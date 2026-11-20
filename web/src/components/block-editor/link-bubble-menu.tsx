@@ -2,6 +2,7 @@ import { BubbleMenu } from '@tiptap/react/menus';
 import { useEditorState, type Editor } from '@tiptap/react';
 import { Check, Copy, ExternalLink, Pencil, Unlink } from 'lucide-react';
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useAppLinkOpener } from '@/lib/use-app-link-opener';
@@ -17,7 +18,12 @@ export interface LinkBubbleMenuLabels {
   openFailed: string;
 }
 
-export function LinkBubbleMenu({ editor, labels }: { editor: Editor; labels: LinkBubbleMenuLabels }) {
+export function LinkBubbleMenu({ editor, labels, scrollTarget }: {
+  editor: Editor;
+  labels: LinkBubbleMenuLabels;
+  scrollTarget: HTMLElement;
+}) {
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
   const openAppLink = useAppLinkOpener();
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,29 +44,44 @@ export function LinkBubbleMenu({ editor, labels }: { editor: Editor; labels: Lin
     window.setTimeout(() => setCopied(false), 1500);
   };
 
-  return (
-    <BubbleMenu
-      editor={editor}
-      shouldShow={({ editor: currentEditor }) => currentEditor.isActive('link')}
-      options={{ placement: 'bottom', offset: 8 }}
-      className="max-w-sm rounded-lg border border-edge bg-surface-overlay p-2 shadow-xl"
-    >
-      <p className="max-w-xs truncate px-1 pb-2 text-xs text-fg-muted" title={href}>{href}</p>
-      <div className="flex items-center gap-1">
-        <LinkActionButton label={labels.open} onClick={() => void open()}><ExternalLink /></LinkActionButton>
-        <LinkActionButton label={labels.edit} onClick={() => editSelectedLink(editor)}><Pencil /></LinkActionButton>
-        <LinkActionButton label={copied ? labels.copied : labels.copy} onClick={() => void copy()}>
-          {copied ? <Check /> : <Copy />}
-        </LinkActionButton>
-        <LinkActionButton
-          label={labels.remove}
-          onClick={() => editor.chain().focus().extendMarkRange('link').unsetLink().run()}
+  return createPortal(
+    <div ref={setHost}>
+      {host && <BubbleMenu
+          editor={editor}
+          appendTo={host}
+          updateDelay={0}
+          resizeDelay={0}
+          shouldShow={({ editor: currentEditor, view }) =>
+            (view.hasFocus() || host.contains(document.activeElement)) && currentEditor.isActive('link')}
+          options={{
+            strategy: 'fixed',
+            placement: 'bottom',
+            offset: 8,
+            shift: { padding: 8 },
+            flip: { padding: 8 },
+            hide: { boundary: scrollTarget },
+            scrollTarget,
+          }}
+          className="z-[60] max-w-[min(24rem,calc(100vw-1rem))] rounded-lg border border-edge bg-surface-overlay p-2 shadow-popover"
         >
-          <Unlink />
-        </LinkActionButton>
-      </div>
-      {error ? <p className="px-1 pt-2 text-xs text-danger" role="alert">{error}</p> : null}
-    </BubbleMenu>
+          <p className="max-w-xs truncate px-1 pb-2 text-xs text-fg-muted" title={href}>{href}</p>
+          <div className="flex flex-wrap items-center gap-1">
+            <LinkActionButton label={labels.open} onClick={() => void open()}><ExternalLink /></LinkActionButton>
+            <LinkActionButton label={labels.edit} onClick={() => editSelectedLink(editor)}><Pencil /></LinkActionButton>
+            <LinkActionButton label={copied ? labels.copied : labels.copy} onClick={() => void copy()}>
+              {copied ? <Check /> : <Copy />}
+            </LinkActionButton>
+            <LinkActionButton
+              label={labels.remove}
+              onClick={() => editor.chain().focus().extendMarkRange('link').unsetLink().run()}
+            >
+              <Unlink />
+            </LinkActionButton>
+          </div>
+          {error ? <p className="px-1 pt-2 text-xs text-danger" role="alert">{error}</p> : null}
+      </BubbleMenu>}
+    </div>,
+    scrollTarget.closest('[role="dialog"]') ?? document.body,
   );
 }
 

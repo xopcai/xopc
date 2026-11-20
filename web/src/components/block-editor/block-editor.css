@@ -2,8 +2,8 @@
 
 .block-editor-content {
   outline: none;
-  min-height: 100%;
-  padding-bottom: 60vh;
+  padding-bottom: min(30dvh, 12rem);
+  overflow-wrap: anywhere;
   font-size: 0.9375rem;
   line-height: 1.7;
   color: var(--color-fg);
@@ -114,6 +114,7 @@
   padding: 0.75rem 1rem;
   margin-bottom: 0.75rem;
   overflow-x: auto;
+  overflow-wrap: normal;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.8125rem;
   line-height: 1.6;

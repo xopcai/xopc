@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import type { Editor } from '@tiptap/react';
+import { useEditorState, type Editor } from '@tiptap/react';
 import {
   Bold,
   Italic,
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
+import { useLocaleStore } from '@/stores/locale-store';
 
 import { focusAfterBlockInsert } from './extensions/block-insert-focus';
 import { editSelectedLink } from './link-interaction';
@@ -39,8 +40,11 @@ function ToolbarButton({ onClick, isActive, disabled, title, children }: Toolbar
       onClick={onClick}
       disabled={disabled}
       title={title}
+      aria-label={title}
+      aria-pressed={isActive}
+      onMouseDown={event => event.preventDefault()}
       className={cn(
-        'rounded-md p-1.5 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+        'inline-flex size-8 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
         isActive && 'bg-surface-hover text-accent',
         disabled && 'pointer-events-none opacity-40',
       )}
@@ -51,7 +55,7 @@ function ToolbarButton({ onClick, isActive, disabled, title, children }: Toolbar
 }
 
 function ToolbarDivider() {
-  return <div className="mx-1 h-5 w-px bg-edge" />;
+  return <div aria-hidden className="mx-1 h-4 w-px shrink-0 bg-edge" />;
 }
 
 export interface BlockEditorToolbarProps {
@@ -61,6 +65,26 @@ export interface BlockEditorToolbarProps {
 }
 
 export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = false }: BlockEditorToolbarProps) {
+  const zh = useLocaleStore(state => state.language === 'zh');
+  const formats = useEditorState({
+    editor,
+    selector: ({ editor }) => ({
+      undo: editor.can().undo(),
+      redo: editor.can().redo(),
+      heading1: editor.isActive('heading', { level: 1 }),
+      heading2: editor.isActive('heading', { level: 2 }),
+      heading3: editor.isActive('heading', { level: 3 }),
+      bold: editor.isActive('bold'),
+      italic: editor.isActive('italic'),
+      strike: editor.isActive('strike'),
+      code: editor.isActive('code'),
+      link: editor.isActive('link'),
+      bulletList: editor.isActive('bulletList'),
+      orderedList: editor.isActive('orderedList'),
+      taskList: editor.isActive('taskList'),
+      blockquote: editor.isActive('blockquote'),
+    }),
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageClick = useCallback(() => {
@@ -83,19 +107,20 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
   const iconSize = 16;
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 border-b border-edge px-3 py-1.5">
+    <div role="group" aria-label={zh ? '排版工具' : 'Formatting controls'}
+      className="flex shrink-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain border-b border-edge-subtle px-3 py-1.5">
       {/* Undo / Redo */}
       <ToolbarButton
         onClick={() => editor.chain().focus().undo().run()}
-        disabled={!editor.can().undo()}
-        title="Undo"
+        disabled={!formats.undo}
+        title={zh ? '撤销' : 'Undo'}
       >
         <Undo2 size={iconSize} />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().redo().run()}
-        disabled={!editor.can().redo()}
-        title="Redo"
+        disabled={!formats.redo}
+        title={zh ? '重做' : 'Redo'}
       >
         <Redo2 size={iconSize} />
       </ToolbarButton>
@@ -105,22 +130,22 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
       {/* Headings */}
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-        isActive={editor.isActive('heading', { level: 1 })}
-        title="Heading 1"
+        isActive={formats.heading1}
+        title={zh ? '一级标题' : 'Heading 1'}
       >
         <Heading1 size={iconSize} />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        isActive={editor.isActive('heading', { level: 2 })}
-        title="Heading 2"
+        isActive={formats.heading2}
+        title={zh ? '二级标题' : 'Heading 2'}
       >
         <Heading2 size={iconSize} />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        isActive={editor.isActive('heading', { level: 3 })}
-        title="Heading 3"
+        isActive={formats.heading3}
+        title={zh ? '三级标题' : 'Heading 3'}
       >
         <Heading3 size={iconSize} />
       </ToolbarButton>
@@ -130,33 +155,33 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
       {/* Inline formatting */}
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBold().run()}
-        isActive={editor.isActive('bold')}
-        title="Bold (⌘B)"
+        isActive={formats.bold}
+        title={zh ? '加粗' : 'Bold (⌘B)'}
       >
         <Bold size={iconSize} />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleItalic().run()}
-        isActive={editor.isActive('italic')}
-        title="Italic (⌘I)"
+        isActive={formats.italic}
+        title={zh ? '斜体' : 'Italic (⌘I)'}
       >
         <Italic size={iconSize} />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleStrike().run()}
-        isActive={editor.isActive('strike')}
-        title="Strikethrough"
+        isActive={formats.strike}
+        title={zh ? '删除线' : 'Strikethrough'}
       >
         <Strikethrough size={iconSize} />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleCode().run()}
-        isActive={editor.isActive('code')}
-        title="Inline code"
+        isActive={formats.code}
+        title={zh ? '行内代码' : 'Inline code'}
       >
         <Code size={iconSize} />
       </ToolbarButton>
-      <ToolbarButton onClick={() => editSelectedLink(editor)} isActive={editor.isActive('link')} title="Link">
+      <ToolbarButton onClick={() => editSelectedLink(editor)} isActive={formats.link} title={zh ? '链接' : 'Link'}>
         <LinkIcon size={iconSize} />
       </ToolbarButton>
 
@@ -165,29 +190,29 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
       {/* Block types */}
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBulletList().run()}
-        isActive={editor.isActive('bulletList')}
-        title="Bullet list"
+        isActive={formats.bulletList}
+        title={zh ? '无序列表' : 'Bullet list'}
       >
         <List size={iconSize} />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        isActive={editor.isActive('orderedList')}
-        title="Ordered list"
+        isActive={formats.orderedList}
+        title={zh ? '有序列表' : 'Ordered list'}
       >
         <ListOrdered size={iconSize} />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleTaskList().run()}
-        isActive={editor.isActive('taskList')}
-        title="Task list"
+        isActive={formats.taskList}
+        title={zh ? '待办列表' : 'Task list'}
       >
         <ListTodo size={iconSize} />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        isActive={editor.isActive('blockquote')}
-        title="Quote"
+        isActive={formats.blockquote}
+        title={zh ? '引用' : 'Quote'}
       >
         <Quote size={iconSize} />
       </ToolbarButton>
@@ -196,7 +221,7 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
           editor.chain().focus().setHorizontalRule().run();
           focusAfterBlockInsert(editor);
         }}
-        title="Divider"
+        title={zh ? '分隔线' : 'Divider'}
       >
         <Minus size={iconSize} />
       </ToolbarButton>
@@ -208,7 +233,7 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
           <ToolbarButton
             onClick={handleImageClick}
             disabled={imageUploading}
-            title={imageUploading ? 'Uploading…' : 'Insert image'}
+            title={imageUploading ? (zh ? '正在上传…' : 'Uploading…') : (zh ? '插入图片' : 'Insert image')}
           >
             <ImagePlus size={iconSize} className={imageUploading ? 'animate-pulse' : undefined} />
           </ToolbarButton>

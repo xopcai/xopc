@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ArrowLeft, Check, ChevronDown, Eye, Code2, FileText, History, MessageCircle, MoreHorizontal, Search, Share2, Sparkles, Trash2, X } from 'lucide-react';
+import { AlignLeft, ArrowLeft, Check, ChevronDown, Eye, Code2, FileText, History, MessageCircle, MoreHorizontal, Search, Share2, Sparkles, Trash2, X } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
@@ -10,7 +10,6 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import type { EditorTextSelection } from '@/components/editor-text-selection';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { AutomationSuggestionCard } from '@/features/automations/automation-suggestion-card';
 import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
 import { getDiscussionForNote } from '@/features/discussions/discussion-api';
 import { DiscussionNoteSections } from '@/features/discussions/discussion-note-sections';
@@ -37,6 +36,7 @@ import {
 import { NoteImageLightboxProvider, useNoteImageLightbox } from './note-image-lightbox';
 import { NoteHistoryPanel } from './note-history-panel';
 import { NoteMarkdownView } from './note-markdown-view';
+import { NoteOutlineDialog, NoteOutlinePopover, useNoteOutline } from './note-outline';
 import { NoteBreakdownPanel } from './note-breakdown-panel';
 import { NoteShareDialog } from './note-share-dialog';
 import { NoteSelectionActions } from './note-selection-actions';
@@ -185,7 +185,6 @@ function NoteDetailPanelInner({
   const language = useLocaleStore((s) => s.language);
   const n = messages(language).notes;
   const contextLabels = messages(language).chat.pageContext;
-  const automationSuggestions = messages(language).automations.suggestions;
   const { data: meeting } = useSWR(['note-discussion-document', noteId], () => getDiscussionForNote(noteId));
   const [showMeeting, setShowMeeting] = useState(true);
   const [textSelection, setTextSelection] = useState<EditorTextSelection | null>(null);
@@ -199,6 +198,7 @@ function NoteDetailPanelInner({
   const [activeSidePanel, setActiveSidePanel] = useState<'history' | 'breakdown' | null>(null);
   const [previewSnapshot, setPreviewSnapshot] = useState<NoteSnapshot | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [sidePanelWidth, setSidePanelWidth] = useState(360);
   const [historyResizing, setHistoryResizing] = useState(false);
@@ -227,11 +227,19 @@ function NoteDetailPanelInner({
   const [deleting, setDeleting] = useState(false);
   const titleComposingRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveInFlightRef = useRef<Promise<Note | null> | null>(null);
   const pendingMarkdownRef = useRef<string | null>(null);
   const pendingTitleRef = useRef<string | null>(null);
   const pendingEditRevision = useRef<number | undefined>(undefined);
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const [outlineRoot, setOutlineRoot] = useState<HTMLDivElement | null>(null);
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const { headings, current: currentHeading, wide: wideOutline, goTo: goToHeading } = useNoteOutline(outlineRoot);
+  const hasOutline = headings.length >= 2 && previewSnapshot === null && mode !== 'source' && (!meeting || !showMeeting);
+  const dockOutline = hasOutline && wideOutline && !assistantOpen && !activeSidePanel && !meeting;
+  useEffect(() => {
+    if (!hasOutline || dockOutline) setOutlineOpen(false);
+  }, [dockOutline, hasOutline]);
   const sidePanelShellRef = useRef<HTMLDivElement>(null);
   const sidePanelInnerRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -279,15 +287,16 @@ function NoteDetailPanelInner({
     setTitle(note.title ?? '');
   }, [note, saving]);
 
-  useEffect(() => {
-    if (!autoFocus || !note || isPreviewingSnapshot || didAutoFocusRef.current === noteId) return undefined;
-    const frame = window.requestAnimationFrame(() => {
-      titleInputRef.current?.focus();
+  const attachTitleInput = useCallback((element: HTMLInputElement | null) => {
+    titleInputRef.current = element;
+    if (!element || !autoFocus || didAutoFocusRef.current === noteId) return;
+    window.requestAnimationFrame(() => {
+      if (titleInputRef.current !== element || didAutoFocusRef.current === noteId) return;
+      didAutoFocusRef.current = noteId;
+      element.focus({ preventScroll: true });
       onAutoFocusConsumed?.();
     });
-    didAutoFocusRef.current = noteId;
-    return () => window.cancelAnimationFrame(frame);
-  }, [autoFocus, isPreviewingSnapshot, note, noteId, onAutoFocusConsumed]);
+  }, [autoFocus, noteId, onAutoFocusConsumed]);
 
   const time = note
     ? new Date(note.createdAt).toLocaleString(undefined, {
@@ -323,9 +332,10 @@ function NoteDetailPanelInner({
   }, [noteId]);
 
   const handleModeChange = useCallback((nextMode: EditorMode) => {
+    if (nextMode === mode) return;
     if (nextMode !== 'preview') stopNoteReading();
     setMode(nextMode);
-  }, [stopNoteReading]);
+  }, [mode, stopNoteReading]);
 
   useEffect(() => {
     if (!saving && pendingMarkdownRef.current === null && pendingTitleRef.current === null) {
@@ -339,33 +349,6 @@ function NoteDetailPanelInner({
     return saved;
   }, [noteId, note?.remoteVersion]);
 
-  const handleTitleChange = useCallback(
-    (value: string) => {
-      stopNoteReading();
-      setTitle(value);
-      if (!noteId) return;
-      pendingTitleRef.current = value;
-      if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
-      titleDebounceRef.current = setTimeout(async () => {
-        const nextTitle = pendingTitleRef.current;
-        pendingTitleRef.current = null;
-        if (nextTitle === null) return;
-        setSaving(true);
-        try {
-          await persistEditorPatch({ title: nextTitle });
-          await mutate();
-          onSaved?.();
-        } catch (err) {
-          if (pendingTitleRef.current === null) pendingTitleRef.current = nextTitle;
-          setActionError(`${n.saveFailed}: ${err instanceof Error ? err.message : n.saveFailedHint}`);
-        } finally {
-          setSaving(false);
-        }
-      }, 600);
-    },
-    [stopNoteReading, noteId, mutate, onSaved, persistEditorPatch, n.saveFailed, n.saveFailedHint],
-  );
-
   const headerMain = useMemo(
     () => (
       <div
@@ -377,7 +360,7 @@ function NoteDetailPanelInner({
         <span className="min-w-0 truncate text-sm font-medium text-fg" title={title || time || undefined}>
           {title || time}
         </span>
-        {saving ? <span className="shrink-0 text-xs text-fg-muted opacity-60">{n.saving}</span> : null}
+        <span role="status" className="shrink-0 text-xs text-fg-muted">{saving ? n.saving : null}</span>
       </div>
     ),
     [n.saving, saving, time, title],
@@ -417,32 +400,64 @@ function NoteDetailPanelInner({
 
   const flushPendingSave = useCallback(async (): Promise<Note | null> => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
     debounceRef.current = null;
-    titleDebounceRef.current = null;
+
+    while (saveInFlightRef.current) {
+      const saved = await saveInFlightRef.current;
+      if (!saved || (pendingMarkdownRef.current === null && pendingTitleRef.current === null)) return saved;
+    }
+
     const markdown = pendingMarkdownRef.current;
-    const pendingTitle = pendingTitleRef.current;
-    pendingMarkdownRef.current = null;
-    pendingTitleRef.current = null;
+    const pendingTitle = titleComposingRef.current ? null : pendingTitleRef.current;
     const patch: Partial<Note> = {};
     if (markdown !== null) patch.markdown = markdown;
     if (pendingTitle !== null) patch.title = pendingTitle;
-    if (Object.keys(patch).length === 0) return note ?? null;
+    if (markdown === null && pendingTitle === null) return note ?? null;
+
+    // Keep the draft available while the request is in flight so mode changes see the latest text.
     setSaving(true);
-    try {
-      const saved = await persistEditorPatch(patch);
+    setSaveError(null);
+    const request = persistEditorPatch(patch).then(async (saved) => {
       await mutate(saved, { revalidate: false });
+      if (pendingMarkdownRef.current === markdown) pendingMarkdownRef.current = null;
+      if (pendingTitleRef.current === pendingTitle) pendingTitleRef.current = null;
       onSaved?.();
       return saved;
-    } catch (err) {
-      if (pendingMarkdownRef.current === null) pendingMarkdownRef.current = markdown;
-      if (pendingTitleRef.current === null) pendingTitleRef.current = pendingTitle;
-      setActionError(`${n.saveFailed}: ${err instanceof Error ? err.message : n.saveFailedHint}`);
+    }).catch((err: unknown) => {
+      setSaveError(`${n.saveFailed}: ${err instanceof Error ? err.message : n.saveFailedHint}`);
       return null;
-    } finally {
+    }).finally(() => {
+      saveInFlightRef.current = null;
       setSaving(false);
-    }
+    });
+    saveInFlightRef.current = request;
+    return request;
   }, [mutate, n.saveFailed, n.saveFailedHint, note, onSaved, persistEditorPatch]);
+
+  const flushPendingSaveRef = useRef(flushPendingSave);
+  flushPendingSaveRef.current = flushPendingSave;
+  const scheduleSave = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => void flushPendingSaveRef.current(), 600);
+  }, []);
+
+  const handleTitleChange = useCallback((value: string) => {
+    stopNoteReading();
+    setTitle(value);
+    pendingTitleRef.current = value;
+    if (!titleComposingRef.current) scheduleSave();
+  }, [scheduleSave, stopNoteReading]);
+
+  const finishTitleComposition = () => {
+    titleComposingRef.current = false;
+    if (pendingTitleRef.current !== null) scheduleSave();
+  };
+
+  const handleSave = useCallback((content: string) => {
+    stopNoteReading();
+    pendingMarkdownRef.current = content;
+    scheduleSave();
+  }, [scheduleSave, stopNoteReading]);
 
   const beforeAssistantSend = useCallback(async () => {
     if (saving) {
@@ -526,9 +541,7 @@ function NoteDetailPanelInner({
     setActionError(null);
     stopNoteReading();
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
     debounceRef.current = null;
-    titleDebounceRef.current = null;
     pendingMarkdownRef.current = null;
     pendingTitleRef.current = null;
     try {
@@ -542,6 +555,16 @@ function NoteDetailPanelInner({
       setDeleting(false);
     }
   }, [deleting, n.deleteFailed, n.quickCaptureFailedHint, noteId, onBack, onSaved, saving, stopNoteReading]);
+
+  const selectOutlineHeading = (element: HTMLElement) => {
+    if (outlineRoot?.clientWidth === 0) {
+      setAssistantOpen(false);
+      setActiveSidePanel(null);
+      window.requestAnimationFrame(() => goToHeading(element));
+      return;
+    }
+    goToHeading(element);
+  };
 
   const headerEnd = useMemo(
     () => (
@@ -570,45 +593,30 @@ function NoteDetailPanelInner({
         />
         <button
           type="button"
-          onClick={handleBreakdownClick}
-          disabled={catalyzing}
-          aria-label={n.catalysisSectionTitle}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-            activeSidePanel === 'breakdown'
-              ? 'bg-accent/10 text-accent'
-              : 'bg-accent/10 text-fg hover:bg-accent/15',
-          )}
-        >
-          <Sparkles className="size-3.5" aria-hidden />
-          <span className="hidden sm:inline">{catalyzing ? n.catalyzing : n.catalyzeButton}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => handleOpenNoteChat(false)}
-          aria-label={n.openChatButton}
+          onClick={() => { if (assistantOpen) setAssistantOpen(false); else void handleOpenNoteChat(); }}
+          aria-label={openingChat ? n.openingChat : n.openChatButton}
+          title={n.openChatButton}
+          aria-controls={assistantOpen ? `note-assistant-${noteId}` : undefined}
+          aria-expanded={assistantOpen}
+          data-note-assistant-trigger
           disabled={openingChat}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
-            'border border-edge text-fg-muted hover:bg-surface-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50',
+            'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
+            assistantOpen && 'bg-surface-active text-fg',
           )}
         >
           <MessageCircle className="size-3.5" aria-hidden />
-          <span className="hidden sm:inline">{openingChat ? n.openingChat : n.openChatButton}</span>
         </button>
         <NoteDetailModeSwitcher
           mode={mode}
           onModeChange={handleModeChange}
           labels={{ edit: n.modeEdit, source: n.modeSource, preview: n.modePreview }}
         />
-        <button type="button" onClick={() => void handleCaptureContext()} disabled={openingChat || saving || !note || Boolean(previewSnapshot)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-2.5 py-1.5 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
-          <FileText className="size-3.5" aria-hidden />{contextLabels.capture}
-        </button>
         <DropdownMenu.Root modal={false}>
           <DropdownMenu.Trigger asChild>
             <button
               type="button"
+              data-note-actions-trigger
               aria-label={n.noteActions}
               title={n.noteActions}
               className="inline-flex size-8 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -622,6 +630,26 @@ function NoteDetailPanelInner({
               sideOffset={6}
               className="z-50 min-w-40 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover"
             >
+              {hasOutline && !dockOutline ? (
+                <DropdownMenu.Item
+                  onSelect={() => setOutlineOpen(true)}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
+                >
+                  <AlignLeft className="size-4 text-fg-muted" aria-hidden />
+                  {n.outline}
+                </DropdownMenu.Item>
+              ) : null}
+              <DropdownMenu.Item onSelect={handleBreakdownClick} disabled={catalyzing}
+                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover data-[disabled]:opacity-50">
+                <Sparkles className="size-4 text-fg-muted" aria-hidden />
+                {catalyzing ? n.catalyzing : n.catalyzeButton}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item onSelect={() => void handleCaptureContext()} disabled={openingChat || saving || !note || Boolean(previewSnapshot)}
+                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover data-[disabled]:opacity-50">
+                <FileText className="size-4 text-fg-muted" aria-hidden />
+                {contextLabels.capture}
+              </DropdownMenu.Item>
+              <DropdownMenu.Separator className="my-1 h-px bg-edge-subtle" />
               <DropdownMenu.Item
                 onSelect={() => void handleShare()}
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
@@ -653,6 +681,11 @@ function NoteDetailPanelInner({
     ),
     [
       catalyzing,
+      hasOutline,
+      dockOutline,
+      n.outline,
+      assistantOpen,
+      noteId,
       handleBreakdownClick,
       handleOpenNoteChat,
       handleCaptureContext,
@@ -661,6 +694,11 @@ function NoteDetailPanelInner({
       previewSnapshot,
       mode,
       n.history,
+      n.catalyzeButton,
+      n.catalyzing,
+      n.noteActions,
+      n.openChatButton,
+      n.openingChat,
       n.modeEdit,
       n.modePreview,
       n.modeSource,
@@ -696,35 +734,6 @@ function NoteDetailPanelInner({
     };
   }, [clearHeaderOnCleanup, clearPageHeader, headerEnd, headerMain, headerStart, meeting, showMeeting, note, setPageHeader]);
 
-  const handleSave = useCallback(
-    (content: string) => {
-      if (!noteId) return;
-      stopNoteReading();
-      pendingMarkdownRef.current = content;
-
-      // Debounce saves to avoid excessive API calls
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(async () => {
-        const markdown = pendingMarkdownRef.current;
-        pendingMarkdownRef.current = null;
-        if (markdown === null) return;
-        setSaving(true);
-        setActionError(null);
-        try {
-          await persistEditorPatch({ markdown });
-          await mutate();
-          onSaved?.();
-        } catch (err) {
-          if (pendingMarkdownRef.current === null) pendingMarkdownRef.current = markdown;
-          setActionError(`${n.saveFailed}: ${err instanceof Error ? err.message : n.saveFailedHint}`);
-        } finally {
-          setSaving(false);
-        }
-      }, 600);
-    },
-    [stopNoteReading, noteId, mutate, n.saveFailed, n.saveFailedHint, onSaved, persistEditorPatch],
-  );
-
   const handleHistorySelect = useCallback(
     (entry: NoteSnapshotEntry) => {
       getNoteSnapshot(noteId, entry.timestamp).then((snapshot) => {
@@ -754,21 +763,9 @@ function NoteDetailPanelInner({
 
   useEffect(() => {
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
-      const pendingMarkdown = pendingMarkdownRef.current;
-      const pendingTitle = pendingTitleRef.current;
-      pendingMarkdownRef.current = null;
-      pendingTitleRef.current = null;
-      const patch: Partial<import('./notes-api').Note> = {};
-      if (pendingMarkdown !== null) patch.markdown = pendingMarkdown;
-      if (pendingTitle !== null) patch.title = pendingTitle;
-      if (Object.keys(patch).length > 0) {
-        // The component is already unmounting, so only consume the best-effort save failure here.
-        void updateNote(noteId, patch, pendingEditRevision.current).catch(() => undefined);
-      }
+      void flushPendingSaveRef.current();
     };
-  }, [noteId]);
+  }, []);
 
   if (note === undefined) {
     if (loadError) return (
@@ -801,37 +798,45 @@ function NoteDetailPanelInner({
 
   const displayTitle = isPreviewingSnapshot ? (previewSnapshot.title ?? '') : title;
   const displayText = isPreviewingSnapshot ? (previewSnapshot.markdown ?? '') : (pendingMarkdownRef.current ?? note.markdown ?? '');
-  const noteCreatedAtMs = new Date(note.createdAt).getTime();
-  const shouldSuggestNoteAutomation =
-    Number.isFinite(noteCreatedAtMs) && Date.now() - noteCreatedAtMs < 60 * 60 * 1000;
-  const titleAutomationSuggestion = shouldSuggestNoteAutomation ? (
-    <AutomationSuggestionCard
-      title={automationSuggestions.noteCreatedTitle}
-      description={automationSuggestions.noteCreatedDescription}
-      prompt={automationSuggestions.noteCreatedPrompt}
-      coverage={{ eventType: 'note.created', source: 'notes', eventPayload: { noteId } }}
-      variant="titleAction"
-      className="ml-3 hidden max-w-[18rem] shrink-0 md:flex"
-    />
-  ) : null;
-
   const voiceTitle = /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(title) ? '' : title;
   const voiceTitleLabel = language === 'zh' ? '语音笔记' : 'Voice note';
   const voiceTitleEditor = !showMeeting && !isPreviewingSnapshot ? (
     <input
-      ref={titleInputRef}
+      ref={attachTitleInput}
       aria-label={n.titlePlaceholder}
       value={voiceTitle}
       placeholder={voiceTitleLabel}
       onChange={event => handleTitleChange(event.target.value)}
       onCompositionStart={() => { titleComposingRef.current = true; }}
-      onCompositionEnd={() => { titleComposingRef.current = false; }}
+      onCompositionEnd={finishTitleComposition}
       className="w-full rounded-md bg-transparent text-2xl font-semibold leading-snug tracking-tight placeholder:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     />
   ) : null;
 
+  const documentTitle = (
+    <input
+      ref={attachTitleInput}
+      type="text"
+      aria-label={n.titlePlaceholder}
+      value={title}
+      onChange={event => handleTitleChange(event.target.value)}
+      onCompositionStart={() => { titleComposingRef.current = true; }}
+      onCompositionEnd={finishTitleComposition}
+      onKeyDown={event => {
+        if (event.key !== 'Enter' || titleComposingRef.current || event.nativeEvent.isComposing) return;
+        const body = editorContainerRef.current?.querySelector<HTMLElement>('.ProseMirror, .cm-content');
+        if (!body) return;
+        event.preventDefault();
+        body.focus();
+      }}
+      placeholder={n.titlePlaceholder}
+      className="block w-full min-w-0 rounded-md bg-transparent text-[clamp(1.75rem,4vw,2.5rem)] font-bold leading-tight tracking-tight text-fg placeholder:text-fg-muted/60 focus:outline-none"
+    />
+  );
+
   const personalEditor = (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={setOutlineRoot} className="relative flex h-full min-h-0 flex-col">
+      {dockOutline ? <NoteOutlinePopover label={n.outline} headings={headings} current={currentHeading} onSelect={selectOutlineHeading} /> : null}
       {meeting ? <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-2 border-b border-edge-subtle px-4 py-1"><h3 className="text-sm font-medium">{language === 'zh' ? '我的笔记' : 'My notes'}</h3><NoteDetailModeSwitcher mode={mode} onModeChange={handleModeChange} labels={{ edit: n.modeEdit, source: n.modeSource, preview: n.modePreview }} /></div> : null}
           <div className="h-full min-h-0 min-w-0 flex-1">
             {isPreviewingSnapshot ? (
@@ -853,38 +858,14 @@ function NoteDetailPanelInner({
               <>
                 {mode === 'wysiwyg' && (
                   <div className="flex h-full flex-col">
-                    {!meeting ? <div className="flex shrink-0 items-start px-6 pt-4">
-                      <input
-                        ref={titleInputRef}
-                        type="text"
-                        value={title}
-                        onChange={(e) => handleTitleChange(e.target.value)}
-                        onCompositionStart={() => {
-                          titleComposingRef.current = true;
-                        }}
-                        onCompositionEnd={() => {
-                          titleComposingRef.current = false;
-                        }}
-                        onKeyDown={(e) => {
-                          const nativeEvent = e.nativeEvent as KeyboardEvent & { isComposing?: boolean };
-                          if (e.key === 'Enter' && !titleComposingRef.current && !nativeEvent.isComposing) {
-                            e.preventDefault();
-                            const prosemirror = editorContainerRef.current?.querySelector<HTMLElement>('.ProseMirror');
-                            prosemirror?.focus();
-                          }
-                        }}
-                        placeholder={n.titlePlaceholder}
-                        className="min-w-0 flex-1 border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
-                      />
-                      {titleAutomationSuggestion}
-                    </div> : null}
                     <div className="min-h-0 flex-1">
                       <Suspense fallback={<EditorFallback />}>
                         <BlockEditor
                           key={`wysiwyg-${noteId}`}
                           autoFocus={!!meeting && !showMeeting}
-                          placeholder={meeting ? (language === 'zh' ? '写点什么…' : 'Write a note…') : undefined}
-                          initialContent={note.markdown ?? ''}
+                          placeholder={n.editorPlaceholder}
+                          documentHeader={!meeting ? documentTitle : undefined}
+                          initialContent={displayText}
                           onChange={handleSave}
                           noteId={noteId}
                           onTextSelection={setTextSelection}
@@ -895,22 +876,12 @@ function NoteDetailPanelInner({
                 )}
                 {mode === 'source' && (
                   <div className="flex h-full flex-col">
-                    {!meeting ? <div className="flex shrink-0 items-start px-6 pt-4">
-                      <input
-                        ref={titleInputRef}
-                        type="text"
-                        value={title}
-                        onChange={(e) => handleTitleChange(e.target.value)}
-                        placeholder={n.titlePlaceholder}
-                        className="min-w-0 flex-1 border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
-                      />
-                      {titleAutomationSuggestion}
-                    </div> : null}
-                    <div className="min-h-0 flex-1">
+                    {!meeting ? <div className="mx-auto mb-3 w-full max-w-3xl px-5 pt-6 sm:px-10 sm:pt-9">{documentTitle}</div> : null}
+                    <div className={cn("min-h-0 min-w-0 flex-1", !meeting && "mx-auto w-full max-w-3xl px-3 sm:px-8")}>
                       <Suspense fallback={<EditorFallback />}>
                         <MarkdownEditor
                           key={`source-${noteId}`}
-                          initialContent={note.markdown ?? ''}
+                          initialContent={displayText}
                           onChange={handleSave}
                           isDark={isDark}
                           onTextSelection={setTextSelection}
@@ -921,22 +892,21 @@ function NoteDetailPanelInner({
                 )}
                 {mode === 'preview' && (
                   <div
-                    className="h-full overflow-y-auto px-4 py-4 sm:px-6"
+                    data-note-outline-scroll
+                    className={cn("h-full overflow-y-auto px-5 py-6 sm:px-10 sm:pt-9", !meeting && "mx-auto w-full max-w-3xl")}
                     onClick={(event) => {
                       const target = event.target;
                       if (!(target instanceof HTMLImageElement)) return;
                       openImage(target.currentSrc || target.src, target.alt);
                     }}
                   >
-                    {!meeting && title && !note.markdown.trimStart().startsWith(`# ${title.trim()}\n`) && note.markdown.trim() !== `# ${title.trim()}` && (
-                      <h1 className="mb-4 text-2xl font-bold text-fg">{title}</h1>
+                    {!meeting && title && !displayText.trimStart().startsWith(`# ${title.trim()}\n`) && displayText.trim() !== `# ${title.trim()}` && (
+                      <h1 className="mb-5 break-words text-[clamp(1.75rem,4vw,2.5rem)] font-bold leading-tight tracking-tight text-fg">{title}</h1>
                     )}
-                    {note.markdown ? (
-                      <NoteMarkdownView
-                        noteId={noteId}
-                        content={note.markdown}
-                        className="[&_img]:cursor-zoom-in"
-                      />
+                    {displayText ? (
+                      <div data-note-outline-content>
+                        <NoteMarkdownView noteId={noteId} content={displayText} className="[&_img]:cursor-zoom-in" />
+                      </div>
                     ) : (
                       meeting ? <button type="button" className="min-h-11 rounded-lg px-2 text-sm text-accent-fg hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" onClick={() => handleModeChange('wysiwyg')}>{language === 'zh' ? '写笔记' : 'Write notes'}</button> : <p className="italic text-fg-muted">{n.emptyPreview}</p>
                     )}
@@ -950,10 +920,30 @@ function NoteDetailPanelInner({
 
   return (
     <>
+    {hasOutline && !dockOutline ? (
+      <NoteOutlineDialog
+        label={n.outline}
+        closeLabel={n.outlineClose}
+        headings={headings}
+        current={currentHeading}
+        onSelect={selectOutlineHeading}
+        open={outlineOpen}
+        onOpenChange={setOutlineOpen}
+        returnFocus={() => document.querySelector<HTMLButtonElement>('[data-note-actions-trigger]')?.focus({ preventScroll: true })}
+      />
+    ) : null}
     {textSelection && !isPreviewingSnapshot && !(meeting && showMeeting) && mode !== 'preview' ? <NoteSelectionActions key={`${noteId}:${mode}`} noteId={noteId} selection={textSelection} zh={language === 'zh'} onDismiss={dismissSelection} onAsk={text => { setAssistantDraft({ id: Date.now(), text: language === 'zh' ? `请帮我分析或改写下面这段笔记：\n\n${text}` : `Help me analyze or rewrite this note selection:\n\n${text}` }); dismissSelection(); void handleOpenNoteChat(); }} /> : null}
     <div className="@container/note flex h-full min-h-0 min-w-0 gap-3 p-3 sm:p-4">
       {/* Editor */}
       <div className={cn("mx-auto min-h-0 min-w-0 w-full flex-1 flex-col", (assistantOpen || activeSidePanel) ? "hidden @min-[56rem]/note:flex" : "flex", !meeting && "max-w-[60rem]")}>
+        {saveError ? (
+          <div className="mb-3 flex shrink-0 items-center gap-2 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger">
+            <p role="alert" className="min-w-0 flex-1 break-words">{saveError}</p>
+            <button type="button" className="shrink-0 rounded-md px-2 py-1 font-medium hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" onClick={() => void flushPendingSave()}>
+              {n.home.retry}
+            </button>
+          </div>
+        ) : null}
         {actionError ? <p className="mb-3 shrink-0 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">{actionError}</p> : null}
         <ProductAutomationFeedback
           eventType="note.created"
@@ -973,12 +963,16 @@ function NoteDetailPanelInner({
         <div
           ref={editorContainerRef}
           onKeyDown={event => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+              event.preventDefault();
+              if (!titleComposingRef.current && !event.nativeEvent.isComposing) void flushPendingSave();
+            }
             if (textSelection && event.altKey && event.key === 'Enter') {
               event.preventDefault();
               document.querySelector<HTMLButtonElement>('[data-note-selection-actions] button:not(:disabled)')?.focus();
             }
           }}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel xl:flex-row"
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel"
         >
           {meeting ? <DiscussionNoteSections
             noteId={noteId}
@@ -1005,6 +999,7 @@ function NoteDetailPanelInner({
                 else setActiveSidePanel('history');
               },
               onDelete: () => setDeleteConfirmOpen(true),
+              onOutline: hasOutline ? () => setOutlineOpen(true) : undefined,
               busy: deleting || saving || catalyzing || openingChat,
             }}
           /> : null}
@@ -1013,7 +1008,7 @@ function NoteDetailPanelInner({
       </div>
 
       {assistantOpen || assistantConversationId ? <aside id={`note-assistant-${noteId}`} aria-label={language === 'zh' ? '笔记 AI 对话' : 'Note AI chat'} className={cn('min-h-0 min-w-0 shrink-0 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel', assistantOpen ? 'flex w-full @min-[56rem]/note:w-[22rem] @min-[76rem]/note:w-[24rem]' : 'hidden')}>
-        <header className="flex shrink-0 items-center gap-2 border-b border-edge-subtle px-4 py-2"><MessageCircle className="size-4 text-accent-fg" aria-hidden /><h2 className="flex-1 text-sm font-medium">{meeting ? (language === 'zh' ? '问这段录音' : 'Ask about this recording') : (language === 'zh' ? 'AI 对话' : 'AI chat')}</h2><button type="button" className="inline-flex size-11 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" aria-label={language === 'zh' ? '收起 AI 对话' : 'Close AI chat'} onClick={() => { setAssistantOpen(false); window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[aria-controls="note-assistant-${noteId}"]`)?.focus({ preventScroll: true })); }}><X className="size-4" /></button></header>
+        <header className="flex shrink-0 items-center gap-2 border-b border-edge-subtle px-4 py-2"><MessageCircle className="size-4 text-accent-fg" aria-hidden /><h2 className="flex-1 text-sm font-medium">{meeting ? (language === 'zh' ? '问这段录音' : 'Ask about this recording') : (language === 'zh' ? 'AI 对话' : 'AI chat')}</h2><button type="button" className="inline-flex size-11 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" aria-label={language === 'zh' ? '收起 AI 对话' : 'Close AI chat'} onClick={() => { setAssistantOpen(false); window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-note-assistant-trigger], [aria-controls="note-assistant-${noteId}"]`)?.focus({ preventScroll: true })); }}><X className="size-4" /></button></header>
         {meeting && assistantOpen && assistantConversationId && meeting.transcript?.text?.trim() ? (
           <div className="flex shrink-0 flex-wrap gap-1 border-b border-edge-subtle px-4 py-1">
             {(language === 'zh' ? ['最后决定了什么？', '有哪些待跟进事项？'] : ['What was decided?', 'What needs follow-up?']).map(question => (

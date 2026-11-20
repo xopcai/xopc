@@ -9,7 +9,7 @@ export interface SlashMenuRendererOptions {
 }
 
 const PANEL_CLASS =
-  'slash-menu-panel fixed z-[9999] w-64 overflow-hidden rounded-lg border border-edge bg-surface-base shadow-lg';
+  'slash-menu-panel fixed z-[9999] w-64 max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg border border-edge bg-surface-base shadow-lg';
 
 const ITEM_BASE_CLASS =
   'flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors text-fg-muted hover:bg-surface-hover hover:text-fg';
@@ -75,16 +75,17 @@ export function createSlashMenuRenderer({ editor, getRuntime }: SlashMenuRendere
       return;
     }
 
-    const rect = currentProps.clientRect?.() ?? null;
-    if (rect) {
-      panel.style.top = `${rect.bottom + 6}px`;
-      panel.style.left = `${rect.left}px`;
-      return;
-    }
+    const rect = currentProps.clientRect?.() ?? currentProps.editor.view.coordsAtPos(currentProps.range.to);
+    const padding = 8;
+    const gap = 6;
+    const below = window.innerHeight - rect.bottom - gap - padding;
+    const above = rect.top - gap - padding;
+    const preferredHeight = Math.min(scroll?.scrollHeight ?? 0, 288);
+    const placeAbove = below < preferredHeight && above > below;
+    if (scroll) scroll.style.maxHeight = `min(18rem, ${Math.max(0, placeAbove ? above : below)}px)`;
 
-    const coords = currentProps.editor.view.coordsAtPos(currentProps.range.to);
-    panel.style.top = `${coords.bottom + 6}px`;
-    panel.style.left = `${coords.left}px`;
+    panel.style.top = `${placeAbove ? Math.max(padding, rect.top - gap - panel.offsetHeight) : rect.bottom + gap}px`;
+    panel.style.left = `${Math.max(padding, Math.min(rect.left, window.innerWidth - panel.offsetWidth - padding))}px`;
   };
 
   const renderMenu = () => {
@@ -92,9 +93,9 @@ export function createSlashMenuRenderer({ editor, getRuntime }: SlashMenuRendere
       return;
     }
 
-    scroll.replaceChildren();
-
     const list = scroll;
+    const scrollTop = list.scrollTop;
+    list.replaceChildren();
     currentProps.items.forEach((item, index) => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -139,6 +140,14 @@ export function createSlashMenuRenderer({ editor, getRuntime }: SlashMenuRendere
     });
 
     updatePosition();
+    list.scrollTop = scrollTop;
+    const activeItem = list.children[selectedIndex];
+    if (activeItem) {
+      const itemRect = activeItem.getBoundingClientRect();
+      const listRect = list.getBoundingClientRect();
+      if (itemRect.top < listRect.top) list.scrollTop += itemRect.top - listRect.top;
+      if (itemRect.bottom > listRect.bottom) list.scrollTop += itemRect.bottom - listRect.bottom;
+    }
   };
 
   const syncProps = (props: SuggestionProps<SlashItem, SlashItem>) => {

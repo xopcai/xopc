@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useState } from 'react';
-import { Download, MoreHorizontal, RefreshCw, Sparkles, MessageCircle, Share2, History, Trash2, SlidersHorizontal, X } from 'lucide-react';
+import { AlignLeft, Download, MoreHorizontal, RefreshCw, Sparkles, MessageCircle, Share2, History, Trash2, SlidersHorizontal, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { PageContextCaptureButton } from '@/features/chat/context/page-context-capture-button';
@@ -10,7 +10,7 @@ import type { DiscussionDetail, DiscussionTemplate } from './discussion-types';
 
 export interface DiscussionNoteManagementActions {
   onAnalyze: () => void; onChat: () => void; onShare: () => void; onHistory: () => void; onDelete: () => void;
-  busy: boolean; chatOpen?: boolean;
+  busy: boolean; chatOpen?: boolean; onOutline?: () => void;
 }
 
 const menuClass = 'z-[140] min-w-44 rounded-lg border border-edge bg-surface-overlay p-1 text-sm text-fg shadow-popover';
@@ -32,9 +32,10 @@ export function DiscussionTools({ detail, zh, busy, processing, pageText, editin
       {['md','txt','srt'].map(format => <DropdownMenu.Item key={format} asChild><a className={rowClass} href={apiUrl(`${base}/export?format=${format}`)} download>{format === 'srt' ? (zh ? '字幕 · SRT' : 'Subtitles · SRT') : format === 'md' ? 'Markdown · MD' : (zh ? '纯文本 · TXT' : 'Plain text · TXT')}</a></DropdownMenu.Item>)}
       {audio ? <><DropdownMenu.Separator className="my-1 h-px bg-edge-subtle" /><DropdownMenu.Item asChild><a className={rowClass} href={apiUrl(`${base}/audio`)} download><Download className="size-4" aria-hidden />{zh ? '下载录音' : 'Download recording'}</a></DropdownMenu.Item></> : null}
     </DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root>
-    <DropdownMenu.Root><DropdownMenu.Trigger asChild><button type="button" aria-label={zh ? '更多笔记操作' : 'More note actions'} className={iconClass}><MoreHorizontal className="size-5" aria-hidden /></button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={6} collisionPadding={12} className={menuClass}>
+    <DropdownMenu.Root><DropdownMenu.Trigger asChild><button type="button" data-note-actions-trigger aria-label={zh ? '更多笔记操作' : 'More note actions'} className={iconClass}><MoreHorizontal className="size-5" aria-hidden /></button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={6} collisionPadding={12} className={menuClass}>
       {noteActions ? <>
         <DropdownMenu.Item className={rowClass} disabled={noteActions.busy} onSelect={noteActions.onAnalyze}><Sparkles className="size-4" aria-hidden />{zh ? '进一步分析' : 'Analyze this note'}</DropdownMenu.Item>
+        {noteActions.onOutline ? <DropdownMenu.Item className={rowClass} onSelect={noteActions.onOutline}><AlignLeft className="size-4" aria-hidden />{zh ? '文档大纲' : 'Document outline'}</DropdownMenu.Item> : null}
         <DropdownMenu.Item className={rowClass} onSelect={noteActions.onHistory}><History className="size-4" aria-hidden />{zh ? '版本历史' : 'Version history'}</DropdownMenu.Item>
       </> : null}
       <div><PageContextCaptureButton presentation="menu" resource={{ kind: 'note',id: detail.note.id,revision: String(detail.note.remoteVersion ?? 1) }} selection={{ text: pageText,draft: false }} label={zh ? '带到新对话' : 'Use in a new chat'} disabled={busy || processing || editing || !pageText || pageText.length > 16000} /></div>

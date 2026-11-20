@@ -68,3 +68,29 @@ it('flushes unsaved personal text before sending and blocks sends when that save
   await act(async () => button('Send').click());
   expect(mocks.sent).toHaveBeenCalledTimes(1);
 });
+
+it('saves edits made during an in-flight save against the new revision', async () => {
+  let finishFirstSave!: (note: typeof mocks.note) => void;
+  mocks.update
+    .mockReturnValueOnce(new Promise(resolve => { finishFirstSave = resolve; }))
+    .mockResolvedValueOnce({ ...mocks.note, markdown: 'Second edit', remoteVersion: 3 });
+
+  await render();
+  await act(async () => button('My notes').click());
+  const editor = container.querySelector<HTMLTextAreaElement>('[aria-label="Editor"]')!;
+
+  const editAndSave = (text: string) => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(editor, text);
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    editor.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }));
+  };
+
+  await act(async () => editAndSave('First edit'));
+  await act(async () => editAndSave('Second edit'));
+  expect(mocks.update).toHaveBeenCalledTimes(1);
+  expect(mocks.update).toHaveBeenNthCalledWith(1, 'note', { markdown: 'First edit' }, 1);
+
+  await act(async () => finishFirstSave({ ...mocks.note, markdown: 'First edit', remoteVersion: 2 }));
+  expect(mocks.update).toHaveBeenCalledTimes(2);
+  expect(mocks.update).toHaveBeenNthCalledWith(2, 'note', { markdown: 'Second edit' }, 2);
+});

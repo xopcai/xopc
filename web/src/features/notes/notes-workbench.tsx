@@ -819,6 +819,7 @@ export function NotesWorkbench({
         ) : null}
         {selectedNoteId ? (
           <NoteDetailPanel
+            key={selectedNoteId}
             noteId={selectedNoteId}
             onBack={() => navigate(basePath)}
             onSaved={() => {

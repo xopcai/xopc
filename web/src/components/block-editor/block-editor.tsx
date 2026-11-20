@@ -45,6 +45,7 @@ export interface BlockEditorProps {
   /** Placeholder text shown when the editor is empty. */
   placeholder?: string;
   className?: string;
+  documentHeader?: React.ReactNode;
   autoFocus?: boolean;
   /** Note ID for image upload endpoint. */
   noteId?: string;
@@ -71,6 +72,7 @@ export function BlockEditor({
   onChange,
   placeholder = 'Start writing, or type "/" for commands…',
   className,
+  documentHeader,
   autoFocus = false,
   noteId,
   onTextSelection,
@@ -84,6 +86,7 @@ export function BlockEditor({
   onChangeRef.current = onChange;
   const selectionCallback = useRef(onTextSelection);
   selectionCallback.current = onTextSelection;
+  const [scrollTarget, setScrollTarget] = useState<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const slashRuntimeRef = useRef<SlashCommandRuntime>({});
   const uploadImageFileRef = useRef<(file: File) => void>(() => undefined);
@@ -279,7 +282,7 @@ export function BlockEditor({
   if (!editor) return null;
 
   return (
-    <div className={cn('flex h-full flex-col overflow-hidden', className)}>
+    <div className={cn('flex h-full min-w-0 flex-col overflow-hidden', className)}>
       <BlockEditorToolbar
         editor={editor}
         onImageUpload={noteId ? handleImageUpload : undefined}
@@ -290,10 +293,16 @@ export function BlockEditor({
           <span className="font-medium">{notesLabels.imageUploadFailed}</span> · {imageUploadError}
         </div>
       ) : null}
-      <div className="relative min-h-0 flex-1 overflow-y-auto px-6 py-4">
-        <EditorContent editor={editor} />
+      <div ref={setScrollTarget} data-note-outline-scroll={noteId ? true : undefined} className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
+        <div className={cn('flex min-h-full min-w-0 flex-col px-5 py-4 sm:px-6', documentHeader && 'mx-auto w-full max-w-3xl pt-6 sm:px-10 sm:pt-9')}>
+          {documentHeader && <div className="mb-5 shrink-0">{documentHeader}</div>}
+          <EditorContent editor={editor} className="flex min-w-0 flex-1 flex-col [&>.ProseMirror]:flex-1" />
+        </div>
+      </div>
+      {scrollTarget && (
         <LinkBubbleMenu
           editor={editor}
+          scrollTarget={scrollTarget}
           labels={{
             open: notesLabels.linkOpen,
             edit: notesLabels.linkEdit,
@@ -303,7 +312,7 @@ export function BlockEditor({
             openFailed: notesLabels.linkOpenFailed,
           }}
         />
-      </div>
+      )}
       <input
         ref={imageInputRef}
         type="file"
