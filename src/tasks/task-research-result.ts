@@ -22,7 +22,8 @@ import { defineTaskContract } from './task-contract-definition.js';
 import { observedEvidenceExcerpt, suggestedEvidenceRanges } from './task-evidence-ranges.js';
 import { isTaskEvidenceTool } from './task-evidence-tools.js';
 import { resolveTaskLocale } from './task-language.js';
-import { finalReplyCharacterLimit } from './task-final-reply.js';
+import { isChatOnlyDelivery } from './task-final-reply.js';
+import { checkTaskDelivery } from './task-delivery-checks.js';
 
 import { taskInstructionSequence } from './task-instruction-sequence.js';
 
@@ -149,7 +150,7 @@ export function applyResearchReview(result: TaskResearchResult, raw: unknown, cr
 }
 
 export const reviewResearchResult: ResearchReviewer = async (input, signal) => {
-  const models = resolveEffectiveAgentConfigForSession(input.conversationId).config.models.chat;
+  const { models } = resolveEffectiveAgentConfigForSession(input.conversationId).config;
   const { checks: _checks, review: _review, claims, instructionChecks, ...submitted } = input.result;
   const auditInput = { ...input, result: { ...submitted, sources: submitted.sources.map(source => ({ ...source,
     observedAtIso: new Date(source.observedAt).toISOString() })),
@@ -165,7 +166,7 @@ export const reviewResearchResult: ResearchReviewer = async (input, signal) => {
   const replyGuidance = ' If finalText is supplied, it is the exact chat text selected for delivery. Inspect it directly for language, structure, coverage, labels and links. Use hostObservations.finalTextCharacters for character limits. Compare its factual statements with the supported claims and sources. Cite supported claim IDs for the findings checked in the text. Do not infer reply content from the claim ledger or demand a file for a text-only reply. For connected-app deliveries, inspect the saved result instead. When neither is supplied, criteria requiring chat content remain unverified.';
   let correction = '';
   for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await completeTaskModelCall(models, { systemPrompt: systemPrompt + replyGuidance,
+    const response = await completeTaskModelCall(models.background ?? models.chat, { systemPrompt: systemPrompt + replyGuidance,
       messages: [{ role: 'user', content: JSON.stringify(auditInput) + correction, timestamp: Date.now() }] },
     { signal, maxTokens: 5000, temperature: 0 },
     { operation: 'task.research_review', conversationId: input.conversationId });
@@ -273,6 +274,7 @@ export async function submitTaskResearchResult(conversationId: string, toolCallI
     if (artifact.success && artifact.data.availability === 'available' && artifact.data.location === 'artifact_store'
       && artifact.data.uri?.startsWith('media://outbound/')) published.set(artifact.data.artifactId, artifact.data);
   }
+  const publishedFileCount = published.size;
   if (published.size && submitted.finalArtifactIds === undefined) throw new Error(JSON.stringify({ code: 'final_artifact_selection_required',
     message: 'Select finalArtifactIds from the successful publications; [] explicitly selects a text-only result. Intermediate files will not be delivered automatically.',
     available: [...published.values()].map(({ artifactId, title }) => ({ artifactId, title })) }));
@@ -288,7 +290,7 @@ export async function submitTaskResearchResult(conversationId: string, toolCallI
   let contentBudget = 24_000;
   for (const artifact of published.values()) {
     let content: string | undefined;
-    if (/\.(md|txt|csv|json|m?js|cjs|ts|py|sh)$/i.test(artifact.title)) {
+    if (/\.(html?|md|txt|csv|json|m?js|cjs|ts|py|sh)$/i.test(artifact.title)) {
       try {
         const { buffer } = await readMediaReference(artifact.uri!, 24_000);
         if (buffer.length <= contentBudget) { content = buffer.toString('utf8'); contentBudget -= buffer.length; }
@@ -312,16 +314,8 @@ export async function submitTaskResearchResult(conversationId: string, toolCallI
     log.warn({ err: error, conversationId, taskId: task.id, runId: run.id }, 'Research review unavailable; criteria remain unverified');
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
   if (!personalSnapshot) {
-    const length = finalText ? Array.from(finalText).length : undefined;
-    const zh = resolveTaskLocale(task) === 'zh';
-    result = { ...result, checks: result.checks.map(check => {
-      const limit = finalReplyCharacterLimit(check.criterion);
-      if (limit === undefined || (length !== undefined && length <= limit)) return check;
-      if (length === undefined) return { ...check, status: 'unverified', claimIds: [],
-        note: zh ? '尚未提交供核验的最终对话正文。' : 'No final chat text was submitted for verification.' };
-      return { ...check, status: 'failed', claimIds: [],
-        note: zh ? `最终对话正文共 ${length} 个字符，超过 ${limit} 字上限。` : `Final chat text has ${length} characters, exceeding the ${limit}-character limit.` };
-    }) };
+    result = checkTaskDelivery(result, { files: artifacts, publishedFileCount,
+      chatReplyOnly: isChatOnlyDelivery(task.contract?.expectedOutputs ?? []), zh: resolveTaskLocale(task) === 'zh' });
   }
   if (JSON.stringify(criteria) === JSON.stringify(defineTaskContract(task.contract?.objective ?? task.title, task.locale).acceptanceCriteria)) {
     result = { ...result, checks: result.checks.map(check => ({ ...check, status: 'unverified',

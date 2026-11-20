@@ -20,6 +20,7 @@ struct XopcIndex {
   @Local invitation: string = '';
   @Local connection: XopcConnectionViewModel = connectionModel;
   @Local showSettings: boolean = false;
+  @Local settingsSection: string = '';
   @Local manualEntry: boolean = false;
   @Local showHelp: boolean = false;
   @Local scanning: boolean = false;
@@ -44,21 +45,35 @@ struct XopcIndex {
   @Monitor('music.openRevision')
   onOpenMusic(): void { if (!this.connection.busy) this.music.consumeOpenRequest(); }
 
-  @Monitor('connection.adding')
-  onAddingGateway(): void {
-    if (this.connection.adding) { this.invitation = ''; this.manualEntry = false; this.showHelp = false; this.showSettings = false; }
+  @Monitor('connection.gatewayPage')
+  onGatewayPageChanged(): void {
+    if (this.connection.gatewayPage === 'add') {
+      this.invitation = ''; this.manualEntry = false; this.showHelp = false;
+    }
   }
   onBackPress(): boolean {
     if (this.call.phase !== 'idle' && this.call.expanded) { this.call.expanded = false; return true; }
     if (this.music.expanded) { this.music.expanded = false; return true; }
-    if (this.showSettings) { this.showSettings = false; return true; }
-    if (this.connection.managing) { this.connection.closeGateways(); return true; }
-    if (this.connection.adding) { if (!this.connection.busy) this.connection.cancel(); return true; }
+    if (this.connection.gatewayPage !== 'hidden') { this.backFromGatewayFlow(); return true; }
+    if (!this.connection.connected && this.showSettings) { this.backFromSettings(); return true; }
     if (!this.connection.connected && !this.connection.busy && (this.manualEntry || this.showHelp)) {
       this.closeSecondary(); return true;
     }
     if (layoutState.dismissChatOverlay?.()) return true;
     return layoutState.dismissSidebar?.() ?? false;
+  }
+
+  private backFromSettings(): void {
+    if (this.settingsSection) this.settingsSection = ''; else this.showSettings = false;
+  }
+
+  private backFromGatewayFlow(): void {
+    if (this.connection.busy || this.scanning) return;
+    if (this.connection.gatewayPage === 'add') {
+      if (this.manualEntry || this.showHelp) this.closeSecondary(); else void this.connection.cancel();
+    } else {
+      this.connection.closeGateways();
+    }
   }
 
   private closeSecondary(): void {
@@ -100,23 +115,25 @@ struct XopcIndex {
   @Builder
   connectionHeader() {
     Row({ space: 10 }) {
-      if (this.manualEntry || this.showHelp || this.connection.adding) {
+      if (this.manualEntry || this.showHelp || this.connection.gatewayPage === 'add') {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground])
         }.id('pairing-back').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
           .enabled(!this.connection.busy).accessibilityText($r('app.string.back')).onClick((): void => {
-            if (this.manualEntry || this.showHelp) this.closeSecondary(); else this.connection.cancel();
+            if (this.connection.gatewayPage === 'add') this.backFromGatewayFlow(); else this.closeSecondary();
           })
       } else {
         Image($r('app.media.brand_logo')).width(32).height(32).objectFit(ImageFit.Contain).accessibilityText('xopc')
         Text('xopc').fontSize(22).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
       }
       Blank().layoutWeight(1)
-      Button({ type: ButtonType.Circle }) {
-        SymbolGlyph($r('sys.symbol.slider_horizontal_2')).fontSize(22).fontColor([this.colors.secondary])
-      }.id('open-settings').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.settings')).enabled(!this.connection.busy && !this.scanning)
-        .onClick((): void => { this.invitationEditor.stopEditing(); this.showSettings = true; })
+      if (this.connection.gatewayPage !== 'add') {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.slider_horizontal_2')).fontSize(22).fontColor([this.colors.secondary])
+        }.id('open-settings').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          .accessibilityText($r('app.string.settings')).enabled(!this.connection.busy && !this.scanning)
+          .onClick((): void => { this.invitationEditor.stopEditing(); this.showSettings = true; })
+      }
     }.width('100%').height(56).padding({ left: 24, right: 16 })
   }
 
@@ -184,6 +201,30 @@ struct XopcIndex {
   }
 
   @Builder
+  pairingContent() {
+    this.connectionHeader()
+    Scroll() {
+      Column() {
+        this.connectionIntro()
+        this.connectionActions()
+      }.width('100%').constraintSize({ minHeight: this.contentHeight }).justifyContent(FlexAlign.SpaceBetween)
+        .padding({ left: 24, right: 24 })
+    }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
+      .onAreaChange((_previous: Area, current: Area): void => { this.contentHeight = Number(current.height); })
+  }
+
+  @Builder
+  gatewayFlow() {
+    Column() {
+      if (this.connection.gatewayPage === 'add') {
+        this.pairingContent()
+      } else {
+        XopcGatewayProfilesView()
+      }
+    }.width('100%').height('100%').backgroundColor(this.colors.surface)
+  }
+
+  @Builder
   musicPlayerSheet() {
     XopcMusicPlayerView()
   }
@@ -192,32 +233,26 @@ struct XopcIndex {
     WithTheme({ theme: this.preferences.customTheme(), colorMode: this.preferences.themeColorMode() }) {
     Stack({ alignContent: Alignment.TopStart }) {
     Column() {
-    if (this.connection.managing) {
-      XopcGatewayProfilesView()
-    } else if (this.showSettings) {
-      Column() {
-        Button($r('app.string.back')).id('settings-back').onClick((): void => { this.showSettings = false; })
-        Column() { XopcSettingsView() }.layoutWeight(1).width('100%')
-      }.height('100%').width('100%')
-    } else if (this.connection.connected && !this.connection.adding) {
-      XopcHomeView()
-    } else {
-      this.connectionHeader()
-      Scroll() {
-        Column() {
-          this.connectionIntro()
-          this.connectionActions()
-        }.width('100%').constraintSize({ minHeight: this.contentHeight }).justifyContent(FlexAlign.SpaceBetween)
-          .padding({ left: 24, right: 24 })
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
-        .onAreaChange((_previous: Area, current: Area): void => { this.contentHeight = Number(current.height); })
-    }
+      if (this.connection.connected) {
+        ForEach([this.connection.activeGatewayId], (_gatewayId: string): void => {
+          XopcHomeView({ openSettingsOnMount: this.connection.gatewayPage !== 'hidden' })
+        }, (gatewayId: string): string => gatewayId)
+      } else if (this.showSettings) {
+        XopcSettingsView({ section: this.settingsSection, onExit: (): void => { this.backFromSettings(); },
+          onOpenSection: (section: string): void => { this.settingsSection = section; } })
+      } else if (this.connection.gatewayPage !== 'add') {
+        this.pairingContent()
+      }
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet(this.music.expanded, this.musicPlayerSheet, { height: '88%', dragBar: true,
         showClose: false, backgroundColor: this.colors.chat.canvas,
         onDisappear: (): void => { this.music.closePreview(); } })
     XopcVoiceCallView({ call: this.call, viewportWidth: this.viewportWidth, viewportHeight: this.viewportHeight })
     }.width('100%').height('100%')
+      .bindContentCover(this.connection.gatewayPage !== 'hidden', this.gatewayFlow, {
+        enableSafeArea: true,
+        onWillDismiss: (_action: DismissContentCoverAction): void => { this.backFromGatewayFlow(); }
+      })
       .onAreaChange((_previous: Area, current: Area): void => {
         this.viewportWidth = Number(current.width); this.viewportHeight = Number(current.height);
       })

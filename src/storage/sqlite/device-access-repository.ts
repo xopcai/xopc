@@ -349,7 +349,8 @@ export function revokeDevice(deviceId: string, now = Date.now()): boolean {
       .run(now, deviceId);
     db.prepare('UPDATE device_refresh_credentials SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL')
       .run(now, deviceId);
-    db.prepare('DELETE FROM device_push_endpoints WHERE device_id = ?').run(deviceId);
+    db.prepare(`DELETE FROM device_push_endpoints WHERE device_id = ? AND push_token NOT LIKE 'platform-push:%'`).run(deviceId);
+    db.prepare('UPDATE device_push_endpoints SET enabled = 0 WHERE device_id = ?').run(deviceId);
     return changed;
   });
 }

@@ -1,5 +1,5 @@
 import { assertPluginMcpCallAccess, schedulePluginRuntimeAccessRefresh } from '../../extensions/agent-plugins/refresh-runtime-access.js';
-import { assertProviderUsage, getModelUsageOrigin, isProviderUsageScopeError } from '../../providers/model-usage.js';
+import { assertProviderUsage, isProviderUsageScopeError } from '../../providers/model-usage.js';
 import crypto from 'node:crypto';
 import { connectionObjectiveContext } from '../context/connection-objective-context.js';
 import { traceRun, startObservation, traceOperation, setTraceIdentity } from '../../observability/runtime.js';
@@ -15,6 +15,7 @@ import { parseTurnOutcome } from '@xopcai/gateway-contract';
 import type { Config } from '../../config/schema.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
+import { resolveAvailableTaskModels, resolveTurnModelRefs } from '../models/turn-candidates.js';
 import type { SessionStore } from '../../session/store.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 import { resolveAgentAbortReason } from '../orchestration/run-termination.js';
@@ -187,42 +188,31 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     const voiceOptions = params.presentation === 'voice' ? config?.voice?.realtime?.assistant : undefined;
     const voiceModelRef = voiceOptions?.model;
     const voiceHistoryTokens = params.presentation === 'voice' ? voiceOptions?.historyTokens ?? 4000 : undefined;
-    const configuredModelRef = String(mm.getModelForSession(conversationId));
-    const candidates = typeof mm.getFallbackCandidatesForSession === 'function'
-      ? mm.getFallbackCandidatesForSession(conversationId)
-      : [];
     const effective = config ? resolveEffectiveAgentProfileForSession(conversationId).config : undefined;
-    const background = !voiceModelRef && getModelUsageOrigin() === 'background' && !mm.hasSessionModelOverride?.(conversationId)
-      && configuredModelRef === effective?.models.chat.primary
-      ? effective.models.background : undefined;
-    const candidateModelRefs = voiceModelRef ? [voiceModelRef] : background ? [background.primary, ...background.fallbacks] : candidates.length > 0
-      ? candidates.map((candidate: { provider: string; model: string }) => `${candidate.provider}/${candidate.model}`)
-      : [configuredModelRef];
-    const selectedRef = voiceModelRef ?? background?.primary ?? configuredModelRef;
-    assertProviderUsage(selectedRef.split('/')[0]!);
-    try {
-      const selected = !voiceModelRef && !background && typeof mm.getResolvedModelForSession === 'function'
-        ? mm.getResolvedModelForSession(conversationId) : resolveModel(selectedRef);
-      assertProviderUsage(selected.provider, selected.baseUrl);
-    } catch (error) {
-      if (isProviderUsageScopeError(error)) throw error;
-    }
+    const dispatchedTask = config && isXopcDatabaseOpen() && Boolean(findSessionInputByRunId(conversationId, runId)?.taskRunId);
+    const { configured: configuredModelRef, selected: selectedRef, refs, useSessionModel } =
+      resolveTurnModelRefs(modelManager, conversationId, effective, voiceModelRef, dispatchedTask);
     const resolvedCandidates: Array<{
       ref: string;
       model: RunXopcEmbeddedTurnParams['model'];
-    }> = [];
-    for (const [index, ref] of candidateModelRefs.entries()) {
+    }> = dispatchedTask ? await resolveAvailableTaskModels(refs, selectedRef) : [];
+    if (!dispatchedTask) {
+      assertProviderUsage(selectedRef.split('/')[0]!);
       try {
-        const resolved = !voiceModelRef && !background && index === 0 && typeof mm.getResolvedModelForSession === 'function'
-          ? mm.getResolvedModelForSession(conversationId)
-          : resolveModel(ref);
-        resolvedCandidates.push({
-          ref,
-          model: resolved as RunXopcEmbeddedTurnParams['model'],
-        });
-      } catch (err) {
-        if (index === 0) assertProviderUsage(ref.split('/')[0]!);
-        log.warn({ err, conversationId, runId, modelRef: ref }, 'Skipping unavailable model candidate');
+        const selected = useSessionModel && typeof mm.getResolvedModelForSession === 'function'
+          ? mm.getResolvedModelForSession(conversationId) : resolveModel(selectedRef);
+        assertProviderUsage(selected.provider, selected.baseUrl);
+      } catch (error) {
+        if (isProviderUsageScopeError(error)) throw error;
+      }
+      for (const ref of refs) {
+        try {
+          const resolved = useSessionModel && ref === configuredModelRef && typeof mm.getResolvedModelForSession === 'function'
+            ? mm.getResolvedModelForSession(conversationId) : resolveModel(ref);
+          resolvedCandidates.push({ ref, model: resolved });
+        } catch (err) {
+          log.warn({ err, conversationId, runId, modelRef: ref }, 'Skipping unavailable model candidate');
+        }
       }
     }
     const primary = resolvedCandidates[0];

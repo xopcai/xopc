@@ -53,6 +53,7 @@ import { XopcMusicMiniPlayer } from './MusicPlaybackView';
 
 @ComponentV2
 export struct XopcHomeView {
+  @Param openSettingsOnMount: boolean = false;
   @Local profileOptions: XopcChatOptionsViewModel = new XopcChatOptionsViewModel();
   @Local colors: XopcThemeColors = appThemeColors;
   @Local capture: XopcDiscussionCapture = discussionCapture;
@@ -119,6 +120,7 @@ export struct XopcHomeView {
       } else if (route.target.conversationId) this.openConversationFromList(route.target.conversationId, false);
       else if (route.target.automationId) this.navigate({ page: 'automations', itemId: route.target.automationId });
     };
+    if (this.openSettingsOnMount) this.navigate({ page: 'settings', itemId: '' });
     notificationNavigation.consume();
     void this.attention.refresh();
     void this.chatRepository.restoreRecent().catch((): void => {});
@@ -577,10 +579,17 @@ export struct XopcHomeView {
     } else if (page === 'task-conversation') {
       NavDestination() {
         XopcChatView({ requestedId: (param as XopcMobileRoute).prompt ?? '',
-          taskId: (param as XopcMobileRoute).itemId, activePage: true, embedded: false,
+          taskId: (param as XopcMobileRoute).itemId, activePage: this.detailRoute === 'task-conversation', embedded: false,
           onTaskClose: (): void => { this.pathStack.pop(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
       }.hideTitleBar(true).onBackPressed((): boolean => { if (layoutState.dismissChatOverlay?.()) return true; this.pathStack.pop(); return true; })
+    } else if (page === 'task-detail') {
+      XopcWorkspaceView({ section: 'tasks', heading: $r('app.string.task_detail_title'), initialId: (param as XopcMobileRoute).itemId,
+        onExit: (): void => { this.pathStack.pop(); },
+        onNavigate: (route: XopcMobileRoute): void => {
+          if (route.page === 'task-chat' && route.itemId === (param as XopcMobileRoute).itemId) this.pathStack.pop();
+          else this.navigate(route);
+        } })
     } else if (page === 'task-edit' || page === 'task-status') {
       XopcWorkspaceView({ section: 'tasks', heading: $r('app.string.tasks'), initialId: (param as XopcMobileRoute).itemId,
         initialTaskAction: page === 'task-edit' ? 'edit' : 'status', onExit: (): void => { this.pathStack.pop(); },
@@ -615,7 +624,7 @@ export struct XopcHomeView {
     } else {
       NavDestination() {
         if (page === 'settings') {
-          XopcSettingsView({ personalAgent: this.personalAgent.record, initialSection: (param as XopcMobileRoute).itemId, useNavigation: true,
+          XopcSettingsView({ personalAgent: this.personalAgent.record, section: (param as XopcMobileRoute).itemId, useNavigation: true,
             onExit: (): void => { this.pathStack.pop(); },
             onOpenSection: (section: string): void => { this.navigate({ page: 'settings', itemId: section }); },
             onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })

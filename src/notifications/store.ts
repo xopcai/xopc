@@ -145,10 +145,12 @@ export function acknowledgeNotification(
   eventId: string,
   consumerId: string,
   surface: 'web' | 'electron' | 'mobile',
+  deviceId?: string,
 ): boolean {
-  const exists = getSqliteDatabase().prepare(
-    'SELECT 1 FROM notification_events WHERE event_id = ?',
-  ).get(eventId);
+  const db = getSqliteDatabase();
+  const exists = deviceId
+    ? db.prepare('SELECT 1 FROM notification_deliveries WHERE event_id = ? AND device_id = ?').get(eventId, deviceId)
+    : db.prepare('SELECT 1 FROM notification_events WHERE event_id = ?').get(eventId);
   if (!exists) return false;
   runSqliteWriteTransaction((db) => {
     db.prepare(

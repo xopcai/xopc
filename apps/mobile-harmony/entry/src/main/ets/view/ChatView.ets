@@ -1,3 +1,4 @@
+import { capabilityText, capabilityDisplayOffset, capabilityWireOffset, editCapabilityText, XopcCapabilityText } from '../common/capabilityText';
 import { loadDesktopChatTarget, reselectDesktopChatTarget, XopcDesktopChatTarget } from '../repository/deviceConnectionsRepository';
 import { XopcConversationShare } from './ConversationShare';
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI';
@@ -76,7 +77,6 @@ import { XopcBrandLoading } from './MobileComponents';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { XopcPersonalChatActivity } from './PersonalChatActivity';
-import { XopcFloatingAudioCard } from './FloatingAudioCard';
 
 interface XopcChatReadingAnchor { rowId: string; offset: number; }
 const chatReadingAnchors: Map<string, XopcChatReadingAnchor> = new Map<string, XopcChatReadingAnchor>();
@@ -138,7 +138,6 @@ export struct XopcChatView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param requestedId: string = '';
   @Param taskId: string = '';
-  @Local taskDetailsRequest: number = 0;
   @Event onTaskClose: () => void = (): void => {};
   @Param requestRevision: number = 0;
   @Param focusRevision: number = 0;
@@ -255,8 +254,7 @@ export struct XopcChatView {
   }
   @Local voice: XopcVoiceCapture = voiceCapture;
   @Local reader: XopcChatReadAloud = chatReadAloud;
-  @Local readAloudViewportWidth: number = 0;
-  @Local readAloudViewportHeight: number = 0;
+  @Local readAloudMenuOpen: boolean = false;
   @Local composerError: string = '';
   private composerNotice: XopcTransientNotice = new XopcTransientNotice((message: string): void => { this.composerError = message; });
   @Local call: XopcVoiceCall = voiceCall;
@@ -425,6 +423,10 @@ export struct XopcChatView {
     if (next.candidate && context) assistantAudioAutoplay.enqueue(context, next.candidate);
   }
 
+  @Local skillLabels: Map<string, string> = new Map<string, string>();
+  @Computed get draftPresentation(): XopcCapabilityText { return capabilityText(this.draft, this.skillLabels, true); }
+  private draftChange?: TextChangeOptions;
+
   private appliedRequestRevision: number = -1;
   private appliedIntakeRevision: number = -1;
 
@@ -437,8 +439,9 @@ export struct XopcChatView {
         this.refs = this.refs.concat([{ kind: 'note', sourceId: item.sourceId, expectedVersion: item.version, title: item.name }]);
       }
     }
+    if (item.kind === 'skill') this.skillLabels.set(item.id.slice('skill:'.length), item.name);
     this.draft = this.draft.slice(0, range.start) + item.token + this.draft.slice(range.end);
-    this.cursor = range.start + item.token.length; this.palette.close(); this.editor.caretPosition(this.cursor);
+    this.cursor = range.start + item.token.length; this.palette.close(); this.editor.caretPosition(capabilityDisplayOffset(this.draftPresentation, this.cursor));
   }
 
   private saveDraft(): void {
@@ -457,7 +460,7 @@ export struct XopcChatView {
     if (!text) return;
     this.draft = text;
     this.cursor = text.length;
-    this.editor.caretPosition(this.cursor);
+    this.editor.caretPosition(capabilityDisplayOffset(this.draftPresentation, this.cursor));
   }
 
   @Monitor('draft', 'refs', 'attachments')
@@ -673,7 +676,7 @@ export struct XopcChatView {
     this.composerNotice.clear();
     try {
       if (action === 'copy') {
-        await copyChatMessage(row.role === 'assistant' ? chatAnswerText(row) : row.text); this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copied') });
+        await copyChatMessage(row.role === 'assistant' ? chatAnswerText(row) : capabilityText(row.text, this.skillLabels).text); this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copied') });
       } else if (action === 'copy-code') {
         await copyChatMessage(extractMarkdownCodeBlocks(chatAnswerText(row))); this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copied') });
       } else if (action === 'edit') { this.fillMessageDraft(row); }
@@ -769,12 +772,13 @@ export struct XopcChatView {
 
   private userBubbleWidth(row: XopcChatRow): string {
     if (this.userVoiceOnly(row)) return '132vp';
+    const displayText = capabilityText(row.text, this.skillLabels).text;
     const payloadCount = (row.media?.length || 0) + (row.refs?.length || 0);
-    if (this.userVoiceMessage(row)) return chatTextBubbleWidth(row.text, 180);
-    if (payloadCount > 1) return chatTextBubbleWidth(row.text, 264);
-    if (row.media?.length === 1 && row.media[0].mimeType.startsWith('image/')) return chatTextBubbleWidth(row.text, 148);
-    if (payloadCount === 1) return chatTextBubbleWidth(row.text, 220);
-    return chatTextBubbleWidth(row.text, 44);
+    if (this.userVoiceMessage(row)) return chatTextBubbleWidth(displayText, 180);
+    if (payloadCount > 1) return chatTextBubbleWidth(displayText, 264);
+    if (row.media?.length === 1 && row.media[0].mimeType.startsWith('image/')) return chatTextBubbleWidth(displayText, 148);
+    if (payloadCount === 1) return chatTextBubbleWidth(displayText, 220);
+    return chatTextBubbleWidth(displayText, 44);
   }
 
   private assistantBubbleWidth(row: XopcChatRow): string {
@@ -999,6 +1003,7 @@ export struct XopcChatView {
   onAuxiliaryState(): void { if (this.visible) { this.options.refreshQueue(); this.prompt.refresh(); void this.connectionWait.refresh(); } }
   @Monitor('chat.selectedId')
   onConnectionWaitTarget(): void {
+    this.readAloudMenuOpen = false;
     this.selectingMessageId = '';
     this.voice.dismissError(); this.composerNotice.clear();
     this.connectionWait.start(this.chat.selectedId);
@@ -1265,7 +1270,7 @@ export struct XopcChatView {
       if (this.visible && !this.disposed && !this.showVoice && !this.sheetOpen && !this.panelOpen) {
         try {
           this.getUIContext().getFocusController().requestFocus('chat-composer');
-          this.editor.caretPosition(this.draft.length);
+          this.editor.caretPosition(this.draftPresentation.text.length);
           this.focusComposerOnMount = false; this.composerFocusAttempts = 0;
         } catch (_) {
           this.composerFocusAttempts++;
@@ -1493,11 +1498,8 @@ export struct XopcChatView {
         personal: this.personalConversation, personalName: this.personalAgent?.displayName ?? 'Ada',
         personalAgentId: this.personalAgent?.agentId ?? '', personalAppearance: this.personalAgent?.appearance ?? 'loopi',
         onDismissComposer: (): void => { this.dismissComposer(); },
-        onChoose: (text: string): void => {
-          if (this.restoringDraft) return;
-          this.draft = text; this.cursor = text.length;
-          this.getUIContext().getFocusController().requestFocus('chat-composer'); this.editor.caretPosition(text.length);
-        } }).layoutWeight(1).width('100%').padding({ top: this.overlayHeaderHeight, bottom: this.bottomRegionHeight })
+        onChoose: (text: string): void => { void this.fillProductDraft(text); }
+      }).layoutWeight(1).width('100%').padding({ top: this.overlayHeaderHeight, bottom: this.bottomRegionHeight })
     } else {
     Stack({ alignContent: Alignment.Bottom }) {
     List({ space: 20, scroller: this.messagesScroller }) {
@@ -1528,7 +1530,7 @@ export struct XopcChatView {
                 }
                 Stack({ alignContent: Alignment.TopStart }) {
                   Column() {
-                  XopcChatMessageContent({ row: item.item, onReading: (): void => { this.pauseAutomaticScroll(); }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId,
+                  XopcChatMessageContent({ skillLabels: this.skillLabels, row: item.item, onReading: (): void => { this.pauseAutomaticScroll(); }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId,
                     previewEligible: item.item.id !== this.latestMessageId,
                     onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
                     reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: (route: XopcMobileRoute): void => { this.navigateChatRoute(route); },
@@ -1571,7 +1573,7 @@ export struct XopcChatView {
                 || (item.item.blocks || []).some((block: XopcChatBlock): boolean => block.kind === 'review')) {
               Column() {
                 Column() {
-                  XopcChatMessageContent({ row: item.item, onReading: (): void => { this.pauseAutomaticScroll(); }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId,
+                  XopcChatMessageContent({ skillLabels: this.skillLabels, row: item.item, onReading: (): void => { this.pauseAutomaticScroll(); }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId,
                     selectingText: this.selectingMessageId === item.item.id,
                     selectionOrigin: this.selectionOrigin,
                     onEndSelection: (): void => { if (this.selectingMessageId === item.item.id) this.selectingMessageId = ''; },
@@ -1613,7 +1615,7 @@ export struct XopcChatView {
             }.width('100%').alignItems(HorizontalAlign.Start)
           } else {
             Column({ space: 2 }) {
-              XopcChatMessageContent({ row: item.item, onReading: (): void => { this.pauseAutomaticScroll(); }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId,
+              XopcChatMessageContent({ skillLabels: this.skillLabels, row: item.item, onReading: (): void => { this.pauseAutomaticScroll(); }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId,
                 reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: (route: XopcMobileRoute): void => { this.navigateChatRoute(route); },
                 onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
             }.width('100%').alignItems(HorizontalAlign.Start)
@@ -1816,8 +1818,11 @@ export struct XopcChatView {
         }.height(28).padding({ left: 10, right: 10 }).backgroundColor(this.colors.chat.card)
           .borderRadius(this.colors.corner(14))
       }.id('task-chat-details-tip').height(44).padding(0).backgroundColor(Color.Transparent)
-        .alignSelf(ItemAlign.End).margin({ right: 16 })
-        .onClick((): void => { this.dismissComposer(); this.taskDetailsRequest++; })
+        .alignSelf(ItemAlign.Start).margin({ left: 16 })
+        .onClick((): void => {
+          this.dismissComposer();
+          this.onNavigate({ page: 'task-detail', itemId: this.taskId });
+        })
     }
     Column() {
     Column() {
@@ -1896,7 +1901,7 @@ export struct XopcChatView {
         } else {
           // Keep one editor node across compact/expanded states so the IME and caret survive the first keystroke.
           Stack({ alignContent: Alignment.Start }) {
-            TextArea({ text: this.draft, placeholder: this.nextTurnPrompt ? '' : this.personalConversation
+            TextArea({ text: this.draftPresentation.text, placeholder: this.nextTurnPrompt ? '' : this.personalConversation
               ? $r('app.string.chat_ask_personal', this.personalAgent?.displayName ?? '') : this.scopedProjectName ? $r('app.string.project_chat_placeholder') : $r('app.string.message_hint'),
               controller: this.editor })
               .id('chat-composer').width('100%').constraintSize({ minHeight: COMPOSER_INPUT_MIN, maxHeight: this.expandedComposer ? COMPOSER_INPUT_MAX : COMPOSER_INPUT_MIN })
@@ -1909,14 +1914,23 @@ export struct XopcChatView {
                 if (editing) this.setPanel(false);
                 else this.draftComposing = false;
               })
+              .onWillChange((change: EditableTextChangeValue): boolean => {
+                this.draftChange = change.options;
+                return true;
+              })
               .onChange((value: string, preview?: PreviewText): void => {
+                const change = this.draftChange; this.draftChange = undefined;
                 this.draftComposing = !!preview?.value;
                 if (!value && !this.draftComposing) this.chat.clearAcceptedSuggestion();
-                this.draft = value; this.cursor = value.length;
-                this.palette.update(value, this.cursor, this.chat.selectedId, appSettings.effectiveLanguage());
+                const presentation = this.draftPresentation;
+                const range = change?.oldContent === presentation.text ? change?.rangeBefore : undefined;
+                this.draft = editCapabilityText(this.draft, presentation, value, range?.start, range?.end);
+                this.cursor = capabilityWireOffset(this.draftPresentation, change?.rangeAfter.end ?? value.length);
+                this.palette.update(this.draft, this.cursor, this.chat.selectedId, appSettings.effectiveLanguage());
               })
               .onTextSelectionChange((start: number, end: number): void => {
-                this.cursor = end; if (start === end) this.palette.update(this.draft, end, this.chat.selectedId, appSettings.effectiveLanguage()); else this.palette.close();
+                this.cursor = capabilityWireOffset(this.draftPresentation, end);
+                if (start === end) this.palette.update(this.draft, this.cursor, this.chat.selectedId, appSettings.effectiveLanguage()); else this.palette.close();
               })
             if (this.nextTurnPrompt) {
               Button({ type: ButtonType.Normal }) {
@@ -2079,21 +2093,100 @@ export struct XopcChatView {
       .onClick((): void => { this.startVoiceCall(); })
   }
 
+  @Computed get showReadAloudPlayback(): boolean {
+    return this.activePage && this.phonePage === 0 && this.reader.owner === this.readAloudOwner &&
+      this.reader.state !== 'idle';
+  }
+
+  private readAloudStatus(): Resource {
+    if (this.reader.state === 'loading') return $r('app.string.chat_read_aloud_loading');
+    if (this.reader.state === 'paused') return $r('app.string.chat_read_aloud_paused');
+    return $r('app.string.chat_read_aloud_playing');
+  }
+
+  private toggleContinuousRead(): void {
+    if (!this.canToggleContinuousRead()) return;
+    this.onAutoReadChange();
+    void this.reader.toggleContinuous(this.readAloudOwner);
+  }
+
+  @Monitor('showReadAloudPlayback', 'searchOpen')
+  closeReadAloudMenu(): void {
+    if (!this.showReadAloudPlayback || this.searchOpen) this.readAloudMenuOpen = false;
+  }
+
+  @Builder
+  readAloudMenuAction(label: Resource, actionId: string, action: () => void) {
+    Button({ type: ButtonType.Normal }) {
+      Text(label).fontSize(14).fontColor(this.colors.foreground)
+        .width('100%').maxLines(2).textAlign(TextAlign.Center)
+    }.id(actionId).layoutWeight(1).height(44).padding({ left: 6, right: 6 })
+      .backgroundColor(Color.Transparent).focusOnTouch(false)
+      .onClick((): void => {
+        this.readAloudMenuOpen = false;
+        if (this.showReadAloudPlayback) action();
+      })
+  }
+
+  @Builder
+  readAloudMenu() {
+    Column() {
+      Text(this.readAloudStatus()).fontSize(12).fontColor(this.colors.secondary).width('100%')
+        .padding({ left: 10, right: 10, top: 6, bottom: 4 })
+      Row() {
+        if (this.reader.state === 'playing' || this.reader.state === 'paused') {
+          this.readAloudMenuAction(this.reader.state === 'paused' ? $r('app.string.resume') : $r('app.string.pause'),
+            'chat-read-aloud-toggle', (): void => { void this.reader.toggle(); })
+        }
+        this.readAloudMenuAction($r('app.string.stop'), 'chat-read-aloud-stop', (): void => { void this.reader.stop(); })
+      }.width('100%')
+      if (this.continuousReadSelected) {
+        Row() {
+          this.readAloudMenuAction($r('app.string.chat_continuous_stop'), 'chat-read-aloud-stop-continuous',
+            (): void => { this.toggleContinuousRead(); })
+        }.width('100%')
+      }
+    }.id('chat-header-read-aloud-menu').width(176).padding(4)
+  }
+
   @Builder
   continuousReadButton() {
-    Button({ type: ButtonType.Circle }) {
-      SymbolGlyph($r('sys.symbol.speaker_wave_2')).fontSize(21)
-        .fontColor([this.continuousReadSelected ? this.colors.accent : this.colors.foreground])
-    }.id('chat-header-continuous-read').width(44).height(44).padding(0)
-      .backgroundColor(this.continuousReadSelected ? this.colors.accentSoft : this.colors.chat.card)
-      .accessibilitySelected(this.continuousReadSelected)
-      .accessibilityText(this.continuousReadSelected ? $r('app.string.chat_continuous_stop') : $r('app.string.chat_continuous_start'))
-      .enabled(this.canToggleContinuousRead())
-      .onClick((): void => {
-        if (!this.canToggleContinuousRead()) return;
-        this.onAutoReadChange();
-        void this.reader.toggleContinuous(this.readAloudOwner);
-      })
+    if (this.showReadAloudPlayback) {
+      Button({ type: ButtonType.Circle }) {
+        if (this.reader.state === 'loading') {
+          LoadingProgress().width(21).height(21).color(this.colors.onAccent)
+        } else {
+          SymbolGlyph(this.reader.state === 'paused' ? $r('sys.symbol.pause_fill') : $r('sys.symbol.waveform'))
+            .fontSize(22).fontColor([this.colors.onAccent])
+        }
+      }.id('chat-header-read-aloud-playback').width(44).height(44).padding(0)
+        .backgroundColor(this.colors.accent)
+        .accessibilitySelected(this.continuousReadSelected)
+        .accessibilityText(this.readAloudStatus())
+        .focusOnTouch(false)
+        .onClick((): void => { this.readAloudMenuOpen = !this.readAloudMenuOpen; })
+        .bindPopup(this.readAloudMenuOpen, {
+          builder: this.readAloudMenu,
+          placement: Placement.BottomRight,
+          focusable: false,
+          showInSubWindow: false,
+          backgroundBlurStyle: BlurStyle.NONE,
+          popupColor: this.colors.panel,
+          onStateChange: (event: PopupStateChangeParam): void => {
+            if (!event.isVisible) this.readAloudMenuOpen = false;
+          }
+        })
+    } else {
+      Button({ type: ButtonType.Circle }) {
+        SymbolGlyph(this.continuousReadSelected ? $r('sys.symbol.speaker_wave_2_fill') : $r('sys.symbol.speaker_slash'))
+          .fontSize(21).fontColor([this.continuousReadSelected ? this.colors.accent : this.colors.foreground])
+      }.id('chat-header-continuous-read').width(44).height(44).padding(0)
+        .backgroundColor(this.continuousReadSelected ? this.colors.accentSoft : this.colors.chat.card)
+        .accessibilitySelected(this.continuousReadSelected)
+        .accessibilityText(this.continuousReadSelected ? $r('app.string.chat_continuous_stop') : $r('app.string.chat_continuous_start'))
+        .enabled(this.canToggleContinuousRead())
+        .onClick((): void => { this.toggleContinuousRead(); })
+    }
   }
 
   @Builder
@@ -2198,41 +2291,6 @@ export struct XopcChatView {
   }
 
   @Builder
-  readAloudControls() {
-    if (this.reader.state === 'loading') {
-      Row({ space: 8 }) {
-        LoadingProgress().width(22).height(22).color(this.colors.accent)
-        Text($r('app.string.chat_read_aloud_loading'))
-          .fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-      }.id('chat-read-aloud-loading')
-        .layoutWeight(1).height(44).padding({ left: 8 })
-    } else {
-      Button({ type: ButtonType.Normal }) {
-        Row({ space: 8 }) {
-          Stack() {
-            SymbolGlyph(this.reader.state === 'paused' ? $r('sys.symbol.play_fill') : $r('sys.symbol.pause_fill'))
-              .fontSize(16).fontColor([this.colors.accent])
-          }.width(32).height(32).borderRadius(16).backgroundColor(this.colors.accentSoft).accessibilityLevel('no')
-          Text(this.reader.state === 'paused' ? $r('app.string.chat_read_aloud_paused') : $r('app.string.chat_read_aloud_playing'))
-            .fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-        }.width('100%')
-      }.id('chat-read-aloud-toggle').layoutWeight(1).height(44).padding({ left: 4, right: 4 })
-        .backgroundColor(Color.Transparent)
-        .accessibilityText(this.reader.state === 'paused' ? $r('app.string.resume') : $r('app.string.pause'))
-        .onClick((): void => { this.reader.toggle(); })
-    }
-    Button({ type: ButtonType.Circle }) {
-      Stack() {
-        SymbolGlyph($r('sys.symbol.xmark')).fontSize(14).fontColor([this.colors.secondary])
-      }.width(32).height(32).borderRadius(16).backgroundColor(this.colors.input)
-    }.id('chat-read-aloud-stop').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-      .accessibilityText($r('app.string.stop'))
-      .onClick((): void => { this.reader.stop(); })
-  }
-
-  @Builder
   chatWorkspace() {
     Stack({ alignContent: Alignment.TopStart }) {
     Column() {
@@ -2263,6 +2321,10 @@ export struct XopcChatView {
       }.width('100%').padding({ top: this.chatHeaderHeight })
         .onAreaChange((_previous: Area, current: Area): void => { this.connectionBannerHeight = Number(current.height); })
       }
+      if (this.embedded && (this.showReadAloudPlayback || this.continuousReadSelected)) {
+        Row() { this.continuousReadButton() }
+          .width('100%').justifyContent(FlexAlign.End).padding({ left: 12, right: 12, bottom: 4 })
+      }
       this.conversation()
       Column().width('100%').height(0)
         .bindSheet($$this.generatedVideoOpen, this.generatedVideoDrawer, {
@@ -2290,11 +2352,11 @@ export struct XopcChatView {
       this.conversationHeader()
     }
     if (this.taskId) {
-      XopcTaskChatHeader({ taskId: this.taskId, detailsRequest: this.taskDetailsRequest, topInset: this.chatTopInset,
+      XopcTaskChatHeader({ taskId: this.taskId, topInset: this.chatTopInset,
+        readAloudAction: () => { this.continuousReadButton(); },
         onClose: (): void => { this.onTaskClose(); },
         onSearch: (): void => { this.openMessageSearch(); },
-        onOptions: (): void => { this.openSheet('actions'); },
-        onNavigate: (route: XopcMobileRoute): void => { this.onNavigate(route); } })
+        onOptions: (): void => { this.openSheet('actions'); } })
     }
     if (this.pinPlayingMusic) {
       Row() { XopcMusicMiniPlayer({ sticky: true, onOpen: (): void => { this.dismissComposer(); } }) }
@@ -2303,18 +2365,8 @@ export struct XopcChatView {
         .onAreaChange((_previous: Area, current: Area): void => { this.stickyMusicHeight = Number(current.height); })
         .hitTestBehavior(HitTestMode.Transparent)
     }
-    if (this.activePage && this.phonePage === 0 && !this.searchOpen && this.reader.owner === this.readAloudOwner
-      && this.reader.state !== 'idle') {
-      XopcFloatingAudioCard({ cardId: 'chat-read-aloud-player', viewportWidth: this.readAloudViewportWidth,
-        viewportHeight: this.readAloudViewportHeight, topClearance: this.chatHeaderHeight,
-        bottomClearance: this.bottomRegionHeight, dockAtBottom: true, content: () => { this.readAloudControls(); } })
-    }
     if (this.searchOpen) { this.messageSearchSheet() }
     }.width('100%').height(LayoutPolicy.matchParent)
-      .onAreaChange((_previous: Area, current: Area): void => {
-        this.readAloudViewportWidth = Number(current.width);
-        this.readAloudViewportHeight = Number(current.height);
-      })
       .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], this.embedded || this.layout.systemTopInsetPx <= 0 ? [] : [LayoutSafeAreaEdge.TOP])
       .bindSheet($$this.executionOpen, this.executionDetailSheet, { height: '92%', dragBar: false,
         showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => { this.closeExecutionDetail(); } })
@@ -2354,7 +2406,7 @@ export struct XopcChatView {
       Scroll() {
         Column() {
           if (this.messageDetailContentReady) {
-            XopcChatMessageContent({ row: this.messageDetailRow, conversationId: this.chat.selectedId,
+            XopcChatMessageContent({ skillLabels: this.skillLabels, row: this.messageDetailRow, conversationId: this.chat.selectedId,
               textSelectable: true, reasoning: this.context.config?.activityDetail?.effective || 'on',
               onShowExecution: (row: XopcChatRow): void => { this.messageDetailOpen = false; this.openExecutionDetail(row); },
               onNavigate: (route: XopcMobileRoute): void => { this.navigateFromMessageDetail(route); },
@@ -2440,7 +2492,7 @@ export struct XopcChatView {
         artifact.shareUrl ?? artifact.uri ?? '').filter((url: string): boolean => /^https?:\/\//i.test(url));
       return links.concat(artifacts).join('\n');
     }
-    return row.text;
+    return row.role === 'user' ? capabilityText(row.text, this.skillLabels).text : row.text;
   }
 
   private messageSearchMatches(row: XopcChatRow): boolean {
@@ -2490,7 +2542,7 @@ export struct XopcChatView {
           { key: 'files', label: this.messageSearchLabel('files'), testId: 'chat-search-category-files' },
           { key: 'links', label: this.messageSearchLabel('links'), testId: 'chat-search-category-links' },
           { key: 'images', label: this.messageSearchLabel('images'), testId: 'chat-search-category-images' }
-        ], selectedKey: this.searchCategory, onSelect: (key: string): void => {
+        ], selectedKey: this.searchCategory, swipeToSelect: true, onSelect: (key: string): void => {
           this.searchCategory = key;
           this.getUIContext().getFocusController().requestFocus('chat-message-search-input');
         } })
@@ -2527,7 +2579,7 @@ export struct XopcChatView {
         onReference: (item: XopcReferenceItem): void => { this.addReference(item); },
         onClose: (): void => { this.sheetOpen = false; }, onRetry: (): void => { this.context.load(this.chat.selectedId); } })
     } else {
-    XopcChatOptions({ model: this.options, mode: this.sheetMode, personal: this.personalConversation, personalRecord: this.personalAgent,
+    XopcChatOptions({ skillLabels: this.skillLabels, model: this.options, mode: this.sheetMode, personal: this.personalConversation, personalRecord: this.personalAgent,
       contextSummary: this.contextMenuSummary(),
       canShare: this.canShareConversation(),
       onShare: (): void => { this.sheetMode = 'share'; },

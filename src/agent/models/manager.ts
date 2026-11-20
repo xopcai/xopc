@@ -178,7 +178,7 @@ export class ModelManager {
   /**
    * Ordered model candidates for the session.
    */
-  getFallbackCandidatesForSession(conversationId: string): ModelCandidate[] {
+  getFallbackCandidatesForSession(conversationId: string, includeUnconfigured = false): ModelCandidate[] {
     const ref = this.getModelForSession(conversationId);
     const parsed = parseModelRef(ref);
     if (!parsed) {
@@ -189,6 +189,7 @@ export class ModelManager {
       cfg: this.config,
       provider: parsed.provider,
       model: parsed.model,
+      includeUnconfigured,
       fallbacksOverride: this.sessionModels.has(conversationId)
         ? undefined
         : this.sessionProfileFallbacks.get(conversationId),

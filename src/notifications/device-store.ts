@@ -123,6 +123,12 @@ export function registerNotificationDevice(input: RegisterNotificationDeviceInpu
   return getNotificationDevice(input.deviceId)!;
 }
 
+export function replaceNotificationPushReference(deviceId: string, previous: string, next: string): boolean {
+  return runSqliteWriteTransaction(db => db.prepare(
+    'UPDATE device_push_endpoints SET push_token = ?, updated_at = ? WHERE device_id = ? AND push_token = ? AND enabled = 1',
+  ).run(next, Date.now(), deviceId, previous).changes > 0);
+}
+
 export function getNotificationDevice(deviceId: string): NotificationDevice | null {
   const row = getSqliteDatabase()
     .prepare('SELECT * FROM device_push_endpoints WHERE device_id = ?')
@@ -150,6 +156,20 @@ export function updateNotificationDevicePreferences(
       .run(JSON.stringify(preferences), Date.now(), deviceId);
   });
   return getNotificationDevice(deviceId);
+}
+
+export function listRevokedPlatformPushDevices(now: number): NotificationDevice[] {
+  return (getSqliteDatabase().prepare(`
+    SELECT n.* FROM device_push_endpoints n JOIN devices d ON n.device_id = d.device_id
+    WHERE d.revoked_at IS NOT NULL AND n.enabled = 0 AND n.push_token LIKE 'platform-push:%'
+    AND n.lease_expires_at > ? ORDER BY n.updated_at LIMIT 20
+  `).all(now) as NotificationDeviceRow[]).map(deviceFromRow);
+}
+
+export function disableNotificationDevice(deviceId: string): void {
+  runSqliteWriteTransaction(db => db.prepare(
+    'UPDATE device_push_endpoints SET enabled = 0 WHERE device_id = ?',
+  ).run(deviceId));
 }
 
 export function removeNotificationDevice(deviceId: string): boolean {

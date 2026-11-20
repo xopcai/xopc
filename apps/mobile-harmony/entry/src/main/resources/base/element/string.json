@@ -603,6 +603,12 @@
     },
     {"name": "push_disabled", "value": "Off"},
     {"name": "push_not_registered", "value": "Not registered"},
+    {"name": "push_pair_required", "value": "Pair this device with a Gateway before turning on notifications."},
+    {"name": "push_permission_required", "value": "Allow xopc notifications in system settings, then try again."},
+    {"name": "push_kit_not_enabled", "value": "Push Kit is not enabled for this app. Notifications will be available after the app’s push service is enabled."},
+    {"name": "push_token_unavailable", "value": "Could not register with Huawei Push Kit. Try again later."},
+    {"name": "push_platform_unavailable", "value": "Push notifications are temporarily unavailable on XOPC Cloud."},
+    {"name": "push_cloud_auth_required", "value": "Connect or reauthorize XOPC Cloud on the Gateway, then try again."},
     {
       "name": "app_description",
       "value": "Your personal AI workspace"

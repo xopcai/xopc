@@ -20,6 +20,9 @@ data class PersonalSummary(val name: String, val role: String, val counts: Perso
   val profile: PersonalProfile = PersonalProfile(name, role, "", "", ""))
 data class PersonalAssertionPage(val items: List<PersonalAssertion>, val nextCursor: String?)
 
+data class WorkMemory(val id: String, val content: String)
+data class WorkMemoryPage(val items: List<WorkMemory>, val nextCursor: String?)
+
 /** The same bounded mobile projection used by Harmony's Personal page. */
 class PersonalRepository(private val gateway: GatewaySession) {
   fun summary(): PersonalSummary = parseSummary(gateway.request("/api/user-model/mobile-summary"))
@@ -34,6 +37,17 @@ class PersonalRepository(private val gateway: GatewaySession) {
       if (!cursor.isNullOrBlank()) append("&cursor=").append(encode(cursor))
     }
     return parseAssertions(gateway.request(path))
+  }
+
+  fun workMemory(gatewayId: String, cursor: String?): WorkMemoryPage {
+    val path = "/api/knowledge-memory?view=manage" + if (cursor == null) "" else
+      "&cursor=" + URLEncoder.encode(cursor, StandardCharsets.UTF_8.name())
+    val result = JSONObject(gateway.request(path, expectedGatewayId = gatewayId))
+    val items = result.getJSONArray("items")
+    return WorkMemoryPage(List(items.length()) { index ->
+      val item = items.getJSONObject(index)
+      WorkMemory(item.getString("id"), item.getString("content"))
+    }, result.optString("nextCursor", "").takeIf { !result.isNull("nextCursor") && it.isNotBlank() })
   }
 
   fun assertion(id: String): PersonalAssertion {

@@ -25,16 +25,23 @@ describe('chat bottom region composition', () => {
 
   it('opens task conversations with the full chat header while retaining task navigation', () => {
     const taskDestination = home.slice(home.indexOf("} else if (page === 'task-conversation')"),
-      home.indexOf("} else if (page === 'tasks'"));
+      home.indexOf("} else if (page === 'task-detail')"));
     expect(taskDestination).toContain("requestedId: (param as XopcMobileRoute).prompt ?? ''");
-    expect(taskDestination).toContain('taskId: (param as XopcMobileRoute).itemId, activePage: true, embedded: false');
+    expect(taskDestination).toContain('taskId: (param as XopcMobileRoute).itemId');
     expect(taskDestination).toContain('this.pathStack.pop(); return true;');
     expect(taskDestination).not.toContain('task_open_conversation');
     expect(home).toContain("route.page === 'task-chat' || (route.page === 'tasks' && route.itemId)");
     const tip = chat.indexOf(".id('task-chat-details-tip')");
     expect(tip).toBeGreaterThan(0);
     expect(tip).toBeLessThan(chat.indexOf(".id('chat-composer')"));
-    expect(taskChatHeader).toContain('.bindSheet($$this.detailsOpen, this.detailsSheet');
+    expect(chat.slice(tip, chat.indexOf(".id('chat-composer')"))).toContain(
+      "this.onNavigate({ page: 'task-detail', itemId: this.taskId })");
+    const detailDestination = home.slice(home.indexOf("} else if (page === 'task-detail')"),
+      home.indexOf("} else if (page === 'task-edit'"));
+    expect(detailDestination).toContain("XopcWorkspaceView({ section: 'tasks'");
+    expect(detailDestination).toContain('initialId: (param as XopcMobileRoute).itemId');
+    expect(detailDestination).toContain('onExit: (): void => { this.pathStack.pop(); }');
+    expect(taskChatHeader).not.toContain('.bindSheet(');
     expect(taskChatHeader).not.toContain('task-chat-summary-toggle');
   });
   it('animates session refresh only for an explicit pull gesture', () => {
@@ -279,16 +286,23 @@ describe('chat bottom region composition', () => {
     expect(options).toContain("heading: $r('app.string.chat_context'), summary: this.contextSummary");
   });
 
-  it('keeps read-aloud controls in a floating card above the composer', () => {
-    const player = chat.slice(chat.indexOf('  readAloudControls() {'), chat.indexOf('  chatWorkspace() {'));
-    expect(player).toContain(".id('chat-read-aloud-toggle')");
-    expect(player).toContain("$r('sys.symbol.play_fill')");
+  it('keeps read-aloud state and playback controls in the header', () => {
+    const player = chat.slice(chat.indexOf('  readAloudMenuAction('), chat.indexOf('  conversationActions() {'));
+    expect(player).toContain("$r('sys.symbol.speaker_slash')");
+    expect(player).toContain("$r('sys.symbol.speaker_wave_2_fill')");
+    expect(player).toContain("$r('sys.symbol.waveform')");
     expect(player).toContain("$r('sys.symbol.pause_fill')");
-    expect(player).toContain(".id('chat-read-aloud-stop')");
-    expect(player).toContain("$r('sys.symbol.xmark')");
-    expect(player).toContain('.maxLines(1)');
-    expect(chat).toContain("XopcFloatingAudioCard({ cardId: 'chat-read-aloud-player'");
-    expect(chat).toContain('bottomClearance: this.bottomRegionHeight, dockAtBottom: true');
+    expect(player).toContain('LoadingProgress()');
+    expect(player).toContain('.bindPopup(this.readAloudMenuOpen, {');
+    expect(player).toContain('focusable: false');
+    expect(player).toContain('showInSubWindow: false');
+    expect(player).toContain('.focusOnTouch(false)');
+    expect(player).toContain('Text(this.readAloudStatus())');
+    expect(player).toContain("'chat-read-aloud-toggle'");
+    expect(player).toContain("'chat-read-aloud-stop'");
+    expect(player).toContain('this.toggleContinuousRead()');
+    expect(chat).toContain('readAloudAction: () => { this.continuousReadButton(); }');
+    expect(chat).not.toContain('XopcFloatingAudioCard');
   });
 
   it('keeps Gateway connection management out of the conversation tab header', () => {

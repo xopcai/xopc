@@ -119,21 +119,22 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
     } finally { loading = false }
   }
 
+  val scopes = listOf(
+    SegmentOption("all", t("全部资料", "All files"), "space-tab-all"),
+    SegmentOption("favorites", t("收藏", "Favorites"), "space-tab-favorites"),
+    SegmentOption("trash", t("回收站", "Trash"), "space-tab-trash"),
+  )
+  fun selectScope(value: String) {
+    if (view == value) return
+    query = ""
+    view = value
+    navigation.rememberSelection("library-scope", value)
+  }
   val activeID = selected
   Column(Modifier.fillMaxSize().padding(insets).testTag("space-library")) {
     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
       PageBackButton("library-back", onExit)
-      PageTitleMenu(listOf(
-        SegmentOption("all", t("全部资料", "All files"), "space-tab-all"),
-        SegmentOption("favorites", t("收藏", "Favorites"), "space-tab-favorites"),
-        SegmentOption("trash", t("回收站", "Trash"), "space-tab-trash"),
-      ), view, "space-scope-menu", Modifier.align(Alignment.Center)) { value ->
-        if (view != value) {
-          query = ""
-          view = value
-          navigation.rememberSelection("library-scope", value)
-        }
-      }
+      PageTitleMenu(scopes, view, "space-scope-menu", Modifier.align(Alignment.Center), ::selectScope)
     }
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
       OutlinedTextField(query, { query = it.take(160) }, Modifier.weight(1f).testTag("space-search"),
@@ -157,7 +158,8 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
         }
       }
     }
-    LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(horizontal = 16.dp),
+    LazyColumn(Modifier.weight(1f).fillMaxWidth()
+      .swipePageSelection(scopes.map { it.value }, view, activeID == null, ::selectScope), contentPadding = PaddingValues(horizontal = 16.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
       if (loading && items.isEmpty()) items(5) {
         Box(Modifier.fillMaxWidth().height(55.dp).background(MaterialTheme.colorScheme.surfaceContainer,

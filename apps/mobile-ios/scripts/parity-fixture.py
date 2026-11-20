@@ -32,6 +32,10 @@ def space_seed():
   'updatedAt':now,'revision':1,'currentVersion':space_version,'origin':space_origin,
   'versions':[space_version,older_space_version],'origins':[space_origin,older_space_origin]}
 space_item = space_seed()
+goals = [
+ {'id':'fixture-ongoing','title':'跟进移动端验收','desiredOutcome':'完成手势回归','status':'active','isPrimary':True},
+ {'id':'fixture-achieved','title':'整理发布记录','desiredOutcome':'归档本次发布','status':'achieved'}
+]
 work_memory = [
  {'id':'fixture-work-decision','kind':'decision','scope':{'type':'project'},'status':'active','updatedAt':now,
   'content':'移动端项目决定：验收须覆盖首屏布局。\n同时检查搜索和记录详情。\n验证返回路径。\n保留分页后的滚动位置。'},
@@ -99,9 +103,11 @@ global_model_revision = 1
 def global_model_payload():
  current = next(item for item in model_choices if item['ref'] == global_model)
  return envelope({'revision':str(global_model_revision),
-  'routing':[dict(key='chat',pool='chat',ref=current['ref'],name=current['name'])],
+  'routing':[dict(key='chat',pool='chat',ref=current['ref'],name=current['name']),
+   dict(key='speech',pool='speech',ref='fixture/tts',name='Fixture Speech')],
   'tasks':[dict(key='coding',pool='chat',ref=None,name=None,inherited=True,allowInherit=True)],
-  'fallbacks':[], 'pools':{'chat':model_choices}})
+  'fallbacks':[], 'pools':{'chat':model_choices,
+   'speech':[dict(ref='fixture/tts',name='Fixture Speech',provider='Fixture')]}})
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args): pass
  def do_PUT(self): self.do_GET()
@@ -453,7 +459,7 @@ class Handler(BaseHTTPRequestHandler):
    else:
     status=201; data={'version':{'id':key,'revision':file_fixture['revision']}}
   elif path=='/api/notes': data={'items':[{'id':'note-1','title':'布局检查笔记','kind':'note','status':'active','createdAt':now,'updatedAt':now,'snippet':'用于模拟器验证。'}],'total':1,'hasMore':False}
-  elif path=='/api/user-model/mobile-summary': data={'profile':{'callName':'Tester','role':'工程师'},'settings':{'memoryEnabled':True,'showMemoryReferences':True,'sensitiveWritePolicy':'confirm'},'counts':{'total':0,'explicit':0,'learned':0,'review':0,'workMemory':len(work_memory)},'goals':[],'recent':[]}
+  elif path=='/api/user-model/mobile-summary': data={'profile':{'callName':'Tester','role':'工程师'},'settings':{'memoryEnabled':True,'showMemoryReferences':True,'sensitiveWritePolicy':'confirm'},'counts':{'total':0,'explicit':0,'learned':0,'review':0,'workMemory':len(work_memory)},'goals':goals,'recent':[]}
   elif path=='/api/user-model/assertions': data={'items':[]}
   elif path=='/api/knowledge-memory' and query.get('view')==['manage']:
    data={'items':work_memory[1:]} if query.get('cursor')==['work-next'] else {'items':work_memory[:1],'nextCursor':'work-next'}

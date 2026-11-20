@@ -25,6 +25,8 @@ import { ExtensionHookRunner } from '../extensions/index.js';
 import { extractTextContent } from './context/workspace.js';
 import { SessionTracker } from './session/tracker.js';
 import { ModelManager } from './models/index.js';
+import { resolveAvailableTaskModels, resolveTurnModelRefs } from './models/turn-candidates.js';
+import { withModelUsageOrigin } from '../providers/model-usage.js';
 import { initializeCommands } from '../chat-commands/index.js';
 import { HookHandler } from './lifecycle/hook-handler.js';
 import { ToolErrorTracker } from './tools/error-tracker.js';
@@ -736,6 +738,16 @@ export class AgentService {
 
   getModelForSession(conversationId: string): string {
     return this.modelManager.getModelForSession(conversationId);
+  }
+
+  async preflightTaskModel(conversationId: string): Promise<void> {
+    const { config } = resolveEffectiveAgentConfigForSession(conversationId);
+    this.modelManager.setSessionProfileDefault(conversationId, config.models.chat.primary, config.models.chat.fallbacks);
+    await this.sessionHydrator.model(conversationId);
+    await withModelUsageOrigin('background', async () => {
+      const { refs, selected } = resolveTurnModelRefs(this.modelManager, conversationId, config, undefined, true);
+      await resolveAvailableTaskModels(refs, selected);
+    });
   }
 
   getThinkingLevelForSession(conversationId: string): ThinkingLevel {

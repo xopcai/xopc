@@ -34,6 +34,7 @@ export function resolveFallbackCandidates(params: {
   provider: string;
   model: string;
   fallbacksOverride?: string[];
+  includeUnconfigured?: boolean;
 }): ModelCandidate[] {
   const { cfg, provider: inputProvider, model: inputModel, fallbacksOverride } = params;
 
@@ -52,7 +53,7 @@ export function resolveFallbackCandidates(params: {
     const key = `${c.provider}/${c.model}`.toLowerCase();
     if (seen.has(key)) return;
     // Skip providers that are not configured (no API key)
-    if (!isProviderConfiguredSync(c.provider)) return;
+    if (!params.includeUnconfigured && !isProviderConfiguredSync(c.provider)) return;
     seen.add(key);
     candidates.push(c);
   };

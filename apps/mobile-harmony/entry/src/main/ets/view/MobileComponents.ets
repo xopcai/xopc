@@ -101,6 +101,7 @@ export struct XopcPageHeader {
   @Param titleMenuId: string = '';
   @Event onSelectTitle: (key: string) => void = (_key: string): void => {};
   @Param backVisible: boolean = false;
+  @Param backId: string = '';
   @Event onBack: () => void = (): void => {};
   @Param searchId: string = '';
   @Param searchOpen: boolean = false;
@@ -121,7 +122,7 @@ export struct XopcPageHeader {
       if (this.backVisible) {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.arrow_left')).fontSize(21).fontColor([this.colors.foreground])
-        }.width(44).height(44).padding(0)
+        }.id(this.backId).width(44).height(44).padding(0)
           .backgroundColor(this.colors.panel)
           .accessibilityText($r('app.string.back')).onClick((): void => { this.onBack(); })
       }

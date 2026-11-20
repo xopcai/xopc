@@ -56,40 +56,48 @@ struct PersonalGoalsView: View {
     @State private var error = false
     @State private var selectedGoal: MobileUserGoal?
     @State private var editing = false
+    @State private var completed = false
+
+    private let goalTabs = [
+        SegmentOption(id: false, title: "进行中", accessibilityID: "personal-goals-ongoing"),
+        SegmentOption(id: true, title: "已达成", accessibilityID: "personal-goals-achieved")
+    ]
 
     var body: some View {
-        List {
-            if let summary {
-                ForEach(summary.goals) { goal in
-                    Button {
-                        selectedGoal = goal
-                        editing = true
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(goal.title).mobileTextStyle(.rowTitle).foregroundStyle(.primary)
-                            if let outcome = goal.desiredOutcome, !outcome.isEmpty {
-                                Text(outcome).mobileTextStyle(.secondary).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-                if summary.goals.isEmpty {
-                    if let focus = summary.primaryFocus {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(focus.title).mobileTextStyle(.rowTitle)
-                            if let outcome = focus.desiredOutcome, !outcome.isEmpty {
-                                Text(outcome).mobileTextStyle(.secondary).foregroundStyle(.secondary)
-                            }
-                        }
-                    } else {
-                        Text("暂无目标").foregroundStyle(.secondary)
-                    }
-                }
-            } else if error {
-                Button("重试") { Task { await load() } }
-            } else {
-                ProfileSkeleton()
+        VStack(spacing: 0) {
+            SegmentedTabs(options: goalTabs, selected: completed, label: "状态", swipeToSelect: !editing) {
+                completed = $0
             }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+            List {
+                if let summary {
+                    let goals = summary.goals.filter { ($0.status == "achieved") == completed }
+                    ForEach(goals) { goal in
+                        Button {
+                            selectedGoal = goal
+                            editing = true
+                        } label: {
+                            goalRow(goal.title, outcome: goal.desiredOutcome)
+                        }
+                        .accessibilityIdentifier("goal-\(goal.id)")
+                    }
+                    if goals.isEmpty {
+                        if !completed, summary.goals.isEmpty, let focus = summary.primaryFocus {
+                            goalRow(focus.title, outcome: focus.desiredOutcome)
+                        } else {
+                            Text("暂无目标").foregroundStyle(.secondary)
+                        }
+                    }
+                } else if error {
+                    Button("重试") { Task { await load() } }
+                } else {
+                    ProfileSkeleton()
+                }
+            }
+            .accessibilityIdentifier("personal-goals-list")
+            .pageSelectionSwipe(goalTabs.map(\.id), selected: completed, enabled: !editing) { completed = $0 }
+            .refreshable { await load() }
         }
         .navigationTitle("目标")
         .navigationBarTitleDisplayMode(.inline)
@@ -101,9 +109,17 @@ struct PersonalGoalsView: View {
             }
         }
         .task(id: configuration) { await load() }
-        .refreshable { await load() }
         .sheet(isPresented: $editing) {
             GoalEditorView(configuration: configuration, goal: selectedGoal) { await load() }
+        }
+    }
+
+    private func goalRow(_ title: String, outcome: String?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).mobileTextStyle(.rowTitle).foregroundStyle(.primary)
+            if let outcome, !outcome.isEmpty {
+                Text(outcome).mobileTextStyle(.secondary).foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -139,27 +155,13 @@ struct UserUnderstandingView: View {
     @State private var error: String?
 
     var body: some View {
-        List {
-            if section == 0 {
-                if let summary {
-                    overview(summary)
-                } else if error == nil {
-                    ProfileSkeleton()
-                }
-            } else if section == 2 {
-                workMemory
-            } else {
-                personalMemory
-            }
-            if section != 2, error != nil {
-                Section {
-                    Text("内容暂时无法读取，请下拉重试").foregroundStyle(.secondary)
-                    Button("重试") { Task { await refreshCurrentSection() } }
-                }
+        TabView(selection: Binding(get: { section }, set: { selectSection($0) })) {
+            ForEach(0 ... 2, id: \.self) { page in
+                memoryPage(page).tag(page)
             }
         }
-        .listStyle(.insetGrouped)
-        .listSectionSpacing(12)
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .accessibilityIdentifier("about-you-pager")
         .mobilePageTitle(Text("隐私与记忆")) {
             MobilePageTitleMenu(options: [
                 SegmentOption(id: 0, title: "概览", accessibilityID: "about-you-tab-overview"),
@@ -196,12 +198,36 @@ struct UserUnderstandingView: View {
                 await loadWork()
             }
         }
-        .refreshable { await refreshCurrentSection() }
         .sheet(isPresented: $editingProfile) {
             if let summary {
                 ProfileEditorView(configuration: configuration, profile: summary.profile) { await refreshSummary() }
             }
         }
+    }
+
+    private func memoryPage(_ page: Int) -> some View {
+        List {
+            if page == 0 {
+                if let summary {
+                    overview(summary)
+                } else if error == nil {
+                    ProfileSkeleton()
+                }
+            } else if page == 2 {
+                workMemory
+            } else {
+                personalMemory
+            }
+            if page != 2, error != nil {
+                Section {
+                    Text("内容暂时无法读取，请下拉重试").foregroundStyle(.secondary)
+                    Button("重试") { Task { await refreshSection(page) } }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(12)
+        .refreshable { await refreshSection(page) }
     }
 
     @ViewBuilder
@@ -265,7 +291,7 @@ struct UserUnderstandingView: View {
             SegmentOption(id: "explicit", title: "你说过的", accessibilityID: "about-you-filter-explicit"),
             SegmentOption(id: "learned", title: "协作中发现", accessibilityID: "about-you-filter-learned"),
             SegmentOption(id: "review", title: "待确认", accessibilityID: "about-you-filter-review")
-        ], selected: filter, label: "筛选") { filter = $0 }
+        ], selected: filter, label: "筛选", swipeToSelect: true) { filter = $0 }
             .accessibilityIdentifier("about-you-filter-tabs")
             .listRowBackground(Color.clear)
         ForEach(assertions) { item in
@@ -303,8 +329,8 @@ struct UserUnderstandingView: View {
         }
     }
 
-    private func refreshCurrentSection() async {
-        switch section {
+    private func refreshSection(_ page: Int) async {
+        switch page {
         case 1: await loadAssertions()
         case 2: await loadWork()
         default: await refreshSummary()

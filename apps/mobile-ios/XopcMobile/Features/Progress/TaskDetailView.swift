@@ -19,8 +19,6 @@ struct TaskConversationView: View {
     @State private var optionsRevision = 0
     @State private var searchRevision = 0
     @State private var editingTask: TaskRecord?
-    @State private var confirmsCancel = false
-    @State private var isWorking = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -42,7 +40,7 @@ struct TaskConversationView: View {
                                 .background(mobileTheme.card, in: Capsule())
                                 .frame(minHeight: 44).contentShape(.rect)
                         }.buttonStyle(.plain).accessibilityIdentifier("task-chat-details-tip")
-                            .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 20)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 20)
                         composer
                     }
                 }
@@ -81,14 +79,20 @@ struct TaskConversationView: View {
         .task(id: conversation?.id) {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(8)) } catch { return }
-                guard editingTask == nil, !showingStatus, !isWorking else { continue }
+                guard editingTask == nil, !showingStatus else { continue }
                 await refresh()
             }
         }
         .sheet(isPresented: $showingDetails) {
             NavigationStack {
-                Group {
-                    if let detail { overview(detail) } else { ProgressListSkeleton() }
+                VStack(spacing: 0) {
+                    if let detail {
+                        overview(detail)
+                        Divider()
+                        taskActions(detail.task)
+                    } else {
+                        ProgressListSkeleton()
+                    }
                 }
                 .navigationTitle("任务详情")
                 .navigationBarTitleDisplayMode(.inline)
@@ -97,27 +101,23 @@ struct TaskConversationView: View {
                         Button("关闭") { showingDetails = false }.accessibilityIdentifier("task-chat-details-close")
                     }
                 }
+                .sheet(item: $editingTask, onDismiss: { Task { await refresh() } }) { task in
+                    TaskEditorView(configuration: configuration, task: task)
+                }
+                .sheet(isPresented: $showingStatus, onDismiss: { Task { await refresh() } }) {
+                    if let detail {
+                        TaskStatusView(configuration: configuration, detail: detail)
+                    }
+                }
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.fraction(0.76), .large])
             .presentationDragIndicator(.visible)
-        }
-        .sheet(item: $editingTask, onDismiss: { Task { await refresh() } }) { task in
-            TaskEditorView(configuration: configuration, task: task)
-        }
-        .sheet(isPresented: $showingStatus, onDismiss: { Task { await refresh() } }) {
-            if let detail {
-                TaskStatusView(configuration: configuration, detail: detail)
-            }
         }
         .fullScreenCover(isPresented: Binding(get: { voiceCall.phase != .idle && voiceCall.expanded }, set: {
             if !$0 {
                 voiceCall.minimize()
             }
         })) { RealtimeVoiceCallView(call: voiceCall) }
-        .confirmationDialog("取消任务？", isPresented: $confirmsCancel, titleVisibility: .visible) {
-            Button("取消任务", role: .destructive) { Task { await cancelTask() } }
-            Button("保留任务", role: .cancel) {}
-        } message: { Text("结束此任务，不标记为完成。之后可以重新打开。") }
         .alert("操作失败", isPresented: Binding(get: { conversation != nil && error != nil }, set: {
             if !$0 {
                 error = nil
@@ -139,29 +139,43 @@ struct TaskConversationView: View {
                 .font(.subheadline.weight(.medium)).lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Menu {
-                if let detail {
-                    Button("编辑") { editingTask = detail.task }
-                    Button("调整状态") { showingStatus = true }
-                    if detail.allowedCommands?.contains("close") == true {
-                        Button("取消任务", role: .destructive) { confirmsCancel = true }
-                    }
-                }
                 Button("搜索消息") { searchRevision += 1 }
                 Button("会话选项") { optionsRevision += 1 }
             } label: {
-                Image("SettingsSliders").frame(width: 44, height: 44)
+                Image(systemName: "ellipsis.circle").frame(width: 44, height: 44)
                     .background(mobileTheme.card, in: Circle())
                     .contentShape(.rect)
             }
-            .disabled(isWorking).accessibilityLabel("更多").accessibilityIdentifier("task-chat-menu")
+            .accessibilityLabel("更多").accessibilityIdentifier("task-chat-menu")
         }.buttonStyle(.plain).foregroundStyle(mobileTheme.foreground).padding(.horizontal, 12).frame(minHeight: 64)
             .background(mobileTheme.canvas)
+    }
+
+    private func taskActions(_ task: TaskRecord) -> some View {
+        HStack(spacing: 8) {
+            Button { editingTask = task } label: {
+                Text("编辑任务").frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("task-chat-edit")
+            Button { showingStatus = true } label: {
+                Text("调整状态").foregroundStyle(mobileTheme.onAction)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("task-chat-status")
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
     }
 
     private func overview(_ detail: TaskDetailEnvelope) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text(detail.task.title).mobileTextStyle(.rowTitle)
+                Text(LocalizedStringKey(detail.task.resolution ?? detail.task.phase))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(mobileTheme.action)
                 LabeledContent("运行状态") { Text(LocalizedStringKey(detail.operationalState)) }
                 if let attention = detail.attention, !attention.isEmpty {
                     overviewSection("需要留意") {
@@ -173,7 +187,12 @@ struct TaskConversationView: View {
                 if let receipt = detail.receipts?.max(by: { ($0.finalizedAt ?? 0) < ($1.finalizedAt ?? 0) }),
                    let summary = receipt.summary, !summary.isEmpty
                 {
-                    overviewSection("执行结果") { Text(summary).textSelection(.enabled) }
+                    overviewSection("执行结果") {
+                        Text(summary).textSelection(.enabled)
+                        ForEach(Array((receipt.remainingWork ?? []).enumerated()), id: \.offset) { _, work in
+                            Text(work).foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 let objective = detail.task.contract?.objective ?? detail.task.body ?? ""
                 if !objective.isEmpty {
@@ -240,16 +259,6 @@ struct TaskConversationView: View {
             conversation = .existing(id: id, title: detail.task.title, agentId: detail.task.delegateAgentId ?? "main")
             error = nil
         } catch is CancellationError {} catch { self.error = error.localizedDescription }
-    }
-
-    @MainActor private func cancelTask() async {
-        guard let detail, !isWorking else { return }
-        isWorking = true
-        defer { isWorking = false }
-        do {
-            try await GatewayClient(configuration: configuration).commandTask(detail.task, command: "close", resolution: "cancelled")
-            await refresh()
-        } catch { self.error = error.localizedDescription }
     }
 }
 

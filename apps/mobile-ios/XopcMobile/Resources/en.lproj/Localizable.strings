@@ -222,6 +222,7 @@
 "状态" = "Status";
 "健康度" = "Health";
 "进行中" = "Active";
+"已达成" = "Achieved";
 "目标" = "Goal";
 "任务详情" = "Task Details";
 "未设置任务目标" = "No task goal set";

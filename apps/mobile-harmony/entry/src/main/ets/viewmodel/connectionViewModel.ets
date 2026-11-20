@@ -3,6 +3,8 @@ import { realtimeClient } from '../service/realtimeClient';
 import { XopcGatewayProbe, XopcProfile } from '../model/gateway';
 import { pushNotifications } from '../service/pushNotifications';
 
+export type XopcGatewayPage = 'hidden' | 'manage' | 'add';
+
 export interface XopcGatewayProbeState {
   gatewayId: string; phase: string; result?: XopcGatewayProbe; error: string;
 }
@@ -14,8 +16,7 @@ export class XopcConnectionViewModel {
   @Trace gatewayName: string = '';
   @Trace confirmationCode: string = '';
   @Trace errorMessage: string = '';
-  @Trace managing: boolean = false;
-  @Trace adding: boolean = false;
+  @Trace gatewayPage: XopcGatewayPage = 'hidden';
   @Trace profiles: XopcProfile[] = [];
   @Trace activeGatewayId: string = '';
   @Trace probes: XopcGatewayProbeState[] = [];
@@ -59,19 +60,19 @@ export class XopcConnectionViewModel {
 
   openGateways(): void {
     if (this.busy || pushNotifications.busy) return;
-    this.syncProfiles(); this.errorMessage = ''; this.managing = true;
+    this.syncProfiles(); this.errorMessage = ''; this.gatewayPage = 'manage';
     this.probeGeneration++; this.probes = [];
     void this.probeAll();
   }
   closeGateways(): void {
     if (this.busy) return;
-    this.managing = false; this.adding = false; this.errorMessage = '';
+    this.gatewayPage = 'hidden'; this.errorMessage = '';
     this.probeGeneration++;
     this.syncProfiles();
   }
   addGateway(): void {
     if (this.busy) return;
-    this.managing = false; this.adding = true; this.errorMessage = '';
+    this.gatewayPage = 'add'; this.errorMessage = '';
   }
 
   async activate(gatewayId: string): Promise<void> {
@@ -81,7 +82,7 @@ export class XopcConnectionViewModel {
       await gatewaySession.activate(gatewayId);
       this.probeGeneration++;
       realtimeClient.reset(); pushNotifications.reset();
-      this.syncProfiles(); this.managing = false;
+      this.syncProfiles(); this.gatewayPage = 'hidden';
       realtimeClient.start();
     } catch (error) {
       this.errorMessage = (error as Error).message;
@@ -121,7 +122,7 @@ export class XopcConnectionViewModel {
     } catch (error) { this.errorMessage = (error as Error).message; }
     finally {
       this.syncProfiles(); this.busy = false; this.confirmationCode = '';
-      if (this.connected && !this.managing && !this.adding) realtimeClient.start();
+      if (this.connected && this.gatewayPage === 'hidden') realtimeClient.start();
     }
   }
 
@@ -132,8 +133,10 @@ export class XopcConnectionViewModel {
       realtimeClient.reset(); pushNotifications.reset();
       const profile = await gatewaySession.pair(link, (code: string): void => { this.confirmationCode = code; });
       this.gatewayName = profile.name; this.connected = true;
-      this.adding = false; this.managing = false; this.syncProfiles();
+      if (this.gatewayPage === 'add') this.gatewayPage = 'manage';
+      this.syncProfiles();
       realtimeClient.start();
+      if (this.gatewayPage === 'manage') void this.probeAll();
     } catch (error) {
       this.errorMessage = (error as Error).message;
       const profile = gatewaySession.currentProfile();
@@ -147,7 +150,7 @@ export class XopcConnectionViewModel {
     catch (error) { this.errorMessage = (error as Error).message; }
     finally {
       this.busy = false; this.confirmationCode = ''; this.syncProfiles();
-      if (!this.errorMessage && this.profiles.length) { this.adding = false; this.managing = true; }
+      if (!this.errorMessage && (this.gatewayPage === 'add' || this.profiles.length > 0)) this.gatewayPage = 'manage';
     }
   }
 }

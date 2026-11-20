@@ -50,8 +50,8 @@ extension AssistantState {
             }
             let id = message.id ?? message.messageId ?? "\(message.role)-\(index)"
             let old = retained[id]
-            let parts = message.role == "assistant" ? (old?.text == text && old?.markdownParts.isEmpty == false ? old?.markdownParts ?? [] :
-                MarkdownPart.project(MarkdownBlock.parse(text), previous: old?.markdownParts ?? [])) : []
+            let parts = old?.text == text && old?.markdownParts.isEmpty == false ? old?.markdownParts ?? [] :
+                MarkdownPart.project(MarkdownBlock.parse(text), previous: old?.markdownParts ?? [])
             return TimelineMessage(
                 id: id,
                 role: message.role,

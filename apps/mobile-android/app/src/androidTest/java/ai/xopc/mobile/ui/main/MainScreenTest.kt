@@ -1012,6 +1012,32 @@ class MainScreenTest {
     assert(loads == 1)
   }
 
+  @Test fun goalListAndCapsulesSwipeBetweenOngoingAndAchieved() {
+    val summary = PersonalSummary("Mia", "", PersonalCounts(0, 0, 0, 0, 0), "", "",
+      listOf(PersonalGoal("ongoing", "In progress", "Keep going", "active", null, false),
+        PersonalGoal("achieved", "Done already", "Delivered", "achieved", null, false)),
+      emptyList(), emptyList())
+    composeTestRule.setContent {
+      PersonalGoalsScreen(PersonalUiState("gateway", summary),
+        androidx.compose.foundation.layout.PaddingValues(), onRefresh = {}, onSaveGoal = { _, _, _, _, _ -> })
+    }
+    val ongoing = composeTestRule.onNodeWithTag("personal-goals-ongoing")
+    val achieved = composeTestRule.onNodeWithTag("personal-goals-achieved")
+    ongoing.assertIsSelected()
+    composeTestRule.onNodeWithTag("goal-ongoing").performTouchInput { swipeLeft() }
+    achieved.assertIsSelected()
+    composeTestRule.onNodeWithTag("goal-achieved").assertExists()
+    composeTestRule.onNodeWithTag("personal-goal-sheet").assertDoesNotExist()
+
+    achieved.performTouchInput { swipeRight() }
+    ongoing.assertIsSelected()
+    composeTestRule.onNodeWithTag("goal-ongoing").assertExists()
+    achieved.performClick()
+    achieved.assertIsSelected()
+    composeTestRule.onNodeWithTag("goal-achieved").performClick()
+    composeTestRule.onNodeWithTag("personal-goal-sheet").assertExists()
+  }
+
   @Test fun settingsOpensPrivacyMenuAndAppAboutDirectly() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val summary = PersonalSummary("Mia", "Designer", PersonalCounts(0, 0, 0, 0, 0),
@@ -1171,21 +1197,34 @@ class MainScreenTest {
     assert(removed == "gateway-b" && switched.isEmpty())
     composeTestRule.onNodeWithTag("gateways-back").performClick()
     composeTestRule.onNodeWithTag("settings-screen").assertExists()
+    composeTestRule.onNodeWithText("Home Gateway").performScrollTo().performClick()
+    Espresso.pressBack()
+    composeTestRule.onNodeWithTag("gateway-profiles-screen").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("settings-screen").assertExists()
   }
 
-  @Test fun verifiedGatewayCanBeSelectedFromTheExpandedCard() {
+  @Test fun onlyExplicitGatewaySwitchReturnsToAssistant() {
     val first = GatewayProfile("gateway-a", "Home Gateway", "key", "device", emptyList(), "")
     val second = GatewayProfile("gateway-b", "Work Gateway", "key", "device", emptyList(), "")
-    var selected = ""
+    fun connection(active: GatewayProfile, available: GatewayProfile, change: GatewayChange? = null) =
+      ConnectionUiState(profile = active, gatewayProfiles = listOf(active, available), gatewayChange = change,
+        gatewayProbes = mapOf(available.gatewayId to GatewayProbeUiState(phase = "online")))
+    var state by mutableStateOf(connection(first, second))
+    var tab by mutableStateOf(HomeTab.Me)
     composeTestRule.setContent {
-      GatewayProfilesScreen(ConnectionUiState(profile = first, gatewayProfiles = listOf(first, second),
-        gatewayProbes = mapOf("gateway-b" to GatewayProbeUiState(phase = "online"))),
-        androidx.compose.foundation.layout.PaddingValues(), onBack = {}, onAdd = {},
-        onProbe = {}, onActivate = { selected = it }, onRename = { _, _ -> }, onRemove = {})
+      MainContent(selectedTab = tab, onSelectTab = { tab = it }, connection = state,
+        onActivateGateway = { id ->
+          assert(id == first.gatewayId)
+          state = connection(first, second, GatewayChange.Switch)
+        })
     }
-    composeTestRule.onNodeWithTag("gateway-select-gateway-b").performClick()
-    composeTestRule.onNodeWithTag("gateway-switch-gateway-b").assertIsEnabled().performClick()
-    assert(selected == "gateway-b")
+    composeTestRule.onNodeWithText("Home Gateway").performScrollTo().performClick()
+    composeTestRule.runOnIdle { state = connection(second, first) }
+    composeTestRule.onNodeWithTag("gateway-profiles-screen").assertExists()
+    composeTestRule.onNodeWithTag("gateway-select-gateway-a").performClick()
+    composeTestRule.onNodeWithTag("gateway-switch-gateway-a").assertIsEnabled().performClick()
+    composeTestRule.runOnIdle { assert(tab == HomeTab.Assistant) }
+    composeTestRule.onNodeWithTag("gateway-profiles-screen").assertDoesNotExist()
   }
 
   @Test fun understandingChatActionsPreserveSelectedAssertionAndDoNotSend() {
@@ -1519,6 +1558,12 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("work-page-tasks").assertIsSelected()
     composeTestRule.onNodeWithTag("work-page-automations").assertDoesNotExist()
     composeTestRule.onNodeWithTag("work-page-tasks").performClick()
+    val openTasks = composeTestRule.onNodeWithTag("progress-filter-open")
+    openTasks.performClick()
+    openTasks.assertIsSelected()
+    openTasks.performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithTag("progress-filter-closed").assertIsSelected()
+    composeTestRule.onNodeWithTag("projects-open-search").assertDoesNotExist()
     composeTestRule.onNodeWithTag("work-page-pager").performTouchInput { swipeLeft() }
     composeTestRule.onNodeWithTag("projects-open-search").assertIsDisplayed()
     composeTestRule.onNodeWithTag("project-create").assertIsDisplayed()

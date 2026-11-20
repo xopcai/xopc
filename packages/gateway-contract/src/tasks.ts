@@ -531,6 +531,13 @@ export type TaskDependencySummary = z.infer<typeof TaskDependencySummarySchema>;
 export type TaskEvidence = z.infer<typeof TaskEvidenceSchema>;
 export type TaskJudgment = z.infer<typeof TaskJudgmentSchema>;
 export type TaskRunReceipt = z.infer<typeof TaskRunReceiptSchema>;
+export function taskRunResultKind(receipt: Pick<TaskRunReceipt, 'status' | 'verification' | 'failure'>) {
+  if (receipt.status === 'cancelled') return 'cancelled';
+  if (receipt.status === 'failed' && receipt.failure?.code !== 'acceptance_incomplete'
+    && receipt.failure?.phase !== 'verification') return 'execution_failed';
+  return receipt.verification.status === 'failed' ? 'verification_failed'
+    : receipt.verification.status === 'unverified' ? 'verification_unverified' : 'passed';
+}
 export type TaskCriterionReview = z.infer<typeof TaskCriterionReviewSchema>;
 export type TaskExecutorSelection = z.infer<typeof TaskExecutorSelectionSchema>;
 export type TaskContractInput = z.infer<typeof TaskContractInputSchema>;

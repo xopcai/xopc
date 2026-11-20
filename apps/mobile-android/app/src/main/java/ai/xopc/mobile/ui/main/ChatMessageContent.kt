@@ -198,19 +198,12 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       if (message.text.isNotBlank()) {
         if (selectingText) {
           val origin = remember { bubbleCoordinates?.takeIf { it.isAttached }?.localToWindow(pressPosition) }
-          ChatSelectableText(message.text, markdown = !isUser, pressInWindow = origin,
+          ChatSelectableText(message.text, pressInWindow = origin,
             onCopy = onCopy, onDone = onEndSelection)
-        } else if (isUser) {
-          ChatTextSelection(textSelectable) {
-          Text(message.text, style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 25.sp),
-            modifier = Modifier.fillMaxWidth().then(if (showPreview)
-              Modifier.messagePreviewFade(bubbleColor) else Modifier),
-            maxLines = if (showPreview) messagePreviewLineLimit(message.role) else Int.MAX_VALUE,
-            overflow = TextOverflow.Ellipsis)
-          }
         } else if (showPreview) MessageTextPreview(message.id, message.text,
           messagePreviewLineLimit(message.role), bubbleColor)
-        else MarkdownContent(rememberAnswerText(message.text, revealAnswer), modifier = Modifier.fillMaxWidth(),
+        else MarkdownContent(if (isUser) message.text else rememberAnswerText(message.text, revealAnswer),
+          modifier = Modifier.fillMaxWidth(),
           onOpenLink = onOpenLink, onCopyCode = onCopy, streaming = streaming, selectable = textSelectable,
           renderImage = { source, alt ->
             val target = remember(source) { messageLinkTarget(source) }

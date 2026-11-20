@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { TaskResearchResult } from '@xopcai/gateway-contract';
+import { verifiedTaskCheckIds, type TaskResearchResult, type TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
@@ -19,6 +19,7 @@ import { TaskResultDeliveryRepository } from '../task-result-delivery-repository
 import { createTaskCollaborationTool } from '../../agent/tools/task-collaboration-tool.js';
 import { TaskCollaborationRepository } from '../task-collaboration-repository.js';
 import { defineTaskContract } from '../task-contract-definition.js';
+import { saveMediaBuffer } from '../../media/store.js';
 import { applyResearchReview, bindResearchSources, currentTaskResearchResult, submitTaskResearchResult, type ResearchReviewer } from '../task-research-result.js';
 
 const input = { sources: [{ id: 'official', excerpt: 'Price is 1.00 per hour.' }],
@@ -36,11 +37,11 @@ describe('personal research benchmark v1', () => {
   });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); });
 
-  function execution(criteria = ['Use the official hourly rate', 'Cite the source']) {
+  function execution(criteria = ['Use the official hourly rate', 'Cite the source'], expectedOutputs = ['Conclusion']) {
     const main = createConversation({ agentId: 'main' });
     const worker = createConversation({ agentId: 'worker' });
     const task = new TaskApplicationService().create({ idempotencyKey: main.key, title: 'Price research',
-      originConversationId: main.key, contract: { objective: 'Research price', expectedOutputs: ['Conclusion'],
+      originConversationId: main.key, contract: { objective: 'Research price', expectedOutputs,
         acceptanceCriteria: criteria, constraints: [], approvalRequired: [],
         assumptions: [], risks: [], acceptancePolicy: 'manual', outputDestinations: [] }, dependencies: [], context: [], authorityGrants: [],
       activation: { mode: 'start', executor: { kind: 'agent', agentId: 'worker' } } });
@@ -231,6 +232,42 @@ describe('personal research benchmark v1', () => {
     expect(result.review).toBe('unavailable');
     expect(result.checks.every(check => check.status === 'unverified')).toBe(true);
     expect(currentTaskResearchResult(runId)!.sources).toHaveLength(1);
+  });
+  it('reviews the final HTML bytes and records host evidence for structure while keeping source checks strict', async () => {
+    const { worker, runId, coordinator } = execution(['HTML 页面包含标题和页脚。', '引用官方价格来源。'], ['report.html']);
+    const html = '<!doctype html><html><head><title>Report</title></head><body><h1>Price report</h1><footer>Source coverage</footer></body></html>';
+    const saved = await saveMediaBuffer(Buffer.from(html), { bucket: 'outbound', originalFilename: 'report.html', contentType: 'text/html' });
+    const artifact: TurnOutcomeDeliverable = {
+      artifactId: 'html', title: 'report.html', kind: 'file', location: 'artifact_store', availability: 'available',
+      capabilities: ['download'], uri: saved.uri,
+    };
+    appendTranscriptEntry(worker.key, { role: 'toolResult', toolCallId: 'publish-html', toolName: 'publish_artifacts',
+      content: [{ type: 'text', text: 'Published report.html' }], isError: false, timestamp: Date.now(), details: { artifacts: [artifact] } });
+    coordinator.captureOutcome({ version: 1, outcomeId: 'html-publication', runId, turnId: runId, status: 'succeeded',
+      deliverables: [artifact], evidence: [], createdAt: new Date().toISOString() });
+    const result = await submitTaskResearchResult(worker.key, 'html-review', { ...input, finalArtifactIds: ['html'] }, undefined,
+      async args => {
+        expect(args.artifacts).toEqual([{ title: 'report.html', content: html, contentReviewed: true }]);
+        return { claims: [{ id: 'price', support: 'unsupported', note: 'Wrong source' }],
+          checks: args.criteria.map((_, criterionIndex) => ({ criterionIndex, status: 'passed', claimIds: [], note: 'No claim linked' })) };
+      });
+    expect(result.review).toBe('model_reviewed');
+    expect(result.checks.map(check => check.status)).toEqual(['passed', 'unverified']);
+    // Inspect the terminal receipt after the automatic repair budget is exhausted.
+    getSqliteDatabase().prepare("UPDATE task_runs SET retry_policy_json = '{\"maxAttempts\":1}' WHERE run_id = ?").run(runId);
+    coordinator.finalize({ status: 'succeeded', summary: 'Published', assistantText: 'Published report.html' });
+    const receipt = new TaskRunRepository().getReceipt(runId)!;
+    expect(receipt.verification.checks[0].method).toBe('tool_verified');
+    expect(verifiedTaskCheckIds(receipt).has(receipt.verification.checks[0].checkId!)).toBe(true);
+  });
+
+  it('checks exact reply format and Unicode length without a factual claim for each format check', async () => {
+    const { worker } = execution(['回复为纯文本聊天内容，未生成任何文件。', '总篇幅控制在2字以内。', '回复不使用 Markdown。', '核对来源。'], ['chat_reply']);
+    const unavailable: ResearchReviewer = async () => { throw new Error('Reviewer unavailable'); };
+    const valid = await submitTaskResearchResult(worker.key, 'valid-reply', { ...input, finalText: '好🙂' }, undefined, unavailable);
+    expect(valid.checks.map(check => check.status)).toEqual(['passed', 'passed', 'passed', 'unverified']);
+    const invalid = await submitTaskResearchResult(worker.key, 'invalid-reply', { ...input, finalText: '**好🙂**' }, undefined, unavailable);
+    expect(invalid.checks.map(check => check.status)).toEqual(['passed', 'failed', 'failed', 'unverified']);
   });
   it('R09-stale-direction: rejects a review completed before later user direction', async () => {
     const { worker, taskId, runId } = execution();

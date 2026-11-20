@@ -54,7 +54,7 @@ export struct XopcChatContext {
           { key: 'note', label: $r('app.string.notes'), testId: 'assistant-reference-tab-note' },
           { key: 'task', label: $r('app.string.tasks'), testId: 'assistant-reference-tab-task' },
           { key: 'file', label: $r('app.string.files'), testId: 'assistant-reference-tab-file' }
-        ], selectedKey: this.kind,
+        ], selectedKey: this.kind, swipeToSelect: true,
           onSelect: (key: string): void => { this.selectKind(key); } })
         TextInput({ text: this.search, placeholder: $r('app.string.search') }).onChange((value: string): void => {
           this.search = value; clearTimeout(this.searchTimer);

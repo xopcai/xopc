@@ -137,6 +137,7 @@ internal fun PersonalOverviewContent(agent: PersonalAgentRecord, avatar: Bitmap?
     PersonalOverviewHeader(agent, avatar, attention, running, library, collapse, maxCollapse, onTab, onClose, onEdit)
     key(library) {
       LazyColumn(Modifier.fillMaxWidth().weight(1f).nestedScroll(scroll)
+        .swipePageSelection(listOf(false, true), library, onSelect = onTab)
         .testTag(if (library) "personal-overview-library-list" else "personal-overview-task-list"),
         contentPadding = PaddingValues(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         if (library) {
@@ -246,7 +247,7 @@ private fun PersonalOverviewHeader(agent: PersonalAgentRecord, avatar: Bitmap?, 
       listOf(
         SegmentOption(false, stringResource(R.string.progress_tasks), "personal-overview-tasks-tab", icon = R.drawable.action_task_list, count = attention.takeIf { it > 0 }),
         SegmentOption(true, stringResource(R.string.personal_overview_library), "personal-overview-library-tab", icon = R.drawable.tab_notes),
-      ), library, onTab, Modifier.padding(top = 12.dp, bottom = 8.dp),
+      ), library, onTab, Modifier.padding(top = 12.dp, bottom = 8.dp), swipeToSelect = true,
     )
   }
 }

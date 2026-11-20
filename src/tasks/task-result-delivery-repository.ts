@@ -11,7 +11,7 @@ import { personalRequestForTask } from '../personal-agent/request-repository.js'
 import { hasPersonalResultFileLinks, sanitizePersonalResultFileLinks } from '../personal-agent/result-file-links.js';
 import { TaskRepository } from './task-repository.js';
 import { taskInstructionSequence } from './task-instruction-sequence.js';
-import { finalReplyCharacterLimit } from './task-final-reply.js';
+import { finalReplyCharacterLimit, isChatOnlyDelivery } from './task-final-reply.js';
 import { finalizedTaskResultId, recordTaskResultVersion } from './task-result-versions.js';
 
 const log = createLogger('TaskResultDelivery');
@@ -135,8 +135,9 @@ export class TaskResultDeliveryRepository {
       && !finalText && !deliverables.some(item => item.availability === 'available'));
     const candidate = finalText ?? (rawText ? sanitizePersonalResultFileLinks(rawText) : undefined);
     const replyLength = candidate ? Array.from(candidate).length : 0;
+    const chatOnly = isChatOnlyDelivery(task.contract?.expectedOutputs ?? []);
     const replyTooLong = task.contract?.acceptanceCriteria.some(criterion =>
-      replyLength > (finalReplyCharacterLimit(criterion) ?? Infinity));
+      replyLength > (finalReplyCharacterLimit(criterion, chatOnly) ?? Infinity));
     const text = replyTooLong ? undefined : candidate
       || (unpublishedFile ? 'The file has not been published for download.' : undefined);
     if (!deliverables.length && (!text || (status !== 'succeeded' && !finalText))) return false;

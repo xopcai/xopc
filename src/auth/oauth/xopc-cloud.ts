@@ -9,7 +9,7 @@ import { resolveConnectedPlatformEndpoint } from '../../platform/resolution.js';
 
 const CLIENT_ID = 'xopc-native';
 const DEFAULT_CONSOLE_URL = 'https://console.xopc.ai';
-const MODEL_SERVICE_SCOPE = 'models:read models:invoke account:usage connectors:read connectors:manage connectors:execute offline_access';
+const MODEL_SERVICE_SCOPE = 'models:read models:invoke account:usage connectors:read connectors:manage connectors:execute push:manage offline_access';
 const TUNNEL_REGISTRATION_SCOPE = 'tunnel:register';
 const HOSTED_SHARE_SCOPE = 'shares:read shares:write offline_access';
 const CALLBACK_PATH = '/oauth/callback';

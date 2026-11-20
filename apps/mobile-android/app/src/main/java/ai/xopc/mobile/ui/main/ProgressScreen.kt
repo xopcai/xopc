@@ -172,9 +172,28 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var selectedProjectId by rememberSaveable(state.gatewayId) { mutableStateOf(initialItemId.takeIf { initialPage == "project" }) }
   var projectMenuOpen by rememberSaveable(state.gatewayId, selectedProjectId) { mutableStateOf(false) }
   val projectKey = selectedProjectId?.let { "project.$it" }
+  val projectSections = listOf(
+    SegmentOption("overview", stringResource(R.string.progress_project_overview), "progress-project-tab-overview"),
+    SegmentOption("sessions", stringResource(R.string.tab_conversations), "progress-project-tab-sessions"),
+    SegmentOption("tasks", stringResource(R.string.progress_tasks), "progress-project-tab-tasks"),
+    SegmentOption("notes", stringResource(R.string.tab_notes), "progress-project-tab-notes"),
+    SegmentOption("automations", stringResource(R.string.progress_automations), "progress-project-tab-automations"),
+  )
   var projectSection by rememberSaveable(state.gatewayId, selectedProjectId) {
-    val sections = listOf("overview", "sessions", "tasks", "notes", "automations")
-    mutableStateOf(projectKey?.let { navigation.selection(it, sections, "overview") } ?: "overview")
+    mutableStateOf(projectKey?.let { navigation.selection(it, projectSections.map { option -> option.value },
+      "overview") } ?: "overview")
+  }
+  val projectPager = androidx.compose.runtime.key(state.gatewayId, selectedProjectId) {
+    rememberPagerState(initialPage = projectSections.indexOfFirst { it.value == projectSection }.coerceAtLeast(0)) {
+      projectSections.size
+    }
+  }
+  val projectPagerScope = rememberCoroutineScope()
+  LaunchedEffect(projectPager, projectKey) {
+    snapshotFlow { projectPager.settledPage }.collect { index ->
+      projectSection = projectSections[index].value
+      if (projectKey != null) navigation.rememberSelection(projectKey, projectSection)
+    }
   }
   var projectEditorMode by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var projectWriteBusy by remember(state.gatewayId) { mutableStateOf(false) }
@@ -466,15 +485,12 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       } else if (page == "automations") {
         Text(stringResource(R.string.progress_automations), style = MaterialTheme.typography.titleMedium)
       } else if (page == "project" && selectedProjectId != null) {
-        PageTitleMenu(listOf(
-          SegmentOption("overview", stringResource(R.string.progress_project_overview), "progress-project-tab-overview"),
-          SegmentOption("sessions", stringResource(R.string.tab_conversations), "progress-project-tab-sessions"),
-          SegmentOption("tasks", stringResource(R.string.progress_tasks), "progress-project-tab-tasks"),
-          SegmentOption("notes", stringResource(R.string.tab_notes), "progress-project-tab-notes"),
-          SegmentOption("automations", stringResource(R.string.progress_automations), "progress-project-tab-automations"),
-        ), projectSection, "progress-project-tabs", Modifier.fillMaxWidth(0.55f)) {
-          projectSection = it
-          if (projectKey != null) navigation.rememberSelection(projectKey, it)
+        PageTitleMenu(projectSections, projectSection, "progress-project-tabs", Modifier.fillMaxWidth(0.55f)) { target ->
+          val index = projectSections.indexOfFirst { it.value == target }
+          projectPagerScope.launch {
+            if (kotlin.math.abs(index - projectPager.currentPage) == 1) projectPager.animateScrollToPage(index)
+            else projectPager.scrollToPage(index)
+          }
         }
       }
     }
@@ -500,17 +516,23 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
           modifier = Modifier.testTag("progress-project-retry")) {
           Text(stringResource(R.string.progress_load_failed))
         }
-        state.project != null -> ProgressProjectDetail(state.project, projectSection, state.projectTasks,
-          state.projectSessions, state.projectSessionsLoading, state.projectSessionsError,
-          state.projectNotes, state.projectNotesLoading, state.projectNotesError,
-          state.projectAutomations, state.projectAutomationsLoading, state.projectAutomationsError,
-          onCreate = { createProjectTask(state.project.id) }, onOpenTask = onOpenTaskChat, onOpenChat = onOpenProjectChat,
-          onOpenNote = onOpenNote, onOpenAutomation = ::openAutomation,
-          onSchedule = { prompt -> onArrangeAutomation(state.project.id, prompt) },
-          onCreateChat = { onCreateProjectChat(state.project.id) }, chatBusy = chatBusy,
-          onRetrySessions = { selectedProjectId?.let(onOpenProject) },
-          deliveries = state.deliveries.filter { it.projectId == state.project.id },
-          onOpenRun = ::openRun)
+        state.project != null -> HorizontalPager(projectPager,
+          modifier = Modifier.fillMaxSize().testTag("progress-project-pager"),
+          key = { projectSections[it].value }, userScrollEnabled = !projectMenuOpen,
+          flingBehavior = PagerDefaults.flingBehavior(projectPager, snapPositionalThreshold = 0.33f),
+        ) { index ->
+          ProgressProjectDetail(state.project, projectSections[index].value, state.projectTasks,
+            state.projectSessions, state.projectSessionsLoading, state.projectSessionsError,
+            state.projectNotes, state.projectNotesLoading, state.projectNotesError,
+            state.projectAutomations, state.projectAutomationsLoading, state.projectAutomationsError,
+            onCreate = { createProjectTask(state.project.id) }, onOpenTask = onOpenTaskChat, onOpenChat = onOpenProjectChat,
+            onOpenNote = onOpenNote, onOpenAutomation = ::openAutomation,
+            onSchedule = { prompt -> onArrangeAutomation(state.project.id, prompt) },
+            onCreateChat = { onCreateProjectChat(state.project.id) }, chatBusy = chatBusy,
+            onRetrySessions = { selectedProjectId?.let(onOpenProject) },
+            deliveries = state.deliveries.filter { it.projectId == state.project.id },
+            onOpenRun = ::openRun)
+        }
       }
       "edit" -> ProgressTaskEditor(editTitle, { editTitle = it }, editBody, { editBody = it },
         editProject, { editProject = it }, editPriority, { editPriority = it }, editDueAt, { editDueAt = it },
@@ -676,7 +698,7 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
         SegmentOption("all", stringResource(R.string.progress_filter_all), "progress-project-filter-all", count = matching.size),
         SegmentOption("active", stringResource(R.string.progress_project_filter_active), "progress-project-filter-active", count = matching.count { it.status != "archived" }),
         SegmentOption("archived", stringResource(R.string.progress_project_filter_archived), "progress-project-filter-archived", count = matching.count { it.status == "archived" }),
-      ), filter, { filter = it },
+      ), filter, { filter = it }, swipeToSelect = true,
     )
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
       if (state.projectsLoading && state.projects.isEmpty()) item {
@@ -907,7 +929,7 @@ private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterCha
         SegmentOption("all", stringResource(R.string.progress_filter_all), "progress-filter-all"),
         SegmentOption("open", stringResource(R.string.progress_filter_open), "progress-filter-open"),
         SegmentOption("closed", stringResource(R.string.progress_filter_closed), "progress-filter-closed"),
-      ), filter, onFilterChange,
+      ), filter, onFilterChange, swipeToSelect = true,
     )
     LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp),
     contentPadding = PaddingValues(bottom = 20.dp)) {

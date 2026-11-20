@@ -22,7 +22,7 @@ class TaskChatHeaderTest {
   @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
   @Test fun taskConversationKeepsSearchAndSettingsAccessible() {
-    val task = ProgressTask("header-task", "Header task", "", "ready", null, 0, null, null)
+    val task = ProgressTask("header-task", "Header task", "", "ready", null, 0, null, null, version = 1, allowedCommands = listOf("close"))
     val conversationId = "11111111-2222-4333-8444-555555555555"
     val state = mutableStateOf(ConnectionUiState(
       profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
@@ -52,10 +52,19 @@ class TaskChatHeaderTest {
     compose.onNodeWithTag("task-chat-overview").assertDoesNotExist()
     compose.onNodeWithTag("task-chat-details-tip").performClick()
     compose.onNodeWithTag("task-chat-overview").assertIsDisplayed()
+    compose.onNodeWithTag("task-chat-edit").assertIsDisplayed()
+    compose.onNodeWithTag("task-chat-status").assertIsDisplayed()
+    compose.onNodeWithTag("task-chat-edit").performClick()
+    compose.onNodeWithTag("progress-task-editor").assertIsDisplayed()
+    androidx.test.espresso.Espresso.pressBack()
+    compose.onNodeWithTag("task-chat-overview").assertIsDisplayed()
     compose.onNodeWithTag("task-chat-details-close").performClick()
     compose.onNodeWithTag("task-chat-overview").assertDoesNotExist()
     compose.onNodeWithTag("assistant-composer-shell").assertIsDisplayed()
     compose.onNodeWithTag("task-chat-menu").performClick()
+    compose.onNodeWithText(compose.activity.getString(R.string.progress_edit_task)).assertDoesNotExist()
+    compose.onNodeWithText(compose.activity.getString(R.string.progress_adjust_status)).assertDoesNotExist()
+    compose.onNodeWithText(compose.activity.getString(R.string.progress_cancel_task)).assertDoesNotExist()
     compose.onNodeWithText(compose.activity.getString(R.string.assistant_options)).performClick()
     compose.onNodeWithTag("chat-options-panel").assertIsDisplayed()
     compose.onNodeWithTag("chat-options-close").performClick()

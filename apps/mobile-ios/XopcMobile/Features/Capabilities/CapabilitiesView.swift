@@ -2,6 +2,7 @@
 import CoreImage.CIFilterBuiltins
 import Photos
 import SwiftUI
+import UIKit
 
 private let capabilityQrContext = CIContext()
 private let capabilityCompactDetent = PresentationDetent.height(420)
@@ -644,6 +645,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     @State private var confirmationOpen = false
     @State private var requestRevision = 0
     @FocusState private var focusedField: String?
+    @State private var focusedCredential: String?
 
     private var panelHeader: some View {
         HStack(spacing: 10) {
@@ -751,7 +753,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                         .padding(12).background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
                         .onChange(of: advanced) {
                             if itemID == "mcp:setup" {
-                                focusedField = nil
+                                dismissPanelKeyboard()
                             }
                         }
                     }
@@ -954,7 +956,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             VStack(spacing: 4) {
                 if let prompt = readyPrompt {
                     Button {
-                        focusedField = nil
+                        dismissPanelKeyboard()
                         onUseInChat(prompt)
                     } label: {
                         Label(t(itemID.hasPrefix("conversation:") ? "返回对话" : "通过对话使用",
@@ -1053,7 +1055,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     }
 
     private func perform(_ action: CapabilityPanelPayload.Action) {
-        focusedField = nil
+        dismissPanelKeyboard()
         if action.dismiss == true {
             onClose()
         } else if action.confirmation != nil, action.inlineReview != true {
@@ -1061,6 +1063,11 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         } else {
             Task { await load(action.id) }
         }
+    }
+
+    private func dismissPanelKeyboard() {
+        focusedField = nil
+        focusedCredential = nil
     }
 
     @ViewBuilder private func actionButton(_ action: CapabilityPanelPayload.Action, prominent: Bool) -> some View {
@@ -1083,7 +1090,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                 retainedValues[field.id] = $0
             }
             if field.presentation == "segmented" {
-                focusedField = nil; errorMessage = nil
+                dismissPanelKeyboard(); errorMessage = nil
             }
         })
         if field.type == "toggle" {
@@ -1101,7 +1108,10 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         } else if field.type == "list" {
             groupList(field, selection: value)
         } else if field.type == "headers" {
-            CapabilityKeyValueEditor(encoded: value, focus: $focusedField, isEnvironment: field.id == "mcp-env")
+            CapabilityKeyValueEditor(
+                encoded: value, focus: $focusedField, credentialFocus: $focusedCredential,
+                isEnvironment: field.id == "mcp-env"
+            )
         } else if field.id == "mcp-json" {
             jsonInput(field, value: value)
         } else {
@@ -1160,7 +1170,12 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     private func textInput(_ field: CapabilityPanelPayload.Field, value: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: field.label).font(.subheadline.weight(.medium))
-            if field.type == "secret" {
+            if field.type == "secret" && itemID == "mcp:setup" {
+                McpCredentialInput(
+                    label: field.label, placeholder: field.hint ?? field.label,
+                    text: value, focus: $focusedCredential, fieldID: field.id
+                )
+            } else if field.type == "secret" {
                 SecureField(field.hint ?? field.label, text: value).textContentType(nil)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
                     .focused($focusedField, equals: field.id)
@@ -1345,9 +1360,85 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     }
 }
 
+private struct McpCredentialInput: UIViewRepresentable {
+    let label: String
+    let placeholder: String
+    @Binding var text: String
+    @Binding var focus: String?
+    let fieldID: String
+    @Environment(\.mobileTheme) private var theme
+
+    func makeUIView(context: Context) -> UITextField {
+        let input = UITextField()
+        input.delegate = context.coordinator
+        input.font = .preferredFont(forTextStyle: .body)
+        input.adjustsFontForContentSizeCategory = true
+        input.autocapitalizationType = .none
+        input.autocorrectionType = .no
+        input.spellCheckingType = .no
+        input.smartQuotesType = .no
+        input.smartDashesType = .no
+        input.smartInsertDeleteType = .no
+        input.keyboardType = .asciiCapable
+        input.returnKeyType = .done
+        input.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        input.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return input
+    }
+
+    func updateUIView(_ input: UITextField, context: Context) {
+        context.coordinator.field = self
+        let masked = String(repeating: "•", count: text.count)
+        if input.text != masked { input.text = masked }
+        input.placeholder = placeholder
+        input.accessibilityLabel = label
+        input.textColor = UIColor(theme.foreground)
+        if input.isFirstResponder && focus != fieldID {
+            input.resignFirstResponder()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(field: self) }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var field: McpCredentialInput
+
+        init(field: McpCredentialInput) { self.field = field }
+
+        func textFieldDidBeginEditing(_ textField: UITextField) {
+            field.focus = field.fieldID
+        }
+
+        func textFieldDidEndEditing(_ textField: UITextField) {
+            if field.focus == field.fieldID { field.focus = nil }
+        }
+
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            textField.resignFirstResponder()
+            return false
+        }
+
+        func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+            let credential = field.text
+            guard let start = credential.index(credential.startIndex, offsetBy: range.location, limitedBy: credential.endIndex),
+                  let end = credential.index(start, offsetBy: range.length, limitedBy: credential.endIndex) else { return false }
+            // Keep the credential in form state so the system input only ever contains bullets.
+            let updated = credential.replacingCharacters(in: start..<end, with: string)
+            field.text = updated
+            textField.text = String(repeating: "•", count: updated.count)
+            let offset = min(range.location + string.count, updated.count)
+            if let cursor = textField.position(from: textField.beginningOfDocument, offset: offset) {
+                textField.selectedTextRange = textField.textRange(from: cursor, to: cursor)
+            }
+            return false
+        }
+    }
+}
+
 private struct CapabilityKeyValueEditor: View {
     @Binding var encoded: String
     let focus: FocusState<String?>.Binding
+    @Binding var credentialFocus: String?
     let isEnvironment: Bool
     @Environment(\.locale) private var locale
     @Environment(\.mobileTheme) private var theme
@@ -1381,9 +1472,10 @@ private struct CapabilityKeyValueEditor: View {
                             .accessibilityIdentifier("\(prefix)-name-\(index)")
                             .padding(10)
                         Divider().padding(.horizontal, 10)
-                        SecureField(valueLabel, text: cell(index, 1))
-                            .focused(focus, equals: "\(prefix)-value-\(index)")
-                            .textContentType(nil)
+                        McpCredentialInput(
+                            label: valueLabel, placeholder: valueLabel, text: cell(index, 1),
+                            focus: $credentialFocus, fieldID: "\(prefix)-value-\(index)"
+                        )
                             .accessibilityIdentifier("\(prefix)-value-\(index)")
                             .padding(10)
                     }

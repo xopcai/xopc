@@ -7,6 +7,7 @@ import { resolveTaskLocale } from './task-language.js';
 import { loadTranscriptRowsForSession } from '../storage/sqlite/index.js';
 import { findUnconfirmedToolEffect, RECOVERY_READ_TOOLS } from '../agent/orchestration/turn-recovery.js';
 import { runInIndependentAgentExecution } from '../agent/independent-execution.js';
+import { TaskModelPreflightError } from '../agent/models/turn-candidates.js';
 
 const log = createLogger('TaskRunDispatcher');
 const LEASE_MS = 60_000;
@@ -26,6 +27,7 @@ export class TaskRunDispatcher {
     maxConcurrency?: number;
     ensureSession: (taskId: string, runId: string, agentId?: string) => Promise<string>;
     validateExecutor?: (taskId: string, agentId?: string) => void;
+    preflightModel?: (conversationId: string) => Promise<void>;
     runAgent: (runId: string, conversationId: string, message: string) => Promise<void>;
   }) {}
 
@@ -95,13 +97,20 @@ export class TaskRunDispatcher {
         if (!run) return;
         const task = this.#tasks.get(run.taskId);
         if (!task) continue;
+        const zh = resolveTaskLocale(task) === 'zh';
+        const retireSuperseded = (expectedRunVersion: number) => {
+          const summary = zh ? '任务要求已更新，本次执行未启动。' : 'Task requirements changed before execution.';
+          this.#application.completeRun({ runId: run.id, expectedRunVersion, terminalCode: 'spec_superseded',
+            receipt: { status: 'cancelled', summary, changes: [], evidence: [],
+              verification: { status: 'unverified', checks: [] }, remainingWork: [], needsUser: false } });
+        };
         try {
           const executableRun = run.status === 'waiting'
             ? this.#runs.setStatus({
               runId: run.id,
               expectedVersion: run.version,
               from: ['waiting'],
-              to: 'running',
+              to: run.startedAt === undefined ? 'queued' : 'running',
               actor: { kind: 'system', id: workerId },
             })
             : run;
@@ -111,17 +120,10 @@ export class TaskRunDispatcher {
             ? await this.deps.ensureSession(task.id, run.id, agentId) : undefined;
           if (this.#stopped) return;
           if (!conversationId || this.#tasks.get(task.id)?.latestContractVersion !== run.contractVersion) {
-            const summary = resolveTaskLocale(task) === 'zh' ? '任务要求已更新，本次执行未启动。' : 'Task requirements changed before execution.';
             const current = this.#runs.get(run.id);
-            if (!current) continue;
-            this.#application.completeRun({
-              runId: current.id, expectedRunVersion: current.version, terminalCode: 'spec_superseded',
-              receipt: { status: 'cancelled', summary, changes: [], evidence: [],
-                verification: { status: 'unverified', checks: [] }, remainingWork: [], needsUser: false },
-            });
+            if (current?.leaseOwner === workerId) retireSuperseded(current.version);
             continue;
           }
-          this.deps.validateExecutor?.(task.id, agentId);
           this.#activeRunIds.add(run.id);
           const heartbeat = setInterval(() => {
             if (!this.#runs.heartbeat({ runId: run.id, owner: workerId, leaseMs: LEASE_MS })) {
@@ -132,6 +134,15 @@ export class TaskRunDispatcher {
           heartbeat.unref?.();
           this.#heartbeats.add(heartbeat);
           try {
+            await this.deps.preflightModel?.(conversationId);
+            if (this.#stopped) return;
+            const current = this.#runs.get(run.id);
+            if (current?.version !== executableRun.version || current.leaseOwner !== workerId) continue;
+            if (this.#tasks.get(task.id)?.latestContractVersion !== run.contractVersion) {
+              retireSuperseded(current.version);
+              continue;
+            }
+            this.deps.validateExecutor?.(task.id, agentId);
             await this.deps.runAgent(run.id, conversationId,
               buildTaskRunMessage(task.contract?.objective ?? task.title, run.trigger, task.contract?.brief, task.id));
           } finally {
@@ -143,23 +154,36 @@ export class TaskRunDispatcher {
           // Preserve the leased run for restart reconciliation after shutdown.
           if (this.#stopped) return;
           const current = this.#runs.get(run.id);
-          if (current?.status === 'waiting' && current.policySnapshot.continuation) continue;
-          if (current && ['queued', 'running', 'waiting', 'verifying'].includes(current.status)) {
+          if (current?.status === 'waiting' && current.policySnapshot.continuation && !(error instanceof TaskModelPreflightError)) continue;
+          if (current?.leaseOwner === workerId && ['queued', 'running', 'waiting', 'verifying'].includes(current.status)) {
+            if (error instanceof TaskModelPreflightError && this.#tasks.get(task.id)?.latestContractVersion !== run.contractVersion) {
+              retireSuperseded(current.version);
+              continue;
+            }
+            const preflight = error instanceof TaskModelPreflightError ? error : undefined;
+            const code = preflight?.code ?? 'dispatch_failed';
+            const diagnostic = error instanceof Error ? error.message : String(error);
+            const summary = preflight ? JSON.stringify({
+              kind: code, code, provider: preflight.provider, modelRef: preflight.modelRef,
+              deepLink: '/settings/capabilities/models', message: diagnostic,
+            }) : zh ? '任务执行调度失败' : 'TaskRun dispatch failed';
             this.#application.completeRun({
               runId: current.id,
               expectedRunVersion: current.version,
-              terminalCode: 'dispatch_failed',
-              terminalMessage: error instanceof Error ? error.message : String(error),
+              terminalCode: code,
+              terminalMessage: preflight ? summary : diagnostic,
               receipt: {
                 status: 'failed',
-                summary: resolveTaskLocale(task) === 'zh' ? '任务执行调度失败' : 'TaskRun dispatch failed',
+                summary,
                 changes: [],
                 evidence: [],
                 verification: { status: 'unverified', checks: [] },
                 remainingWork: [task.contract?.objective ?? task.title],
                 needsUser: false,
                 completionVerdict: 'not_achieved',
-                failure: { code: 'dispatch_failed', phase: 'dispatch', recoveryAction: resolveTaskLocale(task) === 'zh' ? '重试任务执行' : 'Retry the task run' },
+                failure: { code, phase: preflight ? 'preflight' : 'dispatch', recoveryAction: preflight
+                  ? zh ? '在模型设置中检查执行模型及凭证后重试' : 'Check the execution model and its credentials in Model Settings, then retry'
+                  : zh ? '重试任务执行' : 'Retry the task run' },
               },
             });
           }

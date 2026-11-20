@@ -24,7 +24,7 @@ const oauthSchema = z.strictObject({
   clientRegistration: z.enum(['dcr', 'cimd']).optional(),
   scope: z.string().trim().max(512).optional(),
 });
-const authSchema = z.enum(['auto', 'none', 'bearer', 'headers', 'oauth']);
+const authSchema = z.enum(['auto', 'none', 'bearer', 'apiKey', 'headers', 'oauth']);
 const urlTransport = z.enum(['http', 'streamable-http', 'sse']);
 const networkSchema = z.enum(['auto', 'private']);
 const envName = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -260,11 +260,8 @@ function entry(t: Translator, options: { source?: 'link' | 'json' | 'stdio'; can
         advanced: true, visibleWhen: link, options: [
           { id: 'auto', label: t('自动识别', 'Detect automatically') }, { id: 'private', label: t('Gateway 内网', 'Gateway private network') },
         ] },
-      { id: 'authMethod', label: t('认证方式', 'Authentication'), type: 'select', value: options.method ?? 'auto', advanced: true,
-        visibleWhen: link, options: [
-          { id: 'auto', label: t('自动识别', 'Detect automatically') }, { id: 'none', label: t('无需认证', 'No authentication') },
-          ...authOptions(t),
-        ] },
+      { id: 'authMethod', label: t('认证方式', 'Authentication'), type: 'select', value: options.method ?? 'auto',
+        visibleWhen: link, options: authOptions(t) },
       { id: 'commandName', label: t('名称（选填）', 'Name (optional)'), type: 'text',
         value: options.source === 'stdio' ? options.candidate?.name : '', advanced: true, visibleWhen: stdio },
       { id: 'cwd', label: t('工作目录（选填）', 'Working directory (optional)'), type: 'text', value: server?.cwd ?? '',
@@ -286,8 +283,12 @@ function entry(t: Translator, options: { source?: 'link' | 'json' | 'stdio'; can
 
 function authOptions(t: Translator): NonNullable<Field['options']> {
   return [
-    { id: 'bearer', label: 'Bearer Token' }, { id: 'headers', label: t('自定义请求头', 'Custom request headers') },
+    { id: 'auto', label: t('自动探测', 'Detect automatically') },
     { id: 'oauth', label: t('OAuth 浏览器授权', 'OAuth in browser') },
+    { id: 'bearer', label: 'Bearer Token' },
+    { id: 'apiKey', label: 'API Key' },
+    { id: 'headers', label: t('自定义请求头', 'Custom request headers') },
+    { id: 'none', label: t('无需认证', 'No authentication') },
   ];
 }
 
@@ -366,8 +367,10 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
 
   function needsAuth(flow: Flow, t: Translator, message?: string): Panel {
     flow.phase = 'auth';
-    const initial = flow.method === 'bearer' || flow.method === 'headers'
+    const initial = flow.method && flow.method !== 'auto' && flow.method !== 'oauth'
       ? flow.method : flow.rejectedHeaders ? 'headers' : '';
+    const apiKey = { field: 'method', value: 'apiKey' };
+    const previousKeyHeader = flow.method === 'apiKey' ? Object.keys(flow.candidate?.server.headers ?? {})[0] : undefined;
     return {
       flow: flow.id,
       ...reviewSummary(flow.candidate, t),
@@ -377,9 +380,12 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
           { id: '', label: t('选择认证方式', 'Choose an authentication method') }, ...authOptions(t),
         ] },
         { id: 'token', label: 'Bearer Token', type: 'secret', visibleWhen: { field: 'method', value: 'bearer' } },
+        { id: 'apiKeyHeader', label: t('API Key 请求头名称', 'API Key header name'), type: 'text',
+          value: previousKeyHeader ?? 'X-API-Key', hint: 'X-API-Key', visibleWhen: apiKey },
+        { id: 'apiKey', label: 'API Key', type: 'secret', visibleWhen: apiKey },
         { id: 'requestHeaders', label: t('请求头', 'Request headers'), type: 'headers', visibleWhen: { field: 'method', value: 'headers' } },
       ],
-      actions: [{ id: 'verify', label: t('继续认证', 'Continue authentication') }, backAction(t)],
+      actions: [{ id: 'verify', label: t('检查连接', 'Check connection') }, backAction(t)],
     };
   }
 
@@ -441,11 +447,13 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
     if (flow.candidate?.server.type === 'stdio') assertMobileStdioAllowed(readHost().allowStdio, t);
     const result = await drafts.probe(flow.owner, flow.draftId!);
     if (result.state === 'connected') return verified(flow, t, result.toolCount ?? 0);
-    if (result.state === 'oauth_required') return oauthReady(flow, t);
-    if (result.state === 'token_required' || result.state === 'auth_unknown') {
-      flow.rejectedHeaders = result.state === 'token_required' && Boolean(flow.candidate?.server.headers);
-      return needsAuth(flow, t, result.state === 'token_required'
-        ? t('服务未接受这些凭据，请核对后重试。', 'The service did not accept these credentials. Check them and try again.')
+    if (result.state === 'oauth_required' && flow.method !== 'none') return oauthReady(flow, t);
+    if (result.state === 'oauth_required' || result.state === 'token_required' || result.state === 'auth_unknown' ||
+        (flow.candidate?.server.url && result.errorCode === 'access_denied')) {
+      const hasCredentials = Object.keys(flow.candidate?.server.headers ?? {}).length > 0;
+      flow.rejectedHeaders = hasCredentials;
+      return needsAuth(flow, t, hasCredentials
+        ? t('服务拒绝了访问。请检查凭据和权限，或切换认证方式。', 'Access was denied. Check your credentials and permissions, or choose another authentication method.')
         : t('此服务要求认证。请根据服务商的说明选择认证方式。', 'This service requires authentication. Choose the method specified by the provider.'));
     }
     return retry(flow, t, result);
@@ -462,7 +470,7 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
 
   async function connect(flow: Flow, t: Translator): Promise<Panel> {
     const method = flow.method;
-    if (method === 'headers' || method === 'bearer' && !flow.candidate?.server.headers) return needsAuth(flow, t);
+    if (method === 'apiKey' || method === 'headers' || (method === 'bearer' && !flow.candidate?.server.headers)) return needsAuth(flow, t);
     return testDraft(flow, t);
   }
 
@@ -606,20 +614,22 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
       return await connect(flow, t);
     }
     if (action === 'verify' && flow.phase === 'auth' && flow.candidate) {
-      const method = z.enum(['bearer', 'headers', 'oauth']).safeParse(values.method);
+      const method = authSchema.safeParse(values.method);
       if (!method.success) throw new McpDraftError(400, t('请选择认证方式。', 'Choose an authentication method.'));
       const server = { ...flow.candidate.server };
-      if (method.data === 'bearer' || method.data === 'oauth') {
-        server.headers = Object.fromEntries(Object.entries(server.headers ?? {}).filter(([name]) => name.toLowerCase() !== AUTHORIZATION_HEADER));
-      }
-      if (method.data === 'bearer') Object.assign(server.headers!, bearerHeaders(values.token, t));
-      if (method.data === 'headers') {
+      if (method.data !== 'oauth' || flow.method !== 'oauth') server.headers = undefined;
+      if (method.data === 'bearer') {
+        server.headers = bearerHeaders(values.token, t);
+      } else if (method.data === 'apiKey') {
+        server.headers = headerMap([[values.apiKeyHeader ?? 'X-API-Key', values.apiKey ?? '']], t);
+      } else if (method.data === 'headers') {
         const entries = keyValueRows(values.requestHeaders, t);
         server.headers = headerMap(entries.filter(([name, value]) => name.trim() || value.trim()), t);
       }
       if (method.data !== 'oauth') server.oauth = undefined;
       flow.candidate = { ...flow.candidate, server };
       flow.method = method.data;
+      flow.rejectedHeaders = false;
       return await testDraft(flow, t);
     }
     if (action === 'change-auth' && flow.phase === 'oauth') return needsAuth(flow, t);

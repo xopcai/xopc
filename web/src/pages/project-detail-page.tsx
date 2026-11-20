@@ -2,7 +2,7 @@ import { ResourceUnavailable } from '@/components/ui/resource-unavailable';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { TaskChangedEventSchema, TaskDeletedEventSchema, type ProjectOperatingView, type ProjectTaskCard, type TaskCommand, type TaskPhase } from '@xopcai/gateway-contract';
+import { TaskChangedEventSchema, TaskDeletedEventSchema, taskRunResultKind, type ProjectOperatingView, type ProjectTaskCard, type TaskCommand, type TaskPhase } from '@xopcai/gateway-contract';
 import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, History, LayoutDashboard, MessageSquarePlus, Pin, PinOff, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -22,6 +22,8 @@ import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { commandTask, createTask, ensureTaskConversation, fetchTask, updateTaskBoardPosition, updateTaskDependencies } from '@/features/tasks/home-api';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
+import { taskCopy } from '@/features/tasks/task-copy';
+import { taskTextForDisplay } from '@/features/tasks/task-result-presentation';
 import { FileTree } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
@@ -1743,10 +1745,11 @@ export function ProjectDetailPage() {
                       <div className="flex min-w-0 items-center justify-between gap-3">
                         <span className="min-w-0 truncate text-sm font-medium text-fg">{taskTitle}</span>
                         <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">
-                          {pm.overview.resultStatuses[receipt.status]} · {pm.board.verification[receipt.verification.status]}
+                          {taskCopy(language).resultStatuses[taskRunResultKind(receipt)]}
                         </span>
                       </div>
-                      <div className="mt-1 line-clamp-3 text-sm leading-5 text-fg-muted"><MarkdownView content={receipt.summary} compact /></div>
+                      <div className="mt-1 line-clamp-3 text-sm leading-5 text-fg-muted"><MarkdownView
+                        content={receipt.status === 'failed' ? taskTextForDisplay(receipt.summary, language) : receipt.summary} compact /></div>
                     </Link>
                   ))}
                 </div>

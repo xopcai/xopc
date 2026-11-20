@@ -14,6 +14,14 @@ import {
 } from '../../../../storage/sqlite/index.js';
 import { registerDevicePushRoutes } from '../device-push.js';
 
+import { PlatformPushError, registerPlatformPushDevice, removePlatformPushDevice } from '../../../../notifications/platform-push.js';
+
+vi.mock('../../../../notifications/platform-push.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../../../../notifications/platform-push.js')>(),
+  registerPlatformPushDevice: vi.fn(),
+  removePlatformPushDevice: vi.fn(),
+}));
+
 describe('device push routes', () => {
   let stateDir: string;
   let app: Hono;
@@ -27,8 +35,8 @@ describe('device push routes', () => {
       publicKeyJwk: { kty: 'EC', crv: 'P-256', x: 'x', y: 'y' },
       scopes: ['notifications.self'],
     });
-    vi.stubEnv('XOPC_HARMONY_PUSH_SERVICE_ACCOUNT', '/private/account.json');
-    vi.stubEnv('XOPC_HARMONY_PUSH_CATEGORY', 'WORK');
+    vi.mocked(registerPlatformPushDevice).mockResolvedValue('platform-push:00000000-0000-4000-8000-000000000001');
+    vi.mocked(removePlatformPushDevice).mockResolvedValue(undefined);
     app = new Hono();
     app.use('*', async (c, next) => {
       setGatewayPrincipal(c, {
@@ -41,7 +49,7 @@ describe('device push routes', () => {
   });
 
   afterEach(() => {
-    vi.unstubAllEnvs();
+    vi.resetAllMocks();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
@@ -56,7 +64,10 @@ describe('device push routes', () => {
       }),
     });
     expect(registration.status).toBe(201);
-    expect(await registration.json()).toMatchObject({ device: { id: 'device-1', locale: 'zh' } });
+    const record = await registration.json();
+    expect(record).toMatchObject({ device: { id: 'device-1', locale: 'zh' } });
+    expect(record.device).not.toHaveProperty('pushToken');
+    expect(registerPlatformPushDevice).toHaveBeenCalledWith(expect.any(String), 'device-1', 'huawei-token');
 
     const update = await app.request('/api/devices/me/push/preferences', {
       method: 'PATCH', headers: { 'content-type': 'application/json' },
@@ -68,6 +79,7 @@ describe('device push routes', () => {
 
     const removed = await app.request('/api/devices/me/push', { method: 'DELETE' });
     expect(await removed.json()).toEqual({ ok: true, removed: true });
+    expect(removePlatformPushDevice).toHaveBeenCalledWith('platform-push:00000000-0000-4000-8000-000000000001');
   });
 
   it('rejects invalid registration without accepting a caller-selected device id', async () => {
@@ -87,7 +99,7 @@ describe('device push routes', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: 'Invalid push registration' });
   });
-  it('registers HarmonyOS only when its independent provider is configured', async () => {
+  it('registers HarmonyOS only when the platform accepts the registration', async () => {
     createDevice({ id: 'harmony-device', displayName: 'Harmony', platform: 'harmonyos', publicKeyJwk: { kty: 'EC' }, scopes: ['notifications.self'] });
     const harmony = new Hono();
     harmony.use('*', async (c, next) => {
@@ -97,9 +109,10 @@ describe('device push routes', () => {
     registerDevicePushRoutes(harmony);
     const request = () => harmony.request('/api/devices/me/push', { method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ platform: 'harmonyos', pushToken: 'huawei-token', permissions: 'granted', locale: 'zh' }) });
-    vi.stubEnv('XOPC_HARMONY_PUSH_SERVICE_ACCOUNT', '');
-    expect((await request()).status).toBe(503);
-    vi.stubEnv('XOPC_HARMONY_PUSH_SERVICE_ACCOUNT', '/private/account.json'); vi.stubEnv('XOPC_HARMONY_PUSH_CATEGORY', 'WORK');
+    vi.mocked(registerPlatformPushDevice).mockRejectedValueOnce(new PlatformPushError(403, 'PUSH_CLOUD_AUTH_REQUIRED'));
+    const rejected = await request();
+    expect(rejected.status).toBe(503);
+    expect(await rejected.json()).toMatchObject({ error: { code: 'PUSH_CLOUD_AUTH_REQUIRED' } });
     const response = await request(); expect(response.status).toBe(201);
     expect(await response.json()).toMatchObject({ device: { platform: 'harmonyos', id: 'harmony-device' } });
   });

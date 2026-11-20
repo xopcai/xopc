@@ -1,4 +1,3 @@
-import { appSettings } from '../service/settings';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcHttpError } from '../service/transport';
@@ -25,8 +24,6 @@ export struct XopcModelSettingsView {
   @Event onExit: () => void = (): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Local data: XopcGlobalModelSettings | undefined = undefined;
-  @Local page: string = 'defaults';
-  @Local showMedia: boolean = false;
   @Local showingSheet: boolean = false;
   @Local sheet: string = '';
   @Local route: XopcGlobalModelRoute | undefined = undefined;
@@ -39,7 +36,6 @@ export struct XopcModelSettingsView {
   private gatewayId: string = '';
 
   aboutToAppear(): void {
-    this.page = appSettings.pageSelection('model-settings', ['defaults', 'tasks'], 'defaults');
     this.gatewayId = gatewaySession.currentProfile()?.gatewayId ?? '';
     void this.load();
   }
@@ -77,11 +73,11 @@ export struct XopcModelSettingsView {
     } finally { this.saving = false; }
   }
 
-  private label(key: string): Resource {
+  private label(key: string, isTask: boolean): Resource {
     switch (key) {
       case 'chat': return $r('app.string.ms_chat');
       case 'background': return $r('app.string.ms_background');
-      case 'vision': return this.page === 'tasks' ? $r('app.string.ms_visual_task') : $r('app.string.ms_vision');
+      case 'vision': return isTask ? $r('app.string.ms_visual_task') : $r('app.string.ms_vision');
       case 'image': return $r('app.string.ms_image');
       case 'transcription': return $r('app.string.ms_transcription');
       case 'speech': return $r('app.string.ms_speech');
@@ -150,50 +146,63 @@ export struct XopcModelSettingsView {
     if (this.sheet === 'add') {
       this.saveFallbacks(this.data.fallbacks.map((item: XopcGlobalModelChoice): string => item.ref).concat([this.selected]));
     } else if (this.route) {
-      void this.save({ kind: this.page === 'tasks' ? 'task' : 'model', revision: this.data.revision,
+      void this.save({ kind: this.sheet, revision: this.data.revision,
         key: this.route.key, ref: this.selected || null }, '');
     }
   }
 
-  private selectPage(page: string): void {
-    this.page = page;
-    appSettings.rememberPageSelection('model-settings', page);
+  private routeSymbol(key: string): Resource {
+    switch (key) {
+      case 'chat': return $r('sys.symbol.ellipsis_bubble');
+      case 'background': return $r('sys.symbol.clock');
+      case 'vision': return $r('sys.symbol.eye');
+      case 'image': return $r('sys.symbol.paintbrush');
+      case 'transcription': return $r('sys.symbol.mic');
+      case 'speech': return $r('sys.symbol.speaker_wave_2');
+      case 'conversation': return $r('sys.symbol.waveform');
+      case 'video': return $r('sys.symbol.film');
+      case 'music': return $r('sys.symbol.music');
+      case 'fast': return $r('sys.symbol.bolt');
+      case 'reasoning': return $r('sys.symbol.lightbulb');
+      case 'coding': return $r('sys.symbol.code');
+      case 'review': return $r('sys.symbol.checkmark_circle');
+      case 'understanding': return $r('sys.symbol.doc_text');
+      default: return $r('sys.symbol.rectangle_stack');
+    }
   }
 
   @Builder
-  private row(row: XopcGlobalModelRoute) {
-    XopcHubRow({ heading: this.label(row.key), trailingValue: this.display(row), compact: true,
-      symbol: row.key === 'chat' ? $r('sys.symbol.ellipsis_bubble') : $r('sys.symbol.slider_horizontal_2'),
-      onOpen: (): void => { this.open('model', row); } })
-      .id('model-setting-' + row.key)
+  private row(row: XopcGlobalModelRoute, kind: string) {
+    XopcHubRow({ heading: this.label(row.key, kind === 'task'), trailingValue: this.display(row), compact: true,
+      symbol: this.routeSymbol(row.key),
+      onOpen: (): void => { this.open(kind, row); } })
+      .id((kind === 'task' ? 'model-task-' : 'model-setting-') + row.key)
   }
 
   @Builder
   private settingsList(data: XopcGlobalModelSettings) {
-    if (this.page === 'tasks') {
-      ForEach(data.tasks, (row: XopcGlobalModelRoute) => { this.row(row) },
-        (row: XopcGlobalModelRoute): string => 'task-' + row.key + ':' + (row.name ?? ''))
-    } else {
-      XopcSectionLabel({ heading: $r('app.string.ms_default') })
-      ForEach(data.routing.filter((row: XopcGlobalModelRoute): boolean => row.key === 'chat'),
-        (row: XopcGlobalModelRoute) => { this.row(row) },
-        (row: XopcGlobalModelRoute): string => row.ref ?? 'default')
-      XopcHubRow({ heading: $r('app.string.ms_fallbacks'), trailingValue: data.fallbacks.length.toString(), compact: true,
-        symbol: $r('sys.symbol.list_bullet'), onOpen: (): void => { this.open('fallbacks'); } }).id('model-settings-fallbacks')
-      XopcHubRow({ heading: $r('app.string.ms_tasks'), compact: true, trailingValue:
-        data.tasks.filter((route: XopcGlobalModelRoute): boolean => route.inherited !== true).length.toString(),
-        symbol: $r('sys.symbol.slider_horizontal_2'), onOpen: (): void => { this.selectPage('tasks'); } })
-      XopcSectionLabel({ heading: $r('app.string.ms_other') })
-      ForEach(data.routing.filter((row: XopcGlobalModelRoute): boolean => ['background', 'vision', 'image'].includes(row.key)),
-        (row: XopcGlobalModelRoute) => { this.row(row) },
-        (row: XopcGlobalModelRoute): string => row.key + ':' + (row.name ?? ''))
-      XopcHubRow({ heading: $r('app.string.ms_media'), compact: true, showChevron: !this.showMedia,
-        symbol: $r('sys.symbol.play_circle'), onOpen: (): void => { this.showMedia = !this.showMedia; } })
-      if (this.showMedia) {
-        ForEach(data.routing.filter((row: XopcGlobalModelRoute): boolean => ['transcription', 'speech', 'conversation', 'video', 'music'].includes(row.key)),
-          (row: XopcGlobalModelRoute) => { this.row(row) },
-          (row: XopcGlobalModelRoute): string => row.key + ':' + (row.name ?? ''))
-      }
+    XopcSectionLabel({ heading: $r('app.string.ms_default') })
+    ForEach(data.routing.filter((row: XopcGlobalModelRoute): boolean => row.key === 'chat'),
+      (row: XopcGlobalModelRoute) => { this.row(row, 'model') },
+      (row: XopcGlobalModelRoute): string => row.ref ?? 'default')
+    XopcHubRow({ heading: $r('app.string.ms_fallbacks'), trailingValue: data.fallbacks.length.toString(), compact: true,
+      symbol: $r('sys.symbol.list_bullet'), onOpen: (): void => { this.open('fallbacks'); } }).id('model-settings-fallbacks')
+    if (data.tasks.length) {
+      XopcSectionLabel({ heading: $r('app.string.ms_tasks') })
+      ForEach(data.tasks, (row: XopcGlobalModelRoute) => { this.row(row, 'task') },
+        (row: XopcGlobalModelRoute): string => row.key + ':' + (row.ref ?? '') + ':' + (row.name ?? ''))
+    }
+    XopcSectionLabel({ heading: $r('app.string.ms_other') })
+    ForEach(data.routing.filter((row: XopcGlobalModelRoute): boolean => ['background', 'vision', 'image'].includes(row.key)),
+      (row: XopcGlobalModelRoute) => { this.row(row, 'model') },
+      (row: XopcGlobalModelRoute): string => row.key + ':' + (row.ref ?? '') + ':' + (row.name ?? ''))
+    if (data.routing.some((row: XopcGlobalModelRoute): boolean =>
+      ['transcription', 'speech', 'conversation', 'video', 'music'].includes(row.key))) {
+      XopcSectionLabel({ heading: $r('app.string.ms_media') })
+      ForEach(data.routing.filter((row: XopcGlobalModelRoute): boolean =>
+        ['transcription', 'speech', 'conversation', 'video', 'music'].includes(row.key)),
+        (row: XopcGlobalModelRoute) => { this.row(row, 'model') },
+        (row: XopcGlobalModelRoute): string => row.key + ':' + (row.ref ?? '') + ':' + (row.name ?? ''))
     }
   }
 
@@ -218,7 +227,7 @@ export struct XopcModelSettingsView {
   private sheetBody() {
     Column({ space: 8 }) {
       Text(this.sheet === 'fallbacks' ? $r('app.string.ms_fallbacks')
-        : this.sheet === 'add' ? $r('app.string.ms_add_fallback') : this.label(this.route?.key ?? ''))
+        : this.sheet === 'add' ? $r('app.string.ms_add_fallback') : this.label(this.route?.key ?? '', this.sheet === 'task'))
         .fontSize(19).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
       if (this.sheetError) {
         Text($r('app.string.ms_save_error')).fontSize(13).fontColor(this.colors.danger).width('100%')
@@ -271,13 +280,7 @@ export struct XopcModelSettingsView {
     NavDestination() {
     Column() {
       XopcPageHeader({
-        heading: this.page === 'tasks' ? $r('app.string.ms_tasks') : $r('app.string.ms_title'),
-        titleOptions: [
-          { key: 'defaults', label: $r('app.string.ms_title'), id: 'model-page-default' },
-          { key: 'tasks', label: $r('app.string.ms_tasks'), id: 'model-page-tasks' }
-        ],
-        selectedTitle: this.page, titleMenuId: 'model-settings-menu',
-        onSelectTitle: (page: string): void => { this.selectPage(page); }, backVisible: true,
+        heading: $r('app.string.ms_title'), backVisible: true,
         onBack: (): void => { if (!this.saving) this.onExit(); }
       })
       Scroll() {

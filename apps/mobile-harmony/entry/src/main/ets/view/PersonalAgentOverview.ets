@@ -426,7 +426,7 @@ export struct XopcPersonalAgentOverview {
           { key: 'tasks', label: $r('app.string.tasks'), icon: $r('sys.symbol.checkmark_circle'), count: this.model.attentionCount || undefined, testId: 'personal-overview-tasks-tab' },
           { key: 'library', label: $r('app.string.personal_overview_library'), icon: $r('sys.symbol.doc_text'), testId: 'personal-overview-library-tab' }
         ], selectedKey: this.librarySelected ? 'library' : 'tasks',
-          onSelect: (key: string): void => {
+          swipeToSelect: true, onSelect: (key: string): void => {
             const library = key === 'library';
             if (library !== this.librarySelected && !this.deliveryPreview) {
               this.pager.changeIndex(library ? 1 : 0, !this.layout.reduceMotion);

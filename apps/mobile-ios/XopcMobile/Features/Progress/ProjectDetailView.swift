@@ -38,57 +38,13 @@ struct ProjectDetailView: View {
     var body: some View {
         Group {
             if let project {
-                List {
-                    if selection == .overview {
-                        Section {
-                            VStack(alignment: .leading, spacing: 14) {
-                                Text(project.name)
-                                    .mobileTextStyle(.detailTitle)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .accessibilityAddTraits(.isHeader)
-                                HStack {
-                                    Text(LocalizedStringKey("project_status_" + project.status))
-                                        .font(.subheadline.weight(.medium))
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(mobileTheme.action.opacity(0.10), in: .capsule)
-                                    Spacer()
-                                    if let health = project.health, health != "unknown" {
-                                        Text(health).mobileTextStyle(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                                Text(project.brief ?? project.description
-                                    ?? AppLocalization.string("暂无项目说明", locale: AppLocalization.selectedLocale))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.vertical, 8)
-                        }
-                    }
-                    if selection == .overview && !deliveries.isEmpty {
-                        Section("近期成果") {
-                            ForEach(deliveries.prefix(5)) { item in
-                                HomeDeliveryLink(item: item, configuration: configuration,
-                                                 onOpenConversation: onOpenConversation)
-                            }
-                        }
-                    }
-                    if selection == .overview || selection == .conversations {
-                        projectSessions(project)
-                    }
-                    if selection == .overview || selection == .tasks {
-                        projectTasks
-                    }
-                    if selection == .overview || selection == .notes {
-                        projectNotes
-                    }
-                    if selection == .overview || selection == .automations {
-                        projectAutomations
-                    }
-                    if isLoading {
-                        Section { ProgressView("正在刷新项目…") }
+                TabView(selection: $selection) {
+                    ForEach(ProjectSection.allCases, id: \.self) { section in
+                        projectPage(project, section: section).tag(section)
                     }
                 }
-                .refreshable { await load() }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .accessibilityIdentifier("project-pager")
             } else if let error {
                 ContentUnavailableView("无法读取项目", systemImage: "exclamationmark.triangle", description: Text(error))
             } else {
@@ -115,7 +71,7 @@ struct ProjectDetailView: View {
                         Button("新建项目任务", systemImage: "checklist") { creationSheet = .task }
                         Button("新建项目笔记", systemImage: "note.text") { creationSheet = .note }
                         Button("新建项目自动化", systemImage: "clock") { setupPrompt = "" }
-                        Button { managingProject = true } label: { Label("项目设置", image: "SettingsSliders") }
+                        Button { managingProject = true } label: { Label("项目设置", systemImage: "folder") }
                     }
                     .accessibilityIdentifier("project-add")
                 }
@@ -147,6 +103,60 @@ struct ProjectDetailView: View {
         } message: { Text(error ?? "未知错误") }
     }
 
+    private func projectPage(_ project: ProjectRecord, section: ProjectSection) -> some View {
+        List {
+            if section == .overview {
+                Section {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(project.name)
+                            .mobileTextStyle(.detailTitle)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                        HStack {
+                            Text(LocalizedStringKey("project_status_" + project.status))
+                                .font(.subheadline.weight(.medium))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(mobileTheme.action.opacity(0.10), in: .capsule)
+                            Spacer()
+                            if let health = project.health, health != "unknown" {
+                                Text(health).mobileTextStyle(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        Text(project.brief ?? project.description
+                            ?? AppLocalization.string("暂无项目说明", locale: AppLocalization.selectedLocale))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.vertical, 8)
+                }
+            }
+            if section == .overview && !deliveries.isEmpty {
+                Section("近期成果") {
+                    ForEach(deliveries.prefix(5)) { item in
+                        HomeDeliveryLink(item: item, configuration: configuration,
+                                         onOpenConversation: onOpenConversation)
+                    }
+                }
+            }
+            if section == .overview || section == .conversations {
+                projectSessions(project)
+            }
+            if section == .overview || section == .tasks {
+                projectTasks
+            }
+            if section == .overview || section == .notes {
+                projectNotes
+            }
+            if section == .overview || section == .automations {
+                projectAutomations
+            }
+            if isLoading {
+                Section { ProgressView("正在刷新项目…") }
+            }
+        }
+        .refreshable { await load() }
+    }
+
     private func projectSessions(_ project: ProjectRecord) -> some View {
         Section {
             Button {
@@ -164,8 +174,8 @@ struct ProjectDetailView: View {
             ForEach(visible(localChats)) { draft in
                 Button("对话草稿", systemImage: "doc.text") { projectChat = draft }
                     .accessibilityIdentifier("project-draft-\(draft.id)")
-                    .swipeActions {
-                        Button("删除", role: .destructive) { removeLocalChat(draft.id) }
+                    .contextMenu {
+                        Button("删除", systemImage: "trash", role: .destructive) { removeLocalChat(draft.id) }
                     }
             }
             if sessions.isEmpty, localChats.isEmpty {

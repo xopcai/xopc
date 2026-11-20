@@ -481,7 +481,7 @@ private struct TasksView: View {
                 SegmentOption(id: "open", title: "进行中", accessibilityID: "tasks-filter-open"),
                 SegmentOption(id: "closed", title: "已关闭", accessibilityID: "tasks-filter-closed"),
                 SegmentOption(id: "all", title: "全部", accessibilityID: "tasks-filter-all")
-            ], selected: filter, label: "筛选") { filter = $0 }
+            ], selected: filter, label: "筛选", swipeToSelect: true) { filter = $0 }
                 .accessibilityIdentifier("tasks-filter-tabs")
                 .listRowBackground(Color.clear)
             if isLoading, items.isEmpty {
@@ -557,7 +557,7 @@ struct ProjectsView: View {
                 SegmentOption(id: "active", title: "活跃", accessibilityID: "projects-filter-active"),
                 SegmentOption(id: "archived", title: "已归档", accessibilityID: "projects-filter-archived"),
                 SegmentOption(id: "all", title: "全部", accessibilityID: "projects-filter-all")
-            ], selected: filter, label: "筛选") { filter = $0 }
+            ], selected: filter, label: "筛选", swipeToSelect: true) { filter = $0 }
                 .accessibilityIdentifier("projects-filter-tabs")
                 .listRowBackground(Color.clear)
             if isLoading, items.isEmpty {

@@ -22,9 +22,13 @@ export async function completeTaskModelCall(models: { primary: string; fallbacks
       return response;
     } catch (error) {
       options.signal?.throwIfAborted();
-      if (index === chain.length - 1 || !isTransientProviderErrorMessage(error instanceof Error ? error.message : String(error))) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      const missingCredential = /^No API key for provider:/i.test(message) && chain[index + 1] !== chain[index];
+      if (index === chain.length - 1 || (!missingCredential && !isTransientProviderErrorMessage(message))) throw error;
       log.warn({ modelRef: chain[index], nextModelRef: chain[index + 1], operation: usage.operation,
-        conversationId: usage.conversationId }, 'Task model request failed transiently; trying configured recovery model');
+        conversationId: usage.conversationId }, missingCredential
+        ? 'Task model credentials are missing; trying configured fallback model'
+        : 'Task model request failed transiently; trying configured recovery model');
     }
   }
   throw new Error('No task model is configured');

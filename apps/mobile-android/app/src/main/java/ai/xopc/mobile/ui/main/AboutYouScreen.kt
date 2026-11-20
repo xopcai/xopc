@@ -5,6 +5,7 @@ import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.PersonalAssertion
 import ai.xopc.mobile.gateway.PersonalSummary
 import ai.xopc.mobile.gateway.PersonalProfile
+import ai.xopc.mobile.gateway.WorkMemoryPage
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -36,7 +42,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,7 +58,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.DateTimeException
 import java.time.ZoneId
 
@@ -59,15 +71,21 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
   initialSection: String,
   onBack: () -> Unit, onOpenList: () -> Unit, onOpenDetail: (String) -> Unit,
   onLoadList: (String, String, Boolean) -> Unit, onRetryDetail: () -> Unit,
-  onOpenNotes: () -> Unit, onSaveProfile: (PersonalProfile) -> Unit = {},
+  onSaveProfile: (PersonalProfile) -> Unit = {},
   onSaveStatement: (String) -> Unit = {}, onDeleteAssertion: () -> Unit = {},
-  onStartChat: (PersonalAssertion?) -> Unit = {}, chatBusy: Boolean = false) {
+  onStartChat: (PersonalAssertion?) -> Unit = {}, chatBusy: Boolean = false,
+  loadWorkMemory: (suspend (String, String?) -> WorkMemoryPage)? = null) {
   val navigation = rememberNavigationPreferences()
+  val sections = listOf("overview", "understanding", "work")
   var section by rememberSaveable(state.gatewayId, initialSection) {
     val start = if (initialSection == "overview")
-      navigation.selection("privacy-memory", listOf("overview", "understanding"), "overview") else initialSection
+      navigation.selection("privacy-memory", sections, "overview") else initialSection
     mutableStateOf(start)
   }
+  val pager = key(state.gatewayId, initialSection) {
+    rememberPagerState(initialPage = sections.indexOf(section).coerceAtLeast(0)) { sections.size }
+  }
+  val scope = rememberCoroutineScope()
   var filter by rememberSaveable(state.gatewayId) { mutableStateOf("all") }
   var query by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var searchOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
@@ -114,6 +132,17 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
     navigation.rememberSelection("privacy-memory", value)
     if (section == "understanding") onOpenList()
   }
+  fun showSection(value: String) {
+    val index = sections.indexOf(value)
+    if (index < 0 || index == pager.settledPage) return
+    scope.launch {
+      if (kotlin.math.abs(index - pager.currentPage) == 1) pager.animateScrollToPage(index)
+      else pager.scrollToPage(index)
+    }
+  }
+  LaunchedEffect(pager, page) {
+    if (page == "about") snapshotFlow { pager.settledPage }.collect { selectSection(sections[it]) }
+  }
   BackHandler(page == "about" && searchOpen, ::closeSearch)
   Column(Modifier.fillMaxSize().padding(insets).testTag("about-you-screen")) {
     Box(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
@@ -130,34 +159,43 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
         PageTitleMenu(listOf(
           SegmentOption("overview", stringResource(R.string.about_you_overview), "about-you-tab-overview"),
           SegmentOption("understanding", stringResource(R.string.about_you_memories), "about-you-tab-understanding"),
-        ), section, "about-you-menu", Modifier.fillMaxWidth(0.62f), ::selectSection)
+          SegmentOption("work", stringResource(R.string.about_you_work_memory), "about-you-tab-work"),
+        ), section, "about-you-menu", Modifier.fillMaxWidth(0.62f), ::showSection)
       }
     }
     if (page == "detail") {
       AssertionDetail(state, onRetryDetail, onSaveStatement, onDeleteAssertion,
         onStartChat, chatBusy)
     } else {
-      if (section == "overview") AboutOverview(state.summary,
-        { selectSection("understanding") }, onOpenDetail, onOpenNotes, ::editProfile)
-      else {
-        if (searchOpen) OutlinedTextField(query, { query = it.take(100) },
-          modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).then(searchInputFocus()).testTag("about-you-search"),
-          placeholder = { Text(stringResource(R.string.about_you_search)) }, singleLine = true)
-        SegmentedTabs(
-          listOf("all" to R.string.about_you_all, "explicit" to R.string.personal_explicit,
-            "learned" to R.string.personal_learned, "review" to R.string.personal_review).map { (value, label) ->
-            SegmentOption(value, stringResource(label), "about-you-filter-$value")
-          }, filter, { filter = it }, Modifier.padding(horizontal = 20.dp),
-        )
-        AssertionList(state, filter, query, onOpenDetail,
-          onLoadMore = { onLoadList(filter, query.trim(), true) },
-          onRetry = { onLoadList(filter, query.trim(), false) }, modifier = Modifier.weight(1f))
-        if (state.understandingChatError) Text(stringResource(R.string.about_you_chat_error),
-          color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 20.dp))
-        Button(onClick = { onStartChat(null) }, enabled = !chatBusy,
-          modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)
-            .testTag("about-you-chat-modify")) {
-          Text(stringResource(R.string.about_you_chat_modify))
+      HorizontalPager(pager, modifier = Modifier.weight(1f).fillMaxWidth().testTag("about-you-pager"),
+        key = { sections[it] }, userScrollEnabled = !profileEditorOpen,
+        flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.33f),
+      ) { index ->
+        when (sections[index]) {
+          "overview" -> AboutOverview(state.summary, { showSection("understanding") },
+            onOpenDetail, { showSection("work") }, ::editProfile)
+          "work" -> WorkMemoryList(state.gatewayId, section == "work", loadWorkMemory)
+          else -> Column(Modifier.fillMaxSize()) {
+            if (section == "understanding" && searchOpen) OutlinedTextField(query, { query = it.take(100) },
+              modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).then(searchInputFocus()).testTag("about-you-search"),
+              placeholder = { Text(stringResource(R.string.about_you_search)) }, singleLine = true)
+            SegmentedTabs(
+              listOf("all" to R.string.about_you_all, "explicit" to R.string.personal_explicit,
+                "learned" to R.string.personal_learned, "review" to R.string.personal_review).map { (value, label) ->
+                SegmentOption(value, stringResource(label), "about-you-filter-$value")
+              }, filter, { filter = it }, Modifier.padding(horizontal = 20.dp), swipeToSelect = true,
+            )
+            AssertionList(state, filter, query, onOpenDetail,
+              onLoadMore = { onLoadList(filter, query.trim(), true) },
+              onRetry = { onLoadList(filter, query.trim(), false) }, modifier = Modifier.weight(1f))
+            if (state.understandingChatError) Text(stringResource(R.string.about_you_chat_error),
+              color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 20.dp))
+            Button(onClick = { onStartChat(null) }, enabled = !chatBusy,
+              modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)
+                .testTag("about-you-chat-modify")) {
+              Text(stringResource(R.string.about_you_chat_modify))
+            }
+          }
         }
       }
     }
@@ -229,7 +267,7 @@ internal fun validProfileTimezone(value: String): Boolean = value.isBlank() || t
 
 @Composable
 private fun AboutOverview(summary: PersonalSummary?, onOpenList: () -> Unit,
-  onOpenDetail: (String) -> Unit, onOpenNotes: () -> Unit, onEditProfile: () -> Unit) {
+  onOpenDetail: (String) -> Unit, onOpenWork: () -> Unit, onEditProfile: () -> Unit) {
   Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
     .padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text(stringResource(R.string.about_you_subtitle), style = MaterialTheme.typography.bodySmall,
@@ -268,7 +306,7 @@ private fun AboutOverview(summary: PersonalSummary?, onOpenList: () -> Unit,
       AboutLabel(stringResource(R.string.personal_rules))
       rules.forEach { rule -> AboutCard { Text(rule.statement) } }
     }
-    Card(onClick = onOpenNotes, modifier = Modifier.fillMaxWidth().testTag("about-you-work-memory"),
+    Card(onClick = onOpenWork, modifier = Modifier.fillMaxWidth().testTag("about-you-work-memory"),
       colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
       shape = themedCorners(18)) {
       Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -279,6 +317,60 @@ private fun AboutOverview(summary: PersonalSummary?, onOpenList: () -> Unit,
       }
     }
     Spacer(Modifier.height(24.dp))
+  }
+}
+
+@Composable
+private fun WorkMemoryList(gatewayId: String?, active: Boolean,
+  load: (suspend (String, String?) -> WorkMemoryPage)?) {
+  var page by remember(gatewayId) { mutableStateOf<WorkMemoryPage?>(null) }
+  var loading by remember(gatewayId) { mutableStateOf(true) }
+  var failed by remember(gatewayId) { mutableStateOf(false) }
+  var cursor by remember(gatewayId) { mutableStateOf<String?>(null) }
+  var request by remember(gatewayId) { mutableStateOf(0) }
+  var expandedId by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
+  LaunchedEffect(gatewayId, active, request) {
+    if (!active || gatewayId == null || load == null) return@LaunchedEffect
+    loading = true
+    failed = false
+    try {
+      val result = load(gatewayId, cursor)
+      page = result.copy(items = (if (cursor == null) result.items else
+        (page?.items.orEmpty() + result.items).distinctBy { it.id }),
+        nextCursor = result.nextCursor?.takeUnless { it == cursor })
+      cursor = null
+    } catch (cancelled: CancellationException) {
+      throw cancelled
+    } catch (_: Exception) {
+      failed = true
+    } finally {
+      loading = false
+    }
+  }
+  LazyColumn(Modifier.fillMaxSize().testTag("work-memory-list"),
+    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    if (loading && page == null) item { BrandLoadingPanel() }
+    if (failed) item {
+      TextButton(onClick = { request++ }, enabled = !loading) { Text(stringResource(R.string.about_you_work_memory_retry)) }
+    } else if (!loading && page?.items.isNullOrEmpty()) item {
+      Text(stringResource(R.string.about_you_work_memory_empty))
+    }
+    items(page?.items.orEmpty(), key = { it.id }) { memory ->
+      Card(onClick = { expandedId = if (expandedId == memory.id) null else memory.id },
+        modifier = Modifier.fillMaxWidth().testTag("work-memory-${memory.id}"),
+        shape = themedCorners(16)) {
+        Text(memory.content, Modifier.padding(16.dp),
+          maxLines = if (expandedId == memory.id) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis)
+      }
+    }
+    page?.nextCursor?.takeUnless { failed }?.let { next ->
+      item {
+        TextButton(onClick = { cursor = next; request++ }, enabled = !loading) {
+          Text(stringResource(R.string.progress_load_more))
+        }
+      }
+    }
   }
 }
 

@@ -675,7 +675,9 @@
     <string name="about_you_focus">What matters now</string>
     <string name="about_you_no_focus">No focus set yet</string>
     <string name="about_you_work_memory">Work memory</string>
-    <string name="about_you_work_memory_help">Open your notes and saved work.</string>
+    <string name="about_you_work_memory_help">View saved work context.</string>
+    <string name="about_you_work_memory_empty">No work memories yet.</string>
+    <string name="about_you_work_memory_retry">Could not load work memories. Retry</string>
     <string name="about_you_search">Search memories</string>
     <string name="about_you_close_search">Close</string>
     <string name="about_you_all">All</string>

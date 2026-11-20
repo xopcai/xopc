@@ -391,7 +391,7 @@ export class TaskRunRepository {
     const result = getSqliteDatabase().prepare(
       `UPDATE task_runs SET heartbeat_at = ?, lease_expires_at = ?
        WHERE run_id = ? AND lease_owner = ?
-         AND status IN ('running', 'waiting', 'verifying')`,
+         AND status IN ('queued', 'running', 'waiting', 'verifying')`,
     ).run(now, now + input.leaseMs, input.runId, input.owner);
     return result.changes === 0 ? undefined : this.get(input.runId);
   }

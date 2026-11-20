@@ -1,8 +1,9 @@
-import { localizeNotification, type ProductNotificationType } from '@xopcai/gateway-contract';
+import { type ProductNotificationType } from '@xopcai/gateway-contract';
 
 import { createLogger } from '../utils/logger.js';
 
-import { getNotificationDevice, listDeliverableNotificationDevices } from './device-store.js';
+import { getNotificationDevice, listDeliverableNotificationDevices, listRevokedPlatformPushDevices,
+  removeNotificationDevice, replaceNotificationPushReference } from './device-store.js';
 import { notificationPlanFromGatewayEvent, type NotificationPlan } from './planner.js';
 import {
   createNotificationEvent,
@@ -16,7 +17,7 @@ import {
   type NotificationDelivery,
 } from './store.js';
 import type { NotificationPreferences } from './types.js';
-import { sendHarmonyPush } from './harmony-push.js';
+import { platformPushEndpoint, registerPlatformPushDevice, removePlatformPushDevice, sendPlatformPush } from './platform-push.js';
 import { getOrCreateGatewayIdentity } from '../storage/sqlite/gateway-identity-repository.js';
 import { flushClarificationNotifications, isClarificationNotificationActionable } from './clarification.js';
 
@@ -52,7 +53,7 @@ export class NotificationService {
     publish: (type: string, payload: unknown) => void;
     fetch?: typeof fetch;
     allowsNotification?: (notification: NotificationPlan['notification']) => boolean;
-    sendHarmony?: typeof sendHarmonyPush;
+    sendPush?: typeof sendPlatformPush;
   }) {}
 
   start(): void {
@@ -112,6 +113,15 @@ export class NotificationService {
       }
       for (const notification of flushClarificationNotifications(plan => this.persistPlan(plan))) this.options.publish('notification.created', notification);
       await this.deliverPending();
+      for (const device of listRevokedPlatformPushDevices(Date.now())) {
+        try {
+          await removePlatformPushDevice(device.pushToken);
+          removeNotificationDevice(device.id);
+        } catch {
+          // Keep the disabled reference for retry until the platform lease expires.
+          break;
+        }
+      }
     } catch (err) {
       log.warn({ err }, 'Notification delivery pass failed');
     } finally {
@@ -142,21 +152,33 @@ export class NotificationService {
       return;
     }
     const fetchImpl = this.options.fetch ?? fetch;
-    const localized = localizeNotification(delivery.event, delivery.locale);
     try {
       if (delivery.platform !== 'harmonyos') {
         markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Native push provider is not configured');
         return;
       }
-      const ticket = await (this.options.sendHarmony ?? sendHarmonyPush)({
-        pushToken: delivery.pushToken, eventId: delivery.event.id,
-        gatewayId: getOrCreateGatewayIdentity().id, target: delivery.event.target,
-        title: localized.localizedTitle,
-        body: localized.localizedBody,
-        ...(delivery.event.type === 'chat.needs_input' && typeof delivery.event.payload.expiresAt === 'number'
-          ? { expiresAt: delivery.event.payload.expiresAt } : {}),
+      const expiresAt = Math.min(delivery.event.createdAt + 24 * 60 * 60 * 1000,
+        delivery.event.type === 'chat.needs_input' && typeof delivery.event.payload.expiresAt === 'number'
+          ? delivery.event.payload.expiresAt : Number.POSITIVE_INFINITY);
+      if (expiresAt <= Date.now()) {
+        cancelNotificationDelivery(delivery.event.id, delivery.deviceId);
+        return;
+      }
+      let endpointId = platformPushEndpoint(delivery.pushToken);
+      if (!endpointId && !this.options.sendPush) {
+        const reference = await registerPlatformPushDevice(getOrCreateGatewayIdentity().id, delivery.deviceId, delivery.pushToken);
+        if (!replaceNotificationPushReference(delivery.deviceId, delivery.pushToken, reference)) {
+          const current = getNotificationDevice(delivery.deviceId);
+          if (current?.pushToken !== reference) await removePlatformPushDevice(reference);
+          return;
+        }
+        endpointId = platformPushEndpoint(reference);
+      }
+      const ticket = await (this.options.sendPush ?? sendPlatformPush)({
+        endpointId: endpointId ?? delivery.pushToken, eventId: delivery.event.id, locale: delivery.locale,
+        target: delivery.event.target, expiresAt,
       }, fetchImpl);
-      // Huawei Push Kit V3 exposes provider acceptance but no device delivery receipt.
+      // The platform queue has accepted the job; the device has not acknowledged it yet.
       markNotificationDeliveryAccepted(delivery.event.id, delivery.deviceId, ticket, Number.MAX_SAFE_INTEGER);
     } catch (err) {
       this.retryOrFail(delivery, err);

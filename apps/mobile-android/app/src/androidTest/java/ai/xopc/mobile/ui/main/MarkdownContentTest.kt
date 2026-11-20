@@ -106,9 +106,13 @@ class MarkdownContentTest {
     composeTestRule.runOnIdle { assertTrue(wide.value() > 0f) }
   }
 
-  @Test fun assistantMessageUsesReusableMarkdownComponent() {
+  @Test fun assistantMessageUsesReusableMarkdownComponent() = assertChatMarkdown("assistant")
+
+  @Test fun userMessageUsesReusableMarkdownComponent() = assertChatMarkdown("user")
+
+  private fun assertChatMarkdown(role: String) {
     composeTestRule.setContent {
-      ChatMessageCard(ConversationMessage("answer", "assistant", "## Result\n\n**Done**"),
+      ChatMessageCard(ConversationMessage("message", role, "## Result\n\n**Done**"),
         onMore = {}, onOpenTarget = {}, onOpenPreview = { _, _ -> },
         onOpenLink = {}, onCopy = {})
     }

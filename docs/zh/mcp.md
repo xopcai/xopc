@@ -12,6 +12,8 @@ xopc 使用 pi 原生 MCP 扩展处理出站连接、工具发现、资源读取
 
 打开「能力中心 → 连接 → 添加自定义 MCP」。在服务链接的高级设置中选择旧版 SSE，或在 JSON 中使用 `type: "sse"`。内网地址在 Gateway 所在网络访问，`localhost` 指向 Gateway 主机。使用自定义内网域名时，可在高级设置选择「Gateway 内网」，或在导入 JSON 时指定 `"network": "private"`。
 
+使用服务链接添加时，认证方式默认是「自动探测」，也可以手动选择 OAuth 浏览器授权、Bearer Token、API Key、自定义请求头或无需认证。选择 API Key 后，填写密钥并使用默认的 `X-API-Key` 或服务商指定的请求头名称。探测发现服务需要凭据时，可在认证页面选择对应方式。
+
 使用「命令启动」填写 Gateway 主机上的程序和参数。启用该入口需要 Gateway 管理员设置 `xopc config set gateway.mobileMcpAllowStdio true`。请在「运行并检查」前审阅程序、参数和工作目录。环境变量的值只在确认添加时写入 Gateway 凭据库。连接检查通过后，点「添加连接」提交草稿。
 
 ## WebUI 配置

@@ -54,7 +54,7 @@ internal fun GatewayProfilesScreen(state: ConnectionUiState, insets: PaddingValu
   Column(Modifier.fillMaxSize().padding(insets).testTag("gateway-profiles-screen")) {
     Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
       verticalAlignment = Alignment.CenterVertically) {
-      PageBackButton("gateways-back", onBack)
+      PageBackButton("gateways-back", onBack, !state.gatewayBusy)
       Spacer(Modifier.weight(1f))
       IconButton(onClick = onAdd, enabled = !state.gatewayBusy,
         modifier = Modifier.testTag("gateways-add")) { ActionIcon(R.drawable.action_add, size = 24.dp) }

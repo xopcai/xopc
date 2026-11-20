@@ -49,6 +49,7 @@ export const TaskAttentionKindSchema = z.enum([
   'run_failed',
   'run_decision_required',
   'verification_failed',
+  'verification_unverified',
   'overdue',
   'stale',
 ]);

@@ -273,7 +273,14 @@ struct MessageBubble: View {
                 ConfirmedAnswerView(message: message, configuration: configuration, conversationID: conversationID,
                                     animate: animateStreaming)
             } else if message.role == "user" {
-                Text(verbatim: message.text).accessibilityIdentifier("chat-user-text-\(message.id)")
+                MarkdownBodyView(
+                    parts: message.markdownParts,
+                    configuration: configuration,
+                    conversationID: conversationID,
+                    markdown: message.markdownParts.isEmpty ? message.text : nil
+                )
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("chat-user-text-\(message.id)")
             }
         }
     }

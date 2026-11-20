@@ -6,6 +6,7 @@ import type {
   TaskPresentation,
   TaskAcceptanceTarget,
 } from '@xopcai/gateway-contract';
+import { taskRunResultKind } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
@@ -71,14 +72,23 @@ export class TaskReadModelProjector {
             : undefined;
       if (kind) attention.push({ kind, summary: wait.reason, sourceId: wait.id });
     }
-    if (!attention.some(item => item.kind === 'run_decision_required')
-      && latestRun?.status === 'failed' && latestRun.contractVersion === task.latestContractVersion) {
+    if (latestRun && latestRun.contractVersion === task.latestContractVersion
+      && (latestRun.status === 'failed' || latestRun.status === 'succeeded' && task.phase === 'review')) {
       const receipt = this.#runs.getReceipt(latestRun.id);
-      attention.push({
-        kind: receipt?.verification.status === 'failed' ? 'verification_failed' : 'run_failed',
-        summary: latestRun.terminalMessage ?? receipt?.summary ?? (resolveTaskLocale(task) === 'zh' ? '最近一次执行失败' : 'The latest run failed'),
-        sourceId: latestRun.id,
-      });
+      const zh = resolveTaskLocale(task) === 'zh';
+      const resultKind = receipt ? taskRunResultKind(receipt) : 'execution_failed';
+      if (resultKind === 'execution_failed') {
+        const label = zh ? '执行失败' : 'Execution failed';
+        const detail = receipt?.failure?.phase === 'preflight' ? receipt.failure.recoveryAction
+          : latestRun.terminalMessage ?? receipt?.summary;
+        attention.push({ kind: 'run_failed', summary: detail && !detail.trimStart().startsWith('{')
+          ? `${label} · ${detail}` : label, sourceId: latestRun.id });
+      } else if (resultKind === 'verification_failed' || resultKind === 'verification_unverified') {
+        const summary = resultKind === 'verification_failed'
+          ? zh ? '验收未通过，查看未满足的验收项。' : 'Acceptance failed. Review the unmet criteria.'
+          : zh ? '结果未验证，查看仍需核验的验收项。' : 'Result unverified. Review the criteria that still need verification.';
+        attention.push({ kind: resultKind, summary, sourceId: latestRun.id });
+      }
     }
     if (task.dueAt !== undefined && task.phase !== 'closed' && task.dueAt < now) {
       attention.push({ kind: 'overdue', summary: resolveTaskLocale(task) === 'zh' ? '任务已逾期' : 'Task is overdue' });
@@ -138,6 +148,7 @@ export class TaskReadModelProjector {
     if (pause) return { status: 'paused', reason: pause.reason, primaryAction: { type: 'resume', waitId: pause.id } };
     const pending = attention.find(item => item.kind === 'input_required' || item.kind === 'approval_required');
     if (pending?.sourceId) return { status: 'needsUser', reason: pending.summary, primaryAction: { type: 'resolve_wait', waitId: pending.sourceId } };
+    const failure = attention.find(item => item.kind === 'run_failed' || item.kind === 'verification_failed' || item.kind === 'verification_unverified');
     const decision = attention.find(item => item.kind === 'run_decision_required');
     if (decision?.sourceId) {
       const connected = Boolean(personalRequestForTask(task.id));
@@ -150,7 +161,6 @@ export class TaskReadModelProjector {
       return { status: 'needsUser', reason: decision.summary, primaryAction: { type: 'inspect_run', runId: decision.sourceId } };
     }
     if (state === 'failed') {
-      const failure = attention.find(item => item.kind === 'run_failed' || item.kind === 'verification_failed');
       const canRetryExecutor = latestRun?.executorKind === 'agent' && typeof latestRun.executorRef.agentId === 'string';
       if (failure?.sourceId) return { status: 'failed', reason: failure.summary,
         primaryAction: { type: commands.includes('start') && canRetryExecutor ? 'retry_run' : 'inspect_run', runId: failure.sourceId } };
@@ -171,7 +181,8 @@ export class TaskReadModelProjector {
       }
       if (!acceptance) return { status: 'blocked', reason: resolveTaskLocale(task) === 'zh'
         ? '当前成果版本需要重新核验。' : 'Verify the current result again.' };
-      return { status: 'review', primaryAction: acceptance.canSignOff ? { type: 'signoff', resultId: acceptance.id } : { type: 'review' } };
+      return { status: 'review', reason: failure?.summary,
+        primaryAction: acceptance.canSignOff ? { type: 'signoff', resultId: acceptance.id } : { type: 'review' } };
     }
     if (commands.includes('mark_ready')) return { status: 'captured', primaryAction: { type: 'mark_ready' } };
     return { status: 'ready', primaryAction: commands.includes('start') ? { type: 'start' } : undefined };

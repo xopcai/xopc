@@ -154,6 +154,7 @@ export function decisionFromTask(
     'run_decision_required',
     'run_failed',
     'verification_failed',
+    'verification_unverified',
     'overdue',
   ].includes(candidate.kind));
   if (!item) return null;
@@ -162,7 +163,7 @@ export function decisionFromTask(
     : item.kind === 'approval_required'
       ? 'approval_required'
       : item.kind === 'dependency_blocked' ? 'dependency'
-      : item.kind === 'run_failed' || item.kind === 'verification_failed'
+      : item.kind === 'run_failed' || item.kind === 'verification_failed' || item.kind === 'verification_unverified'
         ? 'retry'
         : item.kind === 'overdue'
           ? 'overdue'

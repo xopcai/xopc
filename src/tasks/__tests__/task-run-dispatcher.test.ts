@@ -15,6 +15,7 @@ import { TaskRepository } from '../task-repository.js';
 import { createDataBatchTool, withDataToolPermissions } from '../../agent/tools/dataBatch.js';
 import { getDelegationScope, withDelegationScope } from '../../agent/orchestration/delegation-scope.js';
 import { getEmbeddedExecutionSession, runWithEmbeddedExecutionSession } from '../../agent/embedded/execution-context.js';
+import { TaskModelPreflightError } from '../../agent/models/turn-candidates.js';
 
 const contract = { objective: 'Do work', expectedOutputs: [], acceptanceCriteria: [], constraints: [],
   approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'verified_auto' as const,
@@ -90,6 +91,45 @@ describe('TaskRunDispatcher', () => {
       })));
     expect(runAgent).toHaveBeenCalledTimes(2);
     expect(search.execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('records missing credentials before submitting an Agent input', async () => {
+    const runId = queue('missing-credential', 'zh');
+    const preflightModel = vi.fn(async () => { throw new TaskModelPreflightError('provider_setup_required', 'fixture/model', 'fixture'); });
+    const runAgent = vi.fn(async () => {});
+    const dispatcher = new TaskRunDispatcher({ workerId: 'credential-check', maxConcurrency: 1,
+      ensureSession: async () => 'execution-session', preflightModel, runAgent });
+    await dispatcher.drain();
+    dispatcher.stop();
+    const runs = new TaskRunRepository();
+    expect(preflightModel).toHaveBeenCalledWith('execution-session');
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(runs.require(runId)).toMatchObject({ terminalCode: 'provider_setup_required', status: 'failed' });
+    expect(runs.require(runId).startedAt).toBeUndefined();
+    const receipt = runs.getReceipt(runId)!;
+    expect(receipt.failure).toMatchObject({ code: 'provider_setup_required', phase: 'preflight' });
+    expect(receipt.verification.status).toBe('unverified');
+    expect(JSON.parse(receipt.summary)).toMatchObject({ provider: 'fixture', deepLink: '/settings/capabilities/models' });
+  });
+
+  it('resumes a task paused during preflight as an initial execution', async () => {
+    const runId = queue('pause-before-start');
+    const runs = new TaskRunRepository();
+    const preflightModel = vi.fn(async () => {}).mockImplementationOnce(async () => {
+      const run = runs.require(runId);
+      const wait = runs.createWait({ taskId: run.taskId, taskRunId: runId, kind: 'paused', reason: 'Paused', condition: {} });
+      runs.setStatus({ runId, expectedVersion: run.version, from: ['queued'], to: 'waiting' });
+      runs.resolveWait({ waitId: wait.id, actor: { kind: 'user' } });
+    });
+    const runAgent = vi.fn(async () => {
+      expect(runs.require(runId)).toMatchObject({ status: 'queued' });
+    });
+    const dispatcher = new TaskRunDispatcher({ workerId: 'paused-before-launch', maxConcurrency: 1,
+      ensureSession: async () => 'execution-session', preflightModel, runAgent });
+    await dispatcher.drain();
+    dispatcher.stop();
+    expect(preflightModel).toHaveBeenCalledTimes(2);
+    expect(runAgent).toHaveBeenCalledOnce();
   });
 
   it('clears orphan waits of an already cancelled Run after restart without changing a new Run or its waits', async () => {

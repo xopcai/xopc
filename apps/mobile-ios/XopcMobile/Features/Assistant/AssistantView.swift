@@ -1788,7 +1788,7 @@ private struct ChatMessageSearchView: View {
         .background(mobileTheme.canvas.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
-                SegmentedTabs(options: categories, selected: category, label: "筛选") {
+                SegmentedTabs(options: categories, selected: category, label: "筛选", swipeToSelect: selectedMessage == nil) {
                     category = $0
                     focused = true
                 }

@@ -77,7 +77,7 @@ struct ChatSidebarView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("chat-sidebar-new")
                 Spacer()
-                circleButton("设置", icon: Image("SettingsSliders")) { onNavigate(.settings) }
+                circleButton("设置", icon: Image(systemName: "gearshape")) { onNavigate(.settings) }
                     .accessibilityIdentifier("chat-sidebar-profile")
             }
         }

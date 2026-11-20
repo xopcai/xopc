@@ -58,13 +58,14 @@ struct ReferencePickerView: View {
                     .listStyle(.plain)
                 }
             }
+            .pageSelectionSwipe(availableKinds, selected: kind) { kind = $0 }
             .navigationTitle("添加引用")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: searchPrompt)
             .safeAreaInset(edge: .top) {
                 SegmentedTabs(options: availableKinds.map { item in
                     SegmentOption(id: item, title: item.title, accessibilityID: "reference-tab-\(item.rawValue)")
-                }, selected: kind, label: "引用类型") { kind = $0 }
+                }, selected: kind, label: "引用类型", swipeToSelect: true) { kind = $0 }
                     .accessibilityIdentifier("reference-tabs")
                     .padding(.horizontal)
                     .padding(.vertical, 8)

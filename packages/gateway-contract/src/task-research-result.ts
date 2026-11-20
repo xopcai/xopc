@@ -17,6 +17,7 @@ export const TaskResearchCheckSchema = z.object({
   criterionIndex: z.number().int().nonnegative(), criterion: z.string().min(1),
   status: z.enum(['passed', 'failed', 'unverified']), claimIds: z.array(id).max(40),
   note: z.string().min(1).max(1000),
+  method: z.literal('tool_verified').optional(),
 });
 export const TaskResearchResultSchema = z.object({
   followUp: TaskFollowUpHintSchema.optional(),

@@ -3,7 +3,7 @@ import { XopcShareItem, XopcShareResult } from '../model/share';
 import { validShareUrl } from '../service/shareService';
 import { XopcShareViewModel } from '../viewmodel/shareViewModel';
 import { XopcListSkeleton, XopcPageHeader } from './MobileComponents';
-import { XopcSegmentedTabs } from './SegmentedTabs';
+import { XopcPageSwipe, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
 import { XopcShareResultView } from './ShareResultView';
 
 const DAY_MS: number = 86400000;
@@ -91,6 +91,13 @@ export struct XopcShareCenterView {
       .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
   }
 
+  private filters: XopcSegmentOption[] = [
+    { key: 'all', label: $r('app.string.share_all'), testId: 'share-filter-all' },
+    { key: 'active', label: $r('app.string.share_active_only'), testId: 'share-filter-active' }
+  ];
+
+  private selectFilter(key: string): void { this.model.activeOnly = key === 'active'; }
+
   build() {
     NavDestination() {
       Column() {
@@ -98,11 +105,9 @@ export struct XopcShareCenterView {
           backVisible: true, onBack: (): void => { this.onExit(); },
           actionLabel: $r('app.string.refresh'), onAction: (): void => { void this.model.load(); } })
         Column() {
-          XopcSegmentedTabs({ options: [
-            { key: 'all', label: $r('app.string.share_all'), testId: 'share-filter-all' },
-            { key: 'active', label: $r('app.string.share_active_only'), testId: 'share-filter-active' }
-          ], selectedKey: this.model.activeOnly ? 'active' : 'all',
-            onSelect: (key: string): void => { this.model.activeOnly = key === 'active'; } })
+          XopcSegmentedTabs({ options: this.filters, selectedKey: this.model.activeOnly ? 'active' : 'all',
+            swipeToSelect: !this.resultOpen,
+            onSelect: (key: string): void => { this.selectFilter(key); } })
         }.width('100%').padding({ left: 20, right: 20, bottom: 12 })
         Refresh({ refreshing: this.model.loading && this.model.loaded }) {
           List({ space: 8 }) {
@@ -127,6 +132,9 @@ export struct XopcShareCenterView {
             }, (item: XopcShareItem): string => item.id + ':' + item.expiresAt + ':' + item.revoked + ':' + item.expired)
           }.id('share-history-list').width('100%').height('100%')
             .padding({ left: 20, right: 20, bottom: 24 }).scrollBar(BarState.Off)
+            .gestureModifier(new XopcPageSwipe(this.filters.map((option: XopcSegmentOption): string => option.key),
+              this.model.activeOnly ? 'active' : 'all', (key: string): void => { this.selectFilter(key); },
+              !this.resultOpen && !this.model.busyId))
         }.layoutWeight(1).width('100%').onRefreshing((): void => { void this.model.load(); })
       }.width('100%').height('100%').backgroundColor(this.colors.surface)
         .bindSheet($$this.resultOpen, this.resultSheet, { height: '92%', dragBar: false })

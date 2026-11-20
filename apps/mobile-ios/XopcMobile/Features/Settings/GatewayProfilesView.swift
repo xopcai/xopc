@@ -8,13 +8,14 @@ struct GatewayProfilesView: View {
     let storageError: String?
     let onPair: (String, @escaping @MainActor (String) -> Void) async throws -> Void
     let onRefresh: (String) async throws -> GatewayConfiguration
-    let onActivate: (String) -> Void
+    let onActivate: (String) -> Bool
     let onRename: (String, String) -> Void
     let onRemove: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var probeStates: [String: GatewayProbeState] = [:]
     @State private var editing = false
+    @State private var activationProfile: GatewayProfile?
     @State private var deleteProfile: GatewayProfile?
     @State private var detailProfile: GatewayProfile?
     @State private var renameProfile: GatewayProfile?
@@ -38,11 +39,8 @@ struct GatewayProfilesView: View {
                                 probe: probeStates[profile.id],
                                 onProbe: { Task { _ = await probe(profile) } },
                                 onActivate: {
-                                    Task {
-                                        if await probe(profile) {
-                                            onActivate(profile.id)
-                                        }
-                                    }
+                                    guard activationProfile == nil else { return }
+                                    activationProfile = profile
                                 },
                                 onRename: {
                                     renameText = profile.name
@@ -114,6 +112,13 @@ struct GatewayProfilesView: View {
                     renameProfile = nil
                 }
                 .disabled(renameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .task(id: activationProfile?.id) {
+                guard let profile = activationProfile else { return }
+                defer { activationProfile = nil }
+                if await probe(profile), !Task.isCancelled, onActivate(profile.id) {
+                    dismiss()
+                }
             }
             .task { await probeAll() }
             .onChange(of: profiles.map(\.id)) { Task { await probeAll() } }
@@ -426,7 +431,7 @@ struct GatewayProfileEditor: View {
                     }
                 } else if let onManage {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button(action: onManage) { Label("Gateway 管理", image: "SettingsSliders") }
+                        Button(action: onManage) { Label("Gateway 管理", systemImage: "link") }
                     }
                 }
             }

@@ -1,3 +1,4 @@
+import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { appSettings } from '../service/settings';
 import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
@@ -140,9 +141,26 @@ export struct XopcProjectSpaceView {
         onOpen: (): void => { this.chooseAction('note-create'); } })
       XopcHubRow({ heading: $r('app.string.new_automation'), symbol: $r('sys.symbol.clock'),
         onOpen: (): void => { this.chooseAction('automation-setup'); } })
-      XopcHubRow({ heading: $r('app.string.project_manage'), symbol: $r('sys.symbol.slider_horizontal_2'),
+      XopcHubRow({ heading: $r('app.string.project_manage'), symbol: $r('sys.symbol.folder'),
         onOpen: (): void => { this.chooseAction('project-settings'); } })
     }.width('100%').padding(18)
+  }
+
+  @Local layout: XopcLayoutState = layoutState;
+  private pager: SwiperController = new SwiperController();
+
+  private selectTab(key: string): void {
+    const current = this.tabOptions.findIndex((option: XopcPageTitleOption): boolean => option.key === this.tab);
+    const target = this.tabOptions.findIndex((option: XopcPageTitleOption): boolean => option.key === key);
+    if (target < 0 || current === target) return;
+    this.pager.changeIndex(target, !this.layout.reduceMotion && Math.abs(current - target) === 1);
+  }
+
+  private commitTab(index: number): void {
+    const key = this.tabOptions[index]?.key;
+    if (!key || this.tab === key) return;
+    this.tab = key;
+    appSettings.rememberPageSelection('project.' + this.projectId, key);
   }
 
   private tabOptions: XopcPageTitleOption[] = [
@@ -153,24 +171,129 @@ export struct XopcProjectSpaceView {
     { key: 'automations', label: $r('app.string.automations'), id: 'project-tab-automations' }
   ];
 
+  @Builder
+  private sectionPage(section: string) {
+    Column() {
+      if (section === 'overview' && (this.model.project?.brief || this.model.project?.description)) {
+        Text(this.model.project?.brief || this.model.project?.description || '').fontSize(14).lineHeight(21)
+          .fontColor(this.colors.secondary).width('100%').padding({ left: 20, right: 20, bottom: 10 })
+      }
+      List({ space: 12 }) {
+        if (this.model.loading && !this.model.project) {
+          ListItem() { XopcListSkeleton() }
+        }
+        if (section === 'overview' && this.projectAttention.length) {
+          ListItem() { XopcSectionLabel({ heading: $r('app.string.needs_you') }) }
+          ForEach(this.projectAttention, (item: XopcHomeItem) => {
+            ListItem() {
+              XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.bell'), attention: true,
+                navigable: !!item.openAction, onOpen: (): void => {
+                  const route = mobileRoute(item.openAction?.href ?? '');
+                  if (route) this.onNavigate(route);
+                } })
+            }
+          }, (item: XopcHomeItem): string => item.id)
+        }
+        if ((section === 'overview' || section === 'notes') && this.projectDeliveries.length) {
+          ListItem() { Text($r('app.string.library_recent_results')).fontSize(15).fontWeight(FontWeight.Bold).fontColor(this.colors.secondary) }
+          ForEach(this.projectDeliveries, (item: XopcHomeDelivery) => {
+            ListItem() {
+              XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.checkmark_circle'),
+                onOpen: (): void => {
+                  const route = mobileRoute(item.href);
+                  if (route) this.onNavigate(route);
+                } })
+            }
+          }, (item: XopcHomeDelivery): string => item.id + ':' + item.summary)
+        }
+        if (section === 'sessions') {
+          if (this.model.sessionsError) {
+            ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
+          } else if (this.model.loading && !this.model.sessions.length) {
+            ListItem() { XopcListSkeleton() }
+          } else if (!this.model.sessions.length) {
+            ListItem() { Text($r('app.string.project_no_sessions')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
+          }
+          ForEach(this.model.sessions, (item: XopcSessionItem) => {
+            ListItem() { this.sessionCard(item) }
+          }, (item: XopcSessionItem): string => item.key)
+        }
+        if (section === 'overview' || section === 'tasks') {
+          if (section === 'overview' && this.continuingTasks.length) {
+            ListItem() { XopcSectionLabel({ heading: $r('app.string.project_continue_work') }) }
+          }
+          if (this.model.tasksError) {
+            ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
+          } else if (this.model.loading && !this.model.tasks.length) {
+            ListItem() { XopcListSkeleton() }
+          } else if (section === 'tasks' && !this.model.tasks.length) {
+            ListItem() { Text($r('app.string.project_no_tasks')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
+          }
+          ForEach(section === 'overview' ? this.continuingTasks : this.model.tasks, (item: XopcWorkspaceItem) => {
+            ListItem() { this.taskCard(item) }
+          }, (item: XopcWorkspaceItem): string => item.id)
+          if (section === 'tasks' && this.model.tasks.length < this.model.tasksTotal) {
+            ListItem() {
+              XopcPaginationFooter({ loadingPage: this.model.loadingTasksMore, failedPage: this.model.tasksError,
+                onLoad: (): void => { void this.model.moreTasks(this.projectId); } })
+            }
+          }
+        }
+        if (section === 'notes') {
+          if (this.model.notesError) {
+            ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
+          } else if (this.model.loading && !this.model.notes.length) {
+            ListItem() { XopcListSkeleton() }
+          } else if (!this.model.notes.length) {
+            ListItem() { Text($r('app.string.project_no_notes')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
+          }
+          ForEach(this.model.notes, (item: XopcNoteIndexEntry) => {
+            ListItem() { this.noteCard(item) }
+          }, (item: XopcNoteIndexEntry): string => item.id)
+          if (section === 'notes' && this.model.notes.length < this.model.notesTotal) {
+            ListItem() {
+              XopcPaginationFooter({ loadingPage: this.model.loadingNotesMore, failedPage: this.model.notesError,
+                onLoad: (): void => { void this.model.moreNotes(this.projectId); } })
+            }
+          }
+        }
+        if (section === 'automations') {
+          if (this.model.automationsError) {
+            ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
+          } else if (this.model.loading && !this.model.automations.length) {
+            ListItem() { XopcListSkeleton() }
+          } else if (this.model.project && !this.model.automations.length) {
+            ListItem() {
+              XopcAutomationIdeas({ projectScoped: true, onChoose: (prompt: string): void => {
+                this.onNavigate({ page: 'automation-setup', itemId: '', projectId: this.projectId, prompt });
+              } })
+            }
+          }
+          ForEach(this.model.automations, (item: XopcWorkspaceItem) => {
+            ListItem() { this.automationCard(item) }
+          }, (item: XopcWorkspaceItem): string => item.id)
+        }
+      }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
+      if (this.model.project && (section === 'overview' || section === 'sessions')) {
+        Button(section === 'overview' ? $r('app.string.project_chat_cta') : $r('app.string.project_new_chat'))
+          .id('project-start-chat').width('100%').height(50).fontColor(this.colors.chat.onAction)
+          .backgroundColor(this.colors.chat.action).onClick((): void => { this.go('project-new-chat'); })
+      }
+    }.width('100%').height('100%')
+      .accessibilityLevel(section === this.tab ? 'auto' : 'no-hide-descendants')
+  }
+
   build() {
     NavDestination() {
       Column() {
         XopcPageHeader({ heading: this.tabOptions.find((option: XopcPageTitleOption): boolean => option.key === this.tab)?.label
           ?? $r('app.string.project_overview'), selectedTitle: this.tab, titleOptions: this.tabOptions,
-          titleMenuId: 'project-tabs', onSelectTitle: (key: string): void => {
-            this.tab = key;
-            appSettings.rememberPageSelection('project.' + this.projectId, key);
-          },
+          titleMenuId: 'project-tabs', onSelectTitle: (key: string): void => { this.selectTab(key); },
           backVisible: true, onBack: this.onExit, actionLabel: $r('app.string.project_add_item'), actionIcon: $r('sys.symbol.plus'),
           onAction: (): void => { this.menuOpen = true; } })
         if (this.model.project) {
           Text(this.model.project.name).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
             .width('100%').padding({ left: 20, right: 20, bottom: 8 })
-        }
-        if (this.tab === 'overview' && (this.model.project?.brief || this.model.project?.description)) {
-          Text(this.model.project?.brief || this.model.project?.description || '').fontSize(14).lineHeight(21)
-            .fontColor(this.colors.secondary).width('100%').padding({ left: 20, right: 20, bottom: 10 })
         }
         if (this.model.error) {
           Row({ space: 8 }) {
@@ -179,107 +302,16 @@ export struct XopcProjectSpaceView {
               .onClick((): void => { void this.model.load(this.projectId); })
           }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 8 })
         }
-        List({ space: 12 }) {
-          if (this.model.loading && !this.model.project) {
-            ListItem() { XopcListSkeleton() }
-          }
-          if (this.tab === 'overview' && this.projectAttention.length) {
-            ListItem() { XopcSectionLabel({ heading: $r('app.string.needs_you') }) }
-            ForEach(this.projectAttention, (item: XopcHomeItem) => {
-              ListItem() {
-                XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.bell'), attention: true,
-                  navigable: !!item.openAction, onOpen: (): void => {
-                    const route = mobileRoute(item.openAction?.href ?? '');
-                    if (route) this.onNavigate(route);
-                  } })
-              }
-            }, (item: XopcHomeItem): string => item.id)
-          }
-          if ((this.tab === 'overview' || this.tab === 'notes') && this.projectDeliveries.length) {
-            ListItem() { Text($r('app.string.library_recent_results')).fontSize(15).fontWeight(FontWeight.Bold).fontColor(this.colors.secondary) }
-            ForEach(this.projectDeliveries, (item: XopcHomeDelivery) => {
-              ListItem() {
-                XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.checkmark_circle'),
-                  onOpen: (): void => {
-                    const route = mobileRoute(item.href);
-                    if (route) this.onNavigate(route);
-                  } })
-              }
-            }, (item: XopcHomeDelivery): string => item.id + ':' + item.summary)
-          }
-          if (this.tab === 'sessions') {
-            if (this.model.sessionsError) {
-              ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
-            } else if (this.model.loading && !this.model.sessions.length) {
-              ListItem() { XopcListSkeleton() }
-            } else if (!this.model.sessions.length) {
-              ListItem() { Text($r('app.string.project_no_sessions')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
-            }
-            ForEach(this.model.sessions, (item: XopcSessionItem) => {
-              ListItem() { this.sessionCard(item) }
-            }, (item: XopcSessionItem): string => item.key)
-          }
-          if (this.tab === 'overview' || this.tab === 'tasks') {
-            if (this.tab === 'overview' && this.continuingTasks.length) {
-              ListItem() { XopcSectionLabel({ heading: $r('app.string.project_continue_work') }) }
-            }
-            if (this.model.tasksError) {
-              ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
-            } else if (this.model.loading && !this.model.tasks.length) {
-              ListItem() { XopcListSkeleton() }
-            } else if (this.tab === 'tasks' && !this.model.tasks.length) {
-              ListItem() { Text($r('app.string.project_no_tasks')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
-            }
-            ForEach(this.tab === 'overview' ? this.continuingTasks : this.model.tasks, (item: XopcWorkspaceItem) => {
-              ListItem() { this.taskCard(item) }
-            }, (item: XopcWorkspaceItem): string => item.id)
-            if (this.tab === 'tasks' && this.model.tasks.length < this.model.tasksTotal) {
-              ListItem() {
-                XopcPaginationFooter({ loadingPage: this.model.loadingTasksMore, failedPage: this.model.tasksError,
-                  onLoad: (): void => { void this.model.moreTasks(this.projectId); } })
-              }
-            }
-          }
-          if (this.tab === 'notes') {
-            if (this.model.notesError) {
-              ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
-            } else if (this.model.loading && !this.model.notes.length) {
-              ListItem() { XopcListSkeleton() }
-            } else if (!this.model.notes.length) {
-              ListItem() { Text($r('app.string.project_no_notes')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
-            }
-            ForEach(this.model.notes, (item: XopcNoteIndexEntry) => {
-              ListItem() { this.noteCard(item) }
-            }, (item: XopcNoteIndexEntry): string => item.id)
-            if (this.tab === 'notes' && this.model.notes.length < this.model.notesTotal) {
-              ListItem() {
-                XopcPaginationFooter({ loadingPage: this.model.loadingNotesMore, failedPage: this.model.notesError,
-                  onLoad: (): void => { void this.model.moreNotes(this.projectId); } })
-              }
-            }
-          }
-          if (this.tab === 'automations') {
-            if (this.model.automationsError) {
-              ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
-            } else if (this.model.loading && !this.model.automations.length) {
-              ListItem() { XopcListSkeleton() }
-            } else if (this.model.project && !this.model.automations.length) {
-              ListItem() {
-                XopcAutomationIdeas({ projectScoped: true, onChoose: (prompt: string): void => {
-                  this.onNavigate({ page: 'automation-setup', itemId: '', projectId: this.projectId, prompt });
-                } })
-              }
-            }
-            ForEach(this.model.automations, (item: XopcWorkspaceItem) => {
-              ListItem() { this.automationCard(item) }
-            }, (item: XopcWorkspaceItem): string => item.id)
-          }
-        }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
-        if (this.model.project && (this.tab === 'overview' || this.tab === 'sessions')) {
-          Button(this.tab === 'overview' ? $r('app.string.project_chat_cta') : $r('app.string.project_new_chat'))
-            .id('project-start-chat').width('100%').height(50).fontColor(this.colors.chat.onAction)
-            .backgroundColor(this.colors.chat.action).onClick((): void => { this.go('project-new-chat'); })
-        }
+        Swiper(this.pager) {
+          ForEach(this.tabOptions, (option: XopcPageTitleOption) => {
+            this.sectionPage(option.key)
+          }, (option: XopcPageTitleOption): string => option.key)
+        }.id('project-pager')
+          .index(Math.max(0, this.tabOptions.findIndex((option: XopcPageTitleOption): boolean => option.key === this.tab)))
+          .loop(false).indicator(false).cachedCount(1).disableSwipe(this.menuOpen)
+          .duration(this.layout.reduceMotion ? 0 : 230)
+          .onChange((index: number): void => { this.commitTab(index); })
+          .width('100%').layoutWeight(1)
       }.height('100%').width('100%').backgroundColor(this.colors.surface)
         .bindSheet($$this.menuOpen, this.projectMenu, { height: 455, dragBar: true, showClose: false,
           onDisappear: (): void => {

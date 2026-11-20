@@ -1,4 +1,4 @@
-import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcPageSwipe, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
 import { generatedMusicPlayback, XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
 import { XopcMusicMiniPlayer } from './MusicPlaybackView';
 import { XopcLocalRecording } from '../service/discussionRecordingStore';
@@ -227,6 +227,18 @@ export struct XopcNotesTabView {
     }.width('100%')
   }
 
+  private categoryOptions: XopcSegmentOption[] = [
+    { key: 'all', label: $r('app.string.library_all'), testId: 'library-filter-all' },
+    { key: 'notes', label: $r('app.string.notes'), testId: 'library-filter-notes' },
+    { key: 'files', label: $r('app.string.files'), testId: 'library-filter-files' },
+    { key: 'deliveries', label: $r('app.string.library_results'), testId: 'library-filter-deliveries' }
+  ];
+
+  private selectCategory(key: string): void {
+    this.category = key;
+    if (!this.showsNotes) this.selectedId = '';
+  }
+
   @Builder
   listPane() {
     Column() {
@@ -241,13 +253,8 @@ export struct XopcNotesTabView {
         }.padding({ left: 20, right: 20, bottom: 12 })
       }
       Column() {
-        XopcSegmentedTabs({ options: [
-          { key: 'all', label: $r('app.string.library_all'), testId: 'library-filter-all' },
-          { key: 'notes', label: $r('app.string.notes'), testId: 'library-filter-notes' },
-          { key: 'files', label: $r('app.string.files'), testId: 'library-filter-files' },
-          { key: 'deliveries', label: $r('app.string.library_results'), testId: 'library-filter-deliveries' }
-        ], selectedKey: this.category,
-          onSelect: (key: string): void => { this.category = key; if (!this.showsNotes) this.selectedId = ''; } })
+        XopcSegmentedTabs({ options: this.categoryOptions, selectedKey: this.category, swipeToSelect: true,
+          onSelect: (key: string): void => { this.selectCategory(key); } })
       }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
       if (this.showsNotes && this.capture.pendingRecordings.length && this.capture.phase !== 'recording' && this.capture.phase !== 'paused') {
         Button({ type: ButtonType.Normal }) {
@@ -391,6 +398,8 @@ export struct XopcNotesTabView {
           }
           }
         }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
+          .gestureModifier(new XopcPageSwipe(this.categoryOptions.map((option: XopcSegmentOption): string => option.key),
+            this.category, (key: string): void => { this.selectCategory(key); }, !this.searchOpen))
       if (this.activePage && this.music.track) {
         XopcMusicMiniPlayer()
       }

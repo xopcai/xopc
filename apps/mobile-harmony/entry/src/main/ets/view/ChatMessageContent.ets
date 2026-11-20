@@ -1,3 +1,4 @@
+import { capabilityText } from '../common/capabilityText';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatRow, XopcArtifact, XopcChatBlock, XopcHistoryMedia, XopcReviewFinding, XopcContextRef } from '../model/chat';
 import { XopcMobileRoute } from '../model/home';
@@ -9,7 +10,7 @@ import { XopcChatMediaView } from './ChatMediaView';
 import { XopcChatResultTail } from './ChatResultTail';
 import { chatAnswerText, chatAnswerStarted, chatIsAnswerBlock, artifactMedia } from '../common/chatRichContent';
 import { filePreviewKind } from '../common/filePreview';
-import { chatMessageNeedsPreview, chatMessagePreviewLines, chatMessagePreviewText } from '../common/chatMessagePreview';
+import { chatMessageNeedsPreview, chatMessagePreviewLines } from '../common/chatMessagePreview';
 
 @ComponentV2
 export struct XopcChatMessageContent {
@@ -17,6 +18,7 @@ export struct XopcChatMessageContent {
   @Event onReading: () => void = (): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Param row: XopcChatRow = { id: '', role: 'assistant', text: '' };
+  @Param skillLabels: Map<string, string> = new Map<string, string>();
   @Param conversationId: string = '';
   @Param reasoning: string = 'on';
   @Param connection: string = 'connected';
@@ -32,8 +34,7 @@ export struct XopcChatMessageContent {
   @Event onShowMore: (row: XopcChatRow) => void = (_row: XopcChatRow): void => {};
   @Event onShowExecution: (row: XopcChatRow) => void = (_row: XopcChatRow): void => {};
   @Computed get showPreview(): boolean { return this.previewEligible && chatMessageNeedsPreview(this.row); }
-  @Computed get previewText(): string { return chatMessagePreviewText(this.row); }
-  @Computed get previewMarkdown(): string { return chatAnswerText(this.row); }
+  @Computed get previewMarkdown(): string { return this.row.role === 'user' ? capabilityText(this.row.text, this.skillLabels).text : chatAnswerText(this.row); }
   @Computed get previewLines(): number { return chatMessagePreviewLines(this.row); }
   @Computed get visibleMedia(): XopcHistoryMedia[] {
     const artifacts = this.row.outcome?.deliverables || [];
@@ -109,15 +110,9 @@ export struct XopcChatMessageContent {
           origin: this.selectionOrigin, onEndSelection: this.onEndSelection })
       } else if (this.showPreview) {
         Stack({ alignContent: Alignment.Bottom }) {
-          if (this.row.role === 'assistant') {
-            XopcMarkdownView({ textSelectable: this.textSelectable, content: this.previewMarkdown, conversationId: this.conversationId, compactReading: true,
-              previewLineLimit: this.previewLines, onNavigate: this.onNavigate,
-              onPreviewTap: (): void => { this.onShowMore(this.row); } })
-          } else {
-            Text(this.previewText).fontSize(16).lineHeight(this.row.role === 'assistant' ? 23 : 25)
-              .fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.Start)
-              .maxLines(this.previewLines).textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
+          XopcMarkdownView({ textSelectable: this.textSelectable, content: this.previewMarkdown, conversationId: this.conversationId, compactReading: true,
+            previewLineLimit: this.previewLines, onNavigate: this.onNavigate,
+            onPreviewTap: (): void => { this.onShowMore(this.row); } })
           Column() {}.width('100%').height(48)
             .linearGradient({ direction: GradientDirection.Bottom,
               colors: [[this.previewFadeColor('00'), 0], [this.previewFadeColor('FF'), 1]] })
@@ -165,10 +160,9 @@ export struct XopcChatMessageContent {
             onReading: this.onReading,
             conversationId: this.conversationId, compactReading: true, onNavigate: this.onNavigate }) }
         } else if (this.row.role === 'user') {
-          if (this.row.text) {
-            Text(this.row.text).fontSize(16).lineHeight(25).fontColor(this.colors.foreground)
-              .copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None)
-              .width('100%').textAlign(TextAlign.Start)
+          if (this.previewMarkdown) {
+            XopcMarkdownView({ textSelectable: this.textSelectable, content: this.previewMarkdown,
+              conversationId: this.conversationId, compactReading: true, onNavigate: this.onNavigate })
           }
           ForEach(this.row.refs || [], (ref: XopcContextRef) => {
             this.reference(ref)

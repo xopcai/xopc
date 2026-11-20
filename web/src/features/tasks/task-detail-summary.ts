@@ -48,7 +48,7 @@ export function summarizeTaskCriteria(detail: TaskDetail): CriterionSummary[] {
 
 /** Read the newest receipt for the current task contract, never an older objective. */
 export function currentTaskReceipt(detail: TaskDetail) {
-  const runIds = new Set(detail.runs.filter((run) => run.contractVersion === detail.task.latestContractVersion).map((run) => run.id));
+  const runIds = new Set(detail.runs.filter((run) => !run.parentRunId && run.contractVersion === detail.task.latestContractVersion).map((run) => run.id));
   return detail.receipts.filter((receipt) => runIds.has(receipt.runId)).sort((a, b) => b.finalizedAt - a.finalizedAt)[0];
 }
 

@@ -42,7 +42,7 @@ struct XopcPreferenceOption {
 @ComponentV2
 export struct XopcSettingsView {
   @Local colors: XopcThemeColors = appThemeColors;
-  @Param initialSection: string = '';
+  @Param section: string = '';
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
   @Param useNavigation: boolean = false;
   @Event onOpenSection: (section: string) => void = (_section: string): void => {};
@@ -54,17 +54,11 @@ export struct XopcSettingsView {
   @Local selectedScheme: XopcColorScheme = 'default';
   @Local error: string = '';
   @Local push: XopcPushNotifications = pushNotifications;
-  @Local section: string = '';
   aboutToAppear(): void {
-    this.section = this.initialSection;
     this.selectedLanguage = this.preferences.language;
     this.selectedTheme = this.preferences.theme;
     this.selectedScheme = this.preferences.colorScheme;
   }
-  private openSection(section: string): void {
-    if (this.useNavigation) this.onOpenSection(section); else this.section = section;
-  }
-
   private languageLabel(): ResourceStr {
     return this.selectedLanguage === 'zh-CN' ? '中文' : this.selectedLanguage === 'en-US' ? 'English' : $r('app.string.system');
   }
@@ -85,6 +79,18 @@ export struct XopcSettingsView {
   private notificationStatus(): Resource {
     if (this.push.registered) return $r('app.string.push_registered');
     return this.push.enabled ? $r('app.string.push_not_registered') : $r('app.string.push_disabled');
+  }
+
+  private notificationError(): ResourceStr {
+    switch (this.push.error) {
+      case 'NOT_PAIRED': return $r('app.string.push_pair_required');
+      case 'NOTIFICATION_PERMISSION_REQUIRED': return $r('app.string.push_permission_required');
+      case 'PUSH_KIT_NOT_ENABLED': return $r('app.string.push_kit_not_enabled');
+      case 'PUSH_TOKEN_UNAVAILABLE': return $r('app.string.push_token_unavailable');
+      case 'PUSH_CLOUD_AUTH_REQUIRED': return $r('app.string.push_cloud_auth_required');
+      case 'PUSH_PLATFORM_UNAVAILABLE': return $r('app.string.push_platform_unavailable');
+      default: return userErrorMessage(this.push.error, 'save');
+    }
   }
 
   private async choose(language: string, theme: string, colorScheme: XopcColorScheme = this.selectedScheme): Promise<void> {
@@ -185,11 +191,11 @@ export struct XopcSettingsView {
       symbol: $r('sys.symbol.link'), onOpen: (): void => { connectionModel.openGateways(); } }).id('settings-gateways')
     if (gatewaySession.currentProfile()) {
       if (this.useNavigation) {
-        XopcHubRow({ heading: $r('app.string.ms_title'), symbol: $r('sys.symbol.slider_horizontal_2'),
+        XopcHubRow({ heading: $r('app.string.ms_title'), symbol: $r('sys.symbol.rectangle_stack'),
           onOpen: (): void => { this.onNavigate({ page: 'model-settings', itemId: '' }); } }).id('settings-models')
       }
       XopcHubRow({ heading: $r('app.string.notifications'), trailingValue: this.notificationStatus(),
-        symbol: $r('sys.symbol.bell'), onOpen: (): void => { this.openSection('notifications'); } }).id('settings-notifications')
+        symbol: $r('sys.symbol.bell'), onOpen: (): void => { this.onOpenSection('notifications'); } }).id('settings-notifications')
     }
     if (this.useNavigation) {
       XopcSectionLabel({ heading: $r('app.string.settings_data_sharing') })
@@ -198,21 +204,18 @@ export struct XopcSettingsView {
     }
     XopcSectionLabel({ heading: $r('app.string.preferences') })
     XopcHubRow({ heading: $r('app.string.language'), trailingValue: this.languageLabel(),
-      symbol: $r('sys.symbol.doc_text'), onOpen: (): void => { this.openSection('language'); } }).id('open-language')
+      symbol: $r('sys.symbol.doc_text'), onOpen: (): void => { this.onOpenSection('language'); } }).id('open-language')
     XopcHubRow({ heading: $r('app.string.appearance'), trailingValue: this.themeLabel(),
-      symbol: $r('sys.symbol.sun_max'), onOpen: (): void => { this.openSection('appearance'); } }).id('open-appearance')
+      symbol: $r('sys.symbol.sun_max'), onOpen: (): void => { this.onOpenSection('appearance'); } }).id('open-appearance')
     XopcSectionLabel({ heading: $r('app.string.settings_about_section') })
     XopcHubRow({ heading: $r('app.string.settings_about_xopc'), trailingValue: xopcAppVersion(),
-      symbol: $r('sys.symbol.info_circle'), onOpen: (): void => { this.openSection('about'); } }).id('settings-about')
+      symbol: $r('sys.symbol.info_circle'), onOpen: (): void => { this.onOpenSection('about'); } }).id('settings-about')
   }
 
   build() {
     Column() {
-      XopcPageHeader({ heading: this.sectionTitle(), showStaticTitle: true, backVisible: this.useNavigation || !!this.section,
-        onBack: (): void => {
-          if (this.useNavigation) this.onExit();
-          else this.section = '';
-        } })
+      XopcPageHeader({ heading: this.sectionTitle(), showStaticTitle: true,
+        backVisible: true, backId: 'settings-back', onBack: this.onExit })
       Scroll() {
         Column() {
           if (!this.section) { this.rootSettings() }
@@ -254,7 +257,7 @@ export struct XopcSettingsView {
               }
             }.width('100%').padding(12).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
             if (this.push.error) {
-              Text(userErrorMessage(this.push.error, 'save')).fontColor(this.colors.danger).fontSize(13).margin({ top: 8 })
+              Text(this.notificationError()).fontColor(this.colors.danger).fontSize(13).margin({ top: 8 })
             }
           }
           if (this.error) { Text(userErrorMessage(this.error, 'save')).fontColor(this.colors.danger).margin({ top: 16 }) }

@@ -233,10 +233,14 @@ export class TaskRunCoordinator {
       provenance: 'judge', strength: claim.support === 'supported' ? 'verified' : 'observed', observedAt: Date.now(),
       verifies: currentResearch.checks.filter(check => check.status === 'passed' && check.claimIds.includes(claim.id)).map(check => check.criterion),
     })) ?? [];
+    const deliveryEvidence = currentResearch?.checks.filter(check => check.status === 'passed' && check.method === 'tool_verified')
+      .map((check): TaskEvidence => ({ kind: 'test', title: `Delivery check ${check.criterionIndex + 1}`, summary: check.note,
+        verifies: [check.criterion], provenance: 'tool', strength: 'verified', observedAt: Date.now() })) ?? [];
     const checks = structuralCheck?.checks ?? currentResearch?.checks.map(check => ({ criterion: check.criterion, status: check.status,
       checkId: taskCheckId(task.id, run.contractVersion, check.criterionIndex),
-      evidenceTitles: check.claimIds.map(id => `Research claim: ${id}`), note: check.note,
-      method: currentResearch.review === 'model_reviewed' ? 'model_reviewed' as const : 'unverified' as const }))
+      evidenceTitles: check.method === 'tool_verified' && check.status === 'passed' ? [`Delivery check ${check.criterionIndex + 1}`]
+        : check.claimIds.map(id => `Research claim: ${id}`), note: check.note,
+      method: check.method ?? (currentResearch.review === 'model_reviewed' ? 'model_reviewed' as const : 'unverified' as const) }))
       ?? (task.contract?.acceptanceCriteria ?? []).map(criterion => ({ criterion, status: 'unverified' as const, evidenceTitles: [],
         method: 'unverified' as const, note: zh ? '未提交有证据关联的核验结果。' : 'No evidence-linked verification result was submitted.' }));
     const instructionChecks = (structuralCheck ? [] : currentResearch?.instructionChecks ?? []).map(check => ({ criterion: check.instruction,
@@ -258,8 +262,9 @@ export class TaskRunCoordinator {
         status: finalStatus,
         summary: hostArtifact ? publicationText : summary,
         changes: this.#evidence.filter((item) => item.kind === 'state'),
-        evidence: [...this.#evidence, ...researchEvidence, ...(structuralCheck ? [structuralCheck.evidence] : [])],
-        verification: { status: achieved ? 'passed' : [...checks, ...instructionChecks].some(check => check.status === 'failed') ? 'failed' : 'unverified', checks: [...checks, ...instructionChecks] },
+        evidence: [...this.#evidence, ...researchEvidence, ...deliveryEvidence, ...(structuralCheck ? [structuralCheck.evidence] : [])],
+        verification: { status: achieved ? 'passed' : publications.missing.length > 0
+          || [...checks, ...instructionChecks].some(check => check.status === 'failed') ? 'failed' : 'unverified', checks: [...checks, ...instructionChecks] },
         remainingWork: repair ? repair.gaps : emptySuccess ? [task.contract?.objective ?? (zh ? '完成任务' : 'Complete the task')]
           : achieved ? [] : status === 'succeeded' ? currentResearch
             ? [...currentResearch.checks.filter(check => check.status !== 'passed').map(check => check.criterion),
@@ -268,7 +273,7 @@ export class TaskRunCoordinator {
         needsUser: Boolean(unconfirmedEffects || repairBlocked),
         ...(repairBlocked ? { nextAction: zh ? '先确认上次未确认操作的实际影响，再继续补查。' : 'Confirm the effects of the unconfirmed operation before repair.' } : {}),
         completionVerdict: achieved ? 'achieved' : status === 'succeeded' ? 'partial' : 'not_achieved',
-        ...(finalStatus === 'failed' ? { failure: { code: acceptanceFailed ? 'acceptance_incomplete' : unconfirmedEffects ? 'tool_outcome_unconfirmed' : emptySuccess ? 'empty_agent_run' : 'agent_run_failed', phase: 'execution',
+        ...(finalStatus === 'failed' ? { failure: { code: acceptanceFailed ? 'acceptance_incomplete' : unconfirmedEffects ? 'tool_outcome_unconfirmed' : emptySuccess ? 'empty_agent_run' : 'agent_run_failed', phase: acceptanceFailed ? 'verification' : 'execution',
           recoveryAction: acceptanceFailed ? (zh ? '自动补做后仍有未核验项；检查已记录的缺口后重试任务' : 'Automatic repair left unverified requirements; inspect the recorded gaps and retry')
             : unconfirmedEffects ? (zh ? '检查上次操作的实际影响后再恢复任务' : 'Confirm the previous operation effects before resuming')
             : zh ? '使用其他可用助手或模型重试任务' : 'Retry the task run with another available Agent or model' } } : {}),

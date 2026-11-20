@@ -83,7 +83,12 @@ export async function retryTask(input: TaskRetryInput, deps: {
     if (!task || latest.contractVersion !== task.latestContractVersion || latest.executorKind !== 'agent'
       || typeof latest.executorRef.agentId !== 'string') return result('not_retryable', latest);
     const readOnly = !request && (personal || taskWaits.length > 0) && isReadOnlyTaskRetry(task, latest);
-    if (personal && !request && !readOnly) return result('not_retryable', latest, 'read_scope_unverified');
+    // Older gateways recorded an executor binding failure as a generic dispatch error before starting the run.
+    const failedBeforeExecution = latest.startedAt === undefined && (
+      runs.getReceipt(latest.id)?.failure?.phase === 'preflight'
+      || (latest.terminalCode === 'dispatch_failed' && latest.terminalMessage === 'Task executor differs from the active conversation')
+    );
+    if (personal && !request && !readOnly && !failedBeforeExecution) return result('not_retryable', latest, 'read_scope_unverified');
     const decisionWaits = (request || readOnly) ? taskWaits.filter(wait =>
       wait.taskRunId === latest.id && isReadOnlyRetryDecision(wait.condition, Boolean(request))) : [];
     if (taskWaits.length !== decisionWaits.length || runs.getActiveRoot(task.id)) return result('blocked', latest, 'other_wait');

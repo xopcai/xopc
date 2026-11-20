@@ -459,10 +459,10 @@ export struct XopcWorkspaceView {
   taskActionBar(item: XopcWorkspaceItem) {
     Column({ space: 8 }) {
       Row({ space: 8 }) {
-        Button($r('app.string.task_adjust_status')).layoutWeight(1).height(48)
+        Button($r('app.string.task_adjust_status')).id('task-adjust-status').layoutWeight(1).height(48)
           .backgroundColor(this.colors.input).fontColor(this.colors.foreground).enabled(!this.model.busy)
           .onClick((): void => { this.openSheet('status'); })
-        Button($r('app.string.edit')).layoutWeight(1).height(48)
+        Button($r('app.string.edit')).id('task-edit').layoutWeight(1).height(48)
           .backgroundColor(this.colors.input).fontColor(this.colors.foreground).enabled(!this.model.busy && item.editable)
           .onClick((): void => { this.model.editing = true; })
         Button($r('app.string.task_conversation_short')).layoutWeight(1).height(48)
@@ -734,7 +734,7 @@ export struct XopcWorkspaceView {
           onSubmit: (): void => { this.getUIContext().getFocusController().clearFocus(); } })
       }
       if (this.section !== 'automations') {
-        XopcSegmentedTabs({ options: this.filterOptions(), selectedKey: this.filter,
+        XopcSegmentedTabs({ options: this.filterOptions(), selectedKey: this.filter, swipeToSelect: true,
           onSelect: (key: string): void => { this.filter = key; } })
       }
     }.width('100%').padding({ left: 20, right: 20, bottom: 8 }).alignItems(HorizontalAlign.Start)
@@ -965,24 +965,6 @@ export struct XopcWorkspaceView {
         }.width('100%').padding(18).alignItems(HorizontalAlign.Start)
           .borderRadius(this.colors.corner(20)).backgroundColor(this.colors.panel)
       }
-      if ((info.phaseChanges?.length ?? 0) > 0) {
-        ForEach(info.phaseChanges ?? [], (change: XopcTaskPhaseChange) => {
-          ListItem() {
-            Column({ space: 8 }) {
-              Text($r('app.string.task_change_log')).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-              Row({ space: 6 }) {
-                Text(this.statusLabel(change.fromPhase)).fontColor(this.colors.foreground)
-                if (change.fromResolution) { Text(change.fromResolution).fontSize(12).fontColor(this.colors.secondary) }
-                Text('→').fontColor(this.colors.secondary)
-                Text(this.statusLabel(change.toPhase)).fontColor(this.colors.foreground)
-              }
-              Text(change.actor.kind + ' · ' + (change.actor.id ?? '') + ' · ' + change.source + ' · ' + this.formatTime(change.createdAt))
-                .fontSize(12).fontColor(this.colors.secondary)
-              if (change.toResolution) { Text(change.toResolution).fontSize(12).fontColor(this.colors.secondary) }
-            }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
-          }
-        }, (change: XopcTaskPhaseChange): string => change.id)
-      }
       if (info.attention.length > 0) {
         ListItem() {
           Column({ space: 9 }) {
@@ -993,6 +975,23 @@ export struct XopcWorkspaceView {
             }, (attention: XopcMobileTaskAttention, index: number): string => attention.kind + ':' + index.toString())
           }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
             .backgroundColor(this.colors.attentionFill).borderRadius(this.colors.corner(16))
+        }
+      }
+      if (this.latestTaskReceipt(info)) {
+        ListItem() {
+          Column({ space: 9 }) {
+            Text($r('app.string.task_latest_result')).fontSize(15).fontWeight(FontWeight.Medium)
+              .fontColor(this.colors.foreground)
+            Text(this.latestTaskReceipt(info)?.summary ?? '').fontSize(14).lineHeight(21)
+              .fontColor(this.colors.foreground).width('100%')
+            if ((this.latestTaskReceipt(info)?.remainingWork.length ?? 0) > 0) {
+              Text($r('app.string.task_remaining_work')).fontSize(12).fontColor(this.colors.secondary)
+              ForEach(this.latestTaskReceipt(info)?.remainingWork ?? [], (work: string, index: number) => {
+                Text('• ' + work).fontSize(13).lineHeight(19).fontColor(this.colors.secondary).width('100%')
+              }, (work: string, index: number): string => index.toString() + ':' + work)
+            }
+          }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
+            .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
         }
       }
       ListItem() {
@@ -1050,23 +1049,6 @@ export struct XopcWorkspaceView {
           }
         }.width('100%').padding(18).alignItems(HorizontalAlign.Start)
           .borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel)
-      }
-      if (this.latestTaskReceipt(info)) {
-        ListItem() {
-          Column({ space: 9 }) {
-            Text($r('app.string.task_latest_result')).fontSize(15).fontWeight(FontWeight.Medium)
-              .fontColor(this.colors.foreground)
-            Text(this.latestTaskReceipt(info)?.summary ?? '').fontSize(14).lineHeight(21)
-              .fontColor(this.colors.foreground).width('100%')
-            if ((this.latestTaskReceipt(info)?.remainingWork.length ?? 0) > 0) {
-              Text($r('app.string.task_remaining_work')).fontSize(12).fontColor(this.colors.secondary)
-              ForEach(this.latestTaskReceipt(info)?.remainingWork ?? [], (work: string, index: number) => {
-                Text('• ' + work).fontSize(13).lineHeight(19).fontColor(this.colors.secondary).width('100%')
-              }, (work: string, index: number): string => index.toString() + ':' + work)
-            }
-          }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-            .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
-        }
       }
       if (info.context.some((edge: XopcMobileTaskContext): boolean => edge.role === 'deliverable' || edge.role === 'evidence')
         || this.taskArtifacts(info).length > 0) {
@@ -1171,8 +1153,26 @@ export struct XopcWorkspaceView {
             .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
         }
       }
+      if ((info.phaseChanges?.length ?? 0) > 0) {
+        ForEach(info.phaseChanges ?? [], (change: XopcTaskPhaseChange) => {
+          ListItem() {
+            Column({ space: 8 }) {
+              Text($r('app.string.task_change_log')).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+              Row({ space: 6 }) {
+                Text(this.statusLabel(change.fromPhase)).fontColor(this.colors.foreground)
+                if (change.fromResolution) { Text(change.fromResolution).fontSize(12).fontColor(this.colors.secondary) }
+                Text('→').fontColor(this.colors.secondary)
+                Text(this.statusLabel(change.toPhase)).fontColor(this.colors.foreground)
+              }
+              Text(change.actor.kind + ' · ' + (change.actor.id ?? '') + ' · ' + change.source + ' · ' + this.formatTime(change.createdAt))
+                .fontSize(12).fontColor(this.colors.secondary)
+              if (change.toResolution) { Text(change.toResolution).fontSize(12).fontColor(this.colors.secondary) }
+            }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
+          }
+        }, (change: XopcTaskPhaseChange): string => change.id)
+      }
       ListItem() { Column().height(24) }
-    }.layoutWeight(1).width('100%').padding({ left: 20, right: 20, bottom: 20 }).scrollBar(BarState.Off)
+    }.id('workspace-task-detail').layoutWeight(1).width('100%').padding({ left: 20, right: 20, bottom: 20 }).scrollBar(BarState.Off)
   }
 
   @Builder
@@ -1420,14 +1420,14 @@ export struct XopcWorkspaceView {
           .accessibilityText($r('app.string.back')).enabled(!this.model.busy || !!this.model.openingId || (!this.model.selected && this.searchOpen))
           .onClick((): void => { this.goBack(); })
         Blank().layoutWeight(1)
-        if (!this.model.selected && !this.model.openingId) {
+        if (!this.model.selected && !this.model.openingId && !(this.section === 'tasks' && this.initialId)) {
           if (this.section !== 'tasks') {
             XopcPageSearchButton({ searchId: this.section + '-open-search', open: this.searchOpen,
               onToggle: (): void => { this.toggleSearch(); } })
           }
           if (this.section === 'automations') {
             Button({ type: ButtonType.Circle }) {
-              SymbolGlyph($r('sys.symbol.slider_horizontal_2')).fontSize(21)
+              SymbolGlyph($r('sys.symbol.funnel')).fontSize(21)
                 .fontColor([this.filter === 'all' ? this.colors.foreground : this.colors.accent])
             }.id('automation-filter-menu').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
               .accessibilityText($r('app.string.automation_filter_title'))
@@ -1459,7 +1459,7 @@ export struct XopcWorkspaceView {
       if (!this.embeddedInWorkbench) { this.header() }
       if (this.model.error) {
         Text(userErrorMessage(this.model.error, 'collection')).fontColor(this.colors.secondary).padding(12)
-        if (!this.model.busy && !this.model.selected && !this.model.openingId && !this.model.hasMore) {
+        if (!(this.section === 'tasks' && this.initialId) && !this.model.busy && !this.model.selected && !this.model.openingId && !this.model.hasMore) {
           Button($r('app.string.retry')).onClick((): void => {
             void this.model.list(this.section === 'tasks' ? this.search : '');
           })
@@ -1473,6 +1473,10 @@ export struct XopcWorkspaceView {
         }
       }
       else if (this.model.openingId) { XopcBrandLoading() }
+      else if (this.section === 'tasks' && this.initialId) {
+        Button($r('app.string.retry')).height(44).enabled(!this.model.busy)
+          .onClick((): void => { void this.openTaskAction(); })
+      }
       else {
         this.list()
         if (this.section === 'automations') {

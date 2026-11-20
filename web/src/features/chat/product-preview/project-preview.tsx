@@ -1,4 +1,4 @@
-import type { ProjectTaskCard } from '@xopcai/gateway-contract';
+import { taskRunResultKind, type ProjectTaskCard } from '@xopcai/gateway-contract';
 import { Link, useLocation } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -9,7 +9,9 @@ import {
   type ProjectWithDetails,
 } from '@/features/projects/api';
 import { selectOverviewTasks } from '@/features/projects/project-overview-model';
+import { taskCopy } from '@/features/tasks/task-copy';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
+import { taskTextForDisplay } from '@/features/tasks/task-result-presentation';
 import { messages } from '@/i18n/messages';
 import { withReturnTo } from '@/lib/navigation-return';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -114,9 +116,9 @@ export function ProjectPreview({
     ...(view?.recentResults ?? []).map(({ taskId, taskTitle, receipt }) => ({
       id: `receipt:${receipt.runId}`,
       source: `task:${taskId}`,
-      summary: receipt.summary,
+      summary: receipt.status === 'failed' ? taskTextForDisplay(receipt.summary, language) : receipt.summary,
       at: receipt.finalizedAt,
-      title: `${taskTitle} · ${zh ? { passed: '验证通过', failed: '验证失败', unverified: '未验证' }[receipt.verification.status] : receipt.verification.status}`,
+      title: `${taskTitle} · ${taskCopy(language).resultStatuses[taskRunResultKind(receipt)]}`,
       href: taskHref(taskId),
     })),
   ]

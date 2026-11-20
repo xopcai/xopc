@@ -171,7 +171,8 @@ final class AppState {
         }
     }
 
-    func activateGatewayProfile(id: String) {
+    func activateGatewayProfile(id: String) -> Bool {
+        guard id != activeGatewayProfileID else { return false }
         do {
             gatewayConfiguration = try configurationStore.activateProfile(id: id)
             activeGatewayProfileID = id
@@ -181,7 +182,12 @@ final class AppState {
             } else {
                 Task { await refreshActiveGateway() }
             }
-        } catch { connectionStorageError = error.localizedDescription }
+            homePath.removeAll()
+            return true
+        } catch {
+            connectionStorageError = error.localizedDescription
+            return false
+        }
     }
 
     func removeGatewayProfile(id: String) {
@@ -307,7 +313,7 @@ private extension AppState {
         let scope = ComposerDraftStore.accountScope(gatewayConfiguration)
         guard scope != selectionScope else { return }
         selectionScope = scope
-        homePath = []
+        if !homePath.isEmpty { homePath = [.settings] }
         do { selectedConversation = try ComposerDraftStore().readSelection(configuration: gatewayConfiguration) }
         catch { selectedConversation = nil; connectionStorageError = error.localizedDescription }
         remembersCurrentConversation = selectedConversation != nil

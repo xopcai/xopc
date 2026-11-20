@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { complete } = vi.hoisted(() => ({ complete: vi.fn() }));
+const { complete, getApiKey } = vi.hoisted(() => ({ complete: vi.fn(), getApiKey: vi.fn() }));
 vi.mock('../../providers/model-call.js', () => ({ completeWithResolvedCredentials: complete }));
-vi.mock('../../providers/index.js', () => ({ resolveModel: (ref: string) => ({ id: ref }) }));
+vi.mock('../../providers/index.js', () => ({ getApiKey, resolveModel: (ref: string) => ({ id: ref, provider: ref.split('/')[0] }) }));
 vi.mock('../../config/schema.js', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../config/schema.js')>(),
   getAgentDefaultChatModelConfig: () => ({ primary: 'primary', fallbacks: ['backup'] }),
 }));
 import { completeTaskModelCall } from '../task-model-call.js';
 import { ModelTaskContractPlanner } from '../task-contract-planner.js';
+import { resolveAvailableTaskModels } from '../../agent/models/turn-candidates.js';
 
 const success = (text = 'ok') => ({ role: 'assistant', content: [{ type: 'text', text }], stopReason: 'stop' });
 const outage = { role: 'assistant', content: [], stopReason: 'error', errorMessage: '502 provider_error' };
@@ -33,6 +34,19 @@ describe('task background model recovery', () => {
     complete.mockReset();
     await expect(call(AbortSignal.abort())).rejects.toThrow();
     expect(complete).not.toHaveBeenCalled();
+  });
+  it('uses a configured backup when the primary has no configured API key', async () => {
+    complete.mockRejectedValueOnce(new Error('No API key for provider: primary')).mockResolvedValueOnce(success());
+    await expect(call()).resolves.toMatchObject({ stopReason: 'stop' });
+    expect(complete.mock.calls.map(args => args[0].id)).toEqual(['primary', 'backup']);
+  });
+  it('preflights credentials and returns only usable models in the configured order', async () => {
+    getApiKey.mockReset().mockImplementation(async provider => provider === 'backup' ? 'fixture-key' : undefined);
+    await expect(resolveAvailableTaskModels(['primary/default', 'backup/model1', 'backup/model2'], 'primary/default'))
+      .resolves.toMatchObject([{ ref: 'backup/model1' }, { ref: 'backup/model2' }]);
+    expect(getApiKey.mock.calls.flat()).toEqual(['primary', 'backup']);
+    await expect(resolveAvailableTaskModels(['primary/default'], 'primary/default'))
+      .rejects.toMatchObject({ code: 'provider_setup_required', provider: 'primary' });
   });
   it('stops after the configured bounded chain fails', async () => {
     complete.mockResolvedValue(outage);

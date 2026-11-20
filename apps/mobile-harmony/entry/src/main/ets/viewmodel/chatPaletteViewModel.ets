@@ -1,3 +1,4 @@
+import { skillDisplayName } from '../common/capabilityText';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcPayload } from '../model/realtime';
 import { XopcReferenceItem } from '../model/chat';
@@ -53,7 +54,7 @@ export class XopcChatPaletteViewModel {
             const locale = skill.localizations?.[language.startsWith('zh') ? 'zh-CN' : 'en'] || skill.localizations?.en;
             const aliases: string[] = [skill.name];
             if (skill.localizations) Object.values(skill.localizations).forEach((value: XopcSkillLocalization): void => { aliases.push(value.displayName); });
-            return { kind: 'skill', id: 'skill:' + skill.name, name: locale?.displayName || skill.name, description: locale?.description || skill.description,
+            return { kind: 'skill', id: 'skill:' + skill.name, name: locale?.displayName || skillDisplayName(skill.name), description: locale?.description || skill.description,
               token: '/skill:' + skill.name + ' ', aliases };
           });
           items = catalog.concat(commands.payload.commands.map((command: XopcCommand): XopcPaletteItem => ({ kind: 'command', id: 'command:' + command.id,

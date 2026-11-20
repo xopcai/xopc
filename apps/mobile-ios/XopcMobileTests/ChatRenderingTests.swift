@@ -28,6 +28,18 @@ struct ChatRenderingTests {
         #expect(rows.first?.generatedMediaIds == ["song", "video"])
     }
 
+    @Test func userHistoryProjectsMarkdownWithoutChangingCopyableSource() throws {
+        let messages = try JSONDecoder().decode([WireMessage].self, from: Data(#"""
+        [{"id":"user","role":"user","content":"## Summary\n\n- **Keep formatting**"}]
+        """#.utf8))
+        let row = try #require(AssistantState.timeline(from: messages).first)
+        #expect(row.text == "## Summary\n\n- **Keep formatting**")
+        #expect(row.markdownParts.map(\.block) == [
+            .heading(level: 2, text: "Summary"),
+            .bullet(level: 0, text: "**Keep formatting**")
+        ])
+    }
+
     @MainActor @Test func historicalMusicReappearsOnlyWithItsOriginalReply() throws {
         let jobs = try JSONDecoder().decode([GeneratedMediaPayload].self, from: Data(#"""
         [{"id":"old-song","state":"completed","createdAt":1},

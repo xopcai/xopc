@@ -242,7 +242,7 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
         Spacer(Modifier.weight(1f))
         IconButton(onClick = { onDestination(HomeTab.Me) }, modifier = Modifier
           .background(scheme.surfaceContainer, CircleShape).testTag("chat-sidebar-profile")) {
-          Icon(painterResource(R.drawable.settings_sliders), stringResource(R.string.settings_title), Modifier.size(22.dp),
+          Icon(painterResource(R.drawable.action_settings), stringResource(R.string.settings_title), Modifier.size(22.dp),
             tint = scheme.onSurface)
         }
       }

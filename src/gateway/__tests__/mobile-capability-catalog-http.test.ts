@@ -411,10 +411,14 @@ it('serves only category metadata to a signed mobile device through the authenti
     const setupMcp = (action: string, flow?: { flow: string; revision: number }, values?: Record<string, string>) =>
       signed(custom, 'POST', { action, ...(flow ? { flow: flow.flow, revision: flow.revision } : {}), values });
     const mcpByName = (name: string) => Object.values(config.mcp?.servers ?? {}).find(server => server.displayName === name);
-    expect((await (await signed(custom)).json()).payload).toMatchObject({
+    const entryPanel = (await (await signed(custom)).json()).payload;
+    expect(entryPanel.fields.find((field: { id: string }) => field.id === 'authMethod')?.advanced).toBeUndefined();
+    expect(entryPanel).toMatchObject({
       fields: expect.arrayContaining([
         expect.objectContaining({ id: 'mcp-mode', presentation: 'segmented', value: 'link' }),
         expect.objectContaining({ id: 'url' }),
+        expect.objectContaining({ id: 'authMethod', value: 'auto', visibleWhen: { field: 'mcp-mode', value: 'link' },
+          options: ['auto', 'oauth', 'bearer', 'apiKey', 'headers', 'none'].map(id => expect.objectContaining({ id })) }),
         expect.objectContaining({ id: 'mcp-json', retain: true, type: 'multiline' }),
       ]),
       actions: [expect.objectContaining({ id: 'create' }), expect.objectContaining({ id: 'preview' }), expect.objectContaining({ id: 'review-command' })],
@@ -531,6 +535,59 @@ it('serves only category metadata to a signed mobile device through the authenti
       if (!ref || typeof ref === 'string') throw new Error('Missing custom header credential reference');
       expect(await new CredentialResolver().resolveApiKey(ref.xopcSecretRef.provider)).toBe(secret);
     }
+
+    vi.mocked(probeMcpConnection).mockResolvedValueOnce({ state: 'auth_unknown' });
+    const apiKeySetup = (await (await setupMcp('create', undefined, {
+      url: 'https://example.com/key', id: 'Key service',
+    })).json()).payload;
+    expect(apiKeySetup.fields).toContainEqual(expect.objectContaining({
+      id: 'method', options: expect.arrayContaining(['apiKey', 'none', 'oauth'].map(id => expect.objectContaining({ id }))),
+    }));
+    expect(apiKeySetup.fields).toContainEqual(expect.objectContaining({ id: 'apiKeyHeader', value: 'X-API-Key' }));
+    expect(apiKeySetup.fields).toContainEqual(expect.objectContaining({
+      id: 'apiKey', type: 'secret', visibleWhen: { field: 'method', value: 'apiKey' },
+    }));
+    expect((await setupMcp('verify', apiKeySetup, {
+      method: 'apiKey', apiKeyHeader: 'Host', apiKey: 'fixture-key',
+    })).status).toBe(400);
+    const apiKeyResult = (await (await setupMcp('verify', apiKeySetup, {
+      method: 'apiKey', apiKeyHeader: 'X-Service-Key', apiKey: 'fixture-key', token: 'unused-fixture-token',
+    })).json()).payload;
+    expect(apiKeyResult.tone).toBe('success');
+    expect(JSON.stringify(apiKeyResult)).not.toContain('fixture-key');
+    const [apiKeyProbeConfig, , apiKeyServerId] = vi.mocked(probeMcpConnection).mock.lastCall!;
+    expect(apiKeyProbeConfig.mcp?.servers?.[apiKeyServerId]?.headers).toEqual({ 'X-Service-Key': 'fixture-key' });
+    expect(mcpByName('Key service')).toBeUndefined();
+    expect((await setupMcp('save', apiKeyResult)).status).toBe(200);
+    const savedKey = mcpByName('Key service')?.headers?.['X-Service-Key'];
+    if (!savedKey || typeof savedKey === 'string') throw new Error('Missing API Key credential reference');
+    expect(await new CredentialResolver().resolveApiKey(savedKey.xopcSecretRef.provider)).toBe('fixture-key');
+
+    const manualAuth = (await (await setupMcp('create', undefined, {
+      url: 'https://example.com/public', id: 'Public service', authMethod: 'apiKey',
+    })).json()).payload;
+    expect(manualAuth.fields).toContainEqual(expect.objectContaining({ id: 'method', value: 'apiKey' }));
+    vi.mocked(probeMcpConnection).mockResolvedValueOnce({ state: 'error', errorCode: 'access_denied' });
+    const denied = (await (await setupMcp('verify', manualAuth, {
+      method: 'apiKey', apiKeyHeader: 'X-Service-Key', apiKey: 'rejected-key',
+    })).json()).payload;
+    expect(denied.fields).toContainEqual(expect.objectContaining({ id: 'apiKeyHeader', value: 'X-Service-Key' }));
+    expect(JSON.stringify(denied)).not.toContain('rejected-key');
+    const publicResult = (await (await setupMcp('verify', denied, {
+      method: 'none', apiKey: 'rejected-key', requestHeaders: JSON.stringify([['X-Service-Key', 'rejected-key']]),
+    })).json()).payload;
+    const [publicProbeConfig, , publicServerId] = vi.mocked(probeMcpConnection).mock.lastCall!;
+    expect(publicProbeConfig.mcp?.servers?.[publicServerId]?.headers).toBeUndefined();
+    expect(publicResult.tone).toBe('success');
+    expect(mcpByName('Public service')).toBeUndefined();
+    expect((await setupMcp('save', publicResult)).status).toBe(200);
+
+    vi.mocked(probeMcpConnection).mockResolvedValueOnce({ state: 'oauth_required' });
+    const noAuthDenied = (await (await setupMcp('create', undefined, {
+      url: 'https://example.com/auth-required', authMethod: 'none',
+    })).json()).payload;
+    expect(noAuthDenied.fields).toContainEqual(expect.objectContaining({ id: 'method', value: 'none' }));
+    expect(noAuthDenied.actions).not.toContainEqual(expect.objectContaining({ id: 'authorize' }));
 
     expect((await setupMcp('preview', undefined, { 'mcp-json': '{' })).status).toBe(400);
     expect((await setupMcp('preview', undefined, { 'mcp-json': JSON.stringify({

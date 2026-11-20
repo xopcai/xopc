@@ -123,7 +123,7 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
   var menuOpen by remember(taskId) { mutableStateOf(false) }
   var editOpen by rememberSaveable(taskId) { mutableStateOf(false) }
   var statusOpen by rememberSaveable(taskId) { mutableStateOf(false) }
-  var confirmsCancel by remember(taskId) { mutableStateOf(false) }
+  val overviewScroll = key(taskId, detailsOpen) { rememberScrollState() }
   val task = state.detailTask?.takeIf { it.id == taskId }
   val moreLabel = stringResource(R.string.assistant_message_more)
   val busy = state.commandBusy || state.editBusy
@@ -150,55 +150,63 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
       Box {
         IconButton(onClick = { menuOpen = true }, modifier = Modifier.background(headerFill, CircleShape)
           .semantics { contentDescription = moreLabel }.testTag("task-chat-menu")) {
-          Icon(painterResource(R.drawable.settings_sliders), contentDescription = null, modifier = Modifier.size(22.dp))
+          Icon(painterResource(R.drawable.action_more_horizontal), contentDescription = null, modifier = Modifier.size(22.dp))
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-          DropdownMenuItem(text = { Text(stringResource(R.string.progress_edit_task)) }, enabled = task != null && !busy,
-            onClick = { menuOpen = false; editOpen = true; onLoadProjects() })
-          DropdownMenuItem(text = { Text(stringResource(R.string.progress_adjust_status)) }, enabled = task != null && !busy,
-            onClick = { menuOpen = false; statusOpen = true })
-          if (task?.allowedCommands?.contains("close") == true) DropdownMenuItem(
-            text = { Text(stringResource(R.string.progress_cancel_task), color = MaterialTheme.colorScheme.error) },
-            enabled = !busy, onClick = { menuOpen = false; confirmsCancel = true })
-          HorizontalDivider()
           DropdownMenuItem(text = { Text(stringResource(R.string.chat_personal_search)) }, onClick = { menuOpen = false; onSearch() })
           DropdownMenuItem(text = { Text(stringResource(R.string.assistant_options)) }, onClick = { menuOpen = false; onOptions() })
         }
       }
     }
   }
-  if (detailsOpen) ModalBottomSheet(onDismissRequest = onDismissDetails) {
-    val sheetHeight = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
-    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp),
-      verticalAlignment = Alignment.CenterVertically) {
-      Text(task?.title ?: stringResource(R.string.progress_task_detail),
-        modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-        maxLines = 2, overflow = TextOverflow.Ellipsis)
-      IconButton(onClick = onDismissDetails, modifier = Modifier.testTag("task-chat-details-close")) {
-        Icon(painterResource(R.drawable.action_close), stringResource(R.string.assistant_close))
+  if (detailsOpen && !statusOpen && !editOpen) ModalBottomSheet(
+    onDismissRequest = onDismissDetails,
+    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+  ) {
+    Column(Modifier.fillMaxWidth().fillMaxHeight(0.8f)) {
+      Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(task?.title ?: title.ifBlank { stringResource(R.string.progress_task_detail) },
+          modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge,
+          maxLines = 2, overflow = TextOverflow.Ellipsis)
+        IconButton(onClick = onDismissDetails, modifier = Modifier.testTag("task-chat-details-close")) {
+          Icon(painterResource(R.drawable.action_close), stringResource(R.string.assistant_close))
+        }
       }
-    }
-    Column(Modifier.fillMaxWidth().heightIn(max = sheetHeight * 0.65f)
-      .verticalScroll(rememberScrollState()).padding(20.dp).testTag("task-chat-overview"),
-      verticalArrangement = Arrangement.spacedBy(16.dp)) {
-      if (state.detailError || state.commandError) {
-        TextButton(onClick = onReload) { Text(stringResource(R.string.progress_refresh)) }
-      } else if (task == null) {
-        BrandLoadingPanel()
+      Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(overviewScroll)
+        .padding(20.dp).testTag("task-chat-overview"),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (state.detailError || state.commandError) {
+          Text(stringResource(if (state.commandError) R.string.progress_command_error else R.string.progress_tasks_error),
+            color = MaterialTheme.colorScheme.error)
+          TextButton(onClick = onReload, enabled = !state.detailLoading) {
+            Text(stringResource(R.string.progress_refresh))
+          }
+        } else if (task == null) {
+          BrandLoadingPanel()
+        }
+        if (task != null) TaskChatOverview(task, busy, onCommand)
       }
-      if (task != null) TaskChatOverview(task)
+      if (task != null) {
+        HorizontalDivider()
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          OutlinedButton(onClick = { editOpen = true; onLoadProjects() }, enabled = !busy && task.version > 0,
+            modifier = Modifier.weight(1f).testTag("task-chat-edit")) {
+            Text(stringResource(R.string.progress_edit_task))
+          }
+          Button(onClick = { statusOpen = true }, enabled = !busy,
+            modifier = Modifier.weight(1f).testTag("task-chat-status")) {
+            Text(stringResource(R.string.progress_adjust_status))
+          }
+        }
+      }
     }
   }
   if (task != null && statusOpen) ProgressTaskDetail(task, busy || state.detailLoading, state.commandError,
     false, false, onCommand, onStart, {}, state.agents, state.agentsLoading, state.agentsError,
     onRefresh = onReload, statusOnly = true, onStatusDismiss = { statusOpen = false; onReload() }, onEdit = {})
   if (task != null && editOpen) TaskChatEditor(task, state, onLoadProjects, onSave) { editOpen = false }
-  if (confirmsCancel) AlertDialog(onDismissRequest = { confirmsCancel = false },
-    title = { Text(stringResource(R.string.progress_cancel_task)) },
-    text = { Text(stringResource(R.string.progress_cancel_task_help)) },
-    confirmButton = { TextButton(onClick = { confirmsCancel = false; onCommand("cancel_task") }) {
-      Text(stringResource(R.string.progress_cancel_task))
-    } }, dismissButton = { TextButton(onClick = { confirmsCancel = false }) { Text(stringResource(R.string.assistant_close)) } })
 }
 
 @Composable
@@ -216,7 +224,9 @@ internal fun TaskDetailsTip(onOpen: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun TaskChatOverview(task: ProgressTask) {
+private fun TaskChatOverview(task: ProgressTask, busy: Boolean, onCommand: (String) -> Unit) {
+  Text(task.resolution?.let { taskResolutionLabel(it) } ?: progressPhaseLabel(task.phase),
+    style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
   Text(stringResource(R.string.progress_execution_state, taskExecutionLabel(task.operationalState)),
     color = MaterialTheme.colorScheme.onSurfaceVariant)
   if (task.attention.isNotEmpty()) {
@@ -228,6 +238,13 @@ private fun TaskChatOverview(task: ProgressTask) {
     MarkdownContent(task.latestResult)
   }
   task.remainingWork.forEach { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+  task.presentationReason?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+  task.signoffResultId?.let { resultId ->
+    Button(onClick = { onCommand("signoff:$resultId") }, enabled = !busy,
+      modifier = Modifier.testTag("progress-task-signoff")) {
+      Text(stringResource(R.string.progress_task_signoff))
+    }
+  }
   val objective = task.objective.ifBlank { task.body }
   if (objective.isNotBlank()) {
     Text(stringResource(R.string.progress_description), style = MaterialTheme.typography.labelLarge)

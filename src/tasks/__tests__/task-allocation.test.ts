@@ -33,6 +33,7 @@ import { TaskAllocationDispatcher } from '../task-allocation-service.js';
 import { TaskRepository } from '../task-repository.js';
 import { TaskRunRepository } from '../task-run-repository.js';
 import { TaskRunDispatcher } from '../task-run-dispatcher.js';
+import { retryTask } from '../task-retry-service.js';
 import { TaskConversationRepository } from '../task-conversation-repository.js';
 import { saveMediaBuffer } from '../../media/store.js';
 import { TaskResultDeliveryService } from '../task-result-delivery-service.js';
@@ -643,7 +644,7 @@ describe('background task allocation', () => {
     expect(new TaskCollaborationRepository().recent(task.id, undefined, 10).some(entry => entry.body === 'January through March')).toBe(true);
   });
 
-  it.each([false, true])('serves allocation and opens the selected executor conversation (legacy session: %s)', async legacy => {
+  it.each(['new', 'legacy', 'failed legacy'] as const)('opens the task conversation (%s)', async scenario => {
     const directory = mkdtempSync(join(tmpdir(), 'xopc-allocation-http-'));
     const store = new SessionStore(directory);
     const token = 'allocation-http-test-token';
@@ -657,6 +658,9 @@ describe('background task allocation', () => {
       sessionIndexInstance: store,
       sessions: { getMessagePage: store.getMessagePage.bind(store), getSession: store.get.bind(store) },
       ensureTaskConversation: GatewayService.prototype.ensureTaskConversation,
+      retryTask: (input: Parameters<typeof retryTask>[0]) => retryTask(input, {
+        connectionRecovery: { act: vi.fn(), snapshot: vi.fn() }, wake: vi.fn(),
+      }),
     } as unknown as GatewayService;
     const app = createHonoApp({ service });
     const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
@@ -681,7 +685,7 @@ describe('background task allocation', () => {
       expect(await early.json()).toMatchObject({ error: 'Task executor has not been assigned' });
       expect(conversations.getActiveSession(taskId)).toBeUndefined();
 
-      const oldConversation = legacy ? createConversation({ agentId: 'main' }, directory).key : undefined;
+      const oldConversation = scenario !== 'new' ? createConversation({ agentId: 'main' }, directory).key : undefined;
       if (oldConversation) {
         conversations.activateExecutionSession({ taskId, conversationId: oldConversation, agentId: 'main' });
       }
@@ -693,7 +697,35 @@ describe('background task allocation', () => {
       expect(JSON.stringify(history)).not.toContain('Task submitted;');
       expect(detail.allocation.selectionReason).toBe('Sales expertise and verified tools');
 
-      const run = new TaskRunRepository().getActiveRoot(taskId)!;
+      const runs = new TaskRunRepository();
+      let run = runs.getActiveRoot(taskId)!;
+      if (scenario === 'failed legacy') {
+        const failed = new TaskApplicationService().completeRun({
+          runId: run.id, expectedRunVersion: run.version, terminalCode: 'dispatch_failed',
+          terminalMessage: 'Task executor differs from the active conversation',
+          receipt: {
+            status: 'failed', summary: 'TaskRun dispatch failed', changes: [], evidence: [],
+            verification: { status: 'unverified', checks: [] }, remainingWork: [], needsUser: false,
+            failure: { code: 'dispatch_failed', phase: 'dispatch' },
+          },
+        });
+        expect(failed.ok).toBe(true);
+        const existing = await fetch(conversationUrl, { method: 'POST', headers });
+        expect(existing.status).toBe(200);
+        expect(await existing.json()).toMatchObject({ agentId: 'main', conversationId: oldConversation, created: false });
+        expect(conversations.getActiveSession(taskId)?.conversationId).toBe(oldConversation);
+        const retried = await fetch(`${base}/api/tasks/${taskId}/retry`, { method: 'POST', headers,
+          body: JSON.stringify({ idempotencyKey: 'retry-legacy-dispatch', expectedRunId: run.id }) });
+        expect(retried.status).toBe(200);
+        expect(await retried.json()).toMatchObject({ status: 'queued' });
+        expect(runs.getActiveRoot(taskId)).toMatchObject({ retryOfRunId: run.id, executorRef: { agentId: 'analyst' } });
+        run = runs.getActiveRoot(taskId)!;
+      }
+      // Opening the conversation before the dispatcher claims the run must use the same binding.
+      const preopened = await fetch(conversationUrl, { method: 'POST', headers });
+      expect(preopened.status).toBe(200);
+      const selected = await preopened.json();
+      expect(selected).toMatchObject({ agentId: 'analyst', created: true });
       const runAgent = vi.fn(async () => {});
       await new TaskRunDispatcher({ workerId: 'http-allocation-test', maxConcurrency: 1, runAgent,
         ensureSession: async (id, runId, agentId) =>
@@ -701,6 +733,7 @@ describe('background task allocation', () => {
       }).drain();
       const active = conversations.getActiveSession(taskId);
       expect(active).toMatchObject({ agentId: 'analyst', runId: run.id });
+      expect(active?.conversationId).toBe(selected.conversationId);
       expect(runAgent).toHaveBeenCalledExactlyOnceWith(run.id, active?.conversationId, expect.any(String));
       if (oldConversation) {
         expect(conversations.listSessions(taskId)).toContainEqual(expect.objectContaining({

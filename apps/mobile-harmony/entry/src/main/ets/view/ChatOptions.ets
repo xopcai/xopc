@@ -1,3 +1,4 @@
+import { capabilityText } from '../common/capabilityText';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatOptionsViewModel } from '../viewmodel/chatOptionsViewModel';
 import { XopcChatModel, XopcChatAgent, XopcQueuedInput } from '../model/chat';
@@ -33,6 +34,7 @@ export struct XopcChatOptions {
   @Param personal: boolean = false;
   @Param personalRecord: XopcPersonalAgentRecord | null = null;
   @Param mode: string = 'actions';
+  @Param skillLabels: Map<string, string> = new Map<string, string>();
   @Param contextSummary: ResourceStr = '';
   @Param thinkingBusy: boolean = false;
   @Param modelBusy: boolean = false;
@@ -172,7 +174,7 @@ export struct XopcChatOptions {
                         .width(44).height(44)
                     }
                     Column({ space: 4 }) {
-                      Text(item.content || $r('app.string.add_attachment')).fontSize(14).fontColor(this.colors.foreground)
+                      Text(capabilityText(item.content, this.skillLabels).text || $r('app.string.add_attachment')).fontSize(14).fontColor(this.colors.foreground)
                         .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
                       if (item.attachments?.length || item.contextRefs?.length) {
                         Text((item.attachments?.length ? '📎 ' + item.attachments.length : '')

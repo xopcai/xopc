@@ -45,7 +45,9 @@ struct MobilePageTitleMenu<Value: Hashable>: View {
 
 struct HorizontalSwipeCapture: UIViewRepresentable {
     var leftOnly = false
+    var rightOnly = false
     var reserveBackEdge = false
+    var prioritizeSelection = false
     var onDrag: (CGFloat) -> Void = { _ in }
     var onEnd: (CGFloat, CGFloat) -> Void
 
@@ -111,13 +113,20 @@ struct HorizontalSwipeCapture: UIViewRepresentable {
 
         func gestureRecognizerShouldBegin(_: UIGestureRecognizer) -> Bool {
             let offset = pan.translation(in: nil)
-            return abs(offset.x) > abs(offset.y) * 1.25 && (!capture.leftOnly || offset.x < 0)
+            return abs(offset.x) > abs(offset.y) * 1.25
+                && (!capture.leftOnly || offset.x < 0)
+                && (!capture.rightOnly || offset.x > 0)
         }
 
         func gestureRecognizer(_: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool
         {
-            other.view is UIScrollView
+            !capture.prioritizeSelection && other.view is UIScrollView
+        }
+
+        func gestureRecognizer(_: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            guard capture.prioritizeSelection, let scroll = other.view as? UIScrollView else { return false }
+            return other === scroll.panGestureRecognizer
         }
 
         @objc private func onPan() {
@@ -132,12 +141,46 @@ struct HorizontalSwipeCapture: UIViewRepresentable {
     }
 }
 
+private struct PageSelectionSwipe<Value: Equatable>: ViewModifier {
+    @Environment(\.layoutDirection) private var direction
+    let pages: [Value]
+    let selected: Value
+    let enabled: Bool
+    let prioritizeSelection: Bool
+    let onSelect: (Value) -> Void
+
+    func body(content: Content) -> some View {
+        content.background {
+            if enabled, let index = pages.firstIndex(of: selected), pages.count > 1 {
+                let rtl = direction == .rightToLeft
+                HorizontalSwipeCapture(leftOnly: rtl ? index == pages.count - 1 : index == 0,
+                                       rightOnly: rtl ? index == 0 : index == pages.count - 1,
+                                       reserveBackEdge: true, prioritizeSelection: prioritizeSelection) { distance, speed in
+                    guard abs(distance) >= 64 || (abs(distance) >= 24 && abs(speed) >= 550 && distance * speed > 0)
+                    else { return }
+                    let target = index + ((distance < 0) != rtl ? 1 : -1)
+                    if pages.indices.contains(target) { onSelect(pages[target]) }
+                }
+            }
+        }
+    }
+}
+
+extension View {
+    func pageSelectionSwipe<Value: Equatable>(_ pages: [Value], selected: Value, enabled: Bool = true,
+                                               prioritizeSelection: Bool = false, onSelect: @escaping (Value) -> Void) -> some View {
+        modifier(PageSelectionSwipe(pages: pages, selected: selected, enabled: enabled,
+                                    prioritizeSelection: prioritizeSelection, onSelect: onSelect))
+    }
+}
+
 struct SegmentedTabs<Value: Hashable>: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let options: [SegmentOption<Value>]
     let selected: Value
     let label: LocalizedStringKey
     var minimumSegmentWidth: CGFloat = 64
+    var swipeToSelect = false
     let onSelect: (Value) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -146,9 +189,11 @@ struct SegmentedTabs<Value: Hashable>: View {
     @ScaledMetric(relativeTo: .subheadline) private var height = 46
     @ScaledMetric(relativeTo: .subheadline) private var scale = 1.0
     @Namespace private var indicator
+    @State private var trackWidth: CGFloat = 0
 
     var body: some View {
         GeometryReader { geometry in
+            let canSwipe = swipeToSelect && trackWidth > 0 && trackWidth <= geometry.size.width + 0.5
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
                     SegmentTrack(viewportWidth: geometry.size.width, height: height, direction: direction) {
@@ -158,10 +203,14 @@ struct SegmentedTabs<Value: Hashable>: View {
                                 .layoutValue(key: SegmentMinimumWidth.self, value: (option.minimumWidth ?? minimumSegmentWidth) * scale)
                         }
                     }
+                    .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { trackWidth = $0 }
                     .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(18) * scale))
                     .clipShape(.rect(cornerRadius: mobileTheme.corner(18) * scale))
                     .animation(reduceMotion ? nil : .timingCurve(0.32, 0.72, 0, 1, duration: 0.25), value: selected)
                 }
+                .scrollDisabled(canSwipe)
+                .pageSelectionSwipe(options.map(\.id), selected: selected, enabled: canSwipe,
+                                    prioritizeSelection: true, onSelect: onSelect)
                 .scrollIndicators(.hidden)
                 .onChange(of: selected, initial: true) {
                     withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo(selected) }

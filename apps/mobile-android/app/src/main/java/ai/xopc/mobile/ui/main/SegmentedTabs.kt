@@ -58,6 +58,7 @@ internal fun <T> SegmentedTabs(
   modifier: Modifier = Modifier,
   minimumSegmentWidth: Dp = 64.dp,
   enabled: Boolean = true,
+  swipeToSelect: Boolean = false,
 ) {
   if (options.isEmpty()) return
   val density = LocalDensity.current
@@ -106,7 +107,10 @@ internal fun <T> SegmentedTabs(
       }
       if (target != scroll.value) scroll.animateScrollTo(target)
     }
-    Box(Modifier.horizontalScroll(scroll)) {
+    val fits = trackWidth <= viewport
+    val swipe = if (swipeToSelect && enabled && fits && selected != null)
+      Modifier.swipePageSelection(options.map { it.value }, selected, onSelect = onSelect) else Modifier
+    Box(swipe.horizontalScroll(scroll, enabled = !fits)) {
       Box(Modifier.clip(shape).background(scheme.surfaceContainer)) {
         if (selection >= 0) {
           Box(Modifier.matchParentSize().offset { IntOffset(thumb.roundToPx(), 0) }) {

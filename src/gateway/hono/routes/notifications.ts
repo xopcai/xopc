@@ -6,6 +6,9 @@ import {
   notificationDeliveryMetrics,
 } from '../../../notifications/store.js';
 
+import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 function integerQuery(value: string | undefined, min: number, max: number): number | undefined {
@@ -37,7 +40,15 @@ export function registerNotificationRoutes(authenticated: Hono, _deps: Authentic
     if (!consumerId || (surface !== 'web' && surface !== 'electron' && surface !== 'mobile')) {
       return c.json({ ok: false, error: 'Invalid notification acknowledgement' }, 400);
     }
-    if (!acknowledgeNotification(c.req.param('id'), consumerId, surface)) {
+    const principal = getGatewayPrincipal(c);
+    const deviceId = principal.kind === 'device' ? principal.deviceId : undefined;
+    if (principal.kind === 'device') {
+      const device = deviceId && getDevice(deviceId);
+      if (!device || surface !== 'mobile' || consumerId !== `${device.platform}:${deviceId}`) {
+        return c.json({ ok: false, error: 'Invalid device acknowledgement' }, 403);
+      }
+    }
+    if (!acknowledgeNotification(c.req.param('id'), consumerId, surface, deviceId)) {
       return c.json({ ok: false, error: 'Notification not found' }, 404);
     }
     return c.json({ ok: true });

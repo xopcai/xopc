@@ -675,7 +675,9 @@
     <string name="about_you_focus">最近在关注</string>
     <string name="about_you_no_focus">暂未设置重点</string>
     <string name="about_you_work_memory">工作记忆</string>
-    <string name="about_you_work_memory_help">查看笔记与保存的工作内容。</string>
+    <string name="about_you_work_memory_help">查看已保存的工作内容。</string>
+    <string name="about_you_work_memory_empty">还没有工作记忆。</string>
+    <string name="about_you_work_memory_retry">暂时无法读取工作记忆，点击重试</string>
     <string name="about_you_search">搜索记忆</string>
     <string name="about_you_close_search">关闭</string>
     <string name="about_you_all">全部</string>

@@ -202,7 +202,7 @@ export struct XopcDiscussionNoteView {
           { key: 'summary', label: $r('app.string.note_ui_overview'), testId: 'discussion-tab-summary' },
           { key: 'transcript', label: $r('app.string.note_ui_transcript'), testId: 'discussion-tab-transcript' },
           { key: 'marks', label: $r('app.string.note_ui_marks'), testId: 'discussion-tab-marks' }
-        ], selectedKey: this.model.tab,
+        ], selectedKey: this.model.tab, swipeToSelect: true,
           onSelect: (key: string): void => { this.model.tab = key; if (key === 'marks') void this.model.refreshAnnotations(); } })
         if (this.searchOpen || this.model.reviewQuery.trim()) {
         TextInput({ text: this.model.reviewQuery,placeholder: $r('app.string.discussion_search_note') }).maxLength(200)

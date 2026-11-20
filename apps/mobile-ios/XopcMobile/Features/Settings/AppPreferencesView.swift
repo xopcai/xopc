@@ -43,7 +43,7 @@ struct AppSettingsView: View {
                 NavigationLink {
                     ModelSettingsView(configuration: configuration)
                 } label: {
-                    Label("模型设置", image: "SettingsSliders")
+                    Label("模型设置", systemImage: "rectangle.stack")
                 }
                 .accessibilityIdentifier("settings-models")
                 NavigationLink {
@@ -101,6 +101,11 @@ private struct ShareCenterView: View {
     @State private var failed = false
     @State private var revokeTarget: MobileShare?
 
+    private let filters = [
+        SegmentOption(id: false, title: "全部", accessibilityID: "share-filter-all"),
+        SegmentOption(id: true, title: "仅有效", accessibilityID: "share-filter-active")
+    ]
+
     private var visibleShares: [MobileShare] {
         activeOnly ? shares.filter(\.isActive) : shares
     }
@@ -108,10 +113,7 @@ private struct ShareCenterView: View {
     var body: some View {
         List {
             Section {
-                SegmentedTabs(options: [
-                    SegmentOption(id: false, title: "全部", accessibilityID: "share-filter-all"),
-                    SegmentOption(id: true, title: "仅有效", accessibilityID: "share-filter-active")
-                ], selected: activeOnly, label: "筛选") { activeOnly = $0 }
+                SegmentedTabs(options: filters, selected: activeOnly, label: "筛选") { activeOnly = $0 }
             }
 
             if failed {
@@ -131,6 +133,9 @@ private struct ShareCenterView: View {
                     shareRow(share)
                 }
             }
+        }
+        .pageSelectionSwipe(filters.map(\.id), selected: activeOnly, enabled: !busy && revokeTarget == nil) {
+            activeOnly = $0
         }
         .listStyle(.insetGrouped)
         .listSectionSpacing(12)

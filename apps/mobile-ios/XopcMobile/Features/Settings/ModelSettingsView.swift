@@ -56,15 +56,15 @@ private enum GlobalModelChange: Encodable {
 
 // swiftlint:disable:next type_body_length
 struct ModelSettingsView: View {
-    private enum Page: String { case defaults, tasks }
+    private enum Scope: String { case model, task }
     private enum Sheet: Identifiable {
-        case fallbacks, addFallback, choose(GlobalModelRoute, Page)
+        case fallbacks, addFallback, choose(GlobalModelRoute, Scope)
 
         var id: String {
             switch self {
             case .fallbacks: "fallbacks"
             case .addFallback: "add-fallback"
-            case let .choose(route, page): "\(page.rawValue)-\(route.key)"
+            case let .choose(route, scope): "\(scope.rawValue)-\(route.key)"
             }
         }
     }
@@ -72,7 +72,6 @@ struct ModelSettingsView: View {
     let configuration: GatewayConfiguration
     private let path = "/api/mobile/model-settings"
     @State private var data: GlobalModelSettings?
-    @AppStorage("navigation.model-settings") private var page = Page.defaults
     @State private var sheet: Sheet?
     @State private var saving = false
     @State private var loading = false
@@ -96,21 +95,12 @@ struct ModelSettingsView: View {
                 ProgressView()
             }
             if let data {
-                if page == .tasks {
-                    Section {
-                        ForEach(data.tasks) { route in routeRow(route, data: data, page: .tasks) }
-                    }
-                } else {
-                    defaultSections(data)
-                }
+                modelSections(data)
             }
         }
         .listSectionSpacing(16)
         .mobilePageTitle(Text("模型设置")) {
-            MobilePageTitleMenu(options: [
-                SegmentOption(id: Page.defaults, title: "模型设置", accessibilityID: "model-page-default"),
-                SegmentOption(id: Page.tasks, title: "按任务选模型", accessibilityID: "model-page-tasks")
-            ], selected: page, identifier: "model-settings-menu") { page = $0 }
+            Text("模型设置").font(.headline).foregroundStyle(theme.foreground)
         }
         .task(id: configuration) { await load() }
         .refreshable { await load() }
@@ -121,31 +111,35 @@ struct ModelSettingsView: View {
         }
     }
 
-    @ViewBuilder private func defaultSections(_ data: GlobalModelSettings) -> some View {
+    @ViewBuilder private func modelSections(_ data: GlobalModelSettings) -> some View {
         Section("默认模型") {
             if let primary = data.routing.first(where: { $0.key == "chat" }) {
-                routeRow(primary, data: data, page: .defaults)
+                routeRow(primary, data: data, scope: .model)
             }
             Button { open(.fallbacks) } label: {
-                settingLabel("备用模型", trailing: Text(data.fallbacks.count.formatted()))
+                settingLabel("备用模型", symbol: "list.bullet", trailing: Text(data.fallbacks.count.formatted()))
             }.accessibilityIdentifier("model-settings-fallbacks")
-            Button { page = .tasks } label: {
-                settingLabel("按任务选模型", trailing: Text(data.tasks.filter { $0.inherited != true }.count.formatted()))
+        }
+        if !data.tasks.isEmpty {
+            Section("按任务选模型") {
+                ForEach(data.tasks) { routeRow($0, data: data, scope: .task) }
             }
         }
-        Section("其他用途") {
-            ForEach(data.routing.filter { ["background", "vision", "image"].contains($0.key) }) {
-                routeRow($0, data: data, page: .defaults)
+        let other = data.routing.filter { ["background", "vision", "image"].contains($0.key) }
+        if !other.isEmpty {
+            Section("其他用途") {
+                ForEach(other) { routeRow($0, data: data, scope: .model) }
             }
-            DisclosureGroup("语音与更多媒体") {
-                ForEach(data.routing.filter { !["chat", "background", "vision", "image"].contains($0.key) }) {
-                    routeRow($0, data: data, page: .defaults)
-                }
+        }
+        let media = data.routing.filter { !["chat", "background", "vision", "image"].contains($0.key) }
+        if !media.isEmpty {
+            Section("语音与更多媒体") {
+                ForEach(media) { routeRow($0, data: data, scope: .model) }
             }
         }
     }
 
-    private func routeRow(_ route: GlobalModelRoute, data: GlobalModelSettings, page: Page) -> some View {
+    private func routeRow(_ route: GlobalModelRoute, data: GlobalModelSettings, scope: Scope) -> some View {
         let value = if route.inherited == true {
             Text("继承默认")
         } else if route.key != "chat", data.pools[route.pool]?.isEmpty != false {
@@ -155,14 +149,18 @@ struct ModelSettingsView: View {
         } else {
             Text("未配置")
         }
-        return Button { open(.choose(route, page), current: route.ref) } label: {
-            settingLabel(label(route.key, page: page), trailing: value)
+        return Button { open(.choose(route, scope), current: route.ref) } label: {
+            settingLabel(label(route.key, scope: scope), symbol: routeSymbol(route.key), trailing: value)
         }
-        .accessibilityIdentifier("model-setting-\(route.key)")
+        .accessibilityIdentifier(scope == .task ? "model-task-\(route.key)" : "model-setting-\(route.key)")
     }
 
-    private func settingLabel(_ title: LocalizedStringKey, trailing: Text) -> some View {
+    private func settingLabel(_ title: LocalizedStringKey, symbol: String, trailing: Text) -> some View {
         HStack {
+            Image(systemName: symbol)
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+                .accessibilityHidden(true)
             Text(title).foregroundStyle(.primary)
             Spacer(minLength: 8)
             trailing.mobileTextStyle(.caption).foregroundStyle(.secondary)
@@ -171,11 +169,11 @@ struct ModelSettingsView: View {
     }
 
     // swiftlint:disable:next cyclomatic_complexity
-    private func label(_ key: String, page: Page) -> LocalizedStringKey {
+    private func label(_ key: String, scope: Scope) -> LocalizedStringKey {
         switch key {
         case "chat": "对话与任务"
         case "background": "自动与后台任务"
-        case "vision": page == .tasks ? "视觉任务" : "看图"
+        case "vision": scope == .task ? "视觉任务" : "看图"
         case "image": "生成图片"
         case "transcription": "录音与听写"
         case "speech": "文字转语音"
@@ -188,6 +186,27 @@ struct ModelSettingsView: View {
         case "review": "审查"
         case "understanding": "内容理解"
         default: "模型设置"
+        }
+    }
+
+    // swiftlint:disable:next cyclomatic_complexity
+    private func routeSymbol(_ key: String) -> String {
+        switch key {
+        case "chat": "ellipsis.bubble"
+        case "background": "clock"
+        case "vision": "eye"
+        case "image": "paintbrush"
+        case "transcription": "mic"
+        case "speech": "speaker.wave.2"
+        case "conversation": "waveform"
+        case "video": "film"
+        case "music": "music.note"
+        case "fast": "bolt"
+        case "reasoning": "lightbulb"
+        case "coding": "chevron.left.forwardslash.chevron.right"
+        case "review": "checkmark.circle"
+        case "understanding": "doc.text"
+        default: "rectangle.stack"
         }
     }
 
@@ -252,7 +271,7 @@ struct ModelSettingsView: View {
         switch sheet {
         case .fallbacks: Text("备用模型")
         case .addFallback: Text("添加备用模型")
-        case let .choose(route, page): Text(label(route.key, page: page))
+        case let .choose(route, scope): Text(label(route.key, scope: scope))
         }
     }
 
@@ -298,9 +317,9 @@ struct ModelSettingsView: View {
                     save(.fallbacks(data.fallbacks.map(\.ref) + [selected]), revision: data.revision, returnToFallbacks: true)
                 }
             }
-        case let .choose(route, page):
+        case let .choose(route, scope):
             confirm("确认更换", enabled: selected != route.ref) {
-                save(page == .tasks ? .task(route.key, selected) : .model(route.key, selected), revision: data.revision, close: true)
+                save(scope == .task ? .task(route.key, selected) : .model(route.key, selected), revision: data.revision, close: true)
             }
         }
     }

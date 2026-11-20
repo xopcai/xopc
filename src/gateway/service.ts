@@ -164,7 +164,7 @@ import {
   startConnectorLearningCoordinator,
   type ConnectorLearningCoordinator,
 } from '../connectors/learning-coordinator.js';
-import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { TaskCollaborationDelivery } from '../tasks/task-collaboration-delivery.js';
 import { TaskMainUpdateDelivery } from '../tasks/task-main-update-delivery.js';
 import { allowsPersonalTaskNotification, personalReplyNotification, personalRunDelegated } from '../personal-agent/notifications.js';
@@ -917,6 +917,7 @@ export class GatewayService {
         ensureSession: async (taskId, runId, requestedAgentId) => {
           return (await this.ensureTaskConversation(taskId, { runId, requestedAgentId })).conversationId;
         },
+        preflightModel: conversationId => this.agentService.preflightTaskModel(conversationId),
         validateExecutor: (taskId, agentId) => {
           const allocation = new TaskAllocationRepository().get(taskId);
           if (!allocation || !agentId) return;
@@ -1094,52 +1095,54 @@ export class GatewayService {
     created: boolean;
     conversation: ReturnType<TaskConversationRepository['requireState']>;
   }> {
-    const task = new TaskRepository().require(taskId);
-    const conversations = new TaskConversationRepository();
-    const active = conversations.getActiveSession(task.id);
-    const allocation = new TaskAllocationRepository().get(taskId);
-    if (!active && !options.runId && allocation && allocation.status !== 'assigned') {
-      throw new Error('Task executor has not been assigned');
-    }
-    const agentId = resolveProjectAgentId({
-      config: this.config,
-      projects: this.projects,
-      explicitAgentId: options.requestedAgentId ?? task.delegateAgentId,
-      projectId: task.projectId,
-    });
-    if (active && (!active.agentId || active.agentId === agentId)) {
-      const conversation = conversations.activateExecutionSession({
-        taskId: task.id,
-        conversationId: active.conversationId,
-        agentId,
-        runId: options.runId,
+    return runSqliteWriteTransaction(() => {
+      const task = new TaskRepository().require(taskId);
+      const conversations = new TaskConversationRepository();
+      const active = conversations.getActiveSession(task.id);
+      const allocation = new TaskAllocationRepository().get(taskId);
+      const runs = new TaskRunRepository();
+      const run = runs.getActiveRoot(taskId);
+      const runAgentId = run?.executorKind === 'agent' && typeof run.executorRef.agentId === 'string'
+        ? run.executorRef.agentId : undefined;
+      if (options.runId && (run?.id !== options.runId || !runAgentId)) {
+        throw new Error('Task run is no longer active');
+      }
+      if (allocation && allocation.status !== 'assigned' && !active && !runAgentId) {
+        throw new Error('Task executor has not been assigned');
+      }
+      const activeAgentId = active ? getSessionMetadata(active.conversationId)?.agentId : undefined;
+      if (active && activeAgentId && !runAgentId && !options.requestedAgentId) {
+        // Opening a task between runs should preserve its existing conversation and executor binding.
+        return { conversationId: active.conversationId, agentId: activeAgentId, created: false,
+          conversation: conversations.requireState(taskId) };
+      }
+      const agentId = resolveProjectAgentId({
+        config: this.config,
+        projects: this.projects,
+        explicitAgentId: runAgentId ?? options.requestedAgentId ?? task.delegateAgentId,
+        projectId: task.projectId,
       });
-      return { conversationId: active.conversationId, agentId, created: false, conversation };
-    }
-    if (active) {
-      // Older gateways could create an execution session before background allocation finished.
-      const run = new TaskRunRepository().getActiveRoot(taskId);
-      if (active.runId || !options.runId || run?.id !== options.runId || run.status !== 'queued'
-        || run.executorKind !== 'agent' || run.executorRef.agentId !== agentId
-        || allocation?.status !== 'assigned' || allocation.selected_agent_id !== agentId
-        || task.delegateAgentId !== agentId) {
-        throw new Error('Task executor differs from the active conversation');
+      const runId = runAgentId ? run?.id : undefined;
+      const boundConversationId = runAgentId ? run?.conversationId : undefined;
+      if (active && (!boundConversationId || boundConversationId === active.conversationId)
+        && activeAgentId === agentId && (!active.agentId || active.agentId === agentId)) {
+        const conversation = conversations.activateExecutionSession({ taskId, conversationId: active.conversationId, agentId, runId });
+        return { conversationId: active.conversationId, agentId, created: false, conversation };
       }
-      const inputState = getSessionInputState(active.conversationId);
-      if (inputState.activeRunId || inputState.inputs.length) {
-        throw new Error('Task executor differs from the active conversation');
+      if (boundConversationId) throw new Error('Task run differs from its bound execution conversation');
+      if (active) {
+        // Keep an old executor's transcript while giving a newly queued run its own session.
+        const previousRun = active.runId ? runs.get(active.runId) : undefined;
+        const inputState = getSessionInputState(active.conversationId);
+        if (!runAgentId || run?.status !== 'queued' || previousRun && !['succeeded', 'failed', 'cancelled'].includes(previousRun.status)
+          || inputState.activeRunId || inputState.inputs.length) {
+          throw new Error('Task executor differs from the active conversation');
+        }
       }
-    }
 
-    const peerId = `task-${sanitizeSegment(task.id) || Date.now()}${options.runId ? `-${sanitizeSegment(options.runId)}` : ''}`;
-    const conversationId = resolveConversationId({
-      agentId,
-      source: 'webchat',
-      accountId: 'default',
-      peerKind: 'direct',
-      peerId,
-    });
-    patchSessionMetadata(conversationId, {
+      const peerId = `task-${sanitizeSegment(task.id) || Date.now()}${runId ? `-${sanitizeSegment(runId)}` : ''}`;
+      const conversationId = resolveConversationId({ agentId, source: 'webchat', accountId: 'default', peerKind: 'direct', peerId });
+      patchSessionMetadata(conversationId, {
         sourceChannel: 'webchat',
         sourceChatId: `default:direct:${peerId}`,
         sessionType: 'chat',
@@ -1154,17 +1157,13 @@ export class GatewayService {
         customData: {
           origin: 'task',
           triggerKind: 'user',
-          ...(options.runId ? { taskRunId: options.runId } : {}),
+          ...(runId ? { taskRunId: runId } : {}),
         },
+      });
+      if (task.projectId) this.projects.attachSession(conversationId, task.projectId);
+      const conversation = conversations.activateExecutionSession({ taskId, conversationId, agentId, runId });
+      return { conversationId, agentId, created: true, conversation };
     });
-    if (task.projectId) this.projects.attachSession(conversationId, task.projectId);
-    const conversation = conversations.activateExecutionSession({
-      taskId: task.id,
-      conversationId,
-      agentId,
-      runId: options.runId,
-    });
-    return { conversationId, agentId, created: true, conversation };
   }
 
   dispatchTaskEvents(): void {

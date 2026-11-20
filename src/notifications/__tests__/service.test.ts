@@ -55,12 +55,12 @@ describe('NotificationService', () => {
 
   it('delivers ordinary notifications', async () => {
     const fetchMock = vi.fn<typeof fetch>();
-    const sendHarmony = vi.fn().mockResolvedValue('huawei-request-id');
-    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock, sendHarmony });
+    const sendPush = vi.fn().mockResolvedValue('huawei-request-id');
+    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock, sendPush });
     service.persistGatewayEvent('agent.run.ended', chatEvent);
     await service.drain();
     expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1 });
-    expect(sendHarmony).toHaveBeenCalledOnce();
+    expect(sendPush).toHaveBeenCalledOnce();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -81,12 +81,12 @@ describe('NotificationService', () => {
 
   it('routes HarmonyOS only to its own provider without receipt polling', async () => {
     const fetchMock = vi.fn<typeof fetch>();
-    const sendHarmony = vi.fn().mockResolvedValue('huawei-request-id');
+    const sendPush = vi.fn().mockResolvedValue('huawei-request-id');
     const published: Array<{ id: string }> = [];
-    const service = new NotificationService({ publish: (_type, value) => published.push(value as { id: string }), fetch: fetchMock, sendHarmony });
+    const service = new NotificationService({ publish: (_type, value) => published.push(value as { id: string }), fetch: fetchMock, sendPush });
     service.handleGatewayEvent('agent.run.ended', chatEvent);
     await vi.waitFor(() => expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1, delivered: 0 }));
-    expect(sendHarmony).toHaveBeenCalledOnce(); expect(fetchMock).not.toHaveBeenCalled();
+    expect(sendPush).toHaveBeenCalledOnce(); expect(fetchMock).not.toHaveBeenCalled();
     rescheduleNotificationDelivery(published[0]!.id, 'device-1', 'accepted', 0, 'receipt now');
     await service.drain(); expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -94,11 +94,11 @@ describe('NotificationService', () => {
   it('publishes and queues a review notification when work discovery completes', async () => {
     const published: unknown[] = [];
     const fetchMock = vi.fn<typeof fetch>();
-    const sendHarmony = vi.fn().mockResolvedValue('huawei-request-id');
+    const sendPush = vi.fn().mockResolvedValue('huawei-request-id');
     const service = new NotificationService({
       publish: (_type, payload) => published.push(payload),
       fetch: fetchMock,
-      sendHarmony,
+      sendPush,
     });
 
     service.handleGatewayEvent('work-discovery.completed', {
@@ -122,8 +122,8 @@ describe('NotificationService', () => {
 
   it('requires an explicit mobile preference before delivering home opportunities', async () => {
     const fetchMock = vi.fn<typeof fetch>();
-    const sendHarmony = vi.fn().mockResolvedValue('huawei-request-id');
-    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock, sendHarmony });
+    const sendPush = vi.fn().mockResolvedValue('huawei-request-id');
+    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock, sendPush });
     const event = (notificationKey: string) => ({
       notificationKey,
       opportunityId: `opportunity-${notificationKey}`,
@@ -140,6 +140,6 @@ describe('NotificationService', () => {
     });
     service.handleGatewayEvent('home.opportunity.ready', event('explicit-on'));
     await vi.waitFor(() => expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1 }));
-    expect(sendHarmony).toHaveBeenCalledOnce();
+    expect(sendPush).toHaveBeenCalledOnce();
   });
 });

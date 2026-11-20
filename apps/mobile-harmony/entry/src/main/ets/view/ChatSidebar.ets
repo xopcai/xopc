@@ -198,7 +198,7 @@ export struct XopcChatSidebar {
             .onClick((): void => { this.onNew(); })
           Blank().layoutWeight(1)
           Button({ type: ButtonType.Circle }) {
-            SymbolGlyph($r('sys.symbol.slider_horizontal_2')).fontSize(22).fontColor([this.colors.foreground])
+            SymbolGlyph($r('sys.symbol.gearshape')).fontSize(22).fontColor([this.colors.foreground])
           }.id('chat-sidebar-profile').width(46).height(46).padding(0).backgroundColor(this.colors.input)
             .accessibilityText($r('app.string.settings')).onClick((): void => { this.go('settings'); })
         }.width('100%').padding({ top: 8, bottom: 8 })

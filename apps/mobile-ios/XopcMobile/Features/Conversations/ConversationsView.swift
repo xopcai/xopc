@@ -67,74 +67,27 @@ struct ConversationsView: View {
                     .padding(.bottom, 8)
             }
 
-            Group {
-                if browsingGroups {
-                    groupList
-                } else if state.isLoading, visibleConversations.isEmpty {
-                    ConversationLoadingSkeleton()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let errorMessage = state.errorMessage, state.conversations.isEmpty {
-                    ContentUnavailableView {
-                        Label("无法读取对话", systemImage: "network.slash")
-                    } description: {
-                        Text(errorMessage)
-                    } actions: {
-                        Button("连接设置", action: onOpenSettings)
-                        Button("重试") { reload() }
-                    }
-                } else if visibleConversations.isEmpty {
-                    if state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        ContentUnavailableView("暂无对话", systemImage: "bubble.left.and.bubble.right")
-                    } else {
-                        ContentUnavailableView.search(text: state.searchText)
-                    }
-                } else {
-                    List {
-                        if state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            ForEach(ConversationDateSection.group(visibleConversations, locale: locale)) { section in
-                                Section {
-                                    ForEach(section.conversations) { conversation in
-                                        conversationListRow(conversation)
-                                    }
-                                } header: {
-                                    Text(section.title)
-                                }
-                            }
+            TabView(selection: Binding(get: { mode }, set: { selectMode($0) })) {
+                ForEach(ConversationHistoryMode.allCases, id: \.self) { page in
+                    Group {
+                        if page != .recent, page != mode || groupName == nil {
+                            groupList(page)
+                        } else if page == mode || state.scope == .recent {
+                            conversationList(page)
                         } else {
-                            ForEach(visibleConversations) { conversation in
-                                conversationListRow(conversation)
-                            }
+                            ConversationLoadingSkeleton().frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
-                        if state.isLoadingMore {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .listRowSeparator(.hidden)
-                        } else if state.errorMessage != nil, state.hasMore {
-                            Button("加载更多对话") {
-                                Task { await state.loadMore(using: GatewayClient(configuration: configuration)) }
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .listRowSeparator(.hidden)
-                        }
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .background(mobileTheme.canvas)
-                    .refreshable {
-                        await state.load(using: GatewayClient(configuration: configuration))
-                    }
+                    }.tag(page)
                 }
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .accessibilityIdentifier("sessions-mode-pager")
         }
         .background(mobileTheme.canvas)
         .mobilePageTitle(Text("对话")) {
             MobilePageTitleMenu(options: ConversationHistoryMode.allCases.map {
                 SegmentOption(id: $0, title: $0.title, accessibilityID: "sessions-mode-\($0.rawValue)")
-            }, selected: mode, identifier: "sessions-mode-menu") { next in
-                guard next != mode else { return }
-                clearGroup()
-                mode = next
-            }
+            }, selected: mode, identifier: "sessions-mode-menu", onSelect: selectMode)
         }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -182,6 +135,70 @@ struct ConversationsView: View {
         }
     }
 
+    @ViewBuilder private func conversationList(_ page: ConversationHistoryMode) -> some View {
+        if state.isLoading, visibleConversations.isEmpty {
+            ConversationLoadingSkeleton()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let errorMessage = state.errorMessage, state.conversations.isEmpty {
+            ContentUnavailableView {
+                Label("无法读取对话", systemImage: "network.slash")
+            } description: {
+                Text(errorMessage)
+            } actions: {
+                Button("连接设置", action: onOpenSettings)
+                Button("重试") { reload() }
+            }
+        } else if visibleConversations.isEmpty {
+            if state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ContentUnavailableView("暂无对话", systemImage: "bubble.left.and.bubble.right")
+            } else {
+                ContentUnavailableView.search(text: state.searchText)
+            }
+        } else {
+            List {
+                if state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ForEach(ConversationDateSection.group(visibleConversations, locale: locale)) { section in
+                        Section {
+                            ForEach(section.conversations) { conversation in
+                                conversationListRow(conversation, page: page)
+                            }
+                        } header: {
+                            Text(section.title)
+                        }
+                    }
+                } else {
+                    ForEach(visibleConversations) { conversation in
+                        conversationListRow(conversation, page: page)
+                    }
+                }
+                if state.isLoadingMore {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .listRowSeparator(.hidden)
+                } else if state.errorMessage != nil, state.hasMore {
+                    Button("加载更多对话") {
+                        Task { await state.loadMore(using: GatewayClient(configuration: configuration)) }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .listRowSeparator(.hidden)
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(mobileTheme.canvas)
+            .refreshable {
+                guard page == mode else { return }
+                await state.load(using: GatewayClient(configuration: configuration))
+            }
+        }
+    }
+
+    private func selectMode(_ next: ConversationHistoryMode) {
+        guard next != mode else { return }
+        clearGroup()
+        mode = next
+    }
+
     private var searchLabel: LocalizedStringKey {
         if browsingGroups {
             return mode == .projects ? "搜索项目" : "搜索专家"
@@ -207,22 +224,22 @@ struct ConversationsView: View {
         groupName = name
     }
 
-    @ViewBuilder private var groupList: some View {
-        if catalogLoading {
+    @ViewBuilder private func groupList(_ page: ConversationHistoryMode) -> some View {
+        if page == mode, catalogLoading {
             ConversationLoadingSkeleton().frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if catalogFailed {
+        } else if page == mode, catalogFailed {
             ContentUnavailableView {
                 Label("加载失败", systemImage: "exclamationmark.circle")
             } actions: {
-                Button("重试") { Task { await loadCatalog(mode) } }
+                Button("重试") { Task { await loadCatalog(page) } }
             }
         } else {
-            let query = state.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let query = page == mode ? state.searchText.trimmingCharacters(in: .whitespacesAndNewlines) : ""
             let unassigned = AppLocalization.string("未分配", locale: locale)
             let projectRows = projects.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
             let expertRows = experts.filter { query.isEmpty || $0.displayName.localizedCaseInsensitiveContains(query) }
             let showUnassigned = query.isEmpty || unassigned.localizedCaseInsensitiveContains(query)
-            if mode == .projects ? (projectRows.isEmpty && !showUnassigned) : expertRows.isEmpty {
+            if page == .projects ? (projectRows.isEmpty && !showUnassigned) : expertRows.isEmpty {
                 if query.isEmpty {
                     ContentUnavailableView("暂无专家", systemImage: "person.2")
                 } else {
@@ -230,7 +247,7 @@ struct ConversationsView: View {
                 }
             } else {
                 List {
-                    if mode == .projects {
+                    if page == .projects {
                         if showUnassigned {
                             Button { choose(.unassigned, name: unassigned) } label: {
                                 Label(unassigned, systemImage: "tray")
@@ -296,10 +313,6 @@ struct ConversationsView: View {
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .disabled(state.operatingConversationID != nil)
-        .swipeActions(edge: .trailing) {
-            Button("删除", role: .destructive) { deleteTarget = conversation }
-            Button("归档") { archive(conversation) }.tint(.orange)
-        }
         .contextMenu {
             Button("重命名", systemImage: "pencil") {
                 renameText = conversation.displayName
@@ -315,10 +328,11 @@ struct ConversationsView: View {
                 }
             }
             Button("归档", systemImage: "archivebox") { archive(conversation) }
+            Button("删除", systemImage: "trash", role: .destructive) { deleteTarget = conversation }
         }
     }
 
-    private func conversationListRow(_ conversation: ConversationSummary) -> some View {
+    private func conversationListRow(_ conversation: ConversationSummary, page: ConversationHistoryMode) -> some View {
         Group {
             HStack(spacing: 0) {
                 if let group = state.childrenByConversationID[conversation.id], !group.items.isEmpty {
@@ -365,7 +379,7 @@ struct ConversationsView: View {
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
         .listRowBackground(Color.clear).listRowSeparator(.hidden)
         .onAppear {
-            guard conversation.id == visibleConversations.last?.id else { return }
+            guard page == mode, conversation.id == visibleConversations.last?.id else { return }
             Task { await state.loadMore(using: GatewayClient(configuration: configuration)) }
         }
     }

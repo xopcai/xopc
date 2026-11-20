@@ -531,6 +531,7 @@ fun MainScreen(
   onSavePersonalProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onUploadPersonalAvatar: suspend (ByteArray) -> Unit = {},
   onSavePersonalGoal: (String?, String, String, String, Long?) -> Unit = { _, _, _, _, _ -> },
+  loadWorkMemory: (suspend (String, String?) -> ai.xopc.mobile.gateway.WorkMemoryPage)? = null,
   onLoadPersonalAssertions: (String, String, Boolean) -> Unit = { _, _, _ -> },
   onOpenPersonalAssertion: (String) -> Unit = {},
   onClosePersonalAssertion: () -> Unit = {},
@@ -662,7 +663,7 @@ fun MainScreen(
   LaunchedEffect(connection.profile?.gatewayId) {
     if (connection.profile == null) wasUnpaired = true
     else if (wasUnpaired) {
-      selectedTab = HomeTab.Assistant
+      if (selectedTab != HomeTab.Me) selectedTab = HomeTab.Assistant
       wasUnpaired = false
     }
   }
@@ -821,6 +822,7 @@ fun MainScreen(
     onSavePersonalProactivity = onSavePersonalProactivity,
     onUploadPersonalAvatar = onUploadPersonalAvatar,
     onSavePersonalGoal = onSavePersonalGoal,
+    loadWorkMemory = loadWorkMemory,
     onLoadPersonalAssertions = onLoadPersonalAssertions,
     onOpenPersonalAssertion = onOpenPersonalAssertion,
     onClosePersonalAssertion = onClosePersonalAssertion,
@@ -1061,6 +1063,7 @@ internal fun MainContent(
   onSavePersonalProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onUploadPersonalAvatar: suspend (ByteArray) -> Unit = {},
   onSavePersonalGoal: (String?, String, String, String, Long?) -> Unit = { _, _, _, _, _ -> },
+  loadWorkMemory: (suspend (String, String?) -> ai.xopc.mobile.gateway.WorkMemoryPage)? = null,
   onLoadPersonalAssertions: (String, String, Boolean) -> Unit = { _, _, _ -> },
   onOpenPersonalAssertion: (String) -> Unit = {},
   onClosePersonalAssertion: () -> Unit = {},
@@ -1184,7 +1187,7 @@ internal fun MainContent(
     activeVoiceConversationId = id
     voiceCall.start(id, mode)
   }
-  var personalPage by rememberSaveable(gatewayId) { mutableStateOf("settings") }
+  var personalPage by rememberSaveable { mutableStateOf("settings") }
   val taskNavigation = rememberTaskChatNavigation(connection)
   var taskDetailsOpen by rememberSaveable(gatewayId, connection.taskConversationTaskId) { mutableStateOf(false) }
   fun openTaskConversation(taskId: String) {
@@ -1287,10 +1290,15 @@ internal fun MainContent(
   var personalStartSection by rememberSaveable(gatewayId) { mutableStateOf("overview") }
   var personalDetailId by rememberSaveable(gatewayId) { mutableStateOf("") }
   var previousGatewayId by remember { mutableStateOf(gatewayId) }
-  LaunchedEffect(gatewayId) {
-    if (previousGatewayId != null && gatewayId != null && previousGatewayId != gatewayId) {
+  LaunchedEffect(gatewayId, connection.gatewayChange) {
+    if (connection.gatewayChange == GatewayChange.Switch && previousGatewayId != gatewayId) {
       personalPage = "settings"
       onSelectTab(HomeTab.Assistant)
+    } else if (personalPage == "settings-add" && connection.gatewayChange == GatewayChange.Pair) {
+      personalPage = "settings-gateways"
+    } else if (previousGatewayId != gatewayId &&
+      personalPage != "settings-gateways" && personalPage != "settings-add") {
+      personalPage = "settings"
     }
     previousGatewayId = gatewayId
   }
@@ -1298,13 +1306,15 @@ internal fun MainContent(
     if (personalPage == "detail") {
       personalPage = personalReturnPage
       onClosePersonalAssertion()
+    } else if (personalPage == "settings-gateways") {
+      if (!connection.gatewayBusy) personalPage = "settings"
     } else if (personalPage == "settings-appearance" || personalPage == "settings-language" ||
-      personalPage == "settings-gateways" || personalPage == "settings-sharing" ||
+      personalPage == "settings-sharing" ||
       personalPage == "about" || personalPage == "goals" || personalPage == "settings-about" || personalPage == "settings-models") {
       if (personalPage == "settings-sharing") onCloseShares()
       personalPage = "settings"
     } else if (personalPage == "settings-add") {
-      personalPage = "settings-gateways"
+      if (!connection.pairing && !pairingScanning) personalPage = "settings-gateways"
     } else {
       personalPage = "settings"
       onSelectTab(HomeTab.Assistant)
@@ -1565,7 +1575,7 @@ internal fun MainContent(
             connection.sending || connection.activeRunId != null, onCapabilityPanel)
           if (isTaskChat(connection)) TaskDetailsTip(
             onOpen = { closeKeyboard(); taskDetailsOpen = true },
-            modifier = Modifier.align(Alignment.End).padding(end = 16.dp))
+            modifier = Modifier.align(Alignment.Start).padding(start = 16.dp))
           MainBottomSurface("assistant-bottom-surface", assistantActionsOpen) {
             AssistantComposer(connection, assistantComposerValue, { value ->
               inputVoiceNotice.clear()
@@ -1913,7 +1923,7 @@ internal fun MainContent(
             onOpenPersonalAssertion(id)
           }, onLoadList = onLoadPersonalAssertions,
           onRetryDetail = { if (personalDetailId.isNotBlank()) onOpenPersonalAssertion(personalDetailId) },
-          onOpenNotes = { personalPage = "settings"; onSelectTab(HomeTab.Notes) },
+          loadWorkMemory = loadWorkMemory,
           onSaveProfile = onSavePersonalProfile,
           onSaveStatement = onSavePersonalStatement,
           onDeleteAssertion = onDeletePersonalAssertion,
@@ -3468,7 +3478,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
           "task" to R.string.assistant_action_reference_task, "file" to R.string.assistant_action_reference_file)
           .map { (kind, label) -> SegmentOption(kind, stringResource(label), "assistant-reference-tab-$kind") },
         referenceKind, { kind -> filePath = ""; onReferenceQueryChange(""); onReferenceKindChange(kind) },
-        enabled = !panel.saving,
+        enabled = !panel.saving, swipeToSelect = true,
       )
       OutlinedTextField(value = referenceQuery, onValueChange = { if (it.length <= 4096) onReferenceQueryChange(it) },
         label = { Text(stringResource(R.string.assistant_reference_search)) },
@@ -4177,6 +4187,17 @@ private fun ConversationsScreen(
   BackHandler(enabled = !selecting && (searchOpen || groupId.isNotEmpty())) {
     if (searchOpen) closeSearch() else clearGroup()
   }
+  val historyModes = listOf(
+    SegmentOption("recent", stringResource(R.string.conversations_recent), "sessions-mode-recent"),
+    SegmentOption("projects", stringResource(R.string.progress_projects), "sessions-mode-projects"),
+    SegmentOption("experts", stringResource(R.string.conversations_experts), "sessions-mode-experts"),
+  )
+  fun selectMode(value: String) {
+    if (mode == value) return
+    clearGroup()
+    mode = value
+    navigation.rememberSelection("conversation-history", value)
+  }
   val clearLabel = stringResource(R.string.conversations_clear)
   val newConversationLabel = stringResource(R.string.assistant_new_action)
   val searchLabel = stringResource(when {
@@ -4184,7 +4205,8 @@ private fun ConversationsScreen(
     browsingGroups -> R.string.conversations_search_experts
     else -> R.string.conversations_search
   })
-  Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp),
+  Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp)
+    .swipePageSelection(historyModes.map { it.value }, mode, !selecting && !searchOpen, ::selectMode),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
@@ -4215,17 +4237,8 @@ private fun ConversationsScreen(
             modifier = Modifier.size(24.dp).testTag("conversations-new-icon"))
         }
       }
-      if (!selecting) PageTitleMenu(listOf(
-        SegmentOption("recent", stringResource(R.string.conversations_recent), "sessions-mode-recent"),
-        SegmentOption("projects", stringResource(R.string.progress_projects), "sessions-mode-projects"),
-        SegmentOption("experts", stringResource(R.string.conversations_experts), "sessions-mode-experts"),
-      ), mode, "sessions-mode-menu", Modifier.fillMaxWidth(0.45f)) { selected ->
-        if (mode != selected) {
-          clearGroup()
-          mode = selected
-          navigation.rememberSelection("conversation-history", selected)
-        }
-      }
+      if (!selecting) PageTitleMenu(historyModes, mode, "sessions-mode-menu",
+        Modifier.fillMaxWidth(0.45f), ::selectMode)
     }
     if (groupId.isNotEmpty()) TextButton(onClick = ::clearGroup, modifier = Modifier.testTag("sessions-clear-group")) {
       Text("$groupName ×", maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -4642,7 +4655,7 @@ private fun ContextDetails(connection: ConnectionUiState, onRetry: () -> Unit,
           summary.environment?.let { environment -> item {
             ContextRow(if (environment.kind == "managed_worktree") "Worktree" else "Local",
               listOf(environment.rootPath, environment.branch.orEmpty()).filter(String::isNotBlank)
-                .joinToString("\n"), "context-environment", iconRes = R.drawable.settings_sliders) {
+                .joinToString("\n"), "context-environment", iconRes = R.drawable.material_desktop_windows) {
               choose(if (summary.project != null) "environment" else "directory")
             }
           } }
@@ -4891,7 +4904,7 @@ private fun PairingScreen(
       Spacer(modifier = Modifier.weight(1f))
       if (onSettings != null) IconButton(onClick = onSettings, enabled = !busy,
         modifier = Modifier.size(44.dp).testTag("pairing-settings")) {
-        Icon(painterResource(R.drawable.settings_sliders),
+        Icon(painterResource(R.drawable.action_settings),
           contentDescription = stringResource(R.string.settings_title),
           tint = MaterialTheme.colorScheme.onSurfaceVariant)
       }

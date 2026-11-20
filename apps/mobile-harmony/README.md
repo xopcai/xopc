@@ -46,7 +46,7 @@ hdc -t DEVICE shell aa force-stop ai.xopc.xopc
 hdc -t DEVICE shell aa test -b ai.xopc.xopc -m entry_test -s unittest OpenHarmonyTestRunner -s class XopcUiSmoke -w 90
 ```
 
-Inspect `OHOS_REPORT_RESULT`: HDC's exit code can be zero even when a test fails. Expected results are 4/4 security + pairing and 1/1 UI. Stop the harness with Ctrl-C after testing (it removes only its own temporary database/certificate directory), inspect `hdc -t DEVICE fport ls`, and remove only the test's forward with `hdc -t DEVICE fport rm tcp:9443 tcp:9443`. The public test CA is ignored by Git and never included in the production HAP. Production transport retains normal TLS validation and rejects HTTP/redirects.
+Inspect `OHOS_REPORT_RESULT`: HDC's exit code can be zero even when a test fails. Expected results are 4/4 security + pairing and 2/2 UI. Stop the harness with Ctrl-C after testing (it removes only its own temporary database/certificate directory), inspect `hdc -t DEVICE fport ls`, and remove only the test's forward with `hdc -t DEVICE fport rm tcp:9443 tcp:9443`. The public test CA is ignored by Git and never included in the production HAP. Production transport retains normal TLS validation and rejects HTTP/redirects.
 
 ## Implemented preview surfaces
 
@@ -73,14 +73,13 @@ Asset Store values are chunked below its record limit with an atomic manifest po
 
 ## Huawei push setup
 
-Gateway environment (server only):
+Enable Push Kit for `ai.xopc.xopc` in AppGallery Connect. Configure the Huawei
+service-account file and approved notification category on xopc-platform.
+For the cloud deployment, see the platform's managed HarmonyOS push deployment
+instructions. The Gateway uses its XOPC Cloud OAuth connection with the
+`push:manage` scope. Reauthorize older XOPC Cloud connections before enabling
+notifications on the phone.
 
-```sh
-XOPC_HARMONY_PUSH_SERVICE_ACCOUNT=/absolute/private/path/service-account.json
-XOPC_HARMONY_PUSH_CATEGORY=WORK
-XOPC_HARMONY_PUSH_TEST_MESSAGE=true
-```
-
-Choose an explicitly authorised category (`WORK`, `IM` or `MARKETING`); the example is not an assertion that the app has category approval. The service-account JSON contains `project_id`, `key_id`, `sub_account`, `private_key`. The server signs PS256 JWTs and sends Huawei V3 notification requests. The client never receives this file. Native iOS/Android push providers are not currently configured. Missing HarmonyOS configuration returns 503 at registration rather than a false success.
-
-A Huawei request ID means **provider acceptance**, not device delivery. Device taps acknowledge through the existing Gateway endpoint; do not count all accepted pushes as delivered. See [Huawei JWT guide](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/push-jwt-token) and [V3 request reference](https://developer.huawei.com/consumer/en/doc/harmonyos-references/push-scenariozed-api-request-param).
+The Gateway records the platform's acceptance into its delivery queue. Huawei
+acceptance and device taps are separate events. Device taps acknowledge through
+the existing Gateway endpoint.

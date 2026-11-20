@@ -69,6 +69,7 @@ import java.time.format.DateTimeParseException
 @Composable
 internal fun PersonalGoalsScreen(state: PersonalUiState, insets: PaddingValues, onRefresh: () -> Unit,
   onSaveGoal: (String?, String, String, String, Long?) -> Unit, onBack: () -> Unit = {}) {
+  var completed by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var editingId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var title by rememberSaveable(state.gatewayId) { mutableStateOf("") }
@@ -90,19 +91,30 @@ internal fun PersonalGoalsScreen(state: PersonalUiState, insets: PaddingValues, 
   LaunchedEffect(state.savedGoalRevision, saveStartedRevision, editorOpen) {
     if (editorOpen && state.savedGoalRevision > saveStartedRevision) editorOpen = false
   }
+  val goalTabs = listOf(
+    SegmentOption(false, stringResource(R.string.personal_active), "personal-goals-ongoing"),
+    SegmentOption(true, stringResource(R.string.personal_achieved), "personal-goals-achieved"),
+  )
+  fun selectGoalTab(value: Boolean) { completed = value }
   Column(Modifier.fillMaxSize().padding(insets).testTag("personal-goals-screen")) {
     Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp),
       verticalAlignment = Alignment.CenterVertically) {
       PageBackButton("personal-goals-back", onBack)
-      Spacer(Modifier.weight(1f))
+      Text(stringResource(R.string.personal_goals), Modifier.weight(1f),
+        style = MaterialTheme.typography.titleMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
       IconButton(onClick = { openEditor(null) }, enabled = state.summary != null,
         modifier = Modifier.testTag("goal-add")) {
         ActionIcon(R.drawable.action_add, contentDescription = stringResource(R.string.personal_goal_add))
       }
     }
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
+    SegmentedTabs(goalTabs, completed, ::selectGoalTab,
+      modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), swipeToSelect = true)
+    Column(Modifier.weight(1f).fillMaxWidth()
+      .swipePageSelection(goalTabs.map { it.value }, completed, !editorOpen, ::selectGoalTab)
+      .verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)
+      .testTag("personal-goals-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
       if (state.loading && state.summary == null) BrandLoadingPanel()
-      state.summary?.let { PersonalGoals(it, ::openEditor) }
+      state.summary?.let { PersonalGoals(it, completed, ::openEditor) }
       if (state.error) {
         Text(stringResource(R.string.personal_unavailable), color = MaterialTheme.colorScheme.onSurfaceVariant)
         TextButton(onClick = onRefresh) { Text(stringResource(R.string.personal_retry)) }
@@ -261,14 +273,16 @@ internal fun PersonalAgentSettings(state: PersonalUiState, onOpenAgent: () -> Un
 }
 
 @Composable
-private fun PersonalGoals(summary: PersonalSummary, onOpenGoal: (PersonalGoal?) -> Unit) {
-  if (summary.goals.isNotEmpty()) summary.goals.forEach { goal ->
+private fun PersonalGoals(summary: PersonalSummary, completed: Boolean, onOpenGoal: (PersonalGoal?) -> Unit) {
+  val goals = summary.goals.filter { (it.status == "achieved") == completed }
+  if (goals.isNotEmpty()) goals.forEach { goal ->
     PersonalCard(onClick = { onOpenGoal(goal) }, tag = "goal-${goal.id}") {
       Text(goal.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
       Text(goal.outcome, style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
         overflow = TextOverflow.Ellipsis)
-      Text(stringResource(if (goal.isPrimary) R.string.personal_primary else when (goal.status) {
+      Text(stringResource(if (goal.isPrimary && !completed) R.string.personal_primary else when (goal.status) {
+        "achieved" -> R.string.personal_achieved
         "paused" -> R.string.personal_paused
         "proposed" -> R.string.personal_proposed
         else -> R.string.personal_active
@@ -277,12 +291,12 @@ private fun PersonalGoals(summary: PersonalSummary, onOpenGoal: (PersonalGoal?) 
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
-  } else PersonalCard(onClick = { onOpenGoal(null) }) {
+  } else if (!completed && summary.goals.isEmpty()) PersonalCard(onClick = { onOpenGoal(null) }) {
     Text(summary.focusTitle.ifBlank { stringResource(R.string.personal_goal_empty) },
       style = MaterialTheme.typography.titleMedium)
     if (summary.focusOutcome.isNotBlank()) Text(summary.focusOutcome,
       style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-  }
+  } else Text(stringResource(R.string.personal_goal_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable

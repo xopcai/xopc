@@ -141,7 +141,7 @@ struct PersonalAgentOverview: View {
     @State private var scheduleError = false
     @State private var deliveryRetryReset: Bool?
 
-    private enum SectionTab: Hashable { case tasks, library }
+    private enum SectionTab: CaseIterable, Hashable { case tasks, library }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -160,6 +160,9 @@ struct PersonalAgentOverview: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 22)
+            }
+            .pageSelectionSwipe(SectionTab.allCases, selected: tab, enabled: !showingEdit && setupPrompt == nil) {
+                tab = $0
             }
             .coordinateSpace(name: "personal-overview")
             .accessibilityIdentifier("personal-overview-scroll")
@@ -218,7 +221,7 @@ struct PersonalAgentOverview: View {
             SegmentedTabs(options: [
                 SegmentOption(id: SectionTab.tasks, title: "任务", icon: "checklist", count: count > 0 ? count : nil, accessibilityID: "personal-overview-tasks-tab"),
                 SegmentOption(id: .library, title: "资料库", icon: "doc.on.doc", accessibilityID: "personal-overview-library-tab")
-            ], selected: tab, label: "助理概览") { tab = $0 }
+            ], selected: tab, label: "助理概览", swipeToSelect: !showingEdit && setupPrompt == nil) { tab = $0 }
                 .accessibilityIdentifier("personal-overview-tabs")
                 .padding(.top, 8)
         }

@@ -1,11 +1,10 @@
 import { PERSONAL_PROACTIVE_MESSAGE_TYPE, PersonalProvenanceSchema, parsePersonalProactiveMessage, type PersonalProvenance } from '@xopcai/gateway-contract';
-import { clarificationChoiceReceiptSchema, isUserTurnDocument, parseTurnOutcome, parseTaskResultDelivery, TASK_RESULT_DELIVERY_TYPE,
+import { clarificationChoiceReceiptSchema, isUserTurnDocument, parseTurnOutcome, parseTaskResultDelivery, stripUserMessageDisplayContext, TASK_RESULT_DELIVERY_TYPE,
   type ClarificationChoiceReceipt, type TaskResultDelivery, type TurnOutcome, type UserTurnDocument } from '@xopcai/gateway-contract';
 
 import type { Message } from './types.js';
 import { storedTranscriptEntryId } from '../storage/sqlite/row-mappers.js';
 import type { TaskUpdateTrigger } from '../storage/sqlite/session-input-repository.js';
-import { stripRuntimeContextFromUserMessage } from './user-message-display.js';
 import type { TranscriptStoredRow } from './session-context-for-llm.js';
 import { isRoutineTaskAllocationStatus } from './task-allocation-status.js';
 import { buildTranscriptOutline } from './transcript-outline.js';
@@ -313,7 +312,7 @@ export function messagesToClientHistory(
         ...(typeof (m as unknown as { turnId?: unknown }).turnId === 'string'
           ? { turnId: (m as unknown as { turnId: string }).turnId }
           : {}),
-        content: m.role === 'user' ? stripRuntimeContextFromUserMessage(text) : text,
+        content: m.role === 'user' ? stripUserMessageDisplayContext(text) : text,
         ...(m.media?.length ? { media: m.media } : {}),
         ...(sourceContextDisplayMetadata(m.metadata)
           ? { metadata: sourceContextDisplayMetadata(m.metadata) }
@@ -825,7 +824,7 @@ export function transcriptRowsToClientHistory(
         role: messageRow.role,
         kind: 'message',
         content: messageRow.role === 'user'
-          ? stripRuntimeContextFromUserMessage(flattenMessageContent(messageRow.content ?? ''))
+          ? stripUserMessageDisplayContext(flattenMessageContent(messageRow.content ?? ''))
           : flattenMessageContent(messageRow.content ?? ''),
         ...(messageRow.media?.length ? { media: messageRow.media } : {}),
         ...(sourceContextDisplayMetadata(messageRow.metadata)

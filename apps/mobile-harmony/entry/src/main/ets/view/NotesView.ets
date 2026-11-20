@@ -212,7 +212,7 @@ export struct XopcNotesView {
         { key: 'inbox', label: $r('app.string.inbox') },
         { key: 'processed', label: $r('app.string.note_processed') },
         { key: 'archived', label: $r('app.string.archive') }
-      ], selectedKey: this.model.status,
+      ], selectedKey: this.model.status, swipeToSelect: true,
         onSelect: (key: string): void => {
           this.model.status = key as XopcNoteStatus | '';
           void this.model.list(false, true);

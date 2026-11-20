@@ -4,6 +4,8 @@ import ai.xopc.mobile.gateway.PersonalAssertion
 import ai.xopc.mobile.gateway.PersonalCounts
 import ai.xopc.mobile.gateway.PersonalSummary
 import ai.xopc.mobile.gateway.PersonalProfile
+import ai.xopc.mobile.gateway.WorkMemory
+import ai.xopc.mobile.gateway.WorkMemoryPage
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -14,6 +16,8 @@ import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.runtime.mutableStateOf
@@ -36,12 +40,34 @@ class AboutYouScreenTest {
       AboutYouScreen(PersonalUiState("gateway", summary, assertions = listOf(assertion)),
         "about", PaddingValues(), "understanding", onBack = {}, onOpenList = {},
         onOpenDetail = { opened = it }, onLoadList = { next, _, _ -> filter = next },
-        onRetryDetail = {}, onOpenNotes = {})
+        onRetryDetail = {})
     }
     rule.waitForIdle()
     assertEquals("all", filter)
     rule.onNodeWithTag("assertion-a-1").performClick()
     assertEquals("a-1", opened)
+  }
+
+  @Test fun swipingChangesTheTitleAndLoadsWorkMemory() {
+    rule.setContent {
+      AboutYouScreen(PersonalUiState("gateway"), "about", PaddingValues(), "understanding",
+        onBack = {}, onOpenList = {}, onOpenDetail = {}, onLoadList = { _, _, _ -> },
+        onRetryDetail = {}, loadWorkMemory = { gateway, cursor ->
+          assertEquals("gateway", gateway)
+          assertEquals(null, cursor)
+          WorkMemoryPage(listOf(WorkMemory("decision", "A saved project decision")), null)
+        })
+    }
+    val title = rule.onNodeWithTag("about-you-menu")
+    val pager = rule.onNodeWithTag("about-you-pager")
+    pager.performTouchInput { swipeLeft() }
+    rule.onNodeWithTag("work-memory-decision").assertExists()
+    title.assertTextContains("Work memory")
+    pager.performTouchInput { swipeRight() }
+    rule.onNodeWithTag("about-you-search-toggle").assertExists()
+    title.performClick()
+    rule.onNodeWithTag("about-you-tab-overview").performClick()
+    title.assertTextContains("Overview")
   }
 
   @Test fun detailExpandsReadableSourcesAndScope() {
@@ -51,7 +77,7 @@ class AboutYouScreenTest {
       AboutYouScreen(PersonalUiState("gateway", selectedAssertionId = "a-1",
         selectedAssertion = assertion), "detail", PaddingValues(), "overview",
         onBack = {}, onOpenList = {}, onOpenDetail = {}, onLoadList = { _, _, _ -> },
-        onRetryDetail = {}, onOpenNotes = {})
+        onRetryDetail = {})
     }
     rule.onNodeWithTag("about-you-detail-statement").assertExists()
     rule.onNodeWithText("Project chat").assertDoesNotExist()
@@ -70,7 +96,7 @@ class AboutYouScreenTest {
     rule.setContent {
       AboutYouScreen(state.value, "about", PaddingValues(), "overview",
         onBack = {}, onOpenList = {}, onOpenDetail = {}, onLoadList = { _, _, _ -> },
-        onRetryDetail = {}, onOpenNotes = {}, onSaveProfile = { profile ->
+        onRetryDetail = {}, onSaveProfile = { profile ->
           submitted = profile
           state.value = state.value.copy(savedProfileRevision = state.value.savedProfileRevision + 1)
         })
@@ -101,7 +127,7 @@ class AboutYouScreenTest {
     rule.setContent {
       AboutYouScreen(state.value, "detail", PaddingValues(), "overview",
         onBack = {}, onOpenList = {}, onOpenDetail = {}, onLoadList = { _, _, _ -> },
-        onRetryDetail = {}, onOpenNotes = {}, onSaveStatement = { value ->
+        onRetryDetail = {}, onSaveStatement = { value ->
           saved = value
           state.value = state.value.copy(assertionSavedRevision = state.value.assertionSavedRevision + 1,
             selectedAssertion = assertion.copy(statement = value))

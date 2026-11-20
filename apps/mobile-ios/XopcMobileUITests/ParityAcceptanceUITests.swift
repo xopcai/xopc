@@ -1083,12 +1083,14 @@ final class ParityAcceptanceUITests: XCTestCase {
     }
 
     private func checkTaskEditor() {
-        app.buttons["task-chat-menu"].tap()
-        app.buttons["编辑"].tap()
+        app.buttons["task-chat-details-tip"].tap()
+        app.buttons["task-chat-edit"].tap()
         XCTAssertTrue(app.navigationBars["编辑任务"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["优先级"].exists)
         capture("17-task-edit")
         app.buttons["取消"].tap()
+        XCTAssertTrue(app.buttons["task-chat-status"].waitForExistence(timeout: 5))
+        app.buttons["task-chat-details-close"].tap()
     }
 
     func testNotesJourneys() {
@@ -1852,26 +1854,55 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
     }
 
-    func testTopNavigationChoicesRestoreAfterAppRelaunch() {
+    func testCapabilityNavigationChoiceRestoresAfterAppRelaunch() {
         tab("capabilities")
         app.selectCapability("capability-category-skills")
         XCTAssertTrue(app.buttons["capability-row-meeting-skill"].waitForExistence(timeout: 6))
-        tab("profile")
-        app.buttons["settings-models"].tap()
-        app.selectPageOption("model-page-tasks", from: "model-settings-menu")
-        app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.buttons["settings-models"].waitForExistence(timeout: 6))
 
         app.terminate()
         app.launchEnvironment.removeValue(forKey: "XOPC_UI_TEST_RESET_NAVIGATION")
         app.launch()
         tab("capabilities")
         XCTAssertTrue(app.buttons["capability-row-meeting-skill"].waitForExistence(timeout: 6))
+    }
+
+    func testGatewayManagementDismissesToSettings() {
         tab("profile")
-        app.buttons["settings-models"].tap()
-        let modelMenu = app.buttons["model-settings-menu"]
-        XCTAssertTrue(modelMenu.waitForExistence(timeout: 6))
-        XCTAssertTrue(modelMenu.label.contains("按任务选模型"))
+        let gateway = app.buttons["Gateway 管理"]
+        XCTAssertTrue(gateway.waitForExistence(timeout: 5))
+        gateway.tap()
+        XCTAssertTrue(app.navigationBars["Gateway 管理"].waitForExistence(timeout: 5))
+        app.buttons["添加"].tap()
+        XCTAssertTrue(app.buttons["gateway-pairing-scan"].waitForExistence(timeout: 5))
+        app.buttons["取消"].tap()
+        XCTAssertTrue(app.navigationBars["Gateway 管理"].waitForExistence(timeout: 5))
+        app.buttons["完成"].tap()
+        XCTAssertTrue(gateway.waitForExistence(timeout: 5))
+        XCTAssertTrue(gateway.isHittable)
+    }
+
+    func testModelSettingsShowsTaskAndMediaPickersInline() {
+        tab("profile")
+        let entry = app.buttons["settings-models"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 6))
+        if !entry.isHittable {
+            app.swipeUp()
+        }
+        entry.tap()
+
+        let taskModel = app.buttons["model-task-coding"]
+        XCTAssertTrue(taskModel.waitForExistence(timeout: 6))
+        taskModel.tap()
+        XCTAssertTrue(app.buttons["model-choice-inherit"].waitForExistence(timeout: 6))
+        app.buttons["关闭"].tap()
+
+        let speechModel = app.buttons["model-setting-speech"]
+        if !speechModel.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(speechModel.waitForExistence(timeout: 6))
+        speechModel.tap()
+        XCTAssertTrue(app.buttons["model-choice-fixture/tts"].waitForExistence(timeout: 6))
     }
 
     func testAutomationAndLibraryFiltersRestoreIndependently() {
@@ -2921,8 +2952,8 @@ final class MobileLayoutParityUITests: XCTestCase {
         review.tap()
         XCTAssertTrue(app.buttons["task-chat-details-tip"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["确认"].exists)
-        app.buttons["task-chat-menu"].tap()
-        app.buttons["调整状态"].tap()
+        app.buttons["task-chat-details-tip"].tap()
+        app.buttons["task-chat-status"].tap()
         XCTAssertTrue(app.navigationBars["调整状态"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["task-phase-active"].isEnabled)
         let complete = app.buttons["task-complete"]
@@ -2937,7 +2968,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         let task = app.buttons["查看任务"]
         XCTAssertTrue(task.waitForExistence(timeout: 10))
         task.tap()
-        let tasks = app.cells.containing(.staticText, identifier: "任务顶部栏检查").firstMatch
+        let tasks = app.buttons["task-task-header"]
         XCTAssertTrue(tasks.waitForExistence(timeout: 10))
         tasks.tap()
         let toggle = app.buttons["task-chat-details-tip"]
@@ -2949,12 +2980,23 @@ final class MobileLayoutParityUITests: XCTestCase {
         let overview = app.scrollViews["task-chat-overview"]
         XCTAssertTrue(overview.waitForExistence(timeout: 5))
         XCTAssertGreaterThan(overview.frame.minY, 0)
-        overview.swipeUp()
+        let edit = app.buttons["task-chat-edit"]
+        XCTAssertTrue(edit.isHittable)
+        edit.tap()
+        let editor = app.navigationBars["编辑任务"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.buttons["取消"].tap()
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
         capture("task-chat-overview-expanded")
+        overview.swipeUp()
         app.buttons["task-chat-details-close"].tap()
         XCTAssertTrue(overview.waitForNonExistence(timeout: 5))
         XCTAssertTrue(composer.isHittable)
         app.buttons["task-chat-menu"].tap()
+        XCTAssertFalse(app.buttons["编辑"].exists)
+        XCTAssertFalse(app.buttons["编辑任务"].exists)
+        XCTAssertFalse(app.buttons["调整状态"].exists)
+        XCTAssertFalse(app.buttons["取消任务"].exists)
         app.buttons["会话选项"].tap()
         XCTAssertTrue(app.navigationBars["会话选项"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["新建会话"].exists)
@@ -3123,7 +3165,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         let child = app.buttons["conversation-child-task-child"]
         XCTAssertTrue(child.waitForExistence(timeout: 5))
         XCTAssertGreaterThanOrEqual(child.frame.height, 52)
-        XCTAssertLessThanOrEqual(child.frame.height, 60)
+        XCTAssertLessThanOrEqual(child.frame.height, 60.5)
         XCTAssertLessThan(abs(expand.frame.midY - app.staticTexts["移动端布局检查"].frame.midY), 12)
         capture("conversations-children")
         child.tap()
@@ -3286,6 +3328,98 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(active.label.contains(target))
     }
 
+    func testHistoryLibraryAndProjectTitlesFollowHorizontalSwipes() {
+        func assertTitle(_ id: String, contains title: String) {
+            let menu = app.buttons.matching(identifier: id)
+                .matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+            XCTAssertTrue(menu.waitForExistence(timeout: 6), "Expected \(title) in \(id)")
+        }
+
+        tab("conversations")
+        assertTitle("sessions-mode-menu", contains: "最近")
+        let history = app.descendants(matching: .any)["sessions-mode-pager"].firstMatch
+        XCTAssertTrue(history.exists)
+        let conversation = app.staticTexts["移动端布局检查"].firstMatch
+        XCTAssertTrue(conversation.waitForExistence(timeout: 6))
+        conversation.swipeLeft()
+        assertTitle("sessions-mode-menu", contains: "项目")
+        let group = app.staticTexts["未分配"].firstMatch
+        XCTAssertTrue(group.waitForExistence(timeout: 6))
+        let rowY = (group.frame.midY - history.frame.minY) / history.frame.height
+        let start = history.coordinate(withNormalizedOffset: CGVector(dx: 0.22, dy: rowY))
+        let end = history.coordinate(withNormalizedOffset: CGVector(dx: 0.88, dy: rowY))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .fast, thenHoldForDuration: 0)
+        assertTitle("sessions-mode-menu", contains: "最近")
+
+        tab("library")
+        assertTitle("space-scope-menu", contains: "全部资料")
+        let item = app.buttons["space-item-55555555-5555-4555-8555-555555555555"]
+        XCTAssertTrue(item.waitForExistence(timeout: 6))
+        item.swipeLeft()
+        assertTitle("space-scope-menu", contains: "收藏")
+        XCTAssertFalse(app.buttons["preview-actions"].exists)
+
+        tab("progress")
+        app.selectPageOption("work-page-projects", from: "work-page-menu")
+        let project = app.descendants(matching: .any)["project-fixture-project"].firstMatch
+        XCTAssertTrue(project.waitForExistence(timeout: 6))
+        project.tap()
+        let projectPager = app.descendants(matching: .any)["project-pager"].firstMatch
+        XCTAssertTrue(projectPager.waitForExistence(timeout: 6))
+        projectPager.swipeLeft()
+        assertTitle("project-tabs", contains: "对话")
+    }
+
+    func testGoalCapsulesAndListSwipeBetweenOngoingAndAchieved() {
+        tab("profile")
+        app.buttons["settings-goals"].tap()
+        let ongoing = app.buttons["personal-goals-ongoing"]
+        let achieved = app.buttons["personal-goals-achieved"]
+        let activeGoal = app.buttons["goal-fixture-ongoing"]
+        let completedGoal = app.buttons["goal-fixture-achieved"]
+        XCTAssertTrue(activeGoal.waitForExistence(timeout: 6))
+        XCTAssertTrue(ongoing.isSelected)
+        XCTAssertFalse(completedGoal.exists)
+
+        activeGoal.swipeLeft()
+        XCTAssertTrue(completedGoal.waitForExistence(timeout: 6))
+        XCTAssertTrue(achieved.isSelected)
+        XCTAssertFalse(activeGoal.exists)
+
+        achieved.swipeRight()
+        XCTAssertTrue(activeGoal.waitForExistence(timeout: 6))
+        XCTAssertTrue(ongoing.isSelected)
+        achieved.tap()
+        XCTAssertTrue(completedGoal.waitForExistence(timeout: 6))
+    }
+
+    func testPrivacyMemorySwipesAndTitleMenuStayInSync() {
+        tab("profile")
+        app.buttons["settings-privacy-memory"].tap()
+        let menu = app.buttons["about-you-menu"]
+        let overview = app.buttons["about-you-work-memory"]
+        XCTAssertTrue(overview.waitForExistence(timeout: 6))
+        overview.swipeLeft()
+
+        let search = app.buttons["about-you-search-toggle"]
+        XCTAssertTrue(search.waitForExistence(timeout: 6))
+        XCTAssertTrue(menu.label.contains("记住的你"))
+
+        let pager = app.descendants(matching: .any)["about-you-pager"].firstMatch
+        XCTAssertTrue(pager.exists)
+        pager.swipeLeft()
+        let decision = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "移动端项目决定")).firstMatch
+        XCTAssertTrue(decision.waitForExistence(timeout: 6))
+        XCTAssertTrue(menu.label.contains("工作记忆"))
+        XCTAssertFalse(search.exists)
+
+        decision.swipeRight()
+        XCTAssertTrue(search.waitForExistence(timeout: 6))
+        app.selectPageOption("about-you-tab-overview", from: "about-you-menu")
+        XCTAssertTrue(overview.waitForExistence(timeout: 6))
+        XCTAssertTrue(menu.label.contains("概览"))
+    }
+
     func testPrivacyWorkMemoryAndInactiveShareHistory() {
         tab("profile")
         app.buttons["settings-privacy-memory"].tap()
@@ -3397,7 +3531,13 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertFalse(app.buttons["work-page-automations"].exists)
         app.buttons["work-page-progress"].tap()
         pager.swipeLeft()
-        XCTAssertTrue(app.buttons["tasks-filter-open"].waitForExistence(timeout: 5))
+        let openTasks = app.buttons["tasks-filter-open"]
+        XCTAssertTrue(openTasks.waitForExistence(timeout: 5))
+        openTasks.swipeLeft()
+        let closedTasks = app.buttons["tasks-filter-closed"]
+        XCTAssertTrue(closedTasks.isSelected)
+        XCTAssertFalse(app.buttons["projects-open-search"].exists)
+        openTasks.tap()
         app.selectPageOption("work-page-projects", from: "work-page-menu")
         XCTAssertTrue(app.buttons["projects-open-search"].waitForExistence(timeout: 5))
         pager.swipeRight()

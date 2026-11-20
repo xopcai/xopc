@@ -1,3 +1,4 @@
+import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { appSettings } from '../service/settings';
 import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
@@ -14,6 +15,9 @@ export struct XopcAboutYouView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Local model: XopcUserUnderstandingViewModel = new XopcUserUnderstandingViewModel();
   @Local section: number = 0;
+  @Local layout: XopcLayoutState = layoutState;
+  private pager: SwiperController = new SwiperController();
+  private sections: string[] = ['overview', 'understanding', 'work'];
   @Local expandedWorkId: string = '';
   @Local pageVisible: boolean = false;
   @Local searchOpen: boolean = false;
@@ -40,8 +44,8 @@ export struct XopcAboutYouView {
       await this.model.open(this.initialId);
       return;
     }
-    const key = appSettings.pageSelection('privacy-memory', ['overview', 'understanding', 'work'], 'overview');
-    this.section = key === 'work' ? 2 : key === 'understanding' ? 1 : 0;
+    const key = appSettings.pageSelection('privacy-memory', this.sections, 'overview');
+    this.section = Math.max(0, this.sections.indexOf(key));
     if (this.section === 2) void this.model.loadWork();
     await this.model.refresh();
     if (this.section === 1 && !this.model.items.length && !this.model.loadingMore) await this.model.load('all');
@@ -195,8 +199,14 @@ export struct XopcAboutYouView {
   }
 
   private selectSection(key: string): void {
-    const section = key === 'overview' ? 0 : key === 'understanding' ? 1 : 2;
-    if (section === this.section) return;
+    const section = this.sections.indexOf(key);
+    if (section < 0 || section === this.section) return;
+    this.pager.changeIndex(section, !this.layout.reduceMotion && Math.abs(this.section - section) === 1);
+  }
+
+  private commitSection(section: number): void {
+    const key = this.sections[section];
+    if (!key || section === this.section) return;
     this.closeSearch();
     this.section = section;
     appSettings.rememberPageSelection('privacy-memory', key);
@@ -214,7 +224,7 @@ export struct XopcAboutYouView {
         { key: 'understanding', label: $r('app.string.about_you_understanding'), id: 'about-you-tab-understanding' },
         { key: 'work', label: $r('app.string.about_you_work_memory'), id: 'about-you-tab-work' }
       ],
-      selectedTitle: this.section === 0 ? 'overview' : this.section === 1 ? 'understanding' : 'work', titleMenuId: 'about-you-menu',
+      selectedTitle: this.sections[this.section], titleMenuId: 'about-you-menu',
       onSelectTitle: (key: string): void => { this.selectSection(key); },
       backVisible: true, onBack: (): void => { if (this.searchOpen) this.closeSearch(); else this.onExit(); },
       searchId: this.section === 1 ? 'about-you-search-open' : '', searchOpen: this.searchOpen,
@@ -430,7 +440,7 @@ export struct XopcAboutYouView {
         { key: 'explicit', label: $r('app.string.about_you_explicit') },
         { key: 'learned', label: $r('app.string.about_you_learned') },
         { key: 'review', label: $r('app.string.about_you_review') }
-      ], selectedKey: this.model.filter,
+      ], selectedKey: this.model.filter, swipeToSelect: true,
         onSelect: (key: string): void => { void this.model.load(key); } })
     }.width('100%').padding({ left: 20, right: 20 })
   }
@@ -623,6 +633,42 @@ export struct XopcAboutYouView {
     }.width('100%').height('100%').padding({ left: 20, right: 20, top: 12, bottom: 24 }).backgroundColor(this.colors.panel)
   }
 
+  @Builder
+  private sectionPage(section: string) {
+    Column() {
+      if (section !== 'work' && this.model.error) {
+        Row({ space: 8 }) {
+          Text(userErrorMessage(this.model.error, 'collection')).fontSize(13)
+            .fontColor(this.colors.secondary).layoutWeight(1)
+          Button($r('app.string.refresh')).height(44).onClick((): void => {
+            if (section === 'overview') void this.model.refresh();
+            else void this.model.load(this.model.filter);
+          })
+        }.width('100%').padding({ left: 20, right: 20 })
+      }
+      if (section === 'understanding') {
+        this.understandingFilters()
+        if (this.model.loading) {
+          Column() { XopcListSkeleton() }.layoutWeight(1).width('100%').padding({ left: 20, right: 20, top: 8 })
+        } else {
+          Scroll() {
+            this.understandingList()
+          }.layoutWeight(1).width('100%').align(Alignment.TopStart).scrollBar(BarState.Off)
+        }
+        this.understandingConversationAction()
+      } else if (section === 'work') {
+        this.workMemory()
+      } else if (this.model.loading && !this.model.summary) {
+        Column() { XopcListSkeleton() }.width('100%').padding({ left: 20, right: 20 })
+      } else if (this.model.summary) {
+        Scroll() {
+          this.overview()
+        }.id('privacy-memory-overview').layoutWeight(1).width('100%').align(Alignment.TopStart).scrollBar(BarState.Off)
+      }
+    }.width('100%').height('100%')
+      .accessibilityLevel(section === this.sections[this.section] ? 'auto' : 'no-hide-descendants')
+  }
+
   build() {
     NavDestination() {
       if (this.model.selected) { this.detail(this.model.selected) }
@@ -636,37 +682,14 @@ export struct XopcAboutYouView {
               onSubmit: (): void => { this.getUIContext().getFocusController().clearFocus(); } })
               .margin({ left: 20, right: 20, bottom: 8 })
           }
-          if (this.section !== 2 && this.model.error) {
-            Row({ space: 8 }) {
-              Text(userErrorMessage(this.model.error, 'collection')).fontSize(13)
-                .fontColor(this.colors.secondary).layoutWeight(1)
-              Button($r('app.string.refresh')).height(44).onClick((): void => {
-                if (this.section === 0) void this.model.refresh();
-                else void this.model.load(this.model.filter);
-              })
-            }.width('100%').padding({ left: 20, right: 20 })
-          }
-          if (this.section === 1) {
-            Column() {
-              this.understandingFilters()
-              if (this.model.loading) {
-                Column() { XopcListSkeleton() }.layoutWeight(1).width('100%').padding({ left: 20, right: 20, top: 8 })
-              } else {
-                Scroll() {
-                  this.understandingList()
-                }.layoutWeight(1).width('100%').align(Alignment.TopStart).scrollBar(BarState.Off)
-              }
-              this.understandingConversationAction()
-            }.layoutWeight(1).width('100%').alignItems(HorizontalAlign.Start)
-          } else if (this.section === 2) {
-            this.workMemory()
-          } else if (this.model.loading && !this.model.summary) {
-            Column() { XopcListSkeleton() }.width('100%').padding({ left: 20, right: 20 })
-          } else if (this.model.summary) {
-            Scroll() {
-              this.overview()
-            }.id('privacy-memory-overview').layoutWeight(1).width('100%').align(Alignment.TopStart).scrollBar(BarState.Off)
-          }
+          Swiper(this.pager) {
+            ForEach(this.sections, (section: string) => {
+              this.sectionPage(section)
+            }, (section: string): string => section)
+          }.id('about-you-pager').index(this.section).loop(false).indicator(false).cachedCount(2)
+            .duration(this.layout.reduceMotion ? 0 : 230).disableSwipe(this.editProfileOpen)
+            .onChange((index: number): void => { this.commitSection(index); })
+            .width('100%').layoutWeight(1)
         }.width('100%').height('100%')
       }
     }.hideTitleBar(true).backgroundColor(this.colors.surface)

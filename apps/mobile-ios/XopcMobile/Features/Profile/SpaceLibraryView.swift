@@ -151,6 +151,7 @@ struct SpaceLibraryView: View {
             }
         }
         .listStyle(.plain)
+        .pageSelectionSwipe(LibraryScope.allCases, selected: scope, enabled: selectedItem == nil) { scope = $0 }
         .sheet(item: $selectedItem) { item in
             SpaceLibraryDetail(configuration: configuration, item: item, searchHit: item.hit, onOpenSource: onOpenSource,
                                onUseInChat: onUseInChat, onChange: { refresh += 1 }, onTrash: {

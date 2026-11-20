@@ -33,7 +33,7 @@ internal fun ProjectActions(name: String, onChat: () -> Unit, onTask: () -> Unit
     ContextRow(stringResource(R.string.progress_new_task), "", "project-action-task", iconRes = R.drawable.action_task_list, onClick = onTask)
     ContextRow(stringResource(R.string.notes_new), "", "project-action-note", iconRes = R.drawable.tab_notes, onClick = onNote)
     ContextRow(stringResource(R.string.automation_new), "", "project-action-automation", iconRes = R.drawable.action_clock, onClick = onAutomation)
-    ContextRow(stringResource(R.string.project_manage), "", "project-action-settings", iconRes = R.drawable.settings_sliders, onClick = onManage)
+    ContextRow(stringResource(R.string.project_manage), "", "project-action-settings", iconRes = R.drawable.action_folder, onClick = onManage)
   }
 }
 

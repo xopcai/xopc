@@ -1,4 +1,4 @@
-import type { TaskRunReceipt } from '@xopcai/gateway-contract';
+import { taskRunResultKind, type TaskRunReceipt } from '@xopcai/gateway-contract';
 
 import { parseAgentRunError, parseStructuredAgentRunError } from '@/features/chat/messages/agent-run-error-parser';
 import { serviceDisplayName } from '@/features/settings/models-hub/capability-presentation';
@@ -17,6 +17,7 @@ const diagnosticCodes = new Set([
   'provider_setup_required', 'provider_auth_invalid', 'rate_limit', 'timeout', 'provider_connection_error',
   'billing', 'model_quota_exhausted', 'platform_token_limit_exceeded', 'credit_budget_exhausted',
   'xopc_quota_exhausted', 'xopc_platform_limit', 'xopc_credit_budget_exhausted', 'unknown', 'format',
+  'task_model_unavailable',
 ]);
 const errorHeader = /^(?:No API key found for |OAuth refresh failed for |[a-z]*Error:|HTTP [45]\d{2}\b|[45]\d{2}(?::| (?:Unauthorized|Forbidden|Too Many Requests|Bad Request|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout)\b)|invalid_api_key\b|insufficient_quota\b)/i;
 const runFailure = /^(?:(?:fetch|connection) failed\b|Connection error[.!]?\s*$|(?:Request|Agent run) timed out\b|Assistant turn failed\b)/i;
@@ -59,6 +60,8 @@ function taskRunIssue(text: string | undefined, language: Language, failureCode?
           : `${provider} rejected the current credentials. Sign in again or update the API key, then retry.`,
         action: modelSettings,
       };
+    case 'task_model_unavailable':
+      return { title: zh ? '没有可用于后台任务的模型' : 'No model is available for background tasks', action: modelSettings };
     case 'provider_connection_error':
       return {
         title: m.agentRunErrorConnectionTitle,
@@ -166,17 +169,21 @@ export function taskTextForDisplay(text: string | undefined, language: Language)
 
 export function presentTaskRunResult(receipt: TaskRunReceipt, language: Language, terminalMessage?: string) {
   const zh = language === 'zh';
+  const resultKind = taskRunResultKind(receipt);
   const failureCode = receipt.status === 'failed' ? receipt.failure?.code : undefined;
   const summaryIssue = taskRunIssue(receipt.summary, language);
   const recoveryRequiresReview = failureCode === 'tool_outcome_unconfirmed' || failureCode === 'execution_interrupted';
   const issue = recoveryRequiresReview ? taskRunIssue(undefined, language, failureCode)
-    : summaryIssue ?? taskRunIssue(receipt.status === 'failed' ? terminalMessage : undefined, language, failureCode);
+    : summaryIssue ?? taskRunIssue(receipt.status === 'failed' ? terminalMessage : undefined, language,
+      resultKind === 'verification_unverified' ? undefined : failureCode);
   const summary = summaryIssue || failureCode === 'empty_agent_run' ? '' : readableRepairText(receipt.summary.trim(), language);
   const remainingWork = [...new Set(receipt.remainingWork.map(item => taskTextForDisplay(item, language)).filter(Boolean))];
   const nextAction = taskTextForDisplay(receipt.nextAction, language)
     || (!issue?.description ? taskTextForDisplay(receipt.failure?.recoveryAction, language) : '');
   const status = receipt.status === 'cancelled' ? (zh ? '本次执行已取消。' : 'This run was canceled.')
-    : receipt.status === 'failed' || receipt.completionVerdict === 'not_achieved'
+    : resultKind === 'verification_failed' ? (zh ? '已有执行结果，验收未通过。' : 'A result is available. It did not pass acceptance.')
+      : resultKind === 'verification_unverified' ? (zh ? '验收尚未完成，仍有要求待核验。' : 'Acceptance is pending verification.')
+      : resultKind === 'execution_failed' || receipt.completionVerdict === 'not_achieved'
       ? (zh ? '本次执行未完成。' : 'This run did not complete.')
       : receipt.completionVerdict === 'achieved'
         ? (zh ? '执行报告已达成目标，请结合依据验收。' : 'The run reports that it met the goal. Review the evidence before accepting.')

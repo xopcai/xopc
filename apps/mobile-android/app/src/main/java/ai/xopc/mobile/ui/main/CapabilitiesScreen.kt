@@ -991,7 +991,7 @@ private fun CapabilityInput(field: JSONObject, values: Map<String, String>, busy
             Box {
               TextButton(onClick = { open = true }, enabled = !busy,
                 modifier = Modifier.testTag("capability-field-$id")) {
-                Text(options.firstOrNull { it.value("id") == value }?.optString("label") ?: label)
+                Text(options.firstOrNull { it.optString("id") == value }?.optString("label") ?: label)
               }
               DropdownMenu(open, onDismissRequest = { open = false }) {
                 options.forEach { option ->

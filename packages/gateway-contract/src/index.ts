@@ -19,6 +19,7 @@ export * from './observation-starters.js';
 export * from './tool-activity.js';
 export * from './automations.js';
 export * from './user-message-display.js';
+export * from './user-message-text.js';
 export * from './user-turn-document.js';
 export * from './new-session.js';
 export * from './notifications.js';

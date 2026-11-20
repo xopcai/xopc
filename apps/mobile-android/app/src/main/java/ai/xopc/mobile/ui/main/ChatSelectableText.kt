@@ -77,12 +77,12 @@ internal fun shareMessageText(context: Context, text: String) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun ChatSelectableText(source: String, markdown: Boolean, pressInWindow: Offset?,
+internal fun ChatSelectableText(source: String, pressInWindow: Offset?,
   onCopy: (String) -> Unit, onDone: () -> Unit) {
   val context = LocalContext.current
   val shareLabel = stringResource(R.string.conversations_share)
-  val document = remember(source, markdown) {
-    (if (markdown) markdownSelectableText(source) else AnnotatedString(source)).takeIf { it.isNotBlank() }
+  val document = remember(source) {
+    markdownSelectableText(source).takeIf { it.isNotBlank() }
       ?: AnnotatedString(source)
   }
   val state = rememberTextFieldState(document.text)
@@ -115,7 +115,7 @@ internal fun ChatSelectableText(source: String, markdown: Boolean, pressInWindow
 
   BasicTextField(state = state, readOnly = true, outputTransformation = formatting,
     textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface,
-      lineHeight = if (markdown) 24.sp else 25.sp),
+      lineHeight = 24.sp),
     onTextLayout = { getResult -> layout = getResult() },
     modifier = Modifier.fillMaxWidth().testTag("message-inline-selection")
       .focusRequester(focus).onFocusChanged {

@@ -1,6 +1,8 @@
 import type { Hono } from 'hono';
 
 import {
+  getNotificationDevice,
+  disableNotificationDevice,
   registerNotificationDevice,
   removeNotificationDevice,
   updateNotificationDevicePreferences,
@@ -13,7 +15,8 @@ import type {
 } from '../../../notifications/types.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
-import { harmonyPushConfig } from '../../../notifications/harmony-push.js';
+import { PlatformPushError, registerPlatformPushDevice, removePlatformPushDevice } from '../../../notifications/platform-push.js';
+import { getOrCreateGatewayIdentity } from '../../../storage/sqlite/gateway-identity-repository.js';
 
 function stringField(value: unknown, maxLength: number): string | null {
   return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= maxLength
@@ -71,16 +74,34 @@ export function registerDevicePushRoutes(authenticated: Hono): void {
     if (!pushToken || !platform || !permissions || !locale || preferences === null || appVersion === null) {
       return c.json({ ok: false, error: 'Invalid push registration' }, 400);
     }
-    if (getDevice(deviceId)?.platform !== platform) {
+    const paired = getDevice(deviceId);
+    if (!paired || paired.revokedAt !== undefined || paired.platform !== platform) {
       return c.json({ ok: false, error: 'Push platform must match the paired device' }, 400);
     }
-    if (platform === 'harmonyos' && !harmonyPushConfig()) {
-      return c.json({ ok: false, error: 'Harmony push is not configured on this Gateway' }, 503);
+    let reference: string;
+    try {
+      if (permissions === 'granted') {
+        reference = await registerPlatformPushDevice(getOrCreateGatewayIdentity().id, deviceId, pushToken);
+      } else {
+        disableNotificationDevice(deviceId);
+        const current = getNotificationDevice(deviceId);
+        if (current) await removePlatformPushDevice(current.pushToken);
+        reference = 'disabled:' + deviceId;
+      }
+    } catch (error) {
+      const code = error instanceof PlatformPushError ? error.code : 'PUSH_PLATFORM_REQUEST_FAILED';
+      return c.json({ ok: false, error: { code } }, 503);
+    }
+    if (getDevice(deviceId)?.revokedAt) {
+      // Keep a disabled reference for the service to revoke if the platform is offline.
+      registerNotificationDevice({ deviceId, platform, pushToken: reference, permissions: 'denied', locale });
+      return c.json({ ok: false, error: 'Device access required' }, 403);
     }
     const device = registerNotificationDevice({
-      deviceId, pushToken, platform, permissions, preferences, locale, appVersion,
+      deviceId, pushToken: reference, platform, permissions, preferences, locale, appVersion,
     });
-    return c.json({ ok: true, device }, 201);
+    const { pushToken: _pushToken, ...publicDevice } = device;
+    return c.json({ ok: true, device: publicDevice }, 201);
   });
 
   authenticated.patch('/api/devices/me/push/preferences', async (c) => {
@@ -91,14 +112,22 @@ export function registerDevicePushRoutes(authenticated: Hono): void {
       return c.json({ ok: false, error: 'Invalid notification preferences' }, 400);
     }
     const device = updateNotificationDevicePreferences(deviceId, preferences);
-    return device
-      ? c.json({ ok: true, device })
-      : c.json({ ok: false, error: 'Push registration not found' }, 404);
+    if (!device) return c.json({ ok: false, error: 'Push registration not found' }, 404);
+    const { pushToken: _pushToken, ...publicDevice } = device;
+    return c.json({ ok: true, device: publicDevice });
   });
 
-  authenticated.delete('/api/devices/me/push', (c) => {
+  authenticated.delete('/api/devices/me/push', async (c) => {
     const deviceId = currentDeviceId(c);
     if (!deviceId) return c.json({ ok: false, error: 'Device access required' }, 403);
+    disableNotificationDevice(deviceId);
+    const device = getNotificationDevice(deviceId);
+    try {
+      if (device) await removePlatformPushDevice(device.pushToken);
+    } catch (error) {
+      const code = error instanceof PlatformPushError ? error.code : 'PUSH_PLATFORM_REQUEST_FAILED';
+      return c.json({ ok: false, error: { code } }, 503);
+    }
     return c.json({ ok: true, removed: removeNotificationDevice(deviceId) });
   });
 }

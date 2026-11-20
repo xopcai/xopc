@@ -1040,6 +1040,14 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
     query.isEmpty() || it.title.contains(query, ignoreCase = true) || it.summary.contains(query, ignoreCase = true)
   }
   val visibleDeliveries = if (preview) matchingDeliveries.take(3) else matchingDeliveries
+  val libraryCategories = listOf("all" to R.string.notes_all, "notes" to R.string.tab_notes,
+    "files" to R.string.notes_files, "deliveries" to R.string.library_results).map { (id, label) ->
+    SegmentOption(id, stringResource(label), "library-category-$id")
+  }
+  fun selectCategory(id: String) {
+    category = id
+    if (id != "notes" && state.status.isNotEmpty()) onStatus("")
+  }
   val libraryListState = rememberLazyListState()
   var filtersOpen by rememberSaveable { mutableStateOf(false) }
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1064,15 +1072,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
     }
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp),
       verticalAlignment = Alignment.CenterVertically) {
-      SegmentedTabs(
-        listOf("all" to R.string.notes_all, "notes" to R.string.tab_notes,
-          "files" to R.string.notes_files, "deliveries" to R.string.library_results).map { (id, label) ->
-          SegmentOption(id, stringResource(label), "library-category-$id")
-        }, category, { id ->
-          category = id
-          if (id != "notes" && state.status.isNotEmpty()) onStatus("")
-        }, Modifier.weight(1f),
-      )
+      SegmentedTabs(libraryCategories, category, ::selectCategory, Modifier.weight(1f), swipeToSelect = true)
       IconButton(onClick = { filtersOpen = !filtersOpen }, enabled = showNotes,
         modifier = Modifier.size(48.dp)
           .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14))
@@ -1088,7 +1088,8 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
         SegmentOption(status, stringResource(label), "notes-filter-${status.ifEmpty { "all" }}")
       }, state.status, onStatus,
     )
-    LazyColumn(state = libraryListState, modifier = Modifier.weight(1f).testTag("notes-list"),
+    LazyColumn(state = libraryListState, modifier = Modifier.weight(1f).testTag("notes-list")
+      .swipePageSelection(libraryCategories.map { it.value }, category, !searchOpen, ::selectCategory),
       verticalArrangement = Arrangement.spacedBy(10.dp),
       contentPadding = PaddingValues(bottom = 20.dp)) {
       if (category == "all" && !state.loading && !filesLoading && !deliveriesLoading &&

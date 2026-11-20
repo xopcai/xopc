@@ -87,7 +87,7 @@ internal fun ChatMessageSearch(messages: List<ConversationMessage>, hasOlder: Bo
           listOf("messages" to R.string.chat_search_messages, "files" to R.string.chat_search_files,
             "links" to R.string.chat_search_links, "images" to R.string.chat_search_images).map { (id, label) ->
             SegmentOption(id, stringResource(label), "chat-search-category-$id")
-          }, kind, { id -> kind = id; focus.requestFocus(); keyboard?.show() },
+          }, kind, { id -> kind = id; focus.requestFocus(); keyboard?.show() }, swipeToSelect = true,
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
           Row(Modifier.weight(1f).heightIn(min = 48.dp).background(MaterialTheme.colorScheme.surface, CircleShape)

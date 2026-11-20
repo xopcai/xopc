@@ -25,6 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.composed
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -32,7 +35,28 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
+
+internal fun <T> Modifier.swipePageSelection(pages: List<T>, selected: T, enabled: Boolean = true,
+  onSelect: (T) -> Unit): Modifier = composed {
+  val distanceThreshold = with(LocalDensity.current) { 64.dp.toPx() }
+  val flickDistance = with(LocalDensity.current) { 24.dp.toPx() }
+  val flickVelocity = with(LocalDensity.current) { 550.dp.toPx() }
+  val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+  val index = pages.indexOf(selected)
+  horizontalSwipe(enabled = enabled && index >= 0,
+    allowLeft = if (rtl) index > 0 else index < pages.lastIndex,
+    allowRight = if (rtl) index < pages.lastIndex else index > 0,
+    onRelease = { distance, velocity ->
+      if (abs(distance) >= distanceThreshold ||
+        (abs(distance) >= flickDistance && abs(velocity) >= flickVelocity && distance * velocity > 0)) {
+        val step = if ((distance < 0) != rtl) 1 else -1
+        pages.getOrNull(index + step)?.let(onSelect)
+      }
+    })
+}
 
 @Composable
 internal fun PageBackButton(tag: String, onClick: () -> Unit, enabled: Boolean = true) {

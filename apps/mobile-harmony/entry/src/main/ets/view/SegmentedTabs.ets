@@ -15,11 +15,40 @@ export interface XopcSegmentOption {
 const segmentCurve: ICurve = curves.cubicBezierCurve(0.32, 0.72, 0, 1);
 export const SEGMENTED_PAGE_TAP_SLOP_VP = 8;
 
+export class XopcPageSwipe implements GestureModifier {
+  private keys: string[];
+  private selected: string;
+  private onSelect: (key: string) => void;
+  private enabled: boolean;
+
+  constructor(keys: string[], selected: string, onSelect: (key: string) => void, enabled: boolean = true) {
+    this.keys = keys;
+    this.selected = selected;
+    this.onSelect = onSelect;
+    this.enabled = enabled;
+  }
+
+  applyGesture(event: UIGestureEvent): void {
+    event.clearGestures();
+    const index = this.keys.indexOf(this.selected);
+    if (!this.enabled || index < 0 || this.keys.length < 2) return;
+    const direction = index === 0 ? PanDirection.Left
+      : index === this.keys.length - 1 ? PanDirection.Right : PanDirection.Horizontal;
+    event.addGesture(new PanGestureHandler({ direction, distance: SEGMENTED_PAGE_TAP_SLOP_VP })
+      .onActionEnd((swipe: GestureEvent): void => {
+        if (Math.abs(swipe.offsetX) < 56) return;
+        const target = index + (swipe.offsetX < 0 ? 1 : -1);
+        if (target >= 0 && target < this.keys.length) this.onSelect(this.keys[target]);
+      }));
+  }
+}
+
 @ComponentV2
 export struct XopcSegmentedTabs {
   @Param options: XopcSegmentOption[] = [];
   @Param selectedKey: string = '';
   @Param segmentMin: number = 64;
+  @Param swipeToSelect: boolean = false;
   @Event onSelect: (key: string) => void = (_key: string): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Local layout: XopcLayoutState = layoutState;
@@ -48,6 +77,10 @@ export struct XopcSegmentedTabs {
   @Computed get trackWidth(): number {
     return this.options.reduce((width: number, option: XopcSegmentOption): number =>
       width + (this.minimumWidths.get(option.key) ?? this.segmentMin), 0);
+  }
+
+  @Computed get canSwipeToSelect(): boolean {
+    return this.swipeToSelect && this.viewportWidth > 0 && this.trackWidth <= this.viewportWidth;
   }
 
   @Computed get extraWidth(): number {
@@ -136,7 +169,10 @@ export struct XopcSegmentedTabs {
           .borderRadius(this.segmentRadius).backgroundColor(this.colors.input).clip(true)
       }
     }.width('100%').height(44 * this.fontScale).clip(true)
-      .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+      .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).enableScrollInteraction(!this.canSwipeToSelect)
+      .gestureModifier(new XopcPageSwipe(this.options.map((option: XopcSegmentOption): string => option.key),
+        this.selectedKey, (key: string): void => { this.onSelect(key); },
+        this.canSwipeToSelect))
       .onAreaChange((_before: Area, next: Area): void => {
         this.viewportWidth = Number(next.width);
         const context = this.getUIContext().getHostContext() as common.UIAbilityContext;

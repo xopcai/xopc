@@ -536,19 +536,24 @@ describe('TaskApplicationService', () => {
     ]);
   });
 
-  it('projects a failed run as failed and returns to queued when retried', () => {
+  it.each([
+    ['acceptance_incomplete', 'failed', 'verification_failed'],
+    ['acceptance_incomplete', 'unverified', 'verification_unverified'],
+    ['tool_outcome_unconfirmed', 'failed', 'run_failed'],
+  ] as const)('projects %s with %s verification as %s and returns to queued when retried', (code, verification, attention) => {
     const { service, task, run } = createRunningTask('failed-then-retry');
     expect(new TaskReadModelProjector().get(task.id)).toMatchObject({
       task: { phase: 'active' }, operationalState: 'running',
     });
     const failed = service.completeRun({
       runId: run.id, expectedRunVersion: run.version,
-      receipt: { ...receipt, status: 'failed', verification: { status: 'failed', checks: [] },
+      receipt: { ...receipt, status: 'failed', verification: { status: verification, checks: [] },
+        failure: { code, phase: 'execution', recoveryAction: 'Check the receipt' },
         completionVerdict: 'not_achieved', remainingWork: ['tests pass'] },
     });
     expect(failed).toMatchObject({ ok: true, model: {
       task: { phase: 'active' }, operationalState: 'failed',
-      attention: [expect.objectContaining({ kind: 'verification_failed' })],
+      attention: [expect.objectContaining({ kind: attention })],
     } });
     const current = new TaskRepository().require(task.id);
     expect(service.execute({ taskId: task.id, expectedVersion: current.version,

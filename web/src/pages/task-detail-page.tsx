@@ -10,7 +10,7 @@ import { TaskCurrentAction } from '@/features/tasks/task-current-action';
 import { TaskHeaderTitle } from '@/features/tasks/task-header-title';
 import { findTaskScroller } from '@/features/tasks/task-section-scroll';
 import type { TaskChangedEvent, TaskCommand, TaskCriterionReview, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
-import { taskCheckId } from '@xopcai/gateway-contract';
+import { taskCheckId, taskRunResultKind } from '@xopcai/gateway-contract';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, CalendarClock, Circle, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
@@ -682,7 +682,9 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
   const pausedWait = detail.waits.find((wait) => wait.kind === 'paused');
   const latestReceipt = currentTaskReceipt(detail);
   const statusKey = detailStatusKey(detail);
-  const statusLabel = copy.detailStatuses[statusKey];
+  const resultKind = latestReceipt ? taskRunResultKind(latestReceipt) : undefined;
+  const statusLabel = resultKind && resultKind !== 'passed' && (statusKey === 'failed' || statusKey === 'review')
+    ? copy.resultStatuses[resultKind] : copy.detailStatuses[statusKey];
   const objective = detail.task.body?.trim() || detail.task.contract?.objective.trim() || '';
   const canSchedule = detail.allowedCommands.includes('mark_ready');
   const canStart = detail.allowedCommands.includes('start');

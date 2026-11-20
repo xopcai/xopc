@@ -258,6 +258,8 @@ data class PersonalUiState(val gatewayId: String? = null, val summary: PersonalS
   val assertionSaveError: Boolean = false, val assertionSavedRevision: Int = 0,
   val assertionDeletedRevision: Int = 0, val understandingChatError: Boolean = false)
 
+enum class GatewayChange { Switch, Pair }
+
 data class ConnectionUiState(
   val clarification: ClarificationRequest? = null,
   val clarificationBusy: Boolean = false,
@@ -266,6 +268,7 @@ data class ConnectionUiState(
   val gatewayProfiles: List<GatewayProfile> = emptyList(),
   val gatewayProbes: Map<String, GatewayProbeUiState> = emptyMap(),
   val gatewayBusy: Boolean = false,
+  val gatewayChange: GatewayChange? = null,
   val gatewayError: String? = null,
   val restoring: Boolean = false,
   val pairing: Boolean = false,
@@ -740,6 +743,13 @@ class GatewayViewModel internal constructor(application: Application, private va
     require(bounds.outWidth in 1..1024 && bounds.outHeight in 1..1024) { "INVALID_PERSONAL_AVATAR" }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
   }.getOrNull()
+
+  suspend fun loadWorkMemory(gatewayId: String, cursor: String?): ai.xopc.mobile.gateway.WorkMemoryPage {
+    check(mutableState.value.profile?.gatewayId == gatewayId)
+    val page = runInterruptible(Dispatchers.IO) { personalRepository.workMemory(gatewayId, cursor) }
+    check(mutableState.value.profile?.gatewayId == gatewayId)
+    return page
+  }
 
   fun loadPersonalAssertions(filter: String, query: String, append: Boolean = false) {
     val gatewayId = mutableState.value.profile?.gatewayId ?: return
@@ -2729,7 +2739,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     mutableState.update { it.copy(realtimeStatus = "offline") }
   }
 
-  private suspend fun adoptGateway(profile: GatewayProfile?) {
+  private suspend fun adoptGateway(profile: GatewayProfile?, change: GatewayChange? = null) {
     val currentMusic = ai.xopc.mobile.playback.MusicPlayback.state.value?.track
     if (currentMusic != null && currentMusic.gatewayId != profile?.gatewayId) ai.xopc.mobile.playback.MusicPlayback.stop()
     gatewayProbeGeneration++
@@ -2738,7 +2748,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
     unfilteredNotes = null
     mutableState.value = ConnectionUiState(profile = profile, gatewayProfiles = profiles,
-      recentConversations = recent, conversationsLoading = profile != null,
+      gatewayChange = change, recentConversations = recent, conversationsLoading = profile != null,
       progress = ProgressUiState(gatewayId = profile?.gatewayId), restoringHomeChat = profile != null)
     if (profile == null) return
     val selectedId = withContext(Dispatchers.IO) {
@@ -2831,7 +2841,7 @@ class GatewayViewModel internal constructor(application: Application, private va
         runInterruptible(Dispatchers.IO) { session.probeProfile(gatewayId) }
         quiesceGateway(); quiesced = true
         val profile = runInterruptible(Dispatchers.IO) { session.activate(gatewayId) }
-        adoptGateway(profile)
+        adoptGateway(profile, GatewayChange.Switch)
       } catch (error: CancellationException) { throw error }
       catch (error: Exception) {
         mutableState.update { it.copy(gatewayBusy = false,
@@ -2901,7 +2911,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       mutableState.update { it.copy(gatewayError = "GATEWAY_OPERATION_BUSY") }
       return
     }
-    mutableState.update { it.copy(pairing = true, confirmationCode = null, error = null) }
+    mutableState.update { it.copy(pairing = true, confirmationCode = null, error = null, gatewayChange = null) }
     pairingJob = viewModelScope.launch {
       var quiesced = false
       try {
@@ -2909,7 +2919,7 @@ class GatewayViewModel internal constructor(application: Application, private va
         val profile = runInterruptible(Dispatchers.IO) {
           session.pair(link) { code -> mutableState.update { it.copy(confirmationCode = code) } }
         }
-        adoptGateway(profile)
+        adoptGateway(profile, GatewayChange.Pair)
       } catch (error: CancellationException) {
         mutableState.update { it.copy(pairing = false, confirmationCode = null) }
         if (quiesced && session.currentProfile()?.gatewayId == oldProfile?.gatewayId) {

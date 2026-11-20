@@ -161,6 +161,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onSavePersonalProactivity = gateway::savePersonalProactivity,
             onUploadPersonalAvatar = gateway::uploadPersonalAvatar,
             onSavePersonalGoal = gateway::savePersonalGoal,
+            loadWorkMemory = gateway::loadWorkMemory,
             onLoadPersonalAssertions = gateway::loadPersonalAssertions,
             onOpenPersonalAssertion = gateway::openPersonalAssertion,
             onClosePersonalAssertion = gateway::closePersonalAssertion,

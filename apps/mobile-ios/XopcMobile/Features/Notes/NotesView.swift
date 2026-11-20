@@ -43,7 +43,7 @@ struct NotesView: View {
             }
             SegmentedTabs(options: LibrarySection.allCases.map { item in
                 SegmentOption(id: item, title: item.title, accessibilityID: "library-category-\(item.rawValue)")
-            }, selected: section, label: "资料类型") { section = $0 }
+            }, selected: section, label: "资料类型", swipeToSelect: presentedSheet == nil) { section = $0 }
                 .accessibilityIdentifier("library-category")
                 .padding(.horizontal, 20)
             List {
@@ -100,6 +100,7 @@ struct NotesView: View {
                 }
             }
             .listStyle(.plain)
+            .pageSelectionSwipe(LibrarySection.allCases, selected: section, enabled: !searchOpen && presentedSheet == nil) { section = $0 }
             .scrollContentBackground(.hidden)
             .contentMargins(.top, 0, for: .scrollContent)
             .refreshable { await refreshLibrary() }
