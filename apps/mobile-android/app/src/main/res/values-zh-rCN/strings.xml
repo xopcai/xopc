@@ -319,6 +319,9 @@
     <string name="conversations_pending_delete">对话已移出列表，可在 5 秒内撤销。</string>
     <string name="conversations_delete_error">删除对话失败，已恢复到列表。</string>
     <string name="conversations_select">选择</string>
+    <string name="conversations_multi_select">多选</string>
+    <string name="conversations_delete_one_confirm">删除此会话？此操作无法撤销。</string>
+    <string name="conversations_delete_one_error">无法删除对话，请重试。</string>
     <string name="conversations_selected">已选择 %1$d 项</string>
     <string name="conversations_batch_delete_confirm">删除选中的 %1$d 个对话？删除后无法撤销。</string>
     <string name="conversations_batch_failed">%1$d 个对话操作失败，已保留选中以便重试。</string>

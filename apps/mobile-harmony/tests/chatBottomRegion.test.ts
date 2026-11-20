@@ -152,7 +152,7 @@ describe('chat bottom region composition', () => {
     expect(sidebar).not.toContain(".id('chat-sidebar-sessions')");
     expect(sidebar).not.toContain("$r('app.string.chat_view_more')");
     expect(sidebar).toContain('.virtualScroll({ totalCount: this.recentConversations.length })');
-    expect(sidebar).toContain('void this.loadRecent(this.nextOffset !== null)');
+    expect(sidebar).toContain('void this.sessions.load(this.sessions.hasMore)');
     expect(home).toContain("startSearching: page === 'sessions-search'");
     expect(sessions).toContain('this.searchOpen = this.startSearching');
     expect(sessions).toContain("XopcPageSearchButton({ searchId: 'sessions-open-search'");

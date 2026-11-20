@@ -336,6 +336,9 @@
 "暂无正文" = "No content";
 "已置顶" = "Pinned";
 "置顶" = "Pin";
+"多选" = "Select Multiple";
+"已选 %lld 项" = "%lld selected";
+"这会永久删除所选的 %lld 个对话及其历史记录。" = "This permanently deletes the %lld selected chats and their history.";
 "取消置顶" = "Unpin";
 "归档" = "Archive";
 "移回收件箱" = "Move to Inbox";

@@ -106,8 +106,8 @@ struct ConversationSummary: Codable, Equatable, Identifiable, Sendable {
     var customData: CustomData? = nil
     let key: String
     let agentId: String
-    let name: String?
-    let status: String
+    var name: String?
+    var status: String
     let updatedAt: String
     let messageCount: Int
     let projectId: String?
@@ -127,7 +127,7 @@ struct ConversationSummary: Codable, Equatable, Identifiable, Sendable {
 
 struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
     let id: String
-    let title: String
+    var title: String
     let agentId: String
     let transcriptId: String?
     let isDraft: Bool

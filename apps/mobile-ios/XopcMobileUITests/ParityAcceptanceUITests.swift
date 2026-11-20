@@ -2365,6 +2365,74 @@ final class MobileLayoutParityUITests: XCTestCase {
         }
     }
 
+    func testSidebarSessionLongPressAndBatchDelete() async throws {
+        app.terminate()
+        let base = fixtureBase + "/sidebar-actions"
+        var reset = try URLRequest(url: XCTUnwrap(URL(string: base + "/fixture/reset")))
+        reset.httpMethod = "POST"
+        let (_, response) = try await URLSession.shared.data(for: reset)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = base
+        app.launch()
+        XCTAssertTrue(app.openHomeSidebar())
+        let first = app.buttons["chat-sidebar-session-11111111-2026-4000-9000-000000000001"]
+        let second = app.buttons["chat-sidebar-session-11111111-2026-4000-9000-000000000002"]
+        XCTAssertTrue(second.waitForExistence(timeout: 6))
+        second.press(forDuration: 0.8)
+        let rename = app.buttons["重命名"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 5))
+        capture("ios-sidebar-session-menu")
+        rename.tap()
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        let field = alert.textFields.firstMatch
+        XCTAssertEqual(field.value as? String, "Sidebar 2")
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 9) + "Renamed")
+        alert.buttons["保存"].tap()
+        let renamed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Renamed"), object: second)
+        await fulfillment(of: [renamed], timeout: 6)
+        second.press(forDuration: 0.8)
+        app.buttons["置顶"].tap()
+        let pinnedFirst = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            second.isHittable && second.frame.minY < first.frame.minY
+        }, object: second)
+        await fulfillment(of: [pinnedFirst], timeout: 6)
+        second.press(forDuration: 0.8)
+        app.buttons["多选"].tap()
+        XCTAssertTrue(app.staticTexts["已选 1 项"].exists)
+        first.tap()
+        let batchDelete = app.buttons["chat-sidebar-batch-delete"]
+        batchDelete.tap()
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        alert.buttons["取消"].tap()
+        XCTAssertTrue(first.exists && second.exists)
+        batchDelete.tap()
+        alert.buttons["删除"].tap()
+        XCTAssertTrue(first.waitForNonExistence(timeout: 6))
+        XCTAssertFalse(second.exists)
+    }
+
+    func testSidebarSearchSwipesAcrossHistoryModes() {
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-search"].tap()
+        let search = app.textFields["conversations-search-field"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        let title = app.buttons["sessions-mode-menu"]
+        XCTAssertTrue(title.label.contains("最近"))
+        let pager = app.descendants(matching: .any)["sessions-mode-pager"].firstMatch
+        XCTAssertTrue(pager.waitForExistence(timeout: 5))
+        pager.swipeLeft()
+        XCTAssertTrue(title.label.contains("项目"))
+        XCTAssertTrue(search.exists)
+        pager.swipeLeft()
+        XCTAssertTrue(title.label.contains("专家"))
+        XCTAssertTrue(search.exists)
+        pager.swipeRight()
+        XCTAssertTrue(title.label.contains("项目"))
+        XCTAssertTrue(search.exists)
+    }
+
     func testSidebarScrollsShortcutsAndAutomaticallyAppendsOlderConversations() {
         app.terminate()
         app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/sidebar-pagination"

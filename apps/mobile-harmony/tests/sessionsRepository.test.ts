@@ -30,11 +30,16 @@ describe('session manager Gateway requests', () => {
     const first = row('one');
     const older = ['two', 'three', 'four', 'five', 'six'].map(key => row(key));
     const last = row('seven');
-    mock.request
+    const pinned = row('old-pinned', 1, 'pinned');
+    const history = vi.fn()
       .mockResolvedValueOnce(JSON.stringify({ items: [personal, row('empty', 0), first, row('archived', 1, 'archived')],
         total: 12, hasMore: true }))
-      .mockResolvedValueOnce(JSON.stringify({ items: [first, ...older], total: 12, hasMore: true }))
+      .mockResolvedValueOnce(JSON.stringify({ items: [pinned, ...older], total: 12, hasMore: true }))
       .mockResolvedValueOnce(JSON.stringify({ items: [row('empty-again', 0), last], total: 12, hasMore: false }));
+    mock.request.mockImplementation((path: string) =>
+      new URL(path, 'https://gateway.invalid').searchParams.get('status') === 'pinned'
+        ? Promise.resolve(JSON.stringify({ items: [pinned], total: 1, hasMore: false }))
+        : history());
     mock.cacheWrite.mockResolvedValue(undefined);
 
     const repo = new XopcChatRepository();
@@ -42,12 +47,15 @@ describe('session manager Gateway requests', () => {
     expect(page.nextOffset).toBe(10);
     const next = await repo.recentPage(page.nextOffset!);
 
-    expect(page.items).toEqual([personal, first, ...older]);
+    expect(page.items).toEqual([pinned, personal, first, ...older]);
     expect(next).toMatchObject({ items: [last], hasMore: false, nextOffset: null });
     expect(mock.request.mock.calls.map(([path]) =>
-      Object.fromEntries(new URL(path, 'https://gateway.invalid').searchParams))).toEqual(
+      Object.fromEntries(new URL(path, 'https://gateway.invalid').searchParams)).filter(query => !query.status)).toEqual(
       ['0', '4', '10'].map(offset => ({ limit: '20', offset, rootConversationsOnly: 'true', excludeArchived: 'true',
         excludeAutomationRuns: 'true', sortBy: 'updatedAt', sortOrder: 'desc', search: '' })));
+    expect(mock.request.mock.calls.map(([path]) =>
+      Object.fromEntries(new URL(path, 'https://gateway.invalid').searchParams)).find(query => query.status))
+      .toMatchObject({ offset: '0', status: 'pinned', rootConversationsOnly: 'true', excludeAutomationRuns: 'true' });
     expect(mock.cacheWrite).toHaveBeenCalledWith('gateway', 'device', page);
     expect(mock.cacheWrite).toHaveBeenCalledTimes(1);
   });

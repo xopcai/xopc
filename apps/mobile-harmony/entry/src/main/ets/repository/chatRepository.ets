@@ -115,8 +115,14 @@ export class XopcChatRepository {
     const connection = gatewaySession.connectionRevision();
     if (recentLoad && recentConnection === connection) return recentLoad;
     recentConnection = connection;
-    const request = this.recentPage(0).then((page: XopcRecentConversationPage): XopcRecentConversationPage => {
+    const request = Promise.all([this.recentPage(0), this.pinnedRecent()]).then((pages): XopcRecentConversationPage => {
       gatewaySession.assertConnection(connection);
+      const recent = pages[0];
+      const pinned = pages[1];
+      const pinnedIds = new Set<string>(pinned.map((item: XopcSessionItem): string => item.key));
+      const page: XopcRecentConversationPage = { items: pinned.concat(recent.items.filter(
+        (item: XopcSessionItem): boolean => !pinnedIds.has(item.key))),
+        total: recent.total, hasMore: recent.hasMore, nextOffset: recent.nextOffset };
       if (recentLoad === request) {
         void chatSessionCache.write(profile.gatewayId, profile.deviceId, page).catch((): void => {});
       }
@@ -124,6 +130,22 @@ export class XopcChatRepository {
     }).finally((): void => { if (recentLoad === request) recentLoad = undefined; });
     recentLoad = request;
     return request;
+  }
+
+  private async pinnedRecent(): Promise<XopcSessionItem[]> {
+    const connection = gatewaySession.connectionRevision();
+    const items: XopcSessionItem[] = [];
+    let offset = 0;
+    let page: XopcSessionList;
+    do {
+      page = await this.list('', offset, 20, '', true, '&excludeAutomationRuns=true&status=pinned');
+      gatewaySession.assertConnection(connection);
+      for (const item of page.items) {
+        if (item.status === 'pinned' && item.messageCount > 0) items.push(item);
+      }
+      offset += page.items.length;
+    } while (page.hasMore && page.items.length > 0);
+    return items;
   }
 
   async recentPage(startOffset: number): Promise<XopcRecentConversationPage> {
@@ -510,7 +532,10 @@ export class XopcChatRepository {
 
   async rename(id: string, name: string): Promise<void> {
     const body: XopcRename = { name };
+    const connection = gatewaySession.connectionRevision();
     await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/rename', 'POST', JSON.stringify(body));
+    gatewaySession.assertConnection(connection);
+    recentLoad = undefined;
   }
   async action(id: string, action: string): Promise<void> {
     if (!['pin', 'unpin', 'archive', 'unarchive', 'reset', 'delete'].includes(action)) throw new Error('INVALID_ACTION');
@@ -523,6 +548,7 @@ export class XopcChatRepository {
     try {
       await gatewaySession.request(action === 'delete' ? path : path + '/' + action, action === 'delete' ? 'DELETE' : 'POST', '{}');
       gatewaySession.assertConnection(connection);
+      if (action === 'pin' || action === 'unpin' || action === 'delete') recentLoad = undefined;
       if (action === 'delete' || action === 'archive' || action === 'reset') this.removeCachedRecent(id);
     } finally {
       if (gatewayId && (action === 'delete' || action === 'reset')) await chatHistoryCache.remove(gatewayId, id);

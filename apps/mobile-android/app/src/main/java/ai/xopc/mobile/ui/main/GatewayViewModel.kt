@@ -98,6 +98,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runInterruptible
@@ -3020,7 +3021,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       } catch (_: Exception) {
         mutableState.update { it.copy(recentConversationsError = true) }
       } finally {
-        mutableState.update { it.copy(recentConversationsLoading = false) }
+        if (isActive) mutableState.update { it.copy(recentConversationsLoading = false) }
       }
     }
   }
@@ -4504,7 +4505,7 @@ class GatewayViewModel internal constructor(application: Application, private va
 
   fun beginRename(id: String) {
     val current = mutableState.value
-    val item = current.conversations.firstOrNull { it.id == id && !it.isLocalDraft } ?: return
+    val item = current.conversationSummary(id)?.takeUnless { it.isLocalDraft } ?: return
     if (current.renamingConversation) return
     mutableState.update { it.copy(renameDraftId = id, renameDraftText = item.title, renameError = false) }
   }
@@ -4528,8 +4529,9 @@ class GatewayViewModel internal constructor(application: Application, private va
     viewModelScope.launch {
       try {
         runInterruptible(Dispatchers.IO) { conversations.rename(id, name) }
+        recentConversationsJob?.cancel()
         mutableState.update { it.copy(renamingConversation = false, renameDraftId = null,
-          renameDraftText = "", recentConversations = it.recentConversations?.map { row ->
+          recentConversationsLoading = false, renameDraftText = "", recentConversations = it.recentConversations?.map { row ->
             if (row.id == id) row.copy(title = name) else row
           }, conversations = it.conversations.map { item ->
             if (item.id == id) item.copy(title = name) else item
@@ -4546,18 +4548,24 @@ class GatewayViewModel internal constructor(application: Application, private va
 
   fun togglePin(id: String) {
     val current = mutableState.value
-    val item = current.conversations.firstOrNull { it.id == id && !it.isLocalDraft } ?: return
+    val item = current.conversationSummary(id)?.takeUnless { it.isLocalDraft } ?: return
     if (current.profile == null || current.pinningConversationId != null || current.archivingConversationId != null ||
       current.renamingConversation) return
     val pinned = item.status != "pinned"
+    val status = if (pinned) "pinned" else "active"
     mutableState.update { it.copy(pinningConversationId = id, pinActionError = false) }
     viewModelScope.launch {
       try {
         runInterruptible(Dispatchers.IO) { conversations.setPinned(id, pinned) }
-        mutableState.update { it.copy(pinningConversationId = null,
+        recentConversationsJob?.cancel()
+        mutableState.update { it.copy(pinningConversationId = null, recentConversationsLoading = false,
+          recentConversations = it.recentConversations?.map { row ->
+            if (row.id == id) row.copy(status = status) else row
+          },
           conversations = it.conversations.map { row ->
-            if (row.id == id) row.copy(status = if (pinned) "pinned" else "active") else row
+            if (row.id == id) row.copy(status = status) else row
           }) }
+        persistRecentConversations()
         loadConversations()
       } catch (error: CancellationException) {
         throw error
@@ -4601,7 +4609,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       current.pinningConversationId != null || current.archivingConversationId != null ||
       current.renamingConversation || current.sending) return
     val targets = ids.distinct().mapNotNull { id ->
-      current.conversations.firstOrNull { it.id == id && !it.isLocalDraft }
+      current.conversationSummary(id)?.takeUnless { it.isLocalDraft }
     }
     if (targets.isEmpty() || (action == "delete" && targets.any {
       it.id == current.selectedConversationId && (current.activeRunId != null || current.pendingInput != null)
@@ -4636,7 +4644,10 @@ class GatewayViewModel internal constructor(application: Application, private va
               runProgress = AssistantRunProgress()) }
             openPersonalAgent(remember = false)
           }
+          val removesRecents = completed.isNotEmpty() && (action == "delete" || action == "archive")
+          if (removesRecents) recentConversationsJob?.cancel()
           mutableState.update { state -> state.copy(
+            recentConversationsLoading = state.recentConversationsLoading && !removesRecents,
             recentConversations = state.recentConversations?.filterNot { it.id in completed && action in setOf("delete", "archive") },
             conversations = state.conversations.filterNot { it.id in completed && action == "delete" }
               .map { row -> if (row.id !in completed) row else row.copy(status = when (action) {
@@ -4646,7 +4657,10 @@ class GatewayViewModel internal constructor(application: Application, private va
               }) },
             batchConversationBusy = false, batchConversationFailedIds = failed,
             batchConversationRevision = state.batchConversationRevision + 1) }
-          if (action == "delete" || action == "archive") persistRecentConversations()
+          if (removesRecents) {
+            persistRecentConversations()
+            if (failed.isEmpty()) loadRecentConversations()
+          }
           // Keep failed rows from later pages visible until the user retries or changes the list.
           if (failed.isEmpty()) loadConversations()
         }

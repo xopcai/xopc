@@ -2596,6 +2596,72 @@ class MainScreenTest {
     }
   }
 
+  @Test fun sidebarSessionLongPressRoutesActionsAndConfirmsBatchDeletion() {
+    val first = ConversationSummary("first", "First conversation", "2026-11-20", 1, "main")
+    val second = ConversationSummary("second", "Second conversation", "2026-11-19", 1, "main")
+    val state = mutableStateOf(ConnectionUiState(
+      profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+      recentConversations = listOf(first, second)))
+    var opened: String? = null
+    var renamed: String? = null
+    var deleted = emptyList<String>()
+    composeTestRule.setContent {
+      MainScreen(connection = state.value, onSelectConversation = { opened = it }, onBeginRename = { renamed = it },
+        onTogglePin = { id ->
+          state.value = state.value.copy(recentConversations = state.value.recentConversations?.map {
+            if (it.id == id) it.copy(status = if (it.status == "pinned") "active" else "pinned") else it
+          })
+        }, onBatchConversations = { ids, action ->
+          assertEquals("delete", action)
+          deleted = ids
+          state.value = state.value.copy(
+            recentConversations = state.value.recentConversations?.filterNot { it.id in ids },
+            batchConversationRevision = state.value.batchConversationRevision + 1)
+        })
+    }
+    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    val list = composeTestRule.onNodeWithTag("chat-sidebar-list")
+    val firstRow = composeTestRule.onNodeWithTag("chat-sidebar-session-first")
+    val secondRow = composeTestRule.onNodeWithTag("chat-sidebar-session-second")
+    list.performScrollToNode(hasTestTag("chat-sidebar-session-second"))
+    secondRow.performTouchInput { longClick() }
+    composeTestRule.onNodeWithTag("chat-sidebar-menu-rename").performClick()
+    composeTestRule.runOnIdle { assertEquals("second", renamed); assertEquals(null, opened) }
+    secondRow.performTouchInput { longClick() }
+    composeTestRule.onNodeWithTag("chat-sidebar-menu-pin").performClick()
+    assertTrue(secondRow.fetchSemanticsNode().boundsInRoot.top < firstRow.fetchSemanticsNode().boundsInRoot.top)
+    secondRow.performTouchInput { longClick() }
+    composeTestRule.onNodeWithTag("chat-sidebar-menu-select").performClick()
+    secondRow.assertIsSelected()
+    firstRow.performClick()
+    firstRow.assertIsSelected()
+    composeTestRule.onNodeWithTag("chat-sidebar-batch-delete").performClick()
+    composeTestRule.runOnIdle { assertTrue(deleted.isEmpty()) }
+    composeTestRule.onNodeWithTag("chat-sidebar-delete-confirm").performClick()
+    composeTestRule.runOnIdle { assertEquals(setOf("first", "second"), deleted.toSet()) }
+    firstRow.assertDoesNotExist()
+    secondRow.assertDoesNotExist()
+  }
+
+  @Test fun sidebarSearchSwipesAcrossHistoryModesWithSearchStillOpen() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    composeTestRule.setContent { MainScreen(connection = ConnectionUiState(profile = profile)) }
+    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar-search").performClick()
+    val search = composeTestRule.onNodeWithTag("conversations-search")
+    val pager = composeTestRule.onNodeWithTag("sessions-mode-pager")
+    val context = composeTestRule.activity
+    search.assertIsDisplayed()
+    pager.performTouchInput { swipeLeft() }
+    search.assertTextContains(context.getString(R.string.conversations_search_projects))
+    pager.performTouchInput { swipeLeft() }
+    search.assertTextContains(context.getString(R.string.conversations_search_experts))
+    pager.performTouchInput { swipeRight() }
+    search.assertTextContains(context.getString(R.string.conversations_search_projects))
+    pager.performTouchInput { swipeRight() }
+    search.assertTextContains(context.getString(R.string.conversations_search))
+  }
+
   @Test fun sidebarKeepsCachedRecentsWhileSearchAndRefreshRun() {
     val cached = ConversationSummary("cached", "Cached conversation", "", 3, "main")
     val searchResult = ConversationSummary("filtered", "Filtered conversation", "", 1, "main")

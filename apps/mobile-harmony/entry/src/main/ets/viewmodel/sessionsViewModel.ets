@@ -1,4 +1,4 @@
-import { XopcSessionItem, XopcSessionHistoryScope, XopcSidebarTaskGroup } from '../model/chat';
+import { XopcSessionItem, XopcSessionHistoryScope, XopcSessionList, XopcSidebarTaskGroup } from '../model/chat';
 import { XopcChatRepository } from '../repository/chatRepository';
 import { gatewaySession } from '../service/gatewaySession';
 
@@ -11,6 +11,7 @@ export class XopcSessionsViewModel {
   @Trace refreshing: boolean = false;
   @Trace loadingMore: boolean = false;
   @Trace hasMore: boolean = false;
+  @Trace hasSnapshot: boolean = false;
   @Trace error: string = '';
   @Trace actionError: string = '';
   @Trace busy: boolean = false;
@@ -26,9 +27,21 @@ export class XopcSessionsViewModel {
   private deletes: Map<string, number> = new Map<string, number>();
   private gatewayId: string = gatewaySession.currentProfile()?.gatewayId ?? '';
   private disposed: boolean = false;
+  private readonly sidebar: boolean;
+  private readonly connection: number;
+
+  constructor(sidebar: boolean = false) {
+    this.sidebar = sidebar;
+    this.connection = sidebar ? gatewaySession.connectionRevision() : -1;
+    if (sidebar) {
+      const cached = this.repository.cachedRecent();
+      if (cached) { this.items = cached.items; this.hasSnapshot = true; }
+    }
+  }
 
   private current(): boolean {
-    return !this.disposed && !!this.gatewayId && gatewaySession.currentProfile()?.gatewayId === this.gatewayId;
+    return !this.disposed && !!this.gatewayId && gatewaySession.currentProfile()?.gatewayId === this.gatewayId
+      && (!this.sidebar || gatewaySession.connectionRevision() === this.connection);
   }
   dispose(): void {
     this.disposed = true; this.generation++; clearTimeout(this.searchTimer);
@@ -58,8 +71,24 @@ export class XopcSessionsViewModel {
     this.loading = !more; this.loadingMore = more; this.error = '';
     this.refreshing = !more && userRefresh;
     try {
-      const page = await this.repository.historyList(this.search.trim(), offset, this.scope);
+      if (this.sidebar && !this.hasSnapshot) {
+        const cached = await this.repository.restoreRecent().catch((): undefined => undefined);
+        if (generation !== this.generation || !this.current()) return;
+        if (cached) { this.items = cached.items; this.hasSnapshot = true; }
+      }
+      let page: XopcSessionList;
+      let nextOffset: number | null;
+      if (this.sidebar) {
+        const recent = more ? await this.repository.recentPage(offset) : await this.repository.refreshRecent();
+        page = recent;
+        nextOffset = recent.nextOffset;
+      } else {
+        page = await this.repository.historyList(this.search.trim(), offset, this.scope);
+        nextOffset = page.hasMore && page.items.length > 0 ? offset + page.items.length : null;
+      }
       if (generation !== this.generation || !this.current()) return;
+      this.offset = nextOffset ?? 0;
+      this.hasMore = nextOffset !== null;
       const retained = more ? [] : this.selectedItems();
       const seen: Set<string> = new Set<string>();
       this.items = (more ? this.items.concat(page.items) : page.items.concat(retained)).filter((item: XopcSessionItem): boolean => {
@@ -76,8 +105,7 @@ export class XopcSessionsViewModel {
         }
       }
       this.taskGroups = groups;
-      this.offset = offset + page.items.length;
-      this.hasMore = page.hasMore && page.items.length > 0;
+      this.hasSnapshot = true;
       // Selected rows outside the first page must survive a refresh after a partial batch failure.
     } catch (error) {
       if (generation === this.generation && this.current()) this.error = (error as Error).message;
@@ -115,6 +143,7 @@ export class XopcSessionsViewModel {
   }
   async act(targets: XopcSessionItem[], action: string, onDeleted?: (id: string) => void): Promise<void> {
     if (!this.current() || this.busy || !targets.length || !['pin', 'unpin', 'archive', 'delete'].includes(action)) return;
+    const keepFailedSelection = !this.sidebar || this.selecting;
     this.busy = true; this.actionError = ''; this.generation++;
     const failed: string[] = [];
     const seen: Set<string> = new Set<string>();
@@ -146,7 +175,7 @@ export class XopcSessionsViewModel {
       // Keep unsuccessful targets reachable even if they were on a later page.
       this.items = this.items.concat(failedItems.filter((item: XopcSessionItem): boolean =>
         !this.items.some((row: XopcSessionItem): boolean => row.key === item.key)));
-      this.selected = failed; this.selecting = failed.length > 0;
+      this.selected = keepFailedSelection ? failed : []; this.selecting = this.selected.length > 0;
     }
     this.busy = false;
   }

@@ -3,12 +3,15 @@ package ai.xopc.mobile.ui.main
 import ai.xopc.mobile.R
 import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.theme.LocalChatColors
+import ai.xopc.mobile.gateway.ConversationSummary
+import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
@@ -36,9 +39,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -102,13 +107,74 @@ internal class ChatSidebarState {
 internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: ConnectionUiState,
   onClose: () -> Unit, onRetry: () -> Unit, onLoadMore: () -> Unit,
   onDestination: (HomeTab) -> Unit, onPersonal: () -> Unit,
-  onNew: () -> Unit, onConversation: (String) -> Unit, onSearch: () -> Unit) {
+  onNew: () -> Unit, onConversation: (String) -> Unit, onSearch: () -> Unit,
+  onRename: (String) -> Unit, onTogglePin: (String) -> Unit, onDelete: (List<String>) -> Unit) {
   LaunchedEffect(state.open, state.dragFraction != null) {
     val fraction = state.dragFraction
     if (fraction != null) return@LaunchedEffect
     state.settled.animateTo(if (state.open) 1f else 0f, tween(210))
   }
   if (!state.visible) return
+  var menuId by remember { mutableStateOf<String?>(null) }
+  var selecting by remember { mutableStateOf(false) }
+  var selectedIds by remember { mutableStateOf(emptySet<String>()) }
+  var deleteTargets by remember { mutableStateOf(emptyList<String>()) }
+  var submittedRevision by remember { mutableStateOf<Int?>(null) }
+  var deleteFailureCount by remember { mutableIntStateOf(0) }
+  fun cancelSelection() {
+    selecting = false
+    selectedIds = emptySet()
+    deleteFailureCount = 0
+  }
+  LaunchedEffect(state.open) {
+    if (!state.open) {
+      menuId = null
+      deleteTargets = emptyList()
+      cancelSelection()
+    }
+  }
+  LaunchedEffect(connection.batchConversationRevision) {
+    if (submittedRevision?.let { it != connection.batchConversationRevision } == true) {
+      submittedRevision = null
+      if (selecting) {
+        selectedIds = connection.batchConversationFailedIds.toSet()
+        selecting = selectedIds.isNotEmpty()
+      }
+      deleteFailureCount = connection.batchConversationFailedIds.size
+    }
+  }
+  val operationBusy = connection.batchConversationBusy || connection.renamingConversation ||
+    connection.pinningConversationId != null || connection.archivingConversationId != null ||
+    connection.renameDraftId != null
+  fun canDelete(ids: Collection<String>): Boolean = ids.isNotEmpty() && !operationBusy &&
+    !connection.sending && connection.pendingDeleteId == null && !connection.deleteCommitting &&
+    (connection.selectedConversationId !in ids || (connection.activeRunId == null && connection.pendingInput == null))
+  val close: () -> Unit = {
+    if (!operationBusy) {
+      if (selecting) cancelSelection() else onClose()
+    }
+  }
+  BackHandler(enabled = state.open, onBack = close)
+  if (deleteTargets.isNotEmpty()) AlertDialog(
+    onDismissRequest = { deleteTargets = emptyList() },
+    title = { Text(stringResource(R.string.conversations_delete)) },
+    text = { Text(if (deleteTargets.size == 1) stringResource(R.string.conversations_delete_one_confirm)
+      else stringResource(R.string.conversations_batch_delete_confirm, deleteTargets.size)) },
+    confirmButton = {
+      TextButton(enabled = canDelete(deleteTargets), onClick = {
+        val targets = deleteTargets
+        deleteTargets = emptyList()
+        deleteFailureCount = 0
+        submittedRevision = connection.batchConversationRevision
+        onDelete(targets)
+      }, modifier = Modifier.testTag("chat-sidebar-delete-confirm")) {
+        Text(stringResource(R.string.conversations_delete), color = MaterialTheme.colorScheme.error)
+      }
+    },
+    dismissButton = { TextButton(onClick = { deleteTargets = emptyList() }) {
+      Text(stringResource(R.string.conversations_cancel))
+    } },
+  )
   val scheme = MaterialTheme.colorScheme
   val dismissLabel = stringResource(R.string.assistant_close)
   val density = LocalDensity.current
@@ -126,7 +192,7 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
       }
     }
   }
-  Box(Modifier.fillMaxSize().horizontalSwipe(enabled = state.open && widthPx > 0f, allowRight = false,
+  Box(Modifier.fillMaxSize().horizontalSwipe(enabled = state.open && !selecting && !operationBusy && widthPx > 0f, allowRight = false,
     onDrag = { state.dragFraction = (1f + it / widthPx).coerceIn(0f, 1f) },
     onRelease = { distance, speed ->
       settleDrag(-distance >= minOf(widthPx * 0.32f, closeDistance) ||
@@ -136,7 +202,7 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
   )) {
     Box(Modifier.matchParentSize().graphicsLayer { alpha = state.progress }
       .background(Color.Black.copy(alpha = 0.40f))
-      .then(if (state.open) Modifier.clickable(role = Role.Button, onClick = onClose)
+      .then(if (state.open) Modifier.clickable(role = Role.Button, onClick = close)
         .semantics { contentDescription = dismissLabel }.testTag("chat-sidebar-scrim") else Modifier))
     Column(Modifier.align(BiasAbsoluteAlignment(-1f, 0f)).width(width).fillMaxHeight()
       .graphicsLayer { translationX = (state.progress - 1f) * size.width }
@@ -148,22 +214,38 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
       .padding(horizontal = 14.dp).testTag("chat-sidebar")) {
       Row(Modifier.fillMaxWidth().padding(start = 12.dp, top = 6.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        val mark = if (scheme.surface.luminance() < 0.2f) R.drawable.sidebar_brand_dark else R.drawable.sidebar_brand_light
-        Icon(painterResource(mark), null, Modifier.size(27.dp), tint = Color.Unspecified)
-        Text("xopc", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge,
-          fontWeight = FontWeight.Bold, color = scheme.onSurface)
-        IconButton(onClick = onClose, modifier = Modifier.testTag("chat-sidebar-close")
+        if (selecting) {
+          Text(stringResource(R.string.conversations_selected, selectedIds.size), Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        } else {
+          val mark = if (scheme.surface.luminance() < 0.2f) R.drawable.sidebar_brand_dark else R.drawable.sidebar_brand_light
+          Icon(painterResource(mark), null, Modifier.size(27.dp), tint = Color.Unspecified)
+          Text("xopc", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold, color = scheme.onSurface)
+        }
+        IconButton(onClick = close, enabled = !operationBusy, modifier = Modifier.testTag("chat-sidebar-close")
           .background(scheme.surfaceContainer, CircleShape)) {
-          Icon(painterResource(R.drawable.action_close), dismissLabel, Modifier.size(22.dp), tint = scheme.onSurface)
+          Icon(painterResource(R.drawable.action_close),
+            if (selecting) stringResource(R.string.conversations_cancel) else dismissLabel,
+            Modifier.size(22.dp), tint = scheme.onSurface)
         }
       }
+      if (connection.pinActionError || deleteFailureCount > 0) Text(
+        when {
+          deleteFailureCount == 0 -> stringResource(R.string.conversations_pin_error)
+          selecting -> stringResource(R.string.conversations_batch_failed, deleteFailureCount)
+          else -> stringResource(R.string.conversations_delete_one_error)
+        },
+        Modifier.padding(horizontal = 10.dp, vertical = 4.dp), color = scheme.error,
+        style = MaterialTheme.typography.bodySmall)
       val personal = connection.personal.agent
       val attention = connection.progress.needsUser.size.takeIf {
         connection.progress.gatewayId == connection.profile?.gatewayId
       } ?: 0
       val recent = connection.recentConversations.orEmpty().filter {
         it.id != personal?.conversationId && it.id != connection.pendingDeleteId && it.isRecentSidebarCandidate
-      }
+      }.sortedWith(compareByDescending<ConversationSummary> { it.status == "pinned" }.thenByDescending { it.updatedAt })
+      val shortcutsEnabled = !selecting && !operationBusy
       val nextOffset = connection.recentConversationsNextOffset
       val requestMore by rememberUpdatedState(onLoadMore)
       LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("chat-sidebar-list"),
@@ -171,7 +253,7 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
         item("search") {
           SidebarRow(R.string.conversations_search, R.drawable.action_search, "chat-sidebar-search",
             Modifier.padding(bottom = 4.dp).clip(MaterialTheme.shapes.large).background(scheme.surfaceContainer),
-            onClick = onSearch)
+            enabled = shortcutsEnabled, onClick = onSearch)
         }
         item("personal") {
           SidebarRow(personal?.displayName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.personal_agent_title),
@@ -179,37 +261,43 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
             Modifier.clip(MaterialTheme.shapes.medium)
               .background(if (personal != null && personal.conversationId == connection.selectedConversationId)
                 scheme.surfaceContainerHigh else Color.Transparent),
-            enabled = !connection.personal.agentCreating, onClick = onPersonal) {
+            enabled = shortcutsEnabled && !connection.personal.agentCreating, onClick = onPersonal) {
             PersonalAgentAvatar(connection.personal.agentAvatar, personal?.appearance ?: "loopi", 22.dp, active = false)
           }
         }
         item("workbench") {
-          SidebarRow(R.string.tab_workbench, R.drawable.tab_progress, "chat-sidebar-workbench", badge = attention) {
+          SidebarRow(R.string.tab_workbench, R.drawable.tab_progress, "chat-sidebar-workbench", badge = attention, enabled = shortcutsEnabled) {
             onDestination(HomeTab.Progress)
           }
         }
         item("automations") {
-          SidebarRow(R.string.progress_automations, R.drawable.action_clock, "chat-sidebar-automations") {
+          SidebarRow(R.string.progress_automations, R.drawable.action_clock, "chat-sidebar-automations", enabled = shortcutsEnabled) {
             onDestination(HomeTab.Automations)
           }
         }
         item("notes") {
-          SidebarRow(R.string.tab_notes, R.drawable.tab_notes, "chat-sidebar-notes") { onDestination(HomeTab.Notes) }
+          SidebarRow(R.string.tab_notes, R.drawable.tab_notes, "chat-sidebar-notes", enabled = shortcutsEnabled) { onDestination(HomeTab.Notes) }
         }
         item("library") {
-          SidebarRow(R.string.library_title, R.drawable.action_folder, "chat-sidebar-library") { onDestination(HomeTab.Library) }
+          SidebarRow(R.string.library_title, R.drawable.action_folder, "chat-sidebar-library", enabled = shortcutsEnabled) { onDestination(HomeTab.Library) }
         }
         item("capabilities") {
-          SidebarRow(R.string.capability_title, R.drawable.action_capabilities, "chat-sidebar-capabilities") {
+          SidebarRow(R.string.capability_title, R.drawable.action_capabilities, "chat-sidebar-capabilities", enabled = shortcutsEnabled) {
             onDestination(HomeTab.Capabilities)
           }
         }
         items(recent, key = { "conversation-${it.id}" }) { item ->
-          Text(item.title, Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small)
-            .background(if (item.id == connection.selectedConversationId) scheme.surfaceContainerHigh else Color.Transparent)
-            .clickable(role = Role.Button) { onConversation(item.id) }.heightIn(min = 46.dp)
-            .padding(horizontal = 10.dp, vertical = 12.dp).testTag("chat-sidebar-session-${item.id}"),
-            maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge, color = scheme.onSurface)
+          SidebarConversationRow(item, selecting,
+            selected = if (selecting) item.id in selectedIds else item.id == connection.selectedConversationId,
+            enabled = !operationBusy, menuOpen = menuId == item.id, canDelete = canDelete(listOf(item.id)),
+            onOpenMenu = { menuId = item.id }, onDismissMenu = { menuId = null },
+            onClick = {
+              if (!selecting) onConversation(item.id)
+              else selectedIds = if (item.id in selectedIds) selectedIds - item.id else selectedIds + item.id
+            },
+            onRename = { onRename(item.id) }, onTogglePin = { onTogglePin(item.id) },
+            onStartSelection = { selectedIds = setOf(item.id); selecting = true; deleteFailureCount = 0 },
+            onDelete = { deleteTargets = listOf(item.id) })
         }
         if (connection.recentConversationsLoading) {
           item("loading") { BrandLoadingIndicator(Modifier.padding(10.dp), extent = 24.dp) }
@@ -233,20 +321,31 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
           }
         }
       }
-      Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Button(onClick = onNew, enabled = !connection.creatingConversation,
-          colors = ButtonDefaults.buttonColors(containerColor = LocalChatColors.current.action,
-            contentColor = LocalChatColors.current.onAction),
-          modifier = Modifier.heightIn(min = 46.dp).testTag("chat-sidebar-new")) {
-          Icon(painterResource(R.drawable.action_new_chat), null, Modifier.size(20.dp))
+      if (selecting) {
+        TextButton(onClick = { deleteTargets = selectedIds.toList() }, enabled = canDelete(selectedIds),
+          colors = ButtonDefaults.textButtonColors(contentColor = scheme.error),
+          modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).heightIn(min = 46.dp)
+            .testTag("chat-sidebar-batch-delete")) {
+          Icon(painterResource(R.drawable.action_delete), null, Modifier.size(20.dp))
           Spacer(Modifier.width(8.dp))
-          Text(stringResource(R.string.assistant_action_new_chat))
+          Text(stringResource(R.string.conversations_delete))
         }
-        Spacer(Modifier.weight(1f))
-        IconButton(onClick = { onDestination(HomeTab.Me) }, modifier = Modifier
-          .background(scheme.surfaceContainer, CircleShape).testTag("chat-sidebar-profile")) {
-          Icon(painterResource(R.drawable.action_settings), stringResource(R.string.settings_title), Modifier.size(22.dp),
-            tint = scheme.onSurface)
+      } else {
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+          Button(onClick = onNew, enabled = shortcutsEnabled && !connection.creatingConversation,
+            colors = ButtonDefaults.buttonColors(containerColor = LocalChatColors.current.action,
+              contentColor = LocalChatColors.current.onAction),
+            modifier = Modifier.heightIn(min = 46.dp).testTag("chat-sidebar-new")) {
+            Icon(painterResource(R.drawable.action_new_chat), null, Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.assistant_action_new_chat))
+          }
+          Spacer(Modifier.weight(1f))
+          IconButton(onClick = { onDestination(HomeTab.Me) }, enabled = shortcutsEnabled, modifier = Modifier
+            .background(scheme.surfaceContainer, CircleShape).testTag("chat-sidebar-profile")) {
+            Icon(painterResource(R.drawable.action_settings), stringResource(R.string.settings_title), Modifier.size(22.dp),
+              tint = scheme.onSurface)
+          }
         }
       }
     }
@@ -254,9 +353,63 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
 }
 
 @Composable
+private fun SidebarConversationRow(item: ConversationSummary, selecting: Boolean, selected: Boolean, enabled: Boolean,
+  menuOpen: Boolean, canDelete: Boolean, onOpenMenu: () -> Unit, onDismissMenu: () -> Unit,
+  onClick: () -> Unit, onRename: () -> Unit, onTogglePin: () -> Unit, onStartSelection: () -> Unit, onDelete: () -> Unit) {
+  val scheme = MaterialTheme.colorScheme
+  val pinned = item.status == "pinned"
+  val menuLabel = stringResource(R.string.conversations_more_actions)
+  Box(Modifier.fillMaxWidth()) {
+    Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small)
+      .background(if (selected) scheme.surfaceContainerHigh else Color.Transparent)
+      .combinedClickable(enabled = enabled, role = Role.Button, onClick = onClick,
+        onLongClickLabel = menuLabel.takeUnless { selecting }, onLongClick = onOpenMenu.takeUnless { selecting })
+      .heightIn(min = 46.dp).padding(horizontal = 10.dp, vertical = 10.dp)
+      .semantics { this.selected = selected }.testTag("chat-sidebar-session-${item.id}"),
+      verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      if (selecting) Checkbox(checked = selected, onCheckedChange = null, enabled = enabled,
+        modifier = Modifier.size(22.dp))
+      Text(item.title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+        style = MaterialTheme.typography.bodyLarge, color = scheme.onSurface)
+      if (pinned) Icon(painterResource(R.drawable.action_pin), stringResource(R.string.conversations_pinned),
+        Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
+    }
+    if (menuOpen) Box(Modifier.align(Alignment.CenterEnd)) {
+      DropdownMenu(expanded = true, onDismissRequest = onDismissMenu, offset = DpOffset(0.dp, 24.dp),
+        modifier = Modifier.width(200.dp).testTag("chat-sidebar-session-menu")) {
+        SidebarMenuItem(R.string.conversations_rename, R.drawable.action_new_chat, "rename") {
+          onDismissMenu(); onRename()
+        }
+        HorizontalDivider()
+        SidebarMenuItem(if (pinned) R.string.conversations_unpin else R.string.conversations_pin,
+          R.drawable.action_pin, "pin") { onDismissMenu(); onTogglePin() }
+        HorizontalDivider()
+        SidebarMenuItem(R.string.conversations_multi_select, R.drawable.action_task_list, "select") {
+          onDismissMenu(); onStartSelection()
+        }
+        HorizontalDivider()
+        SidebarMenuItem(R.string.conversations_delete, R.drawable.action_delete, "delete",
+          enabled = canDelete, destructive = true) { onDismissMenu(); onDelete() }
+      }
+    }
+  }
+}
+
+@Composable
+private fun SidebarMenuItem(@StringRes label: Int, @DrawableRes icon: Int, tag: String,
+  enabled: Boolean = true, destructive: Boolean = false, onClick: () -> Unit) {
+  val colors = if (destructive) MenuDefaults.itemColors(
+    textColor = MaterialTheme.colorScheme.error, leadingIconColor = MaterialTheme.colorScheme.error)
+    else MenuDefaults.itemColors()
+  DropdownMenuItem(text = { Text(stringResource(label)) }, leadingIcon = {
+    Icon(painterResource(icon), null, Modifier.size(20.dp))
+  }, enabled = enabled, colors = colors, onClick = onClick, modifier = Modifier.testTag("chat-sidebar-menu-$tag"))
+}
+
+@Composable
 private fun SidebarRow(@StringRes label: Int, @DrawableRes icon: Int, tag: String,
-  modifier: Modifier = Modifier, badge: Int = 0, onClick: () -> Unit) {
-  SidebarRow(stringResource(label), tag, modifier, badge, onClick = onClick) {
+  modifier: Modifier = Modifier, badge: Int = 0, enabled: Boolean = true, onClick: () -> Unit) {
+  SidebarRow(stringResource(label), tag, modifier, badge, enabled, onClick = onClick) {
     Icon(painterResource(icon), null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
   }
 }

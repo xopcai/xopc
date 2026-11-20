@@ -48,10 +48,12 @@ class GatewaySessionTest {
       JSONObject().put("items", JSONArray(items)).put("hasMore", hasMore).toString()
     val personal = row("personal")
     val first = row("one")
+    val pinned = row("old-pinned", status = "pinned")
     val older = listOf("two", "three", "four", "five", "six", "spare")
     fake.sessionPages = mapOf(
       "${prefix}0$filters" to page(listOf(personal, row("empty", messages = 0), first, row("archived", status = "archived"))),
-      "${prefix}4$filters" to page(listOf(first) + older.map { row(it) }),
+      "${prefix}4$filters" to page(listOf(pinned) + older.map { row(it) }),
+      "${prefix}0${filters.replace("&sortBy", "&status=pinned&sortBy")}" to page(listOf(pinned), hasMore = false),
       "${prefix}11$filters" to page(listOf(row("older-empty", messages = 0), row("last")), hasMore = false),
     )
     clear(store)
@@ -59,7 +61,7 @@ class GatewaySessionTest {
       session.pair(invitation()) {}
       val repository = ConversationRepository(session, app)
       val recent = repository.recent()
-      assertEquals(listOf("personal", "one") + older, recent.items.map { it.id })
+      assertEquals(listOf("old-pinned", "personal", "one") + older, recent.items.map { it.id })
       assertEquals(11, recent.nextOffset)
       val next = repository.recent(checkNotNull(recent.nextOffset))
       assertEquals(listOf("last"), next.items.map { it.id })

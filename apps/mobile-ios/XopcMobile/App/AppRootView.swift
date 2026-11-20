@@ -25,6 +25,7 @@ struct AppRootView: View {
     @State private var recentError = false
     @State private var recentLoading = false
     @State private var recentRevision = 0
+    @State private var recentDeleteFailures: Set<String> = []
     @State private var homeRetry = 0
     @State private var pendingAttention = 0
     @State private var defaultAgentID = "main"
@@ -261,6 +262,7 @@ struct AppRootView: View {
             setSidebar(false)
             reopenSidebar = false
             recentConversations = nil
+            recentDeleteFailures = []
             recentNextOffset = nil
             recentScope = nil
             recentError = false
@@ -421,7 +423,72 @@ struct AppRootView: View {
                                attention: pendingAttention, onClose: { setSidebar(false) }, onNavigate: navigate,
                                onPersonal: { Task { await openPersonalAgent(remember: true) } },
                                onConversation: selectConversation, onNew: startNew, onRetry: { recentRevision += 1 },
-                               onLoadMore: { Task { await loadRecent(using: configuration, more: true) } })
+                               onLoadMore: { Task { await loadRecent(using: configuration, more: true) } },
+                               onRename: { item, name in
+                                   try await changeSidebarConversation(item, name: name, using: configuration)
+                               }, onPin: { item in
+                                   try await changeSidebarConversation(item, using: configuration)
+                               }, onDelete: { ids in
+                                   await deleteSidebarConversations(ids, using: configuration)
+                               })
+            .id(currentScope)
+    }
+
+    private func changeSidebarConversation(_ item: ConversationSummary, name: String? = nil,
+                                           using configuration: GatewayConfiguration) async throws {
+        let scope = ComposerDraftStore.accountScope(configuration)
+        guard scope == ComposerDraftStore.accountScope(appState.gatewayConfiguration) else { throw CancellationError() }
+        let gateway = GatewayClient(configuration: configuration)
+        if let name {
+            try await gateway.renameConversation(id: item.id, name: name)
+        } else {
+            try await gateway.mutateConversation(id: item.id, action: item.status == "pinned" ? .unpin : .pin)
+        }
+        guard scope == ComposerDraftStore.accountScope(appState.gatewayConfiguration) else { return }
+        recentConversations = recentConversations?.map { row in
+            guard row.id == item.id else { return row }
+            var updated = row
+            if let name { updated.name = name } else { updated.status = item.status == "pinned" ? "active" : "pinned" }
+            return updated
+        }
+        if let name, var selected = appState.selectedConversation, selected.id == item.id {
+            selected.title = name
+            appState.updateConversation(selected)
+        }
+        await persistSidebarMutation(scope: scope)
+    }
+
+    private func deleteSidebarConversations(_ ids: [String], using configuration: GatewayConfiguration) async -> Set<String> {
+        let scope = ComposerDraftStore.accountScope(configuration)
+        let gateway = GatewayClient(configuration: configuration)
+        var failed = Set(ids)
+        for id in ids {
+            guard scope == ComposerDraftStore.accountScope(appState.gatewayConfiguration) else { return failed }
+            do {
+                try await gateway.deleteConversation(id: id)
+                failed.remove(id)
+            } catch {
+                continue
+            }
+        }
+        guard scope == ComposerDraftStore.accountScope(appState.gatewayConfiguration) else { return failed }
+        recentDeleteFailures = failed
+        let deleted = Set(ids).subtracting(failed)
+        guard !deleted.isEmpty else { return failed }
+        recentConversations?.removeAll { deleted.contains($0.id) }
+        if let id = appState.selectedConversation?.id, deleted.contains(id) {
+            appState.conversationUnavailable(id)
+        }
+        await persistSidebarMutation(scope: scope)
+        return failed
+    }
+
+    private func persistSidebarMutation(scope: String) async {
+        MobileListCache.shared.remove(.conversations, scope: scope)
+        recentRevision += 1
+        if let recentConversations {
+            await RecentConversationsStore.shared.write(recentConversations, scope: scope, requestedAt: .now)
+        }
     }
 
     private func openMobilePush(_ route: String) async {
@@ -567,12 +634,16 @@ struct AppRootView: View {
         }
         guard !Task.isCancelled else { return }
         do {
-            let page = try await GatewayClient(configuration: configuration).fetchRecentConversations(startOffset: offset)
+            let page = try await GatewayClient(configuration: configuration).fetchSidebarConversations(startOffset: offset)
             guard isCurrentRequest() else { return }
             let retained = more ? recentConversations ?? [] : []
             var seen = Set(retained.map(\.id))
             recentScope = scope
-            recentConversations = retained + page.items.filter { seen.insert($0.id).inserted }
+            let fresh = page.items.filter { seen.insert($0.id).inserted }
+            let failedRows = more ? [] : (recentConversations ?? []).filter {
+                recentDeleteFailures.contains($0.id) && seen.insert($0.id).inserted
+            }
+            recentConversations = retained + fresh + failedRows
             recentNextOffset = page.nextOffset
             if !more {
                 await RecentConversationsStore.shared.write(page.items, scope: scope, requestedAt: requestedAt)

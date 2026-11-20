@@ -319,6 +319,9 @@
     <string name="conversations_pending_delete">Conversation removed. Undo within 5 seconds.</string>
     <string name="conversations_delete_error">Could not delete the conversation. It has been restored to the list.</string>
     <string name="conversations_select">Select</string>
+    <string name="conversations_multi_select">Select multiple</string>
+    <string name="conversations_delete_one_confirm">Delete this conversation? This cannot be undone.</string>
+    <string name="conversations_delete_one_error">Could not delete the conversation. Try again.</string>
     <string name="conversations_selected">%1$d selected</string>
     <string name="conversations_batch_delete_confirm">Delete %1$d selected conversations? This cannot be undone.</string>
     <string name="conversations_batch_failed">%1$d conversations could not be changed. They remain selected for retry.</string>

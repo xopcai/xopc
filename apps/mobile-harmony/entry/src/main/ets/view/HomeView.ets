@@ -708,6 +708,7 @@ export struct XopcHomeView {
                 onPersonal: (): void => { void this.openPersonalChat(); },
                 onNew: (): void => { void this.openOrdinaryChat(); },
                 onConversation: (id: string): void => { this.openConversationFromList(id); },
+                onDelete: (id: string): void => { this.onConversationUnavailable(id); },
                 onNavigate: (route: XopcMobileRoute): void => {
                   if (route.page === 'workbench' || route.page === 'automations') {
                     this.navigate({ page: route.page === 'workbench' ? 'progress' : route.page,

@@ -24,6 +24,24 @@ extension GatewayServing {
 }
 
 extension GatewayClient {
+    func fetchSidebarConversations(startOffset: Int) async throws -> RecentConversationPage {
+        guard startOffset == 0 else { return try await fetchRecentConversations(startOffset: startOffset) }
+        async let recents = fetchRecentConversations()
+        var pinned: [ConversationSummary] = []
+        var seen: Set<String> = []
+        var offset = 0
+        while true {
+            try Task.checkCancellation()
+            let page = try await fetchPinnedSidebarConversations(offset: offset)
+            pinned += page.items.filter { $0.status == "pinned" && $0.isRecentSidebarCandidate && seen.insert($0.id).inserted }
+            guard page.hasMore, !page.items.isEmpty else { break }
+            offset += page.items.count
+        }
+        let recent = try await recents
+        return RecentConversationPage(items: pinned + recent.items.filter { seen.insert($0.id).inserted },
+                                      nextOffset: recent.nextOffset)
+    }
+
     func ensureTaskConversation(taskID: String) async throws -> String {
         let response: TaskConversationCreation = try await request(
             path: "/api/tasks/\(taskID)/conversation", method: "POST"

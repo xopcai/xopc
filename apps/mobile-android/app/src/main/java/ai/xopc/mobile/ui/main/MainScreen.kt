@@ -1799,7 +1799,7 @@ internal fun MainContent(
             onSelectTaskChildConversation(taskId, id)
             onSelectTab(HomeTab.Assistant)
           }
-        }, onBeginRename, onRenameDraftChange, onSaveRename, onCancelRename,
+        }, onBeginRename,
           onTogglePin, onToggleArchive, onBatchConversations,
           onBeginConversationShare, onScheduleDelete, onUndoDelete, exitDestination, startConversationSearch,
           onConversationScope, onLoadProgressProjects, onFetchConversationExperts)
@@ -2048,7 +2048,8 @@ internal fun MainContent(
       }
     }
     ChatSidebar(sidebar, sidebarWidth, connection, onClose = { sidebar.open = false }, onRetry = onRefreshRecentConversations,
-      onLoadMore = onLoadMoreRecentConversations,
+      onLoadMore = onLoadMoreRecentConversations, onRename = onBeginRename, onTogglePin = onTogglePin,
+      onDelete = { onBatchConversations(it, "delete") },
       onDestination = { destination ->
         sidebar.open = false
         linkedDetails = emptyList()
@@ -2077,6 +2078,26 @@ internal fun MainContent(
         onSelectConversation(id)
       })
     },
+  )
+  if (connection.renameDraftId != null) AlertDialog(
+    onDismissRequest = onCancelRename,
+    title = { Text(stringResource(R.string.conversations_rename)) },
+    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      OutlinedTextField(value = connection.renameDraftText, onValueChange = onRenameDraftChange,
+        modifier = Modifier.fillMaxWidth().testTag("conversations-rename-input"), singleLine = true,
+        label = { Text(stringResource(R.string.conversations_name)) },
+        enabled = !connection.renamingConversation)
+      if (connection.renameError) Text(stringResource(R.string.conversations_rename_error),
+        color = MaterialTheme.colorScheme.error)
+    } },
+    confirmButton = { TextButton(onClick = onSaveRename,
+      enabled = connection.renameDraftText.isNotBlank() && !connection.renamingConversation,
+      modifier = Modifier.testTag("conversations-rename-save")) {
+      Text(stringResource(R.string.conversations_save))
+    } },
+    dismissButton = { TextButton(onClick = onCancelRename, enabled = !connection.renamingConversation) {
+      Text(stringResource(R.string.conversations_cancel))
+    } },
   )
   if (isPaired) ConversationShareSheet(connection, onBeginConversationShare,
     onConfirmConversationShare, onRevokeConversationShare, onDismissConversationShare)
@@ -4059,9 +4080,6 @@ private fun ConversationsScreen(
   onSelectConversation: (String) -> Unit,
   onSelectTaskChild: (String, String) -> Unit,
   onBeginRename: (String) -> Unit,
-  onRenameDraftChange: (String) -> Unit,
-  onSaveRename: () -> Unit,
-  onCancelRename: () -> Unit,
   onTogglePin: (String) -> Unit,
   onToggleArchive: (String) -> Unit,
   onBatchConversations: (List<String>, String) -> Unit,
@@ -4075,12 +4093,13 @@ private fun ConversationsScreen(
   onFetchExperts: suspend () -> List<ConversationAgent>,
 ) {
   val navigation = rememberNavigationPreferences()
-  var mode by rememberSaveable(connection.profile?.gatewayId) {
-    mutableStateOf(navigation.selection("conversation-history", listOf("recent", "projects", "experts"), "recent"))
+  var mode by rememberSaveable(connection.profile?.gatewayId, startSearching) {
+    mutableStateOf(if (startSearching) "recent"
+      else navigation.selection("conversation-history", listOf("recent", "projects", "experts"), "recent"))
   }
-  var groupId by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
-  var groupName by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
-  var groupQuery by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
+  var groupId by rememberSaveable(connection.profile?.gatewayId, startSearching) { mutableStateOf("") }
+  var groupName by rememberSaveable(connection.profile?.gatewayId, startSearching) { mutableStateOf("") }
+  var groupQuery by rememberSaveable(connection.profile?.gatewayId, startSearching) { mutableStateOf("") }
   var experts by remember(connection.profile?.gatewayId) { mutableStateOf(emptyList<ConversationAgent>()) }
   var expertsLoading by remember { mutableStateOf(false) }
   var expertsFailed by remember { mutableStateOf(false) }
@@ -4203,26 +4222,6 @@ private fun ConversationsScreen(
       }
     }
   }
-  if (connection.renameDraftId != null) AlertDialog(
-    onDismissRequest = onCancelRename,
-    title = { Text(stringResource(R.string.conversations_rename)) },
-    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      OutlinedTextField(value = connection.renameDraftText, onValueChange = onRenameDraftChange,
-        modifier = Modifier.fillMaxWidth().testTag("conversations-rename-input"), singleLine = true,
-        label = { Text(stringResource(R.string.conversations_name)) },
-        enabled = !connection.renamingConversation)
-      if (connection.renameError) Text(stringResource(R.string.conversations_rename_error),
-        color = MaterialTheme.colorScheme.error)
-    } },
-    confirmButton = { TextButton(onClick = onSaveRename,
-      enabled = connection.renameDraftText.isNotBlank() && !connection.renamingConversation,
-      modifier = Modifier.testTag("conversations-rename-save")) {
-      Text(stringResource(R.string.conversations_save))
-    } },
-    dismissButton = { TextButton(onClick = onCancelRename, enabled = !connection.renamingConversation) {
-      Text(stringResource(R.string.conversations_cancel))
-    } },
-  )
   if (confirmBatchDelete) AlertDialog(onDismissRequest = { confirmBatchDelete = false },
     title = { Text(stringResource(R.string.conversations_delete)) },
     text = { Text(stringResource(R.string.conversations_batch_delete_confirm, selectedIds.size)) },
@@ -4257,7 +4256,9 @@ private fun ConversationsScreen(
   )
   fun selectMode(value: String) {
     if (mode == value) return
+    val keepSearching = searchOpen
     clearGroup()
+    searchOpen = keepSearching
     mode = value
     navigation.rememberSelection("conversation-history", value)
   }
@@ -4268,8 +4269,7 @@ private fun ConversationsScreen(
     browsingGroups -> R.string.conversations_search_experts
     else -> R.string.conversations_search
   })
-  Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp)
-    .swipePageSelection(historyModes.map { it.value }, mode, !selecting && !searchOpen, ::selectMode),
+  Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
       Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
@@ -4331,154 +4331,157 @@ private fun ConversationsScreen(
           color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
     }
-    if (browsingGroups) {
-      val projects = mode == "projects"
-      val loading = if (projects) connection.progress.projectsLoading else expertsLoading
-      val failed = if (projects) connection.progress.projectsError else expertsFailed
-      val groups = if (projects) {
-        listOf("unassigned" to stringResource(R.string.conversations_unassigned)) +
-          connection.progress.projects.filter { it.status != "archived" }.map { it.id to it.name }
-      } else experts.map { it.id to it.name }
-      val matches = groups.filter { (_, name) -> name.contains(groupQuery.trim(), ignoreCase = true) }
-      when {
-        loading -> BrandLoadingPanel()
-        failed -> TextButton(onClick = { if (projects) onLoadProjects() else expertReload++ }) {
-          Text(stringResource(R.string.progress_refresh))
-        }
-        matches.isEmpty() -> Text(stringResource(R.string.progress_no_matches))
-        else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          items(matches, key = { it.first }) { (id, name) ->
-            Card(onClick = { closeSearch(); groupId = id; groupName = name },
-              modifier = Modifier.fillMaxWidth().testTag("sessions-group-$id"), shape = themedCorners(16)) {
-              Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(name, modifier = Modifier.weight(1f))
-                ActionIcon(R.drawable.action_chevron_right, size = 16.dp)
+    Column(Modifier.fillMaxWidth().weight(1f).testTag("sessions-mode-pager")
+      .swipePageSelection(historyModes.map { it.value }, mode, !selecting && !connection.batchConversationBusy, ::selectMode)) page@{
+      if (browsingGroups) {
+        val projects = mode == "projects"
+        val loading = if (projects) connection.progress.projectsLoading else expertsLoading
+        val failed = if (projects) connection.progress.projectsError else expertsFailed
+        val groups = if (projects) {
+          listOf("unassigned" to stringResource(R.string.conversations_unassigned)) +
+            connection.progress.projects.filter { it.status != "archived" }.map { it.id to it.name }
+        } else experts.map { it.id to it.name }
+        val matches = groups.filter { (_, name) -> name.contains(groupQuery.trim(), ignoreCase = true) }
+        when {
+          loading -> BrandLoadingPanel()
+          failed -> TextButton(onClick = { if (projects) onLoadProjects() else expertReload++ }) {
+            Text(stringResource(R.string.progress_refresh))
+          }
+          matches.isEmpty() -> Text(stringResource(R.string.progress_no_matches))
+          else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(matches, key = { it.first }) { (id, name) ->
+              Card(onClick = { closeSearch(); groupId = id; groupName = name },
+                modifier = Modifier.fillMaxWidth().testTag("sessions-group-$id"), shape = themedCorners(16)) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                  Text(name, modifier = Modifier.weight(1f))
+                  ActionIcon(R.drawable.action_chevron_right, size = 16.dp)
+                }
               }
             }
           }
         }
+        return@page
       }
-      return@Column
-    }
-    if (connection.conversationsLoading && connection.conversations.isEmpty()) BrandLoadingPanel()
-    if (connection.conversationsError) Row(verticalAlignment = Alignment.CenterVertically) {
-      Text(stringResource(R.string.chat_load_error), color = MaterialTheme.colorScheme.error,
-        modifier = Modifier.weight(1f))
-      TextButton(onClick = onRefresh, enabled = !connection.conversationsLoading,
-        modifier = Modifier.testTag("conversations-retry")) {
-        Text(stringResource(R.string.progress_refresh))
-      }
-    }
-    if (connection.pinActionError) Text(stringResource(R.string.conversations_pin_error),
-      color = MaterialTheme.colorScheme.error)
-    if (connection.archiveActionError) Text(stringResource(R.string.conversations_archive_error),
-      color = MaterialTheme.colorScheme.error)
-    if (connection.deleteActionError) Text(stringResource(R.string.conversations_delete_error),
-      color = MaterialTheme.colorScheme.error)
-    if (connection.batchConversationFailedIds.isNotEmpty()) Text(
-      stringResource(R.string.conversations_batch_failed, connection.batchConversationFailedIds.size),
-      color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("conversations-batch-error"))
-    if (connection.discardDraftError) Text(stringResource(R.string.conversations_discard_error),
-      color = MaterialTheme.colorScheme.error)
-    if (connection.pendingDeleteId != null) Row(modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-      Text(stringResource(R.string.conversations_pending_delete))
-      TextButton(onClick = onUndoDelete, enabled = !connection.deleteCommitting,
-        modifier = Modifier.testTag("conversations-undo-delete")) {
-        Text(stringResource(R.string.conversations_undo))
-      }
-    }
-    if (selecting) Row(modifier = Modifier.fillMaxWidth().testTag("conversations-batch-bar"),
-      horizontalArrangement = Arrangement.SpaceEvenly) {
-      TextButton(onClick = { onBatchConversations(selectedIds, "archive") },
-        enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
-        modifier = Modifier.testTag("conversations-batch-archive")) {
-        Text(stringResource(R.string.conversations_archive))
-      }
-      TextButton(onClick = { onBatchConversations(selectedIds, "pin") },
-        enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
-        modifier = Modifier.testTag("conversations-batch-pin")) {
-        Text(stringResource(R.string.conversations_pin))
-      }
-      TextButton(onClick = {
-        selectedIds.singleOrNull()?.let(onBeginRename)
-      }, enabled = selectedIds.size == 1 && !connection.batchConversationBusy,
-        modifier = Modifier.testTag("conversations-batch-rename")) {
-        Text(stringResource(R.string.conversations_rename))
-      }
-      TextButton(onClick = { confirmBatchDelete = true },
-        enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
-        modifier = Modifier.testTag("conversations-batch-delete")) {
-        Text(stringResource(R.string.conversations_delete), color = MaterialTheme.colorScheme.error)
-      }
-    }
-    PullToRefreshBox(isRefreshing = connection.conversationsLoading && connection.conversations.isNotEmpty(),
-      onRefresh = { if (!connection.conversationsLoading && !connection.conversationsLoadingMore) onRefresh() },
-      modifier = Modifier.fillMaxSize().testTag("conversations-refresh-gesture"),
-      indicator = {
-        if (connection.conversationsLoading && connection.conversations.isNotEmpty()) BrandLoadingIndicator(
-          modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp), extent = 32.dp)
-      }) {
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("conversations-list"),
-      contentPadding = PaddingValues(bottom = 20.dp),
-      verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      ConversationGroups.group(ConversationGroups.visibleHistory(connection.conversations)
-        .filterNot { it.id == connection.pendingDeleteId || it.id == connection.personal.agent?.conversationId }).forEach { group ->
-        item(key = "section-${group.id}") {
-          Text(conversationGroupLabel(group.id), style = MaterialTheme.typography.labelSmall, fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
+      if (connection.conversationsLoading && connection.conversations.isEmpty()) BrandLoadingPanel()
+      if (connection.conversationsError) Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.chat_load_error), color = MaterialTheme.colorScheme.error,
+          modifier = Modifier.weight(1f))
+        TextButton(onClick = onRefresh, enabled = !connection.conversationsLoading,
+          modifier = Modifier.testTag("conversations-retry")) {
+          Text(stringResource(R.string.progress_refresh))
         }
-        group.items.forEach { conversation ->
-          val taskGroup = connection.conversationTaskGroups[conversation.id]
-            ?.takeIf { it.total > 0 && connection.conversationSearch.isBlank() }
-          val taskExpanded = taskGroup != null && conversation.id !in collapsedTaskParents &&
-            (conversation.id in expandedTaskParents || taskGroup.items.any {
-              it.activeConversationId == connection.selectedConversationId
-            })
-          item(key = conversation.id) {
-            ConversationCard(conversation, showTime = true,
-              taskGroup = taskGroup, taskExpanded = taskExpanded,
-              onToggleTasks = if (taskGroup == null) null else ({
-                if (taskExpanded) {
-                  expandedTaskParents = expandedTaskParents - conversation.id
-                  collapsedTaskParents = collapsedTaskParents + conversation.id
-                } else {
-                  collapsedTaskParents = collapsedTaskParents - conversation.id
-                  expandedTaskParents = expandedTaskParents + conversation.id
-                }
-              }),
-              onMenu = if (selecting) null else ({ menuConversationId = conversation.id }),
-              selected = conversation.id == connection.selectedConversationId,
-              selectionMode = selecting,
-              selectionSelected = conversation.id in selectedIds,
-              discardEnabled = connection.discardingDraftId == null && !connection.creatingConversation && !connection.sending,
-              onClick = {
-                if (selecting) selectedIds = if (conversation.id in selectedIds)
-                  selectedIds - conversation.id else selectedIds + conversation.id
-                else onSelectConversation(conversation.id)
-              })
+      }
+      if (connection.pinActionError) Text(stringResource(R.string.conversations_pin_error),
+        color = MaterialTheme.colorScheme.error)
+      if (connection.archiveActionError) Text(stringResource(R.string.conversations_archive_error),
+        color = MaterialTheme.colorScheme.error)
+      if (connection.deleteActionError) Text(stringResource(R.string.conversations_delete_error),
+        color = MaterialTheme.colorScheme.error)
+      if (connection.batchConversationFailedIds.isNotEmpty()) Text(
+        stringResource(R.string.conversations_batch_failed, connection.batchConversationFailedIds.size),
+        color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("conversations-batch-error"))
+      if (connection.discardDraftError) Text(stringResource(R.string.conversations_discard_error),
+        color = MaterialTheme.colorScheme.error)
+      if (connection.pendingDeleteId != null) Row(modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.conversations_pending_delete))
+        TextButton(onClick = onUndoDelete, enabled = !connection.deleteCommitting,
+          modifier = Modifier.testTag("conversations-undo-delete")) {
+          Text(stringResource(R.string.conversations_undo))
+        }
+      }
+      if (selecting) Row(modifier = Modifier.fillMaxWidth().testTag("conversations-batch-bar"),
+        horizontalArrangement = Arrangement.SpaceEvenly) {
+        TextButton(onClick = { onBatchConversations(selectedIds, "archive") },
+          enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
+          modifier = Modifier.testTag("conversations-batch-archive")) {
+          Text(stringResource(R.string.conversations_archive))
+        }
+        TextButton(onClick = { onBatchConversations(selectedIds, "pin") },
+          enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
+          modifier = Modifier.testTag("conversations-batch-pin")) {
+          Text(stringResource(R.string.conversations_pin))
+        }
+        TextButton(onClick = {
+          selectedIds.singleOrNull()?.let(onBeginRename)
+        }, enabled = selectedIds.size == 1 && !connection.batchConversationBusy,
+          modifier = Modifier.testTag("conversations-batch-rename")) {
+          Text(stringResource(R.string.conversations_rename))
+        }
+        TextButton(onClick = { confirmBatchDelete = true },
+          enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
+          modifier = Modifier.testTag("conversations-batch-delete")) {
+          Text(stringResource(R.string.conversations_delete), color = MaterialTheme.colorScheme.error)
+        }
+      }
+      PullToRefreshBox(isRefreshing = connection.conversationsLoading && connection.conversations.isNotEmpty(),
+        onRefresh = { if (!connection.conversationsLoading && !connection.conversationsLoadingMore) onRefresh() },
+        modifier = Modifier.fillMaxSize().testTag("conversations-refresh-gesture"),
+        indicator = {
+          if (connection.conversationsLoading && connection.conversations.isNotEmpty()) BrandLoadingIndicator(
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp), extent = 32.dp)
+        }) {
+      LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("conversations-list"),
+        contentPadding = PaddingValues(bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ConversationGroups.group(ConversationGroups.visibleHistory(connection.conversations)
+          .filterNot { it.id == connection.pendingDeleteId || it.id == connection.personal.agent?.conversationId }).forEach { group ->
+          item(key = "section-${group.id}") {
+            Text(conversationGroupLabel(group.id), style = MaterialTheme.typography.labelSmall, fontSize = 12.sp,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
           }
-          if (taskGroup != null && taskExpanded && !selecting && connection.conversationSearch.isBlank()) {
-            items(taskGroup.items, key = { "task-${conversation.id}-${it.taskId}" }) { child ->
-              ConversationTaskRow(child, onOpen = { id -> onSelectTaskChild(child.taskId, id) })
+          group.items.forEach { conversation ->
+            val taskGroup = connection.conversationTaskGroups[conversation.id]
+              ?.takeIf { it.total > 0 && connection.conversationSearch.isBlank() }
+            val taskExpanded = taskGroup != null && conversation.id !in collapsedTaskParents &&
+              (conversation.id in expandedTaskParents || taskGroup.items.any {
+                it.activeConversationId == connection.selectedConversationId
+              })
+            item(key = conversation.id) {
+              ConversationCard(conversation, showTime = true,
+                taskGroup = taskGroup, taskExpanded = taskExpanded,
+                onToggleTasks = if (taskGroup == null) null else ({
+                  if (taskExpanded) {
+                    expandedTaskParents = expandedTaskParents - conversation.id
+                    collapsedTaskParents = collapsedTaskParents + conversation.id
+                  } else {
+                    collapsedTaskParents = collapsedTaskParents - conversation.id
+                    expandedTaskParents = expandedTaskParents + conversation.id
+                  }
+                }),
+                onMenu = if (selecting) null else ({ menuConversationId = conversation.id }),
+                selected = conversation.id == connection.selectedConversationId,
+                selectionMode = selecting,
+                selectionSelected = conversation.id in selectedIds,
+                discardEnabled = connection.discardingDraftId == null && !connection.creatingConversation && !connection.sending,
+                onClick = {
+                  if (selecting) selectedIds = if (conversation.id in selectedIds)
+                    selectedIds - conversation.id else selectedIds + conversation.id
+                  else onSelectConversation(conversation.id)
+                })
+            }
+            if (taskGroup != null && taskExpanded && !selecting && connection.conversationSearch.isBlank()) {
+              items(taskGroup.items, key = { "task-${conversation.id}-${it.taskId}" }) { child ->
+                ConversationTaskRow(child, onOpen = { id -> onSelectTaskChild(child.taskId, id) })
+              }
             }
           }
         }
-      }
-      if (connection.conversationsHasMore) item {
-        OutlinedButton(onClick = onLoadMore,
-          enabled = !connection.conversationsLoading && !connection.conversationsLoadingMore,
-          modifier = Modifier.fillMaxWidth().testTag("conversations-load-more")) {
-          if (connection.conversationsLoadingMore) BrandLoadingIndicator(extent = 20.dp)
-          Text(stringResource(if (connection.conversationsLoadingMore) R.string.conversations_loading_more
-            else R.string.conversations_load_more))
+        if (connection.conversationsHasMore) item {
+          OutlinedButton(onClick = onLoadMore,
+            enabled = !connection.conversationsLoading && !connection.conversationsLoadingMore,
+            modifier = Modifier.fillMaxWidth().testTag("conversations-load-more")) {
+            if (connection.conversationsLoadingMore) BrandLoadingIndicator(extent = 20.dp)
+            Text(stringResource(if (connection.conversationsLoadingMore) R.string.conversations_loading_more
+              else R.string.conversations_load_more))
+          }
+        }
+        if (connection.conversationsMoreError) item {
+          Text(stringResource(R.string.conversations_more_error), color = MaterialTheme.colorScheme.error)
         }
       }
-      if (connection.conversationsMoreError) item {
-        Text(stringResource(R.string.conversations_more_error), color = MaterialTheme.colorScheme.error)
       }
-    }
     }
   }
 }

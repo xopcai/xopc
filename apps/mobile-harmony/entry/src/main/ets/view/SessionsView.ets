@@ -7,6 +7,7 @@ import { XopcErrorState, XopcHubRow, XopcListSkeleton, XopcPageSearchButton, Xop
 import { userErrorMessage } from '../common/userError';
 import { appSettings } from '../service/settings';
 import { XopcConversationShare } from './ConversationShare';
+import { XopcSessionRenameForm } from './SessionRenameForm';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 
 import { XopcChatRepository } from '../repository/chatRepository';
@@ -216,7 +217,7 @@ export struct XopcSessionsView {
     this.historyMode = mode; this.groupId = ''; this.groupName = '';
     appSettings.rememberPageSelection('conversation-history', mode);
     this.groups = []; this.groupQuery = '';
-    this.closeSearch();
+    this.getUIContext().getFocusController().clearFocus();
     if (mode === 'recent') this.sessions.setScope({});
     else void this.loadGroups();
   }
@@ -411,19 +412,10 @@ export struct XopcSessionsView {
   }
   @Builder
   renameSheet() {
-    Column({ space: 16 }) {
-      Text($r('app.string.sessions_rename')).fontSize(20).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-      TextInput({ text: this.renameText, placeholder: $r('app.string.name') }).id('sessions-rename-input')
-        .onChange((text: string): void => { this.renameText = text; }).enabled(!this.sessions.busy)
-      if (this.sessions.actionError) { Text(userErrorMessage(this.sessions.actionError, 'save')).fontColor(this.colors.danger).fontSize(13) }
-      Row({ space: 12 }) {
-        Button($r('app.string.cancel')).layoutWeight(1).height(44).enabled(!this.sessions.busy)
-          .onClick((): void => { this.renameOpen = false; })
-        Button($r('app.string.save')).id('sessions-rename-save').layoutWeight(1).height(44)
-          .enabled(!this.sessions.busy && this.renameText.trim().length > 0)
-          .onClick(async (): Promise<void> => { if (await this.sessions.rename(this.renameId, this.renameText)) this.renameOpen = false; })
-      }
-    }.width('100%').padding(20)
+    XopcSessionRenameForm({ name: this.renameText, busy: this.sessions.busy, error: this.sessions.actionError,
+      onChange: (name: string): void => { this.renameText = name; },
+      onCancel: (): void => { this.renameOpen = false; },
+      onSave: async (): Promise<void> => { if (await this.sessions.rename(this.renameId, this.renameText)) this.renameOpen = false; } })
   }
   @Builder
   shareSheet() {
@@ -563,7 +555,7 @@ export struct XopcSessionsView {
         }.layoutWeight(1).width('100%')
           .gestureModifier(new XopcPageSwipe(this.historyOptions.map((option: XopcPageTitleOption): string => option.key),
             this.historyMode, (key: string): void => { this.selectMode(key); },
-            !this.sessions.selecting && !this.searchOpen && !this.opening))
+            !this.sessions.selecting && !this.sessions.busy && !this.opening))
         if (this.sessions.undoId) {
           Row() {
             Text($r('app.string.sessions_deleted')).fontColor(this.colors.foreground).layoutWeight(1)

@@ -231,11 +231,23 @@ struct GatewayClient: GatewayServing, Sendable {
     }
 
     func fetchConversationHistory(search: String, offset: Int, scope: ConversationHistoryScope) async throws -> ConversationPage {
+        try await fetchConversationHistory(search: search, offset: offset, scope: scope, pinnedOnly: false)
+    }
+
+    func fetchPinnedSidebarConversations(offset: Int) async throws -> ConversationPage {
+        try await fetchConversationHistory(search: "", offset: offset, scope: .recent, pinnedOnly: true)
+    }
+
+    private func fetchConversationHistory(search: String, offset: Int, scope: ConversationHistoryScope,
+                                          pinnedOnly: Bool) async throws -> ConversationPage {
         var query = [
             URLQueryItem(name: "limit", value: "50"),
             URLQueryItem(name: "offset", value: String(offset)),
             URLQueryItem(name: "excludeArchived", value: "true")
         ]
+        if pinnedOnly {
+            query.append(URLQueryItem(name: "status", value: "pinned"))
+        }
         if !search.isEmpty {
             query.append(URLQueryItem(name: "search", value: search))
         }

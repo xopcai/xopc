@@ -436,7 +436,8 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     return mode
   }
 
-  fun list(search: String = "", offset: Int = 0, limit: Int = 20, scope: ConversationHistoryScope? = null): ConversationPage {
+  fun list(search: String = "", offset: Int = 0, limit: Int = 20,
+    scope: ConversationHistoryScope? = null, pinnedOnly: Boolean = false): ConversationPage {
     require(offset >= 0 && limit in 1..100)
     val roots = if (search.isBlank() || scope is ConversationHistoryScope.Expert) "&rootConversationsOnly=true" else ""
     val filters = when (scope) {
@@ -446,7 +447,8 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       is ConversationHistoryScope.Project -> "&excludeArchived=true&excludeAutomationRuns=true&projectId=" + encode(scope.id)
       is ConversationHistoryScope.Expert -> "&excludeArchived=true&sources=workbench&purposes=chat&activity=manual&agentId=" + encode(scope.id)
     }
-    val query = "?limit=$limit&offset=$offset$filters$roots&sortBy=updatedAt&sortOrder=desc&search=${encode(search.trim())}"
+    val status = if (pinnedOnly) "&status=pinned" else ""
+    val query = "?limit=$limit&offset=$offset$filters$roots$status&sortBy=updatedAt&sortOrder=desc&search=${encode(search.trim())}"
     val remote = parseList(gateway.request("/api/sessions$query"))
     val items = if (scope is ConversationHistoryScope.Expert) remote.items.filterNot { it.agentSetup } else remote.items
     return remote.copy(items = (if (offset == 0 && scope == null) localDrafts(search) else emptyList()) + items)
@@ -463,7 +465,21 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       offset += page.remoteCount
       hasMore = page.hasMore && page.remoteCount > 0
     } while (recent.size < MIN_SIDEBAR_PAGE_ROWS && hasMore)
-    return RecentConversationPage(recent, offset.takeIf { hasMore })
+    val pinned = if (startOffset == 0) pinnedRecents() else emptyList()
+    return RecentConversationPage((pinned + recent).distinctBy { it.id }, offset.takeIf { hasMore })
+  }
+
+  private suspend fun pinnedRecents(): List<ConversationSummary> {
+    val pinned = mutableListOf<ConversationSummary>()
+    var offset = 0
+    do {
+      val page = runInterruptible(Dispatchers.IO) {
+        list(offset = offset, scope = ConversationHistoryScope.Recent, pinnedOnly = true)
+      }
+      pinned += page.items.filter { it.isRecentSidebarCandidate && it.status == "pinned" }
+      offset += page.remoteCount
+    } while (page.hasMore && page.remoteCount > 0)
+    return pinned
   }
 
   fun sharePreview(conversationId: String): ConversationSharePreview {

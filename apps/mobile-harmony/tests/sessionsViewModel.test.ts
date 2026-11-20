@@ -2,13 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mock = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { list: vi.fn(), action: vi.fn(), rename: vi.fn(), create: vi.fn(), gatewayId: 'gateway-a' };
+  return { list: vi.fn(), cachedRecent: vi.fn(), restoreRecent: vi.fn(), refreshRecent: vi.fn(), recentPage: vi.fn(),
+    action: vi.fn(), rename: vi.fn(), create: vi.fn(), gatewayId: 'gateway-a' };
 });
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {
   historyList = mock.list; action = mock.action; rename = mock.rename; create = mock.create;
+  cachedRecent = mock.cachedRecent; restoreRecent = mock.restoreRecent;
+  refreshRecent = mock.refreshRecent; recentPage = mock.recentPage;
 } }));
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: {
   currentProfile: () => ({ gatewayId: mock.gatewayId }),
+  connectionRevision: () => 0,
 } }));
 import { XopcSessionsViewModel } from '../entry/src/main/ets/viewmodel/sessionsViewModel.ets';
 
@@ -61,6 +65,24 @@ describe('native conversation manager', () => {
     const vm = new XopcSessionsViewModel(); await vm.load(); await vm.load(true); await vm.load(true);
     expect(mock.list.mock.calls).toEqual([['', 0, {}], ['', 2, {}], ['', 4, {}]]);
     expect(vm.items.map(x => x.key)).toEqual(['a', 'b', 'c', 'd']); expect(vm.hasMore).toBe(false);
+  });
+  it('uses the sidebar cache and raw pagination cursor through session operations', async () => {
+    mock.cachedRecent.mockReturnValue(page(['cached']));
+    mock.refreshRecent.mockResolvedValueOnce({ ...page(['first'], true), nextOffset: 40 });
+    mock.recentPage.mockResolvedValueOnce({ ...page(['older']), nextOffset: null });
+    const vm = new XopcSessionsViewModel(true);
+    expect(vm.items.map(row => row.key)).toEqual(['cached']);
+    await vm.load();
+    await vm.load(true);
+    expect(mock.recentPage).toHaveBeenCalledExactlyOnceWith(40);
+    expect(vm.hasMore).toBe(false);
+
+    mock.action.mockRejectedValueOnce(new Error('DENIED'));
+    mock.refreshRecent.mockResolvedValue({ ...page(['first'], true), nextOffset: 40 });
+    await vm.act([item('older')], 'pin');
+    expect(vm.selecting).toBe(false);
+    expect(vm.actionError).toBe('DENIED');
+    expect(vm.items.map(row => row.key)).toEqual(['first', 'older']);
   });
   it('resets pagination on a scope change and skips expert setup chats without losing the raw offset', async () => {
     const vm = new XopcSessionsViewModel();

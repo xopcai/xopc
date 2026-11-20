@@ -62,6 +62,13 @@ bubble_messages = [{'id':'bubble-user','role':'user','content':'请只回复 OK�
  {'id':'bubble-short','role':'assistant','content':'OK'},
  {'id':'bubble-code','role':'assistant','content':'```sh\necho OK\n```'}]
 row={'key':parent,'agentId':'main','name':'移动端布局检查','status':'active','updatedAt':'2026-10-09T08:00:00Z','messageCount':len(messages)}
+def sidebar_action_rows():
+ return {
+  f'11111111-2026-4000-9000-{i:012d}':dict(row, key=f'11111111-2026-4000-9000-{i:012d}',
+   name=f'Sidebar {i}', updatedAt=f'2026-10-09T08:0{4-i}:00Z')
+  for i in range(1,4)
+ }
+sidebar_actions = sidebar_action_rows()
 record={'agentId':'personal','conversationId':personal,'state':'ready','displayName':'Ada','appearance':'loopi','revision':1,'preferences':{},'voiceCallPreferences':{'openingGreetingEnabled':True}}
 model={'id':'test/model','name':'Fixture Model','provider':'test','reasoning':True,'vision':False,'thinking':{'mode':'levels','options':['off','low','medium','high'],'initialValue':'medium'}}
 outreach={'revision':1,'mode':'balanced','timezone':'Asia/Shanghai','quietStart':22,'quietEnd':8,'dailyMessages':2,'dailyModelCalls':12}
@@ -133,12 +140,13 @@ class Handler(BaseHTTPRequestHandler):
  def do_PATCH(self): self.do_GET()
  def do_DELETE(self): self.do_GET()
  def do_GET(self):
-  global live_music_state, space_item, capability_skill_enabled, global_model, global_model_revision, device_file_allowed
+  global live_music_state, space_item, capability_skill_enabled, global_model, global_model_revision, device_file_allowed, sidebar_actions
   path=urlparse(self.path).path; query=parse_qs(urlparse(self.path).query)
   keyboard_fixture = path.startswith('/keyboard/')
   suggestion_fixture = path.startswith('/next-turn/')
   bubble_fixture = path.startswith('/bubble-width/')
   sidebar_fixture = path.startswith('/sidebar-pagination/')
+  sidebar_actions_fixture = path.startswith('/sidebar-actions/')
   music_fixture = path.startswith('/music/')
   slow_capabilities = path.startswith('/slow-capabilities/')
   live_music_fixture = path.startswith('/music-live/')
@@ -150,6 +158,7 @@ class Handler(BaseHTTPRequestHandler):
   if suggestion_fixture: path = path.removeprefix('/next-turn')
   if bubble_fixture: path = path.removeprefix('/bubble-width')
   if sidebar_fixture: path = path.removeprefix('/sidebar-pagination')
+  if sidebar_actions_fixture: path = path.removeprefix('/sidebar-actions')
   if music_fixture: path = path.removeprefix('/music')
   if slow_capabilities: path = path.removeprefix('/slow-capabilities')
   if live_music_fixture: path = path.removeprefix('/music-live')
@@ -367,6 +376,24 @@ class Handler(BaseHTTPRequestHandler):
       global_model = change['ref']
       global_model_revision += 1
    data=global_model_payload()
+  elif sidebar_actions_fixture and path=='/fixture/reset' and self.command=='POST':
+   sidebar_actions=sidebar_action_rows(); data={'ok':True}
+  elif sidebar_actions_fixture and path=='/api/sessions':
+   items=list(sidebar_actions.values())
+   if query.get('status')==['pinned']: items=[item for item in items if item['status']=='pinned']
+   search=query.get('search',[''])[0].lower()
+   if search: items=[item for item in items if search in item['name'].lower()]
+   data={'items':items,'total':len(items),'hasMore':False}
+  elif sidebar_actions_fixture and path.startswith('/api/sessions/') and (
+    self.command=='DELETE' or path.rsplit('/',1)[-1] in ('rename','pin','unpin')):
+   parts=path.split('/'); item=sidebar_actions.get(parts[3])
+   if not item: status=404; data={'ok':False}
+   else:
+    if self.command=='DELETE': sidebar_actions.pop(parts[3])
+    elif parts[-1]=='rename': item['name']=json.loads(body)['name']
+    elif parts[-1]=='pin': item['status']='pinned'
+    else: item['status']='active'
+    data={'ok':True}
   elif sidebar_fixture and path=='/api/sessions':
    rows=[dict(row, key=f'11111111-2026-4000-8000-{i:012d}', name=f'会话 {i}') for i in range(1, 28)]
    offset=int(query.get('offset',['0'])[0]); limit=min(20, int(query.get('limit',['20'])[0]))

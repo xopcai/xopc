@@ -31,7 +31,8 @@ struct ConversationsView: View {
 
     @Environment(\.locale) private var locale
 
-    @AppStorage("navigation.conversation-history") private var mode = ConversationHistoryMode.recent
+    @AppStorage("navigation.conversation-history") private var rememberedMode = ConversationHistoryMode.recent
+    @State private var mode = ConversationHistoryMode.recent
     @State private var groupName: String?
     @State private var projects: [ProjectRecord] = []
     @State private var experts: [AgentSummary] = []
@@ -101,6 +102,8 @@ struct ConversationsView: View {
         .task {
             if startSearching {
                 searchOpen = true
+            } else {
+                mode = rememberedMode
             }
         }
         .task(id: ConversationSearchKey(configuration: configuration, query: state.searchText,
@@ -199,8 +202,11 @@ struct ConversationsView: View {
 
     private func selectMode(_ next: ConversationHistoryMode) {
         guard next != mode else { return }
+        let keepSearching = searchOpen
         clearGroup()
+        searchOpen = keepSearching
         mode = next
+        rememberedMode = next
     }
 
     private var searchLabel: LocalizedStringKey {
