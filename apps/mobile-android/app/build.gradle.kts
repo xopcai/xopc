@@ -79,6 +79,8 @@ dependencies {
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
+  // Firebase Messaging brings Fragment 1.1 transitively, which is incompatible with Activity Result APIs.
+  implementation(libs.androidx.fragment)
   // Ed25519 is only in Android's platform JCA from API 33; verify pinned Gateway keys on API 26+.
   implementation(libs.bouncycastle)
   implementation(libs.okhttp)

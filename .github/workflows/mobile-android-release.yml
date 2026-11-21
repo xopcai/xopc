@@ -95,7 +95,11 @@ jobs:
           test -n "$version_code" && test "$version_code" -gt 78
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then
             version_name="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<< "$package_line")"
-            test "$version_name" = "${GITHUB_REF_NAME#mobile-android-v}"
+            if [[ ! "$GITHUB_REF_NAME" =~ ^mobile-android-v([0-9]+\.[0-9]+\.[0-9]+)(-retry\.[1-9][0-9]*)?$ ]]; then
+              echo "::error::Invalid Android release tag: $GITHUB_REF_NAME"
+              exit 1
+            fi
+            test "$version_name" = "${BASH_REMATCH[1]}"
           fi
 
       - name: Prepare release assets and checksums

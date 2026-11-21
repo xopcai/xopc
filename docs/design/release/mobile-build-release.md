@@ -71,7 +71,7 @@ pnpm run mobile:release:patch
 
 ## Android 正式发布
 
-
+如果正式标签的构建失败且还未发布任何资产，修复后从新提交打 `mobile-android-vX.Y.Z-retry.1`（后续尝试递增后缀）。保持应用版本和 versionCode 不变。CI 验证 APK 版本与标签中的 `X.Y.Z` 一致，并在指向修复源码的标签下发布。
 
 - 使用现有 `ANDROID_PRODUCTION_*` Secrets 安装生产签名；
 - 运行单元测试；
