@@ -96,7 +96,7 @@ describe('notification routes', () => {
     };
     const assigned = createNotificationEvent({ ...plan, dedupeKey: 'assigned', deviceIds: ['phone-1'] }).notification.id;
     const other = createNotificationEvent({ ...plan, dedupeKey: 'other', deviceIds: [] }).notification.id;
-    const ack = (id: string, consumerId: string) => app.request(`/api/notifications/${id}/ack`, {
+    const ack = (id: string, consumerId?: string) => app.request(`/api/notifications/${id}/ack`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-test-device': 'phone-1' },
       body: JSON.stringify({ consumerId, surface: 'mobile' }),
@@ -106,5 +106,9 @@ describe('notification routes', () => {
     expect((await ack(assigned, 'harmonyos:phone-2')).status).toBe(403);
     expect((await ack(other, 'harmonyos:phone-1')).status).toBe(404);
     expect((await ack(assigned, 'harmonyos:phone-1')).status).toBe(200);
+    expect(await (await ack(assigned)).json()).toEqual({
+      ok: true, target: { kind: 'chat', conversationId: 'test-chat' },
+    });
+    expect((await ack(other)).status).toBe(404);
   });
 });

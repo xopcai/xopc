@@ -5,6 +5,7 @@ struct TaskConversationView: View {
     let configuration: GatewayConfiguration
     let taskID: String
     var returnLabel: LocalizedStringKey?
+    var opensDetails = false
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -20,6 +21,46 @@ struct TaskConversationView: View {
     @State private var editingTask: TaskRecord?
 
     var body: some View {
+        if opensDetails {
+            taskDetailsPage
+        } else {
+            conversationBody
+        }
+    }
+
+    private var taskDetailsPage: some View {
+        detailsContent
+            .mobilePageTitle(Text("任务详情"))
+            .task(id: taskID) { await refresh() }
+    }
+
+    private var detailsContent: some View {
+        VStack(spacing: 0) {
+            if let detail {
+                overview(detail)
+                Divider()
+                taskActions(detail.task)
+            } else if let error {
+                ContentUnavailableView {
+                    Label("无法读取任务", systemImage: "exclamationmark.triangle")
+                } description: { Text(error) } actions: {
+                    Button("重试") { Task { await refresh() } }
+                }
+            } else {
+                ProgressListSkeleton()
+            }
+        }
+        .sheet(item: $editingTask, onDismiss: { Task { await refresh() } }) { task in
+            TaskEditorView(configuration: configuration, task: task)
+        }
+        .sheet(isPresented: $showingStatus, onDismiss: { Task { await refresh() } }) {
+            if let detail {
+                TaskStatusView(configuration: configuration, detail: detail)
+            }
+        }
+    }
+
+    private var conversationBody: some View {
         ZStack(alignment: .top) {
             if let conversation {
                 AssistantView(
@@ -84,30 +125,14 @@ struct TaskConversationView: View {
         }
         .sheet(isPresented: $showingDetails) {
             NavigationStack {
-                VStack(spacing: 0) {
-                    if let detail {
-                        overview(detail)
-                        Divider()
-                        taskActions(detail.task)
-                    } else {
-                        ProgressListSkeleton()
+                detailsContent
+                    .navigationTitle("任务详情")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") { showingDetails = false }.accessibilityIdentifier("task-chat-details-close")
+                        }
                     }
-                }
-                .navigationTitle("任务详情")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("关闭") { showingDetails = false }.accessibilityIdentifier("task-chat-details-close")
-                    }
-                }
-                .sheet(item: $editingTask, onDismiss: { Task { await refresh() } }) { task in
-                    TaskEditorView(configuration: configuration, task: task)
-                }
-                .sheet(isPresented: $showingStatus, onDismiss: { Task { await refresh() } }) {
-                    if let detail {
-                        TaskStatusView(configuration: configuration, detail: detail)
-                    }
-                }
             }
             .presentationDetents([.fraction(0.76), .large])
             .presentationDragIndicator(.visible)

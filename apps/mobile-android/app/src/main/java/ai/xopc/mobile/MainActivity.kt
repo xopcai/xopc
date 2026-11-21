@@ -38,8 +38,15 @@ class MainActivity : ComponentActivity() {
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
+    capturePush(intent)
     captureExternalIntent(intent)
   }
+  private fun capturePush(intent: Intent?) {
+    val route = runCatching { intent?.getStringExtra(ai.xopc.mobile.gateway.pushRouteExtra) }.getOrNull() ?: return
+    intent?.removeExtra(ai.xopc.mobile.gateway.pushRouteExtra)
+    ai.xopc.mobile.gateway.MobilePushInbox.receive(applicationContext, route)
+  }
+
   private fun captureExternalIntent(shared: Intent?) {
     lifecycleScope.launch {
       try {
@@ -61,6 +68,8 @@ class MainActivity : ComponentActivity() {
     setTheme(R.style.Theme_Xopc)
     super.onCreate(savedInstanceState)
 
+    ai.xopc.mobile.gateway.createPushChannel(this)
+    capturePush(intent)
     captureExternalIntent(if (savedInstanceState == null) intent else null)
     enableEdgeToEdge()
     setContent {

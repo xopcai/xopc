@@ -2,7 +2,10 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
+  id("com.google.gms.google-services") version "4.4.4" apply false
 }
+
+if (file("google-services.json").isFile) apply(plugin = "com.google.gms.google-services")
 
 val releaseSigningKeys = listOf(
     "XOPC_UPLOAD_STORE_FILE",
@@ -79,6 +82,7 @@ dependencies {
   // Ed25519 is only in Android's platform JCA from API 33; verify pinned Gateway keys on API 26+.
   implementation(libs.bouncycastle)
   implementation(libs.okhttp)
+  implementation(libs.firebase.messaging)
   implementation("com.caverock:androidsvg-aar:1.4")
   implementation(libs.zxing.core)
   implementation(libs.androidx.camera.camera2)

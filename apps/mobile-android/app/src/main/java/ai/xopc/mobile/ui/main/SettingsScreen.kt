@@ -55,6 +55,7 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
   onOpenModelSettings: (() -> Unit)? = null,
   onOpenAppAbout: () -> Unit = {}, onOpenAbout: () -> Unit = {}, onOpenGoals: () -> Unit = {},
   personalAgent: @Composable () -> Unit = {},
+  notifications: @Composable () -> Unit = {},
   onOpenAppearance: () -> Unit, onOpenLanguage: () -> Unit = {},
   onAppearanceModeChange: (String) -> Unit,
   onColorSchemeChange: (String) -> Unit, onLanguageChange: (String) -> Unit = {}) {
@@ -146,6 +147,7 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
           if (profile != null && onOpenModelSettings != null) {
             SettingsRow(stringResource(R.string.ms_title), "", true, onOpenModelSettings, "settings-models")
           }
+          notifications()
           SettingsSectionLabel(R.string.settings_data_sharing)
           SettingsRow(stringResource(R.string.share_center),
             stringResource(R.string.share_center_help), true, onOpenSharing)

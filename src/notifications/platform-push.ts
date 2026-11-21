@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { getProviderAuthService } from '../providers/provider-auth-service.js';
 import { resolveXopcModelRouterUrl, XOPC_CLOUD_PROVIDER_ID } from '../providers/xopc-cloud-config.js';
 
+import type { NotificationDevicePlatform } from './types.js';
+
 const endpointResponse = z.object({ endpointId: z.string().uuid() });
 const endpointPrefix = 'platform-push:';
 
@@ -36,8 +38,10 @@ async function request(path: string, method: string, body?: object, fetchImpl = 
   throw new PlatformPushError(response.status, 'PUSH_PLATFORM_REQUEST_FAILED');
 }
 
-export async function registerPlatformPushDevice(gatewayId: string, deviceId: string, pushToken: string): Promise<string> {
-  const response = await request('/endpoints', 'PUT', { gatewayId, deviceId, platform: 'harmonyos', pushToken });
+export async function registerPlatformPushDevice(gatewayId: string, deviceId: string, pushToken: string,
+  platform: NotificationDevicePlatform = 'harmonyos', environment?: 'sandbox' | 'production',
+): Promise<string> {
+  const response = await request('/endpoints', 'PUT', { gatewayId, deviceId, platform, pushToken, environment });
   const result = endpointResponse.safeParse(await response.json().catch(() => null));
   if (!result.success) throw new PlatformPushError(502, 'PUSH_PLATFORM_INVALID_RESPONSE');
   return endpointPrefix + result.data.endpointId;

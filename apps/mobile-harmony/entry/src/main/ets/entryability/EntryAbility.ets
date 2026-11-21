@@ -60,7 +60,7 @@ export default class EntryAbility extends UIAbility {
   }
   onNewWant(want: Want): void { this.receiveWant(want); }
   onConfigurationUpdate(configuration: Configuration): void { appSettings.syncSystemColorMode(configuration.colorMode); }
-  onForeground(): void { gatewaySession.setForeground(true); layoutState.foreground = true; generatedMusicPlayback.onForeground(); voiceCall.onForeground(); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
+  onForeground(): void { gatewaySession.setForeground(true); layoutState.foreground = true; generatedMusicPlayback.onForeground(); voiceCall.onForeground(); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); notificationNavigation.flush(); }
   onBackground(): void {
     generatedMusicPlayback.checkpoint();
     const locationPermission: boolean = hasActiveDeviceLocationPermissionRequest();

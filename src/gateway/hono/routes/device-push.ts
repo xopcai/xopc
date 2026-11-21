@@ -41,7 +41,7 @@ function parsePreferences(value: unknown): Partial<NotificationPreferences> | nu
 }
 
 function parsePlatform(value: unknown): NotificationDevicePlatform | null {
-  return value === 'harmonyos' ? value : null;
+  return value === 'harmonyos' || value === 'ios' || value === 'android' ? value : null;
 }
 
 function parsePermission(value: unknown): NotificationPermission | null {
@@ -67,6 +67,10 @@ export function registerDevicePushRoutes(authenticated: Hono): void {
     }
     const pushToken = stringField(body?.pushToken, 1024);
     const platform = parsePlatform(body?.platform);
+    const environment = body?.environment === 'sandbox' || body?.environment === 'production' ? body.environment : undefined;
+    if (platform === 'ios' ? !environment : body?.environment !== undefined) {
+      return c.json({ ok: false, error: 'Invalid push environment' }, 400);
+    }
     const permissions = parsePermission(body?.permissions);
     const preferences = parsePreferences(body?.preferences);
     const locale = parseLocale(body?.locale);
@@ -81,7 +85,7 @@ export function registerDevicePushRoutes(authenticated: Hono): void {
     let reference: string;
     try {
       if (permissions === 'granted') {
-        reference = await registerPlatformPushDevice(getOrCreateGatewayIdentity().id, deviceId, pushToken);
+        reference = await registerPlatformPushDevice(getOrCreateGatewayIdentity().id, deviceId, pushToken, platform, environment);
       } else {
         disableNotificationDevice(deviceId);
         const current = getNotificationDevice(deviceId);

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="push_title">Notifications</string>
+    <string name="push_on">On</string>
+    <string name="push_off">Off</string>
+    <string name="push_enable">Enable</string>
+    <string name="push_disable">Disable</string>
+    <string name="push_permission">Allow notifications in system settings.</string>
+    <string name="push_unconfigured">Push notifications are unavailable in this build.</string>
+    <string name="push_registration_failed">Check the Gateway connection and XOPC Cloud push authorization, then try again.</string>
+</resources>

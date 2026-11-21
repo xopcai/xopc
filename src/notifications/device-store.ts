@@ -139,7 +139,7 @@ export function getNotificationDevice(deviceId: string): NotificationDevice | nu
 export function listDeliverableNotificationDevices(now = Date.now()): NotificationDevice[] {
   return (getSqliteDatabase().prepare(
     `SELECT * FROM device_push_endpoints
-     WHERE enabled = 1 AND permissions = 'granted' AND platform = 'harmonyos' AND lease_expires_at > ?
+     WHERE enabled = 1 AND permissions = 'granted' AND lease_expires_at > ?
      ORDER BY updated_at DESC`,
   ).all(now) as NotificationDeviceRow[]).map(deviceFromRow);
 }

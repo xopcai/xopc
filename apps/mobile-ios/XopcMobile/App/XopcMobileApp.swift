@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct XopcMobileApp: App {
+    @UIApplicationDelegateAdaptor(MobilePushDelegate.self) private var pushDelegate
+
     init() {
         #if DEBUG
             if ProcessInfo.processInfo.environment["XOPC_UI_TEST_RESET_NAVIGATION"] == "1" {

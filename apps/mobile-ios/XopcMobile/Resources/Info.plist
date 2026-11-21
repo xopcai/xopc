@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>XopcApnsEnvironment</key>
+	<string>$(XOPC_APNS_ENVIRONMENT)</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>用于将你选择保存的授权二维码添加到系统相册。</string>
 	<key>UIBackgroundModes</key>

@@ -153,10 +153,6 @@ export class NotificationService {
     }
     const fetchImpl = this.options.fetch ?? fetch;
     try {
-      if (delivery.platform !== 'harmonyos') {
-        markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Native push provider is not configured');
-        return;
-      }
       const expiresAt = Math.min(delivery.event.createdAt + 24 * 60 * 60 * 1000,
         delivery.event.type === 'chat.needs_input' && typeof delivery.event.payload.expiresAt === 'number'
           ? delivery.event.payload.expiresAt : Number.POSITIVE_INFINITY);
@@ -166,6 +162,10 @@ export class NotificationService {
       }
       let endpointId = platformPushEndpoint(delivery.pushToken);
       if (!endpointId && !this.options.sendPush) {
+        if (delivery.platform !== 'harmonyos') {
+          markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Cloud push registration required');
+          return;
+        }
         const reference = await registerPlatformPushDevice(getOrCreateGatewayIdentity().id, delivery.deviceId, delivery.pushToken);
         if (!replaceNotificationPushReference(delivery.deviceId, delivery.pushToken, reference)) {
           const current = getNotificationDevice(delivery.deviceId);

@@ -47,7 +47,7 @@ struct AppSettingsView: View {
                 }
                 .accessibilityIdentifier("settings-models")
                 NavigationLink {
-                    NotificationSettingsView()
+                    NotificationSettingsView(configuration: configuration)
                 } label: {
                     Label("通知", systemImage: "bell")
                 }
@@ -249,8 +249,27 @@ private struct ShareCenterView: View {
 }
 
 private struct NotificationSettingsView: View {
+    let configuration: GatewayConfiguration
+    @State private var push = MobilePush.shared
+
     var body: some View {
+        let scope = configuration.localIdentity ?? ""
+        let enabled = push.enabled.contains(scope)
         Form {
+            if !scope.isEmpty {
+                Section {
+                    LabeledContent("推送通知") {
+                        Text(enabled ? "已开启" : "已关闭")
+                    }
+                    Button(enabled ? "关闭" : "开启") {
+                        Task { await push.setEnabled(!enabled, configuration: configuration) }
+                    }
+                    .disabled(push.busy.contains(scope))
+                    if let error = push.errors[scope] {
+                        Text(error).foregroundStyle(.red)
+                    }
+                }
+            }
             Section {
                 if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
                     Link("系统通知设置", destination: url)

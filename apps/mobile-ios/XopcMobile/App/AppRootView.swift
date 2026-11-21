@@ -7,6 +7,7 @@ struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @State private var appState = AppState()
+    @State private var push = MobilePush.shared
     @State private var realtimeVoiceCall = RealtimeVoiceCall()
     @State private var personalAgent = PersonalAgentState()
     @State private var settingsPresented = false
@@ -124,9 +125,26 @@ struct AppRootView: View {
         } message: { Text(messageLinks.errorMessage ?? "") }
         // State initializers also run for discarded view values; refresh only the mounted view.
         .task { await appState.refreshGatewayOnForeground() }
+        .task(id: appState.activeGatewayProfileID) {
+            await push.restore(appState.gatewayConfiguration)
+        }
+        .task(id: push.token) {
+            await push.sync(appState.gatewayConfiguration)
+        }
+        .task(id: push.pending.first) {
+            while let route = push.pending.first, !Task.isCancelled {
+                await openMobilePush(route)
+                if push.pending.first == route {
+                    try? await Task.sleep(for: .seconds(5))
+                }
+            }
+        }
         .onChange(of: scenePhase) {
             if scenePhase == .active {
-                Task { await appState.refreshGatewayOnForeground() }
+                Task {
+                    await appState.refreshGatewayOnForeground()
+                    await push.restore(appState.gatewayConfiguration)
+                }
                 Task { await realtimeVoiceCall.resumeAfterInterruption() }
             } else {
                 music.checkpoint()
@@ -338,6 +356,8 @@ struct AppRootView: View {
                 try await appState.startLibraryConversation(configuration: configuration, agentID: defaultAgentID,
                                                             attachment: attachment, origin: origin)
             })
+        case let .notificationTask(taskID):
+            TaskConversationView(configuration: configuration, taskID: taskID, opensDetails: true)
         case let .libraryTask(taskID):
             TaskConversationView(configuration: configuration, taskID: taskID)
         case let .libraryAutomationRun(runID):
@@ -400,6 +420,39 @@ struct AppRootView: View {
                                onPersonal: { Task { await openPersonalAgent(remember: true) } },
                                onConversation: selectConversation, onNew: startNew, onRetry: { recentRevision += 1 },
                                onLoadMore: { Task { await loadRecent(using: configuration, more: true) } })
+    }
+
+    private func openMobilePush(_ route: String) async {
+        guard scenePhase == .active else { return }
+        guard let click = MobilePushClick.decode(route),
+              let profile = appState.gatewayProfiles.first(where: {
+                  GatewayPairingService.shared.gatewayID(profileID: $0.id) == click.gatewayId
+              }) else { push.forget(route); return }
+        if appState.activeGatewayProfileID != profile.id {
+            guard appState.activateGatewayProfile(id: profile.id) else { return }
+        }
+        let configuration = appState.gatewayConfiguration
+        do {
+            let target = try await push.acknowledge(click.eventId, using: configuration)
+            guard !Task.isCancelled, appState.activeGatewayProfileID == profile.id else { return }
+            defer { push.forget(route) }
+            guard let target else { return }
+            appState.homePath.removeAll()
+            setSidebar(false)
+            switch target.kind {
+            case "task":
+                if let id = target.taskId, MobilePushClick.validID(id) { navigate(.notificationTask(id)) }
+            case "automation_run":
+                if let id = target.runId, MobilePushClick.validID(id) { navigate(.libraryAutomationRun(id)) }
+            case "chat", "work_discovery":
+                if let id = target.conversationId, MobilePushClick.validID(id) {
+                    messageLinks.open(.route(page: "chat", itemID: id), appState: appState)
+                }
+            default: break
+            }
+        } catch GatewayClientError.http(statusCode: 404, message: _) {
+            push.forget(route)
+        } catch { }
     }
 
     private func navigate(_ route: HomeDestination) {

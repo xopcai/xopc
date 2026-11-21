@@ -348,10 +348,11 @@ private fun AssistantHistorySkeleton() {
 }
 
 @Composable
-fun MainScreen(
+internal fun MainScreen(
   modifier: Modifier = Modifier,
   connection: ConnectionUiState = ConnectionUiState(),
   phoneRepository: ai.xopc.mobile.gateway.PhoneRepository? = null,
+  mobilePush: ai.xopc.mobile.gateway.MobilePushClient? = null,
   onPair: (String) -> Unit = {},
   onCancelPairing: () -> Unit = {},
   onConversationSearchChange: (String) -> Unit = {},
@@ -680,7 +681,7 @@ fun MainScreen(
       else R.string.assistant_save_note_error, Toast.LENGTH_SHORT).show()
     onMessageNoteFeedbackHandled(feedback)
   }
-  MainContent(phoneRepository = phoneRepository, selectedTab = selectedTab, onSelectTab = { selectedTab = it }, connection = connection,
+  MainContent(phoneRepository = phoneRepository, mobilePush = mobilePush, selectedTab = selectedTab, onSelectTab = { selectedTab = it }, connection = connection,
     onPair = onPair, onCancelPairing = onCancelPairing, onScanPairing = scanPairingCode,
     pairingScanning = pairingScannerOpen || pairingPermissionRequesting,
     pairingScanError = pairingScanError, onConversationSearchChange = onConversationSearchChange,
@@ -885,6 +886,7 @@ internal fun MainContent(
   onSelectTab: (HomeTab) -> Unit,
   connection: ConnectionUiState = ConnectionUiState(),
   phoneRepository: ai.xopc.mobile.gateway.PhoneRepository? = null,
+  mobilePush: ai.xopc.mobile.gateway.MobilePushClient? = null,
   onPair: (String) -> Unit = {},
   onCancelPairing: () -> Unit = {},
   onScanPairing: () -> Unit = {},
@@ -1515,6 +1517,62 @@ internal fun MainContent(
   val layoutDirection = LocalLayoutDirection.current
   val tabStateHolder = rememberSaveableStateHolder()
   val sidebar = remember(gatewayId) { ChatSidebarState() }
+  if (mobilePush != null) {
+    val clickRevision by ai.xopc.mobile.gateway.MobilePushInbox.revision.collectAsStateWithLifecycle()
+    val tokenRevision by ai.xopc.mobile.gateway.MobilePushInbox.tokenRevision.collectAsStateWithLifecycle()
+    val lifecycle by lifecycleOwner.lifecycle.currentStateFlow.collectAsStateWithLifecycle()
+    val profile = connection.profile
+    val active = lifecycle.isAtLeast(Lifecycle.State.STARTED)
+    LaunchedEffect(active, profile?.deviceId, gatewayId, tokenRevision) {
+      if (active && profile != null) {
+        try { mobilePush.restore(profile, tokenRevision) }
+        catch (error: kotlinx.coroutines.CancellationException) { throw error }
+        catch (_: Exception) { }
+      }
+    }
+    LaunchedEffect(active, clickRevision, gatewayId, connection.gatewayProfiles) {
+      if (!active || profile == null) return@LaunchedEffect
+      val inbox = ai.xopc.mobile.gateway.MobilePushInbox
+      val route = inbox.pending(voiceContext).firstOrNull() ?: return@LaunchedEffect
+      val click = ai.xopc.mobile.gateway.MobilePushClick.decode(route)
+      if (click == null || connection.gatewayProfiles.none { it.gatewayId == click.gatewayId } &&
+        click.gatewayId != gatewayId) {
+        inbox.forget(voiceContext, route)
+        return@LaunchedEffect
+      }
+      if (click.gatewayId != gatewayId) {
+        onActivateGateway(click.gatewayId)
+        return@LaunchedEffect
+      }
+      while (true) {
+        try {
+          val target = mobilePush.acknowledge(click)
+          sidebar.open = false
+          when (target?.optString("kind")) {
+            "task" -> openLinkedDetail(HomeTab.Progress, target.getString("taskId"))
+            "chat", "work_discovery" -> {
+              onSelectConversation(target.getString("conversationId")); onSelectTab(HomeTab.Assistant)
+            }
+            "automation_run" -> {
+              libraryDelivery.value = "automation:" + target.getString("runId")
+              onSelectTab(HomeTab.Library)
+            }
+            "home" -> onSelectTab(HomeTab.Assistant)
+          }
+          inbox.forget(voiceContext, route)
+          return@LaunchedEffect
+        } catch (error: kotlinx.coroutines.CancellationException) {
+          throw error
+        } catch (error: ai.xopc.mobile.gateway.GatewayHttpException) {
+          if (error.status == 404) {
+            inbox.forget(voiceContext, route)
+            return@LaunchedEffect
+          }
+        } catch (_: Exception) { }
+        delay(5_000)
+      }
+    }
+  }
   var returnToSidebar by rememberSaveable(gatewayId) { mutableStateOf(false) }
   var startConversationSearch by rememberSaveable(gatewayId) { mutableStateOf(false) }
   val conversationsSearch by rememberUpdatedState(connection.conversationSearch)
@@ -1903,6 +1961,9 @@ internal fun MainContent(
           onOpenGateways = { personalPage = "settings-gateways" },
           onOpenModelSettings = modelSettingsAccess?.let { { personalPage = "settings-models" } },
           onOpenAppAbout = { personalPage = "settings-about" },
+          notifications = {
+            if (profile != null && mobilePush != null) MobilePushSettings(profile, mobilePush)
+          },
           onOpenAbout = { personalStartSection = "overview"; personalPage = "about" },
           onOpenGoals = { personalPage = "goals" },
           personalAgent = {

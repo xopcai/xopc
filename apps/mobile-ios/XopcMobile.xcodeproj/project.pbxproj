@@ -189,6 +189,7 @@
 		FE66EE9309201D6A097D28D4 /* ExternalIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E3CBB52452A6FB90FFCE605 /* ExternalIntakeTests.swift */; };
 		FEBFD502ABB07520200FF6F2 /* TaskConversationCommandTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A70995A952387C4A3D91A23 /* TaskConversationCommandTests.swift */; };
 		FED2DAEE1B07271D69C87AD8 /* AgentPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D5142BA7B2D99C98E8E5FB /* AgentPicker.swift */; };
+		FEFAE17B6A122F51001711A8 /* MobilePush.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1B908DEEF2B977ADF93C18 /* MobilePush.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -365,6 +366,7 @@
 		AC1CB30552DCE6E27AF6593B /* ExternalIntakeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalIntakeStore.swift; sourceTree = "<group>"; };
 		AC8B6069A92BA37E46AF0B9C /* PhonePointerQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhonePointerQueue.swift; sourceTree = "<group>"; };
 		ADF506A4793672A00D0798A7 /* TransientComposerFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransientComposerFeedback.swift; sourceTree = "<group>"; };
+		AE4CE38B075CBA09D8C5B8D4 /* XopcMobilePush.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = XopcMobilePush.entitlements; sourceTree = "<group>"; };
 		AEB920FED2A16F7355F4EA76 /* AssistantAudioAutoplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantAudioAutoplay.swift; sourceTree = "<group>"; };
 		B1BAC3B4F53556FD5305510A /* XopcMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XopcMobileApp.swift; sourceTree = "<group>"; };
 		B3A989628A0B383E59C7ED1E /* MarkdownImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownImageView.swift; sourceTree = "<group>"; };
@@ -394,6 +396,7 @@
 		DA016590211F6147655749F4 /* AssistantTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantTimeline.swift; sourceTree = "<group>"; };
 		DAD77AAEC5143C8A797A7321 /* StreamingMarkdownText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingMarkdownText.swift; sourceTree = "<group>"; };
 		DCA210A3BCBAEC585301213F /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		DD1B908DEEF2B977ADF93C18 /* MobilePush.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePush.swift; sourceTree = "<group>"; };
 		DF04AD3268C6808CA568CBAB /* GatewayClient+Products.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+Products.swift"; sourceTree = "<group>"; };
 		DF0931AC253CD2A261E78D7B /* ChatResultCapsuleLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatResultCapsuleLabel.swift; sourceTree = "<group>"; };
 		DFADEE49AC582A3AA6647297 /* ClarificationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClarificationCard.swift; sourceTree = "<group>"; };
@@ -507,6 +510,7 @@
 			isa = PBXGroup;
 			children = (
 				3A2DFD3FEE245285A0EB8A7E /* XopcMobile.entitlements */,
+				AE4CE38B075CBA09D8C5B8D4 /* XopcMobilePush.entitlements */,
 				F2E7221B6EEBF65507E6315B /* App */,
 				A049ED59801AFA1E501CD8DD /* Core */,
 				09922921FC6DFBFAD9610A5D /* Features */,
@@ -795,6 +799,7 @@
 				0F75545AD4CD3745D041CE90 /* ChatSidebarView.swift */,
 				50E398C828EE423F4B907D7B /* ExternalIntakeModifier.swift */,
 				652621B0564862C06CE9301A /* LoopiIcon.swift */,
+				DD1B908DEEF2B977ADF93C18 /* MobilePush.swift */,
 				6B7544B1EBE05BB7C8A8E557 /* PersonalAgentState.swift */,
 				B1BAC3B4F53556FD5305510A /* XopcMobileApp.swift */,
 			);
@@ -1039,6 +1044,7 @@
 				BA87F3CAB4C3CC2F3C8B7631 /* MessageLink.swift in Sources */,
 				1E933A6E8068947AF05AC34C /* MessageModels.swift in Sources */,
 				AFCE8BBA2E3F11AE93B4C251 /* MobileListCache.swift in Sources */,
+				FEFAE17B6A122F51001711A8 /* MobilePush.swift in Sources */,
 				20B0DB05FE66445A6A5AA384 /* MobileTheme.swift in Sources */,
 				DA875680CA67E6FAF3CBC499 /* MobileTypography.swift in Sources */,
 				034C48EEE4D6F98E5A10378A /* ModelSettingsView.swift in Sources */,
@@ -1176,7 +1182,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = XopcMobile/XopcMobile.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "$(XOPC_APP_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1204,6 +1210,9 @@
 				PROVISIONING_PROFILE_SPECIFIER = "$(XOPC_MAIN_PROFILE_UUID)";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				XOPC_APNS_ENTITLEMENT = development;
+				XOPC_APNS_ENVIRONMENT = disabled;
+				XOPC_APP_ENTITLEMENTS = XopcMobile/XopcMobile.entitlements;
 			};
 			name = Debug;
 		};
@@ -1338,7 +1347,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = XopcMobile/XopcMobile.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "$(XOPC_APP_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1366,6 +1375,9 @@
 				PROVISIONING_PROFILE_SPECIFIER = "$(XOPC_MAIN_PROFILE_UUID)";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				XOPC_APNS_ENTITLEMENT = production;
+				XOPC_APNS_ENVIRONMENT = disabled;
+				XOPC_APP_ENTITLEMENTS = XopcMobile/XopcMobile.entitlements;
 			};
 			name = Release;
 		};

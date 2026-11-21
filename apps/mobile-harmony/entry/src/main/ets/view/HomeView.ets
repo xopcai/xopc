@@ -116,9 +116,11 @@ export struct XopcHomeView {
       else if (route.target.kind === 'task' && route.target.taskId) {
         this.pathStack.clear();
         this.navigate({ page: 'progress', itemId: '' });
-        this.navigate({ page: 'tasks', itemId: route.target.taskId });
+        this.navigate({ page: 'task-detail', itemId: route.target.taskId });
       } else if (route.target.conversationId) this.openConversationFromList(route.target.conversationId, false);
-      else if (route.target.automationId) this.navigate({ page: 'automations', itemId: route.target.automationId });
+      else if (route.target.kind === 'automation_run' && route.target.runId) {
+        this.navigate({ page: 'automation-run', itemId: route.target.runId });
+      }
     };
     if (this.openSettingsOnMount) this.navigate({ page: 'settings', itemId: '' });
     notificationNavigation.consume();
@@ -126,7 +128,11 @@ export struct XopcHomeView {
     void this.chatRepository.restoreRecent().catch((): void => {});
     void this.chatRepository.refreshRecent().catch((): void => {});
     void this.restoreInitialChat();
-    this.attentionTimer = setInterval((): void => { if (this.layout.foreground) void this.attention.refresh(); }, 15000);
+    this.attentionTimer = setInterval((): void => {
+      if (!this.layout.foreground) return;
+      void this.attention.refresh();
+      notificationNavigation.flush();
+    }, 15000);
   }
   @Monitor('music.sourceRevision')
   onMusicSource(): void {
@@ -587,8 +593,11 @@ export struct XopcHomeView {
       XopcWorkspaceView({ section: 'tasks', heading: $r('app.string.task_detail_title'), initialId: (param as XopcMobileRoute).itemId,
         onExit: (): void => { this.pathStack.pop(); },
         onNavigate: (route: XopcMobileRoute): void => {
-          if (route.page === 'task-chat' && route.itemId === (param as XopcMobileRoute).itemId) this.pathStack.pop();
-          else this.navigate(route);
+          const depth = this.pathStack.size();
+          const previous = depth > 1 ? this.pathStack.getParamByIndex(depth - 2) as XopcMobileRoute : undefined;
+          if (route.page === 'task-chat' && previous?.page === 'task-conversation' && previous.itemId === route.itemId) {
+            this.pathStack.pop();
+          } else this.navigate(route);
         } })
     } else if (page === 'task-edit' || page === 'task-status') {
       XopcWorkspaceView({ section: 'tasks', heading: $r('app.string.tasks'), initialId: (param as XopcMobileRoute).itemId,

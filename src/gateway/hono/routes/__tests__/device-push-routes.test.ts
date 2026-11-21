@@ -39,8 +39,9 @@ describe('device push routes', () => {
     vi.mocked(removePlatformPushDevice).mockResolvedValue(undefined);
     app = new Hono();
     app.use('*', async (c, next) => {
+      const id = c.req.header('x-test-device') ?? 'device-1';
       setGatewayPrincipal(c, {
-        kind: 'device', principalId: 'device-1', deviceId: 'device-1',
+        kind: 'device', principalId: id, deviceId: id,
         accessSessionId: 'access-1', scopes: ['notifications.self'],
       });
       await next();
@@ -67,7 +68,7 @@ describe('device push routes', () => {
     const record = await registration.json();
     expect(record).toMatchObject({ device: { id: 'device-1', locale: 'zh' } });
     expect(record.device).not.toHaveProperty('pushToken');
-    expect(registerPlatformPushDevice).toHaveBeenCalledWith(expect.any(String), 'device-1', 'huawei-token');
+    expect(registerPlatformPushDevice).toHaveBeenCalledWith(expect.any(String), 'device-1', 'huawei-token', 'harmonyos', undefined);
 
     const update = await app.request('/api/devices/me/push/preferences', {
       method: 'PATCH', headers: { 'content-type': 'application/json' },
@@ -93,12 +94,30 @@ describe('device push routes', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: 'Device identity must come from authentication' });
   });
-  it('rejects retired mobile push providers', async () => {
+  it('rejects a platform different from the paired device', async () => {
     const response = await app.request('/api/devices/me/push', { method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ platform: 'android', pushToken: 'token', permissions: 'granted', locale: 'en' }) });
     expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({ error: 'Invalid push registration' });
+    expect(await response.json()).toMatchObject({ error: 'Push platform must match the paired device' });
   });
+  it.each([
+    { platform: 'android' as const, environment: undefined },
+    { platform: 'ios' as const, environment: 'production' as const },
+  ])('registers a paired $platform device through Cloud', async ({ platform, environment }) => {
+    const id = platform + '-device';
+    createDevice({ id, displayName: 'Phone', platform, publicKeyJwk: { kty: 'EC' }, scopes: ['notifications.self'] });
+    const response = await app.request('/api/devices/me/push', {
+      method: 'PUT', headers: { 'content-type': 'application/json', 'x-test-device': id },
+      body: JSON.stringify({ platform, environment, pushToken: 'aabb', permissions: 'granted', locale: 'en' }),
+    });
+    expect(response.status).toBe(201);
+    expect(vi.mocked(registerPlatformPushDevice))
+      .toHaveBeenCalledWith(expect.any(String), id, 'aabb', platform, environment);
+    const result = await response.json();
+    expect(result.device).toMatchObject({ id, platform });
+    expect(result.device).not.toHaveProperty('pushToken');
+  });
+
   it('registers HarmonyOS only when the platform accepts the registration', async () => {
     createDevice({ id: 'harmony-device', displayName: 'Harmony', platform: 'harmonyos', publicKeyJwk: { kty: 'EC' }, scopes: ['notifications.self'] });
     const harmony = new Hono();

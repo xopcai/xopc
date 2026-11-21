@@ -433,6 +433,7 @@ private data class RestoredComposer(val draft: LocalConversationDraft?, val text
 class GatewayViewModel internal constructor(application: Application, private val session: GatewaySession) :
   AndroidViewModel(application) {
   constructor(application: Application) : this(application, GatewaySession(application))
+  internal val mobilePush = ai.xopc.mobile.gateway.MobilePushClient(application, session)
   val generatedMediaAccess = GeneratedMediaAccess(session)
   val modelSettingsAccess = ai.xopc.mobile.gateway.ModelSettingsAccess(session)
   val spaceLibraryAccess = ai.xopc.mobile.gateway.SpaceLibraryAccess(session)

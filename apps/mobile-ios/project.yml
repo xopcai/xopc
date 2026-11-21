@@ -38,7 +38,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ai.xopc.xopc
         PROVISIONING_PROFILE_SPECIFIER: $(XOPC_MAIN_PROFILE_UUID)
-        CODE_SIGN_ENTITLEMENTS: XopcMobile/XopcMobile.entitlements
+        CODE_SIGN_ENTITLEMENTS: $(XOPC_APP_ENTITLEMENTS)
+        XOPC_APP_ENTITLEMENTS: XopcMobile/XopcMobile.entitlements
+        XOPC_APNS_ENTITLEMENT: production
+        XOPC_APNS_ENVIRONMENT: disabled
         MARKETING_VERSION: 0.0.135
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
@@ -60,6 +63,9 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      configs:
+        Debug:
+          XOPC_APNS_ENTITLEMENT: development
   XopcShareExtension:
     type: app-extension
     platform: iOS

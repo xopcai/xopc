@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 
 import {
   acknowledgeNotification,
+  getNotificationEvent,
   listNotificationEvents,
   notificationDeliveryMetrics,
 } from '../../../notifications/store.js';
@@ -35,23 +36,24 @@ export function registerNotificationRoutes(authenticated: Hono, _deps: Authentic
 
   authenticated.post('/api/notifications/:id/ack', async (c) => {
     const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
-    const consumerId = stringField(body?.consumerId, 160);
+    const principal = getGatewayPrincipal(c);
+    const deviceId = principal.kind === 'device' ? principal.deviceId : undefined;
+    const device = deviceId ? getDevice(deviceId) : undefined;
+    const deviceConsumer = device && `${device.platform}:${deviceId}`;
+    const consumerId = body?.consumerId === undefined ? deviceConsumer : stringField(body.consumerId, 160);
     const surface = body?.surface;
     if (!consumerId || (surface !== 'web' && surface !== 'electron' && surface !== 'mobile')) {
       return c.json({ ok: false, error: 'Invalid notification acknowledgement' }, 400);
     }
-    const principal = getGatewayPrincipal(c);
-    const deviceId = principal.kind === 'device' ? principal.deviceId : undefined;
     if (principal.kind === 'device') {
-      const device = deviceId && getDevice(deviceId);
-      if (!device || surface !== 'mobile' || consumerId !== `${device.platform}:${deviceId}`) {
+      if (!deviceConsumer || surface !== 'mobile' || consumerId !== deviceConsumer) {
         return c.json({ ok: false, error: 'Invalid device acknowledgement' }, 403);
       }
     }
     if (!acknowledgeNotification(c.req.param('id'), consumerId, surface, deviceId)) {
       return c.json({ ok: false, error: 'Notification not found' }, 404);
     }
-    return c.json({ ok: true });
+    return c.json({ ok: true, ...(deviceId ? { target: getNotificationEvent(c.req.param('id'))?.target } : {}) });
   });
 
   authenticated.get('/api/notifications/metrics', (c) => {

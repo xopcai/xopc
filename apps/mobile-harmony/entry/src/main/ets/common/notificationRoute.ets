@@ -1,4 +1,4 @@
-export interface XopcNotificationTarget { kind: string; conversationId?: string; taskId?: string; automationId?: string; }
+export interface XopcNotificationTarget { kind: string; conversationId?: string; taskId?: string; automationId?: string; runId?: string; }
 export interface XopcNotificationRoute { gatewayId: string; eventId: string; target: XopcNotificationTarget; }
 export function notificationRoute(json: string, gatewayId: string): XopcNotificationRoute | undefined {
   if (json.length > 4096) return undefined;
@@ -8,7 +8,7 @@ export function notificationRoute(json: string, gatewayId: string): XopcNotifica
     const target = route.target;
     if (target.kind === 'home') return route;
     const id = target.kind === 'chat' || target.kind === 'work_discovery' ? target.conversationId
-      : target.kind === 'task' ? target.taskId : target.kind === 'automation_run' ? target.automationId : undefined;
+      : target.kind === 'task' ? target.taskId : target.kind === 'automation_run' ? target.runId : undefined;
     if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(id)) return undefined;
     return route;
   } catch (_error) { return undefined; }

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="push_title">通知</string>
+    <string name="push_on">已开启</string>
+    <string name="push_off">已关闭</string>
+    <string name="push_enable">开启</string>
+    <string name="push_disable">关闭</string>
+    <string name="push_permission">请在系统设置中允许通知。</string>
+    <string name="push_unconfigured">此版本尚未配置推送服务。</string>
+    <string name="push_registration_failed">请检查 Gateway 连接和 XOPC Cloud 推送授权后重试。</string>
+</resources>
