@@ -1,4 +1,5 @@
 /** Browser Control status and driver diagnostics. */
+import { bodyLimit } from 'hono/body-limit';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import type { Context, Hono } from 'hono';
 import { browserTabBindingRequestSchema } from '@xopcai/gateway-contract';
@@ -126,6 +127,36 @@ function canManageBrowserSession(c: Context, service: AuthenticatedRouteDeps['se
 
 export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
+
+  authenticated.get('/api/browser/preview/:conversationId', (c) => {
+    c.header('Cache-Control', 'no-store');
+    return c.json({ available: service.browserPreviews.available(c.req.param('conversationId')) });
+  });
+
+  const snapshotPath = '/api/browser/preview/:requestId/snapshot';
+  authenticated.post(snapshotPath, bodyLimit({ maxSize: 80 * 1024 }), async (c) => {
+    c.header('Cache-Control', 'no-store');
+    const chrome = chromeDevicePrincipal(c);
+    const token = c.req.header('X-Xopc-Preview');
+    if (!chrome || !token || c.req.header('Content-Type') !== 'image/jpeg') return c.body(null, 403);
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    const stored = service.browserPreviews.publishSnapshot(c.req.param('requestId'), chrome.principalId, token, bytes);
+    return c.body(null, stored ? 204 : 404);
+  });
+
+  authenticated.get(snapshotPath, (c) => {
+    c.header('Cache-Control', 'no-store');
+    const token = c.req.header('X-Xopc-Preview');
+    if (!token) return c.body(null, 403);
+    const after = Number(c.req.query('after') ?? '0');
+    if (!Number.isSafeInteger(after) || after < 0) return c.body(null, 400);
+    const result = service.browserPreviews.readSnapshot(c.req.param('requestId'), getGatewayPrincipal(c).principalId, token, after);
+    if (!result) return c.body(null, 404);
+    if (!result.snapshot) return c.body(null, 204);
+    c.header('Content-Type', 'image/jpeg');
+    c.header('X-Xopc-Preview-Frame', String(result.snapshot.version));
+    return c.body(Uint8Array.from(result.snapshot.bytes));
+  });
 
   authenticated.get('/api/browser/tabs', (c) => {
     const conversationId = (c.req.query('conversationId') ?? '').trim();

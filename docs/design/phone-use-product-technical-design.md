@@ -2,6 +2,8 @@
 
 更新：2026-10-26。本文描述当前实现。使用与配置见 [Phone Use](../phone-use.md)；旧研究、性能数据和验收报告仅代表对应版本。
 
+观看架构与浏览器预览的后续合并设计见 [浏览器任务实时预览｜与 Phone Use 统一的观看架构](browser-live-view-product-technical-design.md#3-与-phone-use-统一的观看架构)。当前 Phone Use 媒体仍经 Gateway 的二进制 WebSocket 转发。
+
 ## 产品职责
 
 主 Chat 负责说明任务、进度、协助原因和执行结果。手机页负责观看与操作，不重复任务目标、求助正文或执行日志。

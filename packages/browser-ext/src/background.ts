@@ -12,6 +12,7 @@ import type { EndpointToolDescriptor } from '@xopcai/endpoint-tools-protocol';
 import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 
+import { installBrowserPreview } from './browser-preview';
 import { isControlPaused, resumeControl } from './cdp';
 import { executeBrowserCommand } from './controller';
 import { t } from './i18n';
@@ -70,16 +71,20 @@ function scheduleReconnectAlarm(): void {
   }).catch((error) => log.warn('Could not schedule browser reconnect', { error: String(error) }));
 }
 
+const preview = installBrowserPreview(message => realtime?.sendBrowserPreview(message));
+
 const browserToolRegistry = new EndpointToolRegistry([{
   descriptor: BROWSER_CONTROL_ENDPOINT_DESCRIPTOR as unknown as EndpointToolDescriptor,
   execute: async (args, context) => {
     const input = args.input;
     if (!input || typeof input !== 'object') throw new TypeError('Browser control input is required');
+    const action = input as BrowserActionInput;
+    await preview?.stopBeforeAction(action);
     const result = await executeBrowserCommand({
       id: crypto.randomUUID(),
       protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
       connectionId: 'gateway-realtime',
-      input: input as BrowserActionInput,
+      input: action,
       timeoutMs: typeof args.timeoutMs === 'number' ? args.timeoutMs : 30_000,
       visualFallback: args.visualFallback !== false,
     }, context.signal);
@@ -139,6 +144,7 @@ async function connect(generation: number): Promise<void> {
       return { ticket: body.payload.ticket, realtime: body.payload.realtime,
         connectionProof: await createBrowserRequestProof(profile, new Request(`${profile.gatewayUrl}/api/realtime/v1/ws`), body.payload.ticket, 'CONNECT') };
     },
+    onBrowserPreview: message => preview?.receive(message),
     createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
     onStateChange: (state, error) => {
       lastConnectionError = error;
@@ -163,6 +169,7 @@ async function connect(generation: number): Promise<void> {
     onMessage: (message) => { void endpointHost.handleMessage(message); },
     onDisconnected: () => {
       contextPublisher.stop();
+      preview?.clear();
       endpointClaim = undefined;
       endpointHost.disconnect();
       scheduleReconnectAlarm();
@@ -175,6 +182,7 @@ async function connect(generation: number): Promise<void> {
 
 function disconnect(): void {
   contextPublisher.stop();
+  preview?.clear();
   connectionGeneration += 1;
   realtime?.disconnect();
   realtime = undefined;
@@ -202,6 +210,7 @@ type BrowserRuntimeMessage = {
   operation?: string;
   tabId?: number;
   foreground?: boolean;
+  requestId?: string;
 };
 
 chrome.runtime.onMessage.addListener((message: BrowserRuntimeMessage, sender, sendResponse) => {
@@ -215,12 +224,25 @@ chrome.runtime.onMessage.addListener((message: BrowserRuntimeMessage, sender, se
     void contextPublisher.tick();
     sendResponse({ ok: true });
   } else if (message.type === 'browser/get-status') {
-    void isControlPaused().then(controlPaused => sendResponse({ connected: Boolean(endpointClaim), transport: 'gateway-realtime', error: lastConnectionError, controlPaused }));
+    void isControlPaused().then(controlPaused => sendResponse({ connected: Boolean(endpointClaim), transport: 'gateway-realtime', error: lastConnectionError, controlPaused, preview: preview?.status() }));
   } else if (message.type === 'browser/get-endpoint-claim') {
     sendResponse({ claim: endpointClaim, error: lastConnectionError });
+  } else if (message.type === 'browser/preview-approve' || message.type === 'browser/preview-cancel') {
+    if (sender.url?.split('?')[0] !== chrome.runtime.getURL('dist/sidepanel.html') || typeof message.requestId !== 'string') {
+      sendResponse({ ok: false });
+    } else if (message.type === 'browser/preview-approve') {
+      void preview?.approve(message.requestId).then(ok => sendResponse({ ok }));
+      if (!preview) sendResponse({ ok: false });
+    } else {
+      preview?.cancel(message.requestId);
+      sendResponse({ ok: true });
+    }
   } else if (message.type === 'browser/resume-control') {
     if (sender.url?.split('?')[0] !== chrome.runtime.getURL('dist/sidepanel.html')) { sendResponse({ ok: false, error: 'Use the extension control to resume.' }); return true; }
     void resumeControl().then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false, error: 'Control could not be resumed.' }));
+  } else if (message.type === 'browser/ensure-connected') {
+    connectWithLogging();
+    sendResponse({ ok: true });
   } else if (message.type === 'browser/reconnect') {
     disconnect();
     connectWithLogging();

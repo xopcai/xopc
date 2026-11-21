@@ -37,7 +37,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
           val catalogLocale = LocalConfiguration.current.locales[0].toLanguageTag()
           LaunchedEffect(gateway) { gateway.restore() }
           GatewayForegroundRecovery(onForeground = gateway::onForeground, onBackground = gateway::onBackground)
-          MainScreen(phoneRepository = gateway.phoneRepository, mobilePush = gateway.mobilePush,connection = connection, onPair = gateway::pair,
+          MainScreen(phoneRepository = gateway.phoneRepository, browserPreviewAccess = gateway.browserPreview, mobilePush = gateway.mobilePush,connection = connection, onPair = gateway::pair,
             onCancelPairing = gateway::cancelPairing,
             onSearchExternalConversations = gateway::searchExternalConversations,
             onAppendExternalFiles = gateway::appendExternalFiles,

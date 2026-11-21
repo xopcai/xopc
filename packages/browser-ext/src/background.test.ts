@@ -32,6 +32,7 @@ vi.mock('@xopcai/realtime-client', () => ({
 }));
 
 const profile = { gatewayId: 'gateway', deviceId: 'device', gatewayPublicKey: 'key', gatewayUrl: 'http://127.0.0.1:18790' };
+let messageListener: (message: { type: string }, sender: unknown, reply: (result: unknown) => void) => void;
 let alarmListener: (alarm: { name: string }) => void;
 let storageListener: (changes: Record<string, any>, area: string) => void;
 let createAlarm: ReturnType<typeof vi.fn>;
@@ -53,7 +54,7 @@ beforeEach(() => {
   createAlarm = vi.fn().mockResolvedValue(undefined);
   clearAlarm = vi.fn().mockResolvedValue(true);
   vi.stubGlobal('chrome', {
-    runtime: { id: 'extension', onMessage: { addListener: vi.fn() }, onInstalled: { addListener: vi.fn() },
+    runtime: { id: 'extension', onMessage: { addListener: (listener: typeof messageListener) => { messageListener = listener; } }, onInstalled: { addListener: vi.fn() },
       onStartup: { addListener: vi.fn() }, sendMessage: vi.fn().mockResolvedValue(undefined) },
     sidePanel: { setPanelBehavior: vi.fn().mockResolvedValue(undefined) },
     contextMenus: { onClicked: { addListener: vi.fn() } },
@@ -93,6 +94,18 @@ describe('background browser connection recovery', () => {
     alarmListener({ name: 'xopc.browser.reconnect' });
     await settle();
     expect(clearAlarm).not.toHaveBeenCalled();
+    expect(mocks.clients).toHaveLength(1);
+    expect(mocks.clients[0]!.disconnect).not.toHaveBeenCalled();
+  });
+
+  it('keeps the connection when a paired side panel opens to confirm a request', async () => {
+    await import('./background');
+    await settle();
+    mocks.clients[0]!.endpoint.onReady({ endpointId: 'endpoint', turnToken: 'token' });
+    const reply = vi.fn();
+    messageListener({ type: 'browser/ensure-connected' }, {}, reply);
+    await settle();
+    expect(reply).toHaveBeenCalledWith({ ok: true });
     expect(mocks.clients).toHaveLength(1);
     expect(mocks.clients[0]!.disconnect).not.toHaveBeenCalled();
   });

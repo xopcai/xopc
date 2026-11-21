@@ -9,6 +9,7 @@ import { expect, it, vi } from 'vitest';
 vi.hoisted(() => { vi.stubEnv('XOPC_UI_STATIC_ROOT', `${process.cwd()}/web/public`); });
 
 import { seedTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
+import { BrowserPreviewRuntime } from '../../../../realtime/browser-preview.js';
 import { BrowserSetupService } from '../../../../browser/setup/service.js';
 import { ConfigSchema } from '../../../../config/schema.js';
 import { closeXopcDatabase, openXopcDatabase } from '../../../../storage/sqlite/connection.js';
@@ -33,7 +34,7 @@ it('reaches Browser setup via real authenticated lazy Gateway routes and owner-s
     prepare, open: vi.fn(async () => ({})), doctor: async () => ({ installed: true, nativeHost: { installed: true } }), release: vi.fn(),
   });
   const service = { get currentConfig() { return config; }, getResolvedAuth: () => auth, getEffectiveListenPort: () => 18790,
-    get browserSetup() { return setup; }, getExtensionLoader: () => null, isGatewayReady: () => true, getHealth: () => ({ status: 'healthy' }) } as unknown as GatewayService;
+    browserPreviews: new BrowserPreviewRuntime(() => undefined), get browserSetup() { return setup; }, getExtensionLoader: () => null, isGatewayReady: () => true, getHealth: () => ({ status: 'healthy' }) } as unknown as GatewayService;
   const app = createHonoApp({ service });
   const gateway = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
   try {
@@ -43,6 +44,13 @@ it('reaches Browser setup via real authenticated lazy Gateway routes and owner-s
     const request = (body: unknown, authenticated = true) => fetch(`${base}/api/browser/setup`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(authenticated ? { Authorization: `Bearer ${auth.token}` } : {}) }, body: JSON.stringify(body) });
     expect((await request({ conversationId: conversation.key, action: 'inspect' }, false)).status).toBe(401);
     const ownerHeaders = { Authorization: `Bearer ${auth.token}` };
+    const preview = `${base}/api/browser/preview/${conversation.key}`;
+    expect((await fetch(preview)).status).toBe(401);
+    const previewResponse = await fetch(preview, { headers: ownerHeaders });
+    expect(previewResponse.status).toBe(200);
+    expect(previewResponse.headers.get('cache-control')).toBe('no-store');
+    await expect(previewResponse.json()).resolves.toEqual({ available: false });
+
     for (const [path, method] of [
       ['/api/browser/automations', 'GET'], ['/api/browser/automations', 'POST'],
       ['/api/browser/automations/id/run', 'POST'], ['/api/browser/automations/id/versions', 'GET'],

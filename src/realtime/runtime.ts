@@ -7,6 +7,7 @@ import type { Socket } from 'node:net';
 import { compactRunEvent } from './compact-run-event.js';
 
 import {
+  BROWSER_PREVIEW_CAPABILITY,
   REALTIME_CAPABILITIES,
   REALTIME_HEARTBEAT_INTERVAL_MS,
   REALTIME_HEARTBEAT_TIMEOUT_MS,
@@ -32,12 +33,13 @@ import { getDesktopExecutionGrant } from '../storage/sqlite/desktop-execution-re
 import { assertDesktopObservationHello } from '../endpoint-tools/desktop-observation.js';
 import { signDesktopGatewayFrame, type DesktopFrameBinding } from '../endpoint-tools/desktop-frame.js';
 import { DesktopDeviceFrameVerifier } from '../endpoint-tools/desktop-device-frame.js';
-import { getDevice, getDesktopStateObservation } from '../storage/sqlite/device-access-repository.js';
+import { getDevice, getDesktopStateObservation, isDeviceAccessSessionActive } from '../storage/sqlite/device-access-repository.js';
 import { getEndpointPrincipal } from '../storage/sqlite/endpoint-principal-repository.js';
 import { getOrCreateGatewayIdentity, signGatewayPayload } from '../storage/sqlite/gateway-identity-repository.js';
 import { createLogger } from '../utils/logger.js';
 import { createPreauthConnectionBudget } from '../gateway/security/preauth-connection-budget.js';
 import { hasGatewayScope, type GatewayScope } from '../gateway/security/gateway-scopes.js';
+import type { BrowserPreviewRuntime } from './browser-preview.js';
 import { RealtimeBroker, type RealtimeSubscriptionHandle } from './broker.js';
 import { RealtimeTicketStore } from './tickets.js';
 import { RealtimeSocketWriter } from './writer.js';
@@ -102,8 +104,11 @@ export class RealtimeRuntime {
   private readonly topicCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly socketsByPrincipal = new Map<string, Set<WebSocket>>();
   private closed = false;
+  private previewSweep?: ReturnType<typeof setInterval>;
 
-  constructor(private readonly endpointTools?: EndpointToolRuntime, private readonly isPrincipalActive: (id: string) => boolean = () => true) {
+  constructor(private readonly endpointTools?: EndpointToolRuntime, private readonly isPrincipalActive: (id: string) => boolean = () => true,
+    private readonly browserPreviews?: BrowserPreviewRuntime) {
+    if (browserPreviews) this.previewSweep = setInterval(() => browserPreviews.sweep(), 1000).unref();
     this.wss.on('connection', (socket, request) => this.handleConnection(socket, request));
     this.wss.on('error', (err) => log.error({ err }, 'Realtime WebSocket server failed'));
   }
@@ -138,6 +143,7 @@ export class RealtimeRuntime {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    clearInterval(this.previewSweep);
     for (const client of this.wss.clients) client.close(1001, 'Gateway stopping');
     for (const timer of this.topicCleanupTimers.values()) clearTimeout(timer);
     this.topicCleanupTimers.clear();
@@ -172,6 +178,10 @@ export class RealtimeRuntime {
     let endpointId: string | undefined;
     let principalId: string | undefined;
     let grantedScopes: readonly GatewayScope[] = [];
+    let previewPeer: Parameters<BrowserPreviewRuntime['receive']>[0] | undefined;
+    let unregisterPreview: (() => void) | undefined;
+    let previewMessages = 0;
+    let previewWindowAt = Date.now();
     let desktopBinding: DesktopFrameBinding | undefined;
     let desktopDeviceFrames: { verifier: DesktopDeviceFrameVerifier; authorizationRevision: number } | undefined;
     let executionAuthority: EndpointDesktopExecutionAuthority | undefined;
@@ -402,6 +412,31 @@ export class RealtimeRuntime {
           ...(message.payload.capabilities ? { negotiatedCapabilities } : {}),
           ...(endpointReady ? { endpoint: endpointReady } : {}),
         })), 'critical');
+        if (this.browserPreviews && negotiatedCapabilities?.includes(BROWSER_PREVIEW_CAPABILITY) && !desktopBinding) {
+          const previewSource = claim.clientKind === 'browser_extension' && device?.platform === 'chrome'
+            && endpointId && this.endpointTools?.registry.get(endpointId)?.principalId === device.id ? endpointId : undefined;
+          const previewViewer = ((!endpointId && ['web', 'desktop'].includes(claim.clientKind))
+            || claim.clientKind === 'mobile' && device?.platform === 'android'
+              && (!endpointId || this.endpointTools?.registry.get(endpointId)?.principalId === device.id))
+            && hasGatewayScope(claim.scopes, 'sessions.read') && hasGatewayScope(claim.scopes, 'agents.run');
+          if (previewSource || previewViewer) {
+            const activeConnection = connectionId;
+            previewPeer = {
+              principalId: claim.principalId,
+              ...(previewSource ? { source: { endpointId: previewSource,
+                isCurrent: () => Boolean(this.endpointTools?.registry.isCurrentConnection(previewSource, activeConnection)) } } : {}),
+              ...(previewViewer ? { viewer: device?.displayName || (claim.clientKind === 'mobile' ? 'Mobile' : 'xopc') } : {}),
+              isActive: () => {
+                const current = device && getDevice(device.id);
+                return socket.readyState === 1 && this.isPrincipalActive(claim.principalId)
+                  && (!device || Boolean(current && current.revokedAt === undefined
+                    && (!claim.accessSessionId || isDeviceAccessSessionActive(device.id, claim.accessSessionId))));
+              },
+              send: payload => { if (socket.readyState === 1) writer.enqueue(serverMessage('browser.preview', payload), 'critical'); },
+            };
+            unregisterPreview = this.browserPreviews.register(previewPeer);
+          }
+        }
         desktopReady = true;
         for (const frame of pendingDesktopFrames.splice(0)) writer.enqueue(scopedFrame(frame), 'critical');
         subscribe(message.payload.subscriptions);
@@ -423,6 +458,11 @@ export class RealtimeRuntime {
       } else if (message.kind === 'realtime.ping') {
         if (endpointId && connectionId) this.endpointTools?.touch(endpointId, connectionId);
         writer.enqueue(serverMessage('realtime.pong', {}), 'critical');
+      } else if (message.kind === 'browser.preview') {
+        if (!previewPeer || !this.browserPreviews) return;
+        if (Date.now() - previewWindowAt >= 1000) { previewWindowAt = Date.now(); previewMessages = 0; }
+        if (++previewMessages > 100) { socket.close(4408, 'Browser preview signaling rate exceeded'); return; }
+        this.browserPreviews.receive(previewPeer, message.payload);
       } else if (!endpointId || !connectionId || !this.endpointTools) {
         sendError('ENDPOINT_NOT_REGISTERED', 'Endpoint messages require an endpoint identity');
       } else {
@@ -449,6 +489,7 @@ export class RealtimeRuntime {
       clearInterval(heartbeatTimer);
       releaseBudget();
       writer.close();
+      unregisterPreview?.();
       for (const handle of subscriptions.values()) handle.unsubscribe();
       subscriptions.clear();
       if (endpointId && this.setupAuthorities.get(endpointId)?.connectionId === connectionId) this.setupAuthorities.delete(endpointId);

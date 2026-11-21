@@ -4,7 +4,8 @@ import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WebSocket as WebSocketType } from 'ws';
 
-import { MOBILE_MCP_SETUP_CARD_CAPABILITY, REALTIME_CAPABILITIES, REALTIME_MAX_CLIENT_FRAME_BYTES, REALTIME_PROTOCOL_VERSION, parseServerRealtimeMessage } from '@xopcai/realtime-protocol';
+import { BROWSER_PREVIEW_CAPABILITY, MOBILE_MCP_SETUP_CARD_CAPABILITY, REALTIME_CAPABILITIES, REALTIME_MAX_CLIENT_FRAME_BYTES, REALTIME_PROTOCOL_VERSION, parseServerRealtimeMessage } from '@xopcai/realtime-protocol';
+import { BrowserPreviewRuntime } from '../browser-preview.js';
 import { RealtimeRuntime } from '../runtime.js';
 import { COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
 import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
@@ -145,7 +146,7 @@ describe('RealtimeRuntime', () => {
     }
   });
 
-  it('negotiates the MCP card with a paired mobile device without granting administrator authority', async () => {
+  it('negotiates the MCP card and browser preview with a paired Android endpoint without administrator authority', async () => {
     const { mkdtempSync, rmSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
@@ -156,13 +157,14 @@ describe('RealtimeRuntime', () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-mobile-mcp-card-'));
     db.openXopcDatabase({ path: join(dir, 'test.db') });
     const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const scopes = ['sessions.write', 'sessions.read', 'agents.run'] as const;
     const device = createDevice({ displayName: 'Phone', platform: 'android', publicKeyJwk: publicKey.export({ format: 'jwk' }),
-      scopes: ['sessions.write'] });
+      scopes: [...scopes] });
     const principal = { id: device.id, kind: 'mobile' as const, displayName: 'Phone', platform: 'android',
       publicKey: publicKey.export({ format: 'der', type: 'spki' }).toString('base64url'), createdAt: Date.now() };
     const endpoints = new EndpointToolRuntime({ auth: { getPrincipal: () => principal, bindEndpoint: () => true, touchPrincipal: () => {} } });
     try {
-      runtime = new RealtimeRuntime(endpoints);
+      runtime = new RealtimeRuntime(endpoints, undefined, new BrowserPreviewRuntime(() => undefined));
       server = createServer();
       server.on('upgrade', (request, connection, head) => { runtime!.handleUpgrade(request, connection, head); });
       await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
@@ -173,7 +175,7 @@ describe('RealtimeRuntime', () => {
         nonce: crypto.randomUUID(), signedAt: Date.now(), signature: 'pending-signature' };
       const signValue = (value: string) => sign('sha256', Buffer.from(value), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
       endpoint.signature = signValue(endpointHelloSigningPayload(endpoint));
-      const { ticket } = runtime.tickets.issue(endpoint.endpointId, 'mobile', { principalId: device.id, deviceId: device.id, scopes: ['sessions.write'] });
+      const { ticket } = runtime.tickets.issue(endpoint.endpointId, 'mobile', { principalId: device.id, deviceId: device.id, scopes: [...scopes] });
       const target = '/api/realtime/v1/ws';
       const proof = { timestamp: Date.now(), nonce: crypto.randomUUID(), digest: proofDigest('') };
       const signature = signValue(requestProofMessage({ gatewayId: getOrCreateGatewayIdentity().id,
@@ -184,10 +186,15 @@ describe('RealtimeRuntime', () => {
       socket.send(JSON.stringify({ protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), kind: 'realtime.hello',
         sentAt: Date.now(), payload: { ticket, clientId: endpoint.endpointId, clientKind: 'mobile', subscriptions: [], endpoint,
           connectionProof: `${proof.timestamp}.${proof.nonce}.${proof.digest}.${signature}`,
-          capabilities: ['endpoint.tools.v3', MOBILE_MCP_SETUP_CARD_CAPABILITY] } }));
+          capabilities: ['endpoint.tools.v3', MOBILE_MCP_SETUP_CARD_CAPABILITY, BROWSER_PREVIEW_CAPABILITY] } }));
       await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready', payload: { endpoint: { endpointId: endpoint.endpointId } } });
       expect(endpoints.registry.get(endpoint.endpointId)?.mobileMcpSetupCard).toBe(true);
       expect(runtime.canConfigureEndpoint(endpoint.endpointId)).toBe(false);
+      const requestId = crypto.randomUUID();
+      socket.send(JSON.stringify({ protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(),
+        kind: 'browser.preview', sentAt: Date.now(), payload: { type: 'view', requestId, conversationId: crypto.randomUUID() } }));
+      await expect(messages.next()).resolves.toMatchObject({ kind: 'browser.preview',
+        payload: { type: 'closed', requestId, reason: 'unavailable' } });
     } finally {
       socket?.terminate(); runtime?.close(); endpoints.close();
       db.closeXopcDatabase(); db.resetXopcDatabaseSingletonForTest(); rmSync(dir, { recursive: true, force: true });

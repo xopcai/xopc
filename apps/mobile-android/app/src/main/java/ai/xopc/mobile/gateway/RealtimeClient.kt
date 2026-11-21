@@ -4,6 +4,7 @@ import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -58,6 +59,11 @@ internal class RealtimeClient(
   private var watchedRunTopic: String? = null
   private var watchedRunSeq = 0L
   private var readySocket: WebSocket? = null
+  private var browserPreviewSupported = false
+  val browserPreviewMessages = MutableSharedFlow<JSONObject>(extraBufferCapacity = 64)
+
+  @Synchronized fun sendBrowserPreview(payload: JSONObject): Boolean =
+    browserPreviewSupported && readySocket?.send(frame("browser.preview", payload)) == true
 
   @Synchronized fun watchRun(runId: String?) {
     val topic = runId?.takeIf(String::isNotBlank)?.let { "run:$it" }
@@ -138,7 +144,7 @@ internal class RealtimeClient(
       override fun onOpen(webSocket: WebSocket, response: Response) {
         val hello = JSONObject().put("ticket", ticketPayload.getString("ticket"))
           .put("clientId", clientId).put("clientKind", "mobile")
-          .put("capabilities", JSONArray().put("endpoint.tools.v3").put("mobile.mcp-setup-card.v1"))
+          .put("capabilities", JSONArray().put("endpoint.tools.v3").put("mobile.mcp-setup-card.v1").put("browser.preview.v1"))
           .put("subscriptions", JSONArray().put(JSONObject().put("topic", "gateway"))
             .put(JSONObject().put("topic", "sessions"))).put("endpoint", endpoint)
         webSocket.send(frame("realtime.hello", hello))
@@ -172,6 +178,8 @@ internal class RealtimeClient(
       }
       synchronized(this) {
         readySocket = socket
+        val negotiated = ready.getJSONObject("payload").optJSONArray("negotiatedCapabilities") ?: JSONArray()
+        browserPreviewSupported = (0 until negotiated.length()).any { negotiated.optString(it) == "browser.preview.v1" }
         watchedRunTopic?.let { subscribe(socket, it, watchedRunSeq) }
       }
       onState("connected")
@@ -206,6 +214,7 @@ internal class RealtimeClient(
         val message = JSONObject(raw)
         require(message.getInt("protocolVersion") == 2) { "INVALID_REALTIME_FRAME" }
         when (message.getString("kind")) {
+          "browser.preview" -> browserPreviewMessages.emit(message.getJSONObject("payload"))
           "endpoint.message" -> {
             val inner = message.getJSONObject("payload")
             require(inner.optInt("protocolVersion") == 3) { "INVALID_ENDPOINT_FRAME" }

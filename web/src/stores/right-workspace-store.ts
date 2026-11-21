@@ -30,7 +30,7 @@ export type FileTab = {
 export type BrowserTab = { id: string; kind: 'browser'; title: string; initialUrl?: string; visitedAt: number; returnTo?: string };
 export type PhoneTab = { id: string; kind: 'phone'; phoneSessionId: string; title: string; visitedAt: number; returnTo?: string };
 export const PERSONAL_TASKS_TAB_ID = 'personal-tasks';
-export type WorkspaceTab = PhoneTab | BrowserTab | { id: string; kind: 'home' | 'files' | 'personal-tasks'; title: string; visitedAt: number; returnTo?: string } | FileTab | { id: string; kind: 'sidechat'; sideChatId: string; title: string; visitedAt: number; returnTo?: string };
+export type WorkspaceTab = PhoneTab | BrowserTab | { id: string; kind: 'browser-preview'; title: string; visitedAt: number; returnTo?: string } | { id: string; kind: 'home' | 'files' | 'personal-tasks'; title: string; visitedAt: number; returnTo?: string } | FileTab | { id: string; kind: 'sidechat'; sideChatId: string; title: string; visitedAt: number; returnTo?: string };
 export type WorkspacePane = { open: boolean; tabs: WorkspaceTab[]; activeId: string | null; personalDetailsOpen?: boolean };
 export const EMPTY_WORKSPACE_PANE: WorkspacePane = { open: false, tabs: [], activeId: null };
 
@@ -57,7 +57,7 @@ function layoutRead(key: string, fallback: number): number {
 function persist(state: Stored) {
   try {
     const panes = Object.fromEntries(Object.entries(state.panes).map(([key, p]) => [key, {
-      ...p, tabs: p.tabs.filter((t) => t.kind !== 'browser' && (t.kind !== 'file' || (!t.attachment && !t.reference))).map((t) => ({ ...t })),
+      ...p, tabs: p.tabs.filter((t) => t.kind !== 'browser' && t.kind !== 'browser-preview' && (t.kind !== 'file' || (!t.attachment && !t.reference))).map((t) => ({ ...t })),
     }]));
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, identity: useGatewayStore.getState().conversationId, gateway: useGatewayStore.getState().baseUrl, panes }));
   } catch { /* Storage can be unavailable or full. */ }
@@ -90,6 +90,7 @@ type State = Stored & {
   openFiles: (scope?: string) => void;
   openPersonalTasks: (scope: string) => void;
   closePersonalTasks: (scope: string) => void;
+  openBrowserPreview: (scope: string) => void;
   openBrowser: (url?: string, scope?: string, returnTo?: string) => string;
   updateBrowserTitle: (id: string, title: string) => void;
   setScope: (scope: string) => void;
@@ -162,6 +163,13 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
         return { open: true, tabs, activeId: id };
       });
       return id;
+    },
+    openBrowserPreview: scope => {
+      const id = `browser-preview:${scope}`;
+      commit(scope, pane => ({ ...pane, open: true, activeId: id,
+        tabs: pane.tabs.some(tab => tab.id === id) ? pane.tabs
+          : [...pane.tabs, { id, kind: 'browser-preview', title: 'Browser preview', visitedAt: Date.now() }],
+      }));
     },
     openBrowser: (initialUrl, scope = get().scope, returnTo) => {
       const pane = get().panes[scope] ?? EMPTY_WORKSPACE_PANE;

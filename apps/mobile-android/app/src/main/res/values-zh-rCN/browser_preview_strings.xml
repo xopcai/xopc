@@ -1,0 +1,12 @@
+<resources>
+  <string name="browser_preview_open">查看浏览器</string>
+  <string name="browser_preview_waiting">请在来源电脑的 Chrome 扩展侧栏允许观看，然后点击工具栏图标开始共享。</string>
+  <string name="browser_preview_connecting">正在连接浏览器</string>
+  <string name="browser_preview_live">实时画面</string>
+  <string name="browser_preview_low">弱网 · 已降低画质</string>
+  <string name="browser_preview_snapshot">低帧率预览</string>
+  <string name="browser_preview_ended">浏览器共享已结束。</string>
+  <string name="browser_preview_shrink">缩小</string>
+  <string name="browser_preview_expand">展开</string>
+  <string name="browser_preview_close">关闭</string>
+</resources>

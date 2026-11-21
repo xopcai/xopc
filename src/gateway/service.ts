@@ -141,6 +141,7 @@ import { GatewayAgentRunner } from './service/agent-runner.js';
 import { SessionPreparationWorker } from './service/session-preparation-worker.js';
 import { isBrowserSessionActive } from '../storage/sqlite/browser-session-repository.js';
 import { RealtimeRuntime } from '../realtime/runtime.js';
+import { BrowserPreviewRuntime, type BrowserPreviewTarget } from '../realtime/browser-preview.js';
 import { VoiceRealtimeRuntime } from '../voice/realtime/runtime.js';
 import { DurableVoiceAgentBroker } from '../voice/realtime/agentBroker.js';
 import { reconcileMemoryMaintenanceAutomations } from './memory-maintenance-automation-reconciler.js';
@@ -241,7 +242,8 @@ export class GatewayService {
     if (!principalId.startsWith('browser:')) return true;
     try { return isBrowserSessionActive(principalId.slice('browser:'.length), this.auth); } catch { return false; }
   };
-  readonly realtime = new RealtimeRuntime(this.endpointTools, this.isRealtimePrincipalActive);
+  readonly browserPreviews = new BrowserPreviewRuntime(conversationId => this.agentRunner?.getActiveRunId(conversationId));
+  readonly realtime = new RealtimeRuntime(this.endpointTools, this.isRealtimePrincipalActive, this.browserPreviews);
   readonly phoneStreams = new PhoneStreamGateway(this.isRealtimePrincipalActive);
   readonly voiceRealtime = new VoiceRealtimeRuntime({
     publishConversationContent: async (conversationId, transcriptId, publication) => {
@@ -830,7 +832,13 @@ export class GatewayService {
         runningChannels: new Set(this.getRunningChannelIds()) }),
       getPhoneSetupService: () => this.phoneSetup,
       canConfigureEndpoint: endpointId => this.realtime.canConfigureEndpoint(endpointId),
-      emitBrowserEvent: (type, payload) => this.emit(type, payload),
+      emitBrowserEvent: (type, payload) => {
+        if (type !== 'browser.preview.target') { this.emit(type, payload); return; }
+        const { conversationId, runId, source } = payload as Pick<BrowserPreviewTarget, 'conversationId' | 'runId'>
+          & { source?: Omit<BrowserPreviewTarget, 'conversationId' | 'runId'> };
+        if (source) this.browserPreviews.setTarget({ conversationId, runId, ...source });
+        else this.browserPreviews.clearTarget(conversationId, runId);
+      },
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,
       getWorkDiscovery: () => this._workDiscovery ?? undefined,

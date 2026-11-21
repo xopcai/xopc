@@ -456,6 +456,7 @@ class GatewayViewModel internal constructor(application: Application, private va
   private val personalAgentRepository = PersonalAgentRepository(session)
   private val noteDraftStore = NoteDraftStore(application)
   private val realtime = RealtimeClient(session, ai.xopc.mobile.gateway.DeviceTools(application, session))
+  internal val browserPreview = ai.xopc.mobile.gateway.BrowserPreviewAccess(session, realtime)
   private val mutableState = MutableStateFlow(ConnectionUiState())
   private val streamBuffer = ChatStreamBuffer()
   private val closedNarrations = hashSetOf<String>()

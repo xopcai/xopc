@@ -6,7 +6,7 @@ import {
   type RealtimeWebSocket,
 } from '@xopcai/realtime-client';
 import type { ClientEndpointMessage } from '@xopcai/endpoint-tools-protocol';
-import { REALTIME_PROTOCOL_VERSION, type RealtimeEventPayload } from '@xopcai/realtime-protocol';
+import { REALTIME_PROTOCOL_VERSION, type BrowserPreviewClientMessage, type BrowserPreviewServerMessage, type RealtimeEventPayload } from '@xopcai/realtime-protocol';
 
 import { dispatchGatewayRealtimeEvent } from '@/features/gateway/dispatch-realtime-event';
 import { apiUrl } from '@/lib/url';
@@ -24,6 +24,7 @@ type TopicListenerRegistration = {
 
 const listeners = new Map<string, Set<TopicListenerRegistration>>();
 const topicCursors = new Map<string, number | undefined>();
+const browserPreviewListeners = new Set<(message: BrowserPreviewServerMessage) => void>();
 let activeClient: RealtimeClient | undefined;
 let endpointBinding: RealtimeEndpointBinding | undefined;
 
@@ -70,6 +71,7 @@ export function startGatewayRealtime(): () => void {
       setRealtimeConnectionState({ connectionState: state, error: error ?? null });
       if (state === 'connected') window.dispatchEvent(new CustomEvent('gateway-realtime-connected'));
     },
+    onBrowserPreview: message => { for (const listener of browserPreviewListeners) listener(message); },
     onEvent: (event) => {
       if (event.topic === 'gateway' || event.topic === 'sessions') {
         dispatchGatewayRealtimeEvent(event.event, event.data);
@@ -139,6 +141,16 @@ export function attachGatewayRealtimeEndpoint(binding: RealtimeEndpointBinding):
 
 export function sendGatewayEndpointMessage(message: ClientEndpointMessage): void {
   activeClient?.sendEndpointMessage(message);
+}
+
+export function listenGatewayBrowserPreview(listener: (message: BrowserPreviewServerMessage) => void): () => void {
+  browserPreviewListeners.add(listener);
+  return () => { browserPreviewListeners.delete(listener); };
+}
+
+export function sendGatewayBrowserPreview(message: BrowserPreviewClientMessage): void {
+  if (!activeClient) throw new Error('Gateway Realtime is unavailable');
+  activeClient.sendBrowserPreview(message);
 }
 
 export function stopGatewayRealtime(): void {

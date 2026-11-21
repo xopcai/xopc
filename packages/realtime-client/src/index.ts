@@ -9,6 +9,8 @@ import {
   REALTIME_MAX_CLIENT_FRAME_BYTES,
   REALTIME_PROTOCOL_VERSION,
   parseServerRealtimeMessage,
+  type BrowserPreviewClientMessage,
+  type BrowserPreviewServerMessage,
   type ClientRealtimeMessage,
   type RealtimeClientKind,
   type RealtimeCapability,
@@ -55,6 +57,7 @@ export interface RealtimeClientOptions {
   onEvent?: (event: RealtimeEventPayload) => void;
   onSubscribed?: (subscription: { topic: string; cursor: number }) => void;
   onGap?: (gap: { topic: string; requestedSeq: number; earliestSeq: number; recoverable: boolean }) => void | Promise<void>;
+  onBrowserPreview?: (message: BrowserPreviewServerMessage) => void;
   onEndpointMessage?: (message: ServerEndpointMessage) => void;
   onCapabilities?: (capabilities: readonly RealtimeCapability[]) => void;
 }
@@ -161,6 +164,11 @@ export class RealtimeClient {
   unsubscribe(topic: string): void {
     this.desiredSubscriptions.delete(topic);
     if (this.ready) this.send(this.clientMessage('realtime.unsubscribe', { topics: [topic] }));
+  }
+
+  sendBrowserPreview(message: BrowserPreviewClientMessage): void {
+    if (!this.ready) throw new Error('Realtime connection is not ready');
+    this.send(this.clientMessage('browser.preview', message));
   }
 
   sendEndpointMessage(message: ClientEndpointMessage): void {
@@ -346,6 +354,8 @@ export class RealtimeClient {
     } else if (message.kind === 'realtime.gap') {
       this.cursors.set(message.payload.topic, message.payload.earliestSeq - 1);
       return this.options.onGap?.(message.payload);
+    } else if (message.kind === 'browser.preview') {
+      this.options.onBrowserPreview?.(message.payload);
     } else if (message.kind === 'realtime.error') {
       this.options.onStateChange?.('error', message.payload.message);
     } else if (message.kind === 'endpoint.message') {

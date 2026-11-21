@@ -22,6 +22,7 @@ export interface BrowserRuntimeOptions {
   canRestoreSetupSession?: (taskKey: string, sessionId: string) => boolean;
   isTrustedSetupUrl?: (taskKey: string, url: string) => boolean;
   emit?: (type: string, payload: unknown) => void;
+  publishPreview?: (taskKey: string, source?: { endpointId: string; browserSessionId: string; tabId: number; origin: string }) => void;
   resolveTarget?: (taskKey: string) => BrowserTarget | undefined;
   retainSessionsUntilStopped?: boolean;
 }
@@ -59,6 +60,9 @@ export class BrowserRuntime {
     }
     session.lastUsedAt = Date.now();
 
+    if (['navigate', 'close', 'sequence'].includes(input.action) || input.action === 'tabs' && input.operation !== 'list' || effectiveInput.target?.kind === 'attached_tab') {
+      this.options.publishPreview?.(taskKey);
+    }
     this.options.emit?.('browser.action.started', { sessionId: session.id, action: input.action });
     let result: BrowserControlResult;
     try {
@@ -71,7 +75,16 @@ export class BrowserRuntime {
     }
 
     if (result.ok) {
-      if (result.receipt.observation) session.observation = result.receipt.observation;
+      if (result.receipt.observation) {
+        session.observation = result.receipt.observation;
+        const endpointId = driver.previewEndpoint?.(session.id);
+        const tabId = Number(session.observation.tabId);
+        const page = URL.parse(session.observation.url);
+        if (endpointId && effectiveInput.target?.kind !== 'attached_tab' && Number.isSafeInteger(tabId) && tabId >= 0
+          && page && (page.protocol === 'http:' || page.protocol === 'https:')) {
+          this.options.publishPreview?.(taskKey, { endpointId, browserSessionId: session.id, tabId, origin: page.origin });
+        }
+      }
       this.options.emit?.('browser.action.completed', { sessionId: session.id, receipt: withoutVisual(result.receipt) });
       if (result.receipt.observation) {
         this.options.emit?.('browser.observation.created', withoutVisual(result.receipt.observation));

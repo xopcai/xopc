@@ -352,6 +352,7 @@ internal fun MainScreen(
   modifier: Modifier = Modifier,
   connection: ConnectionUiState = ConnectionUiState(),
   phoneRepository: ai.xopc.mobile.gateway.PhoneRepository? = null,
+  browserPreviewAccess: ai.xopc.mobile.gateway.BrowserPreviewAccess? = null,
   mobilePush: ai.xopc.mobile.gateway.MobilePushClient? = null,
   onPair: (String) -> Unit = {},
   onCancelPairing: () -> Unit = {},
@@ -677,6 +678,7 @@ internal fun MainScreen(
       else R.string.assistant_save_note_error, Toast.LENGTH_SHORT).show()
     onMessageNoteFeedbackHandled(feedback)
   }
+  BrowserPreviewHost(browserPreviewAccess, connection) {
   MainContent(phoneRepository = phoneRepository, mobilePush = mobilePush, selectedTab = selectedTab, onSelectTab = { selectedTab = it }, connection = connection,
     onPair = onPair, onCancelPairing = onCancelPairing, onScanPairing = scanPairingCode,
     pairingScanning = pairingScannerOpen || pairingPermissionRequesting,
@@ -833,6 +835,7 @@ internal fun MainScreen(
     colorScheme = colorScheme, onColorSchemeChange = onColorSchemeChange,
     language = language, onLanguageChange = onLanguageChange,
     modifier = modifier)
+  }
   if (pairingScannerOpen) PairingQrScannerDialog(onDetected = { invitation ->
     pairingScannerOpen = false
     val normalizedInvitation = invitation.trim()
@@ -3414,6 +3417,12 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
               active = !messageSearchOpen)
           }
           Row(Modifier.align(Alignment.TopEnd), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            LocalBrowserPreviewOpen.current?.let { openPreview ->
+              IconButton(onClick = openPreview,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-browser-preview")) {
+                Icon(painterResource(R.drawable.action_browser_preview), stringResource(R.string.browser_preview_open), Modifier.size(22.dp))
+              }
+            }
             if (phoneAvailable) IconButton(onClick = onOpenPhone,
               modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-phone")) {
               Box {

@@ -339,6 +339,12 @@ export class AgentToolsFactory {
         canRestoreSetupSession: (taskKey, sessionId) => this.deps.getBrowserSetupService?.()?.canRestoreSession(taskKey, sessionId) === true,
         isTrustedSetupUrl: (taskKey, url) => this.deps.getBrowserSetupService?.()?.allowsVerificationUrl(taskKey, url) === true,
         emit: this.deps.emitBrowserEvent,
+        publishPreview: (conversationId, source) => {
+          const runId = getEmbeddedExecutionRunId();
+          if (runId && getEmbeddedExecutionSession() === conversationId) {
+            this.deps.emitBrowserEvent?.('browser.preview.target', { conversationId, runId, source });
+          }
+        },
         resolveTarget: (conversationId) => {
           const binding = getBrowserTabBinding(conversationId);
           if (binding) return { kind: 'attached_tab', bindingId: binding.id };

@@ -1,3 +1,4 @@
+import { BrowserPreviewPanel } from '@/features/browser-preview/browser-preview-panel';
 import { PanelRight, Smartphone, Globe, FileText, Folders, FolderOpen, ListTodo, Maximize2, MessageSquare, Minimize2, Plus, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -251,6 +252,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
   }
   function tabTitle(tab: (typeof pane.tabs)[number]) {
     if (tab.kind === 'home') return zh ? '新标签页' : 'New tab';
+    if (tab.kind === 'browser-preview') return zh ? '浏览器预览' : tab.title;
     if (tab.kind === 'browser' && tab.title === 'Browser') return zh ? '浏览器' : 'Browser';
     if (tab.kind === 'files') return zh ? '文件' : 'Files';
     if (tab.kind === 'personal-tasks') return zh ? '任务' : 'Tasks';
@@ -370,7 +372,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
           return <div key={tab.id} data-sliding-active={tab.id === pane.activeId} className={cn('group flex h-9 shrink-0 items-center rounded-md transition-colors', tab.id === pane.activeId ? 'bg-surface-panel text-fg' : 'text-fg-muted hover:bg-surface-hover')}>
             <button role="tab" id={`workspace-tab-${tab.id}`} aria-controls="workspace-content" aria-selected={tab.id === pane.activeId} tabIndex={tab.id === pane.activeId ? 0 : -1}
               title={tab.kind === 'file' ? tab.path || title : title} className="flex max-w-56 items-center gap-1.5 rounded-md px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => select(tab.id)} onDoubleClick={() => { if (tab.kind === 'file') store.keepFileOpen(tab.id); }}>
-              {tab.kind === 'phone' ? <Smartphone className="size-4 shrink-0" aria-hidden /> : tab.kind === 'browser' ? <Globe className="size-4 shrink-0" aria-hidden /> : tab.kind === 'sidechat' ? <MessageSquare className="size-4 shrink-0" aria-hidden /> : tab.kind === 'files' ? <FolderOpen className="size-4 shrink-0" aria-hidden /> : tab.kind === 'personal-tasks' ? <ListTodo className="size-4 shrink-0" aria-hidden /> : <FileIcon name={tab.title} />}
+              {tab.kind === 'phone' ? <Smartphone className="size-4 shrink-0" aria-hidden /> : tab.kind === 'browser' || tab.kind === 'browser-preview' ? <Globe className="size-4 shrink-0" aria-hidden /> : tab.kind === 'sidechat' ? <MessageSquare className="size-4 shrink-0" aria-hidden /> : tab.kind === 'files' ? <FolderOpen className="size-4 shrink-0" aria-hidden /> : tab.kind === 'personal-tasks' ? <ListTodo className="size-4 shrink-0" aria-hidden /> : <FileIcon name={tab.title} />}
               <span className={cn("truncate", tab.kind === 'file' && tab.preview && "italic")}>{title}</span>{stateLabel ? <span className="shrink-0 text-xs text-fg-muted">{stateLabel}</span> : null}
             </button>
             <button className={cn(buttonClass, 'size-7')} tabIndex={tab.id === pane.activeId ? 0 : -1} aria-label={`${zh ? '关闭' : 'Close'} ${title}`} disabled={closing === tab.id} onClick={() => {
@@ -411,6 +413,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
             closeOnNavigate={taskDrawer} visible={personalTasks || floatingPersonalTasks}
             onNavigate={floatingPersonalTasks ? () => closeFloatingTasks(false) : undefined} />, taskPanelHost)}
         </div> : null}
+        {visible && active?.kind === 'browser-preview' ? <BrowserPreviewPanel key={active.id} conversationId={scope} /> : null}
         {visible && phoneLayout ? <div id="phone-workspace-slot" data-phone-conversation-id={scope} className="flex min-h-0 flex-1 flex-col overflow-hidden" /> : null}
         {treeHome && !treeOnly ? <div data-workspace-file-placeholder className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <FileText className="size-9 text-fg-muted" strokeWidth={1.25} aria-hidden />

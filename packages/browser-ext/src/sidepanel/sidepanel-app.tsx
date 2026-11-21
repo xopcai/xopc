@@ -58,8 +58,9 @@ interface SidePanelAppProps {
 
 export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps) {
   const [controlPaused, setControlPaused] = useState(false);
+  const [preview, setPreview] = useState<{ requestId: string; viewer: string; origin: string; phase: 'requested' | 'approved' | 'sharing' }>();
   useEffect(() => {
-    const refresh = () => { void chrome.runtime.sendMessage({ type: 'browser/get-status' }).then(status => setControlPaused(status?.controlPaused === true)).catch(() => {}); };
+    const refresh = () => { void chrome.runtime.sendMessage({ type: 'browser/get-status' }).then(status => { setControlPaused(status?.controlPaused === true); setPreview(status?.preview); }).catch(() => {}); };
     refresh(); const timer = setInterval(refresh, 1500);
     return () => clearInterval(timer);
   }, []);
@@ -106,7 +107,7 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
     void (async () => {
       const stored = await readProfile();
       if (stored) {
-        await reconnectBrowserBridge();
+        await chrome.runtime.sendMessage({ type: 'browser/ensure-connected' }).catch(() => undefined);
         setProfile(stored);
         setState('online');
         return;
@@ -266,6 +267,16 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
           ) : null}
         </div>
       </header>
+      {preview ? <section className="card" aria-label={locale === 'zh-CN' ? '浏览器共享' : 'Browser sharing'}>
+        <p>{locale === 'zh-CN' ? `${preview.viewer} 请求观看 ${preview.origin}` : `${preview.viewer} wants to view ${preview.origin}`}</p>
+        {preview.phase === 'requested' ? <button className="primary" onClick={() => {
+          void chrome.runtime.sendMessage({ type: 'browser/preview-approve', requestId: preview.requestId });
+        }}>{locale === 'zh-CN' ? '允许观看' : 'Allow viewing'}</button> : null}
+        {preview.phase === 'approved' ? <p>{locale === 'zh-CN' ? '在任务标签上点击工具栏的 xopc 图标，开始共享。' : 'Click the xopc toolbar icon on the task tab to start sharing.'}</p> : null}
+        <button onClick={() => {
+          void chrome.runtime.sendMessage({ type: 'browser/preview-cancel', requestId: preview.requestId });
+        }}>{preview.phase === 'sharing' ? (locale === 'zh-CN' ? '停止共享' : 'Stop sharing') : (locale === 'zh-CN' ? '取消' : 'Cancel')}</button>
+      </section> : null}
       {controlPaused && <section className="card" role="alert"><p>{t('browserControlStopped')}</p><button className="primary" onClick={() => { void chrome.runtime.sendMessage({ type: 'browser/resume-control' }).then(result => { if (result?.ok) setControlPaused(false); }); }}>{t('browserControlResume')}</button></section>}
       {state !== 'online' ? <section className="center">
         {state === 'loading' ? <div className="muted">{t('loading')}</div> : null}

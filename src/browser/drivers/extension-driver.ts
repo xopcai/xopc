@@ -17,6 +17,7 @@ type ExtensionProvider = {
 
 export class ExtensionDriver implements BrowserDriver {
   readonly kind = 'extension' as const;
+  private readonly previewEndpoints = new Map<string, string>();
 
   constructor(
     private readonly provider: ExtensionProvider,
@@ -31,6 +32,7 @@ export class ExtensionDriver implements BrowserDriver {
   }
 
   async disconnect(): Promise<void> {
+    this.previewEndpoints.clear();
     await this.release();
   }
 
@@ -64,7 +66,14 @@ export class ExtensionDriver implements BrowserDriver {
     return this.send({ ...input, sessionId }, signal);
   }
 
+  previewEndpoint(sessionId: string): string | undefined { return this.previewEndpoints.get(sessionId); }
+
   private async send(input: Parameters<ExtensionProvider['send']>[0], signal?: AbortSignal): Promise<BrowserControlResult> {
-    return (await this.provider.send(input, this.timeoutMs, this.visualFallback, signal)).result;
+    const response = await this.provider.send(input, this.timeoutMs, this.visualFallback, signal);
+    if (input.sessionId) {
+      if (input.action === 'close' || input.target?.kind === 'attached_tab') this.previewEndpoints.delete(input.sessionId);
+      else if (response.result.ok && response.result.receipt.observation) this.previewEndpoints.set(input.sessionId, response.connectionId);
+    }
+    return response.result;
   }
 }

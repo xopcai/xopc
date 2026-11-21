@@ -1,0 +1,12 @@
+<resources>
+  <string name="browser_preview_open">View browser</string>
+  <string name="browser_preview_waiting">Allow viewing in the Chrome extension on the source computer, then click its toolbar icon.</string>
+  <string name="browser_preview_connecting">Connecting to browser</string>
+  <string name="browser_preview_live">Live view</string>
+  <string name="browser_preview_low">Weak connection · reduced quality</string>
+  <string name="browser_preview_snapshot">Low frame-rate preview</string>
+  <string name="browser_preview_ended">Browser sharing has stopped.</string>
+  <string name="browser_preview_shrink">Shrink</string>
+  <string name="browser_preview_expand">Expand</string>
+  <string name="browser_preview_close">Close</string>
+</resources>
