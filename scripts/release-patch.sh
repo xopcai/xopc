@@ -66,6 +66,7 @@ if git ls-remote --exit-code --tags "${REMOTE}" "refs/tags/${TAG}" >/dev/null 2>
   exit 1
 fi
 
+run_release_step "prepare local node-pty tests" node scripts/prepare-node-pty.mjs --local-test
 run_release_step "pnpm run build" pnpm run build
 run_release_step "pnpm run release:check-package" pnpm run release:check-package
 

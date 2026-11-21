@@ -64,8 +64,20 @@ export function resolveNodePtyPackage(repoRoot) {
   return dirname(requireFromRoot.resolve('node-pty/package.json'));
 }
 
+// pnpm can install the macOS prebuilt helper without its execute bit.
+function prepareLocalTestHelper(packageDir) {
+  if (process.platform !== 'darwin') return;
+  const addonDir = ['build/Release', 'build/Debug', `prebuilds/darwin-${process.arch}`]
+    .map(dir => join(packageDir, dir))
+    .find(dir => existsSync(join(dir, 'pty.node')));
+  if (!addonDir) throw new Error('node-pty has no native module for the local tests');
+  chmodSync(join(addonDir, 'spawn-helper'), 0o755);
+}
+
 const directRun = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (directRun) {
   const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-  prepareNodePtyPackage(resolveNodePtyPackage(repoRoot));
+  const packageDir = resolveNodePtyPackage(repoRoot);
+  if (process.argv.includes('--local-test')) prepareLocalTestHelper(packageDir);
+  else prepareNodePtyPackage(packageDir);
 }
