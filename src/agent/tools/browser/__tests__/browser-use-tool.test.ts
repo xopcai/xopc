@@ -51,6 +51,32 @@ describe('browser_use tool', () => {
     expect(result.details).toMatchObject({ ok: true, receipt: { action: 'observe' } });
   });
 
+  it.each([
+    { action: 'scroll', deltaY: 3000 },
+    { action: 'press', key: 'End' },
+    { action: 'wait', condition: 'text', value: 'ready' },
+  ] as const)('explains how to recover a missing revision for $action', async (params) => {
+    const { tool, execute } = createTool({
+      ok: true,
+      receipt: { action: params.action, risk: 'read', durationMs: 1, verified: true },
+    });
+    const result = await tool.execute('call-no-revision', params, undefined as never, undefined as never);
+    expect(execute).not.toHaveBeenCalled();
+    expect(result.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('requires the numeric revision from the latest observation') });
+  });
+
+  it('tells the model to rediscover the session without forwarding a rejected ID', async () => {
+    const { tool, execute } = createTool({
+      ok: false,
+      error: { code: 'SESSION_NOT_FOUND', message: 'The browser session is unavailable for this task.' },
+    });
+    const result = await tool.execute('call-old-session', {
+      action: 'scroll', sessionId: 'old-session', revision: 1, deltaY: 3000,
+    }, undefined as never, undefined as never);
+    expect(execute).toHaveBeenCalledOnce();
+    expect(result.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('Call observe without sessionId') });
+  });
+
   it('decodes strict-provider placeholder fields into the selected action', async () => {
     const { tool, execute } = createTool({
       ok: true,

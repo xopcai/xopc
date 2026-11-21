@@ -227,14 +227,11 @@ chrome.runtime.onMessage.addListener((message: BrowserRuntimeMessage, sender, se
     void isControlPaused().then(controlPaused => sendResponse({ connected: Boolean(endpointClaim), transport: 'gateway-realtime', error: lastConnectionError, controlPaused, preview: preview?.status() }));
   } else if (message.type === 'browser/get-endpoint-claim') {
     sendResponse({ claim: endpointClaim, error: lastConnectionError });
-  } else if (message.type === 'browser/preview-approve' || message.type === 'browser/preview-cancel') {
-    if (sender.url?.split('?')[0] !== chrome.runtime.getURL('dist/sidepanel.html') || typeof message.requestId !== 'string') {
+  } else if (message.type === 'browser/preview-stop') {
+    if (sender.url?.split('?')[0] !== chrome.runtime.getURL('dist/sidepanel.html')) {
       sendResponse({ ok: false });
-    } else if (message.type === 'browser/preview-approve') {
-      void preview?.approve(message.requestId).then(ok => sendResponse({ ok }));
-      if (!preview) sendResponse({ ok: false });
     } else {
-      preview?.cancel(message.requestId);
+      preview?.stop();
       sendResponse({ ok: true });
     }
   } else if (message.type === 'browser/resume-control') {

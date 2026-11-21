@@ -51,14 +51,21 @@ describe('RealtimeRuntime', () => {
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
   });
 
-  it.each(['compatible', 'non-admin', 'old-contract', 'bad-signature', 'old-endpoint-version'])('handles desktop %s without confusing protocol and auth failures', async (variant) => {
+  it.each(['web', 'compatible', 'non-admin', 'old-contract', 'bad-signature', 'old-endpoint-version'])('handles desktop-compatible endpoint %s without confusing protocol and auth failures', async (variant) => {
     const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
-    const principal = { id: 'desktop-test', kind: 'desktop' as const, displayName: 'Desktop', platform: 'darwin',
+    const kind = variant === 'web' ? 'web' : 'desktop';
+    const principal = { id: 'desktop-test', kind, displayName: 'Desktop', platform: 'darwin',
       publicKey: publicKey.export({ format: 'der', type: 'spki' }).toString('base64url'), createdAt: Date.now() };
     const endpoints = new EndpointToolRuntime({ auth: {
       getPrincipal: () => principal, bindEndpoint: () => true, touchPrincipal: () => {},
     } });
-    runtime = new RealtimeRuntime(endpoints);
+    const conversationId = crypto.randomUUID();
+    const previews = new BrowserPreviewRuntime(() => 'active-run');
+    const sendToChrome = vi.fn();
+    previews.register({ source: { endpointId: 'chrome-preview-source', isCurrent: () => true }, isActive: () => true, send: sendToChrome });
+    previews.setTarget({ conversationId, runId: 'active-run', endpointId: 'chrome-preview-source',
+      browserSessionId: 'chrome-session', tabId: 1, origin: 'https://example.org' });
+    runtime = new RealtimeRuntime(endpoints, undefined, previews);
     server = createServer();
     server.on('upgrade', (request, connection, head) => {
       if (!runtime!.handleUpgrade(request, connection, head)) connection.destroy();
@@ -70,13 +77,13 @@ describe('RealtimeRuntime', () => {
       principalId: principal.id, endpointId: 'desktop-instance', connectionInstanceId: crypto.randomUUID(),
       displayName: principal.displayName, kind: principal.kind, platform: principal.platform, appVersion: 'test',
       availability: 'foreground', nonce: crypto.randomUUID(), signedAt: Date.now(), signature: 'pending-signature',
-      tools: [JSON.parse(JSON.stringify(COMPUTER_DESCRIPTOR))],
+      tools: kind === 'web' ? [] : [JSON.parse(JSON.stringify(COMPUTER_DESCRIPTOR))],
     };
     if (variant === 'old-contract') hello.tools[0]!.inputSchema = {};
     hello.signature = sign('sha256', Buffer.from(endpointHelloSigningPayload(hello)),
       { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
     if (variant === 'bad-signature') hello.signature = 'x'.repeat(86);
-    const issued = runtime.tickets.issue('desktop-client', 'desktop', { principalId: 'owner', scopes: variant === 'non-admin' ? ['agents.run'] : ['gateway.admin'] });
+    const issued = runtime.tickets.issue('desktop-client', kind, { principalId: 'owner', scopes: variant === 'non-admin' ? ['agents.run'] : ['gateway.admin'] });
     socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`);
     await waitForOpen(socket);
     const messages = collectMessages(socket);
@@ -84,11 +91,18 @@ describe('RealtimeRuntime', () => {
     try {
       socket.send(JSON.stringify({ protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(),
         kind: 'realtime.hello', sentAt: Date.now(), payload: {
-          ticket: issued.ticket, clientId: 'desktop-client', clientKind: 'desktop', subscriptions: [], endpoint: hello, capabilities: variant === 'old-endpoint-version' ? [] : ['endpoint.tools.v3'],
+          ticket: issued.ticket, clientId: 'desktop-client', clientKind: kind, subscriptions: [], endpoint: hello, capabilities: variant === 'old-endpoint-version' ? [] : ['endpoint.tools.v3', BROWSER_PREVIEW_CAPABILITY],
         } }));
-      if (variant === 'compatible' || variant === 'non-admin') {
+      if (variant === 'web' || variant === 'compatible' || variant === 'non-admin') {
         await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready', payload: { endpoint: { endpointId: hello.endpointId } } });
-        expect(runtime.canConfigureEndpoint(hello.endpointId)).toBe(variant === 'compatible');
+        expect(runtime.canConfigureEndpoint(hello.endpointId)).toBe(variant !== 'non-admin');
+        const requestId = crypto.randomUUID();
+        socket.send(JSON.stringify({ protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(),
+          kind: 'browser.preview', sentAt: Date.now(), payload: { type: 'view', requestId, conversationId } }));
+        await expect(messages.next()).resolves.toMatchObject({ kind: 'browser.preview',
+          payload: variant === 'non-admin' ? { type: 'closed', requestId, reason: 'unavailable' } : { type: 'waiting', requestId } });
+        if (variant === 'non-admin') expect(sendToChrome).not.toHaveBeenCalled();
+        else expect(sendToChrome).toHaveBeenCalledWith(expect.objectContaining({ type: 'requested', requestId, tabId: 1 }));
         socket.close(); await closed;
         expect(runtime.canConfigureEndpoint(hello.endpointId)).toBe(false);
       } else if (variant === 'old-endpoint-version') {

@@ -164,6 +164,15 @@ const ACTION_FIELDS = {
   close: [],
 } as const;
 
+export function browserUseInputError(action: string, revision: unknown): string {
+  const message = `Invalid parameters for browser action "${action}".`;
+  if (isBrowserActionName(action) && ACTION_FIELDS[action].some(field => field === 'revision')
+    && (typeof revision !== 'number' || !Number.isFinite(revision))) {
+    return `${message} "${action}" requires the numeric revision from the latest observation (including page-level scroll, press, and wait). Call observe for the current session if needed, then retry with that revision.`;
+  }
+  return message;
+}
+
 const SEQUENCE_STEP_FIELDS = {
   click: ['ref', 'expect'],
   fill: ['ref', 'value', 'submit', 'expect'],

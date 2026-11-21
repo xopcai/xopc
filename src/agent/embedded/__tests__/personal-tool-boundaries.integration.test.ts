@@ -18,6 +18,7 @@ vi.mock('../model-runtime.js', async () => {
 });
 
 import { AgentManager } from '../../agent-manager.js';
+import { AgentToolsFactory } from '../../tools/factory.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import type { MessageBus } from '../../../infra/bus/index.js';
 import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
@@ -175,6 +176,7 @@ it('refreshes Browser tool discovery in the same chat after shared configuration
   const config = ConfigSchema.parse({ userContext: { enabled: false }, browser: { enabled: false } });
   const manager = new AgentManager({ workspace: root, model: 'openai/gpt-4o-mini', config,
     bus: {} as MessageBus, getCurrentContext: () => null });
+  const shutdownBrowser = vi.spyOn(AgentToolsFactory.prototype, 'shutdownBrowser');
   try {
     const before = manager.getOrCreateAgent(conversationId);
     expect(before.state.tools.some(tool => tool.name === 'browser_use')).toBe(false);
@@ -182,10 +184,18 @@ it('refreshes Browser tool discovery in the same chat after shared configuration
     const after = manager.getOrCreateAgent(conversationId);
     expect(after).not.toBe(before);
     expect(after.state.tools.some(tool => tool.name === 'browser_use')).toBe(true);
+    expect(shutdownBrowser).toHaveBeenCalledTimes(1);
+    manager.updateRuntimeConfiguration(ConfigSchema.parse({ ...config, browser: { ...config.browser, enabled: true },
+      userContext: { ...config.userContext, enabled: true } }));
+    expect(shutdownBrowser).toHaveBeenCalledTimes(1);
     expect(manager.getOrCreateAgent(conversationId)).toBe(after);
     manager.updateRuntimeConfiguration(config);
+    expect(shutdownBrowser).toHaveBeenCalledTimes(2);
     expect(manager.getOrCreateAgent(conversationId).state.tools.some(tool => tool.name === 'browser_use')).toBe(false);
-  } finally { manager.dispose(); }
+  } finally {
+    shutdownBrowser.mockRestore();
+    manager.dispose();
+  }
 }, 15000);
 
 

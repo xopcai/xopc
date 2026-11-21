@@ -13,6 +13,7 @@ import { traceTools } from '../observability/runtime.js';
  */
 
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import {
   Agent,
@@ -447,16 +448,19 @@ export class AgentManager implements AgentInstanceGateway {
    * of dependency wiring) on every reload. The factory's deps are now built from
    * a single helper ({@link buildToolsFactoryDeps}) and read `this.*` through
    * closures, so existing instances automatically see the new config without
-   * reconstruction. The browser is still shut down because its cached settings
-   * (headless mode, backend choice) come from the config snapshot at connect time.
+   * reconstruction. Browser and computer resources are released when their
+   * configuration changes or an active agent's tool policy changes.
    */
   updateRuntimeConfiguration(config: Config): void {
+    let resetBrowser = !isDeepStrictEqual(this.config.config?.browser, config.browser)
+      || !isDeepStrictEqual(this.config.config?.computer, config.computer);
     this.config.config = config;
     for (const instance of this.agents.values()) {
       const before = instance.effectiveProfile.config;
       const after = resolveEffectiveAgentProfileForSession(instance.conversationId).config;
       if (JSON.stringify([before.runtime.codemode, before.tools, before.toolAllowlist])
         !== JSON.stringify([after.runtime.codemode, after.tools, after.toolAllowlist])) {
+        resetBrowser = true;
         void abortEmbeddedRun(instance.conversationId);
         evictEmbeddedSessionRunner(instance.conversationId, 'agent_tool_configuration_changed');
       }
@@ -466,7 +470,7 @@ export class AgentManager implements AgentInstanceGateway {
     this.defaultModel = ref || getDefaultModelSync(config);
     this.baseWorkspacePath = this.computeBaseWorkspacePath();
     this.skillFilesystemWatcher.refreshPrimaryWorkspace(this.baseWorkspacePath);
-    void this.toolsFactory.shutdownBrowser();
+    if (resetBrowser) void this.toolsFactory.shutdownBrowser();
     void this.workspaceRuntimes.clearAll();
   }
 

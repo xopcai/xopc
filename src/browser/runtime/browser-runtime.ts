@@ -60,7 +60,7 @@ export class BrowserRuntime {
     }
     session.lastUsedAt = Date.now();
 
-    if (['navigate', 'close', 'sequence'].includes(input.action) || input.action === 'tabs' && input.operation !== 'list' || effectiveInput.target?.kind === 'attached_tab') {
+    if (['navigate', 'close'].includes(input.action) || input.action === 'tabs' && input.operation !== 'list' || effectiveInput.target?.kind === 'attached_tab') {
       this.options.publishPreview?.(taskKey);
     }
     this.options.emit?.('browser.action.started', { sessionId: session.id, action: input.action });

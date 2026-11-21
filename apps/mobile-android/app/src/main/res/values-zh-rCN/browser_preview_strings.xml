@@ -1,6 +1,6 @@
 <resources>
   <string name="browser_preview_open">查看浏览器</string>
-  <string name="browser_preview_waiting">请在来源电脑的 Chrome 扩展侧栏允许观看，然后点击工具栏图标开始共享。</string>
+  <string name="browser_preview_waiting">在来源 Chrome 的任务标签上，点一下工具栏的 xopc 图标即可共享。</string>
   <string name="browser_preview_connecting">正在连接浏览器</string>
   <string name="browser_preview_live">实时画面</string>
   <string name="browser_preview_low">弱网 · 已降低画质</string>

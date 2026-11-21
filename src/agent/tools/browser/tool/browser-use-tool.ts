@@ -4,7 +4,7 @@ import { formatBrowserObservation } from '../../../../browser/observation/format
 import type { BrowserNotReadyError } from '../../../../browser/readiness.js';
 import type { BrowserRuntime } from '../../../../browser/runtime/browser-runtime.js';
 
-import { BrowserUseSchema, decodeBrowserUseInput, type BrowserUseInput } from './schemas.js';
+import { BrowserUseSchema, browserUseInputError, decodeBrowserUseInput, type BrowserUseInput } from './schemas.js';
 
 export interface CreateBrowserUseToolDeps {
   getSetupService?: () => import('../../../../browser/setup/service.js').BrowserSetupService | undefined;
@@ -21,18 +21,19 @@ export function createBrowserUseTool(
     name: 'browser_use',
     label: '🌐 Browser',
     description:
-      'Control a persistent browser through typed semantic actions. Start with observe or navigate, then use only refs and revision values from the latest observation. Read visible data from the latest observation, including labeled textbox values. Once the requested result is visible, report it and finish. Keep any verification in this browser session. Screenshots are attached only when requested or semantic observation is insufficient.',
+      'Control a persistent browser through typed semantic actions. Start with observe or navigate. Every click, fill, select, press, scroll, wait, upload, and sequence requires the numeric revision from the latest observation, even without an element ref. Use refs from that same observation. Read visible data from the latest observation, including labeled textbox values. Once the requested result is visible, report it and finish. Keep any verification in this browser session. Screenshots are attached only when requested or semantic observation is insufficient.',
     parameters: BrowserUseSchema,
 
     async execute(_toolCallId, params: BrowserUseInput, signal) {
       const input = decodeBrowserUseInput(params);
       if (!input) {
+        const message = browserUseInputError(params.action, params.revision);
         return {
-          content: [{ type: 'text', text: `[INVALID_INPUT] Invalid parameters for browser action "${params.action}".` }],
+          content: [{ type: 'text', text: `[INVALID_INPUT] ${message}` }],
           details: {
             ok: false,
             kind: 'browser_error',
-            error: { code: 'INVALID_INPUT', message: `Invalid parameters for browser action "${params.action}".` },
+            error: { code: 'INVALID_INPUT', message },
           },
         };
       }
@@ -73,8 +74,12 @@ function presentResult(result: BrowserControlResult) {
 
   if (!('error' in result)) throw new Error('Invalid browser control result');
   const observation = result.error.observation;
+  const recovery = result.error.code === 'SESSION_NOT_FOUND'
+    ? 'Call observe without sessionId to get the current session. If it opens a blank page, navigate to the intended page before retrying. Use the new observation’s revision and refs.'
+    : '';
   const text = [
     `[${result.error.code}] ${result.error.message}`,
+    recovery,
     observation ? formatBrowserObservation(observation) : '',
   ].filter(Boolean).join('\n\n');
   return {

@@ -415,7 +415,8 @@ export class RealtimeRuntime {
         if (this.browserPreviews && negotiatedCapabilities?.includes(BROWSER_PREVIEW_CAPABILITY) && !desktopBinding) {
           const previewSource = claim.clientKind === 'browser_extension' && device?.platform === 'chrome'
             && endpointId && this.endpointTools?.registry.get(endpointId)?.principalId === device.id ? endpointId : undefined;
-          const previewViewer = ((!endpointId && ['web', 'desktop'].includes(claim.clientKind))
+          // The Web UI can register its local tools on the same owner-authenticated socket.
+          const previewViewer = ((!device && ['web', 'desktop'].includes(claim.clientKind))
             || claim.clientKind === 'mobile' && device?.platform === 'android'
               && (!endpointId || this.endpointTools?.registry.get(endpointId)?.principalId === device.id))
             && hasGatewayScope(claim.scopes, 'sessions.read') && hasGatewayScope(claim.scopes, 'agents.run');
@@ -459,9 +460,14 @@ export class RealtimeRuntime {
         if (endpointId && connectionId) this.endpointTools?.touch(endpointId, connectionId);
         writer.enqueue(serverMessage('realtime.pong', {}), 'critical');
       } else if (message.kind === 'browser.preview') {
-        if (!previewPeer || !this.browserPreviews) return;
         if (Date.now() - previewWindowAt >= 1000) { previewWindowAt = Date.now(); previewMessages = 0; }
         if (++previewMessages > 100) { socket.close(4408, 'Browser preview signaling rate exceeded'); return; }
+        if (!previewPeer || !this.browserPreviews) {
+          if (message.payload.type === 'view') writer.enqueue(scopedFrame(serverMessage('browser.preview', {
+            type: 'closed', requestId: message.payload.requestId, reason: 'unavailable',
+          })), 'critical');
+          return;
+        }
         this.browserPreviews.receive(previewPeer, message.payload);
       } else if (!endpointId || !connectionId || !this.endpointTools) {
         sendError('ENDPOINT_NOT_REGISTERED', 'Endpoint messages require an endpoint identity');

@@ -10,7 +10,7 @@ import { useGatewayRealtimeStore } from '@/stores/gateway-realtime-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-type Status = 'connecting' | 'waiting' | 'ready' | 'snapshot' | 'unavailable' | 'ended' | 'expired' | 'busy';
+type Status = 'connecting' | 'waiting' | 'ready' | 'snapshot' | 'unavailable' | 'no-response' | 'ended' | 'expired' | 'busy';
 
 export function BrowserPreviewPanel({ conversationId }: { conversationId: string }) {
   const zh = useLocaleStore(state => state.language === 'zh');
@@ -27,9 +27,11 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
     if (!connected || !video.current) { setStatus('unavailable'); return; }
     const element = video.current;
     const requestId = crypto.randomUUID();
+    const requestDeadline = performance.now() + BROWSER_PREVIEW_REQUEST_MS;
     const candidates: RTCIceCandidateInit[] = [];
     const outgoing: RTCIceCandidateInit[] = [];
     let peer: RTCPeerConnection | undefined;
+    let pendingApproval: { ice?: BrowserPreviewIce } | undefined;
     let stopped = false;
     let offerSent = false;
     let restarted = false;
@@ -128,7 +130,8 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
 
     function armLease(ms: number): void {
       clearTimeout(expires);
-      expires = setTimeout(() => stop('expired'), ms);
+      const duration = peer ? ms : Math.min(ms, requestDeadline - performance.now());
+      expires = setTimeout(() => stop('expired'), duration);
     }
 
     function outgoingCandidate(candidate: RTCIceCandidateInit): void {
@@ -195,7 +198,6 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
     }
 
     async function startPeer(ice?: BrowserPreviewIce): Promise<void> {
-      if (document.hidden) { stop('ended'); return; }
       setStatus('connecting');
       const connection = peer = new RTCPeerConnection(ice);
       mediaDeadline = setTimeout(onTransportFailure, 5000);
@@ -226,15 +228,26 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
       await makeOffer(connection);
     }
 
+    async function startApprovedPreview(): Promise<void> {
+      if (stopped || document.hidden || !pendingApproval) return;
+      const { ice } = pendingApproval;
+      pendingApproval = undefined;
+      const starting = startPeer(ice);
+      armLease(BROWSER_PREVIEW_LEASE_MS);
+      await starting;
+    }
+
     async function handle(message: BrowserPreviewServerMessage): Promise<void> {
       if (stopped || message.requestId !== requestId) return;
       if (message.type === 'waiting') {
+        armLease(BROWSER_PREVIEW_REQUEST_MS);
         setOrigin(message.origin);
         setStatus('waiting');
-      } else if (message.type === 'accepted' && !peer) {
+      } else if (message.type === 'accepted' && !peer && !pendingApproval) {
+        pendingApproval = { ice: message.ice };
         armLease(BROWSER_PREVIEW_LEASE_MS);
         renew = setInterval(() => { if (!send({ type: 'renew', requestId })) stop('unavailable'); }, 3000);
-        await startPeer(message.ice);
+        await startApprovedPreview();
       } else if (message.type === 'quality' && message.quality === 'snapshot' && message.snapshotToken && mode === 'snapshot') {
         void loadSnapshots(message.snapshotToken);
       } else if (message.type === 'lease') {
@@ -263,14 +276,17 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
       clearTimeout(mediaDeadline);
       if (!playing) { playing = true; if (mode !== 'snapshot') setStatus('ready'); }
     };
-    const onVisibility = () => { if (document.hidden) stop('ended'); };
+    const onVisibility = () => { void startApprovedPreview().catch(() => stop('unavailable')); };
+    const onPageHide = () => stop('ended');
     element.addEventListener('playing', onPlaying);
     document.addEventListener('visibilitychange', onVisibility);
-    armLease(BROWSER_PREVIEW_REQUEST_MS);
+    window.addEventListener('pagehide', onPageHide);
+    expires = setTimeout(() => stop('no-response'), 5000);
     if (document.hidden || !send({ type: 'view', requestId, conversationId })) stop('unavailable');
     return () => {
       unsubscribe();
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
       element.removeEventListener('playing', onPlaying);
       stop('ended');
     };
@@ -278,10 +294,11 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
 
   const copy = {
     connecting: zh ? '正在连接浏览器' : 'Connecting to browser',
-    waiting: zh ? '请在来源电脑的任务标签上打开 xopc 侧栏，允许观看后点击工具栏图标开始共享。' : 'On the source computer, open the xopc side panel on the task tab. Allow viewing, then click the toolbar icon to start sharing.',
+    waiting: zh ? '在来源 Chrome 的任务标签上，点一下工具栏的 xopc 图标即可共享。' : 'Click the xopc toolbar icon once on the source Chrome tab to share it.',
     ready: zh ? '实时画面' : 'Live view',
     snapshot: zh ? '低帧率预览' : 'Low frame-rate preview',
     unavailable: zh ? '当前任务的浏览器画面不可用。' : 'The browser preview is unavailable for this task.',
+    'no-response': zh ? 'Gateway 未响应浏览器预览请求。' : 'The Gateway did not respond to the browser preview request.',
     ended: zh ? '浏览器画面已停止共享。' : 'The browser preview has stopped.',
     expired: zh ? '观看请求或连接已过期。' : 'The preview request or connection has expired.',
     busy: zh ? '已有设备正在观看或等待共享。' : 'Another device is viewing or waiting to connect.',

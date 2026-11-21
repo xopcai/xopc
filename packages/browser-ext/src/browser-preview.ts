@@ -10,7 +10,7 @@ import { automationSessions } from './session-manager';
 import { gatewayFetch } from './sidepanel/auth';
 
 type PreviewRequest = Extract<BrowserPreviewServerMessage, { type: 'requested' }>;
-type Viewer = PreviewRequest & { approved?: true; active?: true; snapshot?: string; uploading?: boolean };
+type Viewer = PreviewRequest & { verified?: true; active?: true; snapshot?: string; uploading?: boolean };
 
 export function installBrowserPreview(send: (message: BrowserPreviewClientMessage) => void) {
   if (!chrome.action?.onClicked || !chrome.runtime.onConnect) return;
@@ -28,16 +28,15 @@ export function installBrowserPreview(send: (message: BrowserPreviewClientMessag
   function updateToolbar(): void {
     const tabId = target?.tabId;
     if (tabId === undefined) return;
-    const sharing = [...viewers.values()].some(viewer => viewer.active);
-    const ready = [...viewers.values()].some(viewer => viewer.approved);
+    const sharing = captureReady && viewers.size > 0;
+    const ready = [...viewers.values()].some(viewer => viewer.verified);
     const zh = chrome.i18n.getUILanguage().startsWith('zh');
     const title = sharing ? (zh ? '停止共享浏览器画面' : 'Stop sharing the browser preview')
       : ready ? (zh ? '点击开始共享任务标签' : 'Click to start sharing the task tab')
-        : viewers.size ? (zh ? '查看浏览器共享请求' : 'Review browser sharing request')
-          : chrome.i18n.getMessage('appName') || 'xopc';
+        : chrome.i18n.getMessage('appName') || 'xopc';
     void chrome.action.setTitle({ tabId, title }).catch(() => {});
-    void chrome.action.setBadgeText({ tabId, text: sharing ? '●' : viewers.size ? '▶' : '' }).catch(() => {});
-    void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: !ready || sharing && [...viewers.values()].some(viewer => !viewer.approved) }).catch(() => {});
+    void chrome.action.setBadgeText({ tabId, text: sharing ? '●' : ready ? '▶' : '' }).catch(() => {});
+    void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: !ready && !sharing }).catch(() => {});
   }
 
   function clear(inform: boolean): void {
@@ -68,26 +67,29 @@ export function installBrowserPreview(send: (message: BrowserPreviewClientMessag
   }
 
   async function prepare(message: PreviewRequest): Promise<void> {
-    if (!ownsTab(message) || viewers.size >= 2 || (target && (target.browserSessionId !== message.browserSessionId
+    if (!ownsTab(message) || viewers.size >= 2 || (target && (target.conversationId !== message.conversationId || target.browserSessionId !== message.browserSessionId
       || target.tabId !== message.tabId || target.origin !== message.origin))) {
       notify({ type: 'close', requestId: message.requestId });
       return;
     }
     target ??= message;
-    viewers.set(message.requestId, message);
+    const viewer: Viewer = { ...message };
+    viewers.set(message.requestId, viewer);
     try {
       const [frame] = await chrome.scripting.executeScript({ target: documentId
         ? { tabId: message.tabId, documentIds: [documentId] } : { tabId: message.tabId }, func: () => location.origin });
-      if (!viewers.has(message.requestId)) return;
+      if (viewers.get(message.requestId) !== viewer) return;
       if (!frame?.documentId || frame.result !== message.origin || !ownsTab(message)) { remove(message.requestId, true); return; }
       if (documentId && frame.documentId !== documentId) { remove(message.requestId, true); return; }
       documentId = frame.documentId;
-      updateToolbar();
+      viewer.verified = true;
+      if (captureReady) accept(viewer);
+      else updateToolbar();
     } catch { remove(message.requestId, true); }
   }
 
   function accept(viewer: Viewer): void {
-    if (!publisher || !captureReady || !viewer.approved || viewer.active) return;
+    if (!publisher || !captureReady || !viewer.verified || viewer.active) return;
     viewer.active = true;
     notify({ type: 'accept', requestId: viewer.requestId });
     updateToolbar();
@@ -96,13 +98,14 @@ export function installBrowserPreview(send: (message: BrowserPreviewClientMessag
   chrome.action.onClicked.addListener(tab => {
     const current = target;
     const targetDocument = documentId;
-    const first = [...viewers.values()].find(viewer => viewer.approved);
-    if (!current || !first || !targetDocument || current.tabId !== tab.id) {
+    if (!current || !targetDocument || current.tabId !== tab.id) {
       if (tab.id !== undefined) void chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
       return;
     }
-    if (publisher) { clear(true); return; }
+    if (captureReady) { clear(true); return; }
     if (captureId) return;
+    const first = [...viewers.values()].find(viewer => viewer.verified);
+    if (!first) return;
     if (!ownsTab(current)) { clear(true); return; }
     captureId = first.requestId;
     chrome.tabCapture.getMediaStreamId({ targetTabId: current.tabId, consumerTabId: current.tabId }, id => {
@@ -167,24 +170,14 @@ export function installBrowserPreview(send: (message: BrowserPreviewClientMessag
       publisher?.postMessage(message);
     },
     status: () => {
-      const current = [...viewers.values()].find(viewer => !viewer.active) ?? viewers.values().next().value;
-      if (!current || !documentId) return undefined;
-      return { requestId: current.requestId, viewer: current.viewer, origin: current.origin,
-        phase: current.active ? 'sharing' as const : current.approved ? 'approved' as const : 'requested' as const };
+      if (!target || !documentId) return undefined;
+      return { origin: target.origin, sharing: captureReady };
     },
-    async approve(id: string): Promise<boolean> {
-      const viewer = viewers.get(id);
-      if (!viewer || !documentId || !ownsTab(viewer)) return false;
-      viewer.approved = true;
-      if (publisher) accept(viewer);
-      else updateToolbar();
-      return true;
-    },
-    cancel(id: string): void { remove(id, true); },
+    stop: () => clear(true),
     clear: () => clear(false),
     async stopBeforeAction(input: BrowserActionInput): Promise<void> {
       if (!target || target.browserSessionId !== input.sessionId
-        || !['navigate', 'tabs', 'close', 'sequence', 'fill', 'upload'].includes(input.action)
+        || !['navigate', 'tabs', 'close', 'fill', 'upload'].includes(input.action)
         || input.action === 'tabs' && input.operation === 'list') return;
       const port = publisher;
       if (!port) { clear(true); return; }
