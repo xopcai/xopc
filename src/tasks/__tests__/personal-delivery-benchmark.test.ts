@@ -144,7 +144,10 @@ describe('personal delivery benchmark v1', () => {
     expect(payload(runId).outcome.status).toBe('partial');
   });
 
-  it.each(['worker artifact', 'long reply fallback'] as const)('F02-download: a %s is readable only through its authenticated original chat', async (source) => {
+  it.each([
+    ['F02-download', 'worker artifact'],
+    ['F03-long-download', 'long reply fallback'],
+  ] as const)('%s: a %s is readable only through its authenticated original chat', async (_id, source) => {
     const { main, runId, coordinator, outcome } = execution();
     const fallback = source === 'long reply fallback';
     const content = fallback
@@ -205,7 +208,7 @@ describe('personal delivery benchmark v1', () => {
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
   });
 
-  it('keeps the complete result readable when its attachment could not be created', async () => {
+  it('F04-inline-fallback: keeps the complete result readable when its attachment could not be created', async () => {
     const { main, coordinator, outcome } = execution();
     const report = '结论：本月对账完成。\n\n' + '保留完整核对清单。'.repeat(100);
     coordinator.captureOutcome(outcome);

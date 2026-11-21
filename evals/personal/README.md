@@ -14,7 +14,7 @@ pnpm run eval:personal:p0
 pnpm run eval:personal:p0 -- --output .xopc-evals/personal/candidate.json --label candidate
 ```
 
-The runner executes eight frozen cases in `src/tasks/__tests__/personal-delivery-benchmark.test.ts`, using temporary SQLite state, scripted worker outcomes, and a real authenticated HTTP server for file download and access isolation. It emits a versioned JSON report containing per-case results, durations, the source commit, relevant source hashes, suite hash and lockfile hash. A failing case makes the command exit nonzero. No models or real accounts are used. The cases also run in the ordinary Vitest regression suite.
+P0 v2 executes ten cases in `src/tasks/__tests__/personal-delivery-benchmark.test.ts`, using temporary SQLite state, scripted worker outcomes, and a real authenticated HTTP server for file download and access isolation. It emits a versioned JSON report with per-case results, durations, source commit and source hashes including the fixtures and lockfile. A failing case makes the command exit nonzero. No models or real accounts are used. The cases also run in the ordinary Vitest regression suite.
 
 | Case | Invariant |
 | --- | --- |
@@ -25,11 +25,13 @@ The runner executes eight frozen cases in `src/tasks/__tests__/personal-delivery
 | S02-reference | A model cannot introduce a host download link |
 | S02-fallback | Worker paths do not reappear through fallback or count as published files |
 | F02-download | A real report is downloadable through its original authenticated chat, and inaccessible to another chat |
+| F03-long-download | A long result's fallback attachment follows the same authenticated chat boundary |
+| F04-inline-fallback | The complete result remains readable in chat if attachment creation fails |
 | H03-policy | Concise default has explicit detail exceptions; published artifacts receive a short fallback |
 
 `H03-policy` checks policy and deterministic fallback behavior; it does **not** prove that a live model expresses itself naturally. `F02-download` uses scripted completion and real HTTP delivery; it does **not** claim real specialist execution.
 
-To evaluate an earlier revision, create a disposable checkout, install the same locked dependencies, copy the unchanged benchmark test into that checkout, and pass `--root <checkout> --label pre-p0`. Keep identical suite hashes across comparisons. Only the new test fixture is added to the baseline checkout; its production source remains unchanged. The checked-in reports reproduce pre-P0 `cb13eb3109ba22d0e5670b0774af2b8371221ff7` (2/8) versus the candidate (8/8). Durations are observations, not performance thresholds.
+To evaluate an earlier revision, create a disposable checkout, install the same locked dependencies, copy the matching benchmark test into that checkout, and pass `--root <checkout> --label pre-p0`. Keep identical fixture hashes across comparisons. The checked-in v1 reports reproduce pre-P0 `cb13eb3109ba22d0e5670b0774af2b8371221ff7` (2/8) versus the candidate (8/8).
 
 ## Real-model workflow verification
 
@@ -58,7 +60,7 @@ XOPC_ALLOCATION_REPORT=.xopc-evals/personal/live-research.json \
 node --import tsx scripts/personal-allocation-live-smoke.mts
 ```
 
-P1 runs the eight P0 cases plus twelve evidence/acceptance/format cases from `src/tasks/__tests__/task-research-result.test.ts`: real tool provenance, fabricated quotes and URLs, omitted/unexpanded criteria, unsupported and unknown claim references, durable receipt projection, review outages, superseded requirements, unverified fallback checks, prose/legacy JSON equivalence and acceptance-upgrade rejection. Its component reviewer is scripted; the [P1 baseline](baselines/p1-candidate.json) is a 20-case deterministic regression result, not a research model score. Startup and end hashes must match.
+P1 v3 runs the ten P0 cases plus 23 evidence/acceptance/format cases from `src/tasks/__tests__/task-research-result.test.ts`: real tool provenance, fabricated quotes and URLs, omitted/unexpanded criteria, unsupported and unknown claim references, durable receipt projection, review outages and bounded deadlines, superseded requirements, unverified fallback checks, prose/legacy JSON equivalence and acceptance-upgrade rejection. The component reviewer is scripted. The [v1 P1 baseline](baselines/p1-candidate.json) covers 20 deterministic cases. Startup and end hashes must match.
 
 The real-model research workflow adds frozen synthetic ASR prices to the sales fixture, checks hourly/minute conversion, undisclosed TTS price handling, provenance and each substantive criterion, and verifies that the concise reply retains key numbers and limitations. It also submits a deliberately wrong 100.00/hour claim against the actual 1.00/hour quote to a real review-model call. That claim must not be supported and its criterion must not pass.
 
@@ -77,7 +79,7 @@ XOPC_ALLOCATION_LIVE=1 pnpm run eval:personal:live-repair -- \
   --output-dir .xopc-evals/personal/p2-live
 ```
 
-The deterministic P2 suite v2 contains 48 cases: P0/P1 plus same-run repair, no-progress stopping, the two-continuation budget, missing publications, requirement adoption checks, unknown external effects, legacy-judge ownership, persisted fetch URL metadata, failed fetch exclusion, bounded review-format correction and preservation of short webpage introductions, acceptance-count consistency, evidence amendments and circular-criterion exclusion. Reviewer/model responses in component cases are scripted. `J01–J03` do not make paid model calls.
+The deterministic P2 suite v4 contains 73 cases: P0/P1 plus same-run repair, no-progress stopping, the two-continuation budget, missing publications, requirement adoption checks, unknown external effects, legacy-judge ownership, persisted fetch URL metadata, failed fetch exclusion, bounded review-format correction and preservation of short webpage introductions, acceptance-count consistency, evidence amendments and circular-criterion exclusion. Reviewer and model responses in component cases are scripted.
 
 The real adapter uses configured Personal/Router/worker/review models and a temporary authenticated Gateway. Every scenario includes actual CSV calculation, executable reproduction, frozen synthetic prices, research submission, original-chat history and byte downloads. The scenarios add:
 

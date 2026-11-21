@@ -233,6 +233,34 @@ describe('personal research benchmark v1', () => {
     expect(result.checks.every(check => check.status === 'unverified')).toBe(true);
     expect(currentTaskResearchResult(runId)!.sources).toHaveLength(1);
   });
+  it('accepts a slow review within budget and cancels at the earlier TaskRun or caller deadline', async () => {
+    const { worker, runId } = execution();
+    vi.useFakeTimers();
+    try {
+      const delayed = submitTaskResearchResult(worker.key, 'slow', input, undefined, async args => {
+        await new Promise(resolve => setTimeout(resolve, 40_000));
+        return reviewer(args);
+      });
+      await vi.advanceTimersByTimeAsync(40_000);
+      expect((await delayed).review).toBe('model_reviewed');
+
+      getSqliteDatabase().prepare('UPDATE task_runs SET timeout_at = ? WHERE run_id = ?').run(Date.now() + 2_000, runId);
+      const stopped = vi.fn<ResearchReviewer>().mockImplementation(() => new Promise(() => {}));
+      const timedOut = submitTaskResearchResult(worker.key, 'deadline', input, undefined, stopped);
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect((await timedOut).checks.every(check => check.status === 'unverified')).toBe(true);
+      expect(stopped.mock.calls[0]?.[1]?.aborted).toBe(true);
+
+      getSqliteDatabase().prepare('UPDATE task_runs SET timeout_at = NULL WHERE run_id = ?').run(runId);
+      const controller = new AbortController();
+      const cancelled = submitTaskResearchResult(worker.key, 'cancelled', input, controller.signal, stopped);
+      const rejected = expect(cancelled).rejects.toThrow('Caller cancelled');
+      controller.abort(new Error('Caller cancelled'));
+      await rejected;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('reviews the final HTML bytes and records host evidence for structure while keeping source checks strict', async () => {
     const { worker, runId, coordinator } = execution(['HTML 页面包含标题和页脚。', '引用官方价格来源。'], ['report.html']);
     const html = '<!doctype html><html><head><title>Report</title></head><body><h1>Price report</h1><footer>Source coverage</footer></body></html>';

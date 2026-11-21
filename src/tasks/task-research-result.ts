@@ -30,21 +30,56 @@ import { taskInstructionSequence } from './task-instruction-sequence.js';
 export { taskInstructionSequence } from './task-instruction-sequence.js';
 
 const log = createLogger('TaskResearchResult');
+const RESEARCH_REVIEW_TIMEOUT_MS = 75_000;
 const text = z.string().trim().min(1);
 export const TaskResearchSubmissionSchema = z.object({
   followUp: TaskFollowUpHintSchema.optional(),
   finalText: text.max(16_000).optional(),
   finalArtifactIds: z.array(text).max(50).refine(ids => new Set(ids).size === ids.length, 'Duplicate final artifact IDs').optional(),
+  replacementArtifactIds: z.array(text).min(1).max(50)
+    .refine(ids => new Set(ids).size === ids.length, 'Duplicate replacement artifact IDs').optional(),
   mode: z.enum(['replace', 'amend']).optional(),
   retireClaimIds: z.array(text.max(120)).max(40).optional(),
   sources: z.array(z.object({ id: text.max(120), toolCallId: text.optional(), excerpt: text.max(2000).optional(),
     excerptRange: z.object({ start: z.number().int().nonnegative(), end: z.number().int().positive() }).strict().optional(),
     url: z.string().url().optional() }).strict().refine(source => Boolean(source.excerpt) !== Boolean(source.excerptRange)
-      && (!source.excerptRange || Boolean(source.toolCallId)), 'Supply either an exact excerpt or a toolCallId and excerptRange')).min(1).max(40),
+      && (!source.excerptRange || Boolean(source.toolCallId)), 'Supply either an exact excerpt or a toolCallId and excerptRange')).max(40),
   claims: z.array(z.object({ id: text.max(120), statement: text.max(2000),
-    kind: z.enum(['fact', 'inference', 'recommendation']), sourceIds: z.array(text.max(120)).min(1).max(8) }).strict()).min(1).max(40),
-}).strict().refine(value => !value.retireClaimIds?.length || value.mode === 'amend', 'Retiring claims requires amend mode');
+    kind: z.enum(['fact', 'inference', 'recommendation']), sourceIds: z.array(text.max(120)).min(1).max(8) }).strict()).max(40),
+}).strict().refine(value => !value.retireClaimIds?.length || value.mode === 'amend', 'Retiring claims requires amend mode')
+  .refine(value => !value.replacementArtifactIds || (value.mode === 'amend' && value.finalArtifactIds === undefined),
+    'Replacing artifacts requires amend mode without finalArtifactIds')
+  .refine(value => (value.sources.length > 0 && value.claims.length > 0)
+    || (value.replacementArtifactIds && value.sources.length === 0 && value.claims.length === 0),
+  'Supply sources and claims, or two empty arrays to retain prior evidence when replacing artifacts');
 export type TaskResearchSubmission = z.infer<typeof TaskResearchSubmissionSchema>;
+
+function replaceFinalArtifacts(
+  selectedIds: readonly string[],
+  replacementIds: readonly string[],
+  published: ReadonlyMap<string, z.infer<typeof TurnOutcomeDeliverableSchema>>,
+): string[] {
+  const publicationOrder = new Map([...published.keys()].map((id, index) => [id, index]));
+  const replacements = new Map<string, string>();
+  for (const id of replacementIds) {
+    const sourceFileId = published.get(id)?.sourceFileId;
+    const matches = sourceFileId ? selectedIds.filter(selected => published.get(selected)?.sourceFileId === sourceFileId) : [];
+    const selected = matches.length === 1 ? matches[0] : undefined;
+    if (!selected || replacements.has(selected) || publicationOrder.get(id)! < publicationOrder.get(selected)!) {
+      throw new Error(JSON.stringify({ code: 'invalid_artifact_replacement', artifactId: id,
+        message: 'Each replacement must be a new publication receipt for exactly one previously selected file. Use finalArtifactIds for a changed set of outputs.' }));
+    }
+    replacements.set(selected, id);
+  }
+  return selectedIds.map(id => replacements.get(id) ?? id);
+}
+
+function comparableReviewInput(result: TaskResearchResult) {
+  return JSON.stringify({
+    sources: result.sources, claims: result.claims.map(({ id, statement, kind, sourceIds }) => ({ id, statement, kind, sourceIds })),
+    finalText: result.finalText, personalResultHash: result.personalResultHash, followUp: result.followUp,
+  });
+}
 
 export function mergeResearchSubmission(input: TaskResearchSubmission, previous?: TaskResearchResult): TaskResearchSubmission {
   if (input.mode !== 'amend' || !previous) return input;
@@ -275,47 +310,97 @@ export async function submitTaskResearchResult(conversationId: string, toolCallI
       && artifact.data.uri?.startsWith('media://outbound/')) published.set(artifact.data.artifactId, artifact.data);
   }
   const publishedFileCount = published.size;
-  if (published.size && submitted.finalArtifactIds === undefined) throw new Error(JSON.stringify({ code: 'final_artifact_selection_required',
+  let finalArtifactIds = submitted.finalArtifactIds;
+  let previousArtifactHashes: Array<string | undefined> | undefined;
+  if (submitted.replacementArtifactIds) {
+    if (!previous?.finalArtifactIds?.length || previous.contractVersion !== result.contractVersion
+      || previous.instructionSequence !== result.instructionSequence) {
+      throw new Error('Replacing artifacts requires an existing final selection for the current task requirements');
+    }
+    const previousHashes = new Map(previous.reviewedArtifactHashes?.map(artifact => [artifact.artifactId, artifact.sha256]));
+    previousArtifactHashes = previous.finalArtifactIds.map(id => previousHashes.get(id));
+    finalArtifactIds = replaceFinalArtifacts(previous.finalArtifactIds, submitted.replacementArtifactIds, published);
+  }
+  if (published.size && finalArtifactIds === undefined) throw new Error(JSON.stringify({ code: 'final_artifact_selection_required',
     message: 'Select finalArtifactIds from the successful publications; [] explicitly selects a text-only result. Intermediate files will not be delivered automatically.',
     available: [...published.values()].map(({ artifactId, title }) => ({ artifactId, title })) }));
-  if (submitted.finalArtifactIds) {
-    if (submitted.finalArtifactIds.some(id => ![...published.values()].some(item => item.artifactId === id))) throw new Error(JSON.stringify({ code: 'invalid_final_artifact_selection', message: 'Use exact available artifactId values, not filenames or guessed IDs.', available: [...published.values()].map(({ artifactId, title }) => ({ artifactId, title })) }));
-    for (const [key, artifact] of published) if (!submitted.finalArtifactIds.includes(artifact.artifactId)) published.delete(key);
-    result.finalArtifactIds = submitted.finalArtifactIds;
+  if (finalArtifactIds) {
+    const invalidArtifactIds = finalArtifactIds.filter(id => !published.has(id));
+    if (invalidArtifactIds.length) throw new Error(JSON.stringify({ code: 'invalid_final_artifact_selection',
+      message: 'Use exact available artifactId values, not filenames or guessed IDs.', invalidArtifactIds,
+      available: [...published.values()].map(({ artifactId, title }) => ({ artifactId, title })) }));
+    const selection = new Set(finalArtifactIds);
+    for (const id of published.keys()) if (!selection.has(id)) published.delete(id);
+    result.finalArtifactIds = finalArtifactIds;
   }
   const artifacts: Array<{ title: string; content?: string; contentReviewed: boolean }> = [];
   if (personalSnapshot?.content) artifacts.push({ title: 'Saved connected-app result (summary, items and coverage)',
     content: personalSnapshot.content, contentReviewed: true });
   result.inspectedArtifactIds = [...published.values()].map(artifact => artifact.artifactId);
+  const inspectedHashes = new Map<string, string>();
   let contentBudget = 24_000;
   for (const artifact of published.values()) {
     let content: string | undefined;
     if (/\.(html?|md|txt|csv|json|m?js|cjs|ts|py|sh)$/i.test(artifact.title)) {
       try {
         const { buffer } = await readMediaReference(artifact.uri!, 24_000);
-        if (buffer.length <= contentBudget) { content = buffer.toString('utf8'); contentBudget -= buffer.length; }
+        if (buffer.length <= contentBudget) {
+          content = buffer.toString('utf8');
+          contentBudget -= buffer.length;
+          inspectedHashes.set(artifact.artifactId, createHash('sha256').update(buffer).digest('hex'));
+        }
       } catch { /* Missing or oversized bytes do not become reviewed contents. */ }
     }
     artifacts.push({ title: artifact.title, content, contentReviewed: content !== undefined });
   }
-  const controller = new AbortController();
-  const abort = () => controller.abort(signal?.reason);
-  signal?.addEventListener('abort', abort, { once: true });
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => { const error = new Error('Research review timed out'); controller.abort(error); reject(error); }, 30_000);
-  });
+  const remainingMs = run.timeoutAt === undefined ? RESEARCH_REVIEW_TIMEOUT_MS : run.timeoutAt - Date.now();
+  const brief = `${task.contract?.objective}\n${task.body ?? ''}`;
+  const reviewScopeSha256 = createHash('sha256').update(JSON.stringify({ brief, criteria,
+    directions: result.instructionChecks?.map(({ sequence, instruction }) => ({ sequence, instruction })) })).digest('hex');
+  const reviewBudgetMs = Math.max(0, Math.min(RESEARCH_REVIEW_TIMEOUT_MS, remainingMs));
+  const deadline = new AbortController();
+  const reviewSignal = signal ? AbortSignal.any([signal, deadline.signal]) : deadline.signal;
+  const started = Date.now();
+  const timeoutError = new Error('Research review timed out');
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let cancelReview: (() => void) | undefined;
   try {
-    signal?.throwIfAborted();
-    result = applyResearchReview(result, await Promise.race([reviewer({ conversationId,
-      brief: `${task.contract?.objective}\n${task.body ?? ''}`, criteria, result, artifacts }, controller.signal), timeout]), criteria);
+    reviewSignal.throwIfAborted();
+    if (reviewBudgetMs === 0) throw timeoutError;
+    const sameReviewedBytes = previousArtifactHashes && finalArtifactIds?.every((id, index) =>
+      previousArtifactHashes[index] && previousArtifactHashes[index] === inspectedHashes.get(id));
+    if (sameReviewedBytes && previous?.review === 'model_reviewed' && previous.reviewScopeSha256 === reviewScopeSha256
+      && previous.checks.length > 0 && previous.checks.length === criteria.length
+      && previous.checks.every((check, index) => check.status === 'passed' && check.criterion === criteria[index])
+      && previous.claims.every(claim => claim.support === 'supported')
+      && (previous.instructionChecks ?? []).every(check => check.status === 'passed')
+      && comparableReviewInput(previous) === comparableReviewInput(result)) {
+      result = { ...result, claims: previous.claims, checks: previous.checks, instructionChecks: previous.instructionChecks, review: previous.review };
+      log.info({ conversationId, taskId: task.id, runId: run.id }, 'Reused verified review for byte-identical artifact replacements');
+    } else {
+      const interrupted = new Promise<never>((_, reject) => {
+        cancelReview = () => reject(reviewSignal.reason);
+        reviewSignal.addEventListener('abort', cancelReview, { once: true });
+        timer = setTimeout(() => deadline.abort(timeoutError), reviewBudgetMs);
+      });
+      result = applyResearchReview(result, await Promise.race([reviewer({ conversationId,
+        brief, criteria, result, artifacts }, reviewSignal), interrupted]), criteria);
+    }
   } catch (error) {
     signal?.throwIfAborted();
-    log.warn({ err: error, conversationId, taskId: task.id, runId: run.id }, 'Research review unavailable; criteria remain unverified');
-  } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+    log.warn({ err: error, conversationId, taskId: task.id, runId: run.id, reviewBudgetMs, durationMs: Date.now() - started },
+      'Research review unavailable; criteria remain unverified');
+  } finally {
+    clearTimeout(timer);
+    if (cancelReview) reviewSignal.removeEventListener('abort', cancelReview);
+  }
   if (!personalSnapshot) {
     result = checkTaskDelivery(result, { files: artifacts, publishedFileCount,
       chatReplyOnly: isChatOnlyDelivery(task.contract?.expectedOutputs ?? []), zh: resolveTaskLocale(task) === 'zh' });
+  }
+  if (result.review === 'model_reviewed' && inspectedHashes.size > 0) {
+    result.reviewedArtifactHashes = [...inspectedHashes].map(([artifactId, sha256]) => ({ artifactId, sha256 }));
+    result.reviewScopeSha256 = reviewScopeSha256;
   }
   if (JSON.stringify(criteria) === JSON.stringify(defineTaskContract(task.contract?.objective ?? task.title, task.locale).acceptanceCriteria)) {
     result = { ...result, checks: result.checks.map(check => ({ ...check, status: 'unverified',
@@ -330,6 +415,10 @@ export async function submitTaskResearchResult(conversationId: string, toolCallI
   const current = new TaskRepository().require(task.id);
   if (current.latestContractVersion !== result.contractVersion || taskInstructionSequence(task.id) !== result.instructionSequence
     || new TaskRunRepository().getActiveRoot(task.id)?.id !== run.id || current.phase === 'closed') throw new Error('Task requirements changed during review; resubmit the current result');
+  if (submitted.replacementArtifactIds
+    && (current.body !== task.body || JSON.stringify(currentTaskResearchResult(run.id)) !== JSON.stringify(previous))) {
+    throw new Error('The reviewed result changed during review; resubmit the replacement against the current result');
+  }
   new TaskResultDeliveryRepository().capture(run.id, { version: 1, outcomeId: `research:${toolCallId}`, runId: run.id, turnId: run.id,
     status: result.checks.length > 0 && result.checks.every(check => check.status === 'passed')
       && (result.instructionChecks ?? []).every(check => check.status === 'passed')

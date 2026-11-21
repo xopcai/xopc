@@ -9,9 +9,20 @@ const option = (key: string, fallback: string) => { const index = args.indexOf(k
 const adapter = option('--adapter', 'scripts/personal-repair-live-smoke-v2.mts');
 if (!['scripts/personal-repair-live-smoke.mts', 'scripts/personal-repair-live-smoke-v2.mts'].includes(adapter)) throw new Error('Unknown versioned adapter');
 const rounds = Number(option('--rounds', '2'));
+const harness2Pilot = args.includes('--harness2-pilot');
+if (harness2Pilot && !adapter.endsWith('-v2.mts')) throw new Error('The Harness² pilot requires the v2 adapter');
+const harness2Treatment = option('--harness2-treatment', '');
+const harness2Fixture = option('--harness2-sales-fixture', '');
+const harness2FrozenReproduction = args.includes('--harness2-frozen-reproduction');
+if (harness2Treatment && !harness2Pilot) throw new Error('A Harness² treatment requires --harness2-pilot');
 if (!Number.isInteger(rounds) || rounds < 1 || rounds > 5) throw new Error('Expected 1–5 rounds');
 const scenarios = option('--scenarios', 'web,conflict,file,direction').split(',');
-if (!scenarios.every(scenario => ['web', 'conflict', 'file', 'direction', 'mixed'].includes(scenario))) throw new Error('Unknown scenario');
+if (!scenarios.every(scenario => ['web', 'conflict', 'file', 'direction', 'mixed'].includes(scenario)
+  || (harness2Pilot && scenario === 'multi-file'))) throw new Error('Unknown scenario');
+if (scenarios.includes('multi-file') !== Boolean(harness2Fixture)) throw new Error('Only multi-file trials require a frozen sales fixture');
+if (harness2FrozenReproduction && !(harness2Pilot && scenarios.every(scenario => scenario === 'multi-file'))) {
+  throw new Error('Frozen reproduction is reserved for the multi-file host-repair probe');
+}
 const directory = resolve(option('--output-dir', '.xopc-evals/personal/p2-live'));
 mkdirSync(directory, { recursive: true });
 const trials: Array<Record<string, any>> = [];
@@ -23,7 +34,7 @@ const save = () => {
   const groups = Object.fromEntries(scenarios.map(scenario => { const group = trials.filter(trial => trial.scenario === scenario);
     return [scenario, { total: group.length, passed: group.filter(trial => trial.success).length }]; }));
   const hashes = new Set(trials.map(trial => JSON.stringify(trial.sourceHashes)).filter(value => value !== undefined));
-  const report = { schemaVersion: 1, suite: 'personal-delivery-live-repair', suiteVersion: adapter.endsWith('-v2.mts') ? 7 : 1, adapter, mode: 'real-model-isolated-gateway',
+  const report = { schemaVersion: 1, suite: 'personal-delivery-live-repair', suiteVersion: harness2Pilot ? 8 : adapter.endsWith('-v2.mts') ? 7 : 1, adapter, mode: 'real-model-isolated-gateway',
     createdAt: new Date().toISOString(), requestedRounds: rounds, requestedScenarios: scenarios,
     total: trials.length, passed, failed: trials.length - passed, sourceVersions: hashes.size,
     sameSourceAcrossTrials: hashes.size === 1, groups,
@@ -43,7 +54,11 @@ trialLoop: for (let round = 1; round <= rounds; round++) for (const scenario of 
   console.log(JSON.stringify({ stage: 'trial_start', round, scenario, reportPath }));
   const code = await new Promise<number | null>((resolveCode, reject) => {
     const child = spawn(process.execPath, ['--import', 'tsx', adapter], {
-      cwd: process.cwd(), stdio: 'inherit', env: { ...process.env, XOPC_REPAIR_SCENARIO: scenario, XOPC_ALLOCATION_REPORT: reportPath },
+      cwd: process.cwd(), stdio: 'inherit', env: { ...process.env, XOPC_REPAIR_SCENARIO: scenario,
+        XOPC_ALLOCATION_REPORT: reportPath, XOPC_HARNESS2_PERSONAL_PILOT: harness2Pilot ? '1' : '0',
+        XOPC_HARNESS2_TREATMENT: harness2Treatment ? resolve(harness2Treatment) : '',
+        XOPC_HARNESS2_SALES_FIXTURE: harness2Fixture ? resolve(harness2Fixture) : '',
+        XOPC_HARNESS2_FROZEN_REPRODUCTION: harness2FrozenReproduction ? '1' : '0' },
     });
     const timeout = setTimeout(() => child.kill('SIGTERM'), 12 * 60_000);
     child.once('error', error => { clearTimeout(timeout); reject(error); });
@@ -54,6 +69,7 @@ trialLoop: for (let round = 1; round <= rounds; round++) for (const scenario of 
     success: code === 0 && result.success === true && !result.benchmark?.sourceChangedDuringRun,
     failure: result.failure, sourceChangedDuringRun: result.benchmark?.sourceChangedDuringRun,
     sourceHashes: result.benchmark?.sourceHashes, models: result.models, totalMs: result.durationMs?.total,
+    ...(harness2Pilot ? { treatmentSha256: result.benchmark?.treatmentSha256, fixtureSha256: result.benchmark?.fixtureSha256 } : {}),
     fallbackCount: result.compositionFallbackEvents?.length ?? 0, repairs: result.repairEvents?.length ?? 0,
     replyCharacters: result.replyCharacters, mainInputPreRead: result.mainInputPreRead, mainStrategy: result.mainStrategy, acceptanceDisposition: result.acceptanceDisposition, repairDisposition: result.repairDisposition, injections: result.injections, downloads: result.downloads?.length,
     checks: result.research?.checks.length, instructionChecks: result.research?.instructionChecks?.length });

@@ -1,0 +1,3 @@
+{
+  "guidance": "For work that returns files, reconcile the current requested outputs with the successful publication receipts before you finish. Select exactly the final available artifact IDs. In a continuation, recover the missing or superseded outputs and preserve the valid IDs for unaffected outputs. If a publication or evidence check is unavailable, report that accurately and carry forward verified work. For required source evidence, bind each fact to the shortest exact excerpt from a successful tool read. Use observed offsets only when necessary, and correct a rejected citation by reusing the successful read with a smaller exact excerpt. Keep working records separate from final attachments."
+}

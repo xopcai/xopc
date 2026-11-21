@@ -9,6 +9,7 @@ import { createConversation } from '../../storage/sqlite/conversation-repository
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { resolveMediaBufferPath, saveMediaBuffer } from '../../media/store.js';
 import { TaskApplicationService } from '../task-application-service.js';
 import { TaskRepository } from '../task-repository.js';
 import { TaskConversationRepository } from '../task-conversation-repository.js';
@@ -92,13 +93,57 @@ describe('personal repair benchmark v1', () => {
       if (i < 2) x.resume(); }
   });
   it('A04-file-loss: missing published bytes trigger republication before completion', async () => {
-    const x = execution(); await submitTaskResearchResult(x.worker.key, 'good', submission, undefined, review);
-    new TaskResultDeliveryRepository().capture(x.runId, { version: 1, outcomeId: 'lost', runId: x.runId, turnId: x.runId,
-      status: 'succeeded', evidence: [], createdAt: new Date().toISOString(), deliverables: [{ artifactId: 'lost', kind: 'document',
-        title: 'report.md', availability: 'available', location: 'artifact_store', uri: 'media://outbound/lost', capabilities: ['download'] }] });
+    const x = execution();
+    const publish = async (title: string, sourceFileId: string, text: string) => {
+      const file = await saveMediaBuffer(Buffer.from(text), { bucket: 'outbound', originalFilename: title });
+      const artifact = { artifactId: file.id, sourceFileId, kind: 'document' as const, title,
+        availability: 'available' as const, location: 'artifact_store' as const, uri: file.uri, capabilities: ['download' as const] };
+      appendTranscriptEntry(x.worker.key, { role: 'toolResult', toolCallId: file.id, toolName: 'publish_artifacts',
+        isError: false, content: [{ type: 'text', text: 'Published' }], timestamp: Date.now(), details: { artifacts: [artifact] } });
+      x.coordinator.captureOutcome({ version: 1, outcomeId: file.id, runId: x.runId, turnId: x.runId,
+        status: 'succeeded', evidence: [], createdAt: new Date().toISOString(), deliverables: [artifact] });
+      return file.id;
+    };
+    const report = await publish('report.md', 'workspace:report', '# Price Report\n1/hour');
+    const script = await publish('reproduce.mjs', 'workspace:script', 'console.log(1)');
+    const selected = [report, script];
+    await submitTaskResearchResult(x.worker.key, 'good', { ...submission, finalArtifactIds: selected }, undefined, review);
+    rmSync(resolveMediaBufferPath(report, 'outbound'));
     finish(x.coordinator);
     expect(new TaskRunRepository().require(x.runId).policySnapshot.continuation).toMatchObject({ reason: 'acceptance_repair' });
     expect(new TaskRunRepository().require(x.runId).policySnapshot.continuation.message).toContain('Published file missing');
+    expect(new TaskRunRepository().require(x.runId).policySnapshot.continuation.message).toContain('replacementArtifactIds');
+
+    const resumed = x.resume();
+    const identical = await publish('report.md', 'workspace:report', '# Price Report\n1/hour');
+    const observedReview = vi.fn(review);
+    const reused = await submitTaskResearchResult(x.worker.key, 'identical', {
+      mode: 'amend', replacementArtifactIds: [identical], sources: [], claims: [],
+    }, undefined, observedReview);
+    expect(reused.finalArtifactIds).toEqual([identical, script]);
+    expect(reused.reviewedArtifactHashes?.map(file => file.artifactId)).toEqual([script, identical]);
+    expect(observedReview).not.toHaveBeenCalled();
+
+    const recovered = await publish('report.md', 'workspace:report', '# Recovered report\n1/hour');
+    const unrelated = await publish('report.md', 'other:report', '# Same name, different source');
+    const amend = { ...submission, mode: 'amend' };
+    await expect(submitTaskResearchResult(x.worker.key, 'wrong', { ...amend, replacementArtifactIds: [unrelated] }, undefined, review))
+      .rejects.toThrow(/invalid_artifact_replacement/);
+    await expect(submitTaskResearchResult(x.worker.key, 'mixed', {
+      ...amend, finalArtifactIds: selected, replacementArtifactIds: [recovered],
+    }, undefined, review)).rejects.toThrow(/without finalArtifactIds/);
+    const repaired = await submitTaskResearchResult(x.worker.key, 'fixed', {
+      ...amend, replacementArtifactIds: [recovered],
+    }, undefined, observedReview);
+    expect(observedReview).toHaveBeenCalledOnce();
+    expect(repaired.finalArtifactIds).toEqual([recovered, script]);
+    await expect(submitTaskResearchResult(x.worker.key, 'stale', { ...amend, replacementArtifactIds: [report] }, undefined, review))
+      .rejects.toThrow(/invalid_artifact_replacement/);
+    finish(resumed);
+    expect(new TaskRunRepository().getReceipt(x.runId)?.verification.status).toBe('passed');
+    const delivery = getSqliteDatabase().prepare('SELECT payload_json FROM task_result_deliveries WHERE task_run_id = ?').get(x.runId) as { payload_json: string };
+    expect(JSON.parse(delivery.payload_json).outcome.deliverables.map((artifact: { artifactId: string }) => artifact.artifactId).sort())
+      .toEqual([recovered, script].sort());
   });
   it('A18-502-file-loss: a confirmed evidence-validation failure does not prevent same-run recovery and republication', async () => {
     const x = execution(); await submitTaskResearchResult(x.worker.key, 'good', submission, undefined, review);

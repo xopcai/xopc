@@ -30,6 +30,8 @@ export const TaskResearchResultSchema = z.object({
   finalText: z.string().min(1).max(16_000).optional(),
   finalArtifactIds: z.array(z.string().min(1)).max(50).optional(),
   inspectedArtifactIds: z.array(z.string().min(1)).max(50).optional(),
+  reviewedArtifactHashes: z.array(z.object({ artifactId: z.string().min(1), sha256: z.string().regex(/^[a-f0-9]{64}$/) })).max(50).optional(),
+  reviewScopeSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   instructionChecks: z.array(z.object({ sequence: z.number().int().positive(), instruction: z.string().min(1),
     status: z.enum(['passed', 'failed', 'unverified']), claimIds: z.array(id).max(40), note: z.string().min(1).max(1000),
   })).max(40).optional(),

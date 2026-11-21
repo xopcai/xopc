@@ -105,7 +105,7 @@
           "kind": "delivery",
           "benchmark": "personal-delivery",
           "evidenceClass": "deterministic",
-          "expected": 8
+          "expected": 10
         }
       ],
       "replaySafe": true

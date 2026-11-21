@@ -9,14 +9,23 @@ import { tmpdir, homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { serve } from '@hono/node-server';
+import { installHarnessTreatment, loadHarnessTreatment } from '../evals/personal/harness2-treatment.mjs';
+import { expectedMonthResults } from '../evals/personal/harness2-table-grade.mjs';
 
 assert.equal(process.env.XOPC_ALLOCATION_LIVE, '1', 'This script requires explicit authorization for real model usage');
 const researchLive = true;
+const harness2Pilot = process.env.XOPC_HARNESS2_PERSONAL_PILOT === '1';
+const treatmentPath = process.env.XOPC_HARNESS2_TREATMENT;
+const harnessTreatment = harness2Pilot && treatmentPath ? loadHarnessTreatment(treatmentPath) : undefined;
 const scenario = process.env.XOPC_REPAIR_SCENARIO ?? 'mixed';
-assert.ok(['web', 'conflict', 'file', 'direction', 'mixed'].includes(scenario));
+const multiFile = harness2Pilot && scenario === 'multi-file';
+const frozenReproduction = multiFile && process.env.XOPC_HARNESS2_FROZEN_REPRODUCTION === '1';
+const reproductionPath = 'evals/personal/harness2-reproduce.mjs';
+assert.ok(['web', 'conflict', 'file', 'direction', 'mixed'].includes(scenario) || multiFile);
 const activeWeb = ['web', 'conflict', 'mixed'].includes(scenario);
 const conflict = ['conflict', 'mixed'].includes(scenario);
-const fileLoss = ['file', 'mixed'].includes(scenario);
+const lossTitles = multiFile ? ['report.md', 'monthly_summary.csv'] : ['file', 'mixed'].includes(scenario) ? ['report.md'] : [];
+const fileLoss = lossTitles.length > 0;
 const directionChange = ['direction', 'mixed'].includes(scenario);
 let injectDirection: (() => Promise<void>) | undefined;
 const injections: Array<Record<string, unknown>> = [];
@@ -30,6 +39,9 @@ const fingerprintPaths = ['src/agent/tools/personal-task-tool.ts', 'src/personal
   'packages/gateway-contract/src/task-research-result.ts', 'scripts/personal-repair-live-smoke-v2.mts', 'src/tasks/task-research-repair.ts', 'src/tasks/task-run-repository.ts', 'src/agent/tasks/task-judge-service.ts', 'src/tasks/task-continuation.ts', 'src/agent/orchestration/turn-recovery.ts', 'src/agent/embedded/run-for-session.ts', 'src/agent/embedded/run-turn.ts', 'src/agent/embedded/types.ts', 'src/agent/tools/web.ts', 'src/usage/cloud-wire.ts', 'src/usage/recorder.ts', 'src/providers/model-call.ts', 'src/providers/extension-stream-bridge.ts', 'pnpm-lock.yaml'];
 const sourceFingerprint = () => Object.fromEntries(fingerprintPaths
   .map(path => [path, createHash('sha256').update(readFileSync(path)).digest('hex')]));
+if (harness2Pilot) fingerprintPaths.push('scripts/personal-repair-live-benchmark.mts',
+  'evals/personal/harness2-treatment.mts', 'evals/personal/harness2-table-grade.mts');
+if (frozenReproduction) fingerprintPaths.push(reproductionPath);
 const initialSourceHashes = sourceFingerprint();
 const sourceRoot = process.env.XOPC_STATE_DIR ?? join(homedir(), '.xopc');
 const credentialsDirectory = process.env.XOPC_CREDENTIALS_DIR ?? join(sourceRoot, 'credentials');
@@ -101,6 +113,13 @@ createConversation({ agentId: personal.agent_id, sourceChannel: 'webchat', name:
   hiddenFromSessionList: true, customData: { personalAgent: true, keepHiddenFromSessionList: true } }, directory, personal.conversation_id);
 setSessionConfig(personal.conversation_id, { modelOverride: selection.model_override, fixedModel: true,
   thinkingLevel: selection.thinking_level as 'off' }, directory);
+const downloadControlConversation = multiFile ? createConversation({ agentId: personal.agent_id, sourceChannel: 'webchat',
+  name: 'Separate download-scope control' }, directory).key : undefined;
+if (harnessTreatment) {
+  const workspace = catalog.get('data-analyst')?.workspace;
+  assert.ok(workspace, 'The treatment requires the isolated analyst workspace');
+  installHarnessTreatment(harnessTreatment, directory, workspace);
+}
 
 const toolCalls: Array<{ name: string; command?: string; durationMs: number; failed: boolean; error?: string }> = [];
 const timings: Record<string, number> = {};
@@ -140,13 +159,17 @@ AgentToolsFactory.prototype.createAllTools = function (...args) {
         if (!isMain && tool.name === 'publish_task_result') {
           if (fileLoss && !fileInjected && (!directionChange || directionInjected)) {
             const rows = db.prepare("SELECT payload_json FROM transcript_entries WHERE role = 'toolResult' AND json_type(payload_json, '$.details.artifacts') = 'array' ORDER BY created_at DESC").all();
-            const artifact = rows.flatMap(row => JSON.parse((row as { payload_json: string }).payload_json).details?.artifacts ?? []).find(item => item.title === 'report.md' && item.uri?.startsWith('media://outbound/'));
-            if (artifact) {
+            const published = rows.flatMap(row => JSON.parse((row as { payload_json: string }).payload_json).details?.artifacts ?? []);
+            const artifacts = lossTitles.map(title => published.find(item => item.title === title && item.uri?.startsWith('media://outbound/')));
+            if (artifacts.every(Boolean)) {
               const { tryParseMediaUri } = await import('../src/media/uri.js');
               const { resolveMediaBufferPath } = await import('../src/media/store.js');
-              const media = tryParseMediaUri(artifact.uri)!;
-              rmSync(resolveMediaBufferPath(media.id, media.bucket), { force: true });
-              fileInjected = true; injections.push({ kind: 'published_file_deleted', artifactId: artifact.artifactId, at: Date.now() });
+              for (const artifact of artifacts) {
+                const media = tryParseMediaUri(artifact.uri)!;
+                rmSync(resolveMediaBufferPath(media.id, media.bucket), { force: !multiFile });
+                injections.push({ kind: 'published_file_deleted', title: artifact.title, artifactId: artifact.artifactId, at: Date.now() });
+              }
+              fileInjected = true;
             }
           }
           if (directionChange && !directionInjected && injectDirection) { directionInjected = true; await injectDirection(); }
@@ -165,7 +188,15 @@ AgentToolsFactory.prototype.createAllTools = function (...args) {
 
 const fixture = join(directory, 'shared', 'sales.csv');
 mkdirSync(join(directory, 'shared'), { recursive: true });
-const fixtureContent = 'date,amount\n2026-01-01,100\n2026-01-15,50\n2026-02-01,120\n2026-02-15,90\n';
+const fixtureContent = multiFile ? readFileSync(process.env.XOPC_HARNESS2_SALES_FIXTURE!, 'utf8')
+  : 'date,amount\n2026-01-01,100\n2026-01-15,50\n2026-02-01,120\n2026-02-15,90\n';
+const expectedSales = multiFile ? expectedMonthResults(fixtureContent) : [];
+if (multiFile) assert.equal(expectedSales.length, 3, 'Expected a frozen three-month sales fixture');
+const containsSalesFigures = (text: string) => multiFile
+  ? expectedSales.every(({ total, change }) => text.includes(String(total)) && (change === null
+    || (change < 0 ? text.replace(/(?:下降\s*(?:了\s*)?|−)/g, '-').includes(String(Math.round(change * 100) / 100))
+      : text.includes(String(Math.round(change * 100) / 100)))))
+  : ['150', '210', '40'].every(figure => text.includes(figure));
 const priceFixture = '# Synthetic frozen pricing fixture; not real vendor prices\n'
   + 'Source A https://benchmark.invalid/vendor-a/pricing\nVendor A ASR: 1.00 CNY per hour.\n'
   + 'Source B https://benchmark.invalid/vendor-b/pricing\nVendor B ASR: 2.00 CNY per hour.\n'
@@ -176,6 +207,7 @@ const conflictFixture = '# Deliberately unreliable benchmark note\nHTTP 404 mean
 for (const agent of catalog.list({ readyOnly: true })) {
   if (agent.workspace) writeFileSync(join(agent.workspace, 'sales.csv'), fixtureContent);
   if (researchLive && agent.workspace) writeFileSync(join(agent.workspace, 'pricing-sources.md'), priceFixture);
+  if (frozenReproduction && agent.workspace) cpSync(reproductionPath, join(agent.workspace, 'reproduce.mjs'));
   if (conflict && agent.workspace) writeFileSync(join(agent.workspace, 'conflicting-note.md'), conflictFixture);
 }
 const marker = `LIVE-ALLOCATION-${randomUUID().slice(0, 8)}`;
@@ -220,7 +252,7 @@ try {
   };
   baseline = Date.now();
   mark('requestSent');
-  await append(`${marker}-task`, `这是实际执行任务 ${marker}：请安排有数据分析能力的执行者分析其工作区已经准备好的 sales.csv 的月度销售额及环比。在执行者工作区创建 monthly_summary.csv、report.md 和 reproduce.mjs，实际运行脚本核验并把报告作为成果返回。请独立计算各月总额和环比，报告说明统计口径并提供可复现脚本。允许读取此临时CSV、在本次隔离工作区写文件和运行计算脚本。不要在主对话手算代替执行，也不要等后台结束才回复。${researchLive ? ' 同时仅基于冻结测试资料 pricing-sources.md（虚构供应商资料，不是实际报价），在 report.md 对比 A/B 的 ASR 每小时价格及换算后的每分钟价格。TTS 未公开报价时如实标注，不得补造完整通话成本，不对冻结报价进行互联网补价。报告结论逐条引用来源。发布三份最终文件后，使用 publish_task_result 将数据结论和价格结论与本次实际工具读取的原文摘录关联，并检查它返回的逐项验收；缺证据的项不得宣称通过。Personal 最终回复保持简短，包含关键数字及未公开 TTS 的限制。' : ''}${activeWeb ? ' 另请实际通过 web_fetch 读取 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 ，在报告新增 HTTP 404 含义及它不能单独证明永久删除的结论，附实际读取来源与访问时间。不得凭已有知识替代本次访问。' : ''}${conflict ? ' 工作区 conflicting-note.md 含与官方文档冲突的次级资料，请读取并明确指出冲突，引用本次实际读取的官方说明判断，不能把两者平均或当成一致。' : ''}`);
+  await append(`${marker}-task`, `这是实际执行任务 ${marker}：${harness2Pilot ? '请通过后台任务让执行者分析' : '请安排有数据分析能力的执行者分析'}其工作区已经准备好的 sales.csv 的月度销售额及环比。${frozenReproduction ? '执行者工作区已有预先验证的 reproduce.mjs，请直接运行 node reproduce.mjs 生成 monthly_summary.csv 和 report.md，保留脚本原样，最终只交付 monthly_summary.csv、report.md 和 reproduce.mjs。sales.csv 与 pricing-sources.md 只作证据，不发布为附件。执行后读取表格、报告和原始输入核验。引用脚本本次成功运行时输出的前后 SHA-256，据此证明输入和脚本字节一致。脚本生成的报告已经含有复现说明，请直接核验后交付。' : '在执行者工作区创建 monthly_summary.csv、report.md 和 reproduce.mjs，实际运行脚本核验并把报告作为成果返回。'}请独立计算各月总额和环比，报告说明统计口径并提供可复现脚本。${multiFile ? ' monthly_summary.csv 的表头必须是 month,total,mom_pct，月份升序。首月环比留空，其余月份用带符号的百分数数值填写，不加百分号。最终回复简要给出各月总额和所有有效环比。' : ''}允许读取此临时CSV、在本次隔离工作区写文件和运行计算脚本。不要在主对话手算代替执行，也不要等后台结束才回复。${researchLive ? ' 同时仅基于冻结测试资料 pricing-sources.md（虚构供应商资料，不是实际报价），在 report.md 对比 A/B 的 ASR 每小时价格及换算后的每分钟价格。TTS 未公开报价时如实标注，不得补造完整通话成本，不对冻结报价进行互联网补价。报告结论逐条引用来源。发布三份最终文件后，使用 publish_task_result 将数据结论和价格结论与本次实际工具读取的原文摘录关联，并检查它返回的逐项验收；缺证据的项不得宣称通过。Personal 最终回复保持简短，包含关键数字及未公开 TTS 的限制。' : ''}${activeWeb ? ' 另请实际通过 web_fetch 读取 https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 ，在报告新增 HTTP 404 含义及它不能单独证明永久删除的结论，附实际读取来源与访问时间。不得凭已有知识替代本次访问。' : ''}${conflict ? ' 工作区 conflicting-note.md 含与官方文档冲突的次级资料，请读取并明确指出冲突，引用本次实际读取的官方说明判断，不能把两者平均或当成一致。' : ''}`);
   mark('requestAccepted');
   let pingSent = false;
   let lastState = '';
@@ -291,6 +323,10 @@ try {
   report.history = history;
   report.resultReply = delivery.reply_text;
   const outcome = JSON.parse(delivery.payload_json).outcome;
+  if (multiFile) {
+    report.deliveryStatus = outcome.status;
+    report.deliveryArtifacts = outcome.deliverables.map(({ title, availability }) => ({ title, availability }));
+  }
   const downloads: Array<{ title: string; sha256: string; sizeBytes: number }> = [];
   const publishedContents = new Map<string, string>();
   for (const artifact of outcome.deliverables) {
@@ -300,6 +336,11 @@ try {
     assert.equal((await fetch(query)).status, 401, 'Download must require authentication');
     const response = await fetch(query, { headers: { Authorization: `Bearer ${token}` } });
     assert.equal(response.status, 200, `The original Chat must be able to download ${artifact.title}`);
+    if (downloadControlConversation) {
+      const denied = await fetch(`${base}/api/media/read?uri=${encodeURIComponent(artifact.uri)}&conversationId=${downloadControlConversation}`,
+        { headers: { Authorization: `Bearer ${token}` } });
+      assert.equal(denied.status, 404, 'A separately authenticated conversation must not see the artifact');
+    }
     const bytes = Buffer.from(await response.arrayBuffer());
     publishedContents.set(artifact.title, bytes.toString('utf8'));
     downloads.push({ title: artifact.title, sha256: createHash('sha256').update(bytes).digest('hex'), sizeBytes: bytes.length });
@@ -309,10 +350,16 @@ try {
   }
   const downloadedReport = publishedContents.get('report.md')!;
   report.reportContent = downloadedReport;
-  assert.ok(downloadedReport.includes('150') && downloadedReport.includes('210') && downloadedReport.includes('40'),
+  report.downloads = downloads;
+  if (multiFile) {
+    report.validationTable = publishedContents.get('monthly_summary.csv');
+    assert.equal(downloads.length, 3, 'Only the three requested deliverables may be attached');
+    if (frozenReproduction) assert.equal(publishedContents.get('reproduce.mjs'), readFileSync(reproductionPath, 'utf8'),
+      'The downloaded reproduction script must retain the frozen bytes');
+  }
+  assert.ok(containsSalesFigures(downloadedReport),
     'The downloaded report must contain the independently calculated totals and growth');
   assert.ok(!/MEDIA\s*:|\/Users\/|file:\/\//i.test(delivery.reply_text!), 'The reply must not contain local download references');
-  report.downloads = downloads;
   report.replyCharacters = delivery.reply_text!.length;
   report.conciseReplyProxy = delivery.reply_text!.length <= 600;
   if (researchLive) {
@@ -331,7 +378,7 @@ try {
     if (gaps.length) assert.ok(/部分|未.*验证|未.*核验|partial|unverified/i.test(delivery.reply_text!), 'The reply must disclose the remaining verification gap');
     assert.ok(/未公开|未披露|not disclosed/i.test(downloadedReport), 'The report must preserve the undisclosed TTS price');
     assert.ok(/0\.016|0\.017|1\s*\/\s*60/.test(downloadedReport) && /0\.033|2\s*\/\s*60/.test(downloadedReport), 'Hourly prices must be converted correctly');
-    assert.ok(/150/.test(delivery.reply_text!) && /210/.test(delivery.reply_text!) && /40/.test(delivery.reply_text!)
+    assert.ok(containsSalesFigures(delivery.reply_text!)
       && /未公开|未披露|not disclosed/i.test(delivery.reply_text!), 'The concise reply must retain the main numbers and the missing TTS price');
     const receipt = db.prepare('SELECT verification_json FROM task_run_receipts WHERE run_id IN (SELECT run_id FROM task_runs WHERE task_id = ?) ORDER BY finalized_at DESC LIMIT 1').get(taskId!) as { verification_json: string };
     report.criterionVerification = JSON.parse(receipt.verification_json);
@@ -353,7 +400,7 @@ try {
   const workspace = catalog.get(allocation.selected_agent_id)!.workspace!;
   assert.ok(existsSync(join(workspace, 'report.md')), 'The analyst must create the requested report');
   const analysis = readFileSync(join(workspace, 'report.md'), 'utf8');
-  assert.ok(analysis.includes('150') && analysis.includes('210') && analysis.includes('40'), 'The actual report must contain verified totals and growth');
+  assert.ok(containsSalesFigures(analysis), 'The actual report must contain verified totals and growth');
   assert.ok(existsSync(join(workspace, 'reproduce.mjs')), 'The reproducible script must exist');
   const routerCalls = db.prepare("SELECT COUNT(*) AS count FROM ai_usage_events WHERE operation = 'task.allocation' AND status = 'succeeded'").get() as { count: number };
   assert.ok(routerCalls.count > 0, 'The real Task Router model must choose the executor; deterministic or user-selected bypass does not qualify');
@@ -400,11 +447,15 @@ try {
   if (fileLoss) { assert.ok(fileInjected, 'File-loss injection must happen');
     const repairEvents = db.prepare("SELECT payload_json FROM task_run_events WHERE run_id IN (SELECT run_id FROM task_runs WHERE task_id = ?) AND type = 'task_run.continuation_scheduled'").all(taskId!);
     report.repairEvents = repairEvents;
-    const deletedId = injections.find(event => event.kind === 'published_file_deleted')!.artifactId;
-    const restored = outcome.deliverables.find(item => item.title === 'report.md' && item.availability === 'available' && item.artifactId !== deletedId);
-    assert.ok(restored, 'The deleted publication must be replaced by a downloadable final artifact on the same TaskRun');
+    const restorations = injections.filter(event => event.kind === 'published_file_deleted').map(event => {
+      const restored = outcome.deliverables.find(item => item.title === event.title && item.availability === 'available' && item.artifactId !== event.artifactId);
+      assert.ok(restored, 'Each deleted publication must be replaced by a downloadable final artifact on the same TaskRun');
+      return restored.artifactId;
+    });
     report.repairDisposition = repairEvents.length ? 'coordinator_continuation' : 'within_turn_republication';
-    report.restoredArtifactId = restored.artifactId; }
+    report.restoredArtifactId = restorations[0];
+    if (multiFile) report.restoredArtifactIds = restorations;
+  }
   if (directionChange) { assert.ok(directionInjected, 'User change must arrive during execution');
     const changed = publishedContents.get('change_notes.md') ?? '';
     assert.ok(changed.includes(`REVISED-${marker}`) && /4|四/.test(changed) && changed.includes('2026-01') && changed.includes('2026-02'), 'The revised file and required content must be downloaded from the original main Chat');
@@ -452,10 +503,12 @@ try {
     compositionFallbackEvents: fallbackEvents,
     repairEvents: taskId ? db.prepare("SELECT type,payload_json,occurred_at FROM task_run_events WHERE run_id IN (SELECT run_id FROM task_runs WHERE task_id = ?) AND type = 'task_run.continuation_scheduled'").all(taskId) : [],
     injections, scenario,
-    benchmark: { suite: 'personal-delivery-live-repair', version: 7, mode: 'real-model-isolated-gateway',
+    benchmark: { suite: 'personal-delivery-live-repair', version: harness2Pilot ? 8 : 7, mode: 'real-model-isolated-gateway',
       sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
       nodeVersion: process.version, fixtureSha256: createHash('sha256').update(fixtureContent + (researchLive ? priceFixture : '')).digest('hex'),
       sourceHashes: initialSourceHashes,
+      ...(harness2Pilot ? { treatmentSha256: harnessTreatment?.sha256 ?? null,
+        salesSha256: createHash('sha256').update(fixtureContent).digest('hex'), frozenReproduction } : {}),
       sourceChangedDuringRun: JSON.stringify(initialSourceHashes) !== JSON.stringify(sourceFingerprint()),
       limitation: 'Synthetic sales/prices plus actual MDN retrieval; file deletion is a disclosed isolated fault injection. Length proxy is not naturalness. Every failed round is retained.' },
     models: { personal: selection.model_override, global: JSON.parse(settings.defaults_json).models.chat.primary },

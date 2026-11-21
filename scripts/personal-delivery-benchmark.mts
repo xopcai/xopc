@@ -13,7 +13,9 @@ const option = (name: string, fallback: string) => {
 };
 const root = resolve(option('--root', sourceRoot));
 const suite = option('--suite', 'p0');
-if (!['p0', 'p1', 'p2'].includes(suite)) throw new Error('Expected --suite p0, p1 or p2');
+const suiteContract = { p0: { version: 2, count: 10 }, p1: { version: 3, count: 33 }, p2: { version: 4, count: 73 } } as const;
+if (suite !== 'p0' && suite !== 'p1' && suite !== 'p2') throw new Error('Expected --suite p0, p1 or p2');
+const { version, count } = suiteContract[suite];
 const output = resolve(option('--output', join(sourceRoot, `.xopc-evals/personal/${suite}-current.json`)));
 const label = option('--label', 'candidate');
 const testFile = 'src/tasks/__tests__/personal-delivery-benchmark.test.ts';
@@ -44,10 +46,10 @@ try {
     file.assertionResults.map(item => ({ id: item.title.split(':')[0], name: item.title,
       status: item.status, durationMs: item.duration ?? null,
       failures: item.failureMessages.map(message => message.replaceAll(root, '<source-root>')) })));
-  if (cases.length !== (suite === 'p2' ? 48 : suite === 'p1' ? 20 : 8) || cases.some(item => !['passed', 'failed'].includes(item.status))) {
-    throw new Error('Expected every benchmark case to execute');
+  if (cases.length !== count || cases.some(item => !['passed', 'failed'].includes(item.status))) {
+    throw new Error(`Expected all ${count} cases in ${suite} v${version} to execute; found ${cases.length}`);
   }
-  const report = { schemaVersion: 1, suite: `personal-delivery-${suite}`, suiteVersion: suite === 'p2' ? 2 : 1,
+  const report = { schemaVersion: 1, suite: `personal-delivery-${suite}`, suiteVersion: version,
     mode: 'deterministic', label, createdAt: new Date().toISOString(),
     manifest: { commit: git(['rev-parse', 'HEAD']), nodeVersion: process.version,
       workingTreeDirty: Boolean(git(['status', '--porcelain'])),
