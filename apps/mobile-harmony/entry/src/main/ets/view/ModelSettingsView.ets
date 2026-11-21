@@ -1,9 +1,12 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcHttpError } from '../service/transport';
+import { appSettings } from '../service/settings';
 import { XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcSectionLabel } from './MobileComponents';
 
-interface XopcGlobalModelChoice { ref: string; name: string; provider: string; }
+interface XopcGlobalModelChoice {
+  ref: string; name: string; provider: string; displayNames?: Record<string, string>;
+}
 interface XopcGlobalModelRoute {
   key: string; pool: string; ref: string | null; name: string | null; inherited?: boolean; allowInherit?: boolean;
 }
@@ -96,7 +99,13 @@ export struct XopcModelSettingsView {
   private display(row: XopcGlobalModelRoute): ResourceStr {
     if (row.inherited) return $r('app.string.ms_inherit');
     if (!this.data?.pools[row.pool]?.length && row.key !== 'chat') return $r('app.string.ms_not_connected');
-    return row.name ?? $r('app.string.ms_unset');
+    const choice = this.data?.pools[row.pool]?.find((item: XopcGlobalModelChoice): boolean => item.ref === row.ref);
+    return choice ? this.modelName(choice) : row.name ?? $r('app.string.ms_unset');
+  }
+
+  private modelName(choice: XopcGlobalModelChoice): string {
+    const key = appSettings.effectiveLanguage().startsWith('zh') ? 'zh-CN' : 'en';
+    return choice.displayNames?.[key] || choice.name;
   }
 
   private open(sheet: string, route?: XopcGlobalModelRoute): void {
@@ -120,7 +129,17 @@ export struct XopcModelSettingsView {
   private matching(): XopcGlobalModelChoice[] {
     const search = this.query.trim().toLowerCase();
     return this.choices().filter((item: XopcGlobalModelChoice): boolean =>
-      (item.name + ' ' + item.provider + ' ' + item.ref).toLowerCase().includes(search));
+      (this.modelName(item) + ' ' + item.name + ' ' + item.provider + ' ' + item.ref).toLowerCase().includes(search));
+  }
+
+  private sheetHeight(): number | string {
+    if (this.sheet === 'fallbacks') {
+      const count = this.data?.fallbacks.length ?? 0;
+      return count > 3 ? '72%' : 180 + 52 * count;
+    }
+    const count = this.choices().length;
+    if (count > 3) return '72%';
+    return 184 + 54 * (count + (this.route?.allowInherit ? 1 : 0));
   }
 
   private saveFallbacks(refs: string[]): void {
@@ -180,26 +199,26 @@ export struct XopcModelSettingsView {
   }
 
   @Builder
-  private settingsList(data: XopcGlobalModelSettings) {
+  private settingsList() {
     XopcSectionLabel({ heading: $r('app.string.ms_default') })
-    ForEach(data.routing.filter((row: XopcGlobalModelRoute): boolean => row.key === 'chat'),
+    ForEach((this.data?.routing ?? []).filter((row: XopcGlobalModelRoute): boolean => row.key === 'chat'),
       (row: XopcGlobalModelRoute) => { this.row(row, 'model') },
       (row: XopcGlobalModelRoute): string => row.ref ?? 'default')
-    XopcHubRow({ heading: $r('app.string.ms_fallbacks'), trailingValue: data.fallbacks.length.toString(), compact: true,
+    XopcHubRow({ heading: $r('app.string.ms_fallbacks'), trailingValue: (this.data?.fallbacks.length ?? 0).toString(), compact: true,
       symbol: $r('sys.symbol.list_bullet'), onOpen: (): void => { this.open('fallbacks'); } }).id('model-settings-fallbacks')
-    if (data.tasks.length) {
+    if (this.data?.tasks.length) {
       XopcSectionLabel({ heading: $r('app.string.ms_tasks') })
-      ForEach(data.tasks, (row: XopcGlobalModelRoute) => { this.row(row, 'task') },
+      ForEach(this.data?.tasks ?? [], (row: XopcGlobalModelRoute) => { this.row(row, 'task') },
         (row: XopcGlobalModelRoute): string => row.key + ':' + (row.ref ?? '') + ':' + (row.name ?? ''))
     }
     XopcSectionLabel({ heading: $r('app.string.ms_other') })
-    ForEach(data.routing.filter((row: XopcGlobalModelRoute): boolean => ['background', 'vision', 'image'].includes(row.key)),
+    ForEach((this.data?.routing ?? []).filter((row: XopcGlobalModelRoute): boolean => ['background', 'vision', 'image'].includes(row.key)),
       (row: XopcGlobalModelRoute) => { this.row(row, 'model') },
       (row: XopcGlobalModelRoute): string => row.key + ':' + (row.ref ?? '') + ':' + (row.name ?? ''))
-    if (data.routing.some((row: XopcGlobalModelRoute): boolean =>
+    if (this.data?.routing.some((row: XopcGlobalModelRoute): boolean =>
       ['transcription', 'speech', 'conversation', 'video', 'music'].includes(row.key))) {
       XopcSectionLabel({ heading: $r('app.string.ms_media') })
-      ForEach(data.routing.filter((row: XopcGlobalModelRoute): boolean =>
+      ForEach((this.data?.routing ?? []).filter((row: XopcGlobalModelRoute): boolean =>
         ['transcription', 'speech', 'conversation', 'video', 'music'].includes(row.key)),
         (row: XopcGlobalModelRoute) => { this.row(row, 'model') },
         (row: XopcGlobalModelRoute): string => row.key + ':' + (row.ref ?? '') + ':' + (row.name ?? ''))
@@ -218,7 +237,7 @@ export struct XopcModelSettingsView {
           SymbolGlyph($r('sys.symbol.checkmark')).fontSize(16).fontColor([this.colors.accent])
         }
       }.width('100%').constraintSize({ minHeight: 50 }).padding({ left: 12, right: 12 })
-    }.width('100%').padding(0).backgroundColor(this.selected === ref ? this.colors.accentSoft : Color.Transparent)
+    }.width('100%').padding(0).backgroundColor(this.selected === ref ? this.colors.accentSoft : this.colors.input)
       .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).enabled(!this.saving).accessibilitySelected(this.selected === ref)
       .onClick((): void => { this.selected = ref; })
   }
@@ -238,7 +257,7 @@ export struct XopcModelSettingsView {
           Column() {
             ForEach(this.data?.fallbacks ?? [], (choice: XopcGlobalModelChoice, index: number) => {
               Row({ space: 8 }) {
-                Text((index + 1).toString() + '. ' + choice.name).fontSize(14).fontColor(this.colors.foreground).layoutWeight(1)
+                Text((index + 1).toString() + '. ' + this.modelName(choice)).fontSize(14).fontColor(this.colors.foreground).layoutWeight(1)
                 Button($r('app.string.ms_move_up')).height(44).enabled(index > 0 && !this.saving)
                   .onClick((): void => { this.moveFallback(index); })
                 Button($r('app.string.ms_remove')).height(44).enabled(!this.saving)
@@ -250,14 +269,14 @@ export struct XopcModelSettingsView {
         Button($r('app.string.ms_add_fallback')).width('100%').height(48).enabled(!this.saving)
           .onClick((): void => { this.open('add'); })
       } else {
-        if (this.choices().length) {
+        if (this.choices().length > 3) {
           TextInput({ text: this.query, placeholder: $r('app.string.ms_search') }).id('model-settings-search')
             .width('100%').height(46).backgroundColor(this.colors.input).onChange((query: string): void => { this.query = query; })
         }
         Scroll() {
-          Column() {
+          Column({ space: 4 }) {
             if (this.route?.allowInherit) { this.option($r('app.string.ms_inherit'), '', '') }
-            ForEach(this.matching(), (choice: XopcGlobalModelChoice) => { this.option(choice.name, choice.provider, choice.ref) },
+            ForEach(this.matching(), (choice: XopcGlobalModelChoice) => { this.option(this.modelName(choice), choice.provider, choice.ref) },
               (choice: XopcGlobalModelChoice): string => choice.ref)
             if (!this.matching().length) {
               Text(this.choices().length ? $r('app.string.ms_no_match') : $r('app.string.ms_connect'))
@@ -292,11 +311,11 @@ export struct XopcModelSettingsView {
               .fontSize(14).fontColor(this.colors.secondary).width('100%').margin({ bottom: 8 })
             if (!this.loading && !this.data) { Button($r('app.string.retry')).onClick((): void => { void this.load(); }) }
           }
-          if (this.data) { this.settingsList(this.data) }
+          if (this.data) { this.settingsList() }
         }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 16, right: 16, bottom: 20 })
       }.layoutWeight(1).width('100%').align(Alignment.Top)
     }.id('model-settings').width('100%').height('100%').backgroundColor(this.colors.surface)
-      .bindSheet($$this.showingSheet, this.sheetBody, { height: '72%', dragBar: true, backgroundColor: this.colors.panel,
+      .bindSheet($$this.showingSheet, this.sheetBody, { height: this.sheetHeight(), dragBar: true, backgroundColor: this.colors.panel,
         shouldDismiss: (action: SheetDismiss): void => { if (!this.saving) action.dismiss(); } })
     }.hideTitleBar(true).onBackPressed((): boolean => this.saving)
   }

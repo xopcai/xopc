@@ -1935,6 +1935,35 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["model-choice-fixture/tts"].waitForExistence(timeout: 6))
     }
 
+    func testCloudMusicAndVideoModelsCanBeSelected() {
+        tab("profile")
+        let entry = app.buttons["settings-models"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 6))
+        if !entry.isHittable {
+            app.swipeUp()
+        }
+        entry.tap()
+
+        for kind in ["music", "video"] {
+            let setting = app.buttons["model-setting-\(kind)"]
+            for _ in 0 ..< 3 where !setting.isHittable {
+                app.swipeUp()
+            }
+            XCTAssertTrue(setting.isHittable, "The \(kind) setting should be reachable")
+            setting.tap()
+
+            let cloud = app.buttons["model-choice-xopc-cloud/\(kind)"]
+            XCTAssertTrue(cloud.waitForExistence(timeout: 6))
+            cloud.tap()
+            let confirm = app.buttons["model-settings-confirm"]
+            XCTAssertTrue(confirm.isEnabled)
+            confirm.tap()
+            XCTAssertTrue(confirm.waitForNonExistence(timeout: 6))
+            let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "XOPC Cloud"), object: setting)
+            XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 6), .completed, "The \(kind) choice should be saved")
+        }
+    }
+
     func testAutomationAndLibraryFiltersRestoreIndependently() {
         tab("automations")
         XCTAssertFalse(app.buttons["work-page-menu"].exists)

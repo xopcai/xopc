@@ -74,6 +74,17 @@ export struct XopcChatOptions {
     return typeof label === 'string' ? label : this.getUIContext().getHostContext()?.resourceManager.getStringSync(label) ?? '';
   }
 
+  private modelName(item: XopcChatModel): string {
+    const key = appSettings.effectiveLanguage().startsWith('zh') ? 'zh-CN' : 'en';
+    return item.displayNames?.[key] || item.name || item.id;
+  }
+
+  private matchingModels(): XopcChatModel[] {
+    const search = this.query.trim().toLowerCase();
+    return this.model.models.filter((item: XopcChatModel): boolean =>
+      (this.modelName(item) + ' ' + (item.name ?? '') + ' ' + item.id).toLowerCase().includes(search));
+  }
+
   private matchesAgent(agent: XopcChatAgent): boolean {
     const query = this.query.trim().toLowerCase();
     if (!query) return true;
@@ -134,9 +145,12 @@ export struct XopcChatOptions {
       }
       List({ space: this.mode === 'actions' ? 0 : 8 }) {
         if (this.mode === 'model') {
-          ForEach(this.model.models.filter((item: XopcChatModel): boolean => (item.name + ' ' + item.id).toLowerCase().includes(this.query.toLowerCase())), (item: XopcChatModel) => {
+          if (!this.model.loading && !this.model.error && this.model.models.length && !this.matchingModels().length) {
+            ListItem() { Text($r('app.string.ms_no_match')).fontColor(this.colors.secondary).padding(12) }
+          }
+          ForEach(this.matchingModels(), (item: XopcChatModel) => {
             ListItem() {
-              XopcHubRow({ heading: (item.id === this.model.modelId ? '✓ ' : '') + (item.displayNames?.[appSettings.effectiveLanguage().startsWith('zh') ? 'zh-CN' : 'en'] || item.name || item.id),
+              XopcHubRow({ heading: (item.id === this.model.modelId ? '✓ ' : '') + this.modelName(item),
                 summary: item.id, showChevron: false, onOpen: async (): Promise<void> => { if (await this.model.selectModel(item.id, this.rememberModel)) this.onClose(); } })
             }.enabled(!this.model.loading && !this.model.saving && !this.modelBusy)
           }, (item: XopcChatModel): string => item.id)

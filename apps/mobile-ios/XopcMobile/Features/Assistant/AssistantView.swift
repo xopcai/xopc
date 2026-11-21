@@ -1479,7 +1479,7 @@ struct PersonalAgentProfileView: View {
                 Button {
                     modelPickerOpen = true
                 } label: {
-                    LabeledContent("模型", value: modelOptions.selectedModel?.name
+                    LabeledContent("模型", value: modelOptions.selectedModel?.localizedName(locale)
                         ?? (modelOptions.selectedModelID.isEmpty ? "" : modelOptions.selectedModelID))
                 }
                 .disabled(modelOptions.models.isEmpty)

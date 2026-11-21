@@ -73,7 +73,7 @@
     {"name": "ms_other", "value": "其他用途"},
     {"name": "ms_media", "value": "语音与更多媒体"},
     {"name": "ms_unset", "value": "未配置"},
-    {"name": "ms_not_connected", "value": "未连接服务"},
+    {"name": "ms_not_connected", "value": "暂无可用模型"},
     {"name": "ms_fallback_help", "value": "默认模型失败时，按顺序尝试。"},
     {"name": "ms_add_fallback", "value": "添加备用模型"},
     {"name": "ms_move_up", "value": "上移"},

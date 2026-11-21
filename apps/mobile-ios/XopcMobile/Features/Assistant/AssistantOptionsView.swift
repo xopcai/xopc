@@ -69,7 +69,7 @@ struct AssistantSessionActionsView: View {
                         AssistantOptionPicker(configuration: configuration, conversation: conversation,
                                               state: options, pickingModel: true, onSave: onConversationUpdated)
                     } label: {
-                        optionRow("模型", value: options.selectedModel?.name ?? "默认模型", symbol: "waveform")
+                        optionRow("模型", value: options.selectedModel?.localizedName(locale) ?? AppLocalization.string("默认模型", locale: locale), symbol: "waveform")
                     }.disabled(options.isLoading)
                     NavigationLink {
                         AssistantOptionPicker(configuration: configuration, conversation: conversation,
@@ -154,24 +154,37 @@ struct AssistantOptionPicker: View {
     var reloadAfterError = false
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @State private var search = ""
+
+    private var matchingModels: [ChatModel] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return state.models.filter { model in
+            query.isEmpty || [model.localizedName(locale), model.name, model.id].contains {
+                $0.localizedCaseInsensitiveContains(query)
+            }
+        }
+    }
 
     var body: some View {
         List {
             if pickingModel {
-                ForEach(state.models.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || $0.id.localizedCaseInsensitiveContains(search) }) { model in
+                ForEach(matchingModels) { model in
                     Button {
                         state.selectModel(model.id)
                         save()
                     } label: {
                         HStack {
-                            Text(model.name)
+                            Text(model.localizedName(locale))
                             Spacer()
                             if state.selectedModelID == model.id {
                                 Image(systemName: "checkmark")
                             }
                         }.frame(minHeight: 44)
                     }.disabled(state.isSaving)
+                }
+                if matchingModels.isEmpty, !state.isLoading, state.errorMessage == nil {
+                    Text(state.models.isEmpty ? "暂无可用模型" : "没有匹配的模型").foregroundStyle(.secondary)
                 }
             } else {
                 ForEach(state.thinkingOptions, id: \.self) { level in

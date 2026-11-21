@@ -105,16 +105,24 @@ with wave.open(w,'wb') as audio:
 def envelope(value): return {'ok':True,'payload':value}
 capability_skill_enabled = True
 model_choices = [dict(ref=item['id'], name=item['name'], provider='Fixture Provider') for item in [model, second_model]]
-global_model = model_choices[0]['ref']
+model_pools = {
+ 'chat':model_choices,
+ 'speech':[dict(ref='fixture/tts',name='Fixture Speech',provider='Fixture')],
+ 'music':[dict(ref='mureka-cn/mureka-9.5',name='Mureka 9.5',provider='Mureka'),
+          dict(ref='xopc-cloud/music',name='XOPC Cloud Music',provider='XOPC Cloud')],
+ 'video':[dict(ref='dashscope-cn/wan3.0-video',name='Wan 3.0',provider='Bailian'),
+          dict(ref='xopc-cloud/video',name='XOPC Cloud Video',provider='XOPC Cloud')],
+}
+selected_models = {key:choices[0]['ref'] for key, choices in model_pools.items()}
 global_model_revision = 1
 def global_model_payload():
- current = next(item for item in model_choices if item['ref'] == global_model)
- return envelope({'revision':str(global_model_revision),
-  'routing':[dict(key='chat',pool='chat',ref=current['ref'],name=current['name']),
-   dict(key='speech',pool='speech',ref='fixture/tts',name='Fixture Speech')],
+ routing=[]
+ for key, choices in model_pools.items():
+  current=next(item for item in choices if item['ref'] == selected_models[key])
+  routing.append(dict(key=key,pool=key,ref=current['ref'],name=current['name']))
+ return envelope({'revision':str(global_model_revision), 'routing':routing,
   'tasks':[dict(key='coding',pool='chat',ref=None,name=None,inherited=True,allowInherit=True)],
-  'fallbacks':[], 'pools':{'chat':model_choices,
-   'speech':[dict(ref='fixture/tts',name='Fixture Speech',provider='Fixture')]}})
+  'fallbacks':[], 'pools':model_pools})
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args): pass
  def do_PUT(self): self.do_GET()
@@ -140,7 +148,7 @@ class Handler(BaseHTTPRequestHandler):
  def do_PATCH(self): self.do_GET()
  def do_DELETE(self): self.do_GET()
  def do_GET(self):
-  global live_music_state, space_item, capability_skill_enabled, global_model, global_model_revision, device_file_allowed, sidebar_actions
+  global live_music_state, space_item, capability_skill_enabled, global_model_revision, device_file_allowed, sidebar_actions
   path=urlparse(self.path).path; query=parse_qs(urlparse(self.path).query)
   keyboard_fixture = path.startswith('/keyboard/')
   suggestion_fixture = path.startswith('/next-turn/')
@@ -371,9 +379,10 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/api/mobile/model-settings':
    if self.command == 'PATCH':
     change=json.loads(body)
-    if change.get('kind') == 'model' and change.get('key') == 'chat' and change.get('revision') == str(global_model_revision):
-     if any(item['ref'] == change.get('ref') for item in model_choices):
-      global_model = change['ref']
+    key=change.get('key')
+    if change.get('kind') == 'model' and change.get('revision') == str(global_model_revision):
+     if any(item['ref'] == change.get('ref') for item in model_pools.get(key, [])):
+      selected_models[key] = change['ref']
       global_model_revision += 1
    data=global_model_payload()
   elif sidebar_actions_fixture and path=='/fixture/reset' and self.command=='POST':

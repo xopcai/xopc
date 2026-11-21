@@ -187,6 +187,7 @@
     <string name="assistant_thinking_ultra">Ultra</string>
     <string name="assistant_thinking_unknown">Other</string>
     <string name="voice_speaking">Speaking…</string>
+    <string name="assistant_models_empty">No models available</string>
     <string name="assistant_model_search">Search models</string>
     <string name="assistant_model_error">Could not load or change the model. Refresh the list and try again.</string>
     <string name="assistant_model_retry">Refresh models</string>
@@ -1074,7 +1075,7 @@
     <string name="ms_media">Voice and more media</string>
     <string name="ms_change">Change</string>
     <string name="ms_unset">Not configured</string>
-    <string name="ms_not_connected">No service connected</string>
+    <string name="ms_not_connected">No models available</string>
     <string name="ms_fallback_help">If the default chat model fails, these are tried in order.</string>
     <string name="ms_add_fallback">Add fallback model</string>
     <string name="ms_move_up">Move up</string>

@@ -270,6 +270,11 @@ struct ChatModel: Decodable, Identifiable, Sendable {
     let reasoning: Bool?
     let vision: Bool?
     let thinking: ChatModelThinking?
+    var displayNames: [String: String]? = nil
+
+    func localizedName(_ locale: Locale) -> String {
+        displayNames?[locale.language.languageCode?.identifier == "zh" ? "zh-CN" : "en"] ?? name
+    }
 }
 
 struct ChatModelThinking: Decodable, Sendable {

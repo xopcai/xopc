@@ -73,7 +73,7 @@
     {"name": "ms_other", "value": "Other uses"},
     {"name": "ms_media", "value": "Voice and more media"},
     {"name": "ms_unset", "value": "Not configured"},
-    {"name": "ms_not_connected", "value": "No service connected"},
+    {"name": "ms_not_connected", "value": "No models available"},
     {"name": "ms_fallback_help", "value": "If the default model fails, these are tried in order."},
     {"name": "ms_add_fallback", "value": "Add fallback model"},
     {"name": "ms_move_up", "value": "Move up"},

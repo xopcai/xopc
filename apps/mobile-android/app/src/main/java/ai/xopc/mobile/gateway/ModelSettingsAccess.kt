@@ -5,7 +5,10 @@ import kotlinx.coroutines.runInterruptible
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class SettingsModel(val ref: String, val name: String, val provider: String)
+data class SettingsModel(val ref: String, val name: String, val provider: String,
+  val displayNames: Map<String, String> = emptyMap()) {
+  fun localizedName(language: String): String = displayNames[if (language == "zh") "zh-CN" else "en"] ?: name
+}
 data class SettingsModelRoute(val key: String, val pool: String, val ref: String?, val name: String?,
   val inherited: Boolean, val allowInherit: Boolean)
 data class ModelSettingsSnapshot(val revision: String, val routing: List<SettingsModelRoute>,
@@ -34,7 +37,8 @@ class ModelSettingsAccess internal constructor(private val gateway: GatewaySessi
   private fun route(value: JSONObject) = SettingsModelRoute(value.getString("key"), value.getString("pool"),
     value.nullable("ref"), value.nullable("name"), value.optBoolean("inherited"), value.optBoolean("allowInherit"))
 
-  private fun option(value: JSONObject) = SettingsModel(value.getString("ref"), value.getString("name"), value.getString("provider"))
+  private fun option(value: JSONObject) = SettingsModel(value.getString("ref"), value.getString("name"),
+    value.getString("provider"), value.modelDisplayNames())
 
   private fun JSONObject.nullable(name: String) = if (isNull(name)) null else getString(name)
 

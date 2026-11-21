@@ -99,7 +99,17 @@ data class ConversationAgent(val id: String, val name: String, val description: 
   val purpose: String? = null)
 data class AgentCatalog(val agents: List<ConversationAgent>, val defaultId: String)
 data class ConversationModel(val id: String, val name: String, val initialThinkingLevel: String,
-  val thinkingMode: String = "none", val thinkingOptions: List<String> = emptyList())
+  val thinkingMode: String = "none", val thinkingOptions: List<String> = emptyList(),
+  val displayNames: Map<String, String> = emptyMap()) {
+  fun localizedName(language: String): String = displayNames[if (language == "zh") "zh-CN" else "en"] ?: name
+}
+
+internal fun JSONObject.modelDisplayNames(): Map<String, String> {
+  val names = optJSONObject("displayNames") ?: return emptyMap()
+  return names.keys().asSequence().mapNotNull { key ->
+    names.optString(key).takeIf(String::isNotBlank)?.let { key to it }
+  }.toMap()
+}
 data class ModelSelection(val models: List<ConversationModel>, val selectedId: String,
   val configVersion: Long?, val thinkingLevel: String = "off")
 data class LocalConversationDraft(
@@ -974,7 +984,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         ConversationModel(id, item.optString("name").ifBlank { id },
           thinking?.optString("initialValue")?.takeIf(String::isNotBlank) ?: "off",
           thinking?.optString("mode") ?: "none",
-          (0 until (options?.length() ?: 0)).map { options!!.getString(it) })
+          (0 until (options?.length() ?: 0)).map { options!!.getString(it) }, item.modelDisplayNames())
       }
       return ModelSelection(models, payload.optString("defaultId").ifBlank { models.firstOrNull()?.id.orEmpty() }, null)
     }

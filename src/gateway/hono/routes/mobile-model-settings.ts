@@ -11,6 +11,7 @@ import type { Config } from '../../../config/schema.js';
 import { readMusicModelSettings } from '../../../music-generation/providers.js';
 import { saveMusicModel } from '../../../music-generation/settings.js';
 import { getAllProviders, getProviderDisplayName, isProviderConfigured } from '../../../providers/index.js';
+import { getModelCatalogStore } from '../../../providers/model-catalog-store.js';
 import { previewProviderSetup } from '../../../providers/setup/engine.js';
 import { applySetupVoice, readSetupVoiceState, voiceSetupUses, type SetupVoiceModel } from '../../../providers/setup/voice.js';
 import { getAvailableVideoModelRefs, getConfiguredVideoProviders } from '../../../video-generation/providers.js';
@@ -34,11 +35,16 @@ const changeSchema = z.discriminatedUnion('kind', [
 ]);
 
 type Use = z.infer<typeof uses>;
-type Option = { ref: string; name: string; provider: string };
+type Option = { ref: string; name: string; provider: string; displayNames?: Partial<Record<'zh-CN' | 'en', string>> };
 type Selection = { key: string; pool: Use; ref: string | null; name: string | null; inherited?: boolean; allowInherit?: boolean };
 type Change = z.infer<typeof changeSchema>;
 
-const option = (ref: string, name: string, provider: string): Option => ({ ref, name, provider: getProviderDisplayName(provider) });
+function option(ref: string, name: string, provider: string): Option {
+  const prefix = `${provider}/`;
+  const modelId = ref.startsWith(prefix) ? ref.slice(prefix.length) : ref;
+  const displayNames = getModelCatalogStore().getSource(provider)?.models.find(model => model.id === modelId)?.displayNames;
+  return { ref, name, provider: getProviderDisplayName(provider), ...(displayNames ? { displayNames } : {}) };
+}
 const ordered = (choices: Option[]): Option[] => [...new Map(choices.map(choice => [choice.ref, choice])).values()]
   .sort((a, b) => a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name) || a.ref.localeCompare(b.ref));
 

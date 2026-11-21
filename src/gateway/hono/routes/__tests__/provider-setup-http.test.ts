@@ -37,7 +37,7 @@ describe('model setup authenticated Gateway HTTP', () => {
     vi.stubEnv('XIAOMI_TOKEN_PLAN_CN_API_KEY', 'fixture');
     vi.stubEnv('XOPC_CLOUD_API_KEY', 'fixture');
     getModelCatalogStore().replaceSourceModels('xopc-cloud', { providerId: 'xopc-cloud', baseUrl: 'https://router.test/v1', api: 'openai-completions', etag: null, recommendedModel: 'auto', lastSuccessAt: Date.now() },
-      ['auto', 'advanced'].map(id => ({ id, name: id, kind: 'language' as const, input: ['text', 'image'], output: ['text'], operations: ['chat.completions'], reasoning: true, contextWindow: 128000, maxOutputTokens: 8192 })));
+      ['auto', 'advanced'].map(id => ({ id, name: id, ...(id === 'auto' ? { displayNames: { en: 'Auto', 'zh-CN': '自动' } } : {}), kind: 'language' as const, input: ['text', 'image'], output: ['text'], operations: ['chat.completions'], reasoning: true, contextWindow: 128000, maxOutputTokens: 8192 })));
     service = { currentConfig: ConfigSchema.parse({}), getModelCatalogSync: () => ({}), refreshAgentCatalog: vi.fn(), saveConfig: vi.fn(async (next: Config) => { service.currentConfig = next; return { saved: true }; }) };
     const app = new Hono();
     app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'setup-test', allowTailscale: false }) }));
@@ -92,6 +92,9 @@ describe('model setup authenticated Gateway HTTP', () => {
     const cloud = (await (await request('xopc-cloud')).json() as { payload: ModelSetupPreview }).payload;
     const cloudModels = cloud.uses.find(use => use.id === 'chat')!.choices.map(choice => choice.id);
     expect(start.pools.chat.map((choice: { ref: string }) => choice.ref)).toEqual(expect.arrayContaining(cloudModels));
+    expect(start.pools.chat).toContainEqual(expect.objectContaining({
+      ref: 'xopc-cloud/auto', displayNames: { en: 'Auto', 'zh-CN': '自动' },
+    }));
     const refs: string[] = start.pools.chat.map((choice: { ref: string }) => choice.ref);
     const primary = refs.find(ref => ref !== previous.models.chat.primary)!;
     const backup = refs.find(ref => ref !== primary)!;

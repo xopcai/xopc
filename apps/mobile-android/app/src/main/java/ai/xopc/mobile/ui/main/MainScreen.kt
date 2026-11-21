@@ -2823,7 +2823,9 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   val uriHandler = LocalUriHandler.current
   val context = LocalContext.current
   val speechChat = connection.selectedConversationId?.let { ChatSpeechScope(it, connection.historyTranscriptId) }
-  val speechLanguage = LocalConfiguration.current.locales[0].toLanguageTag()
+  val locale = LocalConfiguration.current.locales[0]
+  val speechLanguage = locale.toLanguageTag()
+  val modelLanguage = locale.language
   DisposableEffect(reader, speechChat) {
     onDispose { speechChat?.let(reader::leaveConversation) }
   }
@@ -3664,10 +3666,15 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
           Text(stringResource(R.string.assistant_model_retry))
         }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          if (!connection.modelsLoading) items(connection.models.filter {
-            modelQuery.isBlank() || it.name.contains(modelQuery, true) || it.id.contains(modelQuery, true)
-          }, key = { it.id }) { model ->
-            ContextRow("${if (model.id == connection.selectedModelId) "✓ " else ""}${model.name}",
+          val search = modelQuery.trim()
+          val matches = connection.models.filter { model ->
+            listOf(model.localizedName(modelLanguage), model.name, model.id).any { it.contains(search, ignoreCase = true) }
+          }
+          if (!connection.modelsLoading && !connection.modelError && matches.isEmpty()) item {
+            Text(stringResource(if (connection.models.isEmpty()) R.string.assistant_models_empty else R.string.ms_no_match))
+          }
+          if (!connection.modelsLoading) items(matches, key = { it.id }) { model ->
+            ContextRow("${if (model.id == connection.selectedModelId) "✓ " else ""}${model.localizedName(modelLanguage)}",
               model.id, "model-${model.id}",
               enabled = !connection.modelSaving && !connection.sending && connection.activeRunId == null &&
                 connection.pendingInput == null,
@@ -3789,7 +3796,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
             }
           }
           ContextRow(stringResource(R.string.assistant_model),
-            connection.models.firstOrNull { it.id == connection.selectedModelId }?.name
+            connection.models.firstOrNull { it.id == connection.selectedModelId }?.localizedName(modelLanguage)
               ?: connection.selectedModelId, "assistant-model", iconRes = R.drawable.action_waveform,
             compact = true, flat = true, enabled = !connection.modelSaving) {
             optionsOpen = false; modelQuery = ""; modelPickerOpen = true; onReloadModels()

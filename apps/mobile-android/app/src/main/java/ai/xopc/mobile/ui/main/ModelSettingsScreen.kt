@@ -17,7 +17,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -66,6 +69,7 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
   var query by remember(gatewayId) { mutableStateOf("") }
   var selected by remember(gatewayId) { mutableStateOf<String?>(null) }
   val inherit = stringResource(R.string.ms_inherit)
+  val language = LocalConfiguration.current.locales[0].language
 
   suspend fun load() {
     loading = true
@@ -132,7 +136,7 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
         item { ModelSettingsCaption(stringResource(R.string.ms_default)) }
         primary?.let { row ->
           item {
-            ModelSettingsRow(stringResource(R.string.ms_chat), row.name ?: stringResource(R.string.ms_unset),
+            ModelSettingsRow(stringResource(R.string.ms_chat), snapshot.modelName(row, language) ?: stringResource(R.string.ms_unset),
               modelRouteIcons.getValue(row.key), { open(row) }, primary = true)
           }
         }
@@ -148,7 +152,7 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
             }
           }
           items(snapshot.tasks, key = { "task-${it.key}" }) { row ->
-            ModelSettingsRow(stringResource(taskLabels.getValue(row.key)), row.name ?: inherit,
+            ModelSettingsRow(stringResource(taskLabels.getValue(row.key)), snapshot.modelName(row, language) ?: inherit,
               modelRouteIcons.getValue(row.key), { open(row, isTask = true) })
           }
         }
@@ -172,14 +176,17 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
       val route = picker?.route
       val isTask = picker?.isTask == true
       val fallbackList = showFallbacks && route == null
-      val title = if (fallbackList || showFallbacks) R.string.ms_fallbacks
+      val title = if (fallbackList) R.string.ms_fallbacks else if (showFallbacks) R.string.ms_add_fallback
         else (if (isTask) taskLabels else useLabels)[route?.key] ?: R.string.ms_title
       val pool = if (showFallbacks) "chat" else route?.pool.orEmpty()
       val choices = snapshot.pools[pool].orEmpty().filter { model ->
         !showFallbacks || model.ref != snapshot.routing.firstOrNull { it.key == "chat" }?.ref &&
           snapshot.fallbacks.none { it.ref == model.ref }
       }
-      val shown = choices.filter { query.isBlank() || "${it.name} ${it.provider} ${it.ref}".contains(query.trim(), ignoreCase = true) }
+      val shown = choices.filter { choice ->
+        listOf(choice.localizedName(language), choice.name, choice.provider, choice.ref)
+          .any { it.contains(query.trim(), ignoreCase = true) }
+      }
       Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(title), style = MaterialTheme.typography.titleLarge)
@@ -190,7 +197,7 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
             items(snapshot.fallbacks.size) { index ->
               val model = snapshot.fallbacks[index]
               Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${index + 1}. ${model.name}", Modifier.weight(1f))
+                Text("${index + 1}. ${model.localizedName(language)}", Modifier.weight(1f))
                 TextButton(enabled = index > 0 && !saving, onClick = {
                   val refs = snapshot.fallbacks.map(SettingsModel::ref).toMutableList()
                   refs.add(index - 1, refs.removeAt(index))
@@ -207,17 +214,19 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
             Text(stringResource(R.string.ms_add_fallback))
           }
         } else {
-          if (choices.isNotEmpty()) OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().testTag("model-settings-search"),
+          if (choices.size > 3) OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().testTag("model-settings-search"),
             placeholder = { Text(stringResource(R.string.ms_search)) }, singleLine = true)
-          LazyColumn(Modifier.weight(1f, fill = false)) {
+          LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (route?.allowInherit == true) item {
               ModelSettingsChoice(inherit, "", selected == null, !saving) { selected = null }
             }
             items(shown, key = { it.ref }) { choice ->
-              ModelSettingsChoice(choice.name, choice.provider, selected == choice.ref, !saving) { selected = choice.ref }
+              ModelSettingsChoice(choice.localizedName(language), choice.provider, selected == choice.ref, !saving) { selected = choice.ref }
             }
             if (shown.isEmpty()) item {
-              ModelSettingsCaption(stringResource(if (choices.isEmpty()) R.string.ms_connect else R.string.ms_no_match))
+              Text(stringResource(if (choices.isEmpty()) R.string.ms_connect else R.string.ms_no_match),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
           }
           if (choices.isNotEmpty() || route?.allowInherit == true) Button(modifier = Modifier.fillMaxWidth(),
@@ -233,13 +242,16 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
   }
 }
 
+private fun ModelSettingsSnapshot.modelName(row: SettingsModelRoute, language: String): String? =
+  pools[row.pool]?.firstOrNull { it.ref == row.ref }?.localizedName(language) ?: row.name
+
 @Composable
 private fun ModelSettingsRouteRow(row: SettingsModelRoute, snapshot: ModelSettingsSnapshot, onClick: () -> Unit) {
   val title = stringResource(useLabels.getValue(row.key))
   val value = when {
     row.inherited -> stringResource(R.string.ms_inherit)
     snapshot.pools[row.pool].isNullOrEmpty() -> stringResource(R.string.ms_not_connected)
-    else -> row.name ?: stringResource(R.string.ms_unset)
+    else -> snapshot.modelName(row, LocalConfiguration.current.locales[0].language) ?: stringResource(R.string.ms_unset)
   }
   ModelSettingsRow(title, value, modelRouteIcons.getValue(row.key), onClick)
 }
@@ -268,12 +280,17 @@ private fun ModelSettingsRow(title: String, value: String, @DrawableRes icon: In
 
 @Composable
 private fun ModelSettingsChoice(name: String, provider: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
-  TextButton(enabled = enabled, onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)) {
-    Column(Modifier.weight(1f)) {
-      Text(name, color = MaterialTheme.colorScheme.onSurface)
-      if (provider.isNotEmpty()) ModelSettingsCaption(provider)
+  Surface(onClick = onClick, enabled = enabled, shape = themedCorners(12),
+    color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+    modifier = Modifier.fillMaxWidth().semantics { this.selected = selected }) {
+    Row(Modifier.heightIn(min = 50.dp).padding(horizontal = 12.dp, vertical = 6.dp),
+      verticalAlignment = Alignment.CenterVertically) {
+      Column(Modifier.weight(1f)) {
+        Text(name, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        if (provider.isNotEmpty()) ModelSettingsCaption(provider)
+      }
+      if (selected) ActionIcon(R.drawable.action_check_circle, color = MaterialTheme.colorScheme.primary)
     }
-    if (selected) Text("✓")
   }
 }
 

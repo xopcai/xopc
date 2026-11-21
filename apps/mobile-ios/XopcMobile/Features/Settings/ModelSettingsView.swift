@@ -4,8 +4,13 @@ private struct GlobalModelChoice: Decodable, Identifiable {
     let ref: String
     let name: String
     let provider: String
+    let displayNames: [String: String]?
     var id: String {
         ref
+    }
+
+    func localizedName(_ locale: Locale) -> String {
+        displayNames?[locale.language.languageCode?.identifier == "zh" ? "zh-CN" : "en"] ?? name
     }
 }
 
@@ -80,6 +85,7 @@ struct ModelSettingsView: View {
     @State private var selected: String?
     @State private var query = ""
     @Environment(\.mobileTheme) private var theme
+    @Environment(\.locale) private var locale
 
     var body: some View {
         List {
@@ -106,7 +112,10 @@ struct ModelSettingsView: View {
         .refreshable { await load() }
         .sheet(item: $sheet) { sheet in
             if let data {
-                sheetContent(sheet, data: data).interactiveDismissDisabled(saving)
+                sheetContent(sheet, data: data)
+                    .presentationDetents(sheetDetents(sheet, data: data))
+                    .presentationDragIndicator(.visible)
+                    .interactiveDismissDisabled(saving)
             }
         }
     }
@@ -143,9 +152,9 @@ struct ModelSettingsView: View {
         let value = if route.inherited == true {
             Text("继承默认")
         } else if route.key != "chat", data.pools[route.pool]?.isEmpty != false {
-            Text("未连接服务")
+            Text("暂无可用模型")
         } else if let name = route.name {
-            Text(verbatim: name)
+            Text(verbatim: data.pools[route.pool]?.first { $0.ref == route.ref }?.localizedName(locale) ?? name)
         } else {
             Text("未配置")
         }
@@ -228,7 +237,7 @@ struct ModelSettingsView: View {
                     Section {
                         ForEach(Array(data.fallbacks.enumerated()), id: \.element.id) { index, choice in
                             HStack {
-                                Text("\(index + 1). \(choice.name)")
+                                Text("\(index + 1). \(choice.localizedName(locale))")
                                 Spacer()
                                 Button("上移") {
                                     var refs = data.fallbacks.map(\.ref)
@@ -243,10 +252,7 @@ struct ModelSettingsView: View {
                         Button("添加备用模型", systemImage: "plus") { open(.addFallback) }
                     } footer: { Text("默认模型失败时，按顺序尝试。") }
                 case .addFallback:
-                    picker(data.pools["chat", default: []].filter { candidate in
-                        candidate.ref != data.routing.first(where: { $0.key == "chat" })?.ref &&
-                            !data.fallbacks.contains(where: { $0.ref == candidate.ref })
-                    }, inherit: false)
+                    picker(fallbackChoices(data), inherit: false)
                 case let .choose(route, _):
                     picker(data.pools[route.pool, default: []], inherit: route.allowInherit == true)
                 }
@@ -267,6 +273,28 @@ struct ModelSettingsView: View {
         }
     }
 
+    private func fallbackChoices(_ data: GlobalModelSettings) -> [GlobalModelChoice] {
+        let primary = data.routing.first { $0.key == "chat" }?.ref
+        return data.pools["chat", default: []].filter { candidate in
+            candidate.ref != primary && !data.fallbacks.contains { $0.ref == candidate.ref }
+        }
+    }
+
+    private func sheetDetents(_ sheet: Sheet, data: GlobalModelSettings) -> Set<PresentationDetent> {
+        let count = switch sheet {
+        case .fallbacks: data.fallbacks.count
+        case .addFallback: fallbackChoices(data).count
+        case let .choose(route, _): data.pools[route.pool, default: []].count + (route.allowInherit == true ? 1 : 0)
+        }
+        if count == 0 {
+            return [.height(250), .large]
+        }
+        if count <= 3 {
+            return [.height(248 + CGFloat(count) * 42), .large]
+        }
+        return [.large]
+    }
+
     private func sheetTitle(_ sheet: Sheet) -> Text {
         switch sheet {
         case .fallbacks: Text("备用模型")
@@ -282,8 +310,15 @@ struct ModelSettingsView: View {
         if inherit {
             choiceRow(Text("继承默认"), detail: nil, ref: nil)
         }
-        let matches = options.filter { query.isEmpty || "\($0.name) \($0.provider) \($0.ref)".localizedCaseInsensitiveContains(query) }
-        ForEach(matches) { choice in choiceRow(Text(verbatim: choice.name), detail: choice.provider, ref: choice.ref) }
+        let search = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let matches = options.filter { choice in
+            search.isEmpty || [choice.localizedName(locale), choice.name, choice.provider, choice.ref].contains {
+                $0.localizedCaseInsensitiveContains(search)
+            }
+        }
+        ForEach(matches) { choice in
+            choiceRow(Text(verbatim: choice.localizedName(locale)), detail: choice.provider, ref: choice.ref)
+        }
         if matches.isEmpty {
             Text(options.isEmpty ? "连接支持此用途的模型服务后再试。" : "没有匹配的模型").foregroundStyle(.secondary)
         }
@@ -300,7 +335,8 @@ struct ModelSettingsView: View {
                 }
                 Spacer()
                 if selected == ref {
-                    Image(systemName: "checkmark").foregroundStyle(theme.action)
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(theme.action)
+                        .accessibilityHidden(true)
                 }
             }.frame(minHeight: 44).contentShape(Rectangle())
         }
@@ -318,8 +354,10 @@ struct ModelSettingsView: View {
                 }
             }
         case let .choose(route, scope):
-            confirm("确认更换", enabled: selected != route.ref) {
-                save(scope == .task ? .task(route.key, selected) : .model(route.key, selected), revision: data.revision, close: true)
+            if route.allowInherit == true || data.pools[route.pool]?.isEmpty == false {
+                confirm("确认更换", enabled: selected != route.ref) {
+                    save(scope == .task ? .task(route.key, selected) : .model(route.key, selected), revision: data.revision, close: true)
+                }
             }
         }
     }

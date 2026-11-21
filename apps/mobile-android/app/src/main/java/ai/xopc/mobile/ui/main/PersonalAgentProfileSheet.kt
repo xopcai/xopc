@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -153,6 +154,7 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
   val closePicker = { if (!modelSaving) modelPickerOpen = false }
   ModalBottomSheet(onDismissRequest = closeProfile, sheetState = sheetState,
     modifier = Modifier.testTag("personal-agent-profile-sheet")) {
+    val modelLanguage = LocalConfiguration.current.locales[0].language
     val selection = modelSelection
     val model = selection?.models?.firstOrNull { it.id == selection.selectedId }
     if (modelPickerOpen) {
@@ -167,10 +169,14 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
         } else if (selection == null) ChatOptionsSkeleton()
         val canSelect = !modelBusy && !modelSaving && !modelError
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          if (selection != null) items(selection.models.filter {
-            query.isBlank() || it.name.contains(query, true) || it.id.contains(query, true)
-          }, key = { it.id }) { option ->
-            ContextRow("${if (option.id == selection.selectedId) "✓ " else ""}${option.name}", option.id,
+          val matches = selection?.models.orEmpty().filter { option ->
+            listOf(option.localizedName(modelLanguage), option.name, option.id).any { it.contains(query.trim(), ignoreCase = true) }
+          }
+          if (selection != null && !modelError && matches.isEmpty()) item {
+            Text(stringResource(if (selection.models.isEmpty()) R.string.assistant_models_empty else R.string.ms_no_match))
+          }
+          if (selection != null) items(matches, key = { it.id }) { option ->
+            ContextRow("${if (option.id == selection.selectedId) "✓ " else ""}${option.localizedName(modelLanguage)}", option.id,
               "personal-model-${option.id}", enabled = canSelect, flat = true, showChevron = false) {
               if (option.id == selection.selectedId) closePicker() else saveModel(model = option)
             }
@@ -209,7 +215,7 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
               selection.models.isEmpty() -> Text(stringResource(R.string.personal_agent_no_models),
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
               else -> {
-                ContextRow(stringResource(R.string.assistant_model), model?.name ?: selection.selectedId,
+                ContextRow(stringResource(R.string.assistant_model), model?.localizedName(modelLanguage) ?: selection.selectedId,
                   "personal-setting-model", enabled = !busy && !modelBusy, compact = true, flat = true) {
                   query = ""
                   modelPickerOpen = true
