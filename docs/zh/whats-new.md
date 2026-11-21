@@ -1,53 +1,35 @@
-# 近期变化
+# xopc 近期变化
 
-> 2026-11-03 起已移除浏览器录制、步骤保存、回放及独立管理页面。基础浏览器控制继续保留。
+更新于 2026 年 11 月 21 日。本文梳理 10 月下旬以来的产品变化，发布基准为 11 月 20 日的[核心 v0.0.487 标签](https://github.com/xopcai/xopc/releases/tag/v0.0.487)和 [Android v0.0.135 发布](https://github.com/xopcai/xopc/releases/tag/mobile-android-v0.0.135)。iOS 有独立分发渠道，HarmonyOS 处于内测，请核对已安装的版本。[移动端下载](./mobile-app.md) · [更新 xopc](./update.md) · [查看核心版本差异](https://github.com/xopcai/xopc/compare/v0.0.419...v0.0.487)
 
-以下是截至 2026 年 10 月 25 日的用户使用入口。具体版本与安装包见 [GitHub Releases](https://github.com/xopcai/xopc/releases)，更新方法见[升级指南](./update.md)。桌面、网关、手机和浏览器扩展独立分发，更新主程序不会自动更新所有客户端。
+## Ada 与任务交付
 
-## v0.0.419：Windows 打包修复
+- 首页发现重复请求时，可以建议一份任务草稿。打开草稿，检查目标和范围再开始。持续目标支持在推进中逐步审阅下一步。[Personal AI 持续跟进](./personal-agent-proactivity.md)
+- 任务卡集中展示结果、产物、检查项和剩余工作。符合自动验收条件的委派任务通过检查后，Ada 可以完成验收。想亲自确认时，交办时明确要求人工验收。支持的会话可以在执行中补充或调整方向。任务失败时，先查看记录的原因，再决定是否重试。[向 Ada 交办](./task-delegation.md) · [任务验收](./task-review.md)
+- 支持的客户端会在回复后提供下一轮建议，由你决定发送什么。[聊天与会话](./session.md)
 
-Windows x64 桌面构建改用系统归档工具解压经过校验的电脑控制驱动。Windows ARM64 构建跳过尚不可用的该驱动；电脑控制仍仅支持 macOS 和 Windows x64。
+## 项目、资料库与编辑
 
-## v0.0.417：Windows 电脑控制与无线手机
+- 项目预览集中展示任务与进展，便于回到原项目继续。从项目发起自动化配置对话，可以把日程留在项目内。个人日程从 Personal 发起。[项目与任务](./projects-tasks-notes.md) · [自动化](./automations.md)
+- **资料库**集中保存文件和生成结果。在网页和桌面端，可以把修改后的交付文件保存为新版本，也可以打开可编辑的工作簿，围绕指定单元格范围提问、审阅建议修改，并把已保存的版本下载为 Excel。[处理文件与项目](./workspace-guide.md)
+- 网页笔记编辑器新增标题大纲。保存遇到新版冲突时，编辑器会保留草稿并提供恢复入口。[笔记](./projects-tasks-notes.md)
 
-- 电脑控制增加 Windows x64 桌面预览，支持窗口观察、原生按钮激活、文本与键盘输入。需要交互式桌面、应用授权与兼容 GUI 模型；ARM64 和完整签名安装包仍需单独验证。
-- Android 11+ 手机可在私有 IPv4 局域网内通过二维码或配对码连接，已保存手机支持校验身份后重连。网关主机需要安装 Android SDK Platform Tools。
-- 手机连接在重启后保留，工作区手机视图支持调整大小。
+## 媒体与客户端
 
-[电脑控制](./computer-use.md) · [手机连接与使用边界](./phone-use.md) · [版本变更](https://github.com/xopcai/xopc/compare/v0.0.416...v0.0.417)。npm 包需要 Node.js 26.12.1 或更高版本；更新核心包不会安装原生移动端或浏览器客户端。
+- 配置生成服务后，可以在聊天里生成音乐或视频草稿。支持的客户端可以在会话内播放结果，网页切换页面时音乐可继续播放。生成任务可能在当前回复结束后才完成，可以从结果卡查看进度和获取成品。[图像与生成媒体](./image-multimodal.md)
+- 手机侧栏汇集最近对话和工作入口。支持的版本可以直接在手机上配置模型与自定义 MCP 连接。支持截图的桌面版本可以在 **设置 → 键盘快捷键** 中修改截图快捷键。[手机端](./mobile-app.md) · [桌面端](./desktop-app.md)
 
-## 个人 Agent 与任务交付
+## 消息通道、设备与 MCP
 
-近期版本增加了 Personal AI 入口、个人资料与回应偏好、委派任务活动，以及结果和文件返回个人对话的能力。你可以交办后继续讨论，再检查成果并要求修改。
+- Slack 和 Discord 可以把机器人收到的消息交给 xopc Agent。在 **设置 → 消息通道** 中连接机器人，批准私聊配对，并指定可在公共频道调用它的成员。[Slack](./channels/slack.md) · [Discord](./channels/discord.md)
+- **设备连接**显示已连接客户端及其报告的能力。外部 MCP 客户端可以通过 Gateway 授权搜索工作区记录或向 xopc Agent 委派任务。Gateway 提供本地 stdio，也可以配置带 OAuth 的远程 Streamable HTTP。[设备连接](./desktop-app.md#查看已连接设备) · [MCP 配置与 Gateway 访问](./mcp.md)
 
-- [认识 Ada](./personal-ai.md)
-- [交办与接收结果](./task-delegation.md)
-- [检查与验收任务](./task-review.md)
+## 11 月 20 日发布标签之后的变化
 
-## 持续跟进与任务验收
+当前源码为 Android、iOS 和 HarmonyOS 增加全局笔记、移动端笔记草稿恢复和更多会话操作。新建普通项目聊天默认使用项目配置的目录，委派实现任务仍可使用由 xopc 管理的 Git worktree。Gateway MCP 回调的启动修复也在 v0.0.487 之后合入。请核对安装版本是否包含这些变化。[手机端](./mobile-app.md) · [项目聊天环境](./session.md#模型与项目执行环境)
 
-可以关注指定主题，查看联系缘由，延后或停止跟进，并设置安静时段。工作台提供任务验收条件检查和失败执行重试。主题跟进不是固定时间送达保证；执行完成也不等于 Task 通过验收。
+## 从 10 月版本升级
 
-- [Personal AI 持续跟进](./personal-agent-proactivity.md)
-- [Project、Task 与笔记](./projects-tasks-notes.md)
+浏览器流程录制、保存和重放已于 11 月 3 日移除，浏览器控制仍可使用。电脑控制在 macOS 和 Windows x64 桌面端提供预览。Android 手机还可使用独立的手机控制预览，Android 11 及以上支持局域网配对。[浏览器扩展](./browser-extension.md) · [电脑控制](./computer-use.md) · [手机控制](./phone-use.md)
 
-## v0.0.369：浏览器录制与客户端体验
-
-- Chrome 扩展侧栏增加浏览器录制：选择网页、开始、暂停、完成保存并运行。录制值可以作为重复执行输入，需要兼容网关和录制版本扩展。
-- 原生移动端源码补充个人 Agent 资料设置和聊天显示改善；实际可用性取决于各平台客户端分发版本。
-- 浏览器控制移除了旧的逐步批准流程。先明确操作范围，并在回放前检查真实网站和输入。
-
-[移动端](./mobile-app.md) · [版本变更](https://github.com/xopcai/xopc/compare/v0.0.368...v0.0.369)。
-
-## 模型、语音与图像
-
-近期更新改进了 XOPC Cloud 模型设置、语音选择与通话处理，并扩展图像生成和编辑支持。使用当前目录选择模型；能力仍受提供商、凭据和客户端版本限制。
-
-[模型](./models.md) · [语音](./voice.md) · [图像与视觉](./image-multimodal.md)。[电脑控制](./computer-use.md)提供 macOS 和 Windows x64 桌面预览，需要专用 GUI 模型及本地应用授权。
-
-## 升级后检查
-
-1. 更新需要使用的桌面或网关，并分别检查手机和扩展版本。
-2. 确认模型与服务凭据可用，先完成一次小请求。
-3. 浏览器自动化先检查输入与目标，再测试一遍。
-4. 查看已有任务的成果和等待状态，避免因升级重复派发或重复外部写入。
+查看发布说明，分别更新使用中的 Gateway 和客户端，然后验证一次模型调用及常用连接。[GitHub Releases](https://github.com/xopcai/xopc/releases) · [升级与恢复](./update.md)

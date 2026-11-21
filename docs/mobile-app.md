@@ -50,10 +50,11 @@ Revoke a phone from **Devices** on the computer. The phone must scan again and r
 
 See [Remote access](./remote-access.md) for advanced configuration.
 
-## Daily destinations
+## Continue work from the sidebar
 
-The phone has five main destinations: Assistant, Conversations, Progress, Notes and Me. Give work to the Assistant, return to existing chats in Conversations, inspect Tasks and pending decisions in Progress, save material in Notes, and check connection settings and preferences in Me.
+- Open **Recent** or conversation search to resume a chat. Open **Projects** for related chats, tasks, files, and schedules.
+- Use **Progress** to inspect task results, pending decisions, and scheduled work. Open **Library** for files and saved results.
+- In builds with global **Notes**, open it from the sidebar to browse and edit notes across projects. If a save conflict offers a recovered draft, review its content before saving.
+- From the app settings, open the model settings or **Capability Center → Connections** to configure a supported connection on the Gateway. [MCP setup](./mcp.md#mobile-setup)
 
-Versions with source references let you use the Chat plus menu to reference a Note, Task or file. Verify the active work computer and source scope first. Images can be opened for preview; asking the Agent to understand them also requires a compatible vision model. See [Voice](./voice.md) for audio setup and permissions.
-
-Specific Android, iOS and HarmonyOS capabilities vary by version. Update both the phone and work computer and use the current interface as the guide. Successful pairing does not establish that every recording, background or media feature has been verified on your device.
+Use the Chat plus menu to reference a Note, Task, or file where supported. Generated music and video can play in supported builds. [Images and generated media](./image-multimodal.md) · [Voice setup](./voice.md)

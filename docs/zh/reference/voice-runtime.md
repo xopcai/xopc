@@ -54,4 +54,4 @@ Ada 使用临时的口语提示词，保留身份、工作区指令、安全、�
 
 完整实现说明见[英文技术参考](../../reference/voice-runtime.md)。
 
-原生链路另记录 `native_response_created`、`native_transcript_confirmed`、`native_audio_received`，区分模型生成、转写确认和首音频到达。Higgs 保留 180 ms 语义断句参数；两次 120 ms 试验均丢弃有效输入，未采用。1500 ms 转写期限用于等待可用的确认，并非固定延迟。当前实测仍未达到稳定 1.5 秒，详见[测量报告](../design/ada-voice-latency-20261107.md)。
+原生链路另记录 `native_response_created`、`native_transcript_confirmed`、`native_audio_received`，区分模型生成、转写确认和首音频到达。Higgs 保留 180 ms 语义断句参数；两次 120 ms 试验均丢弃有效输入，未采用。1500 ms 转写期限用于等待可用的确认，并非固定延迟。当前实测仍未达到稳定 1.5 秒，详见[测量报告](https://github.com/xopcai/xopc/blob/main/docs/design/ada-voice-latency-20261107.md)。

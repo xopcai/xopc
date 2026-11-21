@@ -1,53 +1,35 @@
-# What's new
+# What's new in xopc
 
-> Browser recording, saved workflows, replay, and the dedicated management page were removed on 2026-11-03. Basic browser control remains available.
+Updated November 21, 2026. This overview covers user-facing changes since late October, through the November 20 [core v0.0.487 tag](https://github.com/xopcai/xopc/releases/tag/v0.0.487) and [Android v0.0.135 release](https://github.com/xopcai/xopc/releases/tag/mobile-android-v0.0.135). iOS uses its own distribution channel and HarmonyOS is in internal testing. Check the build you have installed. [Mobile downloads](./mobile-app.md) · [Update xopc](./update.md) · [Compare the core tags](https://github.com/xopcai/xopc/compare/v0.0.419...v0.0.487)
 
-These are user-facing entry points as of October 25, 2026. See [GitHub Releases](https://github.com/xopcai/xopc/releases) for exact versions and artifacts, and [Update xopc](./update.md) for upgrade steps. Desktop, Gateway, mobile, and browser extension builds are distributed separately; updating the core package does not update every client.
+## Ada and task delivery
 
-## v0.0.419: Windows packaging fixes
+- When the home page finds a repeated request it can suggest a draft Task. Open it to check the goal and scope before starting. Continuing goals let you review the next step as work progresses. [Personal AI follow-ups](./personal-agent-proactivity.md)
+- Task cards bring together the outcome, artifacts, checks, and remaining work. Ada can accept eligible delegated work automatically once its checks pass. Ask explicitly to approve the result yourself if you want manual acceptance. You can also steer a supported running conversation or retry a failed Task after inspecting the recorded cause. [Delegate to Ada](./task-delegation.md) · [Review a Task](./task-review.md)
+- Supported clients can offer suggestions for the next message after a reply. You choose what to send. [Chat and sessions](./session.md)
 
-Windows x64 desktop builds now extract the verified Computer Use driver with the system archive tool. Windows ARM64 builds omit that unavailable driver; Computer Use remains supported on macOS and Windows x64 only.
+## Projects, Library, and editing
 
-## v0.0.417: Windows Computer Use and wireless phones
+- Project previews surface Tasks and progress so you can resume work from the project. Start an automation setup chat from the project to keep it in that project, or from Personal for personal schedules. [Projects and Tasks](./projects-tasks-notes.md) · [Automations](./automations.md)
+- **Library** collects files and generated results. On web and desktop, save a revised deliverable as another version, or open an editable workbook, discuss a cell range, and review proposed edits. Download a saved workbook version as Excel. [Work with files and projects](./workspace-guide.md)
+- The web note editor adds a heading outline. If a save conflicts with a newer version, the editor retains the draft and offers recovery. [Notes](./projects-tasks-notes.md)
 
-- Computer Use now includes a Windows x64 desktop preview for window observation, native button activation, text entry and keyboard input. It requires an interactive desktop, authorized application and compatible GUI model; ARM64 and fully signed installers remain separate release checks.
-- Android 11+ phones can pair over a private IPv4 LAN using a QR or pairing code. Saved phones support reconnection with identity verification. Install Android SDK Platform Tools on the Gateway host.
-- Phone connections persist across restarts, and the workspace phone view can be resized.
+## Media and connected clients
 
-[Computer Use](./computer-use.md) · [Phone Use setup and limits](./phone-use.md) · [Version diff](https://github.com/xopcai/xopc/compare/v0.0.416...v0.0.417). Node.js 26.12.1 or later is required for the npm package. Updating core does not install native mobile or browser clients.
+- Ask for music or a video draft in chat with a configured generation service. Supported clients can play the result in the conversation, and the web player can keep music playing while you move between pages. A job may finish after the initiating reply. Open its result card to check progress or retrieve the completed media. [Images and generated media](./image-multimodal.md)
+- The mobile sidebar brings together recent chats and work destinations. Supported builds let you set up models and custom MCP connections from the phone. Desktop builds with screenshot capture let you edit its shortcut in **Settings → Keyboard shortcuts**. [Mobile app](./mobile-app.md) · [Desktop app](./desktop-app.md)
 
-## Personal Agent and task delivery
+## Connections and MCP
 
-Recent versions add the Personal AI destination, profile and response preferences, delegated-task activity, and delivery of results and files into the personal conversation. Delegate work, keep discussing, then inspect the result and request changes.
+- Slack and Discord can route bot messages to an xopc Agent. Use **Settings → Channels** to connect a bot, approve direct-message pairing, and choose who can invoke it in shared channels. [Slack](./channels/slack.md) · [Discord](./channels/discord.md)
+- **Device connections** shows connected clients and their reported capabilities. Separately, external MCP clients can use scoped Gateway grants to search workspace records or delegate to an xopc Agent. The Gateway offers local stdio and optional remote Streamable HTTP with OAuth. [Device connections](./desktop-app.md#check-connected-devices) · [MCP setup and Gateway access](./mcp.md)
 
-- [Meet Ada](./personal-ai.md)
-- [Delegate and receive results](./task-delegation.md)
-- [Review and accept a Task](./task-review.md)
+## Changes after the November 20 release tags
 
-## Follow-ups and Task acceptance
+The current source adds global Notes, draft recovery and conversation actions on Android, iOS, and HarmonyOS. New project chats use the configured project directory by default. Delegated implementation can still use a managed Git worktree. The Gateway MCP callback startup fix also landed after v0.0.487. Check the installed build for these changes. [Mobile app](./mobile-app.md) · [Project chat environments](./session.md#models-and-project-environments)
 
-Follow selected topics, inspect why an update arrived, delay or stop attention, and set quiet hours. The workbench supports acceptance-criterion review and retrying failed executions. A topic check is not a guaranteed delivery time; a finished execution is not an accepted Task.
+## Upgrading from October
 
-- [Personal AI follow-ups](./personal-agent-proactivity.md)
-- [Projects, Tasks, and Notes](./projects-tasks-notes.md)
+Browser workflow recording, saved workflows and replay were removed on November 3. Browser control remains available. Computer Use remains a desktop preview on macOS and Windows x64. Android phones can also use the separate Phone Use preview, including LAN pairing on Android 11 or later. [Browser extension](./browser-extension.md) · [Computer Use](./computer-use.md) · [Phone Use](./phone-use.md)
 
-## v0.0.369: browser recording and client experience
-
-- Browser recording in the Chrome extension side panel: select a website, start, pause, finish saving, and run it again. Recorded values can become replay inputs. Use a compatible Gateway and recording-capable extension.
-- Native mobile sources add personal Agent profile controls and chat display improvements; availability depends on each platform's distributed client version.
-- Browser control removes the older step-by-step approval flow. Define the permitted scope and inspect the real website and inputs before replay.
-
-[Mobile app](./mobile-app.md) · [Version diff](https://github.com/xopcai/xopc/compare/v0.0.368...v0.0.369).
-
-## Models, voice, and images
-
-Recent updates improve XOPC Cloud model setup, voice selection and call handling, and image generation and editing support. Choose models from the current catalog; capabilities depend on provider, credentials, and client version.
-
-[Models](./models.md) · [Voice](./voice.md) · [Images and vision](./image-multimodal.md). [Computer Use](./computer-use.md) is a macOS and Windows x64 desktop preview requiring a dedicated compatible GUI model and local application access.
-
-## Check after upgrading
-
-1. Update the desktop or Gateway you use, and check phone and extension versions separately.
-2. Verify model and service credentials with a small request.
-3. Inspect browser automation inputs and targets before a test run.
-4. Review existing task artifacts and waits before duplicating delegation or external writes.
+Check the release notes, update the Gateway and clients you use, and verify a model call and any important connections afterward. [GitHub Releases](https://github.com/xopcai/xopc/releases) · [Upgrade and recovery](./update.md)

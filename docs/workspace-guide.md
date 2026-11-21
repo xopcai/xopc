@@ -32,7 +32,15 @@ Use a Project for shared files, conversations, and context. Create a Task when a
 
 On return, ask: `Use this project's notes, tasks, and latest results to summarize what is complete, what is blocked, and the next useful action.` Confirm the sources and state before continuing.
 
-For code projects, the conversation can use a local environment or a new local worktree where offered. The local machine is the Gateway host; a new worktree does not copy uncommitted edits. See [Chat and sessions](./session.md).
+New project chats use the configured directory on the Gateway host. Delegated implementation work can use a managed Git worktree. [Chat and sessions](./session.md)
+
+## Reuse files and workbooks from Library
+
+1. Open **Library** on web or desktop to find uploaded material and saved results. Save a revised deliverable as a new version to keep the earlier file available.
+2. Create a workbook or import an Excel, CSV, or TSV file. Edit cells directly or use the workbook chat to ask about selected cells.
+3. Review proposed range or formula changes before applying them. Open version history to inspect earlier versions, or export a saved version as Excel.
+
+Workbook import preserves basic data and supported formulas. Excel macros, charts, pivot tables, and full formatting are outside the editable copy's supported format.
 
 ## Troubleshooting
 

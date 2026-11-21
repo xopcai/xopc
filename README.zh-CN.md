@@ -43,6 +43,12 @@
 
 对话和工作空间是两种开始方式，工作与生活中的事情都可以在这里处理。从整理工作资料到安排周末出行，在同一个 xopc 里开始。可用能力取决于连接的模型、工具和授权。
 
+## 近期产品更新
+
+- **从请求到交付。** 首页可以把重复请求整理成任务草稿。Ada 可以记录实际交付内容，并按验收条件检查结果。[任务验收](https://xopcai.github.io/xopc/zh/task-review)
+- **在项目里持续推进。** 从项目发起定时任务，在资料库保存文件新版本，在桌面或网页上审阅 Agent 建议的工作簿修改。[工作空间指南](https://xopcai.github.io/xopc/zh/workspace-guide)
+- **从更多入口继续工作。** 在手机上接续工作，连接 Slack 或 Discord，或为外部 MCP 客户端授予限定范围的 Gateway 工具与 Agent 委派权限。[近期变化](https://xopcai.github.io/xopc/zh/whats-new)
+
 ## 先完成一件实际的事
 
 | 你想做什么 | 可以这样开始 | 检查什么 |
@@ -62,9 +68,9 @@
 | **委派与交付** | 交办任务、处理补充问题、接收成果，并按验收条件检查结果 |
 | **文件与项目** | 处理授权资料，保留文件、笔记、执行记录和下一步 |
 | **工具与连接** | 技能、MCP、连接器、浏览器自动化、图像和语音；按需启用 |
-| **多端访问** | 桌面、网页、终端、手机，以及 Telegram、微信、飞书/Lark |
+| **多端访问** | 桌面、网页、终端、手机，以及 Telegram、微信、飞书/Lark、Slack 和 Discord |
 
-[电脑控制](https://xopcai.github.io/xopc/zh/computer-use)目前是 macOS 桌面预览能力，需要兼容的 GUI 模型和系统权限。移动端能力随平台与版本变化，Agent 仍在连接的电脑上运行。
+[电脑控制](https://xopcai.github.io/xopc/zh/computer-use)在 macOS 和 Windows x64 上提供桌面预览，需要本机应用授权和兼容的 GUI 模型或视觉主模型。移动端能力随平台与版本变化，Agent 仍在连接的电脑上运行。
 
 <a id="desktop-app"></a>
 <a id="get-started"></a>
@@ -151,7 +157,7 @@ xopc
 
 **它和普通聊天 UI 有什么区别？** — 聊天只是入口。xopc 会把对你的理解、长期目标、项目、Task、决定和执行记录保留下来，让同一个助手可以跨越时间和入口继续工作。
 
-**能在手机或即时通讯里用吗？** — 可以。用 [移动端 App](https://xopcai.github.io/xopc/zh/mobile-app) 扫码连接，或配置 Telegram、微信、飞书/Lark。
+**能在手机或即时通讯里用吗？** — 可以。用 [移动端 App](https://xopcai.github.io/xopc/zh/mobile-app) 扫码连接，或在 Gateway 中配置[消息通道](https://xopcai.github.io/xopc/zh/channels/)。
 
 **还有问题？** — 去 [GitHub Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a) 提问。
 

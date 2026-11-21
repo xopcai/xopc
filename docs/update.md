@@ -8,6 +8,10 @@ xopc --version
 xopc update --check
 ```
 
+## Choose a release
+
+Use the current stable build for normal installations, and pin an exact version for servers or unattended deployments. Before changing channels or skipping versions, check the intervening release notes for migrations and permission changes. Desktop, Gateway, mobile, and browser extension updates are distributed separately. [GitHub Releases](https://github.com/xopcai/xopc/releases) · [npm package history](https://www.npmjs.com/package/@xopcai/xopc) · [Mobile downloads](./mobile-app.md)
+
 ## Desktop app
 
 Use **Settings → Gateway** when an in-app update is offered, or download the current installer from [xopc.ai](https://xopc.ai/en#download). Historical artifacts remain available on [GitHub Releases](https://github.com/xopcai/xopc/releases). Close other xopc windows before replacing the application.
@@ -60,7 +64,7 @@ Before activating a staged npm installation, the updater loads the candidate's G
 
 If the package is already current but the running Gateway is older, retrying the update from the console schedules the missing restart without reinstalling. CLI daemon updates verify readiness and the running version through authenticated `/api/status`; an unverified version or timeout is reported as a restart failure. An in-process update reports a scheduled restart; verify the running version after reconnecting. `--no-restart` and `commands.restart=false` still require a manual restart.
 
-See [Release channels](./releases.md) for stability choices and [Back up and restore xopc](./backup.md) for recovery steps. If a new version migrated the database, restore its matching pre-update backup before running an older binary.
+If an update migrated your database, restore its matching pre-update backup before running an older version. [Back up and restore xopc](./backup.md)
 
 ## Maintainer release checks
 
@@ -72,7 +76,7 @@ Both checks gate the patch-release script and npm publishing. CI tests the exact
 
 ## Database upgrades
 
-xopc 0.0.472 opens existing SQLite schemas v202–v279 and upgrades them to v280. Fresh installations initialize directly at v280.
+xopc v0.0.487 upgrades installed SQLite schemas v202–v280 to v281. Fresh installations start at v281.
 
 Stop other xopc/Gateway processes using the same database before starting the updated app. Before changing the database, xopc writes a consistent snapshot beside it as `xopc.db.pre-upgrade-v<version>-<uuid>.bak`. The snapshot includes committed WAL data. The complete upgrade chain runs in one transaction and checks database integrity and foreign keys before committing. If a migration fails, xopc rolls it back and keeps the backup for recovery. Retired feature data may remain in installed databases or the pre-upgrade snapshot; those features are not re-enabled.
 
@@ -82,6 +86,6 @@ Back up the entire state directory and external workspaces as described in [Back
 
 1. Quit xopc and stop any standalone Gateway using the same state directory. Back up the entire state directory, including `xopc.json`, `xopc.db`, and any SQLite WAL/SHM files. Back up external workspaces separately.
 2. Start [xopc 0.0.332](https://github.com/xopcai/xopc/releases/tag/v0.0.332) with the same state directory. On an Intel Mac, choose `xopc-0.0.332-x64.dmg`. Wait for the app to open. This release upgrades the database to v208, imports legacy Agent settings and bindings into SQLite, and resets retired experimental scene data. Its configuration migration converts the legacy ordinary memory write policy `confirm` to `allow`.
-3. Quit 0.0.332 completely, then start 0.0.472 to finish the database upgrade. Check that your conversations and Agent settings are present. Keep the original backup until you have verified your data.
+3. Quit 0.0.332 completely, then start v0.0.487 to finish the database upgrade. Check that your conversations and Agent settings are present. Keep the original backup until you have verified your data.
 
 If the intermediate release fails or you have another schema below v202, retain the full backup and collect the startup report for support.

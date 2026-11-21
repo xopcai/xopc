@@ -23,7 +23,7 @@ Open an existing Task with acceptance criteria and a result to inspect. Use [tas
 ## Check the result
 
 1. Open the Task card and expand the review area when the Task awaits review.
-2. Inspect the delivered files, execution record, evidence, and remaining work.
+2. Inspect the delivered files, execution record, evidence, and remaining work. Match the review to the result version shown on the Task.
 3. Compare each acceptance criterion with the actual output. Choose **Mark passed** or **Mark failed**; leave unsupported claims unverified.
 4. Choose **Accept task** only when all criteria pass, no waits remain, and the current Task allows closing.
 

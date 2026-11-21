@@ -43,6 +43,12 @@ We want AI to take on more tedious, repetitive, and time-consuming tasks. How yo
 
 Conversation and the workspace are two ways to begin; both can help with work and everyday life. From organizing work material to planning a weekend outing, start in the same xopc. Available capabilities depend on the connected models, tools, and permissions.
 
+## Recent product updates
+
+- **From request to result.** The home page can turn repeated requests into Task drafts. Ada can track what was delivered and check it against your acceptance criteria. [Task review](https://xopcai.github.io/xopc/task-review)
+- **Keep project work together.** Start a project schedule from the project, save revised files in Library, and review Agent-proposed workbook edits on desktop or web. [Workspace guide](https://xopcai.github.io/xopc/workspace-guide)
+- **Work from more places.** Continue on mobile, connect Slack or Discord, or give an external MCP client scoped access to Gateway tools and Agent delegation. [What’s new](https://xopcai.github.io/xopc/whats-new)
+
 ## Finish something real
 
 | Your goal | Try this | Check the result |
@@ -62,9 +68,9 @@ File work requires the relevant access, tools, or skills. Voice, image generatio
 | **Delegation and delivery** | Delegate tasks, answer follow-up questions, receive artifacts, and check acceptance criteria |
 | **Files and projects** | Work with authorized material and retain files, notes, execution records, and next actions |
 | **Tools and connections** | Enable skills, MCP, connectors, browser control, images, and voice as needed |
-| **Access across devices** | Desktop, web, terminal, mobile, Telegram, WeChat, and Feishu/Lark |
+| **Access across devices** | Desktop, web, terminal, mobile, Telegram, WeChat, Feishu/Lark, Slack, and Discord |
 
-[Computer Use](https://xopcai.github.io/xopc/computer-use) is currently a macOS desktop preview requiring a compatible GUI model and native permissions. Mobile capabilities vary by platform and version; the Agent runs on the connected computer.
+[Computer Use](https://xopcai.github.io/xopc/computer-use) is currently a macOS and Windows x64 desktop preview requiring local application access and a compatible GUI or visual main model. Mobile capabilities vary by platform and version; the Agent runs on the connected computer.
 
 <a id="desktop-app"></a>
 <a id="get-started"></a>
@@ -151,7 +157,7 @@ Read the [community guide](https://xopcai.github.io/xopc/community) and [Code of
 
 **How is this different from another chat UI?** — Chat is only one surface. xopc preserves understanding, long-term goals, projects, tasks, decisions, and run history so the same assistant can continue working across time and surfaces.
 
-**Can I use it from my phone or messengers?** — Yes. Pair the [mobile app](https://xopcai.github.io/xopc/mobile-app) by QR code, or configure Telegram, WeChat, or Feishu/Lark via the gateway.
+**Can I use it from my phone or messengers?** — Yes. Pair the [mobile app](https://xopcai.github.io/xopc/mobile-app) by QR code, or configure a [messaging channel](https://xopcai.github.io/xopc/channels/) through the Gateway.
 
 **Have a question?** — Ask on [GitHub Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a).
 

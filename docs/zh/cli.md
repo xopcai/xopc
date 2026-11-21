@@ -28,10 +28,14 @@ xopc --version
 | `resume` | 恢复之前的 TUI Session |
 | `tunnel` | 管理公网隧道访问 |
 | `gateway` | 运行和管理 Gateway |
+| `device-host` | 向 Gateway 发布已配置的设备本地 MCP 能力 |
+| `mcp` | 配置 MCP 连接或对外提供 Gateway 能力 |
 | `history` | 为 ctx 等外部工具导出 Session 历史 |
+| `import` | 从其他 AI 应用选择要导入的技能、上下文和项目 |
 | `session` | 列出和管理 Session |
 | `project` | 管理长期 Project |
 | `doctor` | 诊断安装、数据和安全问题 |
+| `support` | 为 xopc 问题生成脱敏诊断报告 |
 | `runtime` | 管理 Node.js 与 Python 工具运行环境 |
 | `platform` | 连接 XOPC Cloud 或企业平台 |
 | `update` | 检查和安装更新 |

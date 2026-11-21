@@ -63,6 +63,14 @@ Open **You** to inspect automatically maintained understanding, edit it, or dele
 
 The desktop app and terminal commands use the same xopc data by default, so you can start in the app and later run `xopc`, `xopc agent`, or `xopc gateway` without creating a separate setup.
 
+## Check connected devices
+
+Open **Capability Center → Device connections** to see the computers and phones connected to the Gateway and the capabilities each reports. On the computer where files are stored, you can grant or revoke read access to selected folders and choose which paired phones can use that access in chat. [Mobile pairing](./mobile-app.md)
+
+## Capture a screenshot from the keyboard
+
+Open **Settings → Keyboard shortcuts → Screenshot shortcut** to change the shortcut. It opens the system capture tool. Select a region, then paste the image from your clipboard into chat.
+
 ## Data and privacy
 
 xopc stores its configuration, local database, Agents, and workspaces under `~/.xopc/` by default. Model requests still go to the provider you choose unless you use a local model.

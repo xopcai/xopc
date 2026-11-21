@@ -13,6 +13,10 @@ tell me here. Keep the follow-up within the sources I have already authorized.
 
 Wait for the assistant to confirm the saved follow-up and actual check time. “Tomorrow afternoon” is interpreted as 15:00 in the proactive-message timezone. A check time is not a guaranteed delivery time: preparation and queues can delay it, and there may be no message when nothing useful has changed. Use an [Automation](./automations.md) for a fixed scheduled reminder.
 
+## Review a draft Task or continuing goal
+
+The home page can suggest a draft Task when it sees a repeated request. Open the suggestion, review the source and proposed outcome, then edit the draft before starting work. When tracking a continuing goal, review the next proposed step and adjust or end the follow-up from its goal card. [Projects, Tasks, and Notes](./projects-tasks-notes.md)
+
 ## Control when it contacts you
 
 Open Personal AI's preferences and find **Proactive messages**:

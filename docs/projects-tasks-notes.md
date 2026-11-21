@@ -30,9 +30,13 @@ Avoid turning every chat message into a Task. Create one when the result needs t
 
 A Project groups related Tasks, conversations, files, and activity. It is context, not a second task-status system. Keep Project descriptions short and put actionable outcomes in Tasks.
 
+To set up recurring project work, open the project's scheduled tasks and start a configuration chat there. Use Personal for schedules that belong to you outside a project. [Automations](./automations.md)
+
 ## Notes and workspace files
 
 Use a Note for quick durable information and a workspace file for material the Agent should read, edit, or deliver. Give files descriptive names and remove secrets before sharing them with a cloud model.
+
+On web and desktop, open the note outline to jump between headings in longer notes. If a save conflicts with a newer version, review the recovered draft before saving again. Use **Library** to find files and earlier versions of saved deliverables. [Workspace guide](./workspace-guide.md)
 
 ## A simple example
 
@@ -41,20 +45,13 @@ For a product release:
 1. Create a Project for release context and reference files.
 2. Create Tasks for the distinct verifiable results, such as “publish package” and “send release announcement”.
 3. Define completion checks for each Task.
-5. Add an Automation only if timing or an external trigger matters.
-6. Close a Task after reviewing the result, not just after an Agent run stops.
+4. Add an Automation only if timing or an external trigger matters.
+5. Close a Task after reviewing the result, not just after an Agent run stops.
 
 
-## Review results and retry from the workbench
+## Review a Task
 
-Open a Task card to inspect its result, artifacts, evidence and remaining work. A stopped execution and an accepted Task are separate states.
-
-1. Expand the review area of a Task awaiting review and check each acceptance criterion against the result.
-2. Choose **Mark passed** or **Mark failed** based on the evidence. Leave unsupported claims unverified.
-3. Choose **Accept task** once all criteria pass, there are no pending waits, and the current Task allows closing.
-4. If the latest execution failed, inspect its record and cause before choosing **Retry**. Retry retains that execution's executor; it does not prove an earlier external write never happened.
-
-If the Task state has changed, refresh before acting again. Resolve requests for information or authorization before continuing work.
+Open the Task card to inspect the result and remaining work. For automatic and manual acceptance, failed runs, and revisions, follow [Review, accept, or retry a Task](./task-review.md).
 
 ## Start from the current experience
 

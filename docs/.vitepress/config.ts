@@ -103,6 +103,8 @@ export default defineConfig({
               { text: 'Telegram', link: '/channels/telegram' },
               { text: 'Weixin (WeChat)', link: '/channels/weixin' },
               { text: 'Feishu (Lark)', link: '/channels/feishu' },
+              { text: 'Slack', link: '/channels/slack' },
+              { text: 'Discord', link: '/channels/discord' },
               { text: 'Web console', link: '/channels/webui' }
             ]
           },
@@ -142,8 +144,7 @@ export default defineConfig({
               { text: 'Tool runtimes', link: '/runtime-tools' },
               { text: 'Voice runtime', link: '/reference/voice-runtime' },
               { text: 'Templates', link: '/reference/templates' },
-              { text: 'What’s new', link: '/whats-new' },
-              { text: 'Release channels', link: '/releases' }
+              { text: 'What’s new', link: '/whats-new' }
             ]
           },
           {
@@ -225,6 +226,8 @@ export default defineConfig({
               { text: 'Telegram', link: '/zh/channels/telegram' },
               { text: '微信（Weixin）', link: '/zh/channels/weixin' },
               { text: '飞书（Feishu / Lark）', link: '/zh/channels/feishu' },
+              { text: 'Slack', link: '/zh/channels/slack' },
+              { text: 'Discord', link: '/zh/channels/discord' },
               { text: '网页控制台', link: '/zh/channels/webui' }
             ]
           },
@@ -264,8 +267,7 @@ export default defineConfig({
               { text: '工具运行环境', link: '/zh/runtime-tools' },
               { text: '语音技术参考', link: '/zh/reference/voice-runtime' },
               { text: '模板文件', link: '/zh/reference/templates' },
-              { text: '近期变化', link: '/zh/whats-new' },
-              { text: '发布通道', link: '/zh/releases' }
+              { text: '近期变化', link: '/zh/whats-new' }
             ]
           },
           {

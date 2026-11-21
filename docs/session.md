@@ -10,6 +10,10 @@ A Session is one saved conversation with an Agent. It keeps the messages and wor
 
 Start a new Session when the goal or audience changes. Continue the existing Session when you want the Agent to use the current conversation context.
 
+## Follow a running request
+
+Open the conversation or Task to see whether the Agent is working, waiting for input, or has encountered an error. When the Agent finishes, open the actual result or linked file to check it. Inspect the latest run or tool details if progress stalls. Channels with streaming may show updates in a single changing message.
+
 ## Find and resume a Session
 
 The console sidebar lists recent conversations. Select one to continue it.
@@ -69,6 +73,6 @@ To publish a reviewed, read-only snapshot of a conversation, see [Share a conver
 
 The composer shows the concrete selected model and its supported thinking level. That selection is saved to the conversation; a provider error does not silently switch models. Finish active or queued input before changing the model. If an old selection is unavailable, explicitly choose an available model.
 
-When starting Chat from a Project with a configured workspace, choose **Local** or **New local worktree**. Local means the Gateway's machine. Selecting an option creates no directory; the first send creates the conversation and its execution environment. A new worktree starts at current HEAD and does not copy uncommitted edits.
+New project chats use the configured project directory on the Gateway host. The composer checks that the directory is ready when you start a chat. Implementation delegation can still provision a separate managed Git worktree. Check the conversation details for the effective directory.
 
-If creation fails, the draft is retained. Fix the cause or explicitly select another environment before sending again. Existing conversations retain their environment; start another conversation to use a different one.
+If creation fails, xopc retains the draft. Check the directory and its permissions, then try again. Existing conversations stay bound to their original environment.

@@ -14,4 +14,10 @@ For a server URL, **Authentication** defaults to automatic detection. You can al
 
 For stdio, the Gateway administrator enables mobile command launch with `xopc config set gateway.mobileMcpAllowStdio true`. Review the program, arguments, and working directory before selecting **Run and check**. Environment variable values are stored in the Gateway credential store when the draft is committed. After a successful check, choose **Add connection** to commit the draft.
 
-See the [MCP configuration and migration guide](./cli/mcp.md) for examples, credentials, exposure, and incompatible changes. To expose Gateway tools to local clients, create a grant with `xopc mcp grant` and run `xopc mcp serve --stdio`.
+See the [MCP configuration and migration guide](./cli/mcp.md) for examples, credentials, exposure, and incompatible changes.
+
+## Connect an external client to xopc
+
+Use a Gateway grant to let an MCP client search projects, tasks, and notes, or delegate to a configured xopc Agent. Grants default to read access across the personal workspace. Use `--allow-capability` to restrict which operations the client can call. Delegation and other write operations require write access.
+
+For a local client, create a grant with `xopc mcp grant` and configure the client to run `xopc mcp serve --stdio`. Remote clients can use the Gateway's optional Streamable HTTP endpoint with an external OAuth issuer and a separate Gateway grant. Each client can follow its own delegated runs, answer clarifications, steer or cancel work, and retrieve published results where its grant permits. [Local and remote setup](./cli/mcp.md#let-an-external-client-use-gateway-tools)

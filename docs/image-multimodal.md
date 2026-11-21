@@ -53,3 +53,9 @@ Pixel size, aspect ratio and resolution are different options. Only combinations
 Chat images can be previewed and browsed within their group. For edits, identify the source and what must remain; choose another model if editing is unsupported.
 
 Retired model IDs have no aliases or automatic replacements. Reselect an available catalog entry after upgrading. An asynchronous generation failure or timeout does not prove the provider did no work or charged nothing; inspect output and provider records before retrying.
+
+## Generate music or a video draft
+
+1. Open **Settings → Models** in the web or desktop app. Set a music or video model and connect the provider shown there. XOPC Cloud requires sign-in and access to the selected service.
+2. In Chat, describe the music or video you want. When the selected video model supports image-to-video, attach a reference image.
+3. Check the result card for whether the job is still running, ready, or needs attention. Play or download the completed result where the client supports it. Web music playback can continue across pages.

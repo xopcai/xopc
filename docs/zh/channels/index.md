@@ -9,6 +9,10 @@
 | Telegram | Bot Token | [Telegram](./telegram.md) |
 | 微信 | 扫码登录 | [微信](./weixin.md) |
 | 飞书 / Lark | 扫码创建应用或手动填写应用凭据 | [飞书](./feishu.md) |
+| 钉钉 | 扫码配置机器人，或填写 Client ID 和 Secret | [钉钉](../../channels/dingtalk.md) |
+| 企业微信 | 扫码配置机器人，或填写 Bot ID 和 Secret | [企业微信](../../channels/wecom.md) |
+| Slack | 应用清单、Bot Token 和 App Token | [Slack](./slack.md) |
+| Discord | Bot Token 和服务器邀请 | [Discord](./discord.md) |
 | 网页控制台 | Gateway 地址和 Token | [网页控制台](./webui.md) |
 
 扩展可以添加其它通道类型。

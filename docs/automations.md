@@ -34,6 +34,8 @@ Sending, deleting, purchasing, publishing, or changing an external system should
 
 ## Configure in chat
 
+Open the project’s scheduled tasks to start a project configuration chat, or start from Personal for your own schedules. The setup chat retains that scope.
+
 You can also configure schedules in the owner Web Chat. For example: “Save a daily 9:00 Beijing-time report as a draft; don’t run it yet,” “Try it once, show the actual result, then enable the same task,” or “Remind me once in 90 seconds.” A one-time reminder uses a saved `once` schedule. The API also accepts `schedule: { kind: "once", afterMs: 90000 }`; the server anchors it once within the operation receipt, so retrying does not move the reminder.
 
 Explicit local create, edit, pause, resume, and delete requests need no duplicate confirmation. Requested reminders and reports should use `notificationPolicy: "all"` to notify on success; `attention` is for exceptional updates. A queued run is not a completed result. Inspect the terminal run and its result delivery separately.
