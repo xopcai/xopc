@@ -123,9 +123,6 @@
 "发送" = "Send";
 "发送中" = "Sending";
 "下一条" = "Next";
-"加入待处理" = "Queue";
-"引导当前回答" = "Guide Current Response";
-"发送可加入待处理，也可立即引导当前回答" = "Queue this message or use it to guide the current response.";
 "助手正在处理" = "Assistant Is Working";
 "正在连接助手…" = "Connecting to assistant…";
 "正在回答" = "Responding";
@@ -433,14 +430,11 @@
 "思考" = "Reasoning";
 "执行环境" = "Execution Environment";
 "无法停止执行" = "Unable to stop the run";
-"无法取消待处理消息" = "Unable to cancel the queued message";
 "无法建立实时连接" = "Unable to establish a realtime connection";
 "无法提交澄清回答" = "Unable to submit the clarification response";
 "无法更新会话配置" = "Unable to update chat configuration";
-"无法更新待处理消息" = "Unable to update the queued message";
 "无法读取会话配置" = "Unable to load chat configuration";
 "无法读取助手列表" = "Unable to load assistants";
-"无法读取待处理消息" = "Unable to load queued messages";
 "无法读取执行状态" = "Unable to load run status";
 "无法读取拍摄的照片" = "Unable to read the captured photo";
 "无法读取模型列表" = "Unable to load models";
@@ -484,7 +478,6 @@
 "重命名" = "Rename";
 "重命名对话" = "Rename Chat";
 "重新探测" = "Test Again";
-"附件和引用会加入待处理消息" = "Attachments and references will be added to the queued message";
 "隐私" = "Privacy";
 "需要确认" = "Confirmation Required";
 " 秒" = " sec";
@@ -880,7 +873,6 @@
 "选择新对话对象" = "Choose who to start a new chat with";
 "对话对象" = "Chat with";
 "思考档位" = "Thinking Level";
-"后续消息队列" = "Follow-up Queue";
 "默认模型" = "Default Model";
 "待处理" = "Needs Attention";
 "我的助手" = "My Assistant";

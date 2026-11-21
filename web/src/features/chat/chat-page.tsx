@@ -1459,7 +1459,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                 onPersonalSendDispatched={personal ? onPersonalSendDispatched : undefined}
                 placeholder={composerPlaceholder ?? (personal
                   ? stream.streaming || stream.sending
-                    ? language === 'zh' ? '继续聊，或补充要求…' : 'Keep talking or add a detail…'
+                    ? m.chat.inputPlaceholderSteering
                     : language === 'zh' ? `发消息给「${personalWelcome?.name || 'Personal AI'}」…` : `Message ${personalWelcome?.name || 'Personal AI'}…`
                   : agentSetup ? m.agentsSettings.setupComposerPlaceholder : skillDiscovery ? m.skills.findPlaceholder : undefined)}
                 composerContext={!agentSetup && !embedded && !taskId && !editingUserTurn && !showConversationLoading && msgSlice.items.length === 0 ? {

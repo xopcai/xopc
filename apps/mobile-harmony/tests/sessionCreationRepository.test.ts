@@ -61,8 +61,8 @@ describe('local-first session creation', () => {
       .mockResolvedValueOnce(config).mockResolvedValueOnce(response('steer-2'));
     const audio = { type: 'voice', name: 'voice.m4a', mimeType: 'audio/mp4', size: 1, data: 'YQ==' };
 
-    await expect(repository.send('draft-1', 'Use a shorter answer', 'steer-1', 'transcript-1', [], 'steer')).resolves.toBe('run-1');
-    await expect(repository.send('draft-1', '', 'steer-2', 'transcript-1', [audio], 'steer')).resolves.toBe('run-1');
+    await expect(repository.send('draft-1', 'Use a shorter answer', 'steer-1', 'transcript-1', [])).resolves.toBe('run-1');
+    await expect(repository.send('draft-1', '', 'steer-2', 'transcript-1', [audio])).resolves.toBe('run-1');
 
     const commands = mock.request.mock.calls.filter(call => call[1] === 'POST').map(call => JSON.parse(call[2]));
     expect(commands).toMatchObject([
@@ -83,7 +83,7 @@ describe('local-first session creation', () => {
     mock.read.mockResolvedValue(draft());
     mock.request.mockRejectedValueOnce(timeout()).mockRejectedValueOnce(httpError(404)).mockResolvedValueOnce(response('message-1'));
     const attachment = { type: 'image', name: 'photo.png', mimeType: 'image/png', size: 1, data: 'YQ==' };
-    await expect(new XopcChatRepository().send('draft-1', 'hello', 'message-1', '', [attachment], 'next',
+    await expect(new XopcChatRepository().send('draft-1', 'hello', 'message-1', '', [attachment],
       [{ kind: 'note', sourceId: 'note-1' }])).resolves.toBe('run-1');
     expect(mock.request.mock.calls[2]).toEqual(mock.request.mock.calls[0]);
     expect(mock.uuid).not.toHaveBeenCalled();
@@ -216,21 +216,6 @@ describe('local-first session creation', () => {
     expect(mock.remove).toHaveBeenCalledWith('draft-1', 'gateway:device');
   });
 
-  it('normalizes rich queued updates to the Gateway wire contract', async () => {
-    mock.request.mockResolvedValue(JSON.stringify({ payload: { conversationId: 'session-1', inputs: [] } }));
-    const queued = { id: 'input-1', clientMessageId: 'message-1', content: 'old', version: 7, position: 0,
-      kind: 'message', status: 'queued', requestedDelivery: 'next', effectiveDelivery: 'next' };
-    await new XopcChatRepository().updateQueued('session-1', queued, {
-      content: '', attachments: [{ type: 'voice', name: 'voice.m4a', mimeType: 'audio/mp4', size: 2, data: 'YQ==', duration: 3 }],
-      contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: '4', title: 'Note' }],
-    });
-    expect(mock.request).toHaveBeenCalledWith('/api/sessions/session-1/inputs/input-1', 'PATCH', expect.any(String));
-    expect(JSON.parse(mock.request.mock.calls[0][2])).toEqual({
-      version: 7, content: '', attachments: [{ type: 'voice', name: 'voice.m4a', mimeType: 'audio/mp4', size: 2,
-        data: 'YQ==', durationSeconds: 3 }], contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: '4' }],
-    });
-  });
-
   it('replaces the latest turn with a claimed rich input', async () => {
     mock.uuid.mockReturnValue('replacement-message');
     mock.request.mockResolvedValueOnce(JSON.stringify({ payload: { configVersion: 5 } }))
@@ -257,12 +242,12 @@ describe('local-first session creation', () => {
       .mockResolvedValueOnce(JSON.stringify({ ok: true, payload: {
         conversationId: 'task-chat', state: { activeRunId: 'task-run' }
       } }));
-    await expect(repository.send('task-chat', 'continue task', 'message-1', 'transcript-1', [], 'next', [], 'task/1'))
+    await expect(repository.send('task-chat', 'continue task', 'message-1', 'transcript-1', [], [], 'task/1'))
       .resolves.toBe('task-run');
     expect(mock.request.mock.calls[2][0]).toBe('/api/tasks/task%2F1/inputs');
     expect(JSON.parse(mock.request.mock.calls[2][2])).toMatchObject({
       clientMessageId: 'message-1', expectedTranscriptId: 'transcript-1', configVersion: 4,
-      content: 'continue task', delivery: 'next', origin: { type: 'endpoint', endpointId: 'phone', token: 'claim' }
+      content: 'continue task', delivery: 'steer', interrupt: false, origin: { type: 'endpoint', endpointId: 'phone', token: 'claim' }
     });
     expect(JSON.parse(mock.request.mock.calls[2][2])).not.toHaveProperty('kind');
   });

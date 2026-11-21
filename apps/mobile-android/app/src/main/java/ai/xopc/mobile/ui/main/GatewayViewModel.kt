@@ -36,8 +36,6 @@ import ai.xopc.mobile.gateway.ExecutionDetail
 import ai.xopc.mobile.gateway.PendingInput
 import ai.xopc.mobile.gateway.ConversationModel
 import ai.xopc.mobile.gateway.ModelSelection
-import ai.xopc.mobile.gateway.QueuedInput
-import ai.xopc.mobile.gateway.QueuedInputState
 import ai.xopc.mobile.gateway.ConversationAgent
 import ai.xopc.mobile.gateway.ConversationContext
 import ai.xopc.mobile.gateway.ContextEnvironmentOptions
@@ -334,7 +332,6 @@ data class ConnectionUiState(
   val optimisticText: String = "",
   val chatSendSequence: Long = 0,
   val chatSendMessageId: String? = null,
-  val chatSendQueued: Boolean = false,
   val optimisticPreviousUserId: String? = null,
   val sendError: Boolean = false,
   val sendErrorDetail: String? = null,
@@ -365,11 +362,6 @@ data class ConnectionUiState(
   val modelsLoading: Boolean = false,
   val modelSaving: Boolean = false,
   val modelError: Boolean = false,
-  val queuedInputs: List<QueuedInput> = emptyList(),
-  val queuePositionOffset: Int = 0,
-  val queueLoading: Boolean = false,
-  val queueBusy: Boolean = false,
-  val queueError: Boolean = false,
   val agents: List<ConversationAgent> = emptyList(),
   val agentAvatars: Map<String, Bitmap> = emptyMap(),
   val selectedAgentId: String = "",
@@ -398,7 +390,7 @@ internal fun ConnectionUiState.canSuggestNextTurn(): Boolean =
   historyTranscriptId != null && selectedConversationId != null && realtimeStatus == "connected" &&
     !historyLoading && !sending && draftModelReady && !modelSaving && !attachmentLoading &&
     draftText.isEmpty() && draftRefs.isEmpty() && draftAttachments.isEmpty() && pendingInput == null &&
-    activeRunId == null && queuedInputs.isEmpty() && clarification == null && connectionWait.snapshot?.wait == null
+    activeRunId == null && clarification == null && connectionWait.snapshot?.wait == null
 
 data class ConnectionWaitUiState(val gatewayId: String? = null, val conversationId: String? = null,
   val snapshot: ConnectionWaitSnapshot? = null, val loading: Boolean = false, val error: Boolean = false)
@@ -484,7 +476,6 @@ class GatewayViewModel internal constructor(application: Application, private va
   private var executionRevision = 0
   private var runStateJob: Job? = null
   private var modelJob: Job? = null
-  private var queueJob: Job? = null
   private var agentJob: Job? = null
   private var contextJob: Job? = null
   private var contextPanelJob: Job? = null
@@ -3185,7 +3176,6 @@ class GatewayViewModel internal constructor(application: Application, private va
     executionRevision++
     runStateJob?.cancel()
     modelJob?.cancel()
-    queueJob?.cancel()
     agentJob?.cancel()
     contextJob?.cancel()
     contextRevision++
@@ -3217,8 +3207,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     mutableState.update { it.copy(models = emptyList(), selectedModelId = "", thinkingLevel = "off",
       modelConfigVersion = null,
       modelsLoading = false, modelSaving = false, modelError = false,
-      queuedInputs = emptyList(), queuePositionOffset = 0, queueLoading = false,
-      queueBusy = false, queueError = false, agents = emptyList(), agentAvatars = emptyMap(),
+      agents = emptyList(), agentAvatars = emptyMap(),
       selectedAgentId = "", agentsLoading = false, agentError = false) }
     mutableState.update { it.copy(context = null, contextLoading = false, contextError = false,
       connectionWait = ConnectionWaitUiState(it.profile?.gatewayId, id),
@@ -3756,72 +3745,6 @@ class GatewayViewModel internal constructor(application: Application, private va
       catch (_: Exception) {
         if (mutableState.value.selectedConversationId == id) mutableState.update {
           it.copy(modelSaving = false, modelError = true)
-        }
-      }
-    }
-  }
-
-  fun loadQueuedInputs() {
-    val id = mutableState.value.selectedConversationId ?: return
-    queueJob?.cancel()
-    mutableState.update { it.copy(queueLoading = true, queueError = false) }
-    queueJob = viewModelScope.launch {
-      try {
-        val queue = runInterruptible(Dispatchers.IO) { conversations.queuedInputs(id) }
-        if (mutableState.value.selectedConversationId == id) applyQueuedInputs(queue)
-      } catch (error: CancellationException) { throw error }
-      catch (_: Exception) {
-        if (mutableState.value.selectedConversationId == id) mutableState.update {
-          it.copy(queueLoading = false, queueError = true)
-        }
-      }
-    }
-  }
-
-  private fun applyQueuedInputs(queue: QueuedInputState) {
-    mutableState.update { it.copy(queuedInputs = queue.items,
-      queuePositionOffset = queue.positionOffset, queueLoading = false,
-      queueBusy = false, queueError = queue.preparationFailed) }
-  }
-
-  fun updateQueuedInput(inputId: String, content: String?, position: Int?) {
-    val current = mutableState.value
-    val id = current.selectedConversationId ?: return
-    val input = current.queuedInputs.firstOrNull { it.id == inputId } ?: return
-    if (current.queueBusy || current.queueLoading) return
-    val effectivePosition = position?.plus(current.queuePositionOffset)
-    mutableState.update { it.copy(queueBusy = true, queueError = false) }
-    queueJob?.cancel()
-    queueJob = viewModelScope.launch {
-      try {
-        val queue = runInterruptible(Dispatchers.IO) {
-          conversations.updateQueuedInput(id, input, content, effectivePosition)
-        }
-        if (mutableState.value.selectedConversationId == id) applyQueuedInputs(queue)
-      } catch (error: CancellationException) { throw error }
-      catch (_: Exception) {
-        if (mutableState.value.selectedConversationId == id) mutableState.update {
-          it.copy(queueBusy = false, queueError = true)
-        }
-      }
-    }
-  }
-
-  fun cancelQueuedInput(inputId: String) {
-    val current = mutableState.value
-    val id = current.selectedConversationId ?: return
-    val input = current.queuedInputs.firstOrNull { it.id == inputId } ?: return
-    if (current.queueBusy || current.queueLoading) return
-    mutableState.update { it.copy(queueBusy = true, queueError = false) }
-    queueJob?.cancel()
-    queueJob = viewModelScope.launch {
-      try {
-        val queue = runInterruptible(Dispatchers.IO) { conversations.cancelQueuedInput(id, input) }
-        if (mutableState.value.selectedConversationId == id) applyQueuedInputs(queue)
-      } catch (error: CancellationException) { throw error }
-      catch (_: Exception) {
-        if (mutableState.value.selectedConversationId == id) mutableState.update {
-          it.copy(queueBusy = false, queueError = true)
         }
       }
     }
@@ -4808,7 +4731,6 @@ class GatewayViewModel internal constructor(application: Application, private va
       runProgress = if (it.activeRunId == null) AssistantRunProgress() else it.runProgress,
       chatSendSequence = it.chatSendSequence + 1,
       chatSendMessageId = clientMessageId,
-      chatSendQueued = it.activeRunId != null,
       sendRejected = false, optimisticText = optimisticText,
       optimisticPreviousUserId = it.messages.lastOrNull { message -> message.role == "user" }?.id) }
     viewModelScope.launch {
@@ -4825,7 +4747,8 @@ class GatewayViewModel internal constructor(application: Application, private va
           reportSuggestion(accepted, "submitted", content.trim() != accepted.suggestion.prompt)
         }
         if (mutableState.value.selectedConversationId == id) {
-          discardStream()
+          val sameRun = runId.isNotBlank() && mutableState.value.activeRunId == runId
+          if (!sameRun) discardStream()
           val clearDraft = !preserveDraft && mutableState.value.draftText == content
           if (clearDraft) runInterruptible(Dispatchers.IO) { conversations.saveComposerDraft(id, "") }
           mutableState.update { it.copy(sending = false, draftText = if (clearDraft) "" else it.draftText,
@@ -4833,7 +4756,7 @@ class GatewayViewModel internal constructor(application: Application, private va
               refs.map { ref -> ref.copy(title = "") }) emptyList() else it.draftRefs,
             draftAttachments = it.draftAttachments.filterNot { item -> attachments.any { sent -> sent.id == item.id } },
             pendingInput = null, activeRunId = runId.takeIf(String::isNotBlank),
-            runError = false, liveMessages = emptyList(),
+            runError = false, liveMessages = if (sameRun) it.liveMessages else emptyList(),
             runProgress = if (runId.isNotBlank()) it.runProgress.forRun(runId) else AssistantRunProgress()) }
           realtime.watchRun(runId.takeIf(String::isNotBlank))
         } else mutableState.update { it.copy(sending = false) }

@@ -21,20 +21,15 @@ protocol GatewayServing: Sendable {
     func updateAgentConfiguration(conversationID: String, model: String, thinkingLevel: String, configVersion: Int?) async throws -> SessionAgentConfiguration
     func fetchClarification(conversationID: String) async throws -> ClarificationRequest?
     func respondToClarification(_ clarification: ClarificationRequest, command: ClarificationResponseCommand) async throws
-    func fetchInputState(conversationID: String) async throws -> InputState
     func searchReferences(
         kind: ContextReferenceKind,
         query: String,
         conversationID: String?
     ) async throws -> [ReferenceItem]
-    func updateQueuedInput(conversationID: String, input: QueuedInput, content: String) async throws -> InputState
-    func cancelQueuedInput(conversationID: String, input: QueuedInput) async throws -> InputState
-    // swiftlint:disable:next function_parameter_count
     func sendMessage(
         _ text: String,
         attachments: [MessageAttachment],
         references: [ContextReference],
-        delivery: MessageDelivery,
         to conversation: ConversationSelection,
         clientMessageID: String
     ) async throws -> SessionCommandResult
@@ -48,13 +43,6 @@ protocol GatewayServing: Sendable {
 }
 
 extension GatewayServing {
-    func sendMessage(_ text: String, attachments: [MessageAttachment], references: [ContextReference],
-                     delivery: MessageDelivery, to conversation: ConversationSelection) async throws -> SessionCommandResult
-    {
-        try await sendMessage(text, attachments: attachments, references: references, delivery: delivery,
-                              to: conversation, clientMessageID: UUID().uuidString.lowercased())
-    }
-
     func streamTaskResults(conversationID _: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
         AsyncThrowingStream { $0.finish() }
     }

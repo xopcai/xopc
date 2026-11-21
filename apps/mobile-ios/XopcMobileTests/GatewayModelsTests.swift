@@ -353,7 +353,7 @@ struct GatewayModelsTests {
         #expect(value["response"] == nil)
     }
 
-    @Test func decodesQueuedInputState() throws {
+    @Test func decodesActiveRunFromInputState() throws {
         let data = Data(#"""
         {
           "ok": true,
@@ -382,9 +382,7 @@ struct GatewayModelsTests {
 
         let envelope = try JSONDecoder().decode(GatewayEnvelope<InputState>.self, from: data)
 
-        #expect(envelope.payload?.inputs.first?.isPending == true)
-        #expect(envelope.payload?.inputs.first?.content == "Follow up")
-        #expect(envelope.payload?.inputs.first?.contextRefs?.first?.title == "Release plan")
+        #expect(envelope.payload?.activeRunId == "run-1")
     }
 
     @Test func encodesGatewayAttachmentContract() throws {
@@ -415,7 +413,6 @@ struct GatewayModelsTests {
             clientMessageId: "client-1",
             expectedTranscriptId: "transcript-1",
             configVersion: 2,
-            delivery: MessageDelivery.steer.rawValue,
             input: MessageInputCommand(content: "Adjust the answer", attachments: nil, contextRefs: nil),
             origin: DeviceEndpointOrigin(endpointId: "ios:test", token: "claim")
         )
@@ -424,6 +421,7 @@ struct GatewayModelsTests {
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
         #expect(object["delivery"] as? String == "steer")
+        #expect(object["interrupt"] as? Bool == false)
     }
 
     @Test func encodesContextReferenceContract() throws {
@@ -449,14 +447,6 @@ struct GatewayModelsTests {
 
 @MainActor
 extension GatewayModelsTests {
-    @Test func encodesVersionedQueuedInputUpdate() throws {
-        let data = try JSONEncoder().encode(QueuedInputUpdateCommand(version: 7, content: "Updated"))
-        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-
-        #expect(object["version"] as? Int == 7)
-        #expect(object["content"] as? String == "Updated")
-    }
-
     @Test func recentConversationSnapshotSurvivesRestartAndRespectsAccountAndRemoval() async {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }

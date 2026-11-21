@@ -1,7 +1,7 @@
 import { XopcChatRepository } from '../repository/chatRepository';
 import { realtimeClient } from '../service/realtimeClient';
 import { gatewaySession } from '../service/gatewaySession';
-import { XopcAgentReaction, XopcChatRow, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia, XopcMessage, XopcHistory, XopcStreamPayload, XopcNextTurnSuggestion } from '../model/chat';
+import { XopcAgentReaction, XopcChatRow, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcInputState, XopcHistoryMedia, XopcMessage, XopcHistory, XopcStreamPayload, XopcNextTurnSuggestion } from '../model/chat';
 import { dedupeChatHistory, chatHistoryOverlap } from '../common/chatHistory';
 import { XopcEvent } from '../model/realtime';
 import { historyRows } from '../common/chatProtocol';
@@ -17,8 +17,6 @@ interface XopcPendingChatSend {
   row: XopcChatRow;
   attachments: XopcChatAttachment[];
   refs: XopcContextRef[];
-  delivery: string;
-  queuedWhileRunning: boolean;
   suggestion?: XopcSuggestionImpression;
 }
 
@@ -435,14 +433,14 @@ export class XopcChatViewModel {
     const row: XopcChatRow = { id: command.clientMessageId, role: 'user', text: command.input.content,
       media: chatAttachments(media, command.clientMessageId), refs, sendState: 'failed' };
     this.outbox.set(row.id, { conversationId: id, transcriptId: command.expectedTranscriptId,
-      row, attachments, refs, delivery: command.delivery || 'next', queuedWhileRunning: false });
+      row, attachments, refs });
     this.rows = this.rows.concat([row]);
   }
 
   private pendingRows(): XopcChatRow[] {
     const rows: XopcChatRow[] = [];
     this.outbox.forEach((input: XopcPendingChatSend): void => {
-      if (input.conversationId === this.selectedId && !input.queuedWhileRunning) rows.push(input.row);
+      if (input.conversationId === this.selectedId) rows.push(input.row);
     });
     return rows;
   }
@@ -537,25 +535,23 @@ export class XopcChatViewModel {
     } catch (_error) { /* Feedback is optional. */ }
   }
 
-  async send(content: string, attachments: XopcChatAttachment[] = [], delivery: string = 'next', refs: XopcContextRef[] = [],
+  async send(content: string, attachments: XopcChatAttachment[] = [], refs: XopcContextRef[] = [],
     onEnqueued: (rowId: string) => void = (_rowId: string): void => {}): Promise<boolean> {
     if (this.disposed || this.loading || this.sending || this.cachedHistory || !this.selectedId || (!content.trim() && !attachments.length && !refs.length)) return false;
-    if (delivery !== 'next' && delivery !== 'steer') return false;
     const id = this.repository.uuid();
     const media = attachments.map((file: XopcChatAttachment, index: number): XopcHistoryMedia => ({
       id: id + ':attachment:' + index, name: file.name, type: file.type, mimeType: file.mimeType,
       size: file.size, uri: file.uri || '', data: file.data, workspaceRelativePath: file.workspaceRelativePath, duration: file.duration }));
     const row: XopcChatRow = { id, role: 'user', text: content, media: chatAttachments(media, id), refs: refs.slice(), sendState: 'sending' };
-    const queuedWhileRunning = !!this.runId && delivery === 'next';
     const accepted = this.acceptedSuggestion;
     const suggestion = accepted && accepted.scope === this.suggestionScope() && content.trim()
       && accepted.suggestion.conversationId === this.selectedId && accepted.suggestion.transcriptId === this.transcriptId
       ? accepted : undefined;
     if (suggestion) this.clearAcceptedSuggestion();
     const input: XopcPendingChatSend = { conversationId: this.selectedId, transcriptId: this.transcriptId,
-      row, attachments: attachments.slice(), refs: refs.slice(), delivery, queuedWhileRunning, suggestion };
+      row, attachments: attachments.slice(), refs: refs.slice(), suggestion };
     this.outbox.set(id, input);
-    if (!queuedWhileRunning) this.rows = this.rows.concat([row]);
+    this.rows = this.rows.concat([row]);
     this.historyRequest++; this.recoveryRequest++; this.olderPending = false;
     onEnqueued(id);
     return this.deliver(input);
@@ -596,15 +592,14 @@ export class XopcChatViewModel {
       if (this.connection !== 'connected') throw new Error('OFFLINE');
       const alreadyRunning = !!this.runId;
       const run = await this.repository.send(input.conversationId, input.row.text, input.row.id, input.transcriptId,
-        input.attachments, input.delivery, input.refs, this.taskId);
+        input.attachments, input.refs, this.taskId);
       if (input.suggestion) void this.reportSuggestion(input.suggestion, 'submitted',
         input.row.text.trim() !== input.suggestion.suggestion.prompt);
       if (selection !== this.selection) return false;
       // In-flight reads predate this acceptance and must not roll back the visible input or run.
       this.historyRequest++; this.recoveryRequest++; this.olderPending = false;
       this.hasNetworkHistory = true;
-      if (input.queuedWhileRunning) this.outbox.delete(input.row.id);
-      else this.updateSendState(input, 'sent');
+      this.updateSendState(input, 'sent');
       if (!alreadyRunning) { this.snapshotMode = false; this.streaming = ''; this.thinking = ''; this.tool = '';
         this.liveRow = undefined; this.liveActivityRow = undefined; this.completedActivityRunId = ''; }
       this.trackRun(run);
@@ -615,10 +610,6 @@ export class XopcChatViewModel {
       if (!this.outbox.has(input.row.id)) return true;
       this.executionInputIds.delete(input.row.id);
       this.error = (error as Error).message;
-      if (input.queuedWhileRunning) {
-        input.queuedWhileRunning = false;
-        this.rows = this.rows.concat([input.row]);
-      }
       this.updateSendState(input, 'failed'); return false;
     }
     finally { this.sending = false; }
@@ -667,7 +658,7 @@ export class XopcChatViewModel {
       if (state.conversationId === this.selectedId && (event.event === 'session.input-state'
         || event.event === 'clarification.updated' || event.event === 'session.connection-wait.changed')) {
         this.auxiliaryRevision++;
-        if (event.event === 'session.input-state' && !this.sending && ((event.data as XopcQueueState).activeRunId || '') !== this.runId) this.recover();
+        if (event.event === 'session.input-state' && !this.sending && ((event.data as XopcInputState).activeRunId || '') !== this.runId) this.recover();
       }
       return;
     }

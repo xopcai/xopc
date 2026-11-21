@@ -125,8 +125,7 @@ const applyCommandItem = (
       ctx.editor.resetEditor({ nextText: next, caretOffset: range.start });
       return;
     }
-    // Non-abort args=false command: queue as a pending follow-up — same semantics as
-    // typing `/cmd` in the editor and pressing Enter while runBusy.
+    // Queue commands that cannot take arguments until the current turn finishes.
     if (!ctx.callbacks.onAddPendingFollowUp) return;
     if (ctx.pendingFollowUpsCount >= ctx.maxPendingFollowUps) return;
     if (ctx.contextRefs.current.length) {

@@ -1,12 +1,10 @@
 import Foundation
 
 extension GatewayClient {
-    // swiftlint:disable:next function_parameter_count
     func sendMessage(
         _ text: String,
         attachments: [MessageAttachment],
         references: [ContextReference],
-        delivery: MessageDelivery,
         to conversation: ConversationSelection,
         clientMessageID: String
     ) async throws -> SessionCommandResult {
@@ -23,7 +21,6 @@ extension GatewayClient {
             text,
             attachments: attachments,
             references: references,
-            delivery: delivery,
             conversation: conversation,
             clientMessageID: clientMessageID
         )
@@ -47,12 +44,10 @@ extension GatewayClient {
         return ["new", "reset", "restart", "clear", "archive"].contains(name)
     }
 
-    // swiftlint:disable:next function_parameter_count
     private func messageBody(
         _ text: String,
         attachments: [MessageAttachment],
         references: [ContextReference],
-        delivery: MessageDelivery,
         conversation: ConversationSelection,
         clientMessageID: String
     ) async throws -> Data {
@@ -93,7 +88,6 @@ extension GatewayClient {
             clientMessageId: clientMessageID,
             expectedTranscriptId: transcriptID,
             configVersion: configVersion,
-            delivery: delivery.rawValue,
             input: input,
             origin: readyOrigin
         ))

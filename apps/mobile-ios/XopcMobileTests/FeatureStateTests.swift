@@ -188,42 +188,6 @@ struct FeatureStateTests {
         #expect(state.clarification == clarification)
     }
 
-    @Test func assistantQueuesFollowUpDuringActiveRun() async {
-        let state = AssistantState()
-        let conversation = ConversationSelection(summary: ConversationSummary(
-            key: "conversation-1",
-            agentId: "main",
-            name: "Running",
-            status: "active",
-            updatedAt: "2026-10-04T00:00:00Z",
-            messageCount: 1,
-            projectId: nil,
-            transcriptId: "transcript"
-        ))
-        let queued = QueuedInput(
-            id: "input-1",
-            content: "Follow up",
-            status: "queued",
-            version: 1,
-            position: 0,
-            requestedDelivery: "next",
-            effectiveDelivery: "next",
-            error: nil,
-            attachments: nil,
-            contextRefs: nil
-        )
-        let gateway = GatewayStub(
-            activeRun: ActiveRun(active: true, runId: "run-1"),
-            sendInputState: InputState(activeRunId: "run-1", inputs: [queued])
-        )
-
-        await state.loadConversation(conversation, using: gateway)
-        let accepted = await state.queueMessage("Follow up", in: conversation, using: gateway)
-
-        #expect(accepted)
-        #expect(state.pendingInputs == [queued])
-    }
-
     @Test func projectDraftCarriesProjectExecutionContext() {
         let project = ProjectRecord(
             id: "project-1",
@@ -322,23 +286,10 @@ private struct StreamingGatewayStub: GatewayServing {
     }
 
     func respondToClarification(_: ClarificationRequest, command _: ClarificationResponseCommand) async throws {}
-    func fetchInputState(conversationID _: String) async throws -> InputState {
-        InputState(activeRunId: nil)
-    }
-
-    func cancelQueuedInput(
-        conversationID _: String,
-        input _: QueuedInput
-    ) async throws -> InputState {
-        InputState(activeRunId: nil)
-    }
-
-    // swiftlint:disable:next function_parameter_count
     func sendMessage(
         _: String,
         attachments _: [MessageAttachment],
         references _: [ContextReference],
-        delivery _: MessageDelivery,
         to conversation: ConversationSelection,
         clientMessageID: String
     ) async throws -> SessionCommandResult {

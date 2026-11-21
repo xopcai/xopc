@@ -142,7 +142,7 @@ export struct XopcPersonalAgentSettings {
     Column() {
       if (this.modelPickerOpen) {
         XopcChatOptions({ model: this.chatOptions, mode: 'model',
-          modelBusy: this.chatOptions.queued.length > 0, rememberModel: false,
+          rememberModel: false,
           onClose: (): void => { this.modelPickerOpen = false; },
           onRetry: (): void => { this.onReloadModels(); } })
       } else {

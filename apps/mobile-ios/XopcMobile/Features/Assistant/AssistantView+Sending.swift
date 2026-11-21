@@ -2,13 +2,12 @@ import Foundation
 
 extension AssistantView {
     // swiftlint:disable:next function_body_length
-    func send(delivery: MessageDelivery, voice: MessageAttachment? = nil) {
+    func send(voice: MessageAttachment? = nil) {
         guard let conversation, let scope = composerDraftScope,
               scope == ComposerDraftStore.scope(configuration, conversationID: conversation.id) else { return }
         let text = voice == nil ? draft : ""
         let selectedAttachments = voice.map { [$0] } ?? attachments
         let selectedReferences = voice == nil ? references : []
-        let queueing = state.isRunActive
         let candidate = state.acceptedSuggestion
         let impression = voice == nil && candidate?.gateway.configuration == configuration &&
             candidate?.suggestion.conversationId == conversation.id &&
@@ -22,27 +21,10 @@ extension AssistantView {
         attachmentError = nil
         Task {
             let gateway = GatewayClient(configuration: configuration)
-            if queueing {
-                if await state.queueMessage(
-                    text,
-                    attachments: selectedAttachments,
-                    references: selectedReferences,
-                    delivery: delivery,
-                    in: conversation,
-                    using: gateway
-                ) {
-                    reportSuggestedSend(impression, text: text)
-                } else {
-                    restoreSuggestionAfterFailure(impression, scope: scope)
-                    restoreDraft(text, attachments: selectedAttachments, references: selectedReferences, scope: scope, voice: voice)
-                }
-                return
-            }
             let materialized = await state.send(
                 text,
                 attachments: selectedAttachments,
                 references: selectedReferences,
-                delivery: delivery,
                 to: conversation,
                 using: gateway,
                 onMaterialized: onConversationUpdated,

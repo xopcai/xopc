@@ -96,7 +96,7 @@ describe('chat keyboard viewport following', () => {
     view.atBottom = false;
     view.saveReadingPosition();
     view.presentationRows = [{ id: 'history' }, { id: 'question' }];
-    view.followAfterSend('next');
+    view.followAfterSend();
     view.messagesScroller.isAtEnd.mockReturnValue(true);
     vi.runAllTimers();
     expect(view.atBottom).toBe(true);
@@ -111,23 +111,12 @@ describe('chat keyboard viewport following', () => {
 
   it('cancels deferred send alignment when the reader starts dragging', () => {
     const view = setup();
-    view.followAfterSend('next');
+    view.followAfterSend();
     view.onMessageScrollSource('drag');
     view.onMessageScroll(-20, 'scroll');
     vi.runAllTimers();
     expect(view.messagesScroller.scrollToIndex).not.toHaveBeenCalled();
     expect(view.atBottom).toBe(false);
-  });
-
-  it('does not change the reading position when a follow-up is queued', () => {
-    const view = setup();
-    view.atBottom = false;
-    view.chat.runId = 'running';
-    view.followAfterSend('next');
-    vi.runAllTimers();
-    expect(view.atBottom).toBe(false);
-    expect(view.messagesScroller.scrollToIndex).not.toHaveBeenCalled();
-    expect(view.messagesScroller.scrollEdge).not.toHaveBeenCalled();
   });
 
   it('restores the visible message and offset when returning to a conversation', () => {

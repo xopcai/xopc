@@ -1,5 +1,5 @@
 import { agentDisplayName } from '../common/agentPresentation';
-import { XopcAgentConfig, XopcChatModel, XopcChatAgent, XopcQueuedInput, XopcSessionPreparation, XopcQueueState, XopcQueueUpdate } from '../model/chat';
+import { XopcAgentConfig, XopcChatModel, XopcChatAgent, XopcSessionPreparation, XopcInputState } from '../model/chat';
 import { XopcLocalSession } from '../model/sessionCommand';
 import { XopcChatRepository } from '../repository/chatRepository';
 
@@ -10,31 +10,29 @@ export class XopcChatOptionsViewModel {
   @Trace agents: XopcChatAgent[] = [];
   @Trace modelId: string = '';
   @Trace agentId: string = '';
-  @Trace queued: XopcQueuedInput[] = [];
   @Trace loading: boolean = false;
   @Trace saving: boolean = false;
-  @Trace queueBusy: boolean = false;
+  @Trace preparationBusy: boolean = false;
   @Trace error: string = '';
-  @Trace queueError: string = '';
+  @Trace preparationError: string = '';
   private repository: XopcChatRepository = new XopcChatRepository();
   private conversationId: string = '';
   private generation: number = 0;
   private configVersion?: number;
-  private queueRequest: number = 0;
-  private queuePositionOffset: number = 0;
+  private preparationRequest: number = 0;
   private timer: number = -1;
   @Trace thinkingLevel: string = 'off';
 
-  dispose(): void { this.generation++; this.queueRequest++; clearInterval(this.timer); this.timer = -1; }
-  pause(): void { this.queueRequest++; clearInterval(this.timer); this.timer = -1; }
+  dispose(): void { this.generation++; this.preparationRequest++; clearInterval(this.timer); this.timer = -1; }
+  pause(): void { this.preparationRequest++; clearInterval(this.timer); this.timer = -1; }
   resume(): void {
     if (!this.conversationId || this.timer !== -1) return;
-    this.refreshQueue(); this.timer = setInterval((): void => { this.refreshQueue(); }, 15000);
+    this.refreshPreparation(); this.timer = setInterval((): void => { this.refreshPreparation(); }, 15000);
   }
   async load(id: string, agentId: string = '', locale: string = ''): Promise<void> {
     this.pause(); const generation = ++this.generation;
-    this.queueRequest++; this.conversationId = id; this.agentId = agentId; this.queued = [];
-    this.preparation = undefined; this.queueError = ''; this.queueBusy = false;
+    this.preparationRequest++; this.conversationId = id; this.agentId = agentId;
+    this.preparation = undefined; this.preparationError = ''; this.preparationBusy = false;
     this.configVersion = undefined;
     this.models = []; this.agents = []; this.modelId = ''; this.thinkingLevel = 'off'; this.error = ''; this.loading = true;
     this.resume();
@@ -108,67 +106,31 @@ export class XopcChatOptionsViewModel {
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; return false; }
     finally { this.saving = false; }
   }
-  async refreshQueue(): Promise<void> {
+  async refreshPreparation(): Promise<void> {
     const id = this.conversationId; if (!id) return;
-    const request = ++this.queueRequest;
+    const request = ++this.preparationRequest;
     try {
-      const state = await this.repository.queue(id);
-      if (request !== this.queueRequest) return;
-      this.applyQueue(state);
-    } catch (error) { if (request === this.queueRequest) this.queueError = (error as Error).message; }
+      const state = await this.repository.inputState(id);
+      if (request !== this.preparationRequest) return;
+      this.preparation = state.preparation;
+      this.preparationError = state.preparation?.state === 'preparation_failed'
+        ? state.preparation.lastError || 'SESSION_PREPARATION_FAILED' : '';
+    } catch (_error) { /* Keep the last known preparation state. */ }
   }
-  private applyQueue(state: XopcQueueState): void {
-    const queued = state.inputs.filter((item: XopcQueuedInput): boolean => item.kind === 'message' && item.status === 'queued')
-      .sort((a: XopcQueuedInput, b: XopcQueuedInput): number => a.position - b.position);
-    // The first unclaimed input is the pending turn, not a follow-up.
-    this.queuePositionOffset = !state.activeRunId && state.preparation?.state !== 'preparation_failed' && queued.length ? 1 : 0;
-    this.queued = this.queuePositionOffset ? queued.slice(1) : queued;
-    this.preparation = state.preparation;
-    this.queueError = state.preparation?.state === 'preparation_failed' ? state.preparation.lastError || 'SESSION_PREPARATION_FAILED' : '';
-  }
-  async updateQueued(input: XopcQueuedInput, update: XopcQueueUpdate): Promise<boolean> {
-    if (this.queueBusy) return false;
-    const hasPayload = !!update.content?.trim() || !!update.attachments?.length || !!update.contextRefs?.length;
-    if (update.position === undefined && !hasPayload) return false;
-    this.queueBusy = true; const id = this.conversationId; const generation = this.generation; this.queueRequest++;
-    try {
-      const state = await this.repository.updateQueued(id, input, update);
-      if (generation !== this.generation) return false;
-      this.applyQueue(state); return true;
-    } catch (error) { if (generation === this.generation) { await this.refreshQueue(); this.queueError = (error as Error).message; } return false; }
-    finally { this.queueBusy = false; }
-  }
-  moveQueued(from: number, to: number): void {
-    if (this.queueBusy || from < 0 || from >= this.queued.length || to < 0 || to >= this.queued.length || from === to) return;
-    const reordered = this.queued.slice();
-    const input = reordered.splice(from, 1)[0];
-    if (!input) return;
-    reordered.splice(to, 0, input);
-    this.queued = reordered;
-    void this.updateQueued(input, { position: to + this.queuePositionOffset });
-  }
-  async cancelQueued(input: XopcQueuedInput): Promise<void> {
-    if (this.queueBusy) return;
-    this.queueBusy = true; const generation = this.generation; this.queueRequest++;
-    try { const state = await this.repository.cancelQueued(this.conversationId, input); if (generation === this.generation) this.applyQueue(state); }
-    catch (error) { if (generation === this.generation) { await this.refreshQueue(); this.queueError = (error as Error).message; } }
-    finally { this.queueBusy = false; }
-  }
-  async retryQueue(useLocalCheckout: boolean = false): Promise<void> {
-    if (this.queueBusy) return;
+  async retryPreparation(useLocalCheckout: boolean = false): Promise<void> {
+    if (this.preparationBusy) return;
     const preparation = this.preparation;
-    if (useLocalCheckout && (preparation?.state !== 'preparation_failed' || preparation.executionMode !== 'managed_worktree')) return;
+    if (!preparation || preparation.state !== 'preparation_failed'
+      || (useLocalCheckout && preparation.executionMode !== 'managed_worktree')) return;
     const id = this.conversationId;
     const generation = this.generation;
-    this.queueBusy = true;
-    this.queueRequest++;
+    this.preparationBusy = true;
+    this.preparationRequest++;
     try {
-      if (preparation?.state === 'preparation_failed') {
-        await this.repository.retryPreparation(id, preparation.operationId, preparation.revision,
-          useLocalCheckout ? 'local_checkout' : undefined);
-      }
-      if (generation === this.generation) await this.refreshQueue();
-    } catch (error) { if (generation === this.generation) this.queueError = (error as Error).message; }
-    finally { if (generation === this.generation) this.queueBusy = false; }
+      await this.repository.retryPreparation(id, preparation.operationId, preparation.revision,
+        useLocalCheckout ? 'local_checkout' : undefined);
+      if (generation === this.generation) await this.refreshPreparation();
+    } catch (error) { if (generation === this.generation) this.preparationError = (error as Error).message; }
+    finally { if (generation === this.generation) this.preparationBusy = false; }
   }
 }

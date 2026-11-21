@@ -15,12 +15,11 @@ const sidebar = readFileSync(new URL('../entry/src/main/ets/view/ChatSidebar.ets
 const actionPanel = readFileSync(new URL('../entry/src/main/ets/view/ChatActionPanel.ets', import.meta.url), 'utf8');
 
 describe('chat bottom region composition', () => {
-  it('uses the main send action for Personal Agent steering without a separate follow-up hint', () => {
-    const voice = chat.slice(chat.indexOf('  private async sendVoice('), chat.indexOf('  private openReference('));
-    expect(voice).toContain('const delivery = this.defaultSendDelivery();');
-    expect(voice).toContain("this.chat.send('', [attachment], delivery");
-    expect(chat).toContain(".accessibilityText(this.chat.runId && !this.personalConversation ? $r('app.string.chat_send_next') : $r('app.string.send'))");
-    expect(chat).toMatch(/if \(!this\.personalConversation && this\.chat\.runId && .*\) \{\s*Row\([\s\S]+?chat_queue_hint/);
+  it('uses the main send action without a follow-up queue or secondary steer action', () => {
+    expect(chat).toContain("this.chat.send('', [attachment], []");
+    expect(chat).not.toContain("app.string.chat_queue");
+    expect(chat).not.toContain("app.string.chat_steer");
+    expect(options).not.toContain("onEditQueued");
   });
 
   it('opens task conversations with the full chat header while retaining task navigation', () => {

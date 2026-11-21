@@ -247,25 +247,12 @@ class ConversationRepositoryTest {
     }
   }
 
-  @Test fun thinkingOptionsAndFollowUpQueueRespectGatewayState() {
+  @Test fun thinkingOptionsRespectGatewayState() {
     val models = ConversationRepository.parseModels("""{"ok":true,"payload":{"models":[
       {"id":"test/one","thinking":{"mode":"levels","initialValue":"low",
       "options":["off","low","high"]}}]}}""")
     assertEquals("levels", models.models.single().thinkingMode)
     assertEquals(listOf("off", "low", "high"), models.models.single().thinkingOptions)
-    val id = "11111111-2222-3333-4444-555555555555"
-    val queue = ConversationRepository.parseQueuedInputs(id, """{"ok":true,"payload":{
-      "conversationId":"$id","activeRunId":null,"inputs":[
-      {"id":"pending","kind":"message","status":"queued","position":0,"version":1,"content":"first"},
-      {"id":"follow-up","kind":"message","status":"queued","position":1,"version":2,
-        "content":"second","attachments":[{}]}]}}""")
-    assertEquals(1, queue.positionOffset)
-    assertEquals("follow-up", queue.items.single().id)
-    assertEquals(1, queue.items.single().attachmentCount)
-    assertThrows(IllegalArgumentException::class.java) {
-      ConversationRepository.parseQueuedInputs("other", """{"ok":true,"payload":{
-        "conversationId":"$id","inputs":[]}}""")
-    }
   }
 
   @Test fun agentCatalogRequiresDefaultToBeAnAvailableAgent() {

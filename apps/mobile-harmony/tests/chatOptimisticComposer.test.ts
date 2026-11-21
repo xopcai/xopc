@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import ts from 'typescript';
 
 const source = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', import.meta.url), 'utf8');
-const methods = source.slice(source.indexOf('  private defaultSendDelivery('), source.indexOf('  private addReference('));
+const methods = source.slice(source.indexOf('  private async send('), source.indexOf('  private addReference('));
 const compiled = ts.transpileModule(`class Handler { ${methods} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
@@ -14,16 +14,16 @@ describe('optimistic composer handoff', () => {
     let finish!: (sent: boolean) => void;
     const view = Object.assign(new Handler(), {
       restoringDraft: false, draft: 'first', attachments: [{ name: 'photo' }], refs: [{ sourceId: 'note' }],
-      chat: { selectedId: 'one', send: vi.fn((_text, _files, _delivery, _refs, enqueued) => {
+      chat: { selectedId: 'one', send: vi.fn((_text, _files, _refs, enqueued) => {
         enqueued(); return new Promise(resolve => { finish = resolve; });
       }) },
       palette: { close: vi.fn() }, followAfterSend: vi.fn(), saveDraft: vi.fn(), setPanel: vi.fn(), visible: true,
-      options: { loading: false, saving: false, modelId: 'provider/model', refreshQueue: vi.fn() },
+      options: { loading: false, saving: false, modelId: 'provider/model', refreshPreparation: vi.fn() },
     });
     const sending = view.send();
     expect(view.draft).toBe(''); expect(view.attachments).toEqual([]); expect(view.refs).toEqual([]);
     expect(view.saveDraft).toHaveBeenCalledOnce();
-    expect(view.followAfterSend).toHaveBeenCalledExactlyOnceWith('next');
+    expect(view.followAfterSend).toHaveBeenCalledExactlyOnceWith();
     view.draft = 'next draft'; finish(false); await sending;
     expect(view.draft).toBe('next draft');
   });
@@ -35,13 +35,13 @@ describe('optimistic composer handoff', () => {
     });
     await view.send(); expect(view.draft).toBe('keep');
   });
-  it('steers successive Personal Agent messages while the same reply is active', async () => {
-    const send = vi.fn((_text, _files, _delivery, _refs, enqueued) => { enqueued(); return Promise.resolve(true); });
+  it('steers successive messages while the same reply is active', async () => {
+    const send = vi.fn((_text, _files, _refs, enqueued) => { enqueued(); return Promise.resolve(true); });
     const view = Object.assign(new Handler(), {
       personalConversation: true, restoringDraft: false, draft: 'Keep it short', attachments: [], refs: [],
       chat: { selectedId: 'personal', runId: 'active-run', send },
       palette: { close: vi.fn() }, followAfterSend: vi.fn(), saveDraft: vi.fn(), setPanel: vi.fn(), visible: true,
-      options: { loading: false, saving: false, modelId: 'provider/model', refreshQueue: vi.fn() },
+      options: { loading: false, saving: false, modelId: 'provider/model', refreshPreparation: vi.fn() },
     });
 
     await view.send();
@@ -51,8 +51,8 @@ describe('optimistic composer handoff', () => {
     view.refs = refs;
     await view.send();
 
-    expect(send).toHaveBeenNthCalledWith(1, 'Keep it short', [], 'steer', [], expect.any(Function));
-    expect(send).toHaveBeenNthCalledWith(2, 'Use this brief', [], 'steer', refs, expect.any(Function));
+    expect(send).toHaveBeenNthCalledWith(1, 'Keep it short', [], [], expect.any(Function));
+    expect(send).toHaveBeenNthCalledWith(2, 'Use this brief', [], refs, expect.any(Function));
     expect(view.chat.runId).toBe('active-run');
     expect(view.refs).toEqual([]);
   });

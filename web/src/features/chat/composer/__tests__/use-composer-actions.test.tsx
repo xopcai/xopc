@@ -35,55 +35,35 @@ describe('composer acceptance preserves drafts', () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
-  it.each([0, 2])('steers a new personal message even with %s queued inputs', async pendingFollowUpsCount => {
+  it.each([0, 2])('steers a new message even with %s queued inputs', async pendingFollowUpsCount => {
     const onAddPendingFollowUp = vi.fn(async () => {});
-    const onSteerPendingFollowUp = vi.fn();
-    options = { ...options, personal: true, runBusy: true, pendingFollowUpsCount,
-      firstPendingFollowUpId: 'first', onAddPendingFollowUp, onSteerPendingFollowUp };
+    options = { ...options, runBusy: true, pendingFollowUpsCount, onAddPendingFollowUp };
     await render();
     await act(async () => actions.send());
     expect(onAddPendingFollowUp).toHaveBeenCalledExactlyOnceWith('Original', undefined, undefined, false, 'steer');
-    expect(onSteerPendingFollowUp).not.toHaveBeenCalled();
     expect(options.resetEditor).toHaveBeenCalledOnce();
   });
 
-  it('keeps ordinary follow-ups queued by default', async () => {
+  it('queues the draft when Follow is requested', async () => {
     const onAddPendingFollowUp = vi.fn(async () => {});
     options = { ...options, runBusy: true, onAddPendingFollowUp };
     await render();
-    await act(async () => actions.send());
-    expect(onAddPendingFollowUp).toHaveBeenCalledExactlyOnceWith('Original', undefined, undefined);
+    await act(async () => actions.flushSteeringDraft(false, 'next'));
+    expect(onAddPendingFollowUp).toHaveBeenCalledExactlyOnceWith('Original', undefined, undefined, false, 'next');
   });
 
   it('requests cooperative steering without interrupting a personal reply', async () => {
     const onAddPendingFollowUp = vi.fn(async () => {});
-    options = { ...options, personal: true, runBusy: true, onAddPendingFollowUp };
+    options = { ...options, runBusy: true, onAddPendingFollowUp };
     await render();
     await act(async () => actions.flushSteeringDraft(false, 'steer'));
     expect(onAddPendingFollowUp).toHaveBeenCalledWith('Original', undefined, undefined, false, 'steer');
     expect(options.resetEditor).toHaveBeenCalledOnce();
   });
 
-  it('steers the first queued input and preserves the whole draft in ordinary chat', async () => {
-    const onSteerPendingFollowUp = vi.fn();
-    const onAddPendingFollowUp = vi.fn();
-    options = { ...options, runBusy: true, pendingFollowUpsCount: 2,
-      firstPendingFollowUpId: 'first', onSteerPendingFollowUp, onAddPendingFollowUp,
-      wireAttachmentsPayload: () => [{ type: 'file', name: 'draft.pdf' }],
-      getContextRefs: () => [{ kind: 'note', sourceId: 'note', title: 'Draft note', expectedVersion: '1' }] };
-    await render();
-    act(() => actions.steerCurrentReply());
-    expect(onSteerPendingFollowUp).toHaveBeenCalledExactlyOnceWith('first');
-    expect(onAddPendingFollowUp).not.toHaveBeenCalled();
-    expect(options.resetEditor).not.toHaveBeenCalled();
-    expect(options.clearAttachments).not.toHaveBeenCalled();
-    expect(options.clearContextRefs).not.toHaveBeenCalled();
-  });
-
-  it.each(['text', 'attachment', 'reference'])('steers a personal %s draft even with queued inputs', async kind => {
+  it.each(['text', 'attachment', 'reference'])('steers a %s draft even with queued inputs', async kind => {
     const onAddPendingFollowUp = vi.fn(async () => {});
-    options = { ...options, personal: true, runBusy: true, pendingFollowUpsCount: 2,
-      firstPendingFollowUpId: 'first', onSteerPendingFollowUp: vi.fn(), onAddPendingFollowUp };
+    options = { ...options, runBusy: true, pendingFollowUpsCount: 2, onAddPendingFollowUp };
     if (kind !== 'text') options.getTextValue = () => '';
     if (kind === 'attachment') {
       options.getAttachmentCount = () => 1;
@@ -91,24 +71,10 @@ describe('composer acceptance preserves drafts', () => {
     }
     if (kind === 'reference') options.getContextRefs = () => [{ kind: 'note', sourceId: 'note', title: 'Note', expectedVersion: '1' }];
     await render();
-    await act(async () => actions.steerCurrentReply());
+    await act(async () => actions.send());
     expect(onAddPendingFollowUp).toHaveBeenCalledExactlyOnceWith(options.getTextValue(),
       kind === 'attachment' ? options.wireAttachmentsPayload() : undefined,
       kind === 'reference' ? options.getContextRefs() : undefined, false, 'steer');
-  });
-
-  it.each(['idle', 'blocked', 'voice', 'edit-follow-up', 'edit-turn', 'steering'])('ignores shared steer while %s', async mode => {
-    const onSteerPendingFollowUp = vi.fn();
-    const onAddPendingFollowUp = vi.fn();
-    options = { ...options, runBusy: mode !== 'idle', pendingFollowUpsCount: 1,
-      firstPendingFollowUpId: 'first', onSteerPendingFollowUp, onAddPendingFollowUp,
-      blocked: mode === 'blocked', voiceActive: mode === 'voice', steeringPending: mode === 'steering',
-      editingFollowUpId: mode === 'edit-follow-up' ? 'edit' : null,
-      editingUserTurnId: mode === 'edit-turn' ? 'turn' : null };
-    await render();
-    act(() => actions.steerCurrentReply());
-    expect(onSteerPendingFollowUp).not.toHaveBeenCalled();
-    expect(onAddPendingFollowUp).not.toHaveBeenCalled();
   });
 
   it('waits for interrupt acceptance and suppresses repeated submissions', async () => {

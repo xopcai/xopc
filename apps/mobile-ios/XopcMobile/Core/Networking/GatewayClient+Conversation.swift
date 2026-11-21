@@ -52,45 +52,6 @@ extension GatewayClient {
         return response.conversationId
     }
 
-    func fetchInputState(conversationID: String) async throws -> InputState {
-        let envelope: GatewayEnvelope<InputState> = try await request(
-            path: "/api/sessions/\(conversationID)/input-state"
-        )
-        guard envelope.isSuccessful, let state = envelope.payload else {
-            throw GatewayClientError.server(envelope.error?.message ?? "无法读取待处理消息")
-        }
-        return state
-    }
-
-    func cancelQueuedInput(conversationID: String, input: QueuedInput) async throws -> InputState {
-        let envelope: GatewayEnvelope<InputState> = try await request(
-            path: "/api/sessions/\(conversationID)/inputs/\(input.id)",
-            queryItems: [URLQueryItem(name: "version", value: String(input.version))],
-            method: "DELETE"
-        )
-        guard envelope.isSuccessful, let state = envelope.payload else {
-            throw GatewayClientError.server(envelope.error?.message ?? "无法取消待处理消息")
-        }
-        return state
-    }
-
-    func updateQueuedInput(
-        conversationID: String,
-        input: QueuedInput,
-        content: String
-    ) async throws -> InputState {
-        let body = try encoder.encode(QueuedInputUpdateCommand(version: input.version, content: content))
-        let envelope: GatewayEnvelope<InputState> = try await request(
-            path: "/api/sessions/\(conversationID)/inputs/\(input.id)",
-            method: "PATCH",
-            body: body
-        )
-        guard envelope.isSuccessful, let state = envelope.payload else {
-            throw GatewayClientError.server(envelope.error?.message ?? "无法更新待处理消息")
-        }
-        return state
-    }
-
     func fetchClarification(conversationID: String) async throws -> ClarificationRequest? {
         let envelope: GatewayEnvelope<ClarificationSnapshot> = try await request(
             path: "/api/sessions/\(conversationID)/clarification"

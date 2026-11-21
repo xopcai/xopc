@@ -40,9 +40,6 @@ final class AssistantState {
     private(set) var clarification: ClarificationRequest?
     private(set) var clarificationError: String?
     private(set) var isRespondingToClarification = false
-    var pendingInputs: [QueuedInput] = []
-    var queueError: String?
-    var isUpdatingQueue = false
     private var loadedConversationID: String?
     private var loadedTranscriptID: String?
     private struct SendDraft: Equatable {
@@ -50,7 +47,6 @@ final class AssistantState {
         let content: String
         let attachments: [MessageAttachment]
         let references: [ContextReference]
-        let delivery: MessageDelivery
     }
 
     @ObservationIgnored private var failedSend: (id: String, draft: SendDraft)?
@@ -109,8 +105,6 @@ final class AssistantState {
         contextError = nil
         clarification = nil
         clarificationError = nil
-        pendingInputs = []
-        queueError = nil
     }
 
     // swiftlint:disable:next cyclomatic_complexity function_body_length
@@ -130,7 +124,6 @@ final class AssistantState {
             guard generation == historyGeneration, !Task.isCancelled, unavailableConversationID == nil else { return }
             await loadContext(for: conversation, using: gateway)
             await refreshClarification(for: conversation, using: gateway)
-            await refreshInputState(for: conversation, using: gateway)
             return
         }
         cancelRunObservation()
@@ -161,7 +154,6 @@ final class AssistantState {
             }
             await loadContext(for: conversation, using: gateway)
             await refreshClarification(for: conversation, using: gateway)
-            await refreshInputState(for: conversation, using: gateway)
         } catch is CancellationError {
             return
         } catch {
@@ -188,7 +180,6 @@ final class AssistantState {
         _ text: String,
         attachments: [MessageAttachment] = [],
         references: [ContextReference] = [],
-        delivery: MessageDelivery = .next,
         to conversation: ConversationSelection,
         using gateway: any GatewayServing,
         onMaterialized: ((ConversationSelection) -> Void)? = nil,
@@ -202,13 +193,13 @@ final class AssistantState {
         }
         isSending = true
         errorMessage = nil
-        executionActivity = []
         if runID == nil {
+            executionActivity = []
             runProgress = AssistantRunProgress()
+            activityLabel = AppLocalization.resolve("正在准备")
         }
-        activityLabel = AppLocalization.resolve("正在准备")
         let input = SendDraft(conversationID: conversation.id, content: content, attachments: attachments,
-                              references: references, delivery: delivery)
+                              references: references)
         let retryID = failedSend.flatMap { $0.draft == input ? $0.id : nil }
         let optimisticID = retryID ?? UUID().uuidString.lowercased()
         failedSend = nil
@@ -223,26 +214,26 @@ final class AssistantState {
                                   turnId: nil, clientMessageID: optimisticID))
         }
 
-        defer { isSending = false }
+        let materialized: ConversationSelection
         do {
+            defer { isSending = false }
             let result = try await gateway.sendMessage(
                 content,
                 attachments: attachments,
                 references: references,
-                delivery: delivery,
                 to: conversation,
                 clientMessageID: optimisticID
             )
-            let materialized = conversation.materialized(transcriptId: result.receipt.transcriptId)
+            materialized = conversation.materialized(transcriptId: result.receipt.transcriptId)
             guard loadedConversationID == conversation.id else { return materialized }
             loadedTranscriptID = result.receipt.transcriptId
             if let index = messages.firstIndex(where: { $0.id == optimisticID }) {
                 messages[index].isPending = false
             }
             onMaterialized?(materialized)
-            runID = result.inputState.activeRunId
-            await followRun(of: materialized, using: gateway)
-            return materialized
+            let activeRunID = result.inputState.activeRunId
+            if let activeRunID, activeRunID == runID, runObservation != nil { return materialized }
+            runID = activeRunID
         } catch is CancellationError {
             return nil
         } catch {
@@ -254,6 +245,8 @@ final class AssistantState {
             errorMessage = error.localizedDescription
             return nil
         }
+        await followRun(of: materialized, using: gateway)
+        return materialized
     }
 
     func pauseConversation() {
@@ -468,7 +461,6 @@ final class AssistantState {
         runID = nil
         activityLabel = nil
         await refreshClarification(for: conversation, using: gateway)
-        await refreshInputState(for: conversation, using: gateway)
     }
 
     func stop(using gateway: any GatewayServing) async {

@@ -77,21 +77,6 @@ struct AssistantSessionActionsView: View {
                     } label: {
                         optionRow("思考档位", value: thinkingLabel(options.thinkingLevel), symbol: "slider.horizontal.3")
                     }.disabled(options.isLoading)
-                    if !state.pendingInputs.isEmpty {
-                        NavigationLink {
-                            ScrollView {
-                                QueuedInputsCard(inputs: state.pendingInputs, errorMessage: state.queueError,
-                                                 isUpdating: state.isUpdatingQueue,
-                                                 onUpdate: { input, content in
-                                                     Task { await state.updateQueuedInput(input, content: content, in: conversation,
-                                                                                          using: GatewayClient(configuration: configuration)) }
-                                                 }, onCancel: { input in
-                                                     Task { await state.cancelQueuedInput(input, in: conversation,
-                                                                                          using: GatewayClient(configuration: configuration)) }
-                                                 }).padding()
-                            }.navigationTitle("后续消息队列")
-                        } label: { optionRow("后续消息队列", symbol: "square.and.pencil") }
-                    }
                 }
                 if !isTaskConversation {
                     Button {

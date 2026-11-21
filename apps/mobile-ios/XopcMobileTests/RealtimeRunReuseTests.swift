@@ -138,7 +138,7 @@ struct RealtimeRunReuseTests {
             ? "This is a streaming test. Use no tools. Write every number from 1 to 300 in order, separated by spaces."
             : "This is a latency test. Use no tools. Reply with exactly OK."
         let started = clock.now
-        let result = try await client.sendMessage(prompt, attachments: [], references: [], delivery: .next, to: conversation, clientMessageID: messageID)
+        let result = try await client.sendMessage(prompt, attachments: [], references: [], to: conversation, clientMessageID: messageID)
         let runID = try await resolveRun(client: client, conversation: conversation, result: result, messageID: messageID)
         let stream = try await runStream(client: client, runID: runID, reused: reused)
         var observation = ReplyObservation(sentAt: started)

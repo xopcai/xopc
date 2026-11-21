@@ -618,7 +618,6 @@ export const ChatComposer = memo(function ChatComposer({
 
   const editNeedsPause = currentMode.kind !== 'compose' && Boolean(inputControl && !inputControl.paused);
   const actions = useComposerActions({
-    personal,
     chat: m.chat,
     runBusy, draftScope, queuePaused: inputControl?.paused,
     editingUserTurnId, blocked: disabled || sendDisabled || editNeedsPause || inputControl?.phase === 'stopping',
@@ -643,9 +642,6 @@ export const ChatComposer = memo(function ChatComposer({
     onCommitEditFollowUp,
     onPendingFollowUpRemove,
     pendingFollowUpsCount: pendingFollowUps.length,
-    firstPendingFollowUpId: pendingFollowUps[0]?.id,
-    onSteerPendingFollowUp: onPendingFollowUpSteer,
-    steeringPending: Boolean(steeringFollowUpId),
     resetEditor: () => {
       editor.resetEditor();
     },
@@ -654,9 +650,6 @@ export const ChatComposer = memo(function ChatComposer({
     clearEditFollowUpRef,
     onUserTextCommitted,
   });
-
-  const submitFollowUp = useCallback((interrupt = false) => actions.flushSteeringDraft(interrupt),
-    [actions.flushSteeringDraft]);
 
   const openFollowUpInSideChat = useCallback((item: PendingFollowUp, preview: string) => {
     if (!conversationId || conversationId === 'new') return;
@@ -695,9 +688,8 @@ export const ChatComposer = memo(function ChatComposer({
     send: actions.send,
     runBusy,
     pendingFollowUpsCount: pendingFollowUps.length,
-    flushSteeringDraft: submitFollowUp,
+    submitFollowUp: () => actions.flushSteeringDraft(false, 'next'),
     steerDraft: () => actions.flushSteeringDraft(false, 'steer'),
-    steerCurrentReply: actions.steerCurrentReply,
     interruptDraft: actions.interruptDraft,
     editingFollowUpId,
     editingUserTurnId, onCancelUserMessageEdit,
@@ -975,7 +967,7 @@ export const ChatComposer = memo(function ChatComposer({
               ?? placeholder ?? contextualPlaceholder ?? (runBusyState
                 ? editingFollowUpId
                   ? m.chat.inputPlaceholderSteeringEdit
-                  : personal ? m.chat.inputPlaceholderPersonal : m.chat.inputPlaceholderSteering
+                  : m.chat.inputPlaceholderSteering
                 : m.chat.inputPlaceholder)
             }
             onWireInput={onComposerWireInput}

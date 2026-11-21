@@ -12,16 +12,13 @@ import { XopcLocalSession, XopcSessionCreation, XopcSessionCommand, XopcSessionC
 import {
   XopcSessionList, XopcSessionItem, XopcHistory, XopcCreateSession,
   XopcRun, XopcAbort, XopcRename, XopcChatAttachment,
-  XopcChatModels, XopcChatAgents, XopcAgentConfig, XopcQueueState, XopcQueuedInput, XopcQueueUpdate, XopcContextRef,
+  XopcChatModels, XopcChatAgents, XopcAgentConfig, XopcInputState, XopcContextRef,
   XopcInputResult, XopcExecutionDetail, XopcNextTurnSuggestion, XopcNextTurnSuggestionResponse
 } from '../model/chat';
 import { XopcProjectResult } from '../model/workspace';
 
 interface XopcSuggestionFeedback { suggestionId: string; impressionId: string; event: string; edited?: boolean; }
 interface XopcPreparationRetry { operationId: string; expectedRevision: number; idempotencyKey: string; executionMode?: string; }
-interface XopcQueuePatchCommand {
-  version: number; content?: string; attachments?: XopcInputAttachment[]; contextRefs?: XopcContextRef[]; thinking?: string; position?: number;
-}
 interface XopcReplaceTurnCommand {
   clientMessageId: string; content: string; attachments?: XopcInputAttachment[]; contextRefs?: XopcContextRef[];
   configVersion?: number; delivery: string; origin: XopcTurnClaim;
@@ -327,8 +324,8 @@ export class XopcChatRepository {
     if (!result.payload || typeof result.payload.active !== 'boolean') throw new Error('INVALID_RUN');
     return result.payload;
   }
-  async send(id: string, content: string, clientMessageId: string, transcriptId?: string, attachments: XopcChatAttachment[] = [], delivery: string = 'next', refs: XopcContextRef[] = [], taskId: string = ''): Promise<string> {
-    if (taskId) return this.sendTask(taskId, id, content, clientMessageId, transcriptId, attachments, delivery, refs);
+  async send(id: string, content: string, clientMessageId: string, transcriptId?: string, attachments: XopcChatAttachment[] = [], refs: XopcContextRef[] = [], taskId: string = ''): Promise<string> {
+    if (taskId) return this.sendTask(taskId, id, content, clientMessageId, transcriptId, attachments, refs);
     const scope = localSessionStore.scope();
     const connection = gatewaySession.connectionRevision();
     const draft = await this.draft(id);
@@ -362,7 +359,7 @@ export class XopcChatRepository {
       if (!transcriptId) transcriptId = (await this.history(id)).session.transcriptId;
       if (!transcriptId || config.configVersion === undefined) throw new Error('SESSION_IDENTITY_UNAVAILABLE');
       body = { kind: 'append', clientMessageId, expectedTranscriptId: transcriptId,
-        configVersion: config.configVersion, delivery, interrupt: delivery === 'steer' ? false : undefined, input };
+        configVersion: config.configVersion, delivery: 'steer', interrupt: false, input };
     }
     gatewaySession.assertConnection(connection);
     await localSessionStore.saveCommand(id, body, scope);
@@ -387,14 +384,14 @@ export class XopcChatRepository {
     return result.payload.inputState.activeRunId ?? '';
   }
   private async sendTask(taskId: string, id: string, content: string, clientMessageId: string,
-    transcriptId: string | undefined, attachments: XopcChatAttachment[], delivery: string,
+    transcriptId: string | undefined, attachments: XopcChatAttachment[],
     refs: XopcContextRef[]): Promise<string> {
     const connection = gatewaySession.connectionRevision();
     const config = await this.config(id);
     gatewaySession.assertConnection(connection);
     const result = JSON.parse(await gatewaySession.request('/api/tasks/' + encodeURIComponent(taskId) + '/inputs', 'POST',
       JSON.stringify({ clientMessageId, expectedTranscriptId: transcriptId, configVersion: config.configVersion,
-        delivery, content, origin: realtimeClient.turnClaim(),
+        delivery: 'steer', interrupt: false, content, origin: realtimeClient.turnClaim(),
         attachments: attachments.length ? attachments.map((item: XopcChatAttachment): XopcInputAttachment => ({
           type: item.type, name: item.name, mimeType: item.mimeType, size: item.size, data: item.data,
           workspaceRelativePath: item.workspaceRelativePath, uri: item.uri, durationSeconds: item.duration
@@ -451,11 +448,11 @@ export class XopcChatRepository {
       await this.store.write('chat-model.' + gatewayId + '.' + agentId, JSON.stringify(config));
     }
   }
-  async queue(id: string): Promise<XopcQueueState> {
+  async inputState(id: string): Promise<XopcInputState> {
     const draft = await this.draft(id);
-    if (draft && !draft.materialization) return { conversationId: id, inputs: [] };
-    const result = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/input-state')) as XopcPayload<XopcQueueState>;
-    if (result.payload?.conversationId !== id || !Array.isArray(result.payload.inputs)) throw new Error('INVALID_INPUT_STATE');
+    if (draft && !draft.materialization) return { conversationId: id };
+    const result = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/input-state')) as XopcPayload<XopcInputState>;
+    if (result.payload?.conversationId !== id) throw new Error('INVALID_INPUT_STATE');
     return result.payload;
   }
   async nextTurnSuggestion(id: string, locale: string): Promise<XopcNextTurnSuggestionResponse> {
@@ -474,26 +471,6 @@ export class XopcChatRepository {
     const body: XopcPreparationRetry = { operationId, expectedRevision: revision,
       idempotencyKey: operationId + ':' + revision.toString(), executionMode };
     await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/preparation/retry', 'POST', JSON.stringify(body));
-  }
-  async updateQueued(id: string, input: XopcQueuedInput, update: XopcQueueUpdate): Promise<XopcQueueState> {
-    const path = '/api/sessions/' + encodeURIComponent(id) + '/inputs/' + encodeURIComponent(input.id);
-    const body: XopcQueuePatchCommand = { version: input.version, content: update.content, thinking: update.thinking, position: update.position,
-      attachments: update.attachments?.map((item: XopcChatAttachment): XopcInputAttachment => ({
-        type: item.type, name: item.name, mimeType: item.mimeType, size: item.size, data: item.data,
-        workspaceRelativePath: item.workspaceRelativePath, uri: item.uri, durationSeconds: item.duration
-      })),
-      contextRefs: update.contextRefs?.map((ref: XopcContextRef): XopcContextRef => ({
-        kind: ref.kind, sourceId: ref.sourceId, expectedVersion: ref.expectedVersion
-      })) };
-    const result = JSON.parse(await gatewaySession.request(path, 'PATCH', JSON.stringify(body))) as XopcPayload<XopcQueueState>;
-    if (result.payload?.conversationId !== id || !Array.isArray(result.payload.inputs)) throw new Error('INVALID_INPUT_STATE');
-    return result.payload;
-  }
-  async cancelQueued(id: string, input: XopcQueuedInput): Promise<XopcQueueState> {
-    const path = '/api/sessions/' + encodeURIComponent(id) + '/inputs/' + encodeURIComponent(input.id) + '?version=' + input.version;
-    const result = JSON.parse(await gatewaySession.request(path, 'DELETE')) as XopcPayload<XopcQueueState>;
-    if (result.payload?.conversationId !== id || !Array.isArray(result.payload.inputs)) throw new Error('INVALID_INPUT_STATE');
-    return result.payload;
   }
   async replaceLatest(id: string, turnId: string, content: string, attachments: XopcChatAttachment[], refs: XopcContextRef[]): Promise<string> {
     const connection = gatewaySession.connectionRevision();

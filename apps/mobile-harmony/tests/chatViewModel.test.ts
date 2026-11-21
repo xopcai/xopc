@@ -138,7 +138,7 @@ describe('chat history isolation', () => {
     expect(chat.rows).toMatchObject([{ id: 'persisted', text: 'saved', sendState: 'failed' }]);
     mocks.send.mockResolvedValue('run'); await chat.retrySend('persisted');
     expect(mocks.send).toHaveBeenCalledWith('one', 'saved', 'persisted', 't',
-      [expect.objectContaining({ duration: 2, data: 'YQ==' })], 'steer', [], '');
+      [expect.objectContaining({ duration: 2, data: 'YQ==' })], [], '');
     expect(mocks.uuid).not.toHaveBeenCalled(); expect(chat.rows).toHaveLength(1); chat.dispose();
   });
 
@@ -159,7 +159,7 @@ describe('chat history isolation', () => {
     mocks.uuid.mockReturnValue('optimistic');
     let reject!: (error: Error) => void;
     mocks.send.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
-    const enqueued = vi.fn(); const pending = chat.send('hello', [], 'next', [], enqueued);
+    const enqueued = vi.fn(); const pending = chat.send('hello', [], [], enqueued);
     expect(enqueued).toHaveBeenCalledOnce();
     expect(chat.rows).toMatchObject([{ id: 'optimistic', text: 'hello', sendState: 'sending' }]);
     mocks.history.mockResolvedValue({ session: { key: 'one', transcriptId: 't', messages: [] }, pagination: { hasMore: false } });
@@ -172,22 +172,22 @@ describe('chat history isolation', () => {
     expect(chat.rows[0].sendState).toBe('failed');
     chat.dispose();
   });
-  it('keeps a follow-up out of the transcript until its queued turn starts', async () => {
+  it('reconciles an optimistic steering input with its transcript row', async () => {
     const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected'; chat.runId = 'current-run';
     mocks.uuid.mockReturnValue('follow-up');
     let accept!: (runId: string) => void;
     mocks.send.mockImplementationOnce(() => new Promise(resolve => { accept = resolve; }));
     const sending = chat.send('next question');
-    expect(chat.rows).toEqual([]);
+    expect(chat.rows).toMatchObject([{ id: 'follow-up', sendState: 'sending' }]);
     mocks.history.mockResolvedValue({ session: { key: 'one', transcriptId: 't', messages: [] }, pagination: { hasMore: false } });
-    await chat.loadHistory(false); expect(chat.rows).toEqual([]);
-    accept('current-run'); expect(await sending).toBe(true); expect(chat.rows).toEqual([]);
+    await chat.loadHistory(false); expect(chat.rows).toHaveLength(1);
+    accept('current-run'); expect(await sending).toBe(true); expect(chat.rows).toMatchObject([{ id: 'follow-up', sendState: 'sent' }]);
     mocks.history.mockResolvedValue({ session: { key: 'one', transcriptId: 't', messages: [
       { id: 'server-follow-up', role: 'user', content: 'next question', metadata: { clientMessageId: 'follow-up' } },
     ] }, pagination: { hasMore: false } });
     await chat.loadHistory(false); expect(chat.rows.map(row => row.id)).toEqual(['follow-up']); chat.dispose();
   });
-  it('shows a retryable message if queue submission fails', async () => {
+  it('shows a retryable message if steering fails', async () => {
     const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected'; chat.runId = 'current-run';
     mocks.uuid.mockReturnValue('failed-follow-up'); mocks.send.mockRejectedValue(new Error('NETWORK'));
     expect(await chat.send('next question')).toBe(false);
@@ -200,7 +200,7 @@ describe('chat history isolation', () => {
     mocks.send.mockRejectedValueOnce(new Error('NETWORK')).mockResolvedValueOnce('run');
     const file = { type: 'image', name: 'photo.png', mimeType: 'image/png', size: 1, data: 'YQ==' };
     const refs = [{ kind: 'note', sourceId: 'note', expectedVersion: 'v1' }];
-    await chat.send('first', [file], 'next', refs);
+    await chat.send('first', [file], refs);
     await chat.send('second');
     let resolve!: (run: string) => void;
     mocks.send.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
@@ -253,7 +253,7 @@ describe('chat history isolation', () => {
   it('creates an immediately retryable bubble offline and a distinct bubble for identical new input', async () => {
     const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'offline';
     mocks.uuid.mockReturnValueOnce('a').mockReturnValueOnce('b');
-    const enqueued = vi.fn(); await chat.send('hello', [], 'next', [], enqueued);
+    const enqueued = vi.fn(); await chat.send('hello', [], [], enqueued);
     await chat.send('hello');
     expect(enqueued).toHaveBeenCalledOnce(); expect(mocks.send).not.toHaveBeenCalled();
     expect(chat.rows.map(row => [row.id, row.sendState])).toEqual([['a', 'failed'], ['b', 'failed']]);
@@ -303,7 +303,7 @@ describe('chat history isolation', () => {
     const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
     mocks.uuid.mockReturnValue('input-1'); mocks.send.mockResolvedValue('run');
     const refs = [{ kind: 'note', sourceId: 'note', title: 'Notes' }];
-    await chat.send('hello', [{ type: 'image', name: 'a.png', mimeType: 'image/png', size: 1, data: 'YQ==' }], 'next', refs);
+    await chat.send('hello', [{ type: 'image', name: 'a.png', mimeType: 'image/png', size: 1, data: 'YQ==' }], refs);
     mocks.history.mockRejectedValueOnce(new Error('OFFLINE')); await chat.loadHistory(false);
     mocks.history.mockResolvedValue(sentPage(false)); await chat.loadHistory(false);
     expect(chat.rows[0].refs).toEqual(refs); expect(chat.rows[0].media?.[0].uri).toBe('data:image/png;base64,YQ==');
@@ -521,24 +521,23 @@ describe('chat history isolation', () => {
     const chat = new XopcChatViewModel(); const creating = chat.create(); chat.dispose(); finish('late'); await creating;
     expect(chat.selectedId).toBe(''); expect(mocks.history).not.toHaveBeenCalled();
   });
-  it('queues while running without resetting the live response or showing an early bubble', async () => {
+  it('steers while running without resetting the live response', async () => {
     const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected'; chat.runId = 'run'; chat.streaming = 'in progress';
     mocks.uuid.mockReturnValue('queued'); mocks.send.mockResolvedValue('run');
     expect(await chat.send('next turn')).toBe(true); expect(chat.streaming).toBe('in progress');
-    expect(chat.rows).toEqual([]);
-    expect(mocks.send.mock.calls[0][5]).toBe('next');
+    expect(chat.rows).toMatchObject([{ id: 'queued', sendState: 'sent' }]);
   });
-  it('includes steer and references in the idempotent retry identity', async () => {
+  it('keeps distinct send identities and forwards references', async () => {
     const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
     mocks.uuid.mockReturnValueOnce('a').mockReturnValueOnce('b').mockReturnValueOnce('c'); mocks.send.mockRejectedValue(new Error('network'));
-    await chat.send('text', [], 'next'); await chat.send('text', [], 'steer');
-    const refs = [{ kind: 'note', sourceId: 'n', expectedVersion: '1' }]; await chat.send('text', [], 'steer', refs);
-    expect(mocks.send.mock.calls.map(call => call[2])).toEqual(['a', 'b', 'c']); expect(mocks.send.mock.calls[2][6]).toEqual(refs);
+    await chat.send('text'); await chat.send('text');
+    const refs = [{ kind: 'note', sourceId: 'n', expectedVersion: '1' }]; await chat.send('text', [], refs);
+    expect(mocks.send.mock.calls.map(call => call[2])).toEqual(['a', 'b', 'c']); expect(mocks.send.mock.calls[2][5]).toEqual(refs);
   });
   it('sends a reference-only message', async () => {
     const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
     mocks.uuid.mockReturnValue('reference'); mocks.send.mockResolvedValue('run');
-    expect(await chat.send('', [], 'next', [{ kind: 'task', sourceId: 't', expectedVersion: '2' }])).toBe(true);
+    expect(await chat.send('', [], [{ kind: 'task', sourceId: 't', expectedVersion: '2' }])).toBe(true);
     expect(chat.rows[0].refs).toEqual([{ kind: 'task', sourceId: 't', expectedVersion: '2' }]);
   });
   it('replaces the latest turn and reloads authoritative history', async () => {

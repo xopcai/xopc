@@ -78,7 +78,7 @@ export interface XopcInput {
   contextRefs?: XopcContextRef[];
 }
 export interface XopcChatAttachment { type: string; name: string; mimeType: string; size: number; data: string; workspaceRelativePath?: string; uri?: string; duration?: number; }
-export interface XopcInputState { activeRunId?: string; }
+export interface XopcInputState { conversationId?: string; activeRunId?: string; preparation?: XopcSessionPreparation; }
 export interface XopcInputResult { state: XopcInputState; }
 export interface XopcRun { active: boolean; runId?: string; }
 export interface XopcAbort { runId: string; }
@@ -117,17 +117,7 @@ export interface XopcChatAgent { override?: XopcChatAgentOverride; id: string; n
 export interface XopcChatAgents { defaultId: string; agents: XopcChatAgent[]; }
 export interface XopcActivityDetail { default: string; override: string | null; effective: string; source: string; }
 export interface XopcAgentConfig { model?: string; thinkingLevel?: string; activityDetail?: XopcActivityDetail; effectiveWorkspacePath?: string; workingDirectoryLocked?: boolean; configVersion?: number; }
-export interface XopcQueuedInput {
-  id: string; clientMessageId: string; content: string; version: number; position: number;
-  kind: string; status: string; requestedDelivery: string; effectiveDelivery: string;
-  attachments?: XopcChatAttachment[]; contextRefs?: XopcQueuedContextRef[]; thinking?: string; error?: string;
-}
-export interface XopcQueuedContextRef { kind: string; sourceId: string; version: string; title?: string; }
 export interface XopcSessionPreparation { operationId: string; revision: number; state: string; lastError?: string; executionMode?: string; }
-export interface XopcQueueState { conversationId: string; activeRunId?: string; inputs: XopcQueuedInput[]; preparation?: XopcSessionPreparation; }
-export interface XopcQueueUpdate {
-  content?: string; attachments?: XopcChatAttachment[]; contextRefs?: XopcContextRef[]; thinking?: string; position?: number;
-}
 export interface XopcContextRef { kind: string; sourceId: string; expectedVersion: string; title?: string; }
 export interface XopcContextWorkItem { id: string; title: string; phase?: string; }
 export interface XopcContextWork { project?: XopcContextWorkItem; task?: XopcContextWorkItem; }

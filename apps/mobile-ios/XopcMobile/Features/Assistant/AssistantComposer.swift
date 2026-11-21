@@ -33,7 +33,6 @@ struct AssistantComposer: View {
     let onInputFocusChanged: (Bool) -> Void
     let onStop: () -> Void
     let onSend: () -> Void
-    let onSteer: () -> Void
     let onVoiceStart: () -> Void
     let onVoiceAttachment: (MessageAttachment) -> Void
 
@@ -66,9 +65,6 @@ struct AssistantComposer: View {
             if let attachmentError {
                 TransientComposerFeedback(message: attachmentError) { self.attachmentError = nil }
                     .accessibilityLabel(AppLocalization.resolve("附件错误：\(attachmentError)", locale: locale))
-            }
-            if isRunActive, hasPayload {
-                activeRunActions
             }
             if paletteQuery != nil, !isActionPanelExpanded {
                 paletteSuggestions
@@ -176,21 +172,6 @@ struct AssistantComposer: View {
         }
     }
 
-    private var activeRunActions: some View {
-        HStack(spacing: 8) {
-            Text(LocalizedStringKey(
-                canSteer ? "发送可加入待处理，也可立即引导当前回答" : "附件和引用会加入待处理消息"
-            ))
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if canSteer {
-                Button("引导当前回答", action: onSteer)
-                    .font(.caption.weight(.semibold))
-            }
-        }
-    }
-
     private var controls: some View {
         HStack(spacing: 8) {
             Button {
@@ -251,7 +232,7 @@ struct AssistantComposer: View {
                         .frame(width: 40, height: 44)
                 }
                 .disabled(!sendEnabled)
-                .accessibilityLabel(AppLocalization.string(isRunActive ? "加入待处理" : "发送", locale: locale))
+                .accessibilityLabel(AppLocalization.string("发送", locale: locale))
                 .accessibilityIdentifier("assistant-chat-send")
             }
         }
@@ -443,10 +424,6 @@ struct AssistantComposer: View {
 
     private var panelAnimation: Animation? {
         reduceMotion ? nil : .easeInOut(duration: 0.2)
-    }
-
-    private var canSteer: Bool {
-        attachments.isEmpty && references.isEmpty
     }
 
     private var placeholder: String {

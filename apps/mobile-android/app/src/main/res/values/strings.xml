@@ -186,14 +186,6 @@
     <string name="assistant_thinking_max">Maximum</string>
     <string name="assistant_thinking_ultra">Ultra</string>
     <string name="assistant_thinking_unknown">Other</string>
-    <string name="assistant_queue">Follow-up queue</string>
-    <string name="assistant_queue_empty">No follow-up messages queued.</string>
-    <string name="assistant_queue_error">Could not update the queue. Refresh and try again.</string>
-    <string name="assistant_queue_attachment">Attachment or reference</string>
-    <string name="assistant_queue_edit">Edit follow-up</string>
-    <string name="assistant_queue_remove">Remove</string>
-    <string name="assistant_queue_earlier">Move earlier</string>
-    <string name="assistant_queue_later">Move later</string>
     <string name="voice_speaking">Speaking…</string>
     <string name="assistant_model_search">Search models</string>
     <string name="assistant_model_error">Could not load or change the model. Refresh the list and try again.</string>

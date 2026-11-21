@@ -8,31 +8,33 @@ import { ChatComposerInput, type ComposerKbdContext } from '../chat-composer-inp
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('composer keyboard submission', () => {
-  describe.each(['metaKey', 'ctrlKey'])('%s+Enter steering', modifier => {
-    it.each(['draft', 'queue', 'queue-and-draft', 'empty', 'idle', 'editing', 'composing', 'repeat', 'disabled', 'hidden'])('handles %s without interrupting', mode => {
+  describe.each(['Enter', 'metaKey', 'ctrlKey'])('%s submission', modifier => {
+    it.each(modifier === 'Enter' ? ['draft', 'queue-and-draft'] :
+      ['draft', 'queue', 'queue-and-draft', 'empty', 'idle', 'editing', 'composing', 'repeat', 'disabled', 'hidden'])('handles %s without interrupting', mode => {
       const container = document.createElement('div'); document.body.append(container);
       const root = createRoot(container);
       const editorRef = { current: null as HTMLDivElement | null };
       const handleKey = vi.fn(() => true);
       const queued = mode === 'queue' || mode === 'queue-and-draft';
       const state: ComposerKbdContext = { adapters: [], send: vi.fn(), runBusy: mode !== 'idle',
-        pendingFollowUpsCount: queued ? 2 : 0, steerDraft: vi.fn(), steerCurrentReply: vi.fn(),
+        pendingFollowUpsCount: queued ? 2 : 0, steerDraft: vi.fn(), submitFollowUp: vi.fn(),
         interruptDraft: vi.fn(), editingFollowUpId: mode === 'editing' ? 'queued' : null,
         onCancelEditFollowUp: vi.fn(), attachmentsLen: 0, contextRefsLen: 0, isComposing: false,
         valueRef: { current: mode === 'queue' || mode === 'empty' ? '' : 'Keep this draft' },
         adjustHeight: vi.fn(), editorRef };
-      // A picker must not capture the run-control shortcut.
-      if (queued || mode === 'draft') state.adapters = [{ name: 'picker', isActive: () => true, handleKey }];
+      // A picker must not capture the Follow shortcut.
+      if (modifier !== 'Enter' && (queued || mode === 'draft')) state.adapters = [{ name: 'picker', isActive: () => true, handleKey }];
       act(() => root.render(<ChatComposerInput editorRef={editorRef} disabled={mode === 'disabled'} hidden={mode === 'hidden'} placeholder="Message"
         onWireInput={vi.fn()} adjustHeight={vi.fn()} processFiles={async () => {}} processPastedText={async () => {}}
         setIsComposing={vi.fn()} kbdRef={{ current: state }} chatMessages={{ clipboardFileTypeUnsupported: 'Unsupported' }} />));
       try {
-        act(() => editorRef.current!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', [modifier]: true,
+        act(() => editorRef.current!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ...(modifier === 'Enter' ? {} : { [modifier]: true }),
           isComposing: mode === 'composing', repeat: mode === 'repeat', bubbles: true })));
         expect(state.steerDraft).not.toHaveBeenCalled();
-        expect(state.steerCurrentReply).toHaveBeenCalledTimes(queued || mode === 'draft' ? 1 : 0);
+        const follows = modifier !== 'Enter' && (mode === 'queue-and-draft' || mode === 'draft');
+        expect(state.submitFollowUp).toHaveBeenCalledTimes(follows ? 1 : 0);
         expect(state.interruptDraft).not.toHaveBeenCalled();
-        expect(state.send).not.toHaveBeenCalled();
+        expect(state.send).toHaveBeenCalledTimes(modifier === 'Enter' ? 1 : 0);
         expect(handleKey).not.toHaveBeenCalled();
       } finally { act(() => root.unmount()); container.remove(); }
     });
@@ -86,7 +88,7 @@ describe('composer keyboard submission', () => {
     const root = createRoot(container);
     const editorRef = { current: null as HTMLDivElement | null };
     const state: ComposerKbdContext = { adapters: [], send: vi.fn(), runBusy, pendingFollowUpsCount: 2,
-      flushSteeringDraft: vi.fn(), interruptDraft: vi.fn(), editingFollowUpId: null, editingUserTurnId: 'original',
+      submitFollowUp: vi.fn(), interruptDraft: vi.fn(), editingFollowUpId: null, editingUserTurnId: 'original',
       onCancelEditFollowUp: vi.fn(), onCancelUserMessageEdit: vi.fn(), attachmentsLen: 0, contextRefsLen: 0,
       isComposing: false, valueRef: { current: 'edited original' }, adjustHeight: vi.fn(), editorRef };
     act(() => root.render(<ChatComposerInput editorRef={editorRef} disabled={false} placeholder="Message"
@@ -95,7 +97,7 @@ describe('composer keyboard submission', () => {
     try {
       act(() => editorRef.current!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
       expect(state.send).toHaveBeenCalledOnce();
-      expect(state.flushSteeringDraft).not.toHaveBeenCalled();
+      expect(state.submitFollowUp).not.toHaveBeenCalled();
       act(() => editorRef.current!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })));
       expect(state.interruptDraft).not.toHaveBeenCalled();
       act(() => editorRef.current!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));

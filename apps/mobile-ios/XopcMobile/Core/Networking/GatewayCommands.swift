@@ -88,7 +88,8 @@ struct AppendMessageCommand: Encodable {
     let clientMessageId: String
     let expectedTranscriptId: String
     let configVersion: Int
-    let delivery: String
+    let delivery = "steer"
+    let interrupt = false
     let input: MessageInputCommand
     let origin: DeviceEndpointOrigin
 }
@@ -121,11 +122,6 @@ struct ClarificationResponseCommand: Codable, Equatable {
     let idempotencyKey: String
     var schemaVersion: Int?
     var answers: [ClarificationAnswer]?
-}
-
-struct QueuedInputUpdateCommand: Encodable {
-    let version: Int
-    let content: String
 }
 
 struct EmptyCommand: Encodable {}

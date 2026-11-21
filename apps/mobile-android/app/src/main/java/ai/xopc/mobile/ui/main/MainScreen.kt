@@ -413,9 +413,6 @@ internal fun MainScreen(
   onReloadModels: () -> Unit = {},
   onSelectModel: (String) -> Unit = {},
   onSelectThinking: (String) -> Unit = {},
-  onLoadQueuedInputs: () -> Unit = {},
-  onUpdateQueuedInput: (String, String?, Int?) -> Unit = { _, _, _ -> },
-  onCancelQueuedInput: (String) -> Unit = {},
   onReloadAgents: () -> Unit = {},
   onSwitchAgent: (String, Boolean) -> Unit = { _, _ -> },
   onReloadContext: () -> Unit = {},
@@ -737,9 +734,6 @@ internal fun MainScreen(
     onRetryPendingInput = onRetryPendingInput, onStopRun = onStopRun,
     onReloadModels = onReloadModels, onSelectModel = onSelectModel,
     onSelectThinking = onSelectThinking,
-    onLoadQueuedInputs = onLoadQueuedInputs,
-    onUpdateQueuedInput = onUpdateQueuedInput,
-    onCancelQueuedInput = onCancelQueuedInput,
     onReloadAgents = onReloadAgents, onSwitchAgent = onSwitchAgent,
     onReloadContext = onReloadContext, onLoadContextPanel = onLoadContextPanel,
     onSetContextDirectory = onSetContextDirectory, onAddContextFile = onAddContextFile,
@@ -945,9 +939,6 @@ internal fun MainContent(
   onReloadModels: () -> Unit = {},
   onSelectModel: (String) -> Unit = {},
   onSelectThinking: (String) -> Unit = {},
-  onLoadQueuedInputs: () -> Unit = {},
-  onUpdateQueuedInput: (String, String?, Int?) -> Unit = { _, _, _ -> },
-  onCancelQueuedInput: (String) -> Unit = {},
   onReloadAgents: () -> Unit = {},
   onSwitchAgent: (String, Boolean) -> Unit = { _, _ -> },
   onReloadContext: () -> Unit = {},
@@ -1724,8 +1715,8 @@ internal fun MainContent(
           onCreateConversation, onLoadOlderHistory, onLoadReferences, onAddDraftRef,
           onNoteFileContent,
           onRetryPendingInput,
-          onReloadModels, onSelectModel, onSelectThinking, onLoadQueuedInputs,
-          onUpdateQueuedInput, onCancelQueuedInput, onReloadAgents, onSwitchAgent,
+          onReloadModels, onSelectModel, onSelectThinking,
+          onReloadAgents, onSwitchAgent,
           onReloadContext,
           onLoadContextPanel, onSetContextDirectory, onAddContextFile, onCreateContextConversation,
           onRefreshClarification, onRespondToClarification, onRefreshConnectionWait, onConnectionWaitAction,
@@ -2773,9 +2764,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   onRetryPendingInput: () -> Unit,
   onReloadModels: () -> Unit, onSelectModel: (String) -> Unit,
   onSelectThinking: (String) -> Unit,
-  onLoadQueuedInputs: () -> Unit,
-  onUpdateQueuedInput: (String, String?, Int?) -> Unit,
-  onCancelQueuedInput: (String) -> Unit,
   onReloadAgents: () -> Unit, onSwitchAgent: (String, Boolean) -> Unit,
   onReloadContext: () -> Unit,
   onLoadContextPanel: (String, String, String) -> Unit,
@@ -2865,9 +2853,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
       if (connection.modelError) { pendingModelChoice = null; pendingThinkingChoice = null }
     }
   }
-  var queueOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
-  var editingQueuedId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
-  var editingQueuedContent by remember(connection.selectedConversationId) { mutableStateOf("") }
   var modelQuery by remember(connection.selectedConversationId) { mutableStateOf("") }
   var agentQuery by remember(connection.selectedConversationId) { mutableStateOf("") }
   LaunchedEffect(agentPickerOpen) {
@@ -2885,7 +2870,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
 
   val optionsLabel = stringResource(R.string.assistant_options)
   val optimisticUser = connection.chatSendMessageId?.takeIf { id ->
-    connection.optimisticText.isNotBlank() && !connection.chatSendQueued && connection.messages.none { it.renderId == id }
+    connection.optimisticText.isNotBlank() && connection.messages.none { it.renderId == id }
   }?.let { ConversationMessage(it, "user", connection.optimisticText) }
   val displayMessages = remember(connection.messages, connection.liveMessages, optimisticUser) {
     chatPresentationMessages(connection.messages + listOfNotNull(optimisticUser), connection.liveMessages)
@@ -3025,7 +3010,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   }
   var observedSendSequence by remember(readingPosition) { mutableStateOf(connection.chatSendSequence) }
   LaunchedEffect(connection.chatSendSequence) {
-    if (connection.chatSendSequence != observedSendSequence && !connection.chatSendQueued &&
+    if (connection.chatSendSequence != observedSendSequence &&
       connection.chatSendMessageId != null) {
       olderAnchor = null
       followBottom = true
@@ -3693,7 +3678,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
             ContextRow(thinkingLevelLabel(level), if (level == connection.thinkingLevel) "✓" else "",
               "thinking-$level", flat = true,
               enabled = !connection.modelsLoading && !connection.modelSaving && !connection.sending &&
-                connection.activeRunId == null && connection.pendingInput == null && connection.queuedInputs.isEmpty()) {
+                connection.activeRunId == null && connection.pendingInput == null) {
               if (level == connection.thinkingLevel) closeOptions()
               else { pendingThinkingChoice = level; onSelectThinking(level) }
             }
@@ -3804,10 +3789,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
             }, "assistant-thinking", iconRes = R.drawable.action_waveform, compact = true, flat = true) {
             optionsOpen = false; thinkingPickerOpen = true
           }
-          if (connection.queuedInputs.isNotEmpty()) ContextRow(stringResource(R.string.assistant_queue), "", "assistant-queue",
-            iconRes = R.drawable.action_new_chat, compact = true, flat = true) {
-            optionsOpen = false; queueOpen = true; onLoadQueuedInputs()
-          }
         }
         ContextRow(stringResource(R.string.assistant_action_new_chat), "", "assistant-new",
           iconRes = R.drawable.action_new_chat, compact = true, flat = true,
@@ -3887,66 +3868,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
     SessionFilesDetails(connection.contextPanel, onLoadContextPanel, onSessionFileContent) {
       sessionFilesOpen = false
     }
-  }
-  if (queueOpen) ModalBottomSheet(onDismissRequest = { queueOpen = false }) {
-    ChatOptionsPanel(stringResource(R.string.assistant_queue),
-      (156 + connection.queuedInputs.size * 92).coerceIn(240, 620).dp,
-      onClose = { queueOpen = false }) {
-      Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        TextButton(onClick = onLoadQueuedInputs, enabled = !connection.queueBusy) {
-          Text(stringResource(R.string.personal_retry))
-        }
-        if (connection.queueLoading) ChatOptionsSkeleton()
-        else if (connection.queueBusy) BrandLoadingIndicator()
-        if (connection.queueError) Text(stringResource(R.string.assistant_queue_error),
-          color = MaterialTheme.colorScheme.error)
-        if (!connection.queueLoading && connection.queuedInputs.isEmpty()) {
-          Text(stringResource(R.string.assistant_queue_empty),
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        connection.queuedInputs.forEachIndexed { index, input ->
-          Card(modifier = Modifier.fillMaxWidth().testTag("queued-${input.id}")) {
-            Column(Modifier.fillMaxWidth().padding(12.dp)) {
-              Text(input.content.ifBlank { stringResource(R.string.assistant_queue_attachment) },
-                maxLines = 3, overflow = TextOverflow.Ellipsis)
-              val earlierLabel = stringResource(R.string.assistant_queue_earlier)
-              val laterLabel = stringResource(R.string.assistant_queue_later)
-              Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = {
-                  editingQueuedId = input.id; editingQueuedContent = input.content
-                }, enabled = !connection.queueBusy) { Text(stringResource(R.string.progress_edit_task)) }
-                TextButton(onClick = { onUpdateQueuedInput(input.id, null, index - 1) },
-                  enabled = !connection.queueBusy && index > 0,
-                  modifier = Modifier.semantics { contentDescription = earlierLabel }) { Text("↑") }
-                TextButton(onClick = { onUpdateQueuedInput(input.id, null, index + 1) },
-                  enabled = !connection.queueBusy && index < connection.queuedInputs.lastIndex,
-                  modifier = Modifier.semantics { contentDescription = laterLabel }) { Text("↓") }
-                TextButton(onClick = { onCancelQueuedInput(input.id) },
-                  enabled = !connection.queueBusy) { Text(stringResource(R.string.assistant_queue_remove)) }
-              }
-            }
-          }
-        }
-        Spacer(Modifier.height(16.dp))
-      }
-    }
-  }
-  editingQueuedId?.let { inputId ->
-    val input = connection.queuedInputs.firstOrNull { it.id == inputId }
-    AlertDialog(onDismissRequest = { editingQueuedId = null },
-      title = { Text(stringResource(R.string.assistant_queue_edit)) },
-      text = { OutlinedTextField(editingQueuedContent, { editingQueuedContent = it },
-        modifier = Modifier.fillMaxWidth(), maxLines = 5) },
-      confirmButton = { TextButton(onClick = {
-        onUpdateQueuedInput(inputId, editingQueuedContent, null)
-        editingQueuedId = null
-      }, enabled = !connection.queueBusy &&
-        (editingQueuedContent.isNotBlank() || (input?.attachmentCount ?: 0) > 0 ||
-          (input?.referenceCount ?: 0) > 0)) { Text(stringResource(R.string.progress_save)) } },
-      dismissButton = { TextButton(onClick = { editingQueuedId = null }) {
-        Text(stringResource(R.string.progress_cancel))
-      } })
   }
   pendingAgentId?.let { agentId ->
     AlertDialog(onDismissRequest = { pendingAgentId = null },

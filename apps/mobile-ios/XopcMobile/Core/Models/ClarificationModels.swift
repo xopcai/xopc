@@ -143,61 +143,12 @@ struct InputState: Decodable, Sendable {
     let conversationId: String?
     let revision: Int?
     let activeRunId: String?
-    let inputs: [QueuedInput]
 
-    init(
-        conversationId: String? = nil,
-        revision: Int? = nil,
-        activeRunId: String?,
-        inputs: [QueuedInput] = []
-    ) {
+    init(conversationId: String? = nil, revision: Int? = nil, activeRunId: String?) {
         self.conversationId = conversationId
         self.revision = revision
         self.activeRunId = activeRunId
-        self.inputs = inputs
     }
-}
-
-struct QueuedInput: Decodable, Equatable, Identifiable, Sendable {
-    let id: String
-    let content: String
-    let status: String
-    let version: Int
-    let position: Int
-    let requestedDelivery: String
-    let effectiveDelivery: String
-    let error: String?
-    let attachments: [QueuedAttachment]?
-    let contextRefs: [QueuedContextReference]?
-
-    var isPending: Bool {
-        status == "queued" || status == "injecting" || status == "interrupted"
-    }
-
-    var payloadDescription: String {
-        if !content.isEmpty {
-            return content
-        }
-        var parts: [String] = []
-        if let count = attachments?.count, count > 0 {
-            parts.append(AppLocalization.resolve("\(count) 个附件"))
-        }
-        if let count = contextRefs?.count, count > 0 {
-            parts.append(AppLocalization.resolve("\(count) 个引用"))
-        }
-        return parts.isEmpty ? AppLocalization.resolve("待处理消息") : parts.joined(separator: AppLocalization.resolve("、"))
-    }
-}
-
-struct QueuedAttachment: Decodable, Equatable, Sendable {
-    let name: String
-}
-
-struct QueuedContextReference: Decodable, Equatable, Sendable {
-    let kind: String
-    let sourceId: String
-    let version: String
-    let title: String?
 }
 
 struct MessageAttachment: Codable, Equatable, Identifiable, Sendable {
@@ -317,11 +268,6 @@ struct HistoryAttachment: Decodable, Equatable, Identifiable, Sendable {
     var isAudio: Bool {
         type == "audio" || type == "voice" || mimeType?.hasPrefix("audio/") == true
     }
-}
-
-enum MessageDelivery: String, Sendable {
-    case next
-    case steer
 }
 
 extension HistoryAttachment {

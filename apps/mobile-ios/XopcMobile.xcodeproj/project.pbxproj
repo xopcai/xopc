@@ -159,7 +159,6 @@
 		DA875680CA67E6FAF3CBC499 /* MobileTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 295CD90FB2DA31FAFC85BFFE /* MobileTypography.swift */; };
 		DAC72E229A39C56CE35A7B92 /* PersonalAgentModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076122C9C3F415A2B074DFDF /* PersonalAgentModels.swift */; };
 		DCF210105CD10B50485F0B84 /* TaskStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC0F457AA22A80B769AA46F /* TaskStatusView.swift */; };
-		DD51A4D23BB63E54D262EB58 /* QueuedInputsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52BAE7D015632E4519B92D8D /* QueuedInputsCard.swift */; };
 		DD5702CC828B354471A6D4A9 /* GatewayClient+ComposerPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7636CD1ED5D767EF95BA7686 /* GatewayClient+ComposerPalette.swift */; };
 		DD6B1272BC1F7275DD29BBD9 /* ChartMarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E166E1B5840371D24051286 /* ChartMarkdownTests.swift */; };
 		DD6E1A6317903F1A6FB42767 /* ChatMessageLinkRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B1323B1C44E84AFD108F23 /* ChatMessageLinkRouter.swift */; };
@@ -184,7 +183,6 @@
 		FA4EA63AEACD1C8233385ED5 /* GatewayProfilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 945CE29DD9EAD63F09B42935 /* GatewayProfilesView.swift */; };
 		FBE326F33F011E10896B7857 /* ProjectCreationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D825661BEBDD6B5A541C267 /* ProjectCreationTests.swift */; };
 		FC5EB41C7187DC427747B0E0 /* ChatImageGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65101BB9679A52D58EB62AB5 /* ChatImageGalleryView.swift */; };
-		FC66CBF9FC68FF2FF67F7746 /* AssistantQueueState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 558536AF0FCE145886FA6752 /* AssistantQueueState.swift */; };
 		FD6CD0A3A8874B471BB33039 /* ComposerPaletteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3003466FB074E17B87C16573 /* ComposerPaletteModels.swift */; };
 		FE66EE9309201D6A097D28D4 /* ExternalIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E3CBB52452A6FB90FFCE605 /* ExternalIntakeTests.swift */; };
 		FEBFD502ABB07520200FF6F2 /* TaskConversationCommandTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A70995A952387C4A3D91A23 /* TaskConversationCommandTests.swift */; };
@@ -301,10 +299,8 @@
 		4F43FC9CB4D62D76AD60D32C /* PhoneRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneRepository.swift; sourceTree = "<group>"; };
 		50E398C828EE423F4B907D7B /* ExternalIntakeModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalIntakeModifier.swift; sourceTree = "<group>"; };
 		522631A59FE71F4BD8629CB2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		52BAE7D015632E4519B92D8D /* QueuedInputsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueuedInputsCard.swift; sourceTree = "<group>"; };
 		531D335060F09BBFF5ECBCB0 /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesView.swift; sourceTree = "<group>"; };
 		534B8A85AE51F975E4104C07 /* AssistantComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantComposer.swift; sourceTree = "<group>"; };
-		558536AF0FCE145886FA6752 /* AssistantQueueState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantQueueState.swift; sourceTree = "<group>"; };
 		58CC94202B1957EB28AC9543 /* FilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilesView.swift; sourceTree = "<group>"; };
 		59B9D0794B0D4CE399A11BC8 /* ExecutionDetailModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionDetailModels.swift; sourceTree = "<group>"; };
 		5A21ADCB00C6EC5E7859AE32 /* GatewayClient+Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+Conversation.swift"; sourceTree = "<group>"; };
@@ -446,7 +442,6 @@
 				534B8A85AE51F975E4104C07 /* AssistantComposer.swift */,
 				F0255B2AC32A3E02B25D4469 /* AssistantOptionsState.swift */,
 				25DA3228471D55EE4704F260 /* AssistantOptionsView.swift */,
-				558536AF0FCE145886FA6752 /* AssistantQueueState.swift */,
 				E8D33D5255A8BCFF3E0B3116 /* AssistantState.swift */,
 				70704AB00AC699933B3594B2 /* AssistantState+RunLookup.swift */,
 				BBF31D5A622F5FAA38FBFABB /* AssistantTaskResults.swift */,
@@ -479,7 +474,6 @@
 				18359BD966C6EB92C033C1D4 /* MessageDetailView.swift */,
 				F01D9DD109BB37799192FCCE /* PersonalAgentAvatar.swift */,
 				87AFFC731003CDBDAF75F823 /* PersonalAgentOverview.swift */,
-				52BAE7D015632E4519B92D8D /* QueuedInputsCard.swift */,
 				3E0EBB6C3755BDF0256201CB /* RealtimeVoiceAudio.swift */,
 				011E551E82084F5A029CEABC /* RealtimeVoiceCall.swift */,
 				2C60A2CB1866CC9F7F23E108 /* RealtimeVoiceCallView.swift */,
@@ -966,7 +960,6 @@
 				8DF6BCEE61CB87E56A8DBDEF /* AssistantComposer.swift in Sources */,
 				C9947C87AE5057F15DC51FB7 /* AssistantOptionsState.swift in Sources */,
 				14DF591B12C7D14CF991550D /* AssistantOptionsView.swift in Sources */,
-				FC66CBF9FC68FF2FF67F7746 /* AssistantQueueState.swift in Sources */,
 				D32024AC92F728079D7A4EF3 /* AssistantState+RunLookup.swift in Sources */,
 				50E083DE84A577E1A4201E91 /* AssistantState.swift in Sources */,
 				94CFF81C365FED2D2AACE3ED /* AssistantTaskResults.swift in Sources */,
@@ -1072,7 +1065,6 @@
 				D1FDC69D2A43C3BD75C1FA16 /* ProjectManageView.swift in Sources */,
 				124B70EBED2EFABA81F75A48 /* ProjectTaskEditorView.swift in Sources */,
 				5C03D1F5634810BE2BA63B97 /* ProjectTaskMutation.swift in Sources */,
-				DD51A4D23BB63E54D262EB58 /* QueuedInputsCard.swift in Sources */,
 				A72C2C6F9AE30E9813D40BA2 /* RealtimeRunSocket.swift in Sources */,
 				7E1CC8A93454D7792460D252 /* RealtimeVoiceAudio.swift in Sources */,
 				D1AC366C652CBF7C398A77F7 /* RealtimeVoiceCall.swift in Sources */,

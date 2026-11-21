@@ -556,7 +556,6 @@ struct AssistantView<Dock: View>: View {
                             .frame(minHeight: 44)
                         }
                         clarificationCard
-                        queueCard
                         personalConnectionCard
                         if automationSetup {
                             ContentUnavailableView("用对话创建定时任务", systemImage: "clock",
@@ -712,7 +711,6 @@ struct AssistantView<Dock: View>: View {
             if let errorMessage = state.errorMessage {
                 ErrorBanner(message: errorMessage)
             }
-            queueCard
             personalConnectionCard
             ForEach(state.messages.filter { $0.role != "assistant" || $0.answerConfirmed }, id: \.scrollID) { message in
                 timelineMessageRow(message, cards: cards, maximumMessageWidth: maximumMessageWidth,
@@ -1047,7 +1045,7 @@ struct AssistantView<Dock: View>: View {
     private var suggestionKey: NextTurnObservationKey {
         let eligible = isActive && scenePhase == .active && !sidebarOpen && !showingPhone && !startingVoice
             && !voiceMode && !isActionPanelExpanded && !state.isLoadingHistory && !state.isSending && !state.isRunActive
-            && state.clarification == nil && state.pendingInputs.isEmpty && draft.isEmpty
+            && state.clarification == nil && draft.isEmpty
             && attachments.isEmpty && references.isEmpty && !showingPhotoPicker && !showingFilePicker
             && !showingCameraPicker && !showingReferencePicker
         let target = conversation.flatMap {
@@ -1094,15 +1092,14 @@ struct AssistantView<Dock: View>: View {
             onStop: {
                 Task { await state.stop(using: GatewayClient(configuration: configuration)) }
             },
-            onSend: { send(delivery: .next) },
-            onSteer: { send(delivery: .steer) },
+            onSend: { send() },
             onVoiceStart: {
                 music.yieldAudioSession()
                 readAloud.stop()
                 assistantAudio.stop()
                 presentedGeneratedVideo = nil
             },
-            onVoiceAttachment: { send(delivery: .next, voice: $0) }
+            onVoiceAttachment: { send(voice: $0) }
         )
     }
 
@@ -1661,36 +1658,6 @@ private extension AssistantView {
     var personalConnectionCard: some View {
         if isPersonalConversation, let conversation, !conversation.isDraft {
             PersonalConnectionCard(configuration: configuration, conversationID: conversation.id)
-        }
-    }
-
-    @ViewBuilder
-    var queueCard: some View {
-        if !state.pendingInputs.isEmpty, let conversation {
-            QueuedInputsCard(
-                inputs: state.pendingInputs,
-                errorMessage: state.queueError,
-                isUpdating: state.isUpdatingQueue,
-                onUpdate: { input, content in
-                    Task {
-                        await state.updateQueuedInput(
-                            input,
-                            content: content,
-                            in: conversation,
-                            using: GatewayClient(configuration: configuration)
-                        )
-                    }
-                },
-                onCancel: { input in
-                    Task {
-                        await state.cancelQueuedInput(
-                            input,
-                            in: conversation,
-                            using: GatewayClient(configuration: configuration)
-                        )
-                    }
-                }
-            )
         }
     }
 

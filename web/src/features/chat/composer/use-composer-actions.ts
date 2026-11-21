@@ -45,7 +45,6 @@ function harvestDraft(opts: {
 
 export interface UseComposerActionsOptions {
   chat: ChatMessages;
-  personal?: boolean;
   runBusy: boolean;
   voiceActive: boolean;
   cancelVoiceInput: () => void;
@@ -76,9 +75,6 @@ export interface UseComposerActionsOptions {
   ) => void | boolean | Promise<boolean>;
   onPendingFollowUpRemove: (id: string) => void;
   pendingFollowUpsCount: number;
-  firstPendingFollowUpId?: string;
-  onSteerPendingFollowUp?: (id: string) => void;
-  steeringPending?: boolean;
 
   resetEditor: () => void;
   clearAttachments: () => void;
@@ -92,7 +88,6 @@ export interface UseComposerActionsReturn {
   send: () => void;
   flushSteeringDraft: (interrupt?: boolean, delivery?: 'next' | 'steer') => Promise<void>;
   interruptDraft: () => void;
-  steerCurrentReply: () => void;
 }
 
 export function useComposerActions(options: UseComposerActionsOptions): UseComposerActionsReturn {
@@ -209,8 +204,8 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
   ]);
 
   const flushSteeringDraft = useCallback(async (
-    interrupt = options.personal ? false : undefined,
-    delivery: 'next' | 'steer' | undefined = options.personal ? 'steer' : undefined,
+    interrupt = false,
+    delivery: 'next' | 'steer' = 'steer',
   ) => {
     if (latestOptions.current.editingFollowUpId || latestOptions.current.editingUserTurnId) { send(); return; }
     if (!runBusy && pendingFollowUpsCount === 0) return;
@@ -232,12 +227,8 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
 
     followUpSubmissionRef.current = true;
     try {
-      const args: Parameters<NonNullable<typeof onAddPendingFollowUp>> = [draft.text,
-        draft.attachments.length > 0 ? draft.attachments : undefined,
-        draft.contextRefs.length > 0 ? draft.contextRefs : undefined];
-      if (interrupt !== undefined || delivery !== undefined) args.push(interrupt);
-      if (delivery !== undefined) args.push(delivery);
-      await onAddPendingFollowUp(...args);
+      await onAddPendingFollowUp(draft.text, draft.attachments.length ? draft.attachments : undefined,
+        draft.contextRefs.length ? draft.contextRefs : undefined, interrupt, delivery);
       onUserTextCommitted?.(draft.text);
       const latest = latestOptions.current;
       if (latest.draftScope !== options.draftScope || latest.editingFollowUpId || latest.editingUserTurnId
@@ -263,7 +254,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     onAddPendingFollowUp,
     onCommitEditFollowUp,
     getThinkingLevel,
-    options.personal, options.draftScope,
+    options.draftScope,
     m.followUpQueueMaxReached,
     m.followUpQueueSubmitFailed,
     clearEditFollowUpRef,
@@ -327,16 +318,5 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     getContextRefs,
   ]);
 
-  const steerCurrentReply = useCallback(() => {
-    const latest = latestOptions.current;
-    if (!latest.runBusy || latest.blocked || latest.voiceActive || latest.steeringPending
-      || latest.editingFollowUpId || latest.editingUserTurnId) return;
-    if (!latest.personal && latest.pendingFollowUpsCount > 0) {
-      if (latest.firstPendingFollowUpId) latest.onSteerPendingFollowUp?.(latest.firstPendingFollowUpId);
-      return;
-    }
-    void flushSteeringDraft(false, 'steer');
-  }, [flushSteeringDraft]);
-
-  return { send, flushSteeringDraft, interruptDraft, steerCurrentReply };
+  return { send, flushSteeringDraft, interruptDraft };
 }

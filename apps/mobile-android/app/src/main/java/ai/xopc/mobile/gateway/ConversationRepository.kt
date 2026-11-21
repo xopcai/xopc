@@ -102,10 +102,6 @@ data class ConversationModel(val id: String, val name: String, val initialThinki
   val thinkingMode: String = "none", val thinkingOptions: List<String> = emptyList())
 data class ModelSelection(val models: List<ConversationModel>, val selectedId: String,
   val configVersion: Long?, val thinkingLevel: String = "off")
-data class QueuedInput(val id: String, val content: String, val version: Int, val position: Int,
-  val attachmentCount: Int, val referenceCount: Int)
-data class QueuedInputState(val items: List<QueuedInput>, val positionOffset: Int,
-  val preparationFailed: Boolean)
 data class LocalConversationDraft(
   val conversationId: String,
   val agentId: String,
@@ -778,29 +774,6 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     gateway.request("/api/sessions/${encode(suggestion.conversationId)}/next-turn-suggestion-feedback", "POST", body.toString())
   }
 
-  fun queuedInputs(conversationId: String): QueuedInputState {
-    if (draft(conversationId) != null) return QueuedInputState(emptyList(), 0, false)
-    return parseQueuedInputs(conversationId,
-      gateway.request("/api/sessions/$conversationId/input-state"))
-  }
-
-  fun updateQueuedInput(conversationId: String, input: QueuedInput,
-    content: String? = null, position: Int? = null): QueuedInputState {
-    require(content != null || position != null) { "INVALID_QUEUE_CHANGE" }
-    if (content != null) require(content.isNotBlank() || input.attachmentCount > 0 || input.referenceCount > 0) {
-      "EMPTY_QUEUED_INPUT"
-    }
-    val body = JSONObject().put("version", input.version)
-    if (content != null) body.put("content", content)
-    if (position != null) body.put("position", position)
-    return parseQueuedInputs(conversationId, gateway.request(
-      "/api/sessions/$conversationId/inputs/${encode(input.id)}", "PATCH", body.toString()))
-  }
-
-  fun cancelQueuedInput(conversationId: String, input: QueuedInput): QueuedInputState =
-    parseQueuedInputs(conversationId, gateway.request(
-      "/api/sessions/$conversationId/inputs/${encode(input.id)}?version=${input.version}", "DELETE"))
-
   fun abortRun(runId: String) {
     require(runId.isNotBlank()) { "INVALID_RUN_ID" }
     val response = JSONObject(gateway.request("/api/agent/abort", "POST", JSONObject().put("runId", runId).toString()))
@@ -844,7 +817,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       JSONObject().put("kind", "append").put("clientMessageId", clientMessageId)
         .put("localAttachments", localAttachments)
         .put("expectedTranscriptId", transcriptId).put("configVersion", configVersion)
-        .put("delivery", "next").put("input", JSONObject().put("content", content)
+        .put("delivery", "steer").put("interrupt", false).put("input", JSONObject().put("content", content)
           .apply { if (refs.isNotEmpty()) put("contextRefs", contextRefs) })
     }).also {
       if (claim.supportsClarificationV2) it.getJSONObject("input").put("interactionCapabilities", JSONObject().put("clarificationVersions", JSONArray(listOf(1, 2))))
@@ -930,14 +903,15 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       JSONObject().put("kind", "task").put("taskId", taskId).put("localAttachments", localAttachments)
         .put("clientMessageId", clientMessageId)
         .put("expectedTranscriptId", transcriptId).put("configVersion", configVersion)
-        .put("delivery", "next").put("input", JSONObject().put("content", content)
+        .put("delivery", "steer").put("input", JSONObject().put("content", content)
           .apply { if (refs.isNotEmpty()) put("contextRefs", contextRefs) })
         .also { pendingStore?.write(key, it.toString()) }
     }
     val body = JSONObject().put("clientMessageId", command.getString("clientMessageId"))
       .put("expectedTranscriptId", command.getString("expectedTranscriptId"))
       .put("configVersion", command.getLong("configVersion"))
-      .put("delivery", "next").put("content", content).put("origin", claim.json())
+      .put("delivery", command.getString("delivery")).put("content", content).put("origin", claim.json())
+      .apply { if (command.getString("delivery") == "steer") put("interrupt", false) }
       .apply { if (refs.isNotEmpty()) put("contextRefs", contextRefs) }
       .apply { if (attachments.isNotEmpty()) put("attachments",
         attachmentPayloads(profile.gatewayId, conversationId, attachments)) }
@@ -1013,26 +987,6 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       val version = payload.getLong("configVersion")
       require(model.isNotBlank() && version >= 0) { "INVALID_AGENT_CONFIG" }
       return model to version
-    }
-
-    fun parseQueuedInputs(conversationId: String, raw: String): QueuedInputState {
-      val root = JSONObject(raw)
-      require(root.optBoolean("ok")) { "INVALID_INPUT_STATE" }
-      val payload = root.getJSONObject("payload")
-      require(payload.getString("conversationId") == conversationId) { "INVALID_INPUT_STATE" }
-      val rows = payload.getJSONArray("inputs")
-      require(rows.length() <= 100) { "INVALID_INPUT_STATE" }
-      val queued = (0 until rows.length()).map { rows.getJSONObject(it) }
-        .filter { it.optString("kind") == "message" && it.optString("status") == "queued" }
-        .sortedBy { it.getInt("position") }
-      val failed = payload.optJSONObject("preparation")?.optString("state") == "preparation_failed"
-      val hasActiveRun = !payload.isNull("activeRunId") && payload.optString("activeRunId").isNotBlank()
-      val offset = if (!hasActiveRun && !failed && queued.isNotEmpty()) 1 else 0
-      return QueuedInputState(queued.drop(offset).map { item ->
-        QueuedInput(item.getString("id"), item.optString("content"), item.getInt("version"),
-          item.getInt("position"), item.optJSONArray("attachments")?.length() ?: 0,
-          item.optJSONArray("contextRefs")?.length() ?: 0)
-      }, offset, failed)
     }
 
     fun parsePendingInput(raw: String): PendingInput {

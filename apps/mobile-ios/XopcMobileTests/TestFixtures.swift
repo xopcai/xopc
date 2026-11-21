@@ -37,13 +37,6 @@ extension GatewayServing {
         []
     }
 
-    func updateQueuedInput(
-        conversationID _: String,
-        input _: QueuedInput,
-        content _: String
-    ) async throws -> InputState {
-        InputState(activeRunId: nil)
-    }
 }
 
 struct GatewayStub: GatewayServing {
@@ -166,23 +159,10 @@ struct GatewayStub: GatewayServing {
     }
 
     func respondToClarification(_: ClarificationRequest, command _: ClarificationResponseCommand) async throws {}
-    func fetchInputState(conversationID _: String) async throws -> InputState {
-        InputState(activeRunId: nil)
-    }
-
-    func cancelQueuedInput(
-        conversationID _: String,
-        input _: QueuedInput
-    ) async throws -> InputState {
-        InputState(activeRunId: nil)
-    }
-
-    // swiftlint:disable:next function_parameter_count
     func sendMessage(
         _: String,
         attachments _: [MessageAttachment],
         references _: [ContextReference],
-        delivery _: MessageDelivery,
         to conversation: ConversationSelection,
         clientMessageID: String
     ) async throws -> SessionCommandResult {
