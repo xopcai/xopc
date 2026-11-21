@@ -6,6 +6,10 @@
   <string name="browser_preview_low">Weak connection · reduced quality</string>
   <string name="browser_preview_snapshot">Low frame-rate preview</string>
   <string name="browser_preview_ended">Browser sharing has stopped.</string>
+  <string name="browser_preview_expired">The preview request or connection has expired.</string>
+  <string name="browser_preview_busy">Another device is viewing or waiting to connect.</string>
+  <string name="browser_preview_unavailable">The browser preview is unavailable for this task.</string>
+  <string name="browser_preview_retry">Retry</string>
   <string name="browser_preview_shrink">Shrink</string>
   <string name="browser_preview_expand">Expand</string>
   <string name="browser_preview_close">Close</string>

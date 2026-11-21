@@ -12,6 +12,8 @@ import { gatewayFetch } from './sidepanel/auth';
 type PreviewRequest = Extract<BrowserPreviewServerMessage, { type: 'requested' }>;
 type Viewer = PreviewRequest & { verified?: true; active?: true; snapshot?: string; uploading?: boolean };
 
+const CAPTURE_START_TIMEOUT_MS = 5_000;
+
 export function installBrowserPreview(send: (message: BrowserPreviewClientMessage) => void) {
   if (!chrome.action?.onClicked || !chrome.runtime.onConnect) return;
   const viewers = new Map<string, Viewer>();
@@ -19,6 +21,7 @@ export function installBrowserPreview(send: (message: BrowserPreviewClientMessag
   let documentId: string | undefined;
   let publisher: chrome.runtime.Port | undefined;
   let captureId: string | undefined;
+  let captureTimeout: ReturnType<typeof setTimeout> | undefined;
   let captureReady = false;
 
   function notify(message: BrowserPreviewClientMessage): void {
@@ -31,22 +34,24 @@ export function installBrowserPreview(send: (message: BrowserPreviewClientMessag
     const sharing = captureReady && viewers.size > 0;
     const ready = [...viewers.values()].some(viewer => viewer.verified);
     const zh = chrome.i18n.getUILanguage().startsWith('zh');
-    const title = sharing ? (zh ? '停止共享浏览器画面' : 'Stop sharing the browser preview')
+    const title = sharing ? (zh ? '查看或停止浏览器共享' : 'View or stop browser sharing')
       : ready ? (zh ? '点击开始共享任务标签' : 'Click to start sharing the task tab')
         : chrome.i18n.getMessage('appName') || 'xopc';
     void chrome.action.setTitle({ tabId, title }).catch(() => {});
     void chrome.action.setBadgeText({ tabId, text: sharing ? '●' : ready ? '▶' : '' }).catch(() => {});
-    void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: !ready && !sharing }).catch(() => {});
+    void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: sharing || !ready }).catch(() => {});
   }
 
   function clear(inform: boolean): void {
     const ids = [...viewers.keys()];
     viewers.clear();
+    clearTimeout(captureTimeout);
+    captureTimeout = undefined;
+    captureReady = false;
     updateToolbar();
     target = undefined;
     documentId = undefined;
     captureId = undefined;
-    captureReady = false;
     const port = publisher;
     publisher = undefined;
     port?.disconnect();
@@ -98,23 +103,42 @@ export function installBrowserPreview(send: (message: BrowserPreviewClientMessag
   chrome.action.onClicked.addListener(tab => {
     const current = target;
     const targetDocument = documentId;
-    if (!current || !targetDocument || current.tabId !== tab.id) {
+    if (!current || !targetDocument || current.tabId !== tab.id || captureReady) {
       if (tab.id !== undefined) void chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
       return;
     }
-    if (captureReady) { clear(true); return; }
     if (captureId) return;
     const first = [...viewers.values()].find(viewer => viewer.verified);
     if (!first) return;
     if (!ownsTab(current)) { clear(true); return; }
     captureId = first.requestId;
+    clearTimeout(captureTimeout);
+    captureTimeout = setTimeout(() => {
+      if (target === current && captureId === first.requestId && !captureReady) clear(true);
+    }, CAPTURE_START_TIMEOUT_MS);
     chrome.tabCapture.getMediaStreamId({ targetTabId: current.tabId, consumerTabId: current.tabId }, id => {
       if (target !== current || captureId !== first.requestId) return;
       if (!id || chrome.runtime.lastError || !ownsTab(current)) { clear(true); return; }
       void chrome.scripting.executeScript({ target: { tabId: current.tabId, documentIds: [targetDocument] },
         func: startPreviewDocument, args: [first.requestId, id, current.origin, BROWSER_PREVIEW_LEASE_MS] })
+        .then(results => {
+          if (target === current && captureId === first.requestId && results?.[0]?.result === false) clear(true);
+        })
         .catch(() => { if (target === current) clear(true); });
     });
+  });
+
+  chrome.tabs?.onRemoved?.addListener(tabId => {
+    if (target?.tabId === tabId) clear(true);
+  });
+
+  chrome.tabs?.onUpdated?.addListener((tabId, changeInfo) => {
+    if (target?.tabId !== tabId || !changeInfo.url) return;
+    try {
+      if (new URL(changeInfo.url).origin !== target.origin) clear(true);
+    } catch {
+      clear(true);
+    }
   });
 
   async function uploadSnapshot(viewer: Viewer, jpeg: string): Promise<void> {
@@ -148,6 +172,8 @@ export function installBrowserPreview(send: (message: BrowserPreviewClientMessag
     port.onMessage.addListener((message: PreviewDocumentMessage) => {
       if (publisher !== port || target !== current) return;
       if (message.type === 'ready') {
+        clearTimeout(captureTimeout);
+        captureTimeout = undefined;
         captureReady = true;
         for (const viewer of viewers.values()) accept(viewer);
         return;
@@ -171,9 +197,18 @@ export function installBrowserPreview(send: (message: BrowserPreviewClientMessag
     },
     status: () => {
       if (!target || !documentId) return undefined;
-      return { origin: target.origin, sharing: captureReady };
+      return {
+        origin: target.origin,
+        sharing: captureReady,
+        viewers: [...viewers.values()]
+          .filter(viewer => viewer.verified)
+          .map(viewer => ({ requestId: viewer.requestId, viewer: viewer.viewer, active: Boolean(viewer.active) })),
+      };
     },
-    stop: () => clear(true),
+    stop: (requestId?: string) => {
+      if (requestId) remove(requestId, true);
+      else clear(true);
+    },
     clear: () => clear(false),
     async stopBeforeAction(input: BrowserActionInput): Promise<void> {
       if (!target || target.browserSessionId !== input.sessionId
@@ -187,10 +222,17 @@ export function installBrowserPreview(send: (message: BrowserPreviewClientMessag
           const onDisconnect = () => { clearTimeout(deadline); resolve(); };
           const deadline = setTimeout(() => {
             port.onDisconnect.removeListener(onDisconnect);
-            reject(new Error('Wait for Chrome to stop sharing this browser preview before retrying.'));
+            if (input.action === 'close') resolve();
+            else reject(new Error('Wait for Chrome to stop sharing this browser preview before retrying.'));
           }, 1000);
           port.onDisconnect.addListener(onDisconnect);
-          port.postMessage({ type: 'stop' });
+          try {
+            port.postMessage({ type: 'stop' });
+          } catch {
+            clearTimeout(deadline);
+            port.onDisconnect.removeListener(onDisconnect);
+            resolve();
+          }
         });
       } finally {
         if (target === current) clear(true);

@@ -81,6 +81,7 @@ async function sampleStats() {
     if (recoveryDeadline) {
       if (frames > previousFrames) {
         recoveryDeadline = 0;
+        playing = true;
         send({type: 'playing'});
       } else if (performance.now() >= recoveryDeadline) quality('snapshot');
       return;

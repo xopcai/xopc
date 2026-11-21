@@ -10,6 +10,7 @@ import { checkBrowserReadiness } from '../../../browser/readiness.js';
 import { isLoopbackClientIp } from '../../security/loopback.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
 import {
   deleteBrowserTabBinding,
@@ -125,12 +126,22 @@ function canManageBrowserSession(c: Context, service: AuthenticatedRouteDeps['se
   return isLocalOwnerRequest(c, service);
 }
 
+function canViewBrowserPreview(c: Context): boolean {
+  const principal = getGatewayPrincipal(c);
+  if (!hasGatewayScope(principal.scopes, 'sessions.read') || !hasGatewayScope(principal.scopes, 'agents.run')) return false;
+  if (principal.kind === 'owner' || principal.kind === 'trusted-proxy') return true;
+  if (principal.kind !== 'device' || !principal.deviceId) return false;
+  const device = getDevice(principal.deviceId);
+  return device?.platform === 'android' && device.revokedAt === undefined;
+}
+
 export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
 
   authenticated.get('/api/browser/preview/:conversationId', (c) => {
     c.header('Cache-Control', 'no-store');
-    return c.json({ available: service.browserPreviews.available(c.req.param('conversationId')) });
+    const available = canViewBrowserPreview(c) && service.browserPreviews.available(c.req.param('conversationId'));
+    return c.json({ available });
   });
 
   const snapshotPath = '/api/browser/preview/:requestId/snapshot';

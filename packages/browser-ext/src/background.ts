@@ -231,7 +231,7 @@ chrome.runtime.onMessage.addListener((message: BrowserRuntimeMessage, sender, se
     if (sender.url?.split('?')[0] !== chrome.runtime.getURL('dist/sidepanel.html')) {
       sendResponse({ ok: false });
     } else {
-      preview?.stop();
+      preview?.stop(typeof message.requestId === 'string' ? message.requestId : undefined);
       sendResponse({ ok: true });
     }
   } else if (message.type === 'browser/resume-control') {

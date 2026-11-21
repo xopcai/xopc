@@ -58,7 +58,7 @@ interface SidePanelAppProps {
 
 export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps) {
   const [controlPaused, setControlPaused] = useState(false);
-  const [preview, setPreview] = useState<{ origin: string; sharing: boolean }>();
+  const [preview, setPreview] = useState<{ origin: string; sharing: boolean; viewers?: Array<{ requestId: string; viewer: string; active: boolean }> }>();
   useEffect(() => {
     const refresh = () => { void chrome.runtime.sendMessage({ type: 'browser/get-status' }).then(status => { setControlPaused(status?.controlPaused === true); setPreview(status?.preview); }).catch(() => {}); };
     refresh(); const timer = setInterval(refresh, 1500);
@@ -269,10 +269,28 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
       </header>
       {preview ? <section className="card" aria-label={locale === 'zh-CN' ? '浏览器共享' : 'Browser sharing'}>
         <p>{preview.origin}</p>
+        {preview.viewers?.length ? (
+          <p className="muted">
+            {preview.sharing
+              ? (locale === 'zh-CN'
+                ? `正在观看 (${preview.viewers.length})：${preview.viewers.map(item => item.viewer).join('、')}`
+                : `Viewing (${preview.viewers.length}): ${preview.viewers.map(item => item.viewer).join(', ')}`)
+              : (locale === 'zh-CN'
+                ? `请求观看：${preview.viewers.map(item => item.viewer).join('、')}`
+                : `Requested by: ${preview.viewers.map(item => item.viewer).join(', ')}`)}
+          </p>
+        ) : null}
         {!preview.sharing ? <p>{locale === 'zh-CN' ? '在任务标签上点一下工具栏的 xopc 图标即可共享。' : 'Click the xopc toolbar icon once on the task tab to share it.'}</p> : null}
-        <button onClick={() => { void chrome.runtime.sendMessage({ type: 'browser/preview-stop' }); }}>
-          {preview.sharing ? (locale === 'zh-CN' ? '停止共享' : 'Stop sharing') : (locale === 'zh-CN' ? '取消' : 'Cancel')}
-        </button>
+        <div className="actions">
+          <button onClick={() => { void chrome.runtime.sendMessage({ type: 'browser/preview-stop' }); }}>
+            {preview.sharing ? (locale === 'zh-CN' ? '停止共享' : 'Stop sharing') : (locale === 'zh-CN' ? '取消' : 'Cancel')}
+          </button>
+          {preview.sharing && preview.viewers && preview.viewers.length > 1 ? preview.viewers.map(item => (
+            <button key={item.requestId} onClick={() => { void chrome.runtime.sendMessage({ type: 'browser/preview-stop', requestId: item.requestId }); }}>
+              {locale === 'zh-CN' ? `断开 ${item.viewer}` : `Disconnect ${item.viewer}`}
+            </button>
+          )) : null}
+        </div>
       </section> : null}
       {controlPaused && <section className="card" role="alert"><p>{t('browserControlStopped')}</p><button className="primary" onClick={() => { void chrome.runtime.sendMessage({ type: 'browser/resume-control' }).then(result => { if (result?.ok) setControlPaused(false); }); }}>{t('browserControlResume')}</button></section>}
       {state !== 'online' ? <section className="center">

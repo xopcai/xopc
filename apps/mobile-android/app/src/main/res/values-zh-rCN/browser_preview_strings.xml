@@ -6,6 +6,10 @@
   <string name="browser_preview_low">弱网 · 已降低画质</string>
   <string name="browser_preview_snapshot">低帧率预览</string>
   <string name="browser_preview_ended">浏览器共享已结束。</string>
+  <string name="browser_preview_expired">观看请求或连接已过期。</string>
+  <string name="browser_preview_busy">已有设备正在观看或等待共享。</string>
+  <string name="browser_preview_unavailable">当前任务的浏览器画面不可用。</string>
+  <string name="browser_preview_retry">重试</string>
   <string name="browser_preview_shrink">缩小</string>
   <string name="browser_preview_expand">展开</string>
   <string name="browser_preview_close">关闭</string>

@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -62,7 +63,9 @@ import org.json.JSONObject
 
 internal val LocalBrowserPreviewOpen = staticCompositionLocalOf<(() -> Unit)?> { null }
 
-private data class PreviewSelection(val conversationId: String, val title: String)
+private data class PreviewSelection(val conversationId: String, val title: String, val instanceId: String = UUID.randomUUID().toString())
+
+private val TERMINAL_STATES = setOf("ended", "expired", "busy", "unavailable")
 
 @Composable
 internal fun BrowserPreviewHost(access: BrowserPreviewAccess?, connection: ConnectionUiState, content: @Composable () -> Unit) {
@@ -91,7 +94,13 @@ internal fun BrowserPreviewHost(access: BrowserPreviewAccess?, connection: Conne
       content()
       val current = selection
       if (access != null && gatewayId != null && current != null) key(current) {
-        AndroidBrowserPreview(access, gatewayId, current, onClose = { selection = null })
+        AndroidBrowserPreview(
+          access = access,
+          gatewayId = gatewayId,
+          selection = current,
+          onRetry = { selection = current.copy(instanceId = UUID.randomUUID().toString()) },
+          onClose = { selection = null },
+        )
       }
     }
   }
@@ -104,7 +113,13 @@ private class PreviewPlayback {
 }
 
 @Composable
-private fun AndroidBrowserPreview(access: BrowserPreviewAccess, gatewayId: String, selection: PreviewSelection, onClose: () -> Unit) {
+private fun AndroidBrowserPreview(
+  access: BrowserPreviewAccess,
+  gatewayId: String,
+  selection: PreviewSelection,
+  onRetry: () -> Unit,
+  onClose: () -> Unit,
+) {
   val requestId = remember { UUID.randomUUID().toString() }
   val playback = remember { PreviewPlayback() }
   var expanded by remember { mutableStateOf(true) }
@@ -120,9 +135,9 @@ private fun AndroidBrowserPreview(access: BrowserPreviewAccess, gatewayId: Strin
   fun send(type: String, payload: JSONObject = JSONObject()): Boolean =
     access.send(payload.put("requestId", requestId).put("type", type))
 
-  fun clear() {
+  fun clear(reason: String = "ended") {
     accepted = false
-    state = "ended"
+    state = if (reason in TERMINAL_STATES) reason else "ended"
     snapshotToken = null
     snapshot = null
     playback.dispatch(JSONObject().put("type", "stop"))
@@ -137,7 +152,7 @@ private fun AndroidBrowserPreview(access: BrowserPreviewAccess, gatewayId: Strin
   }
   LaunchedEffect(access, requestId) {
     access.messages.collect { message ->
-      if (message.optString("requestId") != requestId || state == "ended") return@collect
+      if (message.optString("requestId") != requestId || state in TERMINAL_STATES) return@collect
       when (message.optString("type")) {
         "waiting" -> {
           source = message.optString("origin")
@@ -155,13 +170,13 @@ private fun AndroidBrowserPreview(access: BrowserPreviewAccess, gatewayId: Strin
         "quality" -> if (quality == "snapshot" && message.optString("quality") == "snapshot") {
           snapshotToken = message.optString("snapshotToken").takeIf(String::isNotBlank)
         }
-        "closed" -> clear()
+        "closed" -> clear(message.optString("reason", "ended"))
       }
     }
   }
   LaunchedEffect(deadline) {
     delay((deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0))
-    if (state != "ended") { send("close"); clear() }
+    if (state !in TERMINAL_STATES) { send("close"); clear("expired") }
   }
   LaunchedEffect(accepted) {
     if (!accepted) return@LaunchedEffect
@@ -170,25 +185,25 @@ private fun AndroidBrowserPreview(access: BrowserPreviewAccess, gatewayId: Strin
   LaunchedEffect(snapshotToken) {
     val token = snapshotToken ?: return@LaunchedEffect
     var after = 0L
-    var lastFrame = 0L
+    var lastFrame = if (snapshot != null) SystemClock.elapsedRealtime() else 0L
     while (isActive) {
       val result = try { access.snapshot(gatewayId, requestId, token, after) }
       catch (cancelled: CancellationException) { throw cancelled }
       catch (error: GatewayHttpException) {
-        if (error.status == 403 || error.status == 404) { clear(); return@LaunchedEffect }
+        if (error.status == 403 || error.status == 404) { clear("ended"); return@LaunchedEffect }
         null
       } catch (_: Exception) { null }
       if (result != null) {
         after = result.first
         snapshot = result.second
         lastFrame = SystemClock.elapsedRealtime()
-      } else if (SystemClock.elapsedRealtime() - lastFrame > 2000) snapshot = null
+      } else if (lastFrame > 0L && SystemClock.elapsedRealtime() - lastFrame > 2000) snapshot = null
       delay(600)
     }
   }
 
   BrowserPreviewWindow(selection.title, source, state, quality, expanded, corner, onToggle = { expanded = !expanded },
-    onMove = { corner = it }, onClose = onClose) {
+    onMove = { corner = it }, onRetry = if (state in TERMINAL_STATES) onRetry else null, onClose = onClose) {
     AndroidView(
       modifier = Modifier.fillMaxSize().alpha(if (state == "playing") 1f else 0f),
       factory = { context ->
@@ -215,20 +230,24 @@ private fun AndroidBrowserPreview(access: BrowserPreviewAccess, gatewayId: Strin
                 override fun onMessage(port: WebMessagePort, message: WebMessage) {
                   val data = message.data?.takeIf { it.length <= 65_536 } ?: return
                   val event = runCatching { JSONObject(data) }.getOrNull() ?: return
-                  if (state == "ended") return
+                  if (state in TERMINAL_STATES) return
                   when (event.optString("type")) {
                     "ready" -> if (!playback.started) {
                       playback.started = send("view", JSONObject().put("conversationId", selection.conversationId))
-                      if (!playback.started) clear()
+                      if (!playback.started) clear("unavailable")
                     }
                     "signal" -> event.optJSONObject("signal")?.let { send("signal", JSONObject().put("signal", it)) }
-                    "playing" -> state = "playing"
+                    "playing" -> {
+                      snapshotToken = null
+                      snapshot = null
+                      state = "playing"
+                    }
                     "quality" -> {
                       val next = event.optString("quality").takeIf { it in setOf("normal", "low", "snapshot") } ?: return
-                      if (!send("quality", JSONObject().put("quality", next))) { clear(); return }
+                      if (!send("quality", JSONObject().put("quality", next))) { clear("unavailable"); return }
                       quality = next
                       if (next == "snapshot") state = "snapshot"
-                      else { snapshotToken = null; snapshot = null }
+                      else snapshotToken = null
                     }
                   }
                 }
@@ -242,42 +261,63 @@ private fun AndroidBrowserPreview(access: BrowserPreviewAccess, gatewayId: Strin
       onRelease = { view -> view.stopLoading(); view.destroy() },
     )
     if (state == "snapshot") snapshot?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxSize()) }
-    if (state == "connecting") CircularProgressIndicator(Modifier.align(Alignment.Center))
+    if (state == "connecting" || (state == "snapshot" && snapshot == null)) {
+      CircularProgressIndicator(Modifier.align(Alignment.Center))
+    }
   }
 }
 
 @Composable
 internal fun BrowserPreviewWindow(title: String, source: String, state: String, quality: String,
   expanded: Boolean, corner: Alignment, onToggle: () -> Unit, onMove: (Alignment) -> Unit, onClose: () -> Unit,
+  onRetry: (() -> Unit)? = null,
   content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
+  var dragX by remember(expanded, corner) { mutableStateOf(0f) }
+  var dragY by remember(expanded, corner) { mutableStateOf(0f) }
   Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding().padding(12.dp)) {
     Card(Modifier.align(if (expanded) Alignment.Center else corner)
-      .then(if (expanded) Modifier.widthIn(max = 560.dp).fillMaxWidth() else Modifier.fillMaxWidth(0.49f))) {
-      Column {
-        Text(title, Modifier.fillMaxWidth().pointerInput(expanded, corner) {
-          if (!expanded) {
-            var x = 0f
-            var y = 0f
-            detectDragGestures(onDragStart = { x = 0f; y = 0f }, onDragEnd = {
+      .then(if (expanded) Modifier.widthIn(max = 560.dp).fillMaxWidth() else Modifier.fillMaxWidth(0.49f))
+      .graphicsLayer {
+        translationX = if (expanded) 0f else dragX
+        translationY = if (expanded) 0f else dragY
+      }
+      .pointerInput(expanded, corner) {
+        if (!expanded) {
+          detectDragGestures(
+            onDragStart = { dragX = 0f; dragY = 0f },
+            onDragCancel = { dragX = 0f; dragY = 0f },
+            onDragEnd = {
               val threshold = 24.dp.toPx()
-              val atEnd = if (kotlin.math.abs(x) > threshold) x > 0 else corner in setOf(Alignment.TopEnd, Alignment.BottomEnd)
-              val atBottom = if (kotlin.math.abs(y) > threshold) y > 0 else corner in setOf(Alignment.BottomStart, Alignment.BottomEnd)
+              val atEnd = if (kotlin.math.abs(dragX) > threshold) dragX > 0 else corner in setOf(Alignment.TopEnd, Alignment.BottomEnd)
+              val atBottom = if (kotlin.math.abs(dragY) > threshold) dragY > 0 else corner in setOf(Alignment.BottomStart, Alignment.BottomEnd)
+              dragX = 0f
+              dragY = 0f
               onMove(if (atBottom) if (atEnd) Alignment.BottomEnd else Alignment.BottomStart
                 else if (atEnd) Alignment.TopEnd else Alignment.TopStart)
-            }) { change, delta -> change.consume(); x += delta.x; y += delta.y }
-          }
-        }.padding(horizontal = 10.dp, vertical = 8.dp), maxLines = 1, style = MaterialTheme.typography.labelLarge)
+            },
+          ) { change, delta -> change.consume(); dragX += delta.x; dragY += delta.y }
+        }
+      }) {
+      Column {
+        Text(title, Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+          maxLines = 1, style = MaterialTheme.typography.labelLarge)
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f), content = content)
         val text = when (state) {
           "waiting" -> R.string.browser_preview_waiting
           "snapshot" -> R.string.browser_preview_snapshot
           "ended" -> R.string.browser_preview_ended
+          "expired" -> R.string.browser_preview_expired
+          "busy" -> R.string.browser_preview_busy
+          "unavailable" -> R.string.browser_preview_unavailable
           "playing" -> if (quality == "low") R.string.browser_preview_low else R.string.browser_preview_live
           else -> R.string.browser_preview_connecting
         }
         Text(stringResource(text), Modifier.padding(horizontal = 10.dp, vertical = 5.dp), style = MaterialTheme.typography.bodySmall)
         if (expanded && source.isNotBlank()) Text(source, Modifier.padding(horizontal = 10.dp), maxLines = 1, style = MaterialTheme.typography.labelSmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+          if (onRetry != null) {
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.browser_preview_retry)) }
+          }
           TextButton(onClick = onToggle) { Text(stringResource(if (expanded) R.string.browser_preview_shrink else R.string.browser_preview_expand)) }
           TextButton(onClick = onClose) { Text(stringResource(R.string.browser_preview_close)) }
         }

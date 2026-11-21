@@ -1,3 +1,4 @@
+import { Maximize2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { BROWSER_PREVIEW_LEASE_MS, BROWSER_PREVIEW_REQUEST_MS, type BrowserPreviewIce, type BrowserPreviewQuality, type BrowserPreviewServerMessage } from '@xopcai/realtime-protocol';
 
@@ -16,7 +17,9 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
   const zh = useLocaleStore(state => state.language === 'zh');
   const identity = useGatewayStore(state => state.conversationId);
   const connected = useGatewayRealtimeStore(state => state.connectionState === 'connected');
+  const stage = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
+  const probeVideo = useRef<(() => void) | null>(null);
   const [status, setStatus] = useState<Status>('connecting');
   const [origin, setOrigin] = useState('');
   const [snapshot, setSnapshot] = useState('');
@@ -32,6 +35,7 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
     const outgoing: RTCIceCandidateInit[] = [];
     let peer: RTCPeerConnection | undefined;
     let pendingApproval: { ice?: BrowserPreviewIce } | undefined;
+    let accepted = false;
     let stopped = false;
     let offerSent = false;
     let restarted = false;
@@ -60,15 +64,19 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
       try { sendGatewayBrowserPreview(message); return true; } catch { return false; }
     }
 
-    function clearSnapshot(): void {
+    function stopSnapshotPolling(): void {
       snapshotAbort?.abort();
       snapshotAbort = undefined;
+    }
+
+    function clearSnapshot(): void {
+      stopSnapshotPolling();
       if (snapshotAddress) URL.revokeObjectURL(snapshotAddress);
       snapshotAddress = '';
       setSnapshot('');
     }
 
-    function selectQuality(next: BrowserPreviewQuality): void {
+    function selectQuality(next: BrowserPreviewQuality, keepSnapshotUntilFrame = false): void {
       if (stopped || next === mode) return;
       if (!send({ type: 'quality', requestId, quality: next })) { stop('unavailable'); return; }
       mode = next;
@@ -77,16 +85,28 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
         recoveringAt = performance.now() + 15_000;
         probeAt = 0;
         setStatus('snapshot');
-      } else if (snapshotAbort) {
+      } else if (keepSnapshotUntilFrame) {
+        stopSnapshotPolling();
+      } else if (snapshotAbort || snapshotAddress) {
         clearSnapshot();
       }
     }
 
+    probeVideo.current = () => {
+      if (stopped || mode !== 'snapshot') return;
+      if (peer?.connectionState === 'connected') {
+        probeAt = performance.now() + 3500;
+        selectQuality('low', true);
+      } else {
+        setAttempt(value => value + 1);
+      }
+    };
+
     async function loadSnapshots(token: string): Promise<void> {
-      clearSnapshot();
+      stopSnapshotPolling();
       const controller = snapshotAbort = new AbortController();
       let after = 0;
-      let receivedAt = 0;
+      let receivedAt = snapshotAddress ? performance.now() : 0;
       while (!controller.signal.aborted) {
         try {
           const response = await apiFetch(apiUrl(`/api/browser/preview/${requestId}/snapshot?after=${after}`), {
@@ -117,6 +137,7 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
     function stop(reason: Status, notify = true): void {
       if (stopped) return;
       stopped = true;
+      probeVideo.current = null;
       clearTimeout(expires);
       clearInterval(renew);
       clearTimeout(mediaDeadline);
@@ -130,7 +151,7 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
 
     function armLease(ms: number): void {
       clearTimeout(expires);
-      const duration = peer ? ms : Math.min(ms, requestDeadline - performance.now());
+      const duration = accepted ? ms : Math.max(0, Math.min(ms, requestDeadline - performance.now()));
       expires = setTimeout(() => stop('expired'), duration);
     }
 
@@ -175,13 +196,17 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
       if (mode === 'snapshot') {
         if (connection.connectionState === 'connected' && performance.now() >= recoveringAt) {
           probeAt = performance.now() + 3500;
-          selectQuality('low');
+          selectQuality('low', true);
         }
         return;
       }
       if (probeAt) {
-        if (frames > previousFrames) { probeAt = 0; setStatus('ready'); }
-        else if (performance.now() >= probeAt) selectQuality('snapshot');
+        if (frames > previousFrames) {
+          probeAt = 0;
+          playing = true;
+          clearSnapshot();
+          setStatus('ready');
+        } else if (performance.now() >= probeAt) selectQuality('snapshot');
         return;
       }
       if (!playing) return;
@@ -244,6 +269,7 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
         setOrigin(message.origin);
         setStatus('waiting');
       } else if (message.type === 'accepted' && !peer && !pendingApproval) {
+        accepted = true;
         pendingApproval = { ice: message.ice };
         armLease(BROWSER_PREVIEW_LEASE_MS);
         renew = setInterval(() => { if (!send({ type: 'renew', requestId })) stop('unavailable'); }, 3000);
@@ -274,7 +300,13 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
     const onPlaying = () => {
       if (stopped) return;
       clearTimeout(mediaDeadline);
-      if (!playing) { playing = true; if (mode !== 'snapshot') setStatus('ready'); }
+      if (!playing) {
+        playing = true;
+        if (mode !== 'snapshot' && !probeAt) {
+          clearSnapshot();
+          setStatus('ready');
+        }
+      }
     };
     const onVisibility = () => { void startApprovedPreview().catch(() => stop('unavailable')); };
     const onPageHide = () => stop('ended');
@@ -282,7 +314,7 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
     expires = setTimeout(() => stop('no-response'), 5000);
-    if (document.hidden || !send({ type: 'view', requestId, conversationId })) stop('unavailable');
+    if (document.hidden || !send({ type: 'view', requestId, conversationId })) stop('unavailable', false);
     return () => {
       unsubscribe();
       document.removeEventListener('visibilitychange', onVisibility);
@@ -304,16 +336,40 @@ export function BrowserPreviewPanel({ conversationId }: { conversationId: string
     busy: zh ? '已有设备正在观看或等待共享。' : 'Another device is viewing or waiting to connect.',
   };
   const loading = status === 'connecting' || status === 'waiting';
+  const showHeader = Boolean(origin) || status === 'ready' || status === 'snapshot';
+  const canFullscreen = (status === 'ready' || (status === 'snapshot' && Boolean(snapshot)))
+    && typeof document !== 'undefined' && document.fullscreenEnabled !== false;
+  const toggleFullscreen = () => {
+    const host = stage.current;
+    if (!host) return;
+    if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {});
+    else void host.requestFullscreen?.().catch(() => {});
+  };
   return <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-base">
-    {origin ? <div className="truncate border-b border-edge px-3 py-2 text-xs text-fg-muted">{origin}</div> : null}
-    <video ref={video} muted playsInline autoPlay aria-label={copy.ready}
-      className={status === 'ready' ? 'min-h-0 w-full flex-1 object-contain' : 'hidden'} />
-    {status === 'ready' && quality === 'low' ? <p role="status" className="px-3 py-1 text-xs text-fg-muted">{zh ? '弱网 · 已降低画质' : 'Weak connection · reduced quality'}</p> : null}
-    {status === 'snapshot' && snapshot ? <img src={snapshot} alt={copy.snapshot} className="min-h-0 w-full flex-1 object-contain" /> : null}
-    {status !== 'ready' ? <div role="status" className={status === 'snapshot' && snapshot ? 'p-2 text-center' : 'mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 p-5 text-center'}>
-      {loading ? <Skeleton className="aspect-video w-full rounded-lg" /> : null}
-      <p className="text-sm text-fg-muted">{copy[status]}</p>
-      {!loading && status !== 'snapshot' ? <Button variant="secondary" disabled={!connected} onClick={() => setAttempt(value => value + 1)}>{zh ? '重试' : 'Retry'}</Button> : null}
+    {showHeader ? <div className="flex items-center justify-between gap-2 border-b border-edge px-3 py-1.5 text-xs text-fg-muted">
+      <div className="flex min-w-0 items-center gap-2">
+        {status === 'ready' ? <span className="size-2 shrink-0 rounded-full bg-emerald-500" aria-hidden /> : null}
+        <span className="truncate">{origin || copy[status]}</span>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        {status === 'ready' ? <span>{quality === 'low' ? (zh ? '弱网 · 已降低画质' : 'Weak connection') : copy.ready}</span> : null}
+        {canFullscreen ? <button type="button" onClick={toggleFullscreen}
+          className="rounded p-1 text-fg-muted hover:bg-surface-hover hover:text-fg"
+          aria-label={zh ? '全屏查看' : 'Fullscreen'} title={zh ? '全屏查看' : 'Fullscreen'}>
+          <Maximize2 className="size-3.5" aria-hidden />
+        </button> : null}
+      </div>
     </div> : null}
+    <div ref={stage} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <video ref={video} muted playsInline autoPlay aria-label={copy.ready}
+        className={status === 'ready' ? 'min-h-0 h-full w-full flex-1 object-contain' : 'pointer-events-none absolute inset-0 h-full w-full object-contain opacity-0'} />
+      {status === 'snapshot' && snapshot ? <img src={snapshot} alt={copy.snapshot} className="min-h-0 w-full flex-1 object-contain" /> : null}
+      {status !== 'ready' ? <div role="status" className={status === 'snapshot' && snapshot ? 'flex items-center justify-center gap-2 p-2 text-center' : 'mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 p-5 text-center'}>
+        {loading || (status === 'snapshot' && !snapshot) ? <Skeleton className="aspect-video w-full rounded-lg" /> : null}
+        <p className="text-sm text-fg-muted">{copy[status]}</p>
+        {status === 'snapshot' ? <Button variant="secondary" className="h-7 px-2.5 text-xs" disabled={!connected} onClick={() => probeVideo.current?.()}>{zh ? '尝试恢复视频' : 'Try video'}</Button> : null}
+        {!loading && status !== 'snapshot' ? <Button variant="secondary" disabled={!connected} onClick={() => setAttempt(value => value + 1)}>{zh ? '重试' : 'Retry'}</Button> : null}
+      </div> : null}
+    </div>
   </section>;
 }
