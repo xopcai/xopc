@@ -309,9 +309,13 @@ describe('runXopcEmbeddedTurn image input', () => {
     }, { triggerTurn: true });
   });
 
-  it('retries a silent response to a direct user message once within the same turn', async () => {
-    mocks.waitForIdle.mockImplementationOnce(async () => { mocks.lastText = 'NO_REPLY'; })
-      .mockImplementationOnce(async () => { mocks.lastText = '我在，想让我做什么？'; });
+  it.each(['NO_REPLY', '   '])('retries a silent response (%j) to a direct user message once', async silent => {
+    const reply = async (text: string) => {
+      mocks.lastText = text;
+      mocks.session.agent.state.messages.push({ role: 'assistant', content: [{ type: 'text', text }], stopReason: 'stop' });
+    };
+    mocks.waitForIdle.mockImplementationOnce(() => reply(silent))
+      .mockImplementationOnce(() => reply('我在，想让我做什么？'));
 
     const result = await runXopcEmbeddedTurn({
       conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0", runId: 'run-visible-reply',

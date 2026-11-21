@@ -13,7 +13,7 @@ import { getSessionInputById, getSessionInputState } from '../../storage/sqlite/
 export { getAvailablePersonalAgentTools, personalAgentModelAvailability } from '../../personal-agent/specialist-capabilities.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { getPersonalRequest, personalRequestForTask } from '../../personal-agent/request-repository.js';
-import { parseTaskHandoffReferences } from '../../tasks/task-handoff.js';
+import { parseTaskHandoffReferences, pinTaskHandoffReference } from '../../tasks/task-handoff.js';
 import { TaskApplicationService } from '../../tasks/task-application-service.js';
 import { TaskAllocationRepository } from '../../tasks/task-allocation-repository.js';
 import { cancelPersonalTask } from '../../personal-agent/task-cancel.js';
@@ -149,7 +149,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
   return {
     name: 'personal_task',
     label: 'Personal Task',
-    description: 'Coordinate ordinary Tasks and connected-app requests. For get, retry, instruct, cancel, answer, collaboration, entry or notifications, use the known taskId or requestId. Connected-app requests awaiting authorization have only a requestId. Use timeRange on instruct for a changed absolute query range. Always include command. When the user asks to retry after reauthorization or failure, locate the original request or Task (list by a distinctive title phrase, using the original date if needed), then call retry with its exact ID. Ask which one only if multiple plausible targets remain. Report the returned status; queued means accepted for execution, waiting_connection means the original request is preserved and may still need action in the connection panel. Do not submit a duplicate. New ordinary goal: submit objective plus useOriginalRequest=true for a self-contained active user message; the host preserves the complete original text. Otherwise supply a concise complete description. Include sourceRefs for required inputs without pre-reading files or planning the execution. Use requirements.requestedAgentId only for an explicitly named executor; preserve explicitly requested requiredSkills. The background Router chooses the executor. After successful persistence, give one short confirmation and finish; updates arrive automatically.\nRUNNING work: send instruct with the known ID and instruction for new direction, or answer with the known ID, questionId and instruction for an exact worker question. Reuse the SAME Task, without a baseline lookup. Never revise running work.\nCOMPLETED ordinary work only: get(section="revision"), then revise with instruction and exact returned revisionBaseline.resultId, baselineVersion and expectedVersion. If revisionBaseline is absent, use instruct/answer; never invent placeholders. This saves a revision and queues background allocation atomically. Reuse idempotencyKey for uncertain retries. supersedesEntryIds names only earlier instruction/answer entries to replace; all other requirements remain. Independent goals use submit with pinned old-result sources; connected-app side effects require a newly authorized Request.\nsourceRefs: workspace input {kind:"file",sourceId:"path"}; prior result {kind:"result",resultId:"exact result ID",sourceId:"exact artifact ID or unique file title"}, omitting sourceId only for retained body; other prior inputs use stable sourceId and optional expectedVersion. The host authorizes and pins exact versions; workspace inputs are not executor cwd. Do not invent composite IDs.\nUse notifications with the known ID and notificationPreference to change an existing Task only when the user asks. Use get(section="status") for a brief current status; list locates a Task or a request awaiting authorization and get(section,limit,offset) reads details. collaboration(afterSequence) returns previews; entry(entryId,bodyOffset) reads full bodies through nextBodyOffset. Read complete questions before answering. cancel only on explicit user instruction; report executionStopConfirmed accurately. retry_allocation retries selection, not arbitrary execution. Saved, delivered, executor-confirmed and verified completion are distinct; report only confirmed states.',
+    description: 'Coordinate ordinary Tasks and connected-app requests. For get, retry, instruct, cancel, answer, collaboration, entry or notifications, use the known taskId or requestId. Connected-app requests awaiting authorization have only a requestId. Use timeRange on instruct for a changed absolute query range. Always include command. When the user asks to retry after reauthorization or failure, locate the original request or Task (list by a distinctive title phrase, using the original date if needed), then call retry with its exact ID. Ask which one only if multiple plausible targets remain. Report the returned status; queued means accepted for execution, waiting_connection means the original request is preserved and may still need action in the connection panel. Do not submit a duplicate. New ordinary goal: submit objective plus useOriginalRequest=true for a self-contained active user message; the host preserves the complete original text. Otherwise supply a concise complete description. Include sourceRefs for required inputs without pre-reading files or planning the execution. Use requirements.requestedAgentId only for an explicitly named executor; preserve explicitly requested requiredSkills. The background Router chooses the executor. After successful persistence, give one short confirmation and finish; updates arrive automatically.\nRUNNING work: send instruct with the known ID and instruction for new direction, or answer with the known ID, questionId and instruction for an exact worker question. Reuse the SAME Task, without a baseline lookup. Never revise running work.\nCOMPLETED ordinary work only: get(section="revision"), then revise with instruction and exact returned revisionBaseline.resultId, baselineVersion and expectedVersion. If revisionBaseline is absent, use instruct/answer; never invent placeholders. This saves a revision and queues background allocation atomically. Reuse idempotencyKey for uncertain retries. supersedesEntryIds names only earlier instruction/answer entries to replace; all other requirements remain. Independent goals use submit with pinned old-result sources; connected-app side effects require a newly authorized Request.\nFor a follow-up depending on a delivered result, use personal_result list/get to identify the exact result and pass it as a pinned source. Saying that the original is in chat does not give the worker access. If a required input is missing, resolve it before submitting.\nsourceRefs: workspace input {kind:"file",sourceId:"path"}; prior result {kind:"result",resultId:"exact result ID",sourceId:"exact artifact ID or unique file title"}, omitting sourceId only for retained body; other prior inputs use stable sourceId and optional expectedVersion. The host authorizes and pins exact versions; workspace inputs are not executor cwd. Do not invent composite IDs.\nUse notifications with the known ID and notificationPreference to change an existing Task only when the user asks. Use get(section="status") for a brief current status; list locates a Task or a request awaiting authorization and get(section,limit,offset) reads details. collaboration(afterSequence) returns previews; entry(entryId,bodyOffset) reads full bodies through nextBodyOffset. Read complete questions before answering. cancel only on explicit user instruction; report executionStopConfirmed accurately. retry_allocation retries selection. For source_reference_unavailable on an unstarted task, supply complete replacement sourceRefs for its unresolved inputs. Reuse the existing task. Do not retry unchanged inputs from a background task update. Saved, delivered, executor-confirmed and verified completion are distinct; report only confirmed states.',
     parameters: PersonalTaskModelSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -169,7 +169,9 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         || !['submit', 'notifications'].includes(input.command))) throw new Error('Invalid Task notification preference');
       if (input.dueAt !== undefined && input.command !== 'submit') throw new Error('dueAt is supported only by submit');
       if (input.taskReference !== undefined && input.command !== 'instruct') throw new Error('taskReference is supported only by instruct');
-      if (modelInput.sourceRefs?.length && !['submit', 'revise'].includes(input.command)) throw new Error('sourceRefs is supported only by submit/revise; it cannot be silently ignored by a coordination command');
+      if (modelInput.sourceRefs?.length && !['submit', 'revise', 'retry_allocation'].includes(input.command)) {
+        throw new Error('sourceRefs requires submit, revise, or recovery of a blocked allocation');
+      }
       const conversationId = deps.getCurrentConversationId?.();
       const ownAgentId = deps.getCurrentAgentId?.();
       if (!conversationId || !ownAgentId || !isPersonalConversation(conversationId)) {
@@ -248,6 +250,9 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         return { content: [{ type: 'text', text: JSON.stringify(boundedPersonalResult({ items, offset,
           ...(rows.length > limit ? { nextOffset: offset + items.length } : {}) })) }], details: {} };
       }
+      const refs = parseTaskHandoffReferences(modelInput.sourceRefs);
+      if (!refs) throw new Error('Invalid Task sourceRefs');
+      const sourceRefs = modelInput.sourceRefs && refs.map(ref => pinTaskHandoffReference(conversationId, ref));
       let selectedProductTool = productTool;
       let pendingSelection: Parameters<AgentSelectionRepository['create']>[0] | undefined;
       let command: string = input.command;
@@ -255,7 +260,11 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
       if (command === 'submit') {
         const objective = input.objective?.trim();
         const inputId = getSessionInputState(conversationId).activeInputId;
-        const original = input.useOriginalRequest && inputId ? getSessionInputById(conversationId, inputId) : undefined;
+        const activeInput = inputId ? getSessionInputById(conversationId, inputId) : undefined;
+        if (activeInput?.origin.type === 'system' && activeInput.origin.source === 'task_update') {
+          throw new Error('A Task update cannot authorize a new Task. Handle the existing Task or leave it waiting for the user.');
+        }
+        const original = input.useOriginalRequest ? activeInput : undefined;
         if (input.useOriginalRequest && (!original || original.kind !== 'message' || !original.content.trim())) {
           throw new Error('The active original user request is unavailable; submit a complete description instead');
         }
@@ -264,12 +273,12 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         if (input.agentId) throw new Error('Use requirements.requestedAgentId for an explicitly requested executor');
         const brief = buildPersonalTaskBrief({ title: input.title, objective, description });
         const submissionKey = input.idempotencyKey?.trim() || selectionRequestHash({
-          sourceInput: inputId ?? toolCallId, brief, requirements, sourceRefs: modelInput.sourceRefs, conversationExcerpts: modelInput.conversationExcerpts,
+          sourceInput: inputId ?? toolCallId, brief, requirements, sourceRefs, conversationExcerpts: modelInput.conversationExcerpts,
           expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria, acceptancePolicy: input.acceptancePolicy,
           notificationPreference: input.notificationPreference, dueAt: input.dueAt, constraints: input.constraints, workspaceOutputs: input.workspaceOutputs,
         });
         command = 'create';
-        args = { ...brief, createMode: 'allocate', requirements, dueAt: input.dueAt, notificationPreference: input.notificationPreference, sourceRefs: modelInput.sourceRefs, conversationExcerpts: modelInput.conversationExcerpts, includeConversationContext: false,
+        args = { ...brief, createMode: 'allocate', requirements, dueAt: input.dueAt, notificationPreference: input.notificationPreference, sourceRefs, conversationExcerpts: modelInput.conversationExcerpts, includeConversationContext: false,
           expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria, acceptancePolicy: input.acceptancePolicy,
           constraints: input.constraints, workspaceOutputs: input.workspaceOutputs,
           idempotencyKey: `personal-submit:${conversationId}:${selectionRequestHash(submissionKey)}` };
@@ -342,8 +351,9 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
           if (activeInput?.kind === 'message' && !workerUpdate) {
             const directory = new TaskOriginRepository();
             const reference = input.taskReference?.trim();
+            const anchored = directory.recentResultTask(conversationId, activeInput.id, activeInput.createdAtMs) === taskId;
             if (!reference) {
-              if (directory.list(conversationId, 1, { excludeClosed: true }).total > 1) {
+              if (!anchored && directory.list(conversationId, 1, { excludeClosed: true }).total > 1) {
                 throw new Error('Several tasks are still open. Provide taskReference quoted from the latest user message, or ask which task they mean.');
               }
             } else {
@@ -358,7 +368,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
               if (matches.total > 1) {
                 throw new Error('The taskReference does not identify this task uniquely. Ask which task the user means without retrying this reference.');
               }
-              if (matches.items[0]?.id !== taskId) {
+              if (matches.items[0]?.id !== taskId && !(anchored && matches.total === 0)) {
                 throw new Error('The taskReference does not identify the selected task. Use a distinctive quote from the user’s message that matches its title or objective, or ask which task they mean.');
               }
             }
@@ -373,17 +383,18 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
           const summary = taskConversationSummary(taskId, conversationId);
           return { content: [{ type: 'text', text: JSON.stringify({ ok: Boolean(summary), summary }) }], details: {} };
         }
-        if (command === 'get' && input.section === 'revision') {
+        if ((command === 'get' && input.section === 'revision') || command === 'instruct') {
           const model = new TaskReadModelProjector().get(taskId)!;
-          return { content: [{ type: 'text', text: JSON.stringify({ ok: true, taskId, phase: model.task.phase, expectedVersion: model.task.version, revisionBaseline: model.revisionBaseline, allowedCommands: model.allowedCommands, allocation: model.allocation, coordination: model.revisionBaseline ? 'Completed result baseline available. Copy its exact fields for revise.' : 'No completed result baseline. Use instruct(taskId,instruction) for new direction or answer(taskId,questionId,instruction); never invent baseline fields.' }) }], details: {} };
+          if (command === 'instruct' && model.revisionBaseline && model.allowedCommands.includes('revise')) return { content: [{ type: 'text', text: JSON.stringify({
+            ok: false, reason: 'revision_required', taskId, revisionBaseline: model.revisionBaseline, expectedVersion: model.task.version,
+            recovery: 'Call revise on this same Task with the instruction and the returned baseline and expectedVersion.' }) }], details: {} };
+          if (command === 'get') return { content: [{ type: 'text', text: JSON.stringify({ ok: true, taskId, phase: model.task.phase, expectedVersion: model.task.version, revisionBaseline: model.revisionBaseline, allowedCommands: model.allowedCommands, allocation: model.allocation, coordination: model.revisionBaseline ? 'Completed result baseline available. Copy its exact fields for revise.' : 'No completed result baseline. Use instruct(taskId,instruction) for new direction or answer(taskId,questionId,instruction); never invent baseline fields.' }) }], details: {} };
         }
         if (command === 'revise') {
           if (!input.instruction || !input.baselineResultId || !input.baselineVersion || !input.expectedVersion) throw new Error('Revision requires instruction, baseline result/version, and expected task version');
-          const refs = parseTaskHandoffReferences(modelInput.sourceRefs);
-          if (!refs) throw new Error('Invalid revision sourceRefs');
           const result = new TaskApplicationService().reviseCompleted({ taskId, conversationId,
             instruction: input.instruction, baselineResultId: input.baselineResultId, baselineVersion: input.baselineVersion,
-            expectedVersion: input.expectedVersion, sourceRefs: refs, supersedesEntryIds: input.supersedesEntryIds,
+            expectedVersion: input.expectedVersion, sourceRefs, supersedesEntryIds: input.supersedesEntryIds,
             idempotencyKey: input.idempotencyKey ?? `personal-revise:${conversationId}:${toolCallId}` });
           deps.dispatchTaskRuns?.();
           const payload = result.ok === false ? { ok: false, reason: result.reason, revisionBaseline: result.model?.revisionBaseline,
@@ -419,8 +430,25 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
           return { content: [{ type: 'text', text: JSON.stringify(result) }], details: {} };
         }
         if (command === 'retry_allocation') {
+          const activeInputId = getSessionInputState(conversationId).activeInputId;
+          const activeInput = activeInputId ? getSessionInputById(conversationId, activeInputId) : undefined;
+          if (!sourceRefs?.length && activeInput?.origin.type === 'system' && activeInput.origin.source === 'task_update') {
+            throw new Error('An unchanged allocation cannot be retried from a background Task update');
+          }
+          const expectedVersion = new TaskRepository().require(taskId).version;
+          if (sourceRefs?.length) {
+            const mutation = { taskId, type: 'retry_allocation', expectedVersion, sourceRefs };
+            if (deps.authorizeCapability && !await deps.authorizeCapability('xopc.tasks.command', mutation)) throw new Error('Task access denied');
+            const result = new TaskApplicationService().execute({ taskId, expectedVersion,
+              idempotencyKey: input.idempotencyKey ?? `allocation-sources:${taskId}:${toolCallId}`,
+              command: { type: 'retry_allocation' }, allocationSources: sourceRefs, actor: { kind: 'agent', id: ownAgentId } });
+            if (result.ok) deps.dispatchTaskRuns?.();
+            const response = result.ok === false ? { ok: false, reason: result.reason }
+              : { ok: true, taskId, allocation: result.model.allocation };
+            return { content: [{ type: 'text', text: JSON.stringify(response) }], details: {} };
+          }
           command = 'command';
-          args = { taskId, type: 'retry_allocation', expectedVersion: new TaskRepository().require(taskId).version };
+          args = { taskId, type: 'retry_allocation', expectedVersion };
         } else if (command === 'instruct' || command === 'answer') {
           const body = input.instruction?.trim();
           if (!body) throw new Error('instruction is required');
@@ -435,9 +463,12 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
       }
       try {
         const result = await selectedProductTool.execute(toolCallId, { mode: 'task', command, args }, signal, undefined as never);
-        if ((input.command === 'answer' || input.command === 'instruct') && input.taskId && result.details.result && (result.details.result as { ok?: boolean }).ok !== false) {
+        if (input.command === 'answer' && input.taskId && result.details.result && (result.details.result as { ok?: boolean }).ok !== false) {
           const allocation = new TaskAllocationRepository().get(input.taskId);
-          if (allocation && ['blocked', 'failed'].includes(allocation.status)) {
+          const question = input.questionId ? new TaskCollaborationRepository().get(input.questionId) : undefined;
+          if (allocation?.status === 'blocked' && allocation.reason_code === 'needs_input'
+            && question?.taskId === input.taskId && question.authorKind === 'system'
+            && question.authorId === 'task-router' && question.createdAt >= allocation.updated_at) {
             new TaskApplicationService().execute({ taskId: input.taskId, expectedVersion: new TaskRepository().require(input.taskId).version,
               idempotencyKey: `allocation-answer:${toolCallId}`, command: { type: 'retry_allocation' }, actor: { kind: 'agent', id: ownAgentId } });
             deps.dispatchTaskRuns?.();

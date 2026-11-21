@@ -3,12 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { TurnOutcome } from '@xopcai/gateway-contract';
-import { resultReferenceId, resultReferenceVersion } from '@xopcai/gateway-contract';
+import { resultReferenceId, resultReferenceVersion, TASK_RESULT_DELIVERY_TYPE } from '@xopcai/gateway-contract';
 import AdmZip from 'adm-zip';
 import * as XLSX from 'xlsx';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
+import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js';
 import { createPersonalResultTool } from '../../agent/tools/personal-result-tool.js';
 import { buildResultAgentContext } from '../../agent/source-context/result-context.js';
 import { saveMediaBuffer, resolveMediaBufferPath } from '../../media/store.js';
@@ -21,7 +22,7 @@ import { TaskApplicationService } from '../../tasks/task-application-service.js'
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
 import { TaskRunCoordinator } from '../../tasks/task-run-coordinator.js';
 import { buildSessionContextForLlm } from '../../session/session-context-for-llm.js';
-import { loadTranscriptRowsForSession } from '../../storage/sqlite/transcript-repository.js';
+import { appendTranscriptEntry, loadTranscriptRowsForSession } from '../../storage/sqlite/transcript-repository.js';
 import { TaskResultDeliveryService } from '../../tasks/task-result-delivery-service.js';
 import { personalAgentId } from '../repository.js';
 import { extractResult } from '../result-extraction.js';
@@ -110,6 +111,52 @@ describe('Personal result continuity', () => {
     writeFileSync(resolveMediaBufferPath(r.media!.id, 'outbound'), 'changed');
     expect(await readPersonalResult(r.conversationId, { command: 'read', resultId: r.resultId, sourceId: r.sourceId })).toMatchObject({ status: 'changed' });
   }, 15000);
+
+  it('pins the delivered result when a follow-up supplies its task ID', async () => {
+    const prior = await result('Retained report with exact evidence');
+    await new TaskResultDeliveryService().drain(() => {});
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => prior.conversationId,
+      getCurrentAgentId: () => personalAgentId('local-owner'), dispatchTaskRuns: vi.fn() });
+
+    await expect(tool.execute('missing', { command: 'submit', objective: 'Transform the prior report',
+      description: 'Use the selected report as the input.', sourceRefs: [{ kind: 'result', resultId: 'unknown' }] }))
+      .rejects.toThrow('exact resultId');
+    const response = await tool.execute('follow-up', { command: 'submit', objective: 'Transform the prior report',
+      description: 'Use the selected report as the input.', sourceRefs: [{ kind: 'result', resultId: prior.taskId }] });
+    const submission = JSON.parse((response.content[0] as { text: string }).text
+      .split('\nOpen in xopc:')[0]!.split('\nxopc-product-delivery:')[0]!);
+    expect(submission.ok).toBe(true);
+    const handoff = await resolveTaskHandoffReferences(submission.task.id);
+    expect(handoff?.sources[0]).toMatchObject({ sourceId: resultReferenceId(prior.resultId),
+      version: resultReferenceVersion(resolvePersonalResultReference(prior.conversationId, prior.resultId)) });
+  });
+
+  it('returns the displayed result baseline for an implicit follow-up even with other open work', async () => {
+    const prior = await result('Retained report');
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => prior.conversationId,
+      getCurrentAgentId: () => personalAgentId('local-owner'), dispatchTaskRuns: vi.fn() });
+    for (const objective of ['Plan the workshop', 'Organize the directory']) {
+      await tool.execute(objective, { command: 'submit', objective, description: objective });
+    }
+    const delivery = resolvePersonalResultReference(prior.conversationId, prior.resultId);
+    const shownAt = Date.now();
+    appendTranscriptEntry(prior.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
+      details: delivery, content: 'Retained report', display: true, timestamp: shownAt });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(shownAt + 100);
+    try {
+      insertSessionInput({ id: 'referential-input', conversationId: prior.conversationId, clientMessageId: 'follow-up',
+        requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued',
+        content: 'Extend the previous one to the full quarter.', origin: { type: 'system', source: 'cli' } });
+    } finally { clock.mockRestore(); }
+    claimNextSessionInput(prior.conversationId, 'follow-up-run');
+
+    const response = await tool.execute('continue', { command: 'instruct', taskId: prior.taskId,
+      taskReference: 'the previous one', instruction: 'Extend the scope to the full quarter.' });
+    expect(JSON.parse((response.content[0] as { text: string }).text)).toMatchObject({
+      ok: false, reason: 'revision_required', taskId: prior.taskId,
+      revisionBaseline: { resultId: prior.resultId },
+    });
+  });
 
   it('resolves a structured prior-result file title to its exact artifact version in the background', async () => {
     const r = await result('Retained result', { text: 'PINNED FILE', name: 'report.md', mime: 'text/markdown' });

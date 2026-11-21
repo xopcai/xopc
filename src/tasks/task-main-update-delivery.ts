@@ -27,8 +27,8 @@ export class TaskMainUpdateDelivery {
       const personal = isPersonalConversation(conversationId);
       const delayNotice = isTaskDelayNotice(entry);
       if (personal && (entry.kind === 'progress' || entry.kind === 'ack') && !this.#entries.hasSubmittedMainUpdate(entry.id)
-        && (delayNotice ? !isCurrentTaskDelayNotice(entry, conversationId)
-          : getTaskNotificationPreference(entry.taskId, conversationId) === 'final_only')) {
+        && (entry.kind === 'ack' || (delayNotice ? !isCurrentTaskDelayNotice(entry, conversationId)
+          : getTaskNotificationPreference(entry.taskId, conversationId) === 'final_only'))) {
         this.#entries.decideMainUpdate(entry.id, 'silent', 'The saved preference or current task state suppresses this update');
         this.#entries.markMainUpdateDelivered(entry.id);
         delivered += 1;
@@ -82,7 +82,10 @@ export class TaskMainUpdateDelivery {
           delivered += 1;
           continue;
         }
-        const requiresOwnerAwareness = entry.kind === 'question' || entry.kind === 'failure' || entry.kind === 'ack';
+        const earlierQuestion = personal && entry.kind === 'question'
+          && this.#entries.coordination(entry.taskId).some(item => item.kind === 'question'
+            && item.sequence < entry.sequence && item.taskRunId === entry.taskRunId && item.authorId === entry.authorId);
+        const requiresOwnerAwareness = (entry.kind === 'question' && !earlierQuestion) || entry.kind === 'failure' || entry.kind === 'ack';
         const verdict = delayNotice
           ? { notify: true, reason: 'The host confirmed a material delay from persisted timestamps' }
           : requiresOwnerAwareness
@@ -119,6 +122,7 @@ export class TaskMainUpdateDelivery {
             : '',
           `Your private notification decision: ${JSON.stringify(verdict.reason)}.`,
           'Use the current Task facts for simple progress. Read the Task and collaboration board with personal_task(command="get", taskId) or xopc_use when more detail is needed to handle a question, failure or outdated update. If this is a worker question, first answer it from the Task brief or conversation with personal_task(command="answer", taskId, questionId, instruction) when available; ask the user only for a genuinely missing fact. For failures, inspect the actual blocker and try a suitable alternative within the user’s authorization before reporting an impasse. After tools, recheck the current outcome. For an internal failure or question resolved from existing context, if recovery is confirmed and there is no final failure, material partial failure, significant delay, new requested result or required user action, return NO_REPLY. Always deliver a new requested final result. A failure entry requires private handling, not necessarily a user notification. Never claim recovery from intent alone or automatically repeat consequential effects. Otherwise tell the user only the remaining impact or required action in your own words; keep routing and retry details private unless asked. Keep the response proportionate to the update and recent conversation. Do not expose this internal trigger or repeat already reported details. If a result receipt is generic, use the board for the actual outcome. A finished TaskRun is not proof that the Task passed verification or was accepted; check its receipt and use precise status language. Do not ask the user to close a Task unless requested. Use tools without preliminary user-facing commentary, then return NO_REPLY or one concise reply according to the remaining user impact.',
+          'For a missing input, recover the exact authorized source with personal_result or the appropriate read tool. Answer only with a substantive resolution the worker can use. If the input is genuinely missing, leave the question open and ask the user once. A direction to wait, an acknowledgement, or a restatement of the missing input is not an answer and must not resume execution.',
           'For a visible update, lead with the change or the exact decision needed, in one or two natural sentences. Avoid a status recap. The snapshot may predate recovery; use the latest tool result when one was needed. Use personal_task get section=status for a fresh snapshot.',
           entry.kind === 'ack' ? 'This acknowledgement is private coordination context. Do not repeat a saved/sent acknowledgement already given to the user. Return NO_REPLY unless it answers a requested status question or adds an actionable change.' : '',
         ].join('\n');

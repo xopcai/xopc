@@ -1,3 +1,4 @@
+import { TASK_RESULT_DELIVERY_TYPE } from '@xopcai/gateway-contract';
 import type { TaskAllocation, TaskOperationalState, TaskPresentation, TaskResolution } from '@xopcai/gateway-contract';
 
 import { getClarification } from '../storage/sqlite/clarification-wait-repository.js';
@@ -49,6 +50,23 @@ export class TaskOriginRepository {
   owns(taskId: string, conversationId: string): boolean {
     return Boolean(getSqliteDatabase().prepare(`SELECT 1 FROM task_origin_links
       WHERE task_id = ? AND conversation_id = ?`).get(taskId, conversationId));
+  }
+
+  /** The most recent result shown after the preceding human input is the implicit continuation anchor. */
+  recentResultTask(conversationId: string, inputId: string, before: number): string | undefined {
+    const row = getSqliteDatabase().prepare(`SELECT json_extract(entry.payload_json, '$.details.taskId') AS taskId
+      FROM sessions session JOIN transcript_entries entry ON entry.transcript_id = session.active_transcript_id
+      WHERE session.conversation_id = ? AND entry.role = 'custom'
+        AND json_extract(entry.payload_json, '$.customType') = ?
+        AND json_extract(entry.payload_json, '$.display') = 1 AND entry.created_at < ?
+        AND entry.created_at >= COALESCE((SELECT MAX(input.created_at_ms) FROM session_inputs input
+          WHERE input.conversation_id = session.conversation_id AND input.id <> ?
+            AND input.created_at_ms <= ? AND input.kind = 'message'
+            AND (json_extract(input.origin_json, '$.type') <> 'system'
+              OR json_extract(input.origin_json, '$.source') = 'cli')), 0)
+      ORDER BY entry.seq DESC LIMIT 1`).get(conversationId, TASK_RESULT_DELIVERY_TYPE, before, inputId, before) as
+        { taskId: string | null } | undefined;
+    return row?.taskId ?? undefined;
   }
 
   getConversationId(taskId: string): string | undefined {

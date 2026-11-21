@@ -11,6 +11,9 @@ const SessionRecallSchema = Type.Object({
     maxLength: 500,
     description: 'Keywords, an exact phrase, path, URL, ID, date, or name to find in this session.',
   }),
+  matchMode: Type.Optional(Type.Union([Type.Literal('keyword'), Type.Literal('phrase')], {
+    description: 'Use keyword for multiple search terms, or phrase for exact wording. Defaults to exact phrase first with a keyword fallback.',
+  })),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20, default: 8 })),
   beforeSeq: Type.Optional(Type.Integer({
     minimum: 1,
@@ -21,6 +24,7 @@ const SessionRecallSchema = Type.Object({
 
 interface SessionRecallParams {
   query: string;
+  matchMode?: 'keyword' | 'phrase';
   limit?: number;
   beforeSeq?: number;
   maxCharsPerResult?: number;
@@ -65,11 +69,17 @@ export function createSessionRecallTool(deps: SessionRecallToolDeps): AgentTool 
       const query = input.query.trim();
       const limit = Math.min(20, Math.max(1, input.limit ?? 8));
       const maxChars = Math.min(20_000, Math.max(500, input.maxCharsPerResult ?? 6_000));
-      const matches = deps.getSessionStore().recallSession(conversationId, query, {
+      const store = deps.getSessionStore();
+      const options = {
         limit,
         ...(input.beforeSeq ? { beforeSeq: input.beforeSeq } : {}),
         ...(deps.maxOutputChars ? { orderBySeq: true } : {}),
-      });
+        ...(input.matchMode ? { matchMode: input.matchMode } : {}),
+      };
+      let matches = store.recallSession(conversationId, query, options);
+      if (!input.matchMode && !matches.length && /\s/u.test(query)) {
+        matches = store.recallSession(conversationId, query, { ...options, matchMode: 'keyword' });
+      }
       const protectedEntries = deps.getHistoryContext ? forgottenHistoryEntries(deps.getHistoryContext(), deps.getCurrentUserText?.()) : new Set<string>();
       for (const match of matches) {
         if (protectedEntries.has(`${conversationId}:*`) || protectedEntries.has(`${conversationId}:${match.entryId}`)) match.content = FORGOTTEN_HISTORY_EXCERPT;

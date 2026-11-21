@@ -27,7 +27,7 @@ import type { TranscriptStoredRow } from '../session/session-context-for-llm.js'
 import { extractFtsContent } from '../storage/sqlite/row-mappers.js';
 import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { TaskRepository } from './task-repository.js';
-import { readPersonalResult, resolvePersonalResultReference, assertPersonalResultDelegateAccess, type PersonalResultInput } from '../personal-agent/result-reader.js';
+import { readPersonalResult, resolvePersonalHandoffResult, resolvePersonalResultReference, assertPersonalResultDelegateAccess, type PersonalResultInput } from '../personal-agent/result-reader.js';
 import { getSessionInputById } from '../storage/sqlite/session-input-repository.js';
 import { readCurrentTranscriptId } from '../storage/sqlite/session-instance-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
@@ -114,6 +114,22 @@ export function parseTaskHandoffReferences(raw: unknown): TurnContextRef[] | nul
       : resultReferenceId(ref.sourceId.slice(0, separator), ref.sourceId.slice(separator + 1)) };
   });
   return parseTurnContextRefs(refs);
+}
+
+/** Pin a result reference using only delivery metadata, before any file or body read. */
+export function pinTaskHandoffReference(conversationId: string, ref: TurnContextRef): TurnContextRef {
+  if (ref.kind !== 'result') return ref;
+  const selection = parseResultReferenceId(ref.sourceId);
+  if (!selection) throw new Error('Invalid result reference');
+  const delivery = resolvePersonalHandoffResult(conversationId, selection.resultId);
+  const version = resultReferenceVersion(delivery);
+  if (ref.expectedVersion && ref.expectedVersion !== version) throw new Error('Selected result version changed');
+  if (selection.sourceId === 'body') return { ...ref, sourceId: resultReferenceId(delivery.deliveryId), expectedVersion: version };
+  const artifacts = delivery.outcome.deliverables;
+  const named = artifacts.filter(item => item.title === selection.sourceId);
+  const artifact = artifacts.find(item => item.artifactId === selection.sourceId) ?? (named.length === 1 ? named[0] : undefined);
+  if (artifact?.availability !== 'available') throw new Error('Select an available artifact by its exact ID from personal_result(command="get", resultId)');
+  return { ...ref, sourceId: resultReferenceId(delivery.deliveryId, artifact.artifactId), expectedVersion: version };
 }
 
 function conversationExcerptSource(conversationId: string, entryId: string, config?: Config) {
@@ -226,6 +242,27 @@ export function assertTaskHandoffAccess(handoff: TaskHandoff): void {
     || handoff.inputId && !getSessionInputById(handoff.conversationId, handoff.inputId)) throw new Error('Task source input is no longer available');
 }
 
+/** Replace the unresolved model-selected inputs of an unstarted allocation. */
+export function replaceUnresolvedTaskHandoffReferences(taskId: string, references: TurnContextRef[]): void {
+  const handoff = getTaskHandoff(taskId);
+  if (!handoff || handoff.kind === 'workspace_files' || !handoff.requestedSources?.length || !references.length) {
+    throw new Error('This Task has no unresolved handoff references to replace');
+  }
+  assertTaskHandoffAccess(handoff);
+  const key = (ref: TurnContextRef) => JSON.stringify([ref.kind, ref.sourceId, ref.expectedVersion]);
+  const previousKeys = new Set(handoff.requestedSources.map(key));
+  if (previousKeys.size === references.length && references.every(ref => previousKeys.has(key(ref)))) {
+    throw new Error('The replacement references are unchanged');
+  }
+  const previous = new Set(handoff.requestedSources.map(ref => `${ref.kind}:${ref.sourceId}`));
+  persistHandoff(taskId, { ...handoff, requestedSources: references,
+    completeness: { ...handoff.completeness, unresolvedReferences: [...new Set([
+      ...handoff.completeness.unresolvedReferences.filter(id => !previous.has(id)),
+      ...references.map(ref => `${ref.kind}:${ref.sourceId}`),
+    ])] },
+  }, 'Repaired task handoff');
+}
+
 function within(base: string, path: string): boolean {
   const rel = relative(base, path);
   return rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
@@ -331,13 +368,8 @@ export async function resolveTaskHandoffReferences(taskId: string, config?: Conf
     }
     let source: { kind: string; sourceId: string; version: string; title: string; text: string; truncated?: boolean } | null = null;
     if (ref.kind === 'result') {
-      const selection = parseResultReferenceId(ref.sourceId);
-      if (selection) {
-        const delivery = resolvePersonalResultReference(handoff.conversationId, selection.resultId);
-        const artifacts = delivery.outcome.deliverables.filter(item => item.artifactId === selection.sourceId || item.title === selection.sourceId);
-        const sourceId = selection.sourceId === 'body' ? 'body' : artifacts.length === 1 ? artifacts[0]!.artifactId : undefined;
-        if (sourceId) source = buildResultAgentContext(handoff.conversationId, resultReferenceId(selection.resultId, sourceId), ref.expectedVersion);
-      }
+      const pinned = pinTaskHandoffReference(handoff.conversationId, ref);
+      source = buildResultAgentContext(handoff.conversationId, pinned.sourceId, pinned.expectedVersion);
     }
     else if (ref.kind === 'task') source = buildTaskAgentContext(new TaskRepository().get(ref.sourceId), ref.expectedVersion);
     else if (ref.kind === 'note') {

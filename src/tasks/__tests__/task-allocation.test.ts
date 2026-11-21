@@ -365,7 +365,7 @@ describe('background task allocation', () => {
     expect(new TaskAllocationRepository().summary(task.id)?.status).toBe('assigned');
   });
 
-  it('blocks unresolved or wrong-version history pointers before selecting an executor', async () => {
+  it('blocks invalid history pointers and replaces them on the same unstarted task', async () => {
     const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => personalAgentId('local-owner'), dispatchTaskRuns: vi.fn() });
     await tool.execute('stale-history', { command: 'submit', objective: 'Use history', description: 'Use the selected note',
       sourceRefs: [{ kind: 'note', sourceId: 'deleted-note', expectedVersion: '1' }] });
@@ -373,6 +373,18 @@ describe('background task allocation', () => {
     await dispatcher().drain();
     expect(new TaskAllocationRepository().summary(task.id)).toMatchObject({ status: 'blocked', reasonCode: 'source_reference_unavailable' });
     expect(new TaskRunRepository().getActiveRoot(task.id)).toBeUndefined();
+
+    await tool.execute('direction', { command: 'instruct', taskId: task.id, instruction: 'Keep waiting for the source' });
+    expect(new TaskAllocationRepository().summary(task.id)?.status).toBe('blocked');
+    new NotesStore().addNote({ id: 'replacement', kind: 'thought', status: 'inbox', markdown: 'Replacement source',
+      createdAt: 1, updatedAt: 2, capturedVia: 'text' } as never);
+    const retry = await tool.execute('replace-source', { command: 'retry_allocation', taskId: task.id,
+      sourceRefs: [{ kind: 'note', sourceId: 'replacement', expectedVersion: '2' }] });
+    expect(JSON.parse(retry.content[0].text)).toMatchObject({ ok: true, taskId: task.id });
+    await dispatcher().drain();
+    expect(new TaskAllocationRepository().summary(task.id)?.status).toBe('assigned');
+    expect((await readTaskHandoffSource(task.id, 0, { command: 'read' })).text).toBe('Replacement source');
+    expect(new TaskRepository().list()).toHaveLength(1);
   });
 
   it('supplements truncated selected text files with bounded UTF-8 pages and rejects changed bytes or escaped paths', async () => {

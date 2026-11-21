@@ -57,6 +57,18 @@ describe('session_recall', () => {
     });
   });
 
+  it('falls back to keywords for a query that misses as an exact phrase', async () => {
+    const recallSession = vi.fn().mockReturnValueOnce([]).mockReturnValueOnce([{
+      entryId: 'entry-4', seq: 4, role: 'custom', createdAt: 4, content: 'Results for the ORBIT launch',
+    }]);
+    const tool = createSessionRecallTool({ getSessionStore: () => ({ recallSession } as any),
+      getCurrentConversationId: () => 'current' });
+    const output = await tool.execute('recall', { query: 'launch ORBIT summary', beforeSeq: 8 });
+    expect(recallSession).toHaveBeenLastCalledWith('current', 'launch ORBIT summary',
+      { limit: 8, beforeSeq: 8, matchMode: 'keyword' });
+    expect(JSON.parse(textOf(output)).results).toMatchObject([{ entryId: 'entry-4' }]);
+  });
+
   it('cannot accept an arbitrary session key and fails without active context', async () => {
     const recallSession = vi.fn();
     const tool = createSessionRecallTool({

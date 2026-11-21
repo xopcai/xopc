@@ -42,10 +42,10 @@ function searchToolResult(query: string, count: number, response: SearchResponse
     details: { results: response.results, provider: response.provider, query, count, cached: response.cached ?? false, capturedAt: response.capturedAt,
       searchInfo: sanitizeSearchInfo({ ...response.metadata, provider: response.provider, cached: response.cached ?? false, capturedAt: response.capturedAt }) } };
 }
-function searchToolError(error: unknown, signal?: AbortSignal): AgentToolResult<any> {
+function searchToolError(query: string, count: number, error: unknown, signal?: AbortSignal): AgentToolResult<any> {
   const failure = classifySearchError(error, signal);
   return { content: [{ type: 'text', text: `Search error (${failure.kind}): ${failure.message}` }],
-    details: { results: [], error: failure.message, failure: searchFailureInfo(failure), status: failure.kind === 'cancelled' ? 'cancelled' : 'failed' } };
+    details: { query, count, results: [], error: failure.message, failure: searchFailureInfo(failure), status: failure.kind === 'cancelled' ? 'cancelled' : 'failed' } };
 }
 export function createWebSearchTool(getConfig: () => Config | undefined): WebSearchBatchTool {
   return {
@@ -61,7 +61,7 @@ export function createWebSearchTool(getConfig: () => Config | undefined): WebSea
         const result = searchToolResult(params.query, count, response);
         return { ...result, details: { ...result.details, sourceRequests: registry.sourceRequests } };
       } catch (error) {
-        const result = searchToolError(error, signal);
+        const result = searchToolError(params.query, count, error, signal);
         return { ...result, details: { ...result.details, sourceRequests: registry.sourceRequests } };
       }
     },
@@ -74,7 +74,7 @@ export function createWebSearchTool(getConfig: () => Config | undefined): WebSea
       }));
       const responses = await registry.searchBatch(inputs, signal, authorize);
       return { sourceRequests: registry.sourceRequests, items: responses.map(item => {
-        const result = item.response ? searchToolResult(item.query, item.count, item.response) : searchToolError(new SearchError(item.error!), signal);
+        const result = item.response ? searchToolResult(item.query, item.count, item.response) : searchToolError(item.query, item.count, new SearchError(item.error!), signal);
         return { id: item.id, result: { ...result, details: { ...result.details, fallback: item.fallback } } };
       }) };
     },

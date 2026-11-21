@@ -25,7 +25,7 @@ import { resolvePersonalResultReference } from '../personal-agent/result-reader.
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
 import { TaskOriginRepository } from './task-origin-repository.js';
 import type { TurnContextRef } from '../agent/source-context/types.js';
-import { captureTaskHandoff, captureWorkspaceFileHandoff, type WorkspaceFileInput } from './task-handoff.js';
+import { captureTaskHandoff, captureWorkspaceFileHandoff, replaceUnresolvedTaskHandoffReferences, type WorkspaceFileInput } from './task-handoff.js';
 import { TaskRepository } from './task-repository.js';
 import { mcpDelegatedRunPrincipal, TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
@@ -297,13 +297,16 @@ export class TaskApplicationService {
     triggerContext?: Record<string, unknown>;
     source?: TaskChangeSource;
     retry?: TaskRunRetry;
+    allocationSources?: TurnContextRef[];
   }): TaskApplicationResult {
     const actor = input.actor ?? { kind: 'user' };
     const task = this.#tasks.get(input.taskId);
     if (!task) return { ok: false, reason: 'not_found' };
     const model = this.#projector.project(task);
     if (task.version !== input.expectedVersion) return { ok: false, reason: 'conflict', model };
-    const duplicate = this.readCommand(input.idempotencyKey, requestHash(input.command));
+    if (input.allocationSources && input.command.type !== 'retry_allocation') return { ok: false, reason: 'invalid_transition', model };
+    const commandHash = requestHash(input.allocationSources ? { taskId: input.taskId, command: input.command, sources: input.allocationSources } : input.command);
+    const duplicate = this.readCommand(input.idempotencyKey, commandHash);
     if (duplicate) return { ok: true, model };
     if (actor.kind !== 'user' && ['move', 'mark_ready', 'request_review', 'close', 'reopen'].includes(input.command.type)
       && !this.#tasks.automaticStartAllowed(task.id)) return { ok: false, reason: 'blocked', model };
@@ -339,12 +342,14 @@ export class TaskApplicationService {
         case 'retry_allocation': {
           const allocation = new TaskAllocationRepository().get(task.id);
           if (!allocation || !['blocked', 'failed'].includes(allocation.status) || task.phase === 'closed'
-            || this.#runs.getActiveRoot(task.id) || this.#runs.listActiveWaits(task.id).length) {
+            || this.#runs.getActiveRoot(task.id) || this.#runs.listActiveWaits(task.id).length
+            || (input.allocationSources && (allocation.reason_code !== 'source_reference_unavailable' || this.#runs.getLatestRoot(task.id)))) {
             result = { ok: false, reason: 'invalid_transition', model };
             break;
           }
           const updated = this.#tasks.update(task.id, { expectedVersion: task.version });
           if (!updated) { result = { ok: false, reason: 'conflict', model }; break; }
+          if (input.allocationSources) replaceUnresolvedTaskHandoffReferences(task.id, input.allocationSources);
           db.prepare("UPDATE task_allocations SET status = 'pending', attempts = 0, reason_code = NULL, task_version = ?, next_attempt_at = ?, updated_at = ? WHERE task_id = ?")
             .run(updated.version, Date.now(), Date.now(), task.id);
           new TaskAllocationRepository().publish(task.id, `任务「${task.title}」正在重新分配执行者。`);
@@ -519,7 +524,7 @@ export class TaskApplicationService {
         key: input.idempotencyKey,
         type: `task.${input.command.type}`,
         subjectId: task.id,
-        hash: requestHash(input.command),
+        hash: commandHash,
         result: { taskId: task.id, runId: result.runId },
       });
       this.enqueueEvent(db, 'task.commanded.v2', task.id, input.idempotencyKey, {

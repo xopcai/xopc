@@ -207,6 +207,18 @@ describe('personal research benchmark v1', () => {
       checks: [{ criterionIndex: 0, status: 'passed', claimIds: ['price'], note: 'False pass' }] }, ['Use hourly units']);
     expect(result.checks[0].status).toBe('unverified');
   });
+  it('gives coverage review the observed retrieval targets and failed attempts', async () => {
+    const { worker } = execution();
+    appendTranscriptEntry(worker.key, { role: 'toolResult', toolCallId: 'search-2', toolName: 'web_search',
+      content: [{ type: 'text', text: 'Search failed' }], details: { query: 'alternative pricing tiers', status: 'failed' },
+      isError: true, timestamp: Date.now() } as never);
+    const audit = vi.fn(reviewer);
+    await submitTaskResearchResult(worker.key, 'coverage', input, undefined, audit);
+    expect(audit.mock.calls[0]?.[0].retrieval).toContainEqual({
+      tool: 'web_search', target: 'alternative pricing tiers', outcome: 'failed',
+    });
+  });
+
   it('R06-unknown-reference: rejects reviewer references to invented claims', () => {
     expect(() => applyResearchReview(seedResult(), { claims: [], checks: [{ criterionIndex: 0, status: 'passed', claimIds: ['invented'], note: 'False pass' }] }, ['Cite sources']))
       .toThrow(/unknown claim/);

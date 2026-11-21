@@ -24,12 +24,13 @@ export function getAvailablePersonalAgentTools(config: EffectiveAgentConfig, dep
 }
 
 export function personalAgentModelAvailability(config: EffectiveAgentConfig): { available: boolean; reason?: string } {
-  for (const ref of [config.models.chat.primary, ...config.models.chat.fallbacks]) {
+  const models = config.models.background ?? config.models.chat;
+  for (const ref of [models.primary, ...models.fallbacks]) {
     try {
       const model = resolveModel(ref);
       if (isProviderConfiguredSync(model.provider)) return { available: true };
     } catch { /* Try the next configured model. */ }
   }
-  return { available: false, reason: 'No configured chat model resolves to an available provider' };
+  return { available: false, reason: 'No configured task model resolves to an available provider' };
 }
 

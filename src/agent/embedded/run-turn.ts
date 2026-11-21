@@ -468,7 +468,6 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
 
     preparationTimings.runnerAcquireMs = performance.now() - runnerStartedAt;
     const { session, reused } = runner;
-    const configurationTurnStart = session.agent.state.messages.length;
     await runLease.attach(session, async () => session.abort());
     const turnDeadline = new AbortController();
     const runAbortSignal = AbortSignal.any([
@@ -480,6 +479,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     }
     const transcriptStartedAt = performance.now();
     session.agent.state.messages = stripTrailingErrorAssistantMessages(await transcriptRuntime.loadMessages());
+    const configurationTurnStart = session.agent.state.messages.length;
+    const previousAssistant = lastAssistantMessage(session.agent.state.messages);
     preparationTimings.transcriptLoadMs = performance.now() - transcriptStartedAt;
     runner.piSm.setActiveTurnId?.(runId);
     const recoveryState = { interruptedAttempts: 0 };
@@ -808,6 +809,11 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       return { block: true as const, terminate: true, reason };
     };
     let sentVisibleMessage = false;
+    const needsVisibleReply = () => {
+      if (!params.requireVisibleReply || sentVisibleMessage || connectionStopped || clarificationStopped || phoneStopped) return false;
+      const reply = lastAssistantPlainText(session)?.trim();
+      return lastAssistantMessage(session.agent.state.messages) === previousAssistant || !reply || reply === NO_REPLY;
+    };
     params.turnPolicy?.reset();
     const nativeBeforeTool = session.agent.beforeToolCall;
     const nativeAfterTool = session.agent.afterToolCall;
@@ -1135,10 +1141,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
             await session.agent.waitForIdle();
             await recoverSettledTurn();
           }
-          if (params.requireVisibleReply && !sentVisibleMessage && !policyStopped
+          if (needsVisibleReply() && !policyStopped
             && !runAbortSignal.aborted && !isAssistantTurnFailed(session.agent)
-            && !isAssistantTurnAborted(session.agent)
-            && lastAssistantPlainText(session).trim() === NO_REPLY) {
+            && !isAssistantTurnAborted(session.agent)) {
             await session.sendCustomMessage({
               customType: 'visible_reply_required',
               content: 'The direct user message still needs a visible response in this conversation. Answer it now. If it is unclear, ask one short clarifying question. Do not output NO_REPLY.',
@@ -1230,8 +1235,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (recallGroundingFailed) return { ok: false, retryable: false, errorMessage: 'Historical source citations could not be verified', lastAssistantText: lastAssistantPlainText(session) };
       if (memoryClaimFailed) return { ok: false, retryable: false, errorMessage: 'Memory save claim has no verified receipt', lastAssistantText: lastAssistantPlainText(session) };
 
-      if (params.requireVisibleReply && !sentVisibleMessage
-        && lastAssistantPlainText(session).trim() === NO_REPLY) {
+      if (needsVisibleReply()) {
         return { ok: false, retryable: false, errorMessage: 'Assistant did not produce a visible reply' };
       }
 

@@ -82,6 +82,23 @@ export function resolvePersonalResultReference(conversationId: string, resultId:
   return resolve(conversationId, resultId).delivery;
 }
 
+/** Resolve an exact result, or the sole delivered result for an owned Task in this transcript. */
+export function resolvePersonalHandoffResult(conversationId: string, reference: string): TaskResultDelivery {
+  const db = getSqliteDatabase();
+  const exact = db.prepare('SELECT 1 FROM task_result_deliveries WHERE conversation_id = ? AND delivery_id = ?')
+    .get(conversationId, reference);
+  if (exact) return resolvePersonalResultReference(conversationId, reference);
+  const rows = db.prepare(`SELECT delivery.delivery_id, delivery.status FROM task_runs run
+    JOIN task_result_deliveries delivery ON delivery.task_run_id = run.run_id
+    WHERE run.task_id = ? AND delivery.conversation_id = ?
+      AND json_extract(delivery.payload_json, '$.originTranscriptId') = ? LIMIT 2`)
+    .all(reference, conversationId, readCurrentTranscriptId(db, conversationId) ?? '') as Array<{ delivery_id: string; status: string }>;
+  if (rows.length === 1 && rows[0]?.status === 'delivered') {
+    return resolvePersonalResultReference(conversationId, rows[0].delivery_id);
+  }
+  throw new Error('Select a result from personal_result(command="list", taskId) and use its exact resultId. The source is unavailable or has multiple delivered versions.');
+}
+
 /** Retry only an exhausted delivery outbox; never reopen execution, parsing, or a historical revision. */
 export function retryPersonalResultDelivery(conversationId: string, resultId: string): Record<string, unknown> {
   const { delivery } = resolve(conversationId, resultId);
