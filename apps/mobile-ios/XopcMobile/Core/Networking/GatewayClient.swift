@@ -227,7 +227,8 @@ struct GatewayClient: GatewayServing, Sendable {
     }
 
     private func fetchConversationHistory(search: String, offset: Int, scope: ConversationHistoryScope,
-                                          pinnedOnly: Bool) async throws -> ConversationPage {
+                                          pinnedOnly: Bool) async throws -> ConversationPage
+    {
         var query = [
             URLQueryItem(name: "limit", value: "50"),
             URLQueryItem(name: "offset", value: String(offset)),
@@ -351,7 +352,9 @@ struct GatewayClient: GatewayServing, Sendable {
         }
         return ticket
     }
+}
 
+extension GatewayClient {
     func request<Response: Decodable>(
         path: String,
         queryItems: [URLQueryItem] = [],

@@ -30,66 +30,66 @@ struct NoteDetailView: View {
                 ProgressView("正在读取笔记…")
             } else if let note {
                 ScrollViewReader { proxy in
-                  ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        if let title = note.title, !title.isEmpty {
-                            Text(verbatim: title).font(.title.bold())
-                        } else {
-                            Text("未命名笔记").font(.title.bold())
-                        }
-                        if note.pinned == true {
-                            Label("已置顶", systemImage: "pin.fill")
-                                .mobileTextStyle(.caption)
-                                .foregroundStyle(.tint)
-                        }
-                        HStack {
-                            Label(note.status.noteStatusLabel, systemImage: "circle.fill")
-                            Text(note.updatedAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
-                        }
-                        .mobileTextStyle(.caption).foregroundStyle(.secondary)
-                        if !note.markdown.isEmpty || note.kind != "voice" {
-                            Group {
-                                if note.markdown.isEmpty {
-                                    Text("暂无正文")
-                                } else {
-                                    MarkdownBodyView(parts: readingParts, configuration: configuration, conversationID: nil,
-                                                     highlightedPart: readingTarget)
-                                        .environment(\.chatTextSelectionEnabled, true)
-                                }
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            if let title = note.title, !title.isEmpty {
+                                Text(verbatim: title).font(.title.bold())
+                            } else {
+                                Text("未命名笔记").font(.title.bold())
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
-                        }
-                        if let discussion {
-                            DiscussionProcessingSection(
-                                detail: discussion,
-                                isRetrying: isRetryingDiscussion,
-                                retryUsesLocalAudio: hasLocalRecording && discussion.discussion.failureStage == "audio_upload",
-                                onRetry: {
-                                    Task {
-                                        if hasLocalRecording, discussion.discussion.failureStage == "audio_upload" {
-                                            await retryLocalRecording()
-                                        } else {
-                                            await retryDiscussion()
-                                        }
+                            if note.pinned == true {
+                                Label("已置顶", systemImage: "pin.fill")
+                                    .mobileTextStyle(.caption)
+                                    .foregroundStyle(.tint)
+                            }
+                            HStack {
+                                Label(note.status.noteStatusLabel, systemImage: "circle.fill")
+                                Text(note.updatedAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
+                            }
+                            .mobileTextStyle(.caption).foregroundStyle(.secondary)
+                            if !note.markdown.isEmpty || note.kind != "voice" {
+                                Group {
+                                    if note.markdown.isEmpty {
+                                        Text("暂无正文")
+                                    } else {
+                                        MarkdownBodyView(parts: readingParts, configuration: configuration, conversationID: nil,
+                                                         highlightedPart: readingTarget)
+                                            .environment(\.chatTextSelectionEnabled, true)
                                     }
                                 }
-                            )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                            }
+                            if let discussion {
+                                DiscussionProcessingSection(
+                                    detail: discussion,
+                                    isRetrying: isRetryingDiscussion,
+                                    retryUsesLocalAudio: hasLocalRecording && discussion.discussion.failureStage == "audio_upload",
+                                    onRetry: {
+                                        Task {
+                                            if hasLocalRecording, discussion.discussion.failureStage == "audio_upload" {
+                                                await retryLocalRecording()
+                                            } else {
+                                                await retryDiscussion()
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                            if let attachments = note.attachments, !attachments.isEmpty {
+                                NoteAttachmentsSection(
+                                    configuration: configuration,
+                                    noteID: note.id,
+                                    attachments: attachments
+                                )
+                            }
                         }
-                        if let attachments = note.attachments, !attachments.isEmpty {
-                            NoteAttachmentsSection(
-                                configuration: configuration,
-                                noteID: note.id,
-                                attachments: attachments
-                            )
-                        }
+                        .padding()
                     }
-                    .padding()
-                  }
-                  .onChange(of: readingTarget) { _, target in
-                      guard let target else { return }
-                      proxy.scrollTo(target, anchor: .top)
-                  }
+                    .onChange(of: readingTarget) { _, target in
+                        guard let target else { return }
+                        proxy.scrollTo(target, anchor: .top)
+                    }
                 }
             } else {
                 ContentUnavailableView {
@@ -117,7 +117,7 @@ struct NoteDetailView: View {
                         readingTarget = nil
                         readingToolsOpen = true
                     }
-                        .accessibilityIdentifier("note-reading-tools")
+                    .accessibilityIdentifier("note-reading-tools")
                 }
             }
             ToolbarItemGroup(placement: .bottomBar) {
@@ -162,7 +162,9 @@ struct NoteDetailView: View {
             let parts = await Task.detached(priority: .userInitiated) {
                 MarkdownPart.project(MarkdownBlock.parse(markdown), previous: previous)
             }.value
-            if !Task.isCancelled { readingParts = parts }
+            if !Task.isCancelled {
+                readingParts = parts
+            }
         }
         .sheet(isPresented: $readingToolsOpen) {
             NoteReadingTools(parts: readingParts) { target in
@@ -351,7 +353,6 @@ extension String {
         return AppLocalization.string(key, locale: AppLocalization.selectedLocale)
     }
 }
-
 
 private struct NoteReadingTools: View {
     let parts: [MarkdownPart]

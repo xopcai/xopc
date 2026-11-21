@@ -3,7 +3,6 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { PERSONAL_WORKER_RESULT_GUIDANCE } from '@xopcai/gateway-contract';
 
 import { memorySearchText } from '../../../knowledge-memory/search-text.js';
 import { personalAgentId } from '../../../personal-agent/repository.js';
@@ -74,6 +73,14 @@ function expectPreserved(db: DatabaseSync): void {
   expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 }
 
+// Persisted by releases before v279, independently of the current worker prompt.
+const LEGACY_PERSONAL_WORKER_RESULT_GUIDANCE = [
+  '## Result for the originating conversation',
+  'For ordinary Tasks when publish_task_result is available, use it before completion to review the actual result. Connected Requests use their own structured result tool instead. When files were published, finalArtifactIds must select the exact final artifact IDs from publication receipts, including [] for a text-only result. Exclude intermediate, obsolete and failed files; publication history is not the final delivery manifest.',
+  'Provide a complete, evidence-grounded result for the originating conversation. The personal assistant may synthesize its final reply from your report. Match the user’s language and requested depth; preserve requested content, relevant sources, verified data cutoffs, uncertainty, and partial failures. Distinguish reported findings from verified facts. Do not invent a friendly opening or assume a new user request.',
+  'Keep internal planning, Agent names, tool logs, and task progress links out of the result unless the user specifically requested them or they are necessary to explain a blocker. Never substitute a progress page, a plan, or a promise for the requested result. Publish required files through the available artifact tools; do not repeat the same attachments or send the user to a Task page to collect them.',
+].join('\n');
+
 describe('supported installed database upgrades', () => {
   it('moves only the current brief and converts the recognized Personal Agent execution policy', () => {
     const db = historicalDatabase(278);
@@ -86,7 +93,7 @@ describe('supported installed database upgrades', () => {
       db.prepare("UPDATE sessions SET agent_id = ?, custom_data_json = '{\"personalAgent\":true}' WHERE conversation_id = 'conversation-1'")
         .run(personalAgentId('local-owner'));
       db.prepare("UPDATE tasks SET latest_contract_version = 2, body = ? WHERE task_id = 'task-1'")
-        .run(`User requirements.\n\n${PERSONAL_WORKER_RESULT_GUIDANCE}`);
+        .run(`User requirements.\n\n${LEGACY_PERSONAL_WORKER_RESULT_GUIDANCE}`);
       ensureXopcDatabaseSchema(db);
       expect(db.prepare("SELECT version, brief, result_policy FROM task_contracts WHERE task_id = 'task-1' ORDER BY version").all()).toEqual([
         { version: 1, brief: null, result_policy: 'selected' },

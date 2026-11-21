@@ -15,10 +15,10 @@ describe('HarmonyOS voice note surface', () => {
     expect(home).not.toContain('this.noteCaptureBar()');
     expect(home).toContain('onStartVoice: (): void => { void this.startNoteCapture(); }');
     expect(home).toContain('await this.capture.start(context)');
-    expect(notes).toContain(".id('notes-create-text')");
+    expect(notes).toContain("actionLabel: $r('app.string.new_note')");
+    expect(notes).toContain("this.onNavigate({ page: 'note-create', itemId: '' })");
     expect(notes).toContain(".id('notes-create-voice')");
-    expect(notes).toContain('this.creationSheetOpen = true');
-    expect(notes).toContain('onDisappear: (): void => { this.finishCreationSheet(); }');
+    expect(notes).toContain('.onClick((): void => { this.onStartVoice(); })');
   });
 
   it('renders live transcript, pause, marker, finish and retry states', () => {

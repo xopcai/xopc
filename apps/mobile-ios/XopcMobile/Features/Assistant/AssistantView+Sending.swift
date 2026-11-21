@@ -1,7 +1,6 @@
 import Foundation
 
 extension AssistantView {
-    // swiftlint:disable:next function_body_length
     func send(voice: MessageAttachment? = nil) {
         guard let conversation, let scope = composerDraftScope,
               scope == ComposerDraftStore.scope(configuration, conversationID: conversation.id) else { return }

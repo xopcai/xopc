@@ -1,4 +1,3 @@
-// swiftlint:disable file_length
 import ImageIO
 import QuickLook
 import SwiftUI

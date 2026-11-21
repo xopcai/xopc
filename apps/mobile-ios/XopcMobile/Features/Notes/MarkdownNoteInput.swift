@@ -39,7 +39,9 @@ struct MarkdownNoteInput: View {
             .accessibilityIdentifier("note-markdown-toolbar")
         }
         .task(id: autofocus) {
-            if autofocus && !showsPreview { isEditing = true }
+            if autofocus, !showsPreview {
+                isEditing = true
+            }
         }
         .onChange(of: markdown) { oldValue, newValue in
             if skipsHistoryChange {

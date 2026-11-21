@@ -138,12 +138,16 @@ struct ChatSidebarView: View {
             }
         }
     }
+}
 
+extension ChatSidebarView {
     private func conversationRow(_ item: ConversationSummary) -> some View {
         let selected = selection?.contains(item.id) ?? (selectedID == item.id)
         return Button {
             if var selection {
-                if !selection.insert(item.id).inserted { selection.remove(item.id) }
+                if !selection.insert(item.id).inserted {
+                    selection.remove(item.id)
+                }
                 self.selection = selection
             } else {
                 onConversation(item)
@@ -172,24 +176,32 @@ struct ChatSidebarView: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("chat-sidebar-session-\(item.id)")
         .contextMenu {
-            if selection == nil, !busy {
-                Button("重命名", systemImage: "pencil") {
-                    renameTarget = item
-                    renameText = item.displayName
-                    renamePresented = true
-                }
-                Button {
-                    runMutation { try await onPin(item) }
-                } label: {
-                    if item.status == "pinned" { Label("取消置顶", systemImage: "pin.slash") }
-                    else { Label("置顶", systemImage: "pin") }
-                }
-                Button("多选", systemImage: "list.bullet") {
-                    selection = [item.id]
-                    mutationFailed = false
-                }
-                Button("删除", systemImage: "trash", role: .destructive) { confirmDelete([item.id]) }
+            conversationMenu(item)
+        }
+    }
+
+    @ViewBuilder
+    private func conversationMenu(_ item: ConversationSummary) -> some View {
+        if selection == nil, !busy {
+            Button("重命名", systemImage: "pencil") {
+                renameTarget = item
+                renameText = item.displayName
+                renamePresented = true
             }
+            Button {
+                runMutation { try await onPin(item) }
+            } label: {
+                if item.status == "pinned" {
+                    Label("取消置顶", systemImage: "pin.slash")
+                } else {
+                    Label("置顶", systemImage: "pin")
+                }
+            }
+            Button("多选", systemImage: "list.bullet") {
+                selection = [item.id]
+                mutationFailed = false
+            }
+            Button("删除", systemImage: "trash", role: .destructive) { confirmDelete([item.id]) }
         }
     }
 
@@ -232,11 +244,15 @@ struct ChatSidebarView: View {
         deleteTargets = []
         runMutation {
             let failures = await onDelete(ids)
-            if selection != nil { selection = failures.isEmpty ? nil : failures }
+            if selection != nil {
+                selection = failures.isEmpty ? nil : failures
+            }
             mutationFailed = !failures.isEmpty
         }
     }
+}
 
+extension ChatSidebarView {
     @ViewBuilder
     private var pagination: some View {
         if recentLoading {

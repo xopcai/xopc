@@ -67,9 +67,8 @@ describe('SessionEnvironmentService', () => {
   it('binds a session to its isolated worktree and removes it on release', async () => {
     seedConversationFixtures();
     const project = new ProjectService().create({ workspaceRoot: repositoryRoot });
-    expect(project.executionMode).toBe('managed_worktree');
 
-    const environment = await service.attach({ conversationId: CONVERSATION_ID, project });
+    const environment = await service.attach({ conversationId: CONVERSATION_ID, project, mode: 'managed_worktree' });
 
     expect(environment).toMatchObject({ kind: 'managed_worktree', status: 'ready' });
     expect(existsSync(environment.rootPath)).toBe(true);
@@ -83,11 +82,9 @@ describe('SessionEnvironmentService', () => {
 
   it('requires an explicit release before changing execution mode', async () => {
     seedConversationFixtures();
-    const project = new ProjectService().create({
-      workspaceRoot: repositoryRoot,
-      executionMode: 'local_checkout',
-    });
-    await service.attach({ conversationId: CONVERSATION_ID, project });
+    const project = new ProjectService().create({ workspaceRoot: repositoryRoot });
+    const environment = await service.attach({ conversationId: CONVERSATION_ID, project });
+    expect(environment.kind).toBe('local_checkout');
 
     await expect(service.attach({
       conversationId: CONVERSATION_ID,
@@ -99,7 +96,7 @@ describe('SessionEnvironmentService', () => {
   it('keeps worktree changes after releasing the session when cleanup is unsafe', async () => {
     seedConversationFixtures();
     const project = new ProjectService().create({ workspaceRoot: repositoryRoot });
-    const environment = await service.attach({ conversationId: CONVERSATION_ID, project });
+    const environment = await service.attach({ conversationId: CONVERSATION_ID, project, mode: 'managed_worktree' });
     writeFileSync(join(environment.rootPath, 'unfinished.txt'), 'Keep this work');
 
     await expect(service.release(CONVERSATION_ID)).rejects.toThrow();
@@ -112,11 +109,12 @@ describe('SessionEnvironmentService', () => {
   it('can release a session while explicitly retaining its managed worktree', async () => {
     seedConversationFixtures();
     const project = new ProjectService().create({ workspaceRoot: repositoryRoot });
-    const environment = await service.attach({ conversationId: CONVERSATION_ID, project });
+    const environment = await service.attach({ conversationId: CONVERSATION_ID, project, mode: 'managed_worktree' });
 
     await service.release(CONVERSATION_ID, false);
 
     expect(service.get(CONVERSATION_ID)).toBeUndefined();
     expect(existsSync(environment.rootPath)).toBe(true);
+    expect(environment.kind).toBe('managed_worktree');
   });
 });

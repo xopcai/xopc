@@ -292,7 +292,9 @@ private struct NotificationSettingsView: View {
         .navigationTitle("通知")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: scenePhase) {
-            if scenePhase == .active { await push.refreshPermission(configuration) }
+            if scenePhase == .active {
+                await push.refreshPermission(configuration)
+            }
         }
     }
 }

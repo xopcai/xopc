@@ -192,7 +192,9 @@ struct TaskConversationView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
     }
+}
 
+extension TaskConversationView {
     private func overview(_ detail: TaskDetailEnvelope) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {

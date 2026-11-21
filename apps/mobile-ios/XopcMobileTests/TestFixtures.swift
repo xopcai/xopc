@@ -36,7 +36,6 @@ extension GatewayServing {
     ) async throws -> [ReferenceItem] {
         []
     }
-
 }
 
 struct GatewayStub: GatewayServing {

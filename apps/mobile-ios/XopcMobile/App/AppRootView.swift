@@ -431,11 +431,12 @@ struct AppRootView: View {
                                }, onDelete: { ids in
                                    await deleteSidebarConversations(ids, using: configuration)
                                })
-            .id(currentScope)
+                               .id(currentScope)
     }
 
     private func changeSidebarConversation(_ item: ConversationSummary, name: String? = nil,
-                                           using configuration: GatewayConfiguration) async throws {
+                                           using configuration: GatewayConfiguration) async throws
+    {
         let scope = ComposerDraftStore.accountScope(configuration)
         guard scope == ComposerDraftStore.accountScope(appState.gatewayConfiguration) else { throw CancellationError() }
         let gateway = GatewayClient(configuration: configuration)
@@ -448,7 +449,11 @@ struct AppRootView: View {
         recentConversations = recentConversations?.map { row in
             guard row.id == item.id else { return row }
             var updated = row
-            if let name { updated.name = name } else { updated.status = item.status == "pinned" ? "active" : "pinned" }
+            if let name {
+                updated.name = name
+            } else {
+                updated.status = item.status == "pinned" ? "active" : "pinned"
+            }
             return updated
         }
         if let name, var selected = appState.selectedConversation, selected.id == item.id {
@@ -508,20 +513,28 @@ struct AppRootView: View {
             guard let target else { return }
             appState.homePath.removeAll()
             setSidebar(false)
-            switch target.kind {
-            case "task":
-                if let id = target.taskId, MobilePushClick.validID(id) { navigate(.notificationTask(id)) }
-            case "automation_run":
-                if let id = target.runId, MobilePushClick.validID(id) { navigate(.libraryAutomationRun(id)) }
-            case "chat", "work_discovery":
-                if let id = target.conversationId, MobilePushClick.validID(id) {
-                    messageLinks.open(.route(page: "chat", itemID: id), appState: appState)
-                }
-            default: break
-            }
+            openMobilePushTarget(target)
         } catch GatewayClientError.http(statusCode: 404, message: _) {
             push.forget(route)
-        } catch { }
+        } catch {}
+    }
+
+    private func openMobilePushTarget(_ target: MobilePushTarget) {
+        switch target.kind {
+        case "task":
+            if let id = target.taskId, MobilePushClick.validID(id) {
+                navigate(.notificationTask(id))
+            }
+        case "automation_run":
+            if let id = target.runId, MobilePushClick.validID(id) {
+                navigate(.libraryAutomationRun(id))
+            }
+        case "chat", "work_discovery":
+            if let id = target.conversationId, MobilePushClick.validID(id) {
+                messageLinks.open(.route(page: "chat", itemID: id), appState: appState)
+            }
+        default: break
+        }
     }
 
     private func navigate(_ route: HomeDestination) {

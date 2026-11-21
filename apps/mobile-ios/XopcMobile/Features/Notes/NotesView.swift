@@ -1,7 +1,5 @@
-// swiftlint:disable file_length
 import SwiftUI
 
-// swiftlint:disable:next type_body_length
 struct NotesView: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration

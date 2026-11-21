@@ -7,7 +7,7 @@ struct MobilePushClick: Decodable {
     let eventId: String
 
     static func decode(_ encoded: String) -> Self? {
-        guard encoded.utf8.count <= 6_000 else { return nil }
+        guard encoded.utf8.count <= 6000 else { return nil }
         let base64 = encoded.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         let padding = String(repeating: "=", count: (4 - base64.count % 4) % 4)
         guard let bytes = Data(base64Encoded: base64 + padding),
@@ -62,7 +62,9 @@ private struct MobilePushResponse: Decodable {
         return value
     }
 
-    private func preference(_ scope: String) -> String { "push.enabled." + scope }
+    private func preference(_ scope: String) -> String {
+        "push.enabled." + scope
+    }
 
     func restore(_ configuration: GatewayConfiguration) async {
         guard let scope = configuration.localIdentity, environment != nil, defaults.bool(forKey: preference(scope)) else { return }
@@ -75,8 +77,11 @@ private struct MobilePushResponse: Decodable {
     func refreshPermission(_ configuration: GatewayConfiguration) async {
         guard let scope = configuration.localIdentity else { return }
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-        if status == .denied { permissionBlocked.insert(scope) }
-        else { permissionBlocked.remove(scope) }
+        if status == .denied {
+            permissionBlocked.insert(scope)
+        } else {
+            permissionBlocked.remove(scope)
+        }
     }
 
     func setEnabled(_ value: Bool, configuration: GatewayConfiguration) async {
@@ -96,7 +101,9 @@ private struct MobilePushResponse: Decodable {
                 permissionBlocked.remove(scope)
                 defaults.set(true, forKey: preference(scope))
                 requested.insert(scope)
-                if token == nil { waitForToken(scope) }
+                if token == nil {
+                    waitForToken(scope)
+                }
                 UIApplication.shared.registerForRemoteNotifications()
                 await sync(configuration)
             } catch {
@@ -130,7 +137,9 @@ private struct MobilePushResponse: Decodable {
 
     func didRegister(_ bytes: Data) {
         let value = bytes.map { String(format: "%02x", $0) }.joined()
-        if !value.isEmpty { token = value }
+        if !value.isEmpty {
+            token = value
+        }
     }
 
     func didFailRegistration() {
@@ -147,22 +156,16 @@ private struct MobilePushResponse: Decodable {
         defer { busy.remove(scope) }
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
         if status == .denied {
-            permissionBlocked.insert(scope)
-            awaitingToken[scope] = nil
-            do {
-                let _: MobilePushResponse = try await GatewayClient(configuration: configuration)
-                    .request(path: "/api/devices/me/push", method: "DELETE", timeout: 15)
-                enabled.remove(scope)
-                registration[scope] = nil
-                errors[scope] = "请在系统设置中允许通知。"
-            } catch { errors[scope] = "未能同步通知权限，请检查 Gateway 连接后重试。" }
+            await revokeRegistration(configuration, scope: scope)
             return
         }
         permissionBlocked.remove(scope)
         guard status == .authorized || status == .provisional || status == .ephemeral, let token else { return }
         awaitingToken[scope] = nil
         retryValue[scope] = true
-        if let recent = registration[scope], recent.token == token, Date().timeIntervalSince(recent.at) < 3600 { return }
+        if let recent = registration[scope], recent.token == token, Date().timeIntervalSince(recent.at) < 3600 {
+            return
+        }
         guard let environment else {
             errors[scope] = AppLocalization.resolve("此构建缺少 iOS 推送配置。")
             return
@@ -189,6 +192,18 @@ private struct MobilePushResponse: Decodable {
         }
     }
 
+    private func revokeRegistration(_ configuration: GatewayConfiguration, scope: String) async {
+        permissionBlocked.insert(scope)
+        awaitingToken[scope] = nil
+        do {
+            let _: MobilePushResponse = try await GatewayClient(configuration: configuration)
+                .request(path: "/api/devices/me/push", method: "DELETE", timeout: 15)
+            enabled.remove(scope)
+            registration[scope] = nil
+            errors[scope] = "请在系统设置中允许通知。"
+        } catch { errors[scope] = "未能同步通知权限，请检查 Gateway 连接后重试。" }
+    }
+
     func enqueue(_ route: String) {
         guard MobilePushClick.decode(route) != nil, !pending.contains(route) else { return }
         pending = Array((pending + [route]).suffix(32))
@@ -209,24 +224,24 @@ private struct MobilePushResponse: Decodable {
 }
 
 final class MobilePushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+    func application(_: UIApplication, didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         return true
     }
 
-    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    func application(_: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         MobilePush.shared.didRegister(deviceToken)
     }
 
-    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+    func application(_: UIApplication, didFailToRegisterForRemoteNotificationsWithError _: Error) {
         MobilePush.shared.didFailRegistration()
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+    nonisolated func userNotificationCenter(_: UNUserNotificationCenter, willPresent _: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .list, .sound]
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    nonisolated func userNotificationCenter(_: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
               let route = response.notification.request.content.userInfo["xopc_route"] as? String else { return }
         await MobilePush.shared.enqueue(route)

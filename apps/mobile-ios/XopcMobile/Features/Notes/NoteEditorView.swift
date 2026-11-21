@@ -30,7 +30,8 @@ struct NoteEditorView: View {
     @State private var shouldClearRecovery = false
 
     init(configuration: GatewayConfiguration, existing: NoteDetail? = nil, projectID: String? = nil,
-         draftNoteID: String? = nil) {
+         draftNoteID: String? = nil)
+    {
         self.configuration = configuration
         self.existing = existing
         self.projectID = projectID
@@ -132,7 +133,9 @@ struct NoteEditorView: View {
             .alert(errorTitle, isPresented: errorBinding) { Button("好", role: .cancel) {} } message: { Text(error ?? "未知错误") }
             .confirmationDialog("放弃未完成的编辑？", isPresented: $confirmsDiscard) {
                 Button("保留草稿并关闭") {
-                    if saveRecovery() { dismiss() }
+                    if saveRecovery() {
+                        dismiss()
+                    }
                 }
                 Button("放弃并关闭", role: .destructive) {
                     clearRecovery()
@@ -150,7 +153,7 @@ struct NoteEditorView: View {
         .onChange(of: markdown) { _, _ in saveTextRecovery() }
         .onChange(of: stagedAttachments.map(\.id)) { _, _ in saveAttachmentRecovery() }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active && restored && !shouldClearRecovery {
+            if phase != .active, restored, !shouldClearRecovery {
                 saveTextRecovery()
             }
         }
@@ -168,7 +171,9 @@ struct NoteEditorView: View {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+}
 
+extension NoteEditorView {
     private var isUnchanged: Bool {
         guard let saved = persistedNote ?? existing else { return false }
         return title == (saved.title ?? "") && markdown == saved.markdown && stagedAttachments.isEmpty
@@ -181,7 +186,9 @@ struct NoteEditorView: View {
         return !title.isEmpty || !markdown.isEmpty || !stagedAttachments.isEmpty
     }
 
-    private var draftWriteFailed: Bool { textRecoveryFailed || attachmentRecoveryFailed }
+    private var draftWriteFailed: Bool {
+        textRecoveryFailed || attachmentRecoveryFailed
+    }
 
     private var statusLabel: LocalizedStringKey {
         if let saved = persistedNote ?? existing,
@@ -190,8 +197,12 @@ struct NoteEditorView: View {
         {
             return "附件待上传"
         }
-        if draftWriteFailed { return "无法保存本地草稿" }
-        if isUnchanged { return "已保存" }
+        if draftWriteFailed {
+            return "无法保存本地草稿"
+        }
+        if isUnchanged {
+            return "已保存"
+        }
         return hasUnsavedChanges ? "草稿已存本机" : "未保存"
     }
 
@@ -223,7 +234,8 @@ struct NoteEditorView: View {
                 savedRemoteID = draft.remoteID ?? draftNoteID
                 pendingCreate = draft.pendingCreate
                 if let existing, existing.remoteVersion != draft.baseRevision,
-                   title != (existing.title ?? "") || markdown != existing.markdown {
+                   title != (existing.title ?? "") || markdown != existing.markdown
+                {
                     conflictingNote = existing
                     showsConflict = true
                 }
@@ -298,18 +310,9 @@ struct NoteEditorView: View {
                 current = try await client.fetchNote(id: savedRemoteID)
             }
             if current == nil {
-                let attempt = pendingCreate ?? NoteCreateAttempt(title: title, markdown: markdown)
-                pendingCreate = attempt
-                guard saveRecovery() else { return }
-                let created = try await client.createNote(title: attempt.title, markdown: attempt.markdown,
-                                                          projectID: projectID, idempotencyKey: attempt.key)
-                current = created
-                alreadySaved = title == attempt.title && markdown == attempt.markdown
-                persistedNote = created
-                savedRemoteID = created.id
-                draftBaseRevision = created.remoteVersion
-                pendingCreate = nil
-                saveTextRecovery()
+                guard let created = try await createNote(using: client) else { return }
+                current = created.note
+                alreadySaved = created.matchesDraft
             }
             guard let current else { return }
             if alreadySaved || (title == (current.title ?? "") && markdown == current.markdown) {
@@ -342,11 +345,31 @@ struct NoteEditorView: View {
             self.error = error.localizedDescription
             return
         }
+        await saveAttachments(using: client, noteID: saved.id)
+    }
+
+    @MainActor
+    private func createNote(using client: GatewayClient) async throws -> (note: NoteDetail, matchesDraft: Bool)? {
+        let attempt = pendingCreate ?? NoteCreateAttempt(title: title, markdown: markdown)
+        pendingCreate = attempt
+        guard saveRecovery() else { return nil }
+        let created = try await client.createNote(title: attempt.title, markdown: attempt.markdown,
+                                                  projectID: projectID, idempotencyKey: attempt.key)
+        persistedNote = created
+        savedRemoteID = created.id
+        draftBaseRevision = created.remoteVersion
+        pendingCreate = nil
+        saveTextRecovery()
+        return (created, title == attempt.title && markdown == attempt.markdown)
+    }
+
+    @MainActor
+    private func saveAttachments(using client: GatewayClient, noteID: String) async {
         do {
             while !stagedAttachments.isEmpty {
                 let attachment = stagedAttachments[0]
                 try await client.uploadNoteAttachment(
-                    noteID: saved.id,
+                    noteID: noteID,
                     name: attachment.name,
                     mimeType: attachment.mimeType,
                     data: attachment.data,
@@ -408,7 +431,6 @@ private struct StagedNoteAttachment: Identifiable, Codable {
     let data: Data
 }
 
-
 private struct NoteCreateAttempt: Codable {
     let title: String
     let markdown: String
@@ -431,7 +453,7 @@ private struct NoteEditorRecoveryStore {
 
     private func directory() throws -> URL {
         let root = try baseDirectory ?? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
-                                                               appropriateFor: nil, create: true)
+                                                                appropriateFor: nil, create: true)
         let scope = ComposerDraftStore.accountScope(configuration)
         let identity = noteID.map { "note:" + $0 } ?? projectID.map { "project:" + $0 } ?? "new"
         let key = ComposerDraftStore.accountScope(identity: scope + ":" + identity)
@@ -445,7 +467,7 @@ private struct NoteEditorRecoveryStore {
         catch let error as CocoaError where error.code == .fileReadNoSuchFile { return nil }
     }
 
-    func write<Value: Encodable>(_ value: Value, file: String) throws {
+    func write(_ value: some Encodable, file: String) throws {
         let directory = try directory()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try JSONEncoder().encode(value).write(to: directory.appendingPathComponent(file + ".json"),

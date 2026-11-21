@@ -206,13 +206,7 @@ final class AssistantState {
         let optimisticText = content.isEmpty
             ? Self.payloadSummary(attachments: attachments, references: references)
             : content
-        if retryID != nil, let index = messages.firstIndex(where: { $0.scrollID == optimisticID }) {
-            messages[index].isPending = true
-        } else {
-            onEnqueued?(optimisticID)
-            messages.append(.init(id: optimisticID, role: "user", text: optimisticText, isPending: true,
-                                  turnId: nil, clientMessageID: optimisticID))
-        }
+        enqueueOptimisticMessage(id: optimisticID, text: optimisticText, retry: retryID != nil, onEnqueued: onEnqueued)
 
         let materialized: ConversationSelection
         do {
@@ -232,7 +226,9 @@ final class AssistantState {
             }
             onMaterialized?(materialized)
             let activeRunID = result.inputState.activeRunId
-            if let activeRunID, activeRunID == runID, runObservation != nil { return materialized }
+            if let activeRunID, activeRunID == runID, runObservation != nil {
+                return materialized
+            }
             runID = activeRunID
         } catch is CancellationError {
             return nil
@@ -247,6 +243,16 @@ final class AssistantState {
         }
         await followRun(of: materialized, using: gateway)
         return materialized
+    }
+
+    private func enqueueOptimisticMessage(id: String, text: String, retry: Bool, onEnqueued: ((String) -> Void)?) {
+        if retry, let index = messages.firstIndex(where: { $0.scrollID == id }) {
+            messages[index].isPending = true
+        } else {
+            onEnqueued?(id)
+            messages.append(.init(id: id, role: "user", text: text, isPending: true,
+                                  turnId: nil, clientMessageID: id))
+        }
     }
 
     func pauseConversation() {

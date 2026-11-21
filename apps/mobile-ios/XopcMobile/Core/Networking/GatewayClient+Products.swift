@@ -73,7 +73,8 @@ extension GatewayClient {
     }
 
     func fetchNotes(search: String = "", status: String = "", projectID: String? = nil,
-                    offset: Int = 0) async throws -> NotePage {
+                    offset: Int = 0) async throws -> NotePage
+    {
         var query = [
             URLQueryItem(name: "limit", value: "100"),
             URLQueryItem(name: "sortBy", value: "updatedAt"),
@@ -100,7 +101,8 @@ extension GatewayClient {
     }
 
     func createNote(title: String, markdown: String, kind: String = "thought", projectID: String? = nil,
-                    idempotencyKey: UUID? = nil) async throws -> NoteDetail {
+                    idempotencyKey: UUID? = nil) async throws -> NoteDetail
+    {
         let body = try encoder.encode(NoteMutation(title: title, markdown: markdown, kind: kind, platform: "ios", projectId: projectID))
         let response: NoteDetailEnvelope = try await request(path: "/api/notes", method: "POST", body: body,
                                                              idempotencyKey: idempotencyKey)
@@ -164,7 +166,8 @@ extension GatewayClient {
     }
 
     func uploadNoteAttachment(noteID: String, name: String, mimeType: String, data: Data,
-                              idempotencyKey: UUID? = nil) async throws {
+                              idempotencyKey: UUID? = nil) async throws
+    {
         let boundary = "xopc-\(UUID().uuidString.lowercased())"
         let safeName = name.replacingOccurrences(of: "\"", with: "_")
             .replacingOccurrences(of: "\r", with: "_")
