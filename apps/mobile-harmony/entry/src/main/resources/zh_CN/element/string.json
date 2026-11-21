@@ -608,6 +608,10 @@
       "name": "push_registered",
       "value": "已开启"
     },
+    {"name": "push_title", "value": "推送通知"},
+    {"name": "push_description", "value": "接收对话、任务和自动化提醒"},
+    {"name": "push_system_settings", "value": "去系统设置"},
+    {"name": "push_updating", "value": "正在更新通知"},
     {"name": "push_disabled", "value": "已关闭"},
     {"name": "push_not_registered", "value": "未注册"},
     {"name": "push_pair_required", "value": "请先配对网关，再开启通知。"},
@@ -615,6 +619,7 @@
     {"name": "push_kit_not_enabled", "value": "此应用尚未开通华为 Push Kit，暂时无法开启通知。"},
     {"name": "push_token_unavailable", "value": "暂时无法向华为 Push Kit 注册，请稍后重试。"},
     {"name": "push_platform_unavailable", "value": "XOPC Cloud 暂时无法发送推送通知。"},
+    {"name": "push_gateway_unreachable", "value": "无法连接 Gateway，请检查手机网络和 Gateway 是否在线。"},
     {"name": "push_cloud_auth_required", "value": "请在 Gateway 上连接或重新授权 XOPC Cloud，然后重试。"},
     {
       "name": "microphone_reason",

@@ -58,6 +58,7 @@ export struct XopcSettingsView {
     this.selectedLanguage = this.preferences.language;
     this.selectedTheme = this.preferences.theme;
     this.selectedScheme = this.preferences.colorScheme;
+    if (this.section === 'notifications') void this.push.restore();
   }
   private languageLabel(): ResourceStr {
     return this.selectedLanguage === 'zh-CN' ? '中文' : this.selectedLanguage === 'en-US' ? 'English' : $r('app.string.system');
@@ -77,8 +78,56 @@ export struct XopcSettingsView {
   }
 
   private notificationStatus(): Resource {
+    if (this.push.permissionBlocked) return $r('app.string.push_disabled');
     if (this.push.registered) return $r('app.string.push_registered');
     return this.push.enabled ? $r('app.string.push_not_registered') : $r('app.string.push_disabled');
+  }
+
+  private setPushEnabled(value: boolean): void {
+    if (value) {
+      void this.push.enable(this.getUIContext().getHostContext() as common.UIAbilityContext);
+    } else {
+      void this.push.disable();
+    }
+  }
+
+  @Builder
+  private notificationPreferences() {
+    Column({ space: 12 }) {
+      Row({ space: 12 }) {
+        SymbolGlyph($r('sys.symbol.bell')).fontSize(22).fontColor([this.colors.accent])
+        Column({ space: 4 }) {
+          Text($r('app.string.push_title')).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+          Text($r('app.string.push_description')).fontSize(13).fontColor(this.colors.secondary)
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        if (this.push.busy) {
+          LoadingProgress().width(26).height(26).color(this.colors.accent)
+            .id('push-progress').margin({ left: 12, right: 12 }).accessibilityText($r('app.string.push_updating'))
+        } else {
+          Toggle({ type: ToggleType.Switch, isOn: this.push.registered && !this.push.permissionBlocked })
+            .selectedColor(this.colors.accent).id('push-switch').accessibilityText($r('app.string.push_title'))
+            .enabled(!!gatewaySession.currentProfile())
+            .onChange((value: boolean): void => { this.setPushEnabled(value); })
+        }
+      }.width('100%').constraintSize({ minHeight: 48 })
+      if (!this.push.busy && (this.push.permissionBlocked || this.push.error)) {
+        Column({ space: 4 }) {
+          Text(this.push.permissionBlocked ? $r('app.string.push_permission_required') : this.notificationError())
+            .fontSize(13).fontColor(this.colors.secondary)
+          Button(this.push.permissionBlocked ? $r('app.string.push_system_settings') : $r('app.string.retry'),
+            { type: ButtonType.Normal })
+            .height(44).padding({ left: 0, right: 16 }).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
+            .id(this.push.permissionBlocked ? 'push-system-settings' : 'push-retry')
+            .onClick((): void => {
+              if (this.push.permissionBlocked) {
+                void this.push.openSettings(this.getUIContext().getHostContext() as common.UIAbilityContext);
+              } else {
+                this.setPushEnabled(!this.push.retryDisable);
+              }
+            })
+        }.width('100%').alignItems(HorizontalAlign.Start)
+      }
+    }.width('100%').padding(16).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
   }
 
   private notificationError(): ResourceStr {
@@ -89,6 +138,7 @@ export struct XopcSettingsView {
       case 'PUSH_TOKEN_UNAVAILABLE': return $r('app.string.push_token_unavailable');
       case 'PUSH_CLOUD_AUTH_REQUIRED': return $r('app.string.push_cloud_auth_required');
       case 'PUSH_PLATFORM_UNAVAILABLE': return $r('app.string.push_platform_unavailable');
+      case 'PUSH_GATEWAY_UNREACHABLE': return $r('app.string.push_gateway_unreachable');
       default: return userErrorMessage(this.push.error, 'save');
     }
   }
@@ -246,19 +296,7 @@ export struct XopcSettingsView {
               GridItem() { this.schemeCard('clay', $r('app.string.color_scheme_clay'), 'scheme-clay') }
             }.columnsTemplate('1fr 1fr').columnsGap(12).rowsGap(12).height(276).width('100%')
           } else if (this.section === 'notifications') {
-            Row({ space: 12 }) {
-              Text(this.notificationStatus()).fontColor(this.colors.foreground).fontSize(16).layoutWeight(1)
-              Button(this.push.enabled ? $r('app.string.refresh') : $r('app.string.enable_push')).height(44)
-                .enabled(!this.push.busy)
-                .onClick((): void => { this.push.enable(this.getUIContext().getHostContext() as common.UIAbilityContext); })
-              if (this.push.enabled) {
-                Button($r('app.string.disable_push')).height(44).enabled(!this.push.busy)
-                  .onClick((): void => { this.push.disable(); })
-              }
-            }.width('100%').padding(12).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
-            if (this.push.error) {
-              Text(this.notificationError()).fontColor(this.colors.danger).fontSize(13).margin({ top: 8 })
-            }
+            this.notificationPreferences()
           }
           if (this.error) { Text(userErrorMessage(this.error, 'save')).fontColor(this.colors.danger).margin({ top: 16 }) }
         }.width('100%').padding({ left: 20, right: 20, bottom: 24 }).alignItems(HorizontalAlign.Start)

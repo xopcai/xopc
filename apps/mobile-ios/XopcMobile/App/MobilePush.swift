@@ -48,6 +48,9 @@ private struct MobilePushResponse: Decodable {
     private(set) var token: String?
     private(set) var pending = UserDefaults.standard.stringArray(forKey: "push.pendingClicks") ?? []
     private(set) var busy = Set<String>()
+    private(set) var permissionBlocked = Set<String>()
+    private(set) var awaitingToken: [String: UUID] = [:]
+    private(set) var retryValue: [String: Bool] = [:]
     private(set) var errors: [String: String] = [:]
     private(set) var requested = Set<String>()
     private(set) var enabled = Set<String>()
@@ -69,22 +72,37 @@ private struct MobilePushResponse: Decodable {
         await sync(configuration)
     }
 
+    func refreshPermission(_ configuration: GatewayConfiguration) async {
+        guard let scope = configuration.localIdentity else { return }
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        if status == .denied { permissionBlocked.insert(scope) }
+        else { permissionBlocked.remove(scope) }
+    }
+
     func setEnabled(_ value: Bool, configuration: GatewayConfiguration) async {
         guard let scope = configuration.localIdentity, !busy.contains(scope) else { return }
         errors[scope] = nil
+        retryValue[scope] = value
         if value {
             guard environment != nil else {
-                errors[scope] = "此构建缺少 iOS 推送配置。"
+                errors[scope] = AppLocalization.resolve("此构建缺少 iOS 推送配置。")
                 return
             }
+            busy.insert(scope)
             do {
                 let allowed = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-                guard allowed else { errors[scope] = "请在系统设置中允许通知。"; return }
+                busy.remove(scope)
+                guard allowed else { permissionBlocked.insert(scope); return }
+                permissionBlocked.remove(scope)
                 defaults.set(true, forKey: preference(scope))
                 requested.insert(scope)
+                if token == nil { waitForToken(scope) }
                 UIApplication.shared.registerForRemoteNotifications()
                 await sync(configuration)
-            } catch { errors[scope] = "无法获取通知权限，请重试。" }
+            } catch {
+                busy.remove(scope)
+                errors[scope] = AppLocalization.resolve("无法获取通知权限，请重试。")
+            }
         } else {
             busy.insert(scope)
             defer { busy.remove(scope) }
@@ -95,7 +113,18 @@ private struct MobilePushResponse: Decodable {
                 requested.remove(scope)
                 enabled.remove(scope)
                 registration[scope] = nil
-            } catch { errors[scope] = "未能关闭通知，请检查 Gateway 连接后重试。" }
+            } catch { errors[scope] = AppLocalization.resolve("未能关闭通知，请检查 Gateway 连接后重试。") }
+        }
+    }
+
+    private func waitForToken(_ scope: String) {
+        let attempt = UUID()
+        awaitingToken[scope] = attempt
+        Task {
+            try? await Task.sleep(for: .seconds(20))
+            guard awaitingToken[scope] == attempt else { return }
+            awaitingToken[scope] = nil
+            errors[scope] = AppLocalization.resolve("暂时无法获取 iOS 推送标识，请重试。")
         }
     }
 
@@ -105,16 +134,21 @@ private struct MobilePushResponse: Decodable {
     }
 
     func didFailRegistration() {
-        for scope in requested { errors[scope] = "无法获取 iOS 推送标识，请重试。" }
+        for scope in requested {
+            awaitingToken[scope] = nil
+            errors[scope] = AppLocalization.resolve("无法获取 iOS 推送标识，请重试。")
+        }
     }
 
     func sync(_ configuration: GatewayConfiguration) async {
         guard let scope = configuration.localIdentity, requested.contains(scope),
-              let token, !busy.contains(scope) else { return }
+              !busy.contains(scope) else { return }
         busy.insert(scope)
         defer { busy.remove(scope) }
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
         if status == .denied {
+            permissionBlocked.insert(scope)
+            awaitingToken[scope] = nil
             do {
                 let _: MobilePushResponse = try await GatewayClient(configuration: configuration)
                     .request(path: "/api/devices/me/push", method: "DELETE", timeout: 15)
@@ -124,22 +158,34 @@ private struct MobilePushResponse: Decodable {
             } catch { errors[scope] = "未能同步通知权限，请检查 Gateway 连接后重试。" }
             return
         }
-        guard status == .authorized || status == .provisional || status == .ephemeral else { return }
+        permissionBlocked.remove(scope)
+        guard status == .authorized || status == .provisional || status == .ephemeral, let token else { return }
+        awaitingToken[scope] = nil
+        retryValue[scope] = true
         if let recent = registration[scope], recent.token == token, Date().timeIntervalSince(recent.at) < 3600 { return }
         guard let environment else {
-            errors[scope] = "此构建缺少 iOS 推送配置。"
+            errors[scope] = AppLocalization.resolve("此构建缺少 iOS 推送配置。")
             return
         }
         do {
             let locale = AppLocalization.selectedLocale.identifier.hasPrefix("zh") ? "zh" : "en"
             let payload = MobilePushRegistration(pushToken: token, locale: locale, environment: environment)
             let _: MobilePushResponse = try await GatewayClient(configuration: configuration)
-                .request(path: "/api/devices/me/push", method: "PUT", body: JSONEncoder().encode(payload), timeout: 15)
+                .request(path: "/api/devices/me/push", method: "PUT", body: JSONEncoder().encode(payload), timeout: 15,
+                         mapHTTPError: { _, error in
+                             switch error?.code {
+                             case "PUSH_CLOUD_AUTH_REQUIRED": .server(AppLocalization.resolve("请在 Gateway 上重新授权 XOPC Cloud。"))
+                             case "PUSH_PLATFORM_UNAVAILABLE": .server(AppLocalization.resolve("XOPC Cloud 暂时无法发送推送。"))
+                             default: nil
+                             }
+                         })
             registration[scope] = (token, .now)
             enabled.insert(scope)
             errors[scope] = nil
+        } catch let error as GatewayClientError {
+            errors[scope] = error.localizedDescription
         } catch {
-            errors[scope] = "注册通知失败，请检查 Gateway 连接和 XOPC Cloud 推送授权。"
+            errors[scope] = AppLocalization.resolve("注册通知失败，请重试。")
         }
     }
 

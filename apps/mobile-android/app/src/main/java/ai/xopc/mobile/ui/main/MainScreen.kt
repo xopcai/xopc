@@ -1301,7 +1301,8 @@ internal fun MainContent(
       if (!connection.gatewayBusy) personalPage = "settings"
     } else if (personalPage == "settings-appearance" || personalPage == "settings-language" ||
       personalPage == "settings-sharing" ||
-      personalPage == "about" || personalPage == "goals" || personalPage == "settings-about" || personalPage == "settings-models") {
+      personalPage == "about" || personalPage == "goals" || personalPage == "settings-about" || personalPage == "settings-models" ||
+      personalPage == "settings-notifications") {
       if (personalPage == "settings-sharing") onCloseShares()
       personalPage = "settings"
     } else if (personalPage == "settings-add") {
@@ -1948,12 +1949,16 @@ internal fun MainContent(
             "settings-appearance" -> "appearance"
             "settings-language" -> "language"
             "settings-about" -> "about"
+            "settings-notifications" -> "notifications"
             else -> "root"
           }, insets = insets,
           onBack = ::leavePersonalPage,
           onOpenGateways = { personalPage = "settings-gateways" },
           onOpenModelSettings = modelSettingsAccess?.let { { personalPage = "settings-models" } },
           onOpenAppAbout = { personalPage = "settings-about" },
+          onOpenNotifications = if (profile != null && mobilePush != null) {
+            { personalPage = "settings-notifications" }
+          } else null,
           notifications = {
             if (profile != null && mobilePush != null) MobilePushSettings(profile, mobilePush)
           },

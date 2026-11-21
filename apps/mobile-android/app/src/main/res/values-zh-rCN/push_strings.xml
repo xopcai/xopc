@@ -8,4 +8,12 @@
     <string name="push_permission">请在系统设置中允许通知。</string>
     <string name="push_unconfigured">此版本尚未配置推送服务。</string>
     <string name="push_registration_failed">请检查 Gateway 连接和 XOPC Cloud 推送授权后重试。</string>
+    <string name="push_setting_title">推送通知</string>
+    <string name="push_description">接收对话、任务和自动化提醒</string>
+    <string name="push_system_settings">去系统设置</string>
+    <string name="push_retry">重试</string>
+    <string name="push_cloud_auth_required">请在 Gateway 上重新授权 XOPC Cloud。</string>
+    <string name="push_cloud_unavailable">XOPC Cloud 暂时无法发送推送。</string>
+    <string name="push_gateway_unreachable">无法连接 Gateway，请检查它是否在线。</string>
+    <string name="push_token_unavailable">暂时无法从 Firebase 获取推送标识。</string>
 </resources>

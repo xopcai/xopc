@@ -609,6 +609,10 @@
       "name": "push_registered",
       "value": "On"
     },
+    {"name": "push_title", "value": "Push notifications"},
+    {"name": "push_description", "value": "Receive chat, task and automation alerts."},
+    {"name": "push_system_settings", "value": "Open system settings"},
+    {"name": "push_updating", "value": "Updating notifications"},
     {"name": "push_disabled", "value": "Off"},
     {"name": "push_not_registered", "value": "Not registered"},
     {"name": "push_pair_required", "value": "Pair this device with a Gateway before turning on notifications."},
@@ -616,6 +620,7 @@
     {"name": "push_kit_not_enabled", "value": "Push Kit is not enabled for this app. Notifications will be available after the app’s push service is enabled."},
     {"name": "push_token_unavailable", "value": "Could not register with Huawei Push Kit. Try again later."},
     {"name": "push_platform_unavailable", "value": "Push notifications are temporarily unavailable on XOPC Cloud."},
+    {"name": "push_gateway_unreachable", "value": "Could not reach Gateway. Check your phone network and whether Gateway is online."},
     {"name": "push_cloud_auth_required", "value": "Connect or reauthorize XOPC Cloud on the Gateway, then try again."},
     {
       "name": "app_description",

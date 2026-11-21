@@ -15,6 +15,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,6 +81,8 @@ internal class MobilePushClient(private val context: Context, private val sessio
   private val operations = Mutex()
   private val mutableEnabled = MutableStateFlow<Set<String>>(emptySet())
   val enabled = mutableEnabled.asStateFlow()
+  private val mutableRestoreFailures = MutableStateFlow<Map<String, Exception>>(emptyMap())
+  val restoreFailures = mutableRestoreFailures.asStateFlow()
   private val recent = mutableMapOf<String, Pair<Int, Long>>()
 
   private fun key(profile: GatewayProfile) = "enabled.${profile.gatewayId}.${profile.deviceId}"
@@ -91,7 +94,14 @@ internal class MobilePushClient(private val context: Context, private val sessio
       val prior = recent[key(profile)]
       if (prior != null && prior.first == revision && System.currentTimeMillis() - prior.second < 3_600_000 &&
         NotificationManagerCompat.from(context).areNotificationsEnabled()) return
-      sync(profile, revision)
+      try {
+        sync(profile, revision)
+        mutableRestoreFailures.value -= key(profile)
+      } catch (error: CancellationException) {
+        throw error
+      } catch (error: Exception) {
+        mutableRestoreFailures.value += key(profile) to error
+      }
     }
   }
 
@@ -105,6 +115,7 @@ internal class MobilePushClient(private val context: Context, private val sessio
         remove(profile)
         preferences.edit().remove(key(profile)).apply()
       }
+      mutableRestoreFailures.value -= key(profile)
     }
   }
 

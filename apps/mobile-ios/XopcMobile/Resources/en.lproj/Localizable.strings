@@ -1373,3 +1373,17 @@
 "稍后处理" = "Resolve Later";
 "本地草稿已保留。选定版本后可以继续编辑。" = "Your local draft is safe. Choose a version to continue editing.";
 "继续编辑本地草稿" = "Continue Editing Local Draft";
+
+"推送通知" = "Push notifications";
+"接收对话、任务和自动化提醒" = "Receive chat, task and automation alerts.";
+"正在更新通知" = "Updating notifications";
+"系统通知权限已关闭。" = "System notification permission is off.";
+"去系统设置" = "Open system settings";
+"此构建缺少 iOS 推送配置。" = "This build does not have iOS push configured.";
+"无法获取通知权限，请重试。" = "Could not request notification permission. Try again.";
+"暂时无法获取 iOS 推送标识，请重试。" = "Could not get an iOS push token. Try again.";
+"无法获取 iOS 推送标识，请重试。" = "Could not get an iOS push token. Try again.";
+"请在 Gateway 上重新授权 XOPC Cloud。" = "Reauthorize XOPC Cloud on your Gateway.";
+"XOPC Cloud 暂时无法发送推送。" = "XOPC Cloud push is temporarily unavailable.";
+"注册通知失败，请重试。" = "Could not register for notifications. Try again.";
+"未能关闭通知，请检查 Gateway 连接后重试。" = "Could not turn off notifications. Check your Gateway connection and try again.";

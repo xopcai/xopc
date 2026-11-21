@@ -8,4 +8,12 @@
     <string name="push_permission">Allow notifications in system settings.</string>
     <string name="push_unconfigured">Push notifications are unavailable in this build.</string>
     <string name="push_registration_failed">Check the Gateway connection and XOPC Cloud push authorization, then try again.</string>
+    <string name="push_setting_title">Push notifications</string>
+    <string name="push_description">Receive chat, task and automation alerts.</string>
+    <string name="push_system_settings">Open system settings</string>
+    <string name="push_retry">Retry</string>
+    <string name="push_cloud_auth_required">Reauthorize XOPC Cloud on your Gateway.</string>
+    <string name="push_cloud_unavailable">XOPC Cloud push is temporarily unavailable.</string>
+    <string name="push_gateway_unreachable">Could not reach your Gateway. Check that it is online.</string>
+    <string name="push_token_unavailable">Could not get a push token from Firebase.</string>
 </resources>

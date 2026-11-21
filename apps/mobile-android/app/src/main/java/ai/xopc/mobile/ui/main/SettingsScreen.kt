@@ -56,6 +56,7 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
   onOpenAppAbout: () -> Unit = {}, onOpenAbout: () -> Unit = {}, onOpenGoals: () -> Unit = {},
   personalAgent: @Composable () -> Unit = {},
   notifications: @Composable () -> Unit = {},
+  onOpenNotifications: (() -> Unit)? = null,
   onOpenAppearance: () -> Unit, onOpenLanguage: () -> Unit = {},
   onAppearanceModeChange: (String) -> Unit,
   onColorSchemeChange: (String) -> Unit, onLanguageChange: (String) -> Unit = {}) {
@@ -66,6 +67,10 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically) {
       PageBackButton("settings-back", onBack)
+      if (section == "notifications") {
+        Text(stringResource(R.string.push_title), Modifier.padding(start = 12.dp),
+          style = MaterialTheme.typography.titleLarge)
+      }
 
     }
     AnimatedContent(targetState = section, modifier = Modifier.fillMaxSize(),
@@ -131,6 +136,8 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
               if (language == option) Text("✓", color = MaterialTheme.colorScheme.primary)
             }
           }
+        } else if (currentSection == "notifications") {
+          notifications()
         } else if (currentSection == "about") {
           AboutAppContent(version)
         } else {
@@ -147,7 +154,9 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
           if (profile != null && onOpenModelSettings != null) {
             SettingsRow(stringResource(R.string.ms_title), "", true, onOpenModelSettings, "settings-models")
           }
-          notifications()
+          onOpenNotifications?.let {
+            SettingsRow(stringResource(R.string.push_title), "", true, it, "settings-notifications")
+          }
           SettingsSectionLabel(R.string.settings_data_sharing)
           SettingsRow(stringResource(R.string.share_center),
             stringResource(R.string.share_center_help), true, onOpenSharing)

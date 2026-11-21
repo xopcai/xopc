@@ -251,33 +251,49 @@ private struct ShareCenterView: View {
 private struct NotificationSettingsView: View {
     let configuration: GatewayConfiguration
     @State private var push = MobilePush.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         let scope = configuration.localIdentity ?? ""
-        let enabled = push.enabled.contains(scope)
+        let busy = push.busy.contains(scope) || push.awaitingToken[scope] != nil
+        let blocked = push.permissionBlocked.contains(scope)
         Form {
             if !scope.isEmpty {
                 Section {
-                    LabeledContent("推送通知") {
-                        Text(enabled ? "已开启" : "已关闭")
+                    Toggle(isOn: Binding(get: { push.enabled.contains(scope) && !blocked }, set: { value in
+                        Task { await push.setEnabled(value, configuration: configuration) }
+                    })) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("推送通知", systemImage: "bell")
+                            Text("接收对话、任务和自动化提醒")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    Button(enabled ? "关闭" : "开启") {
-                        Task { await push.setEnabled(!enabled, configuration: configuration) }
+                    .disabled(busy)
+                    .accessibilityIdentifier("push-switch")
+                    if busy {
+                        ProgressView("正在更新通知")
+                            .font(.footnote)
+                    } else if blocked {
+                        Text("系统通知权限已关闭。").font(.footnote).foregroundStyle(.secondary)
+                        if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                            Link("去系统设置", destination: url)
+                        }
+                    } else if let error = push.errors[scope] {
+                        Text(error).font(.footnote).foregroundStyle(.secondary)
+                        Button("重试") {
+                            Task { await push.setEnabled(push.retryValue[scope] ?? true, configuration: configuration) }
+                        }
                     }
-                    .disabled(push.busy.contains(scope))
-                    if let error = push.errors[scope] {
-                        Text(error).foregroundStyle(.red)
-                    }
-                }
-            }
-            Section {
-                if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
-                    Link("系统通知设置", destination: url)
                 }
             }
         }
         .navigationTitle("通知")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: scenePhase) {
+            if scenePhase == .active { await push.refreshPermission(configuration) }
+        }
     }
 }
 
