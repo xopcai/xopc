@@ -108,7 +108,7 @@ struct ProjectDetailView: View {
             if section == .overview {
                 projectOverviewSection(project)
             }
-            if section == .overview && !deliveries.isEmpty {
+            if section == .overview, !deliveries.isEmpty {
                 Section("近期成果") {
                     ForEach(deliveries.prefix(5)) { item in
                         HomeDeliveryLink(item: item, configuration: configuration,
