@@ -9,7 +9,7 @@
   "language": { "message": "语言" },
   "languageChinese": { "message": "中文" },
   "languageEnglish": { "message": "English" },
-  "contextMenuAskSelection": { "message": "询问 xopc：“%s”" },
+  "contextMenuAskSelection": { "message": "询问 xopc" },
   "statusPairing": { "message": "正在配对" },
   "statusStarting": { "message": "正在启动" },
   "statusSetupRequired": { "message": "需要设置" },
