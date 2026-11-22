@@ -6,7 +6,7 @@ object AppearancePreference {
   private const val KEY = "display-mode"
   private const val SCHEME_KEY = "color-scheme"
   private const val FILE = "xopc-appearance"
-  val schemes = listOf("default", "porcelain", "dawn", "emerald", "clay")
+  val schemes = listOf("default", "porcelain", "emerald", "clay")
 
   fun read(context: Context): String = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     .getString(KEY, "system")?.takeIf { it in setOf("system", "light", "dark") } ?: "system"

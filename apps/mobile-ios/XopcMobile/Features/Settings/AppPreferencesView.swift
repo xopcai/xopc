@@ -323,6 +323,13 @@ private struct AppearanceSettingsView: View {
     @AppStorage("app.appearance") private var appearance = AppAppearance.system.rawValue
     @AppStorage("app.colorPreset") private var colorPreset = MobileThemePreset.default.rawValue
 
+    private var selectedColorPreset: Binding<String> {
+        Binding(
+            get: { (MobileThemePreset(rawValue: colorPreset) ?? .default).rawValue },
+            set: { colorPreset = $0 }
+        )
+    }
+
     var body: some View {
         Form {
             Section("display_mode") {
@@ -333,7 +340,7 @@ private struct AppearanceSettingsView: View {
                 .listRowBackground(mobileTheme.panel)
             }
             Section("color_scheme") {
-                Picker("color_scheme", selection: $colorPreset) {
+                Picker("color_scheme", selection: selectedColorPreset) {
                     ForEach(MobileThemePreset.allCases) { preset in
                         HStack(spacing: 12) {
                             Text(preset.title)

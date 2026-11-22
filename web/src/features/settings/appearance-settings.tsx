@@ -91,22 +91,6 @@ const SCHEME_PREVIEW: Record<
       muted: '#4a3e35',
     },
   },
-  dawn: {
-    light: {
-      canvas: 'linear-gradient(180deg, #accdec 0%, #e7ebf4 61.54%, #ffddb9 100%)',
-      panel: 'rgb(255 255 255 / 0.6)',
-      accent: '#34363a',
-      fg: 'rgb(0 0 0 / 0.85)',
-      muted: 'rgb(111 137 163 / 0.2)',
-    },
-    dark: {
-      canvas: 'linear-gradient(180deg, #21394f 0%, #283545 61.54%, #564536 100%)',
-      panel: 'rgb(31 45 59 / 0.68)',
-      accent: '#d9dde2',
-      fg: 'rgb(255 255 255 / 0.92)',
-      muted: 'rgb(255 255 255 / 0.14)',
-    },
-  },
 };
 
 function SchemePreviewHalf({
@@ -154,12 +138,10 @@ const COLOR_SCHEME_OPTIONS: {
     | 'colorSchemeDefault'
     | 'colorSchemeLightGreen'
     | 'colorSchemeClay'
-    | 'colorSchemeDawn'
     | 'colorSchemePorcelain';
 }[] = [
   { value: 'default', labelKey: 'colorSchemeDefault' },
   { value: 'porcelain', labelKey: 'colorSchemePorcelain' },
-  { value: 'dawn', labelKey: 'colorSchemeDawn' },
   { value: 'emerald', labelKey: 'colorSchemeLightGreen' },
   { value: 'clay', labelKey: 'colorSchemeClay' },
 ];
@@ -176,7 +158,7 @@ function ColorSchemeSelector() {
       <div className="min-w-0">
         <div className="text-sm font-medium text-fg">{a.colorSchemeTitle}</div>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {COLOR_SCHEME_OPTIONS.map(({ value, labelKey }) => {
           const isSelected = colorScheme === value;
           return (

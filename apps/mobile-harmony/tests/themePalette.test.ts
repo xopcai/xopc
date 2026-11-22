@@ -35,6 +35,7 @@ describe('Harmony color schemes', () => {
   it('normalizes legacy and invalid preferences to the default scheme', () => {
     expect(normalizeXopcColorScheme(undefined)).toBe('default');
     expect(normalizeXopcColorScheme('invalid')).toBe('default');
+    expect(normalizeXopcColorScheme('dawn')).toBe('default');
     expect(XOPC_COLOR_SCHEMES.map(normalizeXopcColorScheme)).toEqual(XOPC_COLOR_SCHEMES);
   });
 
@@ -64,7 +65,7 @@ describe('Harmony color schemes', () => {
     expect(palette.get('theme_attention_fill_light')).toBe('#FFF2D2');
   });
 
-  it('applies distinct Chat surfaces and readable foregrounds for all ten appearances', () => {
+  it('applies distinct Chat surfaces and readable foregrounds for all eight appearances', () => {
     const palette = new Map(colors.color.map(({ name, value }) => ['app.color.' + name, value]));
     const color = (resource: unknown): string => {
       const value = palette.get(String(resource));
@@ -123,10 +124,11 @@ describe('Harmony color schemes', () => {
     }
   });
 
-  it('wraps the complete app tree and exposes five live preview selectors', () => {
+  it('wraps the complete app tree and exposes four live preview selectors', () => {
     expect(indexView).toContain('WithTheme({ theme: this.preferences.customTheme()');
     expect(indexView).toContain('@Local colors: XopcThemeColors = appThemeColors');
     for (const scheme of XOPC_COLOR_SCHEMES) expect(settingsView).toContain(`'scheme-${scheme}'`);
+    expect(settingsView).not.toContain("'scheme-dawn'");
     expect(settingsView).toContain('xopcThemePreview(scheme, false)');
     expect(settingsView).toContain('xopcThemePreview(scheme, true)');
   });

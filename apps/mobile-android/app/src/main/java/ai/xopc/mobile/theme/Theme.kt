@@ -54,7 +54,6 @@ fun XopcTheme(
   val factor = when (preset) {
     "emerald" -> 0.8f
     "clay" -> 1.2f
-    "dawn" -> 1.25f
     else -> 1f
   }
   val shapes = Shapes(
@@ -113,10 +112,6 @@ private fun chatColors(scheme: String, dark: Boolean, palette: XopcPalette): Cha
       Color(0xFF844633), onAction, reaction)
     "porcelain" to true -> ChatColors(assistant, Color(0xFF4E392E), Color(0xFF302822),
       Color(0xFFE4AE98), onAction, reaction)
-    "dawn" to false -> ChatColors(assistant, Color(0xFFDFE6EF), Color(0xFFE0E8F2),
-      Color(0xFF245781), onAction, reaction)
-    "dawn" to true -> ChatColors(assistant, Color(0xFF26394D), Color(0xFF253547),
-      Color(0xFFAFD5FB), onAction, reaction)
     "emerald" to false -> ChatColors(assistant, Color(0xFFE0EBE4), Color(0xFFDFEBE3),
       Color(0xFF087446), onAction, reaction)
     "emerald" to true -> ChatColors(assistant, Color(0xFF223D2F), Color(0xFF14221B),

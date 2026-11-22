@@ -46,7 +46,6 @@
     <string name="settings_color_scheme">配色方案</string>
     <string name="settings_scheme_default">默认</string>
     <string name="settings_scheme_porcelain">暖瓷</string>
-    <string name="settings_scheme_dawn">晨曦</string>
     <string name="settings_scheme_emerald">翡翠</string>
     <string name="settings_scheme_clay">陶土</string>
     <string name="gateways_title">Gateway 管理</string>

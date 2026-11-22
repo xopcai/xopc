@@ -237,102 +237,6 @@
       "value": "#5E4B40"
     },
     {
-      "name": "theme_dawn_surface_light",
-      "value": "#EDF2F7"
-    },
-    {
-      "name": "theme_dawn_panel_light",
-      "value": "#F8FBFF"
-    },
-    {
-      "name": "theme_dawn_foreground_light",
-      "value": "#262626"
-    },
-    {
-      "name": "theme_dawn_secondary_light",
-      "value": "#595F66"
-    },
-    {
-      "name": "theme_dawn_tertiary_light",
-      "value": "#4C617B"
-    },
-    {
-      "name": "theme_dawn_accent_light",
-      "value": "#34363A"
-    },
-    {
-      "name": "theme_dawn_danger_light",
-      "value": "#B32B3A"
-    },
-    {
-      "name": "theme_dawn_grouped_light",
-      "value": "#DAE3EC"
-    },
-    {
-      "name": "theme_dawn_input_light",
-      "value": "#DBE4EF"
-    },
-    {
-      "name": "theme_dawn_border_light",
-      "value": "#CFDAE5"
-    },
-    {
-      "name": "theme_dawn_accent_soft_light",
-      "value": "#E1F1FF"
-    },
-    {
-      "name": "theme_dawn_active_light",
-      "value": "#C9D7E5"
-    },
-    {
-      "name": "theme_dawn_surface_dark",
-      "value": "#172433"
-    },
-    {
-      "name": "theme_dawn_panel_dark",
-      "value": "#253342"
-    },
-    {
-      "name": "theme_dawn_foreground_dark",
-      "value": "#F3F6FA"
-    },
-    {
-      "name": "theme_dawn_secondary_dark",
-      "value": "#BFC7D0"
-    },
-    {
-      "name": "theme_dawn_tertiary_dark",
-      "value": "#B4BFCC"
-    },
-    {
-      "name": "theme_dawn_accent_dark",
-      "value": "#D9DDE2"
-    },
-    {
-      "name": "theme_dawn_danger_dark",
-      "value": "#FF9599"
-    },
-    {
-      "name": "theme_dawn_grouped_dark",
-      "value": "#0C1722"
-    },
-    {
-      "name": "theme_dawn_input_dark",
-      "value": "#344557"
-    },
-    {
-      "name": "theme_dawn_border_dark",
-      "value": "#415264"
-    },
-    {
-      "name": "theme_dawn_accent_soft_dark",
-      "value": "#263F58"
-    },
-    {
-      "name": "theme_dawn_active_dark",
-      "value": "#415264"
-    },
-    {
       "name": "theme_emerald_surface_light",
       "value": "#E8F5ED"
     },
@@ -539,12 +443,6 @@
     { "name": "chat_porcelain_card_dark", "value": "#302822" },
     { "name": "chat_porcelain_bubble_dark", "value": "#4E392E" },
     { "name": "chat_porcelain_action_dark", "value": "#E4AE98" },
-    { "name": "chat_dawn_card_light", "value": "#E0E8F2" },
-    { "name": "chat_dawn_bubble_light", "value": "#DFE6EF" },
-    { "name": "chat_dawn_action_light", "value": "#245781" },
-    { "name": "chat_dawn_card_dark", "value": "#253547" },
-    { "name": "chat_dawn_bubble_dark", "value": "#26394D" },
-    { "name": "chat_dawn_action_dark", "value": "#AFD5FB" },
     { "name": "chat_emerald_card_light", "value": "#DFEBE3" },
     { "name": "chat_emerald_bubble_light", "value": "#E0EBE4" },
     { "name": "chat_emerald_action_light", "value": "#087446" },

@@ -46,7 +46,6 @@
     <string name="settings_color_scheme">Color scheme</string>
     <string name="settings_scheme_default">Default</string>
     <string name="settings_scheme_porcelain">Porcelain</string>
-    <string name="settings_scheme_dawn">Dawn</string>
     <string name="settings_scheme_emerald">Emerald</string>
     <string name="settings_scheme_clay">Clay</string>
     <string name="gateways_title">Gateways</string>

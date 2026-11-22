@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum MobileThemePreset: String, CaseIterable, Identifiable {
-    case `default`, porcelain, dawn, emerald, clay
+    case `default`, porcelain, emerald, clay
 
     var id: String {
         rawValue
@@ -11,7 +11,6 @@ enum MobileThemePreset: String, CaseIterable, Identifiable {
         switch self {
         case .default: "color_scheme_default"
         case .porcelain: "color_scheme_porcelain"
-        case .dawn: "color_scheme_dawn"
         case .emerald: "color_scheme_emerald"
         case .clay: "color_scheme_clay"
         }
@@ -21,7 +20,6 @@ enum MobileThemePreset: String, CaseIterable, Identifiable {
         switch self {
         case .emerald: 0.8
         case .clay: 1.2
-        case .dawn: 1.25
         default: 1
         }
     }
@@ -94,12 +92,6 @@ struct MobileTheme {
         case (.porcelain, true):
             (0x211C19, 0x2B2420, 0xF3EAE1, 0xC5B5A8, 0x241E1A, 0x3B3029,
              0x5E4B40, 0xE8A19A, 0xE4AE98, 0x211C19, 0x4E392E, 0x302822)
-        case (.dawn, false):
-            (0xEDF2F7, 0xF8FBFF, 0x262626, 0x595F66, 0xDAE3EC, 0xDBE4EF,
-             0xC9D7E5, 0xB32B3A, 0x245781, 0xFFFFFF, 0xDFE6EF, 0xE0E8F2)
-        case (.dawn, true):
-            (0x172433, 0x253342, 0xF3F6FA, 0xBFC7D0, 0x0C1722, 0x344557,
-             0x415264, 0xFF9599, 0xAFD5FB, 0x172433, 0x26394D, 0x253547)
         case (.emerald, false):
             (0xE8F5ED, 0xFFFFFF, 0x052E16, 0x166534, 0xE8F8ED, 0xCFE9D8,
              0xBDF2D1, 0xB91C1C, 0x087446, 0xFFFFFF, 0xE0EBE4, 0xDFEBE3)

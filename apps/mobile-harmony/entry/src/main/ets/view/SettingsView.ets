@@ -291,10 +291,9 @@ export struct XopcSettingsView {
             Grid() {
               GridItem() { this.schemeCard('default', $r('app.string.color_scheme_default'), 'scheme-default') }
               GridItem() { this.schemeCard('porcelain', $r('app.string.color_scheme_porcelain'), 'scheme-porcelain') }
-              GridItem() { this.schemeCard('dawn', $r('app.string.color_scheme_dawn'), 'scheme-dawn') }
               GridItem() { this.schemeCard('emerald', $r('app.string.color_scheme_emerald'), 'scheme-emerald') }
               GridItem() { this.schemeCard('clay', $r('app.string.color_scheme_clay'), 'scheme-clay') }
-            }.columnsTemplate('1fr 1fr').columnsGap(12).rowsGap(12).height(276).width('100%')
+            }.columnsTemplate('1fr 1fr').columnsGap(12).rowsGap(12).height(180).width('100%')
           } else if (this.section === 'notifications') {
             this.notificationPreferences()
           }

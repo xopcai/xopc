@@ -16,12 +16,6 @@ internal fun xopcPalette(scheme: String, dark: Boolean): XopcPalette = when (
   "porcelain" to true -> XopcPalette(Color(0xFF211C19), Color(0xFF2B2420), Color(0xFFF3EAE1),
     Color(0xFFC5B5A8), Color(0xFFD4A08C), Color(0xFF241E1A), Color(0xFF3B3029),
     Color(0xFF4A3E35), Color(0xFF493A32), Color(0xFF5E4B40), Color(0xFFE8A19A))
-  "dawn" to false -> XopcPalette(Color(0xFFEDF2F7), Color(0xFFF8FBFF), Color(0xFF262626),
-    Color(0xFF595F66), Color(0xFF34363A), Color(0xFFDAE3EC), Color(0xFFDBE4EF),
-    Color(0xFFCFDAE5), Color(0xFFE1F1FF), Color(0xFFC9D7E5), Color(0xFFB32B3A))
-  "dawn" to true -> XopcPalette(Color(0xFF172433), Color(0xFF253342), Color(0xFFF3F6FA),
-    Color(0xFFBFC7D0), Color(0xFFD9DDE2), Color(0xFF0C1722), Color(0xFF344557),
-    Color(0xFF415264), Color(0xFF263F58), Color(0xFF415264), Color(0xFFFF9599))
   "emerald" to false -> XopcPalette(Color(0xFFE8F5ED), Color(0xFFFFFFFF), Color(0xFF052E16),
     Color(0xFF166534), Color(0xFF087446), Color(0xFFE8F8ED), Color(0xFFCFE9D8),
     Color(0xFF86EFAC), Color(0xFFD1FAE5), Color(0xFFBDF2D1), Color(0xFFB91C1C))

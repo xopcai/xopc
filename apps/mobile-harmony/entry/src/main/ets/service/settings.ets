@@ -65,7 +65,7 @@ export class XopcSettings {
   async update(context: common.Context, language: string, theme: string,
     colorScheme: string = this.colorScheme): Promise<void> {
     if (!['', 'zh-CN', 'en-US'].includes(language) || !['system', 'light', 'dark'].includes(theme)
-      || !['default', 'porcelain', 'dawn', 'emerald', 'clay'].includes(colorScheme)) throw new Error('INVALID_PREFERENCE');
+      || !['default', 'porcelain', 'emerald', 'clay'].includes(colorScheme)) throw new Error('INVALID_PREFERENCE');
     const normalizedScheme = normalizeXopcColorScheme(colorScheme);
     const saved: XopcPreferences = { language, theme, colorScheme: normalizedScheme };
     this.language = language; this.theme = theme; this.colorScheme = normalizedScheme; this.apply(context);

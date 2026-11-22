@@ -210,7 +210,6 @@ private fun AboutAppContent(version: String) {
 
 private fun schemeLabel(scheme: String): Int = when (scheme) {
   "porcelain" -> R.string.settings_scheme_porcelain
-  "dawn" -> R.string.settings_scheme_dawn
   "emerald" -> R.string.settings_scheme_emerald
   "clay" -> R.string.settings_scheme_clay
   else -> R.string.settings_scheme_default

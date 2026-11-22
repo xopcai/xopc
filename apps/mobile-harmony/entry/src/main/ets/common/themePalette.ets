@@ -1,8 +1,8 @@
 import { CustomColors, CustomTheme, RectShape } from '@kit.ArkUI';
 
-export type XopcColorScheme = 'default' | 'porcelain' | 'dawn' | 'emerald' | 'clay';
+export type XopcColorScheme = 'default' | 'porcelain' | 'emerald' | 'clay';
 
-export const XOPC_COLOR_SCHEMES: XopcColorScheme[] = ['default', 'porcelain', 'dawn', 'emerald', 'clay'];
+export const XOPC_COLOR_SCHEMES: XopcColorScheme[] = ['default', 'porcelain', 'emerald', 'clay'];
 
 class XopcThemeTokens {
   surface: Resource;
@@ -71,12 +71,11 @@ export class XopcThemeColors {
     return this.light ? this.panel : this.active;
   }
 
-  // Follow the WebUI's tighter Emerald and softer Clay and Dawn shapes.
+  // Follow the WebUI's tighter Emerald and softer Clay shapes.
   corner(base: number): number {
     switch (this.scheme) {
       case 'emerald': return Math.round(base * 0.8);
       case 'clay': return Math.round(base * 1.2);
-      case 'dawn': return Math.round(base * 1.25);
       default: return base;
     }
   }
@@ -221,34 +220,6 @@ function xopcThemeTokens(scheme: XopcColorScheme, dark: boolean): XopcThemeToken
     $r('app.color.theme_porcelain_accent_soft_dark'),
     $r('app.color.theme_porcelain_active_dark')
   );
-  if (scheme === 'dawn' && dark === false) return new XopcThemeTokens(
-    $r('app.color.theme_dawn_surface_light'),
-    $r('app.color.theme_dawn_panel_light'),
-    $r('app.color.theme_dawn_foreground_light'),
-    $r('app.color.theme_dawn_secondary_light'),
-    $r('app.color.theme_dawn_tertiary_light'),
-    $r('app.color.theme_dawn_accent_light'),
-    $r('app.color.theme_dawn_danger_light'),
-    $r('app.color.theme_dawn_grouped_light'),
-    $r('app.color.theme_dawn_input_light'),
-    $r('app.color.theme_dawn_border_light'),
-    $r('app.color.theme_dawn_accent_soft_light'),
-    $r('app.color.theme_dawn_active_light')
-  );
-  if (scheme === 'dawn' && dark === true) return new XopcThemeTokens(
-    $r('app.color.theme_dawn_surface_dark'),
-    $r('app.color.theme_dawn_panel_dark'),
-    $r('app.color.theme_dawn_foreground_dark'),
-    $r('app.color.theme_dawn_secondary_dark'),
-    $r('app.color.theme_dawn_tertiary_dark'),
-    $r('app.color.theme_dawn_accent_dark'),
-    $r('app.color.theme_dawn_danger_dark'),
-    $r('app.color.theme_dawn_grouped_dark'),
-    $r('app.color.theme_dawn_input_dark'),
-    $r('app.color.theme_dawn_border_dark'),
-    $r('app.color.theme_dawn_accent_soft_dark'),
-    $r('app.color.theme_dawn_active_dark')
-  );
   if (scheme === 'emerald' && dark === false) return new XopcThemeTokens(
     $r('app.color.theme_emerald_surface_light'),
     $r('app.color.theme_emerald_panel_light'),
@@ -323,20 +294,6 @@ function xopcChatThemeColors(scheme: XopcColorScheme, dark: boolean, canvas: Res
         card: $r('app.color.chat_porcelain_card_light'),
         bubble: $r('app.color.chat_porcelain_bubble_light'),
         action: $r('app.color.chat_porcelain_action_light'),
-        onAction: $r('app.color.theme_default_panel_light'), secondary,
-      };
-    case 'dawn':
-      return dark ? {
-        canvas,
-        card: $r('app.color.chat_dawn_card_dark'),
-        bubble: $r('app.color.chat_dawn_bubble_dark'),
-        action: $r('app.color.chat_dawn_action_dark'),
-        onAction: canvas, secondary,
-      } : {
-        canvas,
-        card: $r('app.color.chat_dawn_card_light'),
-        bubble: $r('app.color.chat_dawn_bubble_light'),
-        action: $r('app.color.chat_dawn_action_light'),
         onAction: $r('app.color.theme_default_panel_light'), secondary,
       };
     case 'emerald':

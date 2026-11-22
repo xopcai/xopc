@@ -9,7 +9,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import '@/styles/globals.css';
 
 const params = new URLSearchParams(location.search);
-const theme = params.get('theme') ?? 'dawn';
+const theme = params.get('theme') ?? 'default';
 const dark = params.get('mode') === 'dark';
 document.documentElement.dataset.colorScheme = theme;
 document.documentElement.classList.toggle('dark', dark);
