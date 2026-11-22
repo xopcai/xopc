@@ -17,7 +17,7 @@ export interface InitWorkspaceCoreOptions {
   gatewayPort?: number;
   /** When true, sets the default agent workspace to `workspacePath`. */
   persistWorkspacePath?: boolean;
-  /** GatewayServer initializes application state itself after acquiring the lock. */
+  /** GatewayServer bootstraps application state and validates channels under the gateway lock. */
   deferApplicationBootstrap?: boolean;
   /** Optional channel plugin validator (CLI/gateway only; Electron omits). */
   assertChannelPlugins?: (cfg: Config) => void | Promise<void>;
@@ -41,12 +41,13 @@ async function assertChannelPluginsIfNeeded(
 
 async function readDiskConfig(
   configPath: string,
+  deferApplicationBootstrap: boolean,
   assertChannelPlugins?: InitWorkspaceCoreOptions['assertChannelPlugins'],
 ): Promise<Config> {
   const snapshot = readConfigFileSnapshot(configPath);
   const cfg = snapshot.config;
   await assertChannelPluginsIfNeeded(cfg, assertChannelPlugins);
-  snapshot.discardRetiredFields();
+  if (!deferApplicationBootstrap) snapshot.discardRetiredFields();
   return cfg;
 }
 
@@ -57,26 +58,19 @@ async function readDiskConfig(
 export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Promise<InitWorkspaceResult> {
   const gatewayPortDefaulted = options.gatewayPort ?? 18790;
   const persistWorkspacePath = options.persistWorkspacePath ?? false;
-  const { configPath, workspacePath, assertChannelPlugins } = options;
+  const { configPath, workspacePath, deferApplicationBootstrap = false } = options;
+  const assertChannelPlugins = deferApplicationBootstrap ? undefined : options.assertChannelPlugins;
   const persistedWorkspaceRoot = persistWorkspacePath ? workspacePath : undefined;
 
   mkdirSync(dirname(configPath), { recursive: true });
 
   const configExisted = existsSync(configPath);
-  let applicationBootstrapped = false;
-  const bootstrap = () => {
-    if (!applicationBootstrapped) bootstrapApplicationStateSync();
-    applicationBootstrapped = true;
-  };
-  if (!options.deferApplicationBootstrap || persistWorkspacePath) bootstrap();
+  if (!deferApplicationBootstrap || persistWorkspacePath) bootstrapApplicationStateSync();
   const workspaceExisted = existsSync(workspacePath);
 
   let config: Config;
   if (configExisted) {
-    config = await readDiskConfig(configPath, async (cfg) => {
-      if (assertChannelPlugins && Object.keys(cfg.channels ?? {}).length) bootstrap();
-      await assertChannelPluginsIfNeeded(cfg, assertChannelPlugins);
-    });
+    config = await readDiskConfig(configPath, deferApplicationBootstrap, assertChannelPlugins);
   } else {
     config = ConfigSchema.parse(undefined);
     await assertChannelPluginsIfNeeded(config, assertChannelPlugins);
@@ -131,8 +125,8 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
 
   const needsWrite = configCreated || JSON.stringify(config) !== JSON.stringify(nextFinal);
   if (needsWrite) {
-    if (assertChannelPlugins) {
-      await saveConfig(nextFinal, configPath);
+    if (assertChannelPlugins || deferApplicationBootstrap) {
+      await saveConfig(nextFinal, configPath, { deferChannelPluginValidation: deferApplicationBootstrap });
     } else {
       writeFileSync(configPath, `${JSON.stringify(nextFinal, null, 2)}\n`, 'utf8');
     }

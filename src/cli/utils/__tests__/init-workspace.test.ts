@@ -7,6 +7,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 import { loadConfig } from '../../../config/loader.js';
 import { ConfigSchema } from '../../../config/schema.js';
+import { isXopcDatabaseOpen } from '../../../storage/sqlite/connection.js';
 import { initWorkspace } from '../init-workspace.js';
 import { initWorkspaceCore } from '../init-workspace-core.js';
 
@@ -14,6 +15,30 @@ describe('initWorkspace', () => {
   beforeAll(async () => {
     await import('../../../config/validate-channel-configs.js');
   }, 30_000);
+
+  it('prepares new and existing gateway config before opening the database', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-init-gateway-'));
+    try {
+      const options = {
+        configPath: join(root, 'xopc.json'),
+        workspacePath: join(root, 'workspace'),
+        deferApplicationBootstrap: true,
+      };
+
+      expect(isXopcDatabaseOpen()).toBe(false);
+      const fresh = await initWorkspace(options);
+      expect(fresh.configCreated).toBe(true);
+      expect(fresh.config.channels).toHaveProperty('telegram');
+      expect(isXopcDatabaseOpen()).toBe(false);
+
+      const saved = await initWorkspace(options);
+      expect(saved.configCreated).toBe(false);
+      expect(saved.token).toBe(fresh.token);
+      expect(isXopcDatabaseOpen()).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 
   it('creates config and workspace with skipChannelPluginValidation (Electron path; no bundled channel graph)', async () => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-init-skip-'));

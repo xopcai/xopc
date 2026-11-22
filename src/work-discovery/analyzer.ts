@@ -208,9 +208,38 @@ function snapshotForModel(snapshot: WorkContextSnapshot): WorkContextSnapshot {
   };
 }
 
-function defaultConversationStarter(snapshot: WorkContextSnapshot): string {
+function resolveOutputLanguage(locale?: string): 'zh' | 'en' | 'auto' {
+  const normalized = locale?.trim().toLowerCase() ?? '';
+  if (normalized === 'zh' || normalized.startsWith('zh-') || normalized.startsWith('zh_')) return 'zh';
+  if (normalized === 'en' || normalized.startsWith('en-') || normalized.startsWith('en_')) return 'en';
+  return 'auto';
+}
+
+function outputLanguageInstruction(locale: string | undefined, scope: 'snapshot' | 'items'): string {
+  const language = resolveOutputLanguage(locale);
+  if (language === 'zh') {
+    return 'The user interface language is Simplified Chinese. Write EVERY user-facing string (projectSummary, currentState, uncertainties, suggestion title, rationale, evidence observations, expectedTask, actionPrompt, verification, conversationStarter, contextQuestion, workThreads title/summary, and profileCandidates statement) in natural, concise Simplified Chinese, even if the codebase, Git history, or documents are in English. Keep file paths, Git branch names, and code identifiers exact.';
+  }
+  if (language === 'en') {
+    return 'The user interface language is English. Write every user-facing string in clear, concise English, even if some documents are in another language. Keep file paths, Git branch names, and code identifiers exact.';
+  }
+  return scope === 'snapshot'
+    ? 'Use Simplified Chinese for every user-facing string when the visible snapshot documents are mainly Chinese; otherwise use English.'
+    : 'Use Simplified Chinese when the supplied items are mainly Chinese; otherwise use English.';
+}
+
+function defaultConversationStarter(snapshot: WorkContextSnapshot, locale?: string): string {
   const name = snapshot.root.displayName;
   const changedPathCount = snapshot.git?.changedPaths.length ?? 0;
+  if (resolveOutputLanguage(locale) === 'zh') {
+    if (changedPathCount > 0) {
+      return `帮我梳理 ${name} 中这 ${changedPathCount} 个近期变更文件，说明当前正在推进的工作，并建议最值得先做的下一步。`;
+    }
+    if (snapshot.root.projectKind === 'coding') {
+      return `帮我了解 ${name}：简要概括这个项目的用途、当前状态，以及最适合切入的第一步。`;
+    }
+    return `帮我梳理 ${name} 中的资料，找出目前最重要的事项和最值得先开始的方向。`;
+  }
   if (changedPathCount > 0) {
     return `Review the ${changedPathCount} changed ${changedPathCount === 1 ? 'path' : 'paths'} in ${name}, explain what work appears to be in progress, and recommend the most important next step.`;
   }
@@ -224,19 +253,29 @@ function lowConfidenceResult(
   snapshot: WorkContextSnapshot,
   question?: string,
   conversationStarter?: string,
+  locale?: string,
 ): WorkDiscoveryResult {
+  const zh = resolveOutputLanguage(locale) === 'zh';
   return {
-    projectSummary: snapshot.root.projectKind === 'coding'
-      ? `${snapshot.root.displayName} appears to be a software project.`
-      : `${snapshot.root.displayName} is a local work folder.`,
-    currentState: snapshot.git?.changedPaths.length
-      ? `${snapshot.git.changedPaths.length} changed paths were detected, but there was not enough reliable context to recommend work.`
-      : 'There was not enough recent, readable context to determine the current objective.',
-    uncertainties: ['The current objective is not explicit in the selected files.'],
+    projectSummary: zh
+      ? (snapshot.root.projectKind === 'coding'
+        ? `${snapshot.root.displayName} 是一个软件项目目录。`
+        : `${snapshot.root.displayName} 是一个本地工作目录。`)
+      : (snapshot.root.projectKind === 'coding'
+        ? `${snapshot.root.displayName} appears to be a software project.`
+        : `${snapshot.root.displayName} is a local work folder.`),
+    currentState: zh
+      ? (snapshot.git?.changedPaths.length
+        ? `检测到 ${snapshot.git.changedPaths.length} 个变更路径，但目前缺少足够上下文来确定下一步。`
+        : '暂时缺少足够的近期可读上下文来判断当前目标。')
+      : (snapshot.git?.changedPaths.length
+        ? `${snapshot.git.changedPaths.length} changed paths were detected, but there was not enough reliable context to recommend work.`
+        : 'There was not enough recent, readable context to determine the current objective.'),
+    uncertainties: [zh ? '所选文件中未明确体现当前推进目标。' : 'The current objective is not explicit in the selected files.'],
     suggestions: [],
-    conversationStarter: conversationStarter?.trim().slice(0, 2_000) || defaultConversationStarter(snapshot),
+    conversationStarter: conversationStarter?.trim().slice(0, 2_000) || defaultConversationStarter(snapshot, locale),
     lowConfidence: true,
-    contextQuestion: question ?? 'What are you trying to move forward in this folder?',
+    contextQuestion: question ?? (zh ? '你现在最想在这个目录里推进什么？' : 'What are you trying to move forward in this folder?'),
   };
 }
 
@@ -245,12 +284,13 @@ export async function analyzeWorkContext(input: {
   snapshot: WorkContextSnapshot;
   candidateContext?: WorkDiscoveryCandidate[];
   projectOverviewOnly?: boolean;
+  locale?: string;
   signal?: AbortSignal;
 }): Promise<{ modelRef: string; result: WorkDiscoveryResult }> {
   const modelRef = getAgentDefaultModelRef();
   if (!modelRef) throw new Error('No default model configured');
   if (input.snapshot.documents.length === 0 && !input.snapshot.git?.changedPaths.length) {
-    return { modelRef, result: lowConfidenceResult(input.snapshot) };
+    return { modelRef, result: lowConfidenceResult(input.snapshot, undefined, undefined, input.locale) };
   }
 
   const model = resolveModel(modelRef);
@@ -286,7 +326,7 @@ export async function analyzeWorkContext(input: {
       'Always return conversationStarter, including when confidence is low.',
       'If the current objective is unclear or fewer than three credible suggestions exist, set lowConfidence=true, return suggestions=[], and ask one concise contextQuestion.',
     ]),
-    'Use Simplified Chinese for every user-facing string when the visible snapshot documents are mainly Chinese; otherwise use English.',
+    outputLanguageInstruction(input.locale, 'snapshot'),
     '',
     input.candidateContext?.length
       ? `Other ranked local work projects (metadata only):\n${JSON.stringify(input.candidateContext.slice(0, 8).map((candidate) => ({
@@ -335,6 +375,7 @@ export async function analyzeWorkContext(input: {
       input.snapshot,
       typeof parsed.contextQuestion === 'string' ? parsed.contextQuestion.trim().slice(0, 500) : undefined,
       typeof parsed.conversationStarter === 'string' ? parsed.conversationStarter : undefined,
+      input.locale,
     );
     const projectSummary = typeof parsed.projectSummary === 'string' && parsed.projectSummary.trim()
       ? parsed.projectSummary.trim().slice(0, 1_200)
@@ -426,6 +467,7 @@ async function analyzeUnderstandingBatch(input: {
   config: Config;
   items: BoundedUnderstandingSourceItem[];
   workContext?: Pick<WorkDiscoveryResult, 'projectSummary' | 'currentState' | 'uncertainties' | 'workThreads'>;
+  locale?: string;
   signal?: AbortSignal;
 }): Promise<UnderstandingBatchAnalysis> {
   const modelRef = getAgentDefaultModelRef();
@@ -448,7 +490,7 @@ async function analyzeUnderstandingBatch(input: {
     'Do not infer sensitive identity, health, finances, political views, credentials, private contact details, or unstated relationship labels.',
     'Evidence must be a short paraphrase and must not quote private content verbatim.',
     'Calendar events and tasks may establish commitments and timing, not stable preferences without repeated evidence.',
-    'Use Simplified Chinese when the supplied items are mainly Chinese; otherwise use English.',
+    outputLanguageInstruction(input.locale, 'items'),
     input.workContext ? `Work-directory context for reconciliation only:\n${JSON.stringify(input.workContext)}` : '',
     JSON.stringify(input.items),
   ].join('\n');
@@ -537,6 +579,7 @@ export async function analyzeUnderstandingSources(input: {
   config: Config;
   items: UnderstandingSourceItem[];
   workContext?: Pick<WorkDiscoveryResult, 'projectSummary' | 'currentState' | 'uncertainties' | 'workThreads'>;
+  locale?: string;
   signal?: AbortSignal;
 }): Promise<{
   modelRef: string;
@@ -582,6 +625,7 @@ export async function analyzeUnderstandingSources(input: {
         config: input.config,
         items: batch,
         ...(input.workContext ? { workContext: input.workContext } : {}),
+        ...(input.locale ? { locale: input.locale } : {}),
         signal: input.signal,
       });
       sourceAnalyses.push(...result.analyses);

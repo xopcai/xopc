@@ -43,6 +43,7 @@ import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-inpu
 import { TaskDetailModal } from '@/features/tasks/task-detail-modal';
 import { closeTaskDetailModalHref, TASK_DETAIL_MODAL_PARAM } from '@/features/tasks/task-detail-route';
 import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
+import { DesktopHabitToast } from '@/features/onboarding/desktop-habit-toast';
 import { TopBannerStack } from '@/components/shell/top-banner-stack';
 import { UnderstandingActivityCoordinator } from '@/features/work-discovery/understanding-activity-coordinator';
 import {
@@ -240,6 +241,7 @@ function AppShellContent() {
       <SideChatSelectionLauncher conversationId={parentConversationId} />
       <TokenDialog />
       {!pathname.startsWith('/mcp-setup/') && !pathname.startsWith('/configuration/') ? <OnboardingDialog /> : null}
+      <DesktopHabitToast />
       {productPreviewTarget ? (
         <ProductPreviewModal target={productPreviewTarget} backgroundPath={productPreviewBackgroundPath} onClose={() => navigate(productPreviewBackgroundPath, { replace: true })} />
       ) : null}

@@ -381,4 +381,35 @@ describe('work discovery analyzer', () => {
     expect(analysis.profileCandidates).toHaveLength(2);
     expect(analysis.sourceStatuses).toEqual([{ sourceId: 'apple-notes', status: 'completed' }]);
   });
+
+  it('enforces Simplified Chinese output when user locale is zh-CN even for English repositories', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValueOnce({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          projectSummary: 'xopc 是一个本地优先的个人 AI 助手仓库。',
+          currentState: '当前有未提交改动。',
+          uncertainties: [],
+          lowConfidence: true,
+          suggestions: [],
+        }),
+      }],
+    } as never);
+
+    const snapshot = {
+      root: { displayName: 'xopc', projectKind: 'coding' as const, markerReasons: ['package.json'] },
+      structure: { sampledPaths: ['README.md'], metadataOnlyFiles: [], omittedPathCount: 0 },
+      git: { branch: 'main', changedPaths: ['README.md'], recentCommits: [] },
+      documents: [{ relativePath: 'README.md', excerpt: '# xopc English README', truncated: false, selectionReason: 'high_value' }],
+      limits: { policyVersion: 1, fileCount: 1, contentBytes: 21, truncated: false },
+    };
+
+    const result = await analyzeWorkContext({ config: {} as never, snapshot, locale: 'zh-CN' });
+
+    const callArg = vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[1] as { messages: Array<{ content: string }> };
+    expect(callArg.messages[0]?.content).toContain('The user interface language is Simplified Chinese');
+    expect(callArg.messages[0]?.content).not.toContain('when the visible snapshot documents are mainly Chinese');
+    expect(result.result.contextQuestion).toContain('你现在最想在这个目录里推进什么');
+    expect(result.result.conversationStarter).toContain('xopc');
+  });
 });

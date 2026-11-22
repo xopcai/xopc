@@ -1,14 +1,20 @@
 import type { ModelSetupPreview } from '@xopcai/gateway-contract';
 
-import { CheckCircle2, ChevronRight, LoaderCircle, X } from 'lucide-react';
+import { Check, CheckCircle2, ChevronRight, LoaderCircle, Pencil, X } from 'lucide-react';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 import { Loopi } from '@/components/brand/loopi';
+import { APP_CHROME_BAR_CLASS, APP_CHROME_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
+import {
+  ensureDefaultPersonalAgent,
+  prefetchDesktopOnboardingContext,
+} from '@/features/onboarding/desktop-onboarding-bootstrap';
 import { OnboardingLanguageSwitch } from '@/features/onboarding/onboarding-language-switch';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
 import { cn } from '@/lib/cn';
 import { isElectron } from '@/lib/electron-env';
+import { isElectronDarwin } from '@/lib/electron-window-chrome';
 import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 import { applyModelSetup, previewModelSetup } from '@/features/settings/models-hub/provider-setup-api';
 import { AddProviderDialog } from '@/features/settings/models-hub/add-provider-dialog';
@@ -89,6 +95,8 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
 
   const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [desktopApplied, setDesktopApplied] = useState(false);
   const providerData = useConnectedProviders();
   const desktop = isElectron();
   const applyingCloud = useRef(false);
@@ -134,6 +142,19 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
     };
   }, []);
 
+  const persistProfileSilently = async () => {
+    const normalizedCallName = callName.trim();
+    try {
+      await updateUserProfile({
+        ...(normalizedCallName ? { callName: normalizedCallName } : {}),
+        timezone: detectBrowserTimezone(),
+        locale: language === 'zh' ? 'zh-CN' : 'en-US',
+      });
+    } catch {
+      // Optional profile defaults must never block first-run setup on desktop.
+    }
+  };
+
   const continueFromCallName = async () => {
     const normalizedCallName = callName.trim();
     dispatch({ type: 'patch', patch: { busy: true, error: null } });
@@ -154,11 +175,22 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
     }
   };
 
+  const completeDesktopSilently = async () => {
+    await persistProfileSilently();
+    void ensureDefaultPersonalAgent();
+    void prefetchDesktopOnboardingContext();
+    await onComplete();
+  };
+
   const finishCloudSetup = async () => {
     if (applyingCloud.current) return;
     applyingCloud.current = true;
     dispatch({ type: 'patch', patch: { busy: true, error: null } });
     try {
+      if (desktop && desktopApplied) {
+        await completeDesktopSilently();
+        return;
+      }
       const request = { mode: 'replace' as const };
       const preview = await previewModelSetup('xopc-cloud', request);
       if (!preview.configured || !preview.uses.find(use => use.id === 'chat')?.recommended) {
@@ -167,6 +199,11 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
       const selected = preview.uses.filter(use => use.selected && use.recommended).map(use => use.id);
       await applyModelSetup('xopc-cloud', { ...request, selected }, preview.revision);
       setCloudSetup(preview);
+      if (desktop) {
+        setDesktopApplied(true);
+        await completeDesktopSilently();
+        return;
+      }
       dispatch({ type: 'patch', patch: { step: 'success' } });
     } catch (cause) {
       dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } });
@@ -182,6 +219,182 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
     catch (cause) { dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } }); }
     finally { dispatch({ type: 'patch', patch: { busy: false } }); }
   };
+
+  if (desktop) {
+    const zh = language === 'zh';
+    const trimmedName = callName.trim();
+    return (
+      <div className="xopc-onboarding-experience relative flex h-full min-h-0 w-full flex-col overflow-hidden" data-step="desktop-connect">
+        <header className={cn(
+          'relative z-20 flex h-14 shrink-0 items-center justify-end gap-2 px-5 sm:px-8',
+          isElectronDarwin() && APP_CHROME_BAR_CLASS,
+          isElectronDarwin() && APP_CHROME_DRAG_CLASS,
+        )}>
+          <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <OnboardingLanguageSwitch
+              value={language}
+              onChange={(nextLanguage) => {
+                dispatch({ type: 'patch', patch: { error: null } });
+                setLanguage(nextLanguage);
+              }}
+            />
+            {canDismiss ? (
+              <button
+                type="button"
+                aria-label={o.skipSetup}
+                disabled={busy}
+                className="inline-flex size-9 items-center justify-center rounded-xl text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                onClick={onDismiss}
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            ) : null}
+          </div>
+        </header>
+
+        <main className="xopc-onboarding-scroll relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-5 pb-12 pt-2 sm:px-8">
+          <div className="xopc-focus-stage flex w-full max-w-[30rem] flex-col items-center text-center">
+            <Loopi
+              className="mb-6 size-28"
+              interactive
+              language={language}
+              mood={error ? 'care' : busy ? 'work' : desktopApplied ? 'done' : 'listen'}
+            />
+
+            {/* Inline optional call-name pill (prefilled from OS, editable in place, zero extra step) */}
+            <div className="mb-3 min-h-8">
+              {editingName ? (
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-accent bg-surface-panel px-3 py-1 shadow-surface">
+                  <input
+                    autoFocus
+                    autoComplete="name"
+                    aria-label={o.profileCallNameLabel}
+                    value={callName}
+                    onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
+                    onBlur={() => setEditingName(false)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === 'Escape') {
+                        event.preventDefault();
+                        setEditingName(false);
+                      }
+                    }}
+                    placeholder={o.profileCallNamePlaceholder}
+                    className="w-36 bg-transparent text-center text-xs font-medium text-fg outline-none placeholder:text-fg-subtle"
+                  />
+                  <button
+                    type="button"
+                    aria-label={zh ? '完成编辑称呼' : 'Done editing name'}
+                    className="text-accent-fg hover:text-fg"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setEditingName(false)}
+                  >
+                    <Check className="size-3.5" aria-hidden />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setEditingName(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-panel/85 px-3 py-1 text-xs font-medium text-fg-muted transition-colors hover:border-edge-strong hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <span>
+                    {trimmedName
+                      ? (zh ? `你好，${trimmedName}` : `Hi, ${trimmedName}`)
+                      : (zh ? '设置你的称呼' : 'Set your name')}
+                  </span>
+                  <Pencil className="size-3 opacity-70" aria-hidden />
+                </button>
+              )}
+            </div>
+
+            <h1 className="text-[1.875rem] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-[2.25rem]">
+              {zh ? '连接 XOPC Cloud' : 'Connect XOPC Cloud'}
+            </h1>
+            <p className="mt-3 max-w-[26rem] text-sm leading-6 text-fg-muted">
+              {zh
+                ? '登录后自动配齐聊天、图片、语音和任务模型，即刻进入你的工作。电脑操作默认关闭，无需 API Key。'
+                : 'Sign in to configure chat, image, voice, and task models automatically. Computer control stays off by default. No API key required.'}
+            </p>
+
+            <div className="mt-8 w-full rounded-2xl border border-edge bg-surface-panel p-5 text-left shadow-surface">
+              <fieldset disabled={busy} className="min-w-0">
+                <OAuthProviderConnect
+                  providerId="xopc-cloud"
+                  displayName="XOPC Cloud"
+                  connected={cloudConnected}
+                  onConnected={() => {
+                    setCloudAuthorized(true);
+                    void finishCloudSetup();
+                  }}
+                />
+              </fieldset>
+
+              {cloudConnected ? (
+                <div className="mt-4 flex justify-end">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="h-10 w-full gap-1.5 rounded-xl px-5"
+                    disabled={busy}
+                    onClick={() => void finishCloudSetup()}
+                  >
+                    {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
+                    {error ? (zh ? '重试' : 'Retry') : o.continue}
+                    {!busy && !error ? <ChevronRight className="size-4" aria-hidden /> : null}
+                  </Button>
+                </div>
+              ) : null}
+
+              {error ? <p className="mt-3 text-sm text-danger" role="alert">{error}</p> : null}
+              {cloudSetup?.uses.some(use => !use.selected) ? (
+                <p className="mt-2.5 text-xs text-fg-muted">
+                  {zh ? '部分能力暂无可用模型，可稍后在模型设置中查看。' : 'Some capabilities have no available model. Review them in Model settings.'}
+                </p>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                dispatch({ type: 'patch', patch: { selectedProvider: null, error: null } });
+                setProviderDialogOpen(true);
+              }}
+              className="mt-6 text-xs font-medium text-fg-muted transition-colors hover:text-fg hover:underline"
+            >
+              {zh ? '使用自有 API Key 或本地模型' : 'Use your own API key or local model'}
+            </button>
+          </div>
+        </main>
+
+        <AddProviderDialog
+          open={providerDialogOpen}
+          initialProviderId={selectedProvider ?? undefined}
+          onOpenChange={setProviderDialogOpen}
+          builtinRows={providerData.builtinRows}
+          customConfig={providerData.customConfig}
+          labels={messages(language).capabilitiesSettings.addProviderDialog}
+          language={language}
+          onSaved={(providerId) => {
+            setProviderDialogOpen(false);
+            if (providerId === 'xopc-cloud') {
+              void finishCloudSetup();
+              return;
+            }
+            dispatch({ type: 'patch', patch: { busy: true, error: null } });
+            void completeDesktopSilently()
+              .catch((cause) => {
+                dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } });
+              })
+              .finally(() => {
+                dispatch({ type: 'patch', patch: { busy: false } });
+              });
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="xopc-onboarding-experience relative flex h-full min-h-0 w-full flex-col overflow-hidden" data-step={step}>

@@ -59,8 +59,16 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
   authenticated.post('/api/work-discovery/candidates', limited, async (c) => {
     if (!service.isEnabled()) return c.json({ ok: false, error: 'Work discovery is disabled' }, 404);
     try {
-      const candidates = await service.discoverCandidates(c.req.raw.signal);
-      return c.json({ ok: true, candidates, processingTarget: service.getModelProcessingTarget() });
+      const [candidates, recentFiles] = await Promise.all([
+        service.discoverCandidates(c.req.raw.signal),
+        service.discoverRecentFiles(c.req.raw.signal).catch(() => []),
+      ]);
+      return c.json({
+        ok: true,
+        candidates,
+        recentFiles,
+        processingTarget: service.getModelProcessingTarget(),
+      });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500);
     }
@@ -71,12 +79,17 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
     const body = await c.req.json().catch(() => null);
     const idempotencyKey = stringField(body, 'idempotencyKey');
     const processingPolicy = stringField(body, 'processingPolicy');
+    const locale = stringField(body, 'locale');
     if (!idempotencyKey) return c.json({ ok: false, error: 'Missing idempotencyKey' }, 400);
     if (processingPolicy !== 'local_only' && processingPolicy !== 'remote_allowed') {
       return c.json({ ok: false, error: 'Explicit processingPolicy is required' }, 400);
     }
     try {
-      const run = await service.startQuickRun({ idempotencyKey, processingPolicy });
+      const run = await service.startQuickRun({
+        idempotencyKey,
+        processingPolicy,
+        ...(locale ? { locale } : {}),
+      });
       return c.json({ ok: true, run }, 202);
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
@@ -89,6 +102,7 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
     const rootPath = stringField(body, 'rootPath');
     const idempotencyKey = stringField(body, 'idempotencyKey');
     const requestedSource = stringField(body, 'source');
+    const locale = stringField(body, 'locale');
     const source: WorkDiscoverySource = requestedSource === 'manual_selected_directory'
       ? 'manual_selected_directory'
       : 'onboarding_selected_directory';
@@ -96,7 +110,12 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
       return c.json({ ok: false, error: 'Missing rootPath or idempotencyKey' }, 400);
     }
     try {
-      const run = await service.startRun({ rootPath, source, idempotencyKey });
+      const run = await service.startRun({
+        rootPath,
+        source,
+        idempotencyKey,
+        ...(locale ? { locale } : {}),
+      });
       return c.json({ ok: true, run }, 202);
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);

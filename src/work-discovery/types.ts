@@ -28,6 +28,7 @@ export type WorkDiscoverySource = 'onboarding_selected_directory' | 'manual_sele
 export type WorkDiscoveryCandidateSource =
   | 'existing_project'
   | 'approved_directory'
+  | 'ai_tool_project'
   | 'common_work_root'
   | 'personal_work_root';
 
@@ -44,6 +45,15 @@ export interface WorkDiscoveryCandidate {
   branch?: string;
   changedFileCount: number;
   evidence: string[];
+}
+
+export interface WorkDiscoveryRecentFile {
+  id: string;
+  name: string;
+  directory: string;
+  rootLabel: string;
+  extension: string;
+  modifiedAt: number;
 }
 
 export interface WorkDiscoveryDirectorySource {

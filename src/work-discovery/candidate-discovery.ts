@@ -1,24 +1,30 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { access, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, extname, isAbsolute, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { parse as parseToml } from 'smol-toml';
 
 import { inferProjectKind } from '../projects/index.js';
 
-import type { WorkDiscoveryCandidate, WorkDiscoveryCandidateSource } from './types.js';
+import type { WorkDiscoveryCandidate, WorkDiscoveryCandidateSource, WorkDiscoveryRecentFile } from './types.js';
 
 const execFileAsync = promisify(execFile);
 
 const COMMON_WORK_ROOT_NAMES = ['develop', 'Developer', 'Projects', 'workspace', 'code', 'src'];
 const PERSONAL_WORK_ROOT_NAMES = ['Desktop', 'Documents', 'Downloads'];
 const MAX_ROOT_CHILDREN = 100;
+const MAX_AI_TOOL_PROJECTS = 20;
 const GIT_TIMEOUT_MS = 2_500;
 const RECENT_GENERAL_WORK_MS = 90 * 86_400_000;
+const RECENT_FILE_CLUE_WINDOW_MS = 14 * 86_400_000;
+const MAX_RECENT_FILE_CLUES = 6;
 const GENERAL_WORK_EXTENSIONS = new Set([
-  '.doc', '.docx', '.md', '.odt', '.pdf', '.ppt', '.pptx', '.rtf', '.txt', '.xls', '.xlsx',
+  '.csv', '.doc', '.docx', '.key', '.md', '.numbers', '.odt', '.pages', '.pdf', '.ppt', '.pptx', '.rtf', '.txt', '.xls', '.xlsx',
 ]);
+const SECRET_CLUE_NAME = /(?:^|[-_.])(credentials?|secrets?|tokens?|api[-_]?keys?|auth)(?:[-_.]|$)|^\.env(?:\.|$)|\.(?:pem|key|p12|pfx)$/i;
 
 interface CandidateInput {
   rootPath: string;
@@ -141,6 +147,7 @@ async function probeCandidate(input: CandidateInput, nowMs: number, signal?: Abo
   if (inference.reasons[0]) evidence.push(inference.reasons[0]);
   if (input.source === 'existing_project') evidence.push('already connected to xopc');
   if (input.source === 'approved_directory') evidence.push('previously approved work folder');
+  if (input.source === 'ai_tool_project') evidence.push('recent AI tool project');
   return {
     id: input.projectId ? `project:${input.projectId}` : `path:${rootPath}`,
     rootPath,
@@ -255,6 +262,92 @@ async function personalRootInputs(
   return inputs;
 }
 
+async function readProjectKeysFromConfig(
+  path: string,
+  format: 'json' | 'toml',
+): Promise<string[]> {
+  const raw = await readFile(path, 'utf8').catch(() => '');
+  if (!raw || raw.length > 2 * 1024 * 1024) return [];
+  try {
+    const parsed = (format === 'toml' ? parseToml(raw) : JSON.parse(raw)) as Record<string, unknown>;
+    const projects = parsed?.projects;
+    if (!projects || typeof projects !== 'object' || Array.isArray(projects)) return [];
+    return Object.keys(projects).filter((key) => isAbsolute(key));
+  } catch {
+    return [];
+  }
+}
+
+async function aiToolProjectInputs(homeDirectory: string, signal?: AbortSignal): Promise<CandidateInput[]> {
+  abortIfNeeded(signal);
+  const canonicalHome = await realpath(homeDirectory).catch(() => resolve(homeDirectory));
+  const [claudeRoots, codexRoots] = await Promise.all([
+    readProjectKeysFromConfig(join(homeDirectory, '.claude.json'), 'json'),
+    readProjectKeysFromConfig(join(homeDirectory, '.codex', 'config.toml'), 'toml'),
+  ]);
+  const seen = new Set<string>();
+  const inputs: CandidateInput[] = [];
+  for (const candidatePath of [...claudeRoots, ...codexRoots]) {
+    abortIfNeeded(signal);
+    if (inputs.length >= MAX_AI_TOOL_PROJECTS) break;
+    const normalized = resolve(candidatePath);
+    if (normalized === canonicalHome || seen.has(normalized)) continue;
+    seen.add(normalized);
+    inputs.push({ rootPath: normalized, source: 'ai_tool_project' });
+  }
+  return inputs;
+}
+
+export async function discoverRecentDocumentClues(
+  options: Pick<DiscoverWorkCandidatesOptions, 'homeDirectory' | 'nowMs' | 'signal' | 'platform' | 'environment'> = {},
+): Promise<WorkDiscoveryRecentFile[]> {
+  const nowMs = options.nowMs ?? Date.now();
+  const homeDirectory = options.homeDirectory ?? homedir();
+  const roots = await resolvePersonalWorkRoots(
+    homeDirectory,
+    options.platform ?? process.platform,
+    options.environment ?? process.env,
+  );
+  const found: WorkDiscoveryRecentFile[] = [];
+
+  const visit = async (rootLabel: string, directory: string, depth: number): Promise<void> => {
+    abortIfNeeded(options.signal);
+    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries.slice(0, MAX_ROOT_CHILDREN)) {
+      if (entry.name.startsWith('.') || SECRET_CLUE_NAME.test(entry.name)) continue;
+      const fullPath = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (depth < 1) await visit(rootLabel, fullPath, depth + 1);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const extension = extname(entry.name).toLowerCase();
+      if (!GENERAL_WORK_EXTENSIONS.has(extension)) continue;
+      const info = await stat(fullPath).catch(() => null);
+      if (!info?.isFile() || nowMs - info.mtimeMs > RECENT_FILE_CLUE_WINDOW_MS) continue;
+      const id = createHash('sha256').update(fullPath).digest('hex').slice(0, 16);
+      found.push({
+        id,
+        name: entry.name.slice(0, 200),
+        directory,
+        rootLabel,
+        extension,
+        modifiedAt: info.mtimeMs,
+      });
+    }
+  };
+
+  await Promise.all(roots.map(async (root) => {
+    const readable = await readableDirectory(root);
+    if (!readable) return;
+    await visit(basename(readable), readable, 0);
+  }));
+
+  return found
+    .sort((left, right) => right.modifiedAt - left.modifiedAt || left.name.localeCompare(right.name))
+    .slice(0, MAX_RECENT_FILE_CLUES);
+}
+
 export async function discoverWorkCandidates(
   options: DiscoverWorkCandidatesOptions = {},
 ): Promise<WorkDiscoveryCandidate[]> {
@@ -268,17 +361,19 @@ export async function discoverWorkCandidates(
     rootPath: source.rootPath,
     source: 'approved_directory',
   }));
-  const [commonInputs, personalInputs] = await Promise.all([
+  const [aiToolInputs, commonInputs, personalInputs] = await Promise.all([
+    aiToolProjectInputs(homeDirectory, options.signal),
     commonRootInputs(homeDirectory, options.signal),
     resolvePersonalWorkRoots(homeDirectory, options.platform ?? process.platform, options.environment ?? process.env)
       .then((roots) => personalRootInputs(roots, nowMs, options.signal)),
   ]);
   const uniqueInputs = new Map<string, CandidateInput>();
-  for (const input of [...existingInputs, ...approvedInputs, ...commonInputs, ...personalInputs]) {
+  for (const input of [...existingInputs, ...approvedInputs, ...aiToolInputs, ...commonInputs, ...personalInputs]) {
     const existing = uniqueInputs.get(input.rootPath);
     if (!existing
       || input.source === 'existing_project'
-      || (input.source === 'approved_directory' && existing.source !== 'existing_project')) {
+      || (input.source === 'approved_directory' && existing.source !== 'existing_project')
+      || (input.source === 'ai_tool_project' && existing.source !== 'existing_project' && existing.source !== 'approved_directory')) {
       uniqueInputs.set(input.rootPath, input);
     }
   }

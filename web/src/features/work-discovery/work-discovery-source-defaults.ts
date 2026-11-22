@@ -1,12 +1,12 @@
 import type { ElectronUnderstandingSourceDefinition } from '@/types/electron';
 
+// Only zero-prompt local sources are enabled by default during onboarding.
+// OS permission-gated apps (Apple Notes/Mail/Calendar/Reminders) stay opt-in / just-in-time.
 const DEFAULT_ONBOARDING_SOURCE_IDS = new Set([
   'local-recent-files',
   'chromium-bookmarks',
-  'apple-notes',
-  'apple-mail',
-  'apple-calendar',
-  'apple-reminders',
+  'windows-recent-documents',
+  'linux-recent-documents',
 ]);
 
 export function defaultSelectedLocalSourceIds(

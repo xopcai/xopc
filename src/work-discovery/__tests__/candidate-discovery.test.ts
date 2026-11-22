@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { discoverWorkCandidates } from '../candidate-discovery.js';
+import { discoverRecentDocumentClues, discoverWorkCandidates } from '../candidate-discovery.js';
 
 const cleanup: string[] = [];
 
@@ -150,5 +150,41 @@ describe('discoverWorkCandidates', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ source: 'approved_directory', displayName: 'client-briefs' });
+  });
+
+  it('discovers project roots registered in Claude Code and Codex configs outside common roots', async () => {
+    const home = await tempHome();
+    const claudeProject = join(home, 'custom-dir', 'claude-repo');
+    const codexProject = join(home, 'other-dir', 'codex-repo');
+    await mkdir(claudeProject, { recursive: true });
+    await mkdir(codexProject, { recursive: true });
+    await mkdir(join(home, '.codex'), { recursive: true });
+    await writeFile(join(claudeProject, 'package.json'), '{"name":"claude-repo"}');
+    await writeFile(join(codexProject, 'pyproject.toml'), '[project]\nname="codex-repo"');
+    await writeFile(join(home, '.claude.json'), JSON.stringify({ projects: { [claudeProject]: {} } }));
+    await writeFile(join(home, '.codex', 'config.toml'), `[projects."${codexProject}"]\ntrust_level = "trusted"\n`);
+
+    const result = await discoverWorkCandidates({ homeDirectory: home, nowMs: Date.now() });
+
+    expect(result.map((item) => item.displayName).sort()).toEqual(['claude-repo', 'codex-repo']);
+    expect(result.every((item) => item.source === 'ai_tool_project')).toBe(true);
+    expect(result[0]!.evidence).toContain('recent AI tool project');
+  });
+});
+
+describe('discoverRecentDocumentClues', () => {
+  it('collects recent readable documents without reading secrets or hidden files', async () => {
+    const home = await tempHome();
+    await mkdir(join(home, 'Desktop'), { recursive: true });
+    await mkdir(join(home, 'Documents', 'Q4'), { recursive: true });
+    await writeFile(join(home, 'Desktop', 'vendor-quotes.xlsx'), 'stub');
+    await writeFile(join(home, 'Documents', 'Q4', 'review-notes.md'), '# Notes');
+    await writeFile(join(home, 'Desktop', '.env'), 'SECRET=1');
+    await writeFile(join(home, 'Desktop', 'api-tokens.txt'), 'secret');
+
+    const clues = await discoverRecentDocumentClues({ homeDirectory: home, nowMs: Date.now() });
+
+    expect(clues.map((item) => item.name).sort()).toEqual(['review-notes.md', 'vendor-quotes.xlsx']);
+    expect(clues.every((item) => item.rootLabel === 'Desktop' || item.rootLabel === 'Documents')).toBe(true);
   });
 });

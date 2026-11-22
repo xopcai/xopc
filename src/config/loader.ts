@@ -90,7 +90,11 @@ export function loadConfig(configPath?: string): Config {
  * @param config Configuration object to save
  * @param configPath Optional custom config path
  */
-export async function saveConfig(config: Config, configPath?: string): Promise<void> {
+export async function saveConfig(
+  config: Config,
+  configPath?: string,
+  options?: { deferChannelPluginValidation?: boolean },
+): Promise<void> {
   const path = configPath || process.env.XOPC_CONFIG_PATH || resolveConfigPath();
 
   const dir = dirname(path);
@@ -99,7 +103,7 @@ export async function saveConfig(config: Config, configPath?: string): Promise<v
   }
 
   const validated = ConfigSchema.parse(config);
-  assertChannelPluginConfigs(validated);
+  if (!options?.deferChannelPluginValidation) assertChannelPluginConfigs(validated);
   const content = JSON.stringify(validated, null, 2);
 
   // Backup existing config before writing

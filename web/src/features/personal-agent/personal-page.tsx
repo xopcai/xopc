@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ChatPage } from '@/features/chat/chat-page';
 import { useVoiceCall } from '@/features/voice/realtime/voice-call-context';
 import { fetchJson } from '@/lib/fetch';
+import { isElectron } from '@/lib/electron-env';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -108,9 +109,21 @@ export function PersonalPage() {
         fetchJson<ApiResult<PersonalAgent | null>>(apiUrl('/api/personal-agent')),
         fetchJson<ApiResult<ModelOption[]>>(apiUrl('/api/personal-agent/models')),
       ]);
-      setRecord(personal.payload);
-      window.dispatchEvent(new CustomEvent('personal-agent-updated', { detail: personal.payload }));
-      if (personal.payload) window.dispatchEvent(new Event('session-updated'));
+      let nextRecord = personal.payload;
+      if (!nextRecord && isElectron() && compatible.payload.length > 0) {
+        try {
+          const created = await fetchJson<ApiResult<PersonalAgent>>(apiUrl('/api/personal-agent'), {
+            method: 'POST',
+            body: JSON.stringify({ displayName: 'Ada', appearance: 'loopi' }),
+          });
+          nextRecord = created.payload;
+        } catch {
+          // Fall back to manual onboarding if auto-provisioning fails.
+        }
+      }
+      setRecord(nextRecord);
+      window.dispatchEvent(new CustomEvent('personal-agent-updated', { detail: nextRecord }));
+      if (nextRecord) window.dispatchEvent(new Event('session-updated'));
       setModels(compatible.payload);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));

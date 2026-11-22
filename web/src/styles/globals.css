@@ -952,6 +952,24 @@ html.dark {
   to { transform: translateX(250%); }
 }
 
+.xopc-focus-stage {
+  animation: xopc-focus-stage-in 320ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-clue-card {
+  animation: xopc-clue-card-in 280ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes xopc-focus-stage-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes xopc-clue-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .xopc-onboarding-dialog,
   .xopc-onboarding-mark,
@@ -967,6 +985,8 @@ html.dark {
   .xopc-onboarding-stage,
   .xopc-onboarding-provider-options,
   .xopc-work-discovery-stage,
+  .xopc-focus-stage,
+  .xopc-clue-card,
   .xopc-discovery-logo,
   .xopc-understanding-step,
   .xopc-understanding-center,

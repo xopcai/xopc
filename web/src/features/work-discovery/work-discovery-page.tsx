@@ -475,7 +475,7 @@ export function WorkDiscoveryPage({
     const draft = discussOnly
       ? `${language === 'zh' ? '先帮我评估这个方向，不要修改文件：' : 'First assess this direction without changing files:'}\n\n${suggestion.actionPrompt}`
       : suggestion.actionPrompt;
-    openConversation(run.conversationId, draft);
+    openConversation(run.conversationId, draft, !discussOnly);
   };
 
   const completeUnderstandingReveal = async (

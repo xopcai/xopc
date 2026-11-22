@@ -1,5 +1,10 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { useLocaleStore } from '@/stores/locale-store';
+
+function currentUiLocale(): string {
+  return useLocaleStore.getState().language === 'zh' ? 'zh-CN' : 'en-US';
+}
 
 export type WorkDiscoveryStatus = 'queued' | 'probing' | 'analyzing' | 'completed' | 'failed' | 'canceled';
 export type WorkDiscoveryStage = 'folder_structure' | 'recent_progress' | 'next_steps';
@@ -128,7 +133,7 @@ export type WorkDiscoveryCandidate = {
   id: string;
   rootPath: string;
   displayName: string;
-  source: 'existing_project' | 'approved_directory' | 'common_work_root' | 'personal_work_root';
+  source: 'existing_project' | 'approved_directory' | 'ai_tool_project' | 'common_work_root' | 'personal_work_root';
   projectId?: string;
   projectKind: 'coding' | 'general' | 'unknown';
   projectKindConfidence: number;
@@ -137,6 +142,15 @@ export type WorkDiscoveryCandidate = {
   branch?: string;
   changedFileCount: number;
   evidence: string[];
+};
+
+export type WorkDiscoveryRecentFile = {
+  id: string;
+  name: string;
+  directory: string;
+  rootLabel: string;
+  extension: string;
+  modifiedAt: number;
 };
 
 export type WorkDiscoveryProcessingTarget = {
@@ -167,15 +181,21 @@ export async function previewWorkDiscoveryFolder(rootPath: string): Promise<Work
 
 export async function discoverWorkDiscoveryCandidates(): Promise<{
   candidates: WorkDiscoveryCandidate[];
+  recentFiles: WorkDiscoveryRecentFile[];
   processingTarget: WorkDiscoveryProcessingTarget;
 }> {
   const response = await fetchJson<{
     candidates: WorkDiscoveryCandidate[];
+    recentFiles?: WorkDiscoveryRecentFile[];
     processingTarget: WorkDiscoveryProcessingTarget;
   }>(apiUrl('/api/work-discovery/candidates'), {
     method: 'POST',
   });
-  return { candidates: response.candidates, processingTarget: response.processingTarget };
+  return {
+    candidates: response.candidates,
+    recentFiles: response.recentFiles ?? [],
+    processingTarget: response.processingTarget,
+  };
 }
 
 export type WorkDiscoveryDirectorySource = {
@@ -245,13 +265,14 @@ sourceCheckpoints?: Record<string, { fingerprint: string; collectedAt: number }>
   );
 }
 
-export async function startWorkDiscoveryRun(rootPath: string): Promise<WorkDiscoveryRun> {
+export async function startWorkDiscoveryRun(rootPath: string, locale = currentUiLocale()): Promise<WorkDiscoveryRun> {
   const response = await fetchJson<{ run: WorkDiscoveryRun }>(apiUrl('/api/work-discovery/runs'), {
     method: 'POST',
     body: JSON.stringify({
       rootPath,
       source: 'onboarding_selected_directory',
       idempotencyKey: crypto.randomUUID(),
+      locale,
     }),
   });
   return response.run;
@@ -259,10 +280,11 @@ export async function startWorkDiscoveryRun(rootPath: string): Promise<WorkDisco
 
 export async function startQuickWorkDiscoveryRun(
   processingPolicy: WorkDiscoveryProcessingPolicy,
+  locale = currentUiLocale(),
 ): Promise<WorkDiscoveryRun> {
   const response = await fetchJson<{ run: WorkDiscoveryRun }>(apiUrl('/api/work-discovery/quick-runs'), {
     method: 'POST',
-    body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), processingPolicy }),
+    body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), processingPolicy, locale }),
   });
   return response.run;
 }

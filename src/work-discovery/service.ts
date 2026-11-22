@@ -22,6 +22,7 @@ import { writeKnowledgeItem } from '../knowledge-memory/index.js';
 import {
   createPriorityWindow,
   createUserGoal,
+  getUserProfileSnapshot,
   linkAssertionEvidence,
   reconcileAssertion,
   type UserAssertion,
@@ -43,7 +44,7 @@ import { isLocalUnderstandingSourceId } from '../user-context/sources/local-sour
 import { createLogger } from '../utils/logger.js';
 
 import { analyzeUnderstandingSources, analyzeWorkContext, workDiscoveryResultMarkdown } from './analyzer.js';
-import { discoverWorkCandidates } from './candidate-discovery.js';
+import { discoverRecentDocumentClues, discoverWorkCandidates } from './candidate-discovery.js';
 import { workDiscoveryFingerprintsEqual } from './incremental.js';
 import {
   findActiveWorkDiscoverySourceRefresh,
@@ -313,6 +314,7 @@ export class WorkDiscoveryService {
   private readonly executions = new Set<Promise<void>>();
   private stopped = false;
   private readonly candidateContexts = new Map<string, WorkDiscoveryCandidate[]>();
+  private readonly runLocales = new Map<string, string>();
   private readonly activity = new ActivityService();
 
   constructor(private readonly options: WorkDiscoveryServiceOptions) {}
@@ -433,6 +435,10 @@ export class WorkDiscoveryService {
       rootPath: source.rootPath,
     }));
     return discoverWorkCandidates({ existingProjects, approvedDirectories, signal });
+  }
+
+  async discoverRecentFiles(signal?: AbortSignal) {
+    return discoverRecentDocumentClues({ signal });
   }
 
   listDirectorySources() {
@@ -641,6 +647,7 @@ export class WorkDiscoveryService {
             uncertainties: linkedRun.result.uncertainties,
             workThreads: linkedRun.result.workThreads,
           } } : {}),
+          locale: (runId ? this.runLocales.get(runId) : undefined) ?? getUserProfileSnapshot().locale,
           signal,
         })
         : {
@@ -820,6 +827,7 @@ export class WorkDiscoveryService {
   async startQuickRun(input: {
     idempotencyKey: string;
     processingPolicy: ModelProcessingPolicy;
+    locale?: string;
   }): Promise<WorkDiscoveryRun> {
     const candidates = await this.discoverCandidates();
     const primary = candidates[0];
@@ -830,6 +838,7 @@ export class WorkDiscoveryService {
       source: 'onboarding_selected_directory',
       idempotencyKey: input.idempotencyKey,
       candidateContext: candidates,
+      ...(input.locale ? { locale: input.locale } : {}),
     });
   }
 
@@ -838,6 +847,7 @@ export class WorkDiscoveryService {
     source: WorkDiscoverySource;
     idempotencyKey: string;
     candidateContext?: WorkDiscoveryCandidate[];
+    locale?: string;
   }): Promise<WorkDiscoveryRun> {
     if (this.stopped) throw new Error('Work understanding is stopping');
     const existing = getWorkDiscoveryRunByIdempotencyKey(input.idempotencyKey);
@@ -919,6 +929,9 @@ export class WorkDiscoveryService {
     this.abortControllers.set(run.id, controller);
     if (input.candidateContext?.length) {
       this.candidateContexts.set(run.id, input.candidateContext.slice(0, 8));
+    }
+    if (input.locale) {
+      this.runLocales.set(run.id, input.locale);
     }
     this.trackExecution(this.execute(run, controller.signal));
     return run;
@@ -1030,6 +1043,7 @@ export class WorkDiscoveryService {
         snapshot: investigatedSnapshot,
         projectOverviewOnly: run.mode === 'background',
         ...(candidateContext?.length ? { candidateContext } : {}),
+        locale: this.runLocales.get(run.id) ?? getUserProfileSnapshot().locale,
         signal,
       });
       checkCancelled();
@@ -1186,6 +1200,7 @@ export class WorkDiscoveryService {
     } finally {
       if (run.mode !== 'background') this.abortControllers.delete(run.id);
       this.candidateContexts.delete(run.id);
+      this.runLocales.delete(run.id);
     }
   }
 

@@ -24,7 +24,7 @@ function source(
 }
 
 describe('defaultSelectedLocalSourceIds', () => {
-  it('selects every available onboarding source by default', () => {
+  it('selects only non-intrusive zero-prompt local sources by default', () => {
     const selected = defaultSelectedLocalSourceIds([
       source('local-recent-files'),
       source('chromium-bookmarks'),
@@ -37,10 +37,6 @@ describe('defaultSelectedLocalSourceIds', () => {
     expect([...selected]).toEqual([
       'local-recent-files',
       'chromium-bookmarks',
-      'apple-notes',
-      'apple-mail',
-      'apple-calendar',
-      'apple-reminders',
     ]);
   });
 

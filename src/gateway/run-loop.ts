@@ -2,11 +2,12 @@
  * Gateway Run Loop - Core run loop for gateway process management
  */
 
+import { existsSync } from 'node:fs';
 import { flushCompileCache } from 'node:module';
 
 import { isRestartEnabled } from '../config/commands.flags.js';
-import { loadConfig } from '../config/loader.js';
-import type { Config } from '../config/schema.js';
+import { readConfigFileSnapshot } from '../config/config-file.js';
+import { ConfigSchema, type Config } from '../config/schema.js';
 import { runBootstrapMigrationsSync } from '../migrations/runner.js';
 import type { GatewayServer } from './server.js';
 import { acquireGatewayLock } from './lock.js';
@@ -31,9 +32,13 @@ export type RunGatewayLoopOptions = {
 
 export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void> {
   const migrations = runBootstrapMigrationsSync(opts.configPath);
+  // GatewayService validates channels after bootstrapping the Agent catalog under the lock.
+  const readRestartConfig = () => existsSync(opts.configPath)
+    ? readConfigFileSnapshot(opts.configPath).config
+    : ConfigSchema.parse(undefined);
   const config = opts.validatedConfig && !migrations.changed
     ? opts.validatedConfig
-    : loadConfig(opts.configPath);
+    : readRestartConfig();
   setGatewaySigusr1RestartPolicy({ allowExternal: isRestartEnabled(config) });
 
   let lock = await acquireGatewayLock(opts.configPath, { port: opts.port });

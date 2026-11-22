@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { DesktopFocusOnboarding } from '@/features/onboarding/desktop-focus-onboarding';
 import { OnboardingCard } from '@/features/onboarding/onboarding-card';
 import {
   deriveOnboardingExperienceState,
@@ -145,6 +146,13 @@ export function OnboardingDialog() {
                 void cloudOnboarding.refresh().catch(closeExperience);
               }}
             />
+          ) : isElectron() ? (
+            <div className="xopc-onboarding-work-stage h-full overflow-hidden">
+              <DesktopFocusOnboarding
+                onRequestClose={leaveExperience}
+                onNavigateAway={closeExperience}
+              />
+            </div>
           ) : (
             <div className="xopc-onboarding-work-stage h-full overflow-hidden">
               <WorkDiscoveryPage
