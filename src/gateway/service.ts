@@ -1,6 +1,7 @@
 import { deliverAutomationCompletion } from './automation-completion-delivery.js';
 import { createPhoneSetupService } from './hono/routes/phone-setup.js';
 import { BrowserSetupService } from '../browser/setup/service.js';
+import { SelfConfigService, UnifiedSetupSceneService } from '../self-config/index.js';
 import { weixinPrivateIdentity } from '../agent/mcp/weixin-setup-scope.js';
 import { McpConversationSetup } from '../agent/mcp/conversation-setup.js';
 import { withGatewayConfigWriteLock } from './hono/lib/config-write-lock.js';
@@ -365,6 +366,31 @@ export class GatewayService {
 
   private _phoneSetup?: import('../phone/setup/service.js').PhoneSetupService;
   get phoneSetup() { return this._phoneSetup ??= createPhoneSetupService(this); }
+
+  private _selfConfig?: import('../self-config/service.js').SelfConfigService;
+  get selfConfig(): import('../self-config/service.js').SelfConfigService {
+    if (!this._selfConfig) {
+      // Lazy-construct using already-resolved config/saveConfig/event emitters.
+      this._selfConfig = new SelfConfigService({
+        getConfig: () => this.currentConfig,
+        saveConfig: (next, expected) => this.saveConfig(next, expected),
+        getWorkspace: () => this.workspacePath,
+        onAgentCatalogMutate: () => this.refreshAgentCatalog(),
+        evictSessionAgent: (conversationId) => this._agentService?.evictSessionAgent(conversationId),
+        emitEvent: (event, payload) => this.emit(event, payload),
+      });
+    }
+    return this._selfConfig;
+  }
+
+  private _setupScenes?: import('../self-config/setup-engine.js').UnifiedSetupSceneService;
+  get setupScenes(): import('../self-config/setup-engine.js').UnifiedSetupSceneService {
+    return this._setupScenes ??= new UnifiedSetupSceneService({
+      getConfig: () => this.currentConfig,
+      saveConfig: (next, expected) => this.saveConfig(next, expected),
+      emitEvent: (event, payload) => this.emit(event, payload),
+    });
+  }
 
   private _browserSetup?: BrowserSetupService;
   get browserSetup(): BrowserSetupService {
@@ -840,6 +866,8 @@ export class GatewayService {
       getAutomationService: () => this.automationService,
       getBrowserSetupService: () => this.browserSetup,
       getMcpSetupService: () => this.mcpSetup,
+      getSelfConfigService: () => this.selfConfig,
+      getSetupSceneService: () => this.setupScenes,
       getCapabilityChannelState: () => ({ channelSnapshot: this.extensionLoader?.getManifestSnapshot(),
         runningChannels: new Set(this.getRunningChannelIds()) }),
       getPhoneSetupService: () => this.phoneSetup,

@@ -233,6 +233,24 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/models/cloud-onboarding')?.id).toBe('models');
     expect(findAuthenticatedLazyRouteBundle('/api/models-cloud-onboarding')).toBeUndefined();
   });
+  it('maps user avatar and self-config / unified setup routes without capturing neighbors', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/user-context/avatar')?.id).toBe('user-avatar');
+    expect(findAuthenticatedLazyRouteBundle('/api/user-context/avatar-other')).toBeUndefined();
+    for (const path of [
+      '/api/self-config/inspect',
+      '/api/self-config/changes',
+      '/api/self-config/changes/chg-1/rollback',
+      '/api/setup/models',
+      '/api/setup/web_search',
+      '/api/setup/voice',
+      '/api/setup/channels',
+      '/api/setup/computer',
+    ]) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('self-config');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/setup/unknown')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/self-config-other')).toBeUndefined();
+  });
   it('maps personal Agent routes without catching neighboring paths', () => {
     for (const path of ['/api/personal-agent', '/api/personal-agent/models', '/api/personal-agent/proactivity', '/api/personal-agent/outreach/outreach-id/provenance', '/api/personal-agent/outreach/outreach-id/feedback', '/api/personal-agent/attention/thread-id', '/api/personal-agent/interests', '/api/personal-agent/attention/thread-id/strategy/rollback', '/api/personal-agent/unread', '/api/personal-agent/read', '/api/personal-agent/onboarding', '/api/personal-agent/profile', '/api/personal-agent/avatar', '/api/personal-agent/activity', '/api/personal-agent/schedules', '/api/personal-agent/schedules/schedule-id', '/api/personal-agent/schedules/schedule-id/run', '/api/personal-agent/requests', '/api/personal-agent/requests/request-id', '/api/personal-agent/requests/request-id/cancel']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('personal-agent');

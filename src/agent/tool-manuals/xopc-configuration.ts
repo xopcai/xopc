@@ -134,18 +134,27 @@ begin_verification {setupId,endpointId,expectedRevision}. The host derives the f
 Use normal browser_use calls on the returned attempt; close and read verification_report.
 No API Key is needed. Preserve policy refusals and existing pairing; only manual steps need
 an ordinary link to interactionPath (settingsPath is the fallback). dryRun never writes; opening a page is not proof of success.`,
-  settings: `# xopc settings and capability checks
-settings open is navigation only; it does not read, apply or verify configuration.
-Voice: {section:"capabilities/voice",title:"语音设置"}; models: section:"capabilities/models";
-browser: section:"agent-browser". Unknown sections are rejected. There is no generic
-config/set, capability inspect or voice mutation in xopc_use. Never edit storage directly.
-For a capability report read the current Agent's configuration, and use actual dedicated
-status/test tools if available. Model names or credentials alone are not proof of readiness.
-Report unknown when no verification tool exists. Saved, runtime-ready and tested differ.
-Voice settings are shared. Microphone permission, recording and playback need actual device
-interaction. Return the exact product link and state the remaining action; never claim the
-page has opened or the device test passed from a navigation receipt. Do not invent UI buttons
-or promise audio verification unless the active tools can perform it.`,
+  settings: `# xopc settings, self-configuration and capability checks
+settings inspect {domain?} returns a strictly redacted readiness snapshot across models, voice,
+web_search, channels, browser, phone, computer, profile, appearance, and compaction.
+Use settings inspect first when diagnosing missing capabilities or answering "what is configured".
+For avatars: settings set_avatar {target:"user"|"agent"|"personal_agent", agentId?, source?, preset?}
+supports media:// chat uploads, generated image paths under workspace/state, or presets;
+settings delete_avatar removes the custom avatar.
+For typed self-configuration: settings patch {target, patch, confirm?} enforces three risk tiers:
+- Tier 1 (low-risk reversible preferences, immediate apply + rollback receipt):
+  appearance.activity_detail, voice.tts, voice.stt, personal_agent.profile, compaction.
+- Tier 2 (broader operational policies, dryRun preview then confirm:true):
+  defaults.models, web_search, browser, computer, channels.telegram, channels.weixin.
+- Tier 3 (secrets, API keys, tokens, OAuth, gateway.auth): never accepted in chat.
+  Start guided setup via xopc_use({mode:"setup", command:"start", args:{scene, resumeObjective?}})
+  for scenes models, web_search, voice, channels, computer (or browser/phone/mcp) and return
+  the exact interactionPath link for the secure modal.
+Every successful Tier 1/2 mutation returns a changeId; undo with settings rollback {changeId}
+or list recent changes with settings changes {limit?}.
+settings open remains available for navigation links (e.g. section:"capabilities/voice",
+"capabilities/models", "agent-browser"). Never edit storage files directly.
+Model names or credentials alone are not proof of readiness; distinguish saved, ready and tested.`,
   automation: `# xopc automations
 In a paired Weixin conversation the host pins result delivery to that exact original account
 and peer. Use notificationPolicy:all for requested reminders; do not invent a Weixin webhook,

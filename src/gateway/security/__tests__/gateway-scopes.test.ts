@@ -46,6 +46,13 @@ describe('gateway scopes', () => {
     expect(requiredGatewayScope('POST', '/api/personal-agent')).toBe('sessions.write');
     expect(requiredGatewayScope('PATCH', '/api/personal-agent/profile')).toBe('sessions.write');
     expect(requiredGatewayScope('PUT', '/api/personal-agent/avatar')).toBe('sessions.write');
+    expect(requiredGatewayScope('GET', '/api/user-context/avatar')).toBe('sessions.read');
+    expect(requiredGatewayScope('PUT', '/api/user-context/avatar')).toBe('sessions.write');
+    expect(requiredGatewayScope('DELETE', '/api/user-context/avatar')).toBe('sessions.write');
+    expect(requiredGatewayScope('GET', '/api/self-config/inspect')).toBe('gateway.status');
+    expect(requiredGatewayScope('GET', '/api/self-config/changes')).toBe('gateway.status');
+    expect(requiredGatewayScope('POST', '/api/self-config/changes/chg-1/rollback')).toBe('gateway.admin');
+    expect(requiredGatewayScope('POST', '/api/setup/models')).toBe('gateway.admin');
     expect(requiredGatewayScope('PUT', '/api/agents/personal/avatar')).toBe('gateway.admin');
     expect(requiredGatewayScope('GET', '/api/personal-agent/activity')).toBe('tasks.read');
     expect(requiredGatewayScope('GET', '/api/personal-agent-other')).toBe('gateway.admin');

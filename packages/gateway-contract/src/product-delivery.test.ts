@@ -69,6 +69,34 @@ describe('product delivery contract', () => {
       reference: { kind: 'chat_preview', id: crypto.randomUUID(), title: 'Login', revision: 'd'.repeat(64), capabilities: [] },
       sourceHash: 'c'.repeat(64),
     } })).toBeNull();
+    const configChange = parseProductDeliveryEnvelope({
+      version: 2,
+      operation: 'updated',
+      primary: { kind: 'settings', id: 'appearance', title: 'Appearance', capabilities: ['open', 'rollback'] },
+      presentation: {
+        kind: 'config_change',
+        changeId: 'chg-1',
+        tier: 1,
+        target: 'user.avatar',
+        title: 'User avatar',
+        canRollback: true,
+        changes: [{ field: 'avatar', before: 'none', after: 'image/png' }],
+      },
+    });
+    expect(configChange?.presentation).toMatchObject({ kind: 'config_change', changeId: 'chg-1', tier: 1, canRollback: true });
+    expect(parseProductDeliveryEnvelope({
+      version: 2,
+      operation: 'updated',
+      presentation: {
+        kind: 'config_change',
+        changeId: 'chg-bad',
+        tier: 3,
+        target: 'providers',
+        title: 'Bad',
+        canRollback: false,
+        changes: [],
+      },
+    })).toBeNull();
   });
   it('accepts session keys without changing canonical id links or other kinds', () => {
     const key = 'agent:coder:webchat:default:direct:chat_801605448ec548c9b90d1c4eb5024727';

@@ -31,6 +31,7 @@ export const ProductCapabilitySchema = z.enum([
   'share',
   'reveal',
   'configure',
+  'rollback',
 ]);
 
 export type ProductCapability = z.infer<typeof ProductCapabilitySchema>;
@@ -89,6 +90,19 @@ export const ProductDeliveryPresentationSchema = z.discriminatedUnion('kind', [
     presentation => !presentation.reference.revision || presentation.reference.revision === presentation.sourceHash,
     { message: 'Inline preview reference revision must match its source', path: ['reference', 'revision'] },
   ),
+  z.object({
+    kind: z.literal('config_change'),
+    changeId: z.string().min(1).max(200),
+    tier: z.union([z.literal(1), z.literal(2)]),
+    target: z.string().min(1).max(200),
+    title: z.string().min(1).max(200),
+    canRollback: z.boolean(),
+    changes: z.array(z.object({
+      field: z.string().min(1).max(200),
+      before: z.string().max(500).optional(),
+      after: z.string().max(500).optional(),
+    })).max(20),
+  }),
 ]);
 
 export const ProductDeliveryEnvelopeSchema = z.object({

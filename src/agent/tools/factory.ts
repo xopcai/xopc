@@ -90,6 +90,7 @@ import { withPersonalPerformance } from './personal-performance.js';
 import { createTaskResultTool } from './task-result-tool.js';
 import { createTaskCollaborationTool } from './task-collaboration-tool.js';
 import { createPersonalRequestTools } from './personal-request-tool.js';
+import { createPersonalSelfConfigTool } from './personal-self-config-tool.js';
 import { createPersonalRequestConnectionTool, createPersonalRequestResultTool } from './personal-request-result-tool.js';
 import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
 import { getPendingTranscriptUserText, getActiveTranscriptUserText } from '../inbound/attachment-pipeline.js';
@@ -179,6 +180,8 @@ export interface ToolFactoryDeps {
   getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
   getMcpSetupService?: () => import('../mcp/conversation-setup.js').McpConversationSetup | undefined;
+  getSelfConfigService?: () => import('../../self-config/service.js').SelfConfigService | undefined;
+  getSetupSceneService?: () => import('../../self-config/setup-engine.js').UnifiedSetupSceneService | undefined;
   getCapabilityChannelState?: () => import('../../capabilities/capability-catalog.js').CapabilityChannelState;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: enables the `xopc_use` product-object tool. */
@@ -612,6 +615,8 @@ export class AgentToolsFactory {
       getBrowserSetupService: this.deps.getBrowserSetupService,
       getMcpSetupService: this.deps.getMcpSetupService,
       getPhoneSetupService: this.deps.getPhoneSetupService,
+      getSelfConfigService: this.deps.getSelfConfigService,
+      getSetupSceneService: this.deps.getSetupSceneService,
       dispatchTaskEvents: this.deps.dispatchTaskEvents,
       dispatchTaskRuns: this.deps.dispatchTaskRuns,
       retryTask: this.deps.retryTask,
@@ -866,6 +871,8 @@ export class AgentToolsFactory {
         : []),
       ...(this.deps.getPhoneSetupService
         || this.deps.getBrowserSetupService
+        || this.deps.getSelfConfigService
+        || this.deps.getSetupSceneService
         || this.deps.getAutomationService
         || this.deps.getProjectService
         || this.deps.getNotesService
@@ -881,6 +888,12 @@ export class AgentToolsFactory {
               createPersonalReadTool({ ...productToolDeps, getCurrentConversationId: currentConversationId }),
               createPersonalResultTool(currentConversationId),
               ...createPersonalRequestTools(productToolDeps),
+              ...(this.deps.getSelfConfigService ? [createPersonalSelfConfigTool({
+                getSelfConfigService: this.deps.getSelfConfigService,
+                getSetupSceneService: this.deps.getSetupSceneService,
+                getCurrentConversationId: currentConversationId,
+                getCurrentAgentId: () => resolvedAgentId,
+              })] : []),
               createPersonalAttentionTool({ getConversationId: () => this.deps.getCurrentContext()?.conversationId, getConfig: () => this.deps.getConfig?.() }),
             ] : []),
           ]

@@ -6,6 +6,7 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { Config } from '../../config/schema.js';
 import { getAgentDefaultImageGenerationModelConfig } from '../../config/schema.js';
 import { isFailoverError } from '../failover-error.js';
+import { buildSetupRecoveryHint } from '../../self-config/recovery.js';
 import {
   imageAssetFromDataUrl,
   imageFileExtensionForMimeType,
@@ -471,9 +472,24 @@ export function createImageGenerateTool(options: {
               attempts: e.attempts,
             }
           : {};
+        const isConfigMissing = /api[_ -]?key|not configured|no .*provider|unconfigured|auth|model.*not found/i.test(msg)
+          || (isFailoverError(e) && (e.reason === 'auth' || e.reason === 'config' || e.reason === 'not_found'));
+        const setupRecovery = isConfigMissing
+          ? buildSetupRecoveryHint({
+              scene: 'models',
+              capability: 'image-generation',
+              reason: msg,
+              resumeObjective: prompt,
+            })
+          : undefined;
         return {
-          content: [{ type: 'text', text: `Image generation failed: ${msg}` }],
-          details: { error: 'generation_failed', ...failoverFields },
+          content: [{
+            type: 'text',
+            text: setupRecovery
+              ? `Image generation failed: ${msg}\n${setupRecovery.nextAction}`
+              : `Image generation failed: ${msg}`,
+          }],
+          details: { error: 'generation_failed', ...failoverFields, ...(setupRecovery ? { setupRecovery } : {}) },
         };
       }
     },

@@ -41,10 +41,12 @@ import { noteDetailHref } from '@/features/notes/note-detail-route';
 import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
 import { withDetailReturnTo } from '@/lib/navigation-return';
 import {
+  productDeliveryConfigChanges,
   productDeliveryReferences,
   workspacePathFromFileResourceId,
   type ProductDeliveryEntry,
 } from './product-delivery-model';
+import { ConfigChangeCard } from './config-change-card';
 import { TaskDeliveryGroup } from './task-delivery-group';
 
 const KIND_ICON = {
@@ -323,16 +325,20 @@ export function ProductDeliveryRows({
   conversationId?: string | null;
   projectId?: string | null;
 }) {
+  const configChanges = productDeliveryConfigChanges(deliveries);
   const references = productDeliveryReferences(deliveries, excludedReferenceKeys);
   const fileReferences = references.filter(({ reference }) => reference.kind === 'file');
   const firstFileIndex = references.findIndex(({ reference }) => reference.kind === 'file');
   const taskReferences = references.filter(({ reference }) => reference.kind === 'task');
   const firstTaskIndex = references.findIndex(({ reference }) => reference.kind === 'task');
 
-  if (references.length === 0) return null;
+  if (references.length === 0 && configChanges.length === 0) return null;
 
   return (
     <>
+      {configChanges.map(({ key, presentation }) => (
+        <ConfigChangeCard key={`cfg-${key}-${presentation.changeId}`} presentation={presentation} language={language} />
+      ))}
       {references.map(({ key, delivery, reference }, index) => {
         if (reference.kind === 'task' && taskReferences.length > 3) {
           return index === firstTaskIndex ? (

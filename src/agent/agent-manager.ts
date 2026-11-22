@@ -201,6 +201,8 @@ export interface AgentManagerConfig {
   getPhoneSetupService?: () => import('../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../browser/setup/service.js').BrowserSetupService | undefined;
   getMcpSetupService?: () => import('./mcp/conversation-setup.js').McpConversationSetup | undefined;
+  getSelfConfigService?: () => import('../self-config/service.js').SelfConfigService | undefined;
+  getSetupSceneService?: () => import('../self-config/setup-engine.js').UnifiedSetupSceneService | undefined;
   getCapabilityChannelState?: () => import('../capabilities/capability-catalog.js').CapabilityChannelState;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */
@@ -504,6 +506,8 @@ export class AgentManager implements AgentInstanceGateway {
       getAutomationService: this.config.getAutomationService,
       getBrowserSetupService: this.config.getBrowserSetupService,
       getMcpSetupService: this.config.getMcpSetupService,
+      getSelfConfigService: this.config.getSelfConfigService,
+      getSetupSceneService: this.config.getSetupSceneService,
       getCapabilityChannelState: this.config.getCapabilityChannelState,
       getPhoneSetupService: this.config.getPhoneSetupService,
       canConfigureEndpoint: this.config.canConfigureEndpoint,

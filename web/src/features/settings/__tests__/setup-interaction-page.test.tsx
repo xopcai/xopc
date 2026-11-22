@@ -62,3 +62,42 @@ it.each([{ state: 'cancelled' }, { stale: true }, { conversationId: 'foreign-cha
   expect(document.body.textContent).not.toContain('Save phone model');
   expect(document.querySelector('[role="alert"]')).not.toBeNull(); expect(mock.fetch).not.toHaveBeenCalled();
 });
+it('submits managed scene credentials to /api/setup/:scene and preserves resumeObjective on return', async () => {
+  mock.data = {
+    id: 'setup-models-1',
+    conversationId,
+    revision: 1,
+    state: 'needs_input',
+    resumeObjective: '帮我画一只猫头像',
+  };
+  await act(async () => root.render(
+    <MemoryRouter initialEntries={[`/configuration/models/setup-models-1?conversationId=${conversationId}`]}>
+      <Routes>
+        <Route path="/configuration/:scene/:setupId" element={<SetupInteractionPage />} />
+        <Route path="/chat/:conversationId" element={<p>Original chat</p>} />
+      </Routes>
+      <LocationProbe />
+    </MemoryRouter>,
+  ));
+  expect(document.body.textContent).toContain('帮我画一只猫头像');
+  const input = document.querySelector('input[type="password"]') as HTMLInputElement;
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    setter.call(input, 'sk-demo-key');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () => button('保存并返回原对话继续').click());
+  const [url, req] = mock.fetch.mock.calls[0];
+  expect(url).toBe('/api/setup/models');
+  expect(JSON.parse(req.body)).toMatchObject({
+    action: 'submit_secret',
+    setupId: 'setup-models-1',
+    payload: { providerId: 'openai', apiKey: 'sk-demo-key' },
+  });
+  const destination = container.querySelector('output')!.textContent!;
+  expect(destination.startsWith(`/chat/${conversationId}?`)).toBe(true);
+  const query = new URL(destination, 'https://xopc.test').searchParams;
+  expect(query.get('autoSend')).toBe('1');
+  expect(query.get('draft')).toContain('帮我画一只猫头像');
+  expect(query.get('draft')).not.toContain('sk-demo-key');
+});

@@ -1,6 +1,6 @@
 ---
 name: configure-xopc
-description: Guide xopc App configuration, connection, repair, and verification, including Browser Use, Phone Use, local Android, HarmonyOS, and Alibaba Cloud phones. Use for App setup requests or missing capability recovery.
+description: Guide xopc self-configuration, readiness inspection, connection, repair, and verification across Models, Web Search, Voice, Channels, Computer Use, Browser Use, Phone Use, MCP, and Avatars/Preferences. Use for App setup requests or missing capability recovery.
 metadata:
   i18n:
     en:

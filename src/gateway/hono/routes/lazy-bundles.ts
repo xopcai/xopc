@@ -43,6 +43,25 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'user-avatar',
+    match: path => path === '/api/user-context/avatar',
+    load: async () => {
+      const { registerUserAvatarRoutes } = await import('./user-avatar.js');
+      return { register: registerUserAvatarRoutes };
+    },
+  },
+  {
+    id: 'self-config',
+    match: path => path === '/api/self-config/inspect'
+      || path === '/api/self-config/changes'
+      || /^\/api\/self-config\/changes\/[^/]+\/rollback$/.test(path)
+      || /^\/api\/setup\/(?:models|web_search|voice|channels|computer)$/.test(path),
+    load: async () => {
+      const { registerSelfConfigRoutes } = await import('./self-config.js');
+      return { register: registerSelfConfigRoutes };
+    },
+  },
+  {
     id: 'location-sharing',
     match: path => /^\/api\/user-context\/environment\/location-shares(?:\/[^/]+(?:\/samples)?)?$/.test(path),
     load: async () => {

@@ -62,6 +62,10 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (/^\/api\/phone\/conversations\/[^/]+\/[^/]+\/control$/.test(path) && method === 'POST') return 'phone.control';
   if (path === '/api/endpoint-tools/hosts/enrollment' || path === '/api/endpoint-tools/providers/admission' || path.startsWith('/api/endpoint-tools/provider-operations/')) return 'gateway.admin';
   if (path.startsWith('/api/endpoint-tools')) return 'device.self';
+  if (path === '/api/user-context/avatar') return methodScope(method, 'sessions.read', 'sessions.write');
+  if (path === '/api/self-config/inspect' || path === '/api/self-config/changes') return 'gateway.status';
+  if (/^\/api\/self-config\/changes\/[^/]+\/rollback$/.test(path)) return 'gateway.admin';
+  if (/^\/api\/setup\/(?:models|web_search|voice|channels|computer)$/.test(path)) return 'gateway.admin';
   if (path === '/api/user-context/environment' || path.startsWith('/api/user-context/environment/')) return 'device.self';
   if (path === '/api/personal-agent/activity') return 'tasks.read';
   if (path === '/api/personal-agent/schedules' || path.startsWith('/api/personal-agent/schedules/')) {

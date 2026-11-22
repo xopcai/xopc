@@ -10,6 +10,7 @@ import { SearchProviderRegistry } from './search/registry.js';
 import { resolveWebSearchConfig } from './search/resolve-config.js';
 import { sanitizeSearchInfo } from './search/search-info.js';
 import { fetchPublicText } from './fetch-text.js';
+import { buildSetupRecoveryHint } from '../../self-config/recovery.js';
 
 const log = createLogger('WebFetch');
 
@@ -44,8 +45,15 @@ function searchToolResult(query: string, count: number, response: SearchResponse
 }
 function searchToolError(query: string, count: number, error: unknown, signal?: AbortSignal): AgentToolResult<any> {
   const failure = classifySearchError(error, signal);
-  return { content: [{ type: 'text', text: `Search error (${failure.kind}): ${failure.message}` }],
-    details: { query, count, results: [], error: failure.message, failure: searchFailureInfo(failure), status: failure.kind === 'cancelled' ? 'cancelled' : 'failed' } };
+  const setupRecovery = failure.kind === 'permission_denied' || /api[_ -]?key|not configured|unconfigured|provider/i.test(failure.message)
+    ? buildSetupRecoveryHint({
+        scene: 'web_search',
+        reason: failure.message,
+        resumeObjective: query,
+      })
+    : undefined;
+  return { content: [{ type: 'text', text: setupRecovery ? `Search error (${failure.kind}): ${failure.message}\n${setupRecovery.nextAction}` : `Search error (${failure.kind}): ${failure.message}` }],
+    details: { query, count, results: [], error: failure.message, failure: searchFailureInfo(failure), status: failure.kind === 'cancelled' ? 'cancelled' : 'failed', ...(setupRecovery ? { setupRecovery } : {}) } };
 }
 export function createWebSearchTool(getConfig: () => Config | undefined): WebSearchBatchTool {
   return {

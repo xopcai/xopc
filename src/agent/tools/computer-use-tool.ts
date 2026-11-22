@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { ComputerUseInputSchema, type ComputerRuntime } from '../../computer/runtime.js';
 import { computerDiagnostic, computerRecovery, computerRecoveryDirective } from '../../computer/errors.js';
+import { buildSetupRecoveryHint } from '../../self-config/recovery.js';
 
 const Schema = Type.Object({
   op: Type.Union(['discover', 'open', 'observe', 'step', 'run', 'exec', 'close', 'report', 'flows', 'forget_flow'].map(op => Type.Literal(op))),
@@ -40,8 +41,11 @@ export function createComputerUseTool(deps: {
         const code = diagnostic?.errorCode ?? (error instanceof z.ZodError ? 'COMPUTER_INVALID_INPUT'
           : error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message) ? error.message : 'COMPUTER_OPERATION_FAILED');
         const report = deps.runtime.getReport(context.conversationId);
+        const setupRecovery = /DISABLED|PERMISSION|ACCESSIBILITY|SCREEN_RECORDING|MODEL_UNAVAILABLE|UNCONFIGURED/i.test(code)
+          ? buildSetupRecoveryHint({ scene: 'computer', reason: code })
+          : undefined;
         const details = { status: 'error', ...diagnostic, errorCode: code, nextAction: computerRecovery(code),
-          recovery: computerRecoveryDirective(code, report?.failure?.dispatch), ...(report ? { report } : {}) };
+          recovery: computerRecoveryDirective(code, report?.failure?.dispatch), ...(setupRecovery ? { setupRecovery } : {}), ...(report ? { report } : {}) };
         throw new Error(JSON.stringify(details));
       };
       const invoke = async (input: z.infer<typeof ComputerUseInputSchema>) => {

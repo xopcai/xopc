@@ -12,6 +12,7 @@ import {
 import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsGroup } from '@/features/settings/settings-group';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
+import { UserAvatarField } from '@/features/settings/user-avatar-field';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -295,6 +296,7 @@ export function AppearanceSettingsPanel() {
       <SettingsPageHeader title={a.pageTitle} />
 
       <SettingsGroup>
+        <UserAvatarField />
         <PreferenceSelectFields variant="page" sections={['language']} />
       </SettingsGroup>
 

@@ -74,6 +74,14 @@ import { TaskApplicationService } from '../../tasks/task-application-service.js'
 import { TaskOriginRepository } from '../../tasks/task-origin-repository.js';
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
 import { TaskCollaborationRepository, type TaskCollaborationKind } from '../../tasks/task-collaboration-repository.js';
+import {
+  isManagedSetupScene,
+  type SelfConfigAvatarTarget,
+  type SelfConfigDomain,
+  type SelfConfigService,
+  type UnifiedSetupSceneService,
+} from '../../self-config/index.js';
+import { deliveryForSelfConfigReceipt } from './personal-self-config-tool.js';
 
 const XopcUseToolSchema = Type.Object({
   mode: Type.Union([
@@ -87,6 +95,7 @@ const XopcUseToolSchema = Type.Object({
     Type.Literal('chat_preview'),
     Type.Literal('agent'),
     Type.Literal('settings'),
+    Type.Literal('setup'),
     Type.Literal('browser_setup'),
     Type.Literal('phone_setup'),
     Type.Literal('mcp_setup'),
@@ -100,7 +109,7 @@ const XopcUseToolSchema = Type.Object({
       'Project milestone writes support idempotencyKey; update_milestone/delete_milestone require original expectedRevision for stable retries, and create_update requires original expectedVersion. TaskRun cancel accepts idempotencyKey and expectedVersion, and does not confirm external execution stopped. ' +
       'Automation diagnostics: get_run/run_events {runId}, metrics {}, events {eventType?, source?, limit?}, deliveries {runId?, limit?}, product_events {eventType, source?, payloadKey?, payloadValue?, limit?}; payload filters require both key and value. Recovery commands: replay_event {eventId, reason, idempotencyKey}, retry_delivery {runId, destinationKey, reason, idempotencyKey}. ' +
       'Automation also supports cancel/read {runId, idempotencyKey?} and read_all {projectId?, idempotencyKey?}; omitted projectId means all projects. Cancel acceptance is not confirmation of stopping. ' +
-      'Object command. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/rerun/pause/resume/history (rerun takes runId; run/rerun accept idempotencyKey), note list/get/project_summaries/history {noteId}/snapshot {noteId, timestamp}/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, chat_preview create/revise/get, local_app list/get/create/validate, and settings open.',
+      'Object command. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/rerun/pause/resume/history (rerun takes runId; run/rerun accept idempotencyKey), note list/get/project_summaries/history {noteId}/snapshot {noteId, timestamp}/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, chat_preview create/revise/get, local_app list/get/create/validate, settings open/inspect/patch/set_avatar/delete_avatar/rollback/changes, and setup inspect/start/get/recheck/verify/cancel {scene: models|web_search|voice|channels|computer|browser|phone|mcp, resumeObjective?}.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -108,7 +117,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'context' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings' | 'browser_setup' | 'phone_setup' | 'mcp_setup';
+export type XopcUseMode = 'context' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'chat_preview' | 'local_app' | 'agent' | 'settings' | 'setup' | 'browser_setup' | 'phone_setup' | 'mcp_setup';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -126,6 +135,8 @@ export interface XopcUseToolDeps {
   getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
   getMcpSetupService?: () => import('../mcp/conversation-setup.js').McpConversationSetup | undefined;
+  getSelfConfigService?: () => SelfConfigService | undefined;
+  getSetupSceneService?: () => UnifiedSetupSceneService | undefined;
   authorizeCapability?: CapabilityContext['authorize'];
   getWorkspace?: () => string;
   getConfig?: () => Config | undefined;
@@ -1433,6 +1444,66 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
           surface: 'agent', scopes: ['gateway.admin'], authorize: deps.authorizeCapability ?? (() => true), signal };
         return okText({ ...details, result: await capabilities.call('xopc.context.resolve', args, caller) });
       }
+      if (mode === 'setup') {
+        const sceneRaw = trimString(args.scene);
+        if (!sceneRaw) return errorText('args.scene is required (models | web_search | voice | channels | computer | browser | phone | mcp).', details);
+        if (sceneRaw === 'browser') {
+          const service = deps.getBrowserSetupService?.();
+          const conversationId = deps.getCurrentConversationId?.();
+          const agentId = deps.getCurrentAgentId?.();
+          if (!service || !conversationId || !agentId) return errorText('Browser setup requires a Gateway conversation.', details);
+          if (deps.authorizeCapability && !await deps.authorizeCapability(`xopc.browser_setup.${command}`, args)) return errorText('Browser setup access denied', details);
+          try {
+            return okText({ ...details, result: await service.command(command, args, { conversationId, agentId, canConfigure: deps.canConfigureFromConversation?.() === true }, dryRun) });
+          } catch (error) { return errorText(error instanceof Error ? error.message : String(error), details); }
+        }
+        if (sceneRaw === 'phone') {
+          const service = deps.getPhoneSetupService?.();
+          const conversationId = deps.getCurrentConversationId?.();
+          const agentId = deps.getCurrentAgentId?.();
+          if (!service || !conversationId || !agentId) return errorText('Phone setup requires a Gateway conversation.', details);
+          if (deps.authorizeCapability && !await deps.authorizeCapability(`xopc.phone_setup.${command}`, args)) return errorText('Phone setup access denied', details);
+          try {
+            return okText({ ...details, result: await service.command(command, args, { conversationId, agentId, canConfigure: deps.canConfigureFromConversation?.() === true, isAuthorized: deps.canConfigureFromConversation, runId: getEmbeddedExecutionRunId() }, dryRun) });
+          } catch (error) { return errorText(error instanceof Error ? error.message : String(error), details); }
+        }
+        if (sceneRaw === 'mcp') {
+          const service = deps.getMcpSetupService?.();
+          const conversationId = deps.getCurrentConversationId?.();
+          const agentId = deps.getCurrentAgentId?.();
+          if (!service || !conversationId || !agentId) return errorText('MCP setup requires a Gateway conversation.', details);
+          if (deps.authorizeCapability && !await deps.authorizeCapability(`xopc.mcp_setup.${command}`, args)) return errorText('MCP setup access denied', details);
+          try {
+            return okText({ ...details, result: await service.command(command, args, { conversationId, agentId, signal,
+              canConfigure: deps.canConfigureFromConversation?.() === true,
+              canRequestWeixinSetup: deps.canRequestWeixinMcpSetup?.() === true,
+              showSetupCard: deps.canShowMcpSetupCard?.() === true,
+              canOpenMobileForm: deps.canOpenMobileMcpForm?.() === true }, dryRun) });
+          } catch (error) { return errorText(error instanceof Error ? error.message : String(error), details); }
+        }
+        if (!isManagedSetupScene(sceneRaw)) {
+          return errorText(`Unsupported setup scene "${sceneRaw}". Supported scenes: models, web_search, voice, channels, computer, browser, phone, mcp.`, details);
+        }
+        const setupScenes = deps.getSetupSceneService?.();
+        const conversationId = deps.getCurrentConversationId?.();
+        const agentId = deps.getCurrentAgentId?.() ?? 'main';
+        if (!setupScenes || !conversationId) {
+          return errorText(`Guided setup for "${sceneRaw}" requires an active Gateway conversation.`, details);
+        }
+        if (deps.authorizeCapability && !await deps.authorizeCapability(`xopc.setup.${sceneRaw}.${command}`, args)) {
+          return errorText('Setup access denied', details);
+        }
+        try {
+          const result = await setupScenes.command(sceneRaw, command, args, {
+            conversationId,
+            agentId,
+            canConfigure: deps.canConfigureFromConversation?.() === true,
+          }, dryRun);
+          return okText({ ...details, result });
+        } catch (error) {
+          return errorText(error instanceof Error ? error.message : String(error), details);
+        }
+      }
       if (mode === 'settings' && command === 'open') {
         const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
           surface: 'agent', scopes: ['gateway.status'], authorize: deps.authorizeCapability ?? (() => true), signal };
@@ -1444,6 +1515,84 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
             ? 'Invalid settings target. Read tool_manual({tool:"xopc_use",topic:"settings"}); never invent a settings section.'
             : error instanceof Error ? error.message : String(error);
           return errorText(message, details);
+        }
+      }
+      if (mode === 'settings' && ['inspect', 'patch', 'set_avatar', 'delete_avatar', 'rollback', 'changes'].includes(command)) {
+        const selfConfig = deps.getSelfConfigService?.();
+        if (!selfConfig) {
+          return errorText('Self-configuration service is unavailable in this runtime.', details);
+        }
+        if (deps.authorizeCapability && !await deps.authorizeCapability(`xopc.settings.${command}`, args)) {
+          return errorText('Self-configuration access denied', details);
+        }
+        const conversationId = deps.getCurrentConversationId?.();
+        const agentId = deps.getCurrentAgentId?.();
+        try {
+          if (command === 'inspect') {
+            const domain = (trimString(args.domain) ?? 'all') as SelfConfigDomain;
+            return okText({ ...details, result: await selfConfig.inspect(domain) });
+          }
+          if (command === 'changes') {
+            const limit = finiteNumber(args.limit) ?? 20;
+            return okText({ ...details, result: { ok: true, items: selfConfig.listChanges(limit) } });
+          }
+          if (command === 'rollback') {
+            const changeId = trimString(args.changeId) ?? trimString(args.id);
+            if (!changeId) return errorText('changeId is required', details);
+            const result = await selfConfig.rollback(changeId);
+            return result.ok ? okText({ ...details, result }) : errorText(result.error ?? 'Rollback failed', details);
+          }
+          if (command === 'set_avatar') {
+            const target = trimString(args.target) as SelfConfigAvatarTarget | undefined;
+            if (!target || !['user', 'agent', 'personal_agent'].includes(target)) {
+              return errorText('target must be user, agent, or personal_agent', details);
+            }
+            const result = await selfConfig.setAvatar(
+              {
+                target,
+                agentId: trimString(args.agentId) ?? (target === 'agent' ? agentId : undefined),
+                source: trimString(args.source),
+                preset: trimString(args.preset),
+              },
+              { conversationId, dryRun },
+            );
+            if (!result.ok) return errorText(result.error ?? 'Failed to set avatar', details);
+            return okText({ ...details, result, delivery: dryRun ? undefined : deliveryForSelfConfigReceipt(result.receipt) });
+          }
+          if (command === 'delete_avatar') {
+            const target = trimString(args.target) as SelfConfigAvatarTarget | undefined;
+            if (!target || !['user', 'agent', 'personal_agent'].includes(target)) {
+              return errorText('target must be user, agent, or personal_agent', details);
+            }
+            const result = await selfConfig.deleteAvatar(
+              {
+                target,
+                agentId: trimString(args.agentId) ?? (target === 'agent' ? agentId : undefined),
+              },
+              { conversationId, dryRun },
+            );
+            if (!result.ok) return errorText(result.error ?? 'Failed to delete avatar', details);
+            return okText({ ...details, result, delivery: dryRun ? undefined : deliveryForSelfConfigReceipt(result.receipt) });
+          }
+          // command === 'patch'
+          const target = trimString(args.target);
+          const patch = record(args.patch);
+          if (!target) return errorText('target is required', details);
+          if (!patch) return errorText('patch object is required', details);
+          const result = await selfConfig.patch({
+            target,
+            patch,
+            confirm: args.confirm === true,
+            dryRun,
+            conversationId,
+          });
+          return okText({
+            ...details,
+            result,
+            delivery: !dryRun && result.ok ? deliveryForSelfConfigReceipt(result.receipt) : undefined,
+          });
+        } catch (error) {
+          return errorText(error instanceof Error ? error.message : String(error), details);
         }
       }
       if (mode === 'local_app' && (command === 'get' || command === 'list' || command === 'validate')) {

@@ -9,6 +9,7 @@ import { getChannelOutputFormat } from '../../voice/tts/service.js';
 import { compressAudio } from '../../voice/tts/audio.js';
 import { persistOutboundTtsAudio } from '../../channels/attachments/outbound-tts-persist.js';
 import { createLogger } from '../../utils/logger.js';
+import { buildSetupRecoveryHint } from '../../self-config/recovery.js';
 
 const log = createLogger('Agent:TTSTool');
 
@@ -62,9 +63,15 @@ export function createTextToSpeechTool(deps: TextToSpeechToolDeps): AgentTool {
       const cfg = deps.getConfig();
       const ttsConfig = mergeTtsConfigFromAppConfig(cfg?.messages?.tts);
       if (!ttsConfig.enabled) {
+        const setupRecovery = buildSetupRecoveryHint({
+          scene: 'voice',
+          capability: 'tts',
+          reason: 'TTS is disabled in configuration.',
+          resumeObjective: params.text.slice(0, 120),
+        });
         return {
-          content: [{ type: 'text', text: 'TTS is not enabled in configuration.' }],
-          details: {},
+          content: [{ type: 'text', text: `TTS is not enabled in configuration.\n${setupRecovery.nextAction}` }],
+          details: { error: 'tts_disabled', setupRecovery },
         };
       }
 
@@ -157,9 +164,17 @@ export function createTextToSpeechTool(deps: TextToSpeechToolDeps): AgentTool {
       } catch (error) {
         const em = error instanceof Error ? error.message : String(error);
         log.error({ errorMessage: em, textLength: params.text.length }, 'TTS tool failed');
+        const setupRecovery = /api[_ -]?key|not configured|unconfigured|auth|disabled|provider/i.test(em)
+          ? buildSetupRecoveryHint({
+              scene: 'voice',
+              capability: 'tts',
+              reason: em,
+              resumeObjective: params.text.slice(0, 120),
+            })
+          : undefined;
         return {
-          content: [{ type: 'text', text: `TTS failed: ${em}` }],
-          details: { error: em },
+          content: [{ type: 'text', text: setupRecovery ? `TTS failed: ${em}\n${setupRecovery.nextAction}` : `TTS failed: ${em}` }],
+          details: { error: em, ...(setupRecovery ? { setupRecovery } : {}) },
         };
       }
     },
