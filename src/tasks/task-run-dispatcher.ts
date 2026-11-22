@@ -4,7 +4,7 @@ import { TaskApplicationService } from './task-application-service.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { resolveTaskLocale } from './task-language.js';
-import { loadTranscriptRowsForSession } from '../storage/sqlite/index.js';
+import { isXopcDatabaseOpen, loadTranscriptRowsForSession } from '../storage/sqlite/index.js';
 import { findUnconfirmedToolEffect, RECOVERY_READ_TOOLS } from '../agent/orchestration/turn-recovery.js';
 import { runInIndependentAgentExecution } from '../agent/independent-execution.js';
 import { TaskModelPreflightError } from '../agent/models/turn-candidates.js';
@@ -144,11 +144,17 @@ export class TaskRunDispatcher {
             }
             this.deps.validateExecutor?.(task.id, agentId);
             await this.deps.runAgent(run.id, conversationId,
-              buildTaskRunMessage(task.contract?.objective ?? task.title, run.trigger, task.contract?.brief, task.id));
+              buildTaskRunMessage(task.contract?.objective ?? task.title, run.trigger, task.body, task.id));
           } finally {
             clearInterval(heartbeat);
             this.#heartbeats.delete(heartbeat);
             this.#activeRunIds.delete(run.id);
+            if (!this.#stopped && isXopcDatabaseOpen()) {
+              const after = this.#runs.get(run.id);
+              if (after?.status === 'waiting' && after.leaseOwner === workerId) {
+                this.#runs.releaseWaitingLease(run.id, workerId);
+              }
+            }
           }
         } catch (error) {
           // Preserve the leased run for restart reconciliation after shutdown.
@@ -200,6 +206,15 @@ export class TaskRunDispatcher {
 }
 
 export function buildTaskRunMessage(objective: string, trigger: Record<string, unknown>, body?: string, taskId?: string): string {
+  if (trigger.kind === 'follow_up' && typeof trigger.instruction === 'string' && trigger.instruction.trim()) {
+    return [
+      `<task_follow_up task_id="${taskId ?? ''}">`,
+      'The user sent a follow-up instruction on this task. Continue directly from your existing context and confirmed results in this session without redoing completed work unnecessarily.',
+      '',
+      trigger.instruction.trim(),
+      '</task_follow_up>',
+    ].join('\n');
+  }
   const brief = body?.trim();
   const taskMessage = brief
     ? `${objective}\n\n<task_brief>\n${brief.slice(0, 12_000)}\n</task_brief>`

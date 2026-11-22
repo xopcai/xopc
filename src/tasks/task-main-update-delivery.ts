@@ -26,7 +26,9 @@ export class TaskMainUpdateDelivery {
       const connected = personalRequestForTask(entry.taskId);
       const personal = isPersonalConversation(conversationId);
       const delayNotice = isTaskDelayNotice(entry);
-      if (personal && (entry.kind === 'progress' || entry.kind === 'ack') && !this.#entries.hasSubmittedMainUpdate(entry.id)
+      if ((personal && (entry.kind === 'ack' || entry.kind === 'progress')
+        || (!personal && entry.kind === 'ack' && getTaskNotificationPreference(entry.taskId, conversationId) === 'final_only'))
+        && !this.#entries.hasSubmittedMainUpdate(entry.id)
         && (entry.kind === 'ack' || (delayNotice ? !isCurrentTaskDelayNotice(entry, conversationId)
           : getTaskNotificationPreference(entry.taskId, conversationId) === 'final_only'))) {
         this.#entries.decideMainUpdate(entry.id, 'silent', 'The saved preference or current task state suppresses this update');

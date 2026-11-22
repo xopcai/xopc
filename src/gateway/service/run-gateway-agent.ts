@@ -186,6 +186,18 @@ export async function *runGatewayAgent(
       ? { taskTrigger: listTaskUpdateTriggers(webchatConversationId).get(runId) } : {}) });
   let registeredActiveWebchatRun = false;
   const captureTaskEvent = (event: ChatStreamEvent): void => {
+    if (event.type === 'tool_start') {
+      taskRun?.captureToolStart(event.payload.toolName, event.payload.activity);
+      return;
+    }
+    if (event.type === 'tool_end') {
+      taskRun?.captureToolEnd(event.payload.toolName);
+      return;
+    }
+    if (event.type === 'assistant_message_start') {
+      taskRun?.captureResponding();
+      return;
+    }
     if (event.type === 'task_plan_updated') {
       taskRun?.capturePlan(event.payload.items);
       return;

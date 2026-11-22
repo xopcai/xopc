@@ -15,14 +15,19 @@ import type {
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
+import { AgentCatalogRepository } from '../agent-catalog/repository.js';
+import { getConnectorAccount } from '../storage/sqlite/connector-account-repository.js';
+import { getConnectorConnection } from '../storage/sqlite/connector-repository.js';
 import { TaskContextRepository } from './task-context-repository.js';
 import { delegatedRunText } from './delegated-run-result.js';
 import { enqueueTaskAttentionRequiredEvent, enqueueTaskChangedEvent } from './task-change-events.js';
 import { TaskDependencyService } from './task-dependency-service.js';
 import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
 import { TaskAllocationRepository } from './task-allocation-repository.js';
+import { captureExecutionRequirements, savedExecutionRequirements } from './task-execution-capabilities.js';
 import { resolvePersonalResultReference } from '../personal-agent/result-reader.js';
-import { personalRequestForTask } from '../personal-agent/request-repository.js';
+import { personalRequestForTask, updatePersonalRequest } from '../personal-agent/request-repository.js';
+import { waitForPersonalRequestConnection } from '../personal-agent/request-service.js';
 import { TaskOriginRepository } from './task-origin-repository.js';
 import type { TurnContextRef } from '../agent/source-context/types.js';
 import { captureTaskHandoff, captureWorkspaceFileHandoff, replaceUnresolvedTaskHandoffReferences, type WorkspaceFileInput } from './task-handoff.js';
@@ -42,6 +47,18 @@ export type TaskApplicationResult =
   | { ok: false; reason: 'not_found' | 'conflict' | 'invalid_transition' | 'blocked'; model?: TaskReadModel };
 
 export type TaskRevisionApplicationResult = TaskApplicationResult | { ok: false; reason: 'invalid_reference'; model: TaskReadModel };
+
+export type TaskFollowUpAction =
+  | 'updated_allocation'
+  | 'steered_running'
+  | 'unblocked_and_resumed'
+  | 'continued_warm_session'
+  | 'reallocated_continuation'
+  | 'saved_while_waiting_authorization';
+
+export type TaskFollowUpResult =
+  | { ok: true; action: TaskFollowUpAction; model: TaskReadModel; runId?: string; conversationId?: string }
+  | { ok: false; reason: 'not_found' | 'cancelled' | 'invalid_transition'; model?: TaskReadModel };
 
 type TaskRunRetry = { runId: string; readOnly: boolean; originalRequestAt?: number; decisionWaitIds: string[] };
 
@@ -285,6 +302,396 @@ export class TaskApplicationService {
         (SELECT run_id FROM task_runs WHERE task_id = ?) AND reply_status IN ('pending','generating','ready')`).run(task.id);
       enqueueTaskChangedEvent(db, { taskId: task.id, version: current.version, changedFields: ['contract', 'body', 'phase', 'context'], actor });
       return { ok: true, model: this.#projector.project(current) };
+    });
+  }
+
+  /**
+   * Unified state-adaptive follow-up on an existing Task:
+   * - allocating / unstarted: merges new direction into brief and resets pending/blocked allocation
+   * - running / queued: posts steer instruction to active Worker
+   * - waiting: auto-resolves collaboration / user_input / paused / run_decision waits and resumes
+   * - completed / review / failed: wakes existing Worker session with full warm context (or reallocates if needed)
+   */
+  followUp(input: {
+    taskId: string;
+    conversationId: string;
+    instruction: string;
+    idempotencyKey: string;
+    sourceRefs?: TurnContextRef[];
+    requestedAgentId?: string;
+    timeRange?: { from: string; to: string; timezone: string; expression: string };
+  }): TaskFollowUpResult {
+    const db = getSqliteDatabase();
+    const task = this.#tasks.get(input.taskId);
+    if (!task || !new TaskOriginRepository().owns(task.id, input.conversationId)) {
+      return { ok: false, reason: 'not_found' };
+    }
+    const instruction = input.instruction.trim();
+    if (!instruction || instruction.length > 8000 || !input.idempotencyKey.trim()) {
+      throw new Error('Follow-up requires a bounded instruction and idempotency key');
+    }
+    const hash = requestHash(input);
+    const dedupRow = db.prepare(
+      'SELECT request_hash, result_json FROM command_deduplication WHERE idempotency_key = ?',
+    ).get(input.idempotencyKey) as { request_hash: string; result_json: string } | undefined;
+    if (dedupRow) {
+      if (dedupRow.request_hash !== hash) throw new Error('Idempotency key was reused with different input');
+      const saved = JSON.parse(dedupRow.result_json) as { action: TaskFollowUpAction; runId?: string; conversationId?: string };
+      return {
+        ok: true,
+        action: saved.action,
+        model: this.#projector.project(task),
+        ...(saved.runId ? { runId: saved.runId } : {}),
+        ...(saved.conversationId ? { conversationId: saved.conversationId } : {}),
+      };
+    }
+
+    const request = personalRequestForTask(task.id);
+    if ((task.phase === 'closed' && task.resolution === 'cancelled') || request?.state === 'cancelled') {
+      return { ok: false, reason: 'cancelled', model: this.#projector.project(task) };
+    }
+
+    return runSqliteWriteTransaction(() => {
+      const actor: ActorRef = { kind: 'user' };
+      const board = new TaskCollaborationRepository();
+      const conversations = new TaskConversationRepository();
+      const activeRun = this.#runs.getActiveRoot(task.id);
+      const latestRun = activeRun ?? this.#runs.getLatestRoot(task.id);
+      const waits = this.#runs.listActiveWaits(task.id);
+      const recordOutcome = (action: TaskFollowUpAction, runId?: string, execConversationId?: string): TaskFollowUpResult => {
+        this.recordCommand(db, {
+          key: input.idempotencyKey,
+          type: 'task.follow_up',
+          subjectId: task.id,
+          hash,
+          result: { taskId: task.id, action, runId, conversationId: execConversationId },
+        });
+        return {
+          ok: true,
+          action,
+          model: this.#projector.get(task.id)!,
+          ...(runId ? { runId } : {}),
+          ...(execConversationId ? { conversationId: execConversationId } : {}),
+        };
+      };
+
+      // 1. Active waits: respect non-bypassable host gates; auto-unblock collaboration/input/paused/decision waits.
+      let appendedBoardEntry = false;
+      if (waits.length > 0) {
+        const gateWaits = waits.filter(
+          w => w.condition.type === 'connection' || w.kind === 'approval' || w.kind === 'dependency',
+        );
+        const resolvableWaits = waits.filter(w => !gateWaits.includes(w));
+        if (gateWaits.length > 0 && resolvableWaits.length === 0) {
+          board.append({
+            taskId: task.id,
+            authorKind: 'main_agent',
+            authorId: input.conversationId,
+            kind: 'instruction',
+            body: instruction,
+            deliverToWorker: true,
+            idempotencyKey: `follow-up-board:${input.idempotencyKey}`,
+          });
+          if (request && input.timeRange) {
+            updatePersonalRequest(request, { parameters: { ...request.parameters, timeRange: input.timeRange } });
+          }
+          return recordOutcome('saved_while_waiting_authorization', activeRun?.id, activeRun?.conversationId);
+        }
+
+        const questionWait = resolvableWaits.find(w => typeof w.condition.collaborationEntryId === 'string');
+        board.append({
+          taskId: task.id,
+          authorKind: 'main_agent',
+          authorId: input.conversationId,
+          kind: questionWait ? 'answer' : 'instruction',
+          body: instruction,
+          ...(questionWait ? { causationId: String(questionWait.condition.collaborationEntryId) } : {}),
+          deliverToWorker: false,
+          idempotencyKey: `follow-up-board:${input.idempotencyKey}`,
+        });
+        appendedBoardEntry = true;
+
+        for (const wait of resolvableWaits) {
+          if (wait.kind === 'user_input') {
+            this.#context.add({
+              taskId: task.id,
+              targetKind: 'source',
+              targetId: wait.id,
+              role: 'input',
+              title: wait.reason,
+              pinned: true,
+              metadata: { userAnswer: instruction },
+              createdBy: actor,
+            });
+          }
+          this.#runs.resolveWait({
+            waitId: wait.id,
+            actor,
+            resolution: questionWait && wait.id === questionWait.id
+              ? { kind: 'collaboration_answer', answer: instruction }
+              : { kind: 'follow_up', instruction },
+          });
+        }
+
+        if (request && input.timeRange) {
+          updatePersonalRequest(request, { parameters: { ...request.parameters, timeRange: input.timeRange } });
+        }
+        if (activeRun) {
+          enqueueTaskChangedEvent(db, { taskId: task.id, projectId: task.projectId, version: task.version, changedFields: ['runs', 'attention'], actor });
+          return recordOutcome('unblocked_and_resumed', activeRun.id, activeRun.conversationId);
+        }
+      }
+
+      // 2. Running / Queued / Verifying: steer the live Worker directly.
+      if (activeRun) {
+        board.append({
+          taskId: task.id,
+          authorKind: 'main_agent',
+          authorId: input.conversationId,
+          kind: 'instruction',
+          body: instruction,
+          deliverToWorker: true,
+          idempotencyKey: `follow-up-board:${input.idempotencyKey}`,
+        });
+        if (request && input.timeRange) {
+          updatePersonalRequest(request, { parameters: { ...request.parameters, timeRange: input.timeRange } });
+        }
+        return recordOutcome('steered_running', activeRun.id, activeRun.conversationId);
+      }
+
+      // 3. Unstarted / Allocating: merge into brief and reset allocation so router sees latest instruction & sources.
+      if (!latestRun) {
+        if (!appendedBoardEntry) {
+          board.append({
+            taskId: task.id,
+            authorKind: 'main_agent',
+            authorId: input.conversationId,
+            kind: 'instruction',
+            body: instruction,
+            deliverToWorker: false,
+            idempotencyKey: `follow-up-board:${input.idempotencyKey}`,
+          });
+        }
+        const nextBody = [task.body ?? task.contract?.objective ?? task.title, `## Follow-up instruction\n${instruction}`]
+          .filter(Boolean)
+          .join('\n\n');
+        const updated = this.#tasks.update(task.id, { expectedVersion: task.version, body: nextBody }) ?? task;
+        const allocation = new TaskAllocationRepository().get(task.id);
+        if (input.sourceRefs?.length) {
+          if (allocation?.reason_code === 'source_reference_unavailable') {
+            replaceUnresolvedTaskHandoffReferences(task.id, input.sourceRefs);
+          } else {
+            captureTaskHandoff(task.id, input.conversationId, nextBody, input.sourceRefs);
+          }
+        }
+        if (allocation) {
+          const existingReqs = JSON.parse(allocation.requirements_json) as Record<string, unknown>;
+          const nextReqs = input.requestedAgentId
+            ? { ...existingReqs, requestedAgentId: input.requestedAgentId }
+            : existingReqs;
+          db.prepare(
+            `UPDATE task_allocations SET status = 'pending', attempts = 0, reason_code = NULL,
+              requirements_json = ?, task_version = ?, lease_token = NULL, lease_expires_at = NULL,
+              next_attempt_at = ?, updated_at = ? WHERE task_id = ?`,
+          ).run(JSON.stringify(nextReqs), updated.version, Date.now(), Date.now(), task.id);
+        }
+        enqueueTaskChangedEvent(db, { taskId: task.id, projectId: task.projectId, version: updated.version, changedFields: ['body', 'contract', 'attention'], actor });
+        return recordOutcome('updated_allocation');
+      }
+
+      // 4. Completed / Review / Ended: Warm Session Continuation (preserve existing Worker session & context).
+      if (!appendedBoardEntry) {
+        board.append({
+          taskId: task.id,
+          authorKind: 'main_agent',
+          authorId: input.conversationId,
+          kind: 'instruction',
+          body: instruction,
+          deliverToWorker: false,
+          idempotencyKey: `follow-up-board:${input.idempotencyKey}`,
+        });
+      }
+      this.#tasks.authorizeAutomaticPhase(task.id);
+      let current = task.phase !== 'active'
+        ? this.#tasks.setLifecycle({
+            taskId: task.id,
+            expectedVersion: task.version,
+            phase: 'active',
+            actor,
+            source: 'api',
+            operationId: input.idempotencyKey,
+          })!
+        : task;
+
+      const contract = current.contract!;
+      const baseObjective = (
+        db.prepare('SELECT objective FROM task_contracts WHERE task_id = ? ORDER BY version LIMIT 1')
+          .get(task.id) as { objective: string } | undefined
+      )?.objective ?? contract.objective.split(/\n(?:Current revision|Follow-up):/)[0]!.trim();
+      const baseBrief = task.body ?? baseObjective;
+      const nextBrief = `${baseBrief}\n\n## Follow-up\n${instruction}`;
+      current = this.#tasks.update(task.id, { expectedVersion: current.version, body: nextBrief }) ?? current;
+      current = this.#tasks.reviseContract({
+        ...contract,
+        taskId: task.id,
+        expectedVersion: current.version,
+        objective: `${baseObjective}\nFollow-up: ${instruction}`,
+        createdBy: actor,
+      })!;
+
+      db.prepare(
+        `UPDATE task_origin_links SET
+          origin_transcript_id = (SELECT active_transcript_id FROM sessions WHERE conversation_id = ?),
+          request_input_id = COALESCE(
+            (SELECT id FROM session_inputs WHERE conversation_id = ? AND status = 'running' ORDER BY created_at_ms DESC LIMIT 1),
+            request_input_id
+          )
+         WHERE task_id = ?`,
+      ).run(input.conversationId, input.conversationId, task.id);
+
+      const latestDeliveryRow = db.prepare(
+        `SELECT delivery_id, payload_json FROM task_result_deliveries
+         WHERE task_run_id IN (SELECT run_id FROM task_runs WHERE task_id = ?)
+           AND status IN ('pending','delivered','stale')
+         ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+      ).get(task.id) as { delivery_id: string; payload_json: string } | undefined;
+      const refs: TurnContextRef[] = [...(input.sourceRefs ?? [])];
+      if (latestDeliveryRow) {
+        const parsedDelivery = JSON.parse(latestDeliveryRow.payload_json) as {
+          deliveryId: string;
+          taskRunId: string;
+          assignmentEpoch: number;
+          outcome: { outcomeId: string; deliverables: Array<{ artifactId: string; availability: string }> };
+        };
+        const expectedVer = resultReferenceVersion(parsedDelivery as never);
+        for (const sourceId of [
+          'body',
+          ...parsedDelivery.outcome.deliverables.filter(item => item.availability === 'available').map(item => item.artifactId),
+        ]) {
+          const ref: TurnContextRef = {
+            kind: 'result',
+            sourceId: resultReferenceId(parsedDelivery.deliveryId, sourceId),
+            expectedVersion: expectedVer,
+          };
+          if (!refs.some(item => item.kind === ref.kind && item.sourceId === ref.sourceId)) refs.push(ref);
+        }
+      }
+      if (refs.length <= 51) {
+        captureTaskHandoff(task.id, input.conversationId, nextBrief, refs.length ? refs : undefined);
+      }
+
+      db.prepare(
+        `UPDATE task_result_deliveries SET reply_status = 'stale'
+         WHERE task_run_id IN (SELECT run_id FROM task_runs WHERE task_id = ?)
+           AND reply_status IN ('pending','generating','ready')`,
+      ).run(task.id);
+
+      const priorSession = conversations.getActiveSession(task.id)
+        ?? conversations.listSessions(task.id).find(session => session.role === 'execution');
+      const priorAgentId = priorSession?.agentId
+        ?? conversations.getState(task.id)?.currentExecutorAgentId
+        ?? current.delegateAgentId
+        ?? (typeof latestRun.executorRef.agentId === 'string' ? latestRun.executorRef.agentId : undefined);
+      const catalogAgent = priorAgentId ? new AgentCatalogRepository().get(priorAgentId) : undefined;
+      const warmSessionValid = Boolean(
+        priorSession?.conversationId
+          && priorAgentId
+          && catalogAgent
+          && catalogAgent.enabled !== false
+          && catalogAgent.provisioningState === 'ready'
+          && (!input.requestedAgentId || input.requestedAgentId === priorAgentId)
+          && db.prepare('SELECT 1 FROM sessions WHERE conversation_id = ?').get(priorSession.conversationId),
+      );
+
+      if (warmSessionValid) {
+        const savedReqs = savedExecutionRequirements(task.id);
+        if (savedReqs) {
+          captureExecutionRequirements(current, savedReqs.requirements, savedReqs.needs);
+        }
+        const newRun = this.#runs.create({
+          taskId: task.id,
+          executorKind: 'agent',
+          executorRef: { agentId: priorAgentId! },
+          trigger: {
+            kind: 'follow_up',
+            actor,
+            instruction,
+            previousRunId: latestRun.id,
+          },
+          correlationId: input.idempotencyKey,
+          idempotencyKey: `follow-up-run:${input.idempotencyKey}`,
+          contractVersion: current.latestContractVersion,
+          conversationId: priorSession!.conversationId,
+          retryPolicy: { maxAttempts: 3 },
+        });
+        conversations.activateExecutionSession({
+          taskId: task.id,
+          conversationId: priorSession!.conversationId,
+          agentId: priorAgentId!,
+          runId: newRun.id,
+        });
+        if (request) {
+          let updatedReq = updatePersonalRequest(request, {
+            objective: `${request.objective}\n\nFollow-up:\n${instruction}`,
+            state: 'queued',
+            connectionWaitId: undefined,
+            parameters: {
+              ...request.parameters,
+              ...(input.timeRange ? { timeRange: input.timeRange } : {}),
+              taskRunId: newRun.id,
+            },
+          });
+          db.prepare(
+            `UPDATE personal_requests SET result_json = NULL, result_run_id = NULL, delivery_entry_id = NULL,
+              notified_at = NULL, delivery_attempts = 0, delivery_next_attempt_at = 0, delivery_error = NULL
+             WHERE request_id = ?`,
+          ).run(request.requestId);
+          const account = updatedReq.accountId ? getConnectorAccount(updatedReq.accountId) : undefined;
+          const conn = account?.currentConnectionId ? getConnectorConnection(account.currentConnectionId) : undefined;
+          const activeConn = conn?.status === 'active' && (!conn.expiresAt || Date.parse(conn.expiresAt) > Date.now());
+          if (!activeConn) {
+            updatedReq = waitForPersonalRequestConnection(updatedReq, newRun);
+          }
+        }
+        enqueueTaskChangedEvent(db, {
+          taskId: task.id,
+          projectId: current.projectId,
+          version: current.version,
+          changedFields: ['contract', 'body', 'phase', 'runs', 'context'],
+          actor,
+        });
+        return recordOutcome('continued_warm_session', newRun.id, priorSession!.conversationId);
+      }
+
+      // Fallback when prior session was deleted or user requested switching to another Specialist.
+      db.prepare("UPDATE task_sessions SET status = 'superseded', ended_at = ? WHERE task_id = ? AND role = 'execution' AND status = 'active'")
+        .run(Date.now(), task.id);
+      db.prepare("UPDATE task_conversation_state SET active_conversation_id = NULL, current_executor_agent_id = NULL, status = 'idle', updated_at = ? WHERE task_id = ?")
+        .run(Date.now(), task.id);
+      const allocation = new TaskAllocationRepository();
+      const prevAlloc = allocation.get(task.id);
+      const nextReqs = {
+        version: 1 as const,
+        summary: instruction.slice(0, 300),
+        ...(input.requestedAgentId ? { requestedAgentId: input.requestedAgentId } : {}),
+      };
+      if (prevAlloc) {
+        db.prepare(
+          `UPDATE task_allocations SET id = ?, status = 'pending', attempts = 0, selected_agent_id = NULL,
+            requirements_json = ?, lease_token = NULL, lease_expires_at = NULL, selection_reason = NULL,
+            reason_code = NULL, task_version = ?, next_attempt_at = ?, updated_at = ? WHERE task_id = ?`,
+        ).run(randomUUID(), JSON.stringify(nextReqs), current.version, Date.now(), Date.now(), task.id);
+      } else {
+        allocation.create(task.id, input.conversationId, current.version, nextReqs);
+      }
+      enqueueTaskChangedEvent(db, {
+        taskId: task.id,
+        projectId: current.projectId,
+        version: current.version,
+        changedFields: ['contract', 'body', 'phase', 'context'],
+        actor,
+      });
+      return recordOutcome('reallocated_continuation');
     });
   }
 

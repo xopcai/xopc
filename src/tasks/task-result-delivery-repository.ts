@@ -10,6 +10,7 @@ import { createLogger } from '../utils/logger.js';
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
 import { hasPersonalResultFileLinks, sanitizePersonalResultFileLinks } from '../personal-agent/result-file-links.js';
 import { TaskRepository } from './task-repository.js';
+import { isLightweightDefaultContract } from './task-contract-definition.js';
 import { taskInstructionSequence } from './task-instruction-sequence.js';
 import { finalReplyCharacterLimit, isChatOnlyDelivery } from './task-final-reply.js';
 import { finalizedTaskResultId, recordTaskResultVersion } from './task-result-versions.js';
@@ -104,13 +105,27 @@ export class TaskResultDeliveryRepository {
       WHERE task_run_id = ? AND assignment_epoch = ? ORDER BY created_at, rowid LIMIT 100`)
       .all(runId, state.assignmentEpoch) as Array<{ outcome_json: string }>;
     const outcomes = rows.map(row => TurnOutcomeSchema.parse(JSON.parse(row.outcome_json)));
-    const latest = outcomes.at(-1);
+    const task = new TaskRepository().require(run.taskId);
+    const lightweightContract = isLightweightDefaultContract(task.contract);
+    const rawText = resultText?.trim() && resultText.trim() !== 'NO_REPLY' ? resultText.trim() : undefined;
+    const latest = outcomes.at(-1) ?? (lightweightContract && rawText && status === 'succeeded'
+      ? TurnOutcomeSchema.parse({
+          version: 1,
+          outcomeId: `inline:${runId}`,
+          runId,
+          turnId: runId,
+          status: 'succeeded',
+          summary,
+          deliverables: [],
+          evidence: [],
+          createdAt: new Date().toISOString(),
+        })
+      : undefined);
     if (!latest) return false;
     const research = hostArtifact?.sha256 ? undefined : [...outcomes].reverse().find(outcome => outcome.research)?.research;
-    const task = new TaskRepository().require(run.taskId);
     const validResearch = research && research.contractVersion === task.latestContractVersion
       && research.instructionSequence === taskInstructionSequence(task.id) ? research : undefined;
-    const selectionRequired = task.contract?.resultPolicy === 'selected';
+    const selectionRequired = task.contract?.resultPolicy === 'selected' && !(lightweightContract && !research && !hostArtifact);
     const researchGap = selectionRequired && !research && !hostArtifact?.sha256 || Boolean(research && (!validResearch || !validResearch.checks.length
       || validResearch.checks.length !== task.contract?.acceptanceCriteria.length
       || validResearch.checks.some(check => check.status !== 'passed')
@@ -130,7 +145,6 @@ export class TaskResultDeliveryRepository {
     const selectedManifest = validResearch?.finalArtifactIds !== undefined;
     const selectedMissing = selectedManifest && deliverables.length !== validResearch!.finalArtifactIds!.length;
     const finalText = validResearch?.finalText;
-    const rawText = resultText?.trim() && resultText.trim() !== 'NO_REPLY' ? resultText.trim() : undefined;
     const unpublishedFile = Boolean(rawText && hasPersonalResultFileLinks(rawText)
       && !finalText && !deliverables.some(item => item.availability === 'available'));
     const candidate = finalText ?? (rawText ? sanitizePersonalResultFileLinks(rawText) : undefined);

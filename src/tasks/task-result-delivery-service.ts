@@ -99,8 +99,9 @@ export class TaskResultDeliveryService {
             if (personal && (delivery.text || !outcome.research?.finalText) && !personalRequestForTask(delivery.taskId)) enqueuePersonalReply({ delivery: { ...delivery, outcome },
               report: delivery.text?.trim() || delivery.outcome.summary?.trim() || statusText,
               objective: currentTask.contract?.objective ?? delivery.taskTitle });
-            const content = personal || !delivery.text ? statusText
-              : delivery.text === outcome.research?.finalText ? delivery.text : `${statusText}\n\n${delivery.text}`;
+            const nonPersonalBody = delivery.text?.trim() || outcome.summary?.trim();
+            const content = personal || !nonPersonalBody ? statusText
+              : delivery.text === outcome.research?.finalText ? delivery.text : `${statusText}\n\n${nonPersonalBody}`;
             const details = { ...delivery, outcome };
             if (personal) delete details.text;
             const entry = !personal || deliverables.length ? appendTranscriptEntry(delivery.conversationId, {

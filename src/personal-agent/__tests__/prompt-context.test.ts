@@ -28,18 +28,17 @@ beforeEach(() => {
 afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
 
 describe('personal prompt snapshot', () => {
-  it('does not scan or inject the specialist directory into the personal prompt', () => {
-    catalog.create({ id: 'researcher', toolAllowlist: ['web_search'], profile: { name: 'Researcher' } }, { ready: true });
-    const list = vi.spyOn(AgentCatalogRepository.prototype, 'list');
+  it('includes a bounded global specialist and connected-app snapshot without raw tool allowlists', () => {
+    catalog.create({ id: 'researcher', toolAllowlist: ['web_search'], profile: { name: 'Researcher', description: 'Deep multi-source synthesis' } }, { ready: true });
     const builder = new PersonalPromptContext();
     const first = builder.build(config, conversationId)!;
-    expect(first).not.toContain('researcher');
+    expect(first).toContain('Specialists:');
+    expect(first).toContain('researcher');
+    expect(first).toContain('Researcher');
     expect(first).not.toContain('web_search');
-    expect(first).not.toContain('Specialists');
-    expect(first).toContain('Delegated tasks');
+    expect(first).toContain('Connected apps:');
+    expect(first).toContain('Delegated tasks:');
     expect(builder.build(config, conversationId)).toBe(first);
-    expect(list).not.toHaveBeenCalled();
-    list.mockRestore();
   });
 
   it('refreshes explicit user data and honors a disabled session immediately', () => {

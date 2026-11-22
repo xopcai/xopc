@@ -402,6 +402,13 @@ export class TaskRunRepository {
     return result.changes === 0 ? undefined : this.get(input.runId);
   }
 
+  releaseWaitingLease(runId: string, owner: string): void {
+    getSqliteDatabase().prepare(
+      `UPDATE task_runs SET lease_owner = NULL, lease_expires_at = NULL
+       WHERE run_id = ? AND lease_owner = ? AND status = 'waiting'`,
+    ).run(runId, owner);
+  }
+
   listExpiredLeasedRunning(now = Date.now(), limit = 50): TaskRun[] {
     const rows = getSqliteDatabase().prepare(`SELECT * FROM task_runs
       WHERE status IN ('running', 'verifying') AND lease_owner IS NOT NULL
@@ -733,6 +740,12 @@ export class TaskRunRepository {
           waitId: wait.id,
           resolution: input.resolution,
         }, input.actor, now);
+        const activeInput = db.prepare(`SELECT 1 FROM session_inputs
+          WHERE task_run_id = ? AND status IN ('queued', 'running', 'injecting') LIMIT 1`).get(wait.taskRunId);
+        if (!activeInput) {
+          db.prepare(`UPDATE task_runs SET lease_owner = NULL, lease_expires_at = NULL
+            WHERE run_id = ? AND status = 'waiting'`).run(wait.taskRunId);
+        }
       }
       return this.getWait(input.waitId);
     });

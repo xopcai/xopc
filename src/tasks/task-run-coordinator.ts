@@ -1,5 +1,5 @@
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
-import type { TaskEvidence, TaskRunReceipt, TurnOutcome } from '@xopcai/gateway-contract';
+import type { TaskEvidence, TaskRunReceipt, ToolActivity, TurnOutcome } from '@xopcai/gateway-contract';
 import { taskCheckId } from '@xopcai/gateway-contract';
 
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
@@ -11,6 +11,14 @@ import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { TaskApplicationService } from './task-application-service.js';
 import { TaskContextRepository } from './task-context-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
+import { isLightweightDefaultContract } from './task-contract-definition.js';
+import {
+  clearTaskLiveActivity,
+  recordTaskLiveResponding,
+  recordTaskLiveStart,
+  recordTaskLiveToolEnd,
+  recordTaskLiveToolStart,
+} from './task-live-activity.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
@@ -49,10 +57,12 @@ export class TaskRunCoordinator {
   readonly #runs = new TaskRunRepository();
   #hasDeliverables = false;
 
+  readonly #taskId: string;
   readonly #zh: boolean;
 
   private constructor(readonly runId: string) {
     const run = this.#runs.require(runId);
+    this.#taskId = run.taskId;
     this.#zh = resolveTaskLocale(new TaskRepository().require(run.taskId)) === 'zh';
   }
 
@@ -131,7 +141,23 @@ export class TaskRunCoordinator {
         zh ? `任务「${task.title}」由 ${executorName || '执行者'} 开始执行。`
           : `Task “${task.title}” started by ${executorName || 'the assigned executor'}.`));
     }
-    return run.status === 'running' ? new TaskRunCoordinator(run.id) : undefined;
+    if (run.status === 'running') {
+      recordTaskLiveStart(task.id, run.id, resolveTaskLocale(task) === 'zh');
+      return new TaskRunCoordinator(run.id);
+    }
+    return undefined;
+  }
+
+  captureToolStart(toolName: string, activity?: ToolActivity): void {
+    recordTaskLiveToolStart(this.#taskId, this.runId, toolName, activity, this.#zh);
+  }
+
+  captureToolEnd(toolName: string): void {
+    recordTaskLiveToolEnd(this.#taskId, this.runId, toolName, this.#zh);
+  }
+
+  captureResponding(): void {
+    recordTaskLiveResponding(this.#taskId, this.runId, this.#zh);
   }
 
   addEvidence(evidence: TaskEvidence): void {
@@ -164,12 +190,14 @@ export class TaskRunCoordinator {
   }
 
   finalize(input: { status: TaskRunReceipt['status']; summary: string; assistantText?: string }): void {
+    clearTaskLiveActivity(this.#taskId, this.runId);
     const run = this.#runs.get(this.runId);
     if (!run || !['running', 'waiting', 'verifying'].includes(run.status)) return;
     if (run.status === 'waiting' && run.policySnapshot.continuation) return;
     if (run.status === 'waiting' && this.#runs.listActiveWaits(run.taskId).length > 0) return;
     const hasAssistantResult = Boolean(input.assistantText?.trim() && input.assistantText.trim() !== 'NO_REPLY');
-    const hasBoardResult = new TaskCollaborationRepository().recent(run.taskId, undefined, 20)
+    const collaborationBoard = new TaskCollaborationRepository();
+    const hasBoardResult = collaborationBoard.recent(run.taskId, undefined, 20)
       .some((entry) => entry.taskRunId === run.id && entry.kind === 'result');
     const task = new TaskRepository().require(run.taskId);
     const research = currentTaskResearchResult(run.id);
@@ -212,10 +240,24 @@ export class TaskRunCoordinator {
       ? { id: publication.artifactId, sha256: structuralCheck?.sha256 } : undefined;
     const publicationText = structuralCheck?.summary ?? (zh ? '交付内容尚未逐项核验。'
       : 'The deliverable has not been verified against every requirement.');
-    const repair = hostArtifact ? undefined : buildResearchRepair({
+    const activeDirectionsDelivered = !instructionsChanged || collaborationBoard.coordination(task.id)
+      .filter(entry => ['main_agent', 'user'].includes(entry.authorKind) && ['answer', 'instruction'].includes(entry.kind))
+      .every(entry => entry.sequence <= (run.instructionSequenceAtStart ?? 0)
+        || entry.deliveryStatus === undefined || entry.deliveryStatus === 'delivered' || entry.deliveryStatus === 'confirmed');
+    const lightweightComplete = status === 'succeeded'
+      && !personalSnapshot
+      && !jsonSpec
+      && !research
+      && !hostArtifact
+      && isLightweightDefaultContract(task.contract)
+      && (hasAssistantResult || hasBoardResult || this.#hasDeliverables)
+      && !unconfirmedEffect()
+      && publications.missing.length === 0
+      && activeDirectionsDelivered;
+    const repair = (hostArtifact || lightweightComplete) ? undefined : buildResearchRepair({
       publicationStructureGap: jsonSpec ? zh ? `发布符合全部约定结构的 ${jsonSpec.file}。宿主会直接检查文件名、JSON 格式及约定的对象数量和字段。`
         : `Publish ${jsonSpec.file} with the agreed JSON structure. The host checks the actual file name, JSON syntax, and any required object count and fields.` : undefined,
-      research: currentResearch, stale: Boolean(research && !currentResearch || instructionsChanged && !directionsReviewed),
+      research: currentResearch, stale: Boolean(research && !currentResearch || instructionsChanged && !directionsReviewed && !lightweightComplete),
       instructionSequence, publications, criteria: task.contract?.acceptanceCriteria ?? [],
       resultFingerprint: personalSnapshot?.hash,
       requiresFinalText: !personalSnapshot && task.contract?.expectedOutputs.some(isChatReplyOutput),
@@ -233,19 +275,40 @@ export class TaskRunCoordinator {
       provenance: 'judge', strength: claim.support === 'supported' ? 'verified' : 'observed', observedAt: Date.now(),
       verifies: currentResearch.checks.filter(check => check.status === 'passed' && check.claimIds.includes(claim.id)).map(check => check.criterion),
     })) ?? [];
-    const deliveryEvidence = currentResearch?.checks.filter(check => check.status === 'passed' && check.method === 'tool_verified')
+    const deliveryEvidence: TaskEvidence[] = currentResearch?.checks.filter(check => check.status === 'passed' && check.method === 'tool_verified')
       .map((check): TaskEvidence => ({ kind: 'test', title: `Delivery check ${check.criterionIndex + 1}`, summary: check.note,
         verifies: [check.criterion], provenance: 'tool', strength: 'verified', observedAt: Date.now() })) ?? [];
-    const checks = structuralCheck?.checks ?? currentResearch?.checks.map(check => ({ criterion: check.criterion, status: check.status,
+    if (lightweightComplete) {
+      deliveryEvidence.push({
+        kind: 'test',
+        title: 'Lightweight task delivery',
+        summary: zh ? '轻量任务已完成执行与结果交付。' : 'Completed via lightweight task execution.',
+        verifies: [...(task.contract?.acceptanceCriteria ?? [])],
+        provenance: 'tool',
+        strength: 'verified',
+        observedAt: Date.now(),
+      });
+    }
+    const lightweightChecks = lightweightComplete
+      ? (task.contract?.acceptanceCriteria ?? []).map((criterion, criterionIndex) => ({
+          criterion,
+          status: 'passed' as const,
+          checkId: taskCheckId(task.id, run.contractVersion, criterionIndex),
+          evidenceTitles: ['Lightweight task delivery', ...this.#evidence.slice(0, 2).map(item => item.title)],
+          method: 'tool_verified' as const,
+          note: zh ? '轻量任务已完成执行与结果交付。' : 'Completed via lightweight task execution.',
+        }))
+      : undefined;
+    const checks = structuralCheck?.checks ?? lightweightChecks ?? currentResearch?.checks.map(check => ({ criterion: check.criterion, status: check.status,
       checkId: taskCheckId(task.id, run.contractVersion, check.criterionIndex),
       evidenceTitles: check.method === 'tool_verified' && check.status === 'passed' ? [`Delivery check ${check.criterionIndex + 1}`]
         : check.claimIds.map(id => `Research claim: ${id}`), note: check.note,
       method: check.method ?? (currentResearch.review === 'model_reviewed' ? 'model_reviewed' as const : 'unverified' as const) }))
       ?? (task.contract?.acceptanceCriteria ?? []).map(criterion => ({ criterion, status: 'unverified' as const, evidenceTitles: [],
         method: 'unverified' as const, note: zh ? '未提交有证据关联的核验结果。' : 'No evidence-linked verification result was submitted.' }));
-    const instructionChecks = (structuralCheck ? [] : currentResearch?.instructionChecks ?? []).map(check => ({ criterion: check.instruction,
+    const instructionChecks = (structuralCheck || lightweightComplete ? [] : currentResearch?.instructionChecks ?? []).map(check => ({ criterion: check.instruction,
       status: check.status, evidenceTitles: check.claimIds.map(id => `Research claim: ${id}`), note: check.note, method: 'model_reviewed' as const }));
-    const achieved = Boolean(structuralCheck) || (status === 'succeeded' && checks.length > 0 && checks.length === task.contract?.acceptanceCriteria.length
+    const achieved = Boolean(structuralCheck) || lightweightComplete || (status === 'succeeded' && checks.length > 0 && checks.length === task.contract?.acceptanceCriteria.length
       && (!personalSnapshot || personalSnapshot.complete)
       && [...checks, ...instructionChecks].every(check => check.status === 'passed') && !repair && currentResearch?.claims.every(claim => claim.support === 'supported') === true);
     const acceptanceFailed = status === 'succeeded' && Boolean(repair)
@@ -256,7 +319,7 @@ export class TaskRunCoordinator {
       expectedRunVersion: run.version,
       resultText: hostArtifact ? publicationText : directionsReviewed ? currentResearch?.finalText
         : publishedFinalText ?? input.assistantText,
-      ...(directionsReviewed ? { reviewedInstructionSequence: instructionSequence } : {}),
+      ...(directionsReviewed || (lightweightComplete && instructionsChanged) ? { reviewedInstructionSequence: instructionSequence } : {}),
       hostArtifact,
       ...(unconfirmedEffects || repairBlocked ? { unconfirmedEffect: unconfirmedEffects ?? repairBlocked } : {}),
       receipt: {

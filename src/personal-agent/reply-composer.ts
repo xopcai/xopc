@@ -283,11 +283,15 @@ export class PersonalReplyComposer {
 
   async drain(notify: (conversationId: string, deliveryId: string) => void | Promise<void>, isAvailable: (conversationId: string) => boolean = () => true): Promise<void> {
     const db = getSqliteDatabase();
-    // The durable text outbox competes atomically with composition, independent of foreground/voice availability.
-    const overdue = db.prepare(`SELECT delivery_id, reply_payload_json FROM task_result_deliveries
+    const now = Date.now();
+    const hardDeadline = now - Math.max(this.timeoutMs + 5000, 17_000);
+    // Busy conversations fall back after 5s; idle conversations retain their full composition timeout budget.
+    const overdue = db.prepare(`SELECT delivery_id, conversation_id, created_at, reply_payload_json FROM task_result_deliveries
       WHERE status = 'delivered' AND reply_status IN ('pending','generating','ready')
-      AND reply_payload_json IS NOT NULL AND created_at <= ? ORDER BY created_at LIMIT 20`).all(Date.now() - 5000) as Array<{ delivery_id: string; reply_payload_json: string }>;
-    const overduePackets = overdue.map(row => ({ id: row.delivery_id, packet: PacketSchema.parse(JSON.parse(row.reply_payload_json)) }));
+      AND reply_payload_json IS NOT NULL AND created_at <= ? ORDER BY created_at LIMIT 20`).all(now - 5000) as Array<{ delivery_id: string; conversation_id: string; created_at: number; reply_payload_json: string }>;
+    const overduePackets = overdue
+      .filter(row => row.created_at <= hardDeadline || !isAvailable(row.conversation_id) || !personalConversationState(row.conversation_id).idle)
+      .map(row => ({ id: row.delivery_id, packet: PacketSchema.parse(JSON.parse(row.reply_payload_json)) }));
     const staged = await Promise.all(overduePackets.map(async ({ id, packet }) => ({ id, packet,
       result: valid(packet) && !selectedReplyText(packet) && !preserveInlineResult(packet)
         ? await preparePersonalReplyResult(packet) : undefined,

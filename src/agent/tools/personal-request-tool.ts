@@ -62,8 +62,9 @@ export async function coordinatePersonalRequest(
   coordinateTask: (taskId: string, instruction?: string) => Promise<AgentToolResult<Record<string, never>>>,
 ): Promise<AgentToolResult<Record<string, never>>> {
   const { conversationId } = request;
-  if (input.timeRange !== undefined && input.command !== 'instruct') {
-    throw new Error('timeRange is supported only on instruct for a connected-app request');
+  const isFollowUp = input.command === 'instruct' || input.command === 'follow_up';
+  if (input.timeRange !== undefined && !isFollowUp) {
+    throw new Error('timeRange is supported only on instruct or follow_up for a connected-app request');
   }
   if (input.command === 'notifications') {
     if (!input.notificationPreference) throw new Error('notificationPreference is required');
@@ -86,14 +87,15 @@ export async function coordinatePersonalRequest(
   if (input.command === 'get' && !request.taskId) {
     return result({ ok: true, ...compactSnapshot(request), objective: request.objective });
   }
-  if (input.command === 'instruct' && input.timeRange) assertPersonalRequestTimeRange(input.timeRange);
-  if ((input.command === 'instruct' || input.command === 'answer') && !input.instruction?.trim()) throw new Error('instruction is required');
-  const instruction = input.command === 'instruct' && input.timeRange
+  if (isFollowUp && input.timeRange) assertPersonalRequestTimeRange(input.timeRange);
+  if ((isFollowUp || input.command === 'answer') && !input.instruction?.trim()) throw new Error('instruction is required');
+  const instruction = isFollowUp && input.timeRange
     ? `${input.instruction}\n\nUpdated absolute query range: ${JSON.stringify(input.timeRange)}` : input.instruction;
-  if (input.command === 'answer' || input.command === 'instruct') {
-    if (['completed', 'failed', 'cancelled'].includes(personalRequestSnapshot(request).state)) throw new Error('Request is no longer active');
+  if (input.command === 'answer' || isFollowUp) {
+    if (input.command !== 'follow_up' && ['completed', 'failed', 'cancelled'].includes(personalRequestSnapshot(request).state)) throw new Error('Request is no longer active');
+    if (input.command === 'follow_up' && personalRequestSnapshot(request).state === 'cancelled') throw new Error('Request is cancelled');
     if (readCurrentTranscriptId(getSqliteDatabase(), conversationId) !== request.transcriptId) throw new Error('SESSION_CHANGED');
-    if (!request.taskId && input.command === 'instruct' && request.state === 'waiting_connection') {
+    if (!request.taskId && isFollowUp && request.state === 'waiting_connection') {
       const addition = `\n\nSupplemental requirement:\n${instruction!.trim()}`;
       if (!request.objective.endsWith(addition)) runSqliteWriteTransaction(() => {
         const wait = getActiveConnectionWait(conversationId);
@@ -112,7 +114,7 @@ export async function coordinatePersonalRequest(
   if (input.command === 'get') {
     return result({ ...JSON.parse((coordinated.content[0] as { text: string }).text), ...compactSnapshot(request) });
   }
-  if (input.command === 'instruct' && input.timeRange && JSON.parse((coordinated.content[0] as { text: string }).text).ok === true) {
+  if (isFollowUp && input.timeRange && JSON.parse((coordinated.content[0] as { text: string }).text).ok === true) {
     runSqliteWriteTransaction(() => {
       const current = getPersonalRequest(request.requestId)!;
       updatePersonalRequest(current, { parameters: { ...current.parameters, timeRange: input.timeRange } });

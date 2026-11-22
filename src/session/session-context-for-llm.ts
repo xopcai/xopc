@@ -587,8 +587,8 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
             taskId: delivery.taskId, title: delivery.taskTitle, status: delivery.outcome.status,
             resultId: delivery.deliveryId.replace(/^reply:/, ''),
             readWith: 'This chat projection is an excerpt; retrieve exact source content with available result or file tools.',
-            ...(delivery.text ? { result: delivery.text.slice(0, 1200) } : {}),
-            ...(delivery.deliveryId.startsWith('personal-request:') ? { summary: delivery.outcome.summary } : {}),
+            ...(delivery.text ? { result: delivery.text.slice(0, 2400) } : {}),
+            ...(delivery.outcome.summary && delivery.outcome.summary !== delivery.text ? { summary: delivery.outcome.summary.slice(0, 1200) } : {}),
             artifacts: delivery.outcome.deliverables.map(item => ({ artifactId: item.artifactId,
               title: item.title.slice(0, 200), kind: item.kind, availability: item.availability, uri: item.uri })),
           })}` });

@@ -2,6 +2,7 @@ import type { TranscriptStoredRow } from '../session/session-context-for-llm.js'
 import { extractFtsContent } from '../storage/sqlite/row-mappers.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
+import { getTaskLiveActivity } from './task-live-activity.js';
 import { getTaskNotificationPreference } from './task-notification-preference.js';
 import { taskInstructionSequence } from './task-instruction-sequence.js';
 import { TaskReadModelProjector } from './task-read-model-projector.js';
@@ -19,6 +20,7 @@ export function taskConversationSummary(taskId: string, conversationId: string) 
   const waits = runs.listActiveWaits(taskId);
   const progress = new TaskCollaborationRepository().recent(taskId, undefined, 10)
     .findLast(entry => entry.kind === 'progress' && current && entry.taskRunId === current.id);
+  const liveActivity = current ? getTaskLiveActivity(taskId, current.id) : undefined;
   const db = getSqliteDatabase();
   const previous = db.prepare(`SELECT delivery.delivery_id,
       substr(json_extract(entry.payload_json, '$.content'), 1, 600) AS text
@@ -71,6 +73,13 @@ export function taskConversationSummary(taskId: string, conversationId: string) 
       questionId: wait.condition.collaborationEntryId })),
     attention: model.attention.slice(0, 4).map(item => ({ kind: item.kind, summary: item.summary.slice(0, 500) })),
     workerProgress: progress && { text: progress.body.slice(0, 600), at: progress.createdAt },
+    liveActivity: liveActivity && {
+      stage: liveActivity.stage,
+      toolName: liveActivity.toolName,
+      stepCount: liveActivity.stepCount,
+      summary: liveActivity.summary,
+      at: liveActivity.updatedAt,
+    },
     receipt: receipt && { verdict: receipt.completionVerdict, verification: receipt.verification.status,
       summary: receipt.summary.slice(0, 700), remaining: receipt.remainingWork.slice(0, 5).map(item => item.slice(0, 300)),
       needsUser: receipt.needsUser, nextAction: receipt.nextAction?.slice(0, 500) },

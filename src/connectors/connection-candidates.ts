@@ -72,7 +72,7 @@ export function resolveExactConnectionCandidate(app: string): string {
     return runtime.type === 'cli'
       && [definition.id, definition.displayName].some(value => normalizedIdentity(value) === identity);
   });
-  if (matches.length !== 1) throw new Error('Use personal_capability to identify the exact supported app or connector ID');
+  if (matches.length !== 1) throw new Error('Use personal_task(command="capabilities") or personal_capability to identify the exact supported app or connector ID');
   return matches[0].id;
 }
 
