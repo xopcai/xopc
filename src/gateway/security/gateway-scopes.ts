@@ -72,6 +72,8 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   }
   if (/^\/api\/browser\/preview\/[^/]+\/snapshot$/.test(path)) return methodScope(method, 'sessions.read', 'device.self');
   if (method === 'GET' && /^\/api\/browser\/preview\/[^/]+$/.test(path)) return 'sessions.read';
+  if (method === 'GET' && /^\/api\/browser\/managed\/[^/]+\/frame$/.test(path)) return 'sessions.read';
+  if (method === 'POST' && /^\/api\/browser\/managed\/[^/]+\/(?:takeover|heartbeat|release|handback|input)$/.test(path)) return 'agents.run';
   if (path.startsWith('/api/browser/tab-bindings')) {
     return methodScope(method, 'sessions.read', 'sessions.write');
   }

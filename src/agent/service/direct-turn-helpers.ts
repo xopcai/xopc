@@ -233,7 +233,7 @@ export async function runDirectAgentTurn(
     onEvent: input.onEvent,
   });
 
-  if (!isResume && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required' && result.stopReason !== 'phone_assistance_required') {
+  if (!isResume && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required' && result.stopReason !== 'phone_assistance_required' && result.stopReason !== 'browser_assistance_required') {
     deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.conversationId);
   }
 

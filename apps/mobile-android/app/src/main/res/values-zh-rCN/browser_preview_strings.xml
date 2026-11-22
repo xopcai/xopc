@@ -13,4 +13,15 @@
   <string name="browser_preview_shrink">缩小</string>
   <string name="browser_preview_expand">展开</string>
   <string name="browser_preview_close">关闭</string>
+  <string name="browser_preview_takeover">接管浏览器</string>
+  <string name="browser_preview_handback">完成，继续任务</string>
+  <string name="browser_preview_pause_control">暂离</string>
+  <string name="browser_preview_needs_user">需要你接管浏览器完成登录或确认。</string>
+  <string name="browser_preview_privacy_paused">另一台设备正在接管浏览器，已暂停画面以保护隐私。</string>
+  <string name="browser_preview_type_text">输入文字</string>
+  <string name="browser_preview_type_placeholder">输入要发送到焦点输入框的文字</string>
+  <string name="browser_preview_send">发送</string>
+  <string name="browser_preview_enter_key">回车</string>
+  <string name="browser_preview_back">后退</string>
+  <string name="browser_preview_reload">刷新</string>
 </resources>

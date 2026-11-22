@@ -4,6 +4,7 @@ import { BROWSER_PREVIEW_LEASE_MS, BROWSER_PREVIEW_REQUEST_MS, type BrowserPrevi
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ManagedBrowserView } from '@/features/browser-preview/managed-browser-view';
 import { listenGatewayBrowserPreview, sendGatewayBrowserPreview } from '@/features/gateway/gateway-realtime';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -13,7 +14,12 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 type Status = 'connecting' | 'waiting' | 'ready' | 'snapshot' | 'unavailable' | 'no-response' | 'ended' | 'expired' | 'busy';
 
-export function BrowserPreviewPanel({ conversationId }: { conversationId: string }) {
+export function BrowserPreviewPanel({ conversationId, mode = 'extension' }: { conversationId: string; mode?: 'extension' | 'managed' }) {
+  if (mode === 'managed') return <ManagedBrowserView conversationId={conversationId} />;
+  return <ExtensionBrowserPreviewPanel conversationId={conversationId} />;
+}
+
+function ExtensionBrowserPreviewPanel({ conversationId }: { conversationId: string }) {
   const zh = useLocaleStore(state => state.language === 'zh');
   const identity = useGatewayStore(state => state.conversationId);
   const connected = useGatewayRealtimeStore(state => state.connectionState === 'connected');

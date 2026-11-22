@@ -12,7 +12,7 @@ import type {
 
 import type { Config } from '../../config/schema.js';
 import { checkPostRedirectUrl, assertBrowserUrlAllowed, containsApiKeyPattern } from '../url-policy.js';
-import type { BrowserDriver, BrowserPrimitiveInput } from '../drivers/browser-driver.js';
+import type { BrowserDriver, BrowserPrimitiveInput, ManagedBrowserLiveHandle } from '../drivers/browser-driver.js';
 import { classifyBrowserRisk } from '../policy/browser-policy.js';
 
 export interface BrowserRuntimeOptions {
@@ -23,6 +23,9 @@ export interface BrowserRuntimeOptions {
   isTrustedSetupUrl?: (taskKey: string, url: string) => boolean;
   emit?: (type: string, payload: unknown) => void;
   publishPreview?: (taskKey: string, source?: { endpointId: string; browserSessionId: string; tabId: number; origin: string }) => void;
+  publishManagedLive?: (taskKey: string, source?: { browserSessionId: string; handle: ManagedBrowserLiveHandle; url: string; title: string }) => void;
+  isSessionPinned?: (taskKey: string) => boolean;
+  isHumanControlled?: (taskKey: string) => boolean;
   resolveTarget?: (taskKey: string) => BrowserTarget | undefined;
   retainSessionsUntilStopped?: boolean;
 }
@@ -40,13 +43,51 @@ export class BrowserRuntime {
   private connecting?: Promise<BrowserDriver>;
   private readonly opening = new Map<string, Promise<RuntimeSession>>();
   private sessionsByTask = new Map<string, RuntimeSession>();
+  private readonly activeActions = new Map<string, Promise<unknown>>();
+  private readonly pinnedTasks = new Set<string>();
+  private readonly humanControlledTasks = new Set<string>();
 
   constructor(private readonly options: BrowserRuntimeOptions) {}
+
+  pinSession(taskKey: string): void {
+    this.pinnedTasks.add(taskKey);
+  }
+
+  unpinSession(taskKey: string): void {
+    this.pinnedTasks.delete(taskKey);
+  }
+
+  setHumanControlled(taskKey: string, controlled: boolean): void {
+    if (controlled) this.humanControlledTasks.add(taskKey);
+    else this.humanControlledTasks.delete(taskKey);
+  }
+
+  getSessionId(taskKey: string): string | undefined {
+    return this.sessionsByTask.get(taskKey)?.id;
+  }
+
+  getLiveHandle(taskKey: string): ManagedBrowserLiveHandle | undefined {
+    const session = this.sessionsByTask.get(taskKey);
+    if (!session || session.closing) return undefined;
+    return this.driver?.getLiveHandle?.(session.id);
+  }
+
+  async waitForIdle(taskKey: string, timeoutMs = 5_000): Promise<void> {
+    const active = this.activeActions.get(taskKey);
+    if (!active) return;
+    await Promise.race([
+      active.catch(() => {}),
+      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
+  }
 
   async execute(taskKey: string, input: BrowserActionInput, signal?: AbortSignal): Promise<BrowserControlResult> {
     this.evictExpiredSessions();
     if (!this.options.getConfig().enabled && input.action !== 'close') return failure('DRIVER_UNAVAILABLE', 'Browser Control is disabled.');
     if (signal?.aborted) return failure('ABORTED', 'Operation was aborted.');
+    if (input.action !== 'close' && (this.humanControlledTasks.has(taskKey) || this.options.isHumanControlled?.(taskKey))) {
+      return failure('INVALID_INPUT', 'The user currently controls this browser session. Wait for explicit handback before continuing.');
+    }
     const resolvedTarget = input.target ? undefined : this.options.resolveTarget?.(taskKey);
     const effectiveInput = input.target || !resolvedTarget ? input : { ...input, target: resolvedTarget };
     let session: RuntimeSession | null;
@@ -64,14 +105,23 @@ export class BrowserRuntime {
       this.options.publishPreview?.(taskKey);
     }
     this.options.emit?.('browser.action.started', { sessionId: session.id, action: input.action });
+    const pinned = this.pinnedTasks.has(taskKey) || this.options.isSessionPinned?.(taskKey) === true;
+    const actionPromise = (async (): Promise<BrowserControlResult> => {
+      try {
+        const raw = driver.abortClosesSession && !pinned && signal && input.action !== 'close'
+          ? await this.dispatchCancellable(driver, session, effectiveInput, signal)
+          : await this.dispatch(driver, session, effectiveInput, signal);
+        return this.constrainResult(raw);
+      } catch (error) {
+        return failure('DRIVER_UNAVAILABLE', error instanceof Error ? error.message : String(error));
+      }
+    })();
+    this.activeActions.set(taskKey, actionPromise);
     let result: BrowserControlResult;
     try {
-      result = driver.abortClosesSession && signal && input.action !== 'close'
-        ? await this.dispatchCancellable(driver, session, effectiveInput, signal)
-        : await this.dispatch(driver, session, effectiveInput, signal);
-      result = this.constrainResult(result);
-    } catch (error) {
-      result = failure('DRIVER_UNAVAILABLE', error instanceof Error ? error.message : String(error));
+      result = await actionPromise;
+    } finally {
+      if (this.activeActions.get(taskKey) === actionPromise) this.activeActions.delete(taskKey);
     }
 
     if (result.ok) {
@@ -83,6 +133,15 @@ export class BrowserRuntime {
         if (endpointId && effectiveInput.target?.kind !== 'attached_tab' && Number.isSafeInteger(tabId) && tabId >= 0
           && page && (page.protocol === 'http:' || page.protocol === 'https:')) {
           this.options.publishPreview?.(taskKey, { endpointId, browserSessionId: session.id, tabId, origin: page.origin });
+        }
+        const liveHandle = driver.getLiveHandle?.(session.id);
+        if (liveHandle && effectiveInput.target?.kind !== 'attached_tab') {
+          this.options.publishManagedLive?.(taskKey, {
+            browserSessionId: session.id,
+            handle: liveHandle,
+            url: session.observation.url,
+            title: session.observation.title,
+          });
         }
       }
       this.options.emit?.('browser.action.completed', { sessionId: session.id, receipt: withoutVisual(result.receipt) });
@@ -101,9 +160,14 @@ export class BrowserRuntime {
   async shutdown(): Promise<void> {
     await Promise.allSettled(this.opening.values());
     await this.connecting?.catch(() => {});
+    for (const taskKey of this.sessionsByTask.keys()) {
+      this.options.publishManagedLive?.(taskKey, undefined);
+    }
     await this.driver?.disconnect();
     this.driver = null;
     this.sessionsByTask.clear();
+    this.pinnedTasks.clear();
+    this.humanControlledTasks.clear();
   }
 
   async closeTaskSession(taskKey: string, target?: BrowserTarget): Promise<void> {
@@ -115,6 +179,9 @@ export class BrowserRuntime {
 
   private closeSession(session: RuntimeSession, target?: BrowserTarget): Promise<void> {
     return session.closing ??= Promise.resolve().then(async () => {
+      this.options.publishManagedLive?.(session.taskKey, undefined);
+      this.pinnedTasks.delete(session.taskKey);
+      this.humanControlledTasks.delete(session.taskKey);
       await this.driver?.closeSession(session.id, target);
       if (this.sessionsByTask.get(session.taskKey) === session) this.sessionsByTask.delete(session.taskKey);
       this.options.emit?.('browser.session.closed', { sessionId: session.id });
@@ -392,6 +459,8 @@ export class BrowserRuntime {
     const expiresBefore = Date.now() - this.options.getConfig().limits.sessionTimeoutMs;
     for (const [taskKey, session] of this.sessionsByTask) {
       if (session.closing || session.lastUsedAt >= expiresBefore) continue;
+      if (this.pinnedTasks.has(taskKey) || this.options.isSessionPinned?.(taskKey)) continue;
+      this.options.publishManagedLive?.(taskKey, undefined);
       void this.driver?.closeSession(session.id).catch(() => {});
       this.sessionsByTask.delete(taskKey);
     }

@@ -2,9 +2,11 @@
 import { bodyLimit } from 'hono/body-limit';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import type { Context, Hono } from 'hono';
+import { z } from 'zod';
 import { browserTabBindingRequestSchema } from '@xopcai/gateway-contract';
 import { BROWSER_EXTENSION_PROTOCOL_VERSION, BROWSER_CONTROL_ENDPOINT_TOOL_NAME } from '@xopcai/browser-control-contract';
 
+import { ManagedBrowserLiveError } from '../../../browser/managed-live-runtime.js';
 import { createBrowserDriver } from '../../../browser/drivers/create-driver.js';
 import { checkBrowserReadiness } from '../../../browser/readiness.js';
 import { isLoopbackClientIp } from '../../security/loopback.js';
@@ -135,13 +137,178 @@ function canViewBrowserPreview(c: Context): boolean {
   return device?.platform === 'android' && device.revokedAt === undefined;
 }
 
+const managedClientIdSchema = z.string().min(1).max(160);
+const managedTakeoverBodySchema = z.strictObject({
+  clientId: managedClientIdSchema,
+});
+const managedEpochBodySchema = z.strictObject({
+  clientId: managedClientIdSchema,
+  epoch: z.number().int().positive(),
+});
+const managedOptionalEpochBodySchema = z.strictObject({
+  clientId: managedClientIdSchema,
+  epoch: z.number().int().positive().optional(),
+});
+const managedInteractiveEventSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('pointer'),
+    phase: z.enum(['down', 'move', 'up', 'cancel', 'click']),
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+    button: z.enum(['left', 'right', 'middle']).optional(),
+  }),
+  z.strictObject({
+    kind: z.literal('wheel'),
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+    deltaX: z.number().min(-2000).max(2000),
+    deltaY: z.number().min(-2000).max(2000),
+  }),
+  z.strictObject({
+    kind: z.literal('text'),
+    text: z.string().min(1).max(1024),
+  }),
+  z.strictObject({
+    kind: z.literal('key'),
+    key: z.enum(['Enter', 'Backspace', 'Tab', 'Escape', 'Delete', 'Home', 'End', 'PageUp', 'PageDown', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']),
+  }),
+  z.strictObject({
+    kind: z.literal('navigate'),
+    action: z.enum(['back', 'forward', 'reload']),
+  }),
+]);
+const managedInputBodySchema = z.strictObject({
+  clientId: managedClientIdSchema,
+  epoch: z.number().int().positive(),
+  seq: z.number().int().positive(),
+  event: managedInteractiveEventSchema,
+});
+
+function managedActor(c: Context, clientId: string) {
+  const principal = getGatewayPrincipal(c);
+  const device = principal.kind === 'device' && principal.deviceId ? getDevice(principal.deviceId) : undefined;
+  return {
+    actorKey: `${principal.principalId}:${clientId}`,
+    principalId: principal.principalId,
+    deviceName: device?.displayName || (principal.kind === 'device' ? 'Mobile' : 'xopc'),
+  };
+}
+
+function managedErrorResponse(c: Context, error: unknown) {
+  if (error instanceof ManagedBrowserLiveError) {
+    return c.json({ ok: false, error: { code: error.code, message: error.message } }, error.status as 404 | 409 | 429);
+  }
+  return c.json({ ok: false, error: { code: 'BROWSER_LIVE_ERROR', message: error instanceof Error ? error.message : String(error) } }, 500);
+}
+
 export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
 
   authenticated.get('/api/browser/preview/:conversationId', (c) => {
     c.header('Cache-Control', 'no-store');
-    const available = canViewBrowserPreview(c) && service.browserPreviews.available(c.req.param('conversationId'));
-    return c.json({ available });
+    if (!canViewBrowserPreview(c)) return c.json({ available: false });
+    const conversationId = c.req.param('conversationId');
+    const clientId = c.req.query('clientId')?.trim() || c.req.header('X-Xopc-Client-Id')?.trim();
+    const actorKey = clientId ? `${getGatewayPrincipal(c).principalId}:${clientId}` : undefined;
+    const managed = service.managedBrowserLive?.status(conversationId, actorKey);
+    if (managed) return c.json(managed);
+    const available = service.browserPreviews.available(conversationId);
+    return c.json(available ? { available: true, mode: 'extension' as const } : { available: false });
+  });
+
+  authenticated.get('/api/browser/managed/:conversationId/frame', async (c) => {
+    c.header('Cache-Control', 'no-store');
+    if (!canViewBrowserPreview(c) || !service.managedBrowserLive) return c.body(null, 403);
+    const after = Number(c.req.query('after') ?? '0');
+    if (!Number.isSafeInteger(after) || after < 0) return c.body(null, 400);
+    const clientId = c.req.query('clientId')?.trim() || c.req.header('X-Xopc-Client-Id')?.trim() || 'viewer';
+    const actorKey = `${getGatewayPrincipal(c).principalId}:${clientId}`;
+    const result = await service.managedBrowserLive.waitForFrame(
+      c.req.param('conversationId'),
+      actorKey,
+      after,
+      1200,
+      c.req.raw.signal,
+    );
+    if (result.kind === 'unavailable') return c.body(null, 404);
+    if (result.kind === 'privacy_paused') return c.body(null, 423);
+    if (result.kind === 'empty') return c.body(null, 204);
+    c.header('Content-Type', 'image/jpeg');
+    c.header('X-Xopc-Preview-Frame', String(result.frame.seq));
+    c.header('X-Xopc-Viewport-Width', String(result.frame.width));
+    c.header('X-Xopc-Viewport-Height', String(result.frame.height));
+    return c.body(Uint8Array.from(result.frame.bytes));
+  });
+
+  authenticated.post('/api/browser/managed/:conversationId/takeover', async (c) => {
+    c.header('Cache-Control', 'no-store');
+    if (!canViewBrowserPreview(c) || !service.managedBrowserLive) return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Browser takeover is not authorized.' } }, 403);
+    const parsed = managedTakeoverBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid takeover request.' } }, 400);
+    try {
+      const payload = await service.managedBrowserLive.takeover(c.req.param('conversationId'), managedActor(c, parsed.data.clientId));
+      return c.json({ ok: true, payload });
+    } catch (error) {
+      return managedErrorResponse(c, error);
+    }
+  });
+
+  authenticated.post('/api/browser/managed/:conversationId/heartbeat', async (c) => {
+    c.header('Cache-Control', 'no-store');
+    if (!canViewBrowserPreview(c) || !service.managedBrowserLive) return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Browser control is not authorized.' } }, 403);
+    const parsed = managedEpochBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid heartbeat request.' } }, 400);
+    try {
+      const actor = managedActor(c, parsed.data.clientId);
+      const payload = service.managedBrowserLive.heartbeat(c.req.param('conversationId'), actor.actorKey, parsed.data.epoch);
+      return c.json({ ok: true, payload });
+    } catch (error) {
+      return managedErrorResponse(c, error);
+    }
+  });
+
+  authenticated.post('/api/browser/managed/:conversationId/release', async (c) => {
+    c.header('Cache-Control', 'no-store');
+    if (!canViewBrowserPreview(c) || !service.managedBrowserLive) return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Browser control is not authorized.' } }, 403);
+    const parsed = managedOptionalEpochBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid release request.' } }, 400);
+    const actor = managedActor(c, parsed.data.clientId);
+    const payload = service.managedBrowserLive.release(c.req.param('conversationId'), actor.actorKey, parsed.data.epoch);
+    return c.json({ ok: true, payload: payload ?? null });
+  });
+
+  authenticated.post('/api/browser/managed/:conversationId/handback', async (c) => {
+    c.header('Cache-Control', 'no-store');
+    if (!canViewBrowserPreview(c) || !service.managedBrowserLive) return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Browser handback is not authorized.' } }, 403);
+    const parsed = managedOptionalEpochBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid handback request.' } }, 400);
+    try {
+      const actor = managedActor(c, parsed.data.clientId);
+      const payload = service.managedBrowserLive.handback(c.req.param('conversationId'), actor.actorKey, parsed.data.epoch);
+      return c.json({ ok: true, payload });
+    } catch (error) {
+      return managedErrorResponse(c, error);
+    }
+  });
+
+  authenticated.post('/api/browser/managed/:conversationId/input', bodyLimit({ maxSize: 16 * 1024 }), async (c) => {
+    c.header('Cache-Control', 'no-store');
+    if (!canViewBrowserPreview(c) || !service.managedBrowserLive) return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Browser input is not authorized.' } }, 403);
+    const parsed = managedInputBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid browser input payload.' } }, 400);
+    try {
+      const actor = managedActor(c, parsed.data.clientId);
+      await service.managedBrowserLive.input(
+        c.req.param('conversationId'),
+        actor.actorKey,
+        parsed.data.epoch,
+        parsed.data.seq,
+        parsed.data.event,
+      );
+      return c.body(null, 204);
+    } catch (error) {
+      return managedErrorResponse(c, error);
+    }
   });
 
   const snapshotPath = '/api/browser/preview/:requestId/snapshot';

@@ -117,6 +117,7 @@ export const BrowserUseSchema = Type.Object({
     Type.Literal('upload'),
     Type.Literal('tabs'),
     Type.Literal('sequence'),
+    Type.Literal('request_user'),
     Type.Literal('close'),
   ]),
   sessionId: SessionId,
@@ -145,6 +146,7 @@ export const BrowserUseSchema = Type.Object({
   ])),
   tabId: Type.Optional(Type.String()),
   steps: Type.Optional(Type.Array(SequenceStep, { minItems: 1, maxItems: 10 })),
+  reason: Type.Optional(Type.String({ minLength: 1, maxLength: 400, description: 'Short explanation shown to the user when requesting manual browser takeover (login, CAPTCHA, MFA, confirmation).' })),
 }, { additionalProperties: false });
 
 export type BrowserUseInput = Static<typeof BrowserUseSchema>;

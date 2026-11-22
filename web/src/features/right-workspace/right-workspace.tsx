@@ -413,7 +413,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
             closeOnNavigate={taskDrawer} visible={personalTasks || floatingPersonalTasks}
             onNavigate={floatingPersonalTasks ? () => closeFloatingTasks(false) : undefined} />, taskPanelHost)}
         </div> : null}
-        {visible && active?.kind === 'browser-preview' ? <BrowserPreviewPanel key={active.id} conversationId={scope} /> : null}
+        {visible && active?.kind === 'browser-preview' ? <BrowserPreviewPanel key={active.id} conversationId={scope} mode={active.mode} /> : null}
         {visible && phoneLayout ? <div id="phone-workspace-slot" data-phone-conversation-id={scope} className="flex min-h-0 flex-1 flex-col overflow-hidden" /> : null}
         {treeHome && !treeOnly ? <div data-workspace-file-placeholder className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <FileText className="size-9 text-fg-muted" strokeWidth={1.25} aria-hidden />

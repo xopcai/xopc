@@ -1,6 +1,7 @@
 import { parseUserTurnDocument, renderUserTurnDocument, type SessionInputControlCommand } from '@xopcai/gateway-contract';
 import crypto from 'node:crypto';
 import { consumePhoneAssistance, finishPhoneAssistance, phoneAssistance, queuePhoneAssistance, reconcilePhoneAssistance, type PhoneAssistance } from '../../phone/assistance.js';
+import { consumeBrowserAssistance, finishBrowserAssistance, queueBrowserAssistance, reconcileBrowserAssistance } from '../../browser/assistance.js';
 import { isDeepStrictEqual } from 'node:util';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
@@ -222,6 +223,11 @@ export class SessionInputCoordinator {
   }
   resumePhone(conversationId: string, waitId: string): void {
     queuePhoneAssistance(conversationId, waitId);
+    this.publish(conversationId);
+    void this.drain(conversationId);
+  }
+  resumeBrowser(conversationId: string, waitId: string): void {
+    queueBrowserAssistance(conversationId, waitId);
     this.publish(conversationId);
     void this.drain(conversationId);
   }
@@ -610,10 +616,11 @@ export class SessionInputCoordinator {
             continue;
           }
           allowed = allowed && readSessionInputControl(conversationId).phase !== 'stopping';
-          allowed = allowed && consumeConnectionResume(input) && consumeClarificationResume(input) && consumePhoneAssistance(input);
+          allowed = allowed && consumeConnectionResume(input) && consumeClarificationResume(input) && consumePhoneAssistance(input) && consumeBrowserAssistance(input);
         } catch (err) {
           log.warn({ err, conversationId, runId, inputId: input.id }, 'Session input preflight failed');
           finishPhoneAssistance(input, false);
+          finishBrowserAssistance(input, false);
           finishSessionInputRun(conversationId, runId, 'failed', 'Input preflight failed');
           if (input.kind === 'connection_resume') reconcileConnectionWaits();
           this.publish(conversationId);
@@ -622,6 +629,7 @@ export class SessionInputCoordinator {
         if (!allowed) {
           finishSessionInputRun(conversationId, runId, 'cancelled');
           finishPhoneAssistance(input, false);
+          finishBrowserAssistance(input, false);
           this.publish(conversationId);
           continue;
         }
@@ -665,6 +673,7 @@ export class SessionInputCoordinator {
             : 'failed';
         finishSessionInputRun(conversationId, runId, terminal, terminal === 'failed' ? result.summary : undefined);
         finishPhoneAssistance(input, terminal === 'completed');
+        finishBrowserAssistance(input, terminal === 'completed');
         this.publish(conversationId);
       }
     } finally {
@@ -799,7 +808,7 @@ export class SessionInputCoordinator {
   recover(): void {
     const interrupted = recoverSessionInputState();
     new TaskRunRepository().reconcileCancelledRuns();
-    for (const conversationId of new Set([...interrupted, ...reconcileConnectionWaits(true), ...reconcilePhoneAssistance()])) {
+    for (const conversationId of new Set([...interrupted, ...reconcileConnectionWaits(true), ...reconcilePhoneAssistance(), ...reconcileBrowserAssistance()])) {
       this.publish(conversationId);
       void this.drain(conversationId);
     }

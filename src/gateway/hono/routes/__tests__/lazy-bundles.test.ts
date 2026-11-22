@@ -468,6 +468,13 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/browser/tabs')?.id).toBe('browser');
     expect(findAuthenticatedLazyRouteBundle('/api/browser/preview/request-1/snapshot')?.id).toBe('browser');
     expect(findAuthenticatedLazyRouteBundle('/api/browser/preview/session-1')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/managed/session-1/frame')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/managed/session-1/takeover')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/managed/session-1/heartbeat')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/managed/session-1/release')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/managed/session-1/handback')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/managed/session-1/input')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browserish/managed/session-1/takeover')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/browserish/preview/session-1')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/browser/tab-bindings/session-1')?.id).toBe('browser');
     expect(findAuthenticatedLazyRouteBundle('/api/browserish/tab-bindings/session-1')).toBeUndefined();

@@ -13,4 +13,15 @@
   <string name="browser_preview_shrink">Shrink</string>
   <string name="browser_preview_expand">Expand</string>
   <string name="browser_preview_close">Close</string>
+  <string name="browser_preview_takeover">Take over browser</string>
+  <string name="browser_preview_handback">Done, continue task</string>
+  <string name="browser_preview_pause_control">Pause</string>
+  <string name="browser_preview_needs_user">Action needed in browser (login or confirmation).</string>
+  <string name="browser_preview_privacy_paused">Another device is controlling this browser. Live view is paused.</string>
+  <string name="browser_preview_type_text">Type text</string>
+  <string name="browser_preview_type_placeholder">Enter text to send to focused field</string>
+  <string name="browser_preview_send">Send</string>
+  <string name="browser_preview_enter_key">Enter</string>
+  <string name="browser_preview_back">Back</string>
+  <string name="browser_preview_reload">Reload</string>
 </resources>

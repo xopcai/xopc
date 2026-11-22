@@ -109,7 +109,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       errorMessage: result.errorMessage, hostSignalAborted: supervisor.signal.aborted,
       deadlineAtMs: supervisor.deadlineAtMs,
     }, result.ok ? 'Agent run completed' : `Agent run ended: ${result.errorMessage ?? 'unknown failure'}`);
-    turnCompleted = result.ok && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required' && result.stopReason !== 'phone_assistance_required';
+    turnCompleted = result.ok && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required' && result.stopReason !== 'phone_assistance_required' && result.stopReason !== 'browser_assistance_required';
     if (voiceTranscriptId && (isNaturalVoiceDelegation(findSessionInputByRunId(conversationId, runId))
       || (voiceToolExecuted && !voiceContentPublished))) {
       const text = result.ok ? result.lastAssistantText
@@ -125,7 +125,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
         } catch (err) { log.warn({ err, conversationId, runId }, 'Voice task result could not be shared in Chat'); }
       }
     }
-    if (result.stopReason === 'connection_required' || result.stopReason === 'clarification_required' || result.stopReason === 'phone_assistance_required') return result;
+    if (result.stopReason === 'connection_required' || result.stopReason === 'clarification_required' || result.stopReason === 'phone_assistance_required' || result.stopReason === 'browser_assistance_required') return result;
     try {
       const rows = await sessionStore.loadTranscriptRows(conversationId);
       const hasTurn = rows.some((source) => {

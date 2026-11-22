@@ -345,6 +345,13 @@ export class AgentToolsFactory {
             this.deps.emitBrowserEvent?.('browser.preview.target', { conversationId, runId, source });
           }
         },
+        publishManagedLive: (conversationId, source) => {
+          this.deps.emitBrowserEvent?.('browser.managed.live', {
+            conversationId,
+            source,
+            runtime: this.browserRuntime,
+          });
+        },
         resolveTarget: (conversationId) => {
           const binding = getBrowserTabBinding(conversationId);
           if (binding) return { kind: 'attached_tab', bindingId: binding.id };

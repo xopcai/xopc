@@ -142,6 +142,9 @@ import { SessionPreparationWorker } from './service/session-preparation-worker.j
 import { isBrowserSessionActive } from '../storage/sqlite/browser-session-repository.js';
 import { RealtimeRuntime } from '../realtime/runtime.js';
 import { BrowserPreviewRuntime, type BrowserPreviewTarget } from '../realtime/browser-preview.js';
+import { ManagedBrowserLiveRuntime } from '../browser/managed-live-runtime.js';
+import type { BrowserRuntime } from '../browser/runtime/browser-runtime.js';
+import type { ManagedBrowserLiveHandle } from '../browser/drivers/browser-driver.js';
 import { VoiceRealtimeRuntime } from '../voice/realtime/runtime.js';
 import { DurableVoiceAgentBroker } from '../voice/realtime/agentBroker.js';
 import { reconcileMemoryMaintenanceAutomations } from './memory-maintenance-automation-reconciler.js';
@@ -242,7 +245,16 @@ export class GatewayService {
     if (!principalId.startsWith('browser:')) return true;
     try { return isBrowserSessionActive(principalId.slice('browser:'.length), this.auth); } catch { return false; }
   };
+  private readonly managedBrowserRuntimes = new Map<string, BrowserRuntime>();
   readonly browserPreviews = new BrowserPreviewRuntime(conversationId => this.agentRunner?.getActiveRunId(conversationId));
+  readonly managedBrowserLive = new ManagedBrowserLiveRuntime({
+    isRunActive: conversationId => Boolean(this.agentRunner?.getActiveRunId(conversationId)),
+    waitForIdle: conversationId => this.managedBrowserRuntimes.get(conversationId)?.waitForIdle(conversationId) ?? Promise.resolve(),
+    pinSession: conversationId => this.managedBrowserRuntimes.get(conversationId)?.pinSession(conversationId),
+    unpinSession: conversationId => this.managedBrowserRuntimes.get(conversationId)?.unpinSession(conversationId),
+    setHumanControlled: (conversationId, active) => this.managedBrowserRuntimes.get(conversationId)?.setHumanControlled(conversationId, active),
+    resumeBrowserAssistance: (conversationId, waitId) => this.resumeBrowserAssistance(conversationId, waitId),
+  });
   readonly realtime = new RealtimeRuntime(this.endpointTools, this.isRealtimePrincipalActive, this.browserPreviews);
   readonly phoneStreams = new PhoneStreamGateway(this.isRealtimePrincipalActive);
   readonly voiceRealtime = new VoiceRealtimeRuntime({
@@ -833,6 +845,21 @@ export class GatewayService {
       getPhoneSetupService: () => this.phoneSetup,
       canConfigureEndpoint: endpointId => this.realtime.canConfigureEndpoint(endpointId),
       emitBrowserEvent: (type, payload) => {
+        if (type === 'browser.managed.live') {
+          const { conversationId, source, runtime } = payload as {
+            conversationId: string;
+            source?: { browserSessionId: string; handle: ManagedBrowserLiveHandle; url: string; title: string };
+            runtime?: BrowserRuntime;
+          };
+          if (source) {
+            if (runtime) this.managedBrowserRuntimes.set(conversationId, runtime);
+            this.managedBrowserLive.setSource(conversationId, source);
+          } else {
+            this.managedBrowserRuntimes.delete(conversationId);
+            this.managedBrowserLive.clearSource(conversationId);
+          }
+          return;
+        }
         if (type !== 'browser.preview.target') { this.emit(type, payload); return; }
         const { conversationId, runId, source } = payload as Pick<BrowserPreviewTarget, 'conversationId' | 'runId'>
           & { source?: Omit<BrowserPreviewTarget, 'conversationId' | 'runId'> };
@@ -1213,6 +1240,9 @@ export class GatewayService {
   }
   resumePhoneAssistance(conversationId: string, waitId: string): void {
     this.agentRunner.inputs.resumePhone(conversationId, waitId);
+  }
+  resumeBrowserAssistance(conversationId: string, waitId: string): void {
+    this.agentRunner.inputs.resumeBrowser(conversationId, waitId);
   }
 
   withSessionInputSubmission<T>(conversationId: string, operation: () => Promise<T>): Promise<T> {
@@ -1933,6 +1963,7 @@ export class GatewayService {
     const { getPhoneRuntime } = await import('../phone/runtime.js');
     await getPhoneRuntime().shutdown();
     this.phoneStreams.close();
+    this.managedBrowserLive.close();
     const { cancelAllPluginCliAuthorizations } = await import('../extensions/agent-plugins/cli-authorization.js');
     cancelAllPluginCliAuthorizations();
     this.taskAllocationDispatcher?.stop();

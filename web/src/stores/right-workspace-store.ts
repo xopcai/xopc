@@ -30,7 +30,7 @@ export type FileTab = {
 export type BrowserTab = { id: string; kind: 'browser'; title: string; initialUrl?: string; visitedAt: number; returnTo?: string };
 export type PhoneTab = { id: string; kind: 'phone'; phoneSessionId: string; title: string; visitedAt: number; returnTo?: string };
 export const PERSONAL_TASKS_TAB_ID = 'personal-tasks';
-export type WorkspaceTab = PhoneTab | BrowserTab | { id: string; kind: 'browser-preview'; title: string; visitedAt: number; returnTo?: string } | { id: string; kind: 'home' | 'files' | 'personal-tasks'; title: string; visitedAt: number; returnTo?: string } | FileTab | { id: string; kind: 'sidechat'; sideChatId: string; title: string; visitedAt: number; returnTo?: string };
+export type WorkspaceTab = PhoneTab | BrowserTab | { id: string; kind: 'browser-preview'; mode?: 'extension' | 'managed'; title: string; visitedAt: number; returnTo?: string } | { id: string; kind: 'home' | 'files' | 'personal-tasks'; title: string; visitedAt: number; returnTo?: string } | FileTab | { id: string; kind: 'sidechat'; sideChatId: string; title: string; visitedAt: number; returnTo?: string };
 export type WorkspacePane = { open: boolean; tabs: WorkspaceTab[]; activeId: string | null; personalDetailsOpen?: boolean };
 export const EMPTY_WORKSPACE_PANE: WorkspacePane = { open: false, tabs: [], activeId: null };
 
@@ -90,7 +90,7 @@ type State = Stored & {
   openFiles: (scope?: string) => void;
   openPersonalTasks: (scope: string) => void;
   closePersonalTasks: (scope: string) => void;
-  openBrowserPreview: (scope: string) => void;
+  openBrowserPreview: (scope: string, mode?: 'extension' | 'managed') => void;
   openBrowser: (url?: string, scope?: string, returnTo?: string) => string;
   updateBrowserTitle: (id: string, title: string) => void;
   setScope: (scope: string) => void;
@@ -164,11 +164,12 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
       });
       return id;
     },
-    openBrowserPreview: scope => {
+    openBrowserPreview: (scope, mode) => {
       const id = `browser-preview:${scope}`;
       commit(scope, pane => ({ ...pane, open: true, activeId: id,
-        tabs: pane.tabs.some(tab => tab.id === id) ? pane.tabs
-          : [...pane.tabs, { id, kind: 'browser-preview', title: 'Browser preview', visitedAt: Date.now() }],
+        tabs: pane.tabs.some(tab => tab.id === id)
+          ? pane.tabs.map(tab => tab.id === id && tab.kind === 'browser-preview' ? { ...tab, ...(mode ? { mode } : {}) } : tab)
+          : [...pane.tabs, { id, kind: 'browser-preview', ...(mode ? { mode } : {}), title: 'Browser preview', visitedAt: Date.now() }],
       }));
     },
     openBrowser: (initialUrl, scope = get().scope, returnTo) => {

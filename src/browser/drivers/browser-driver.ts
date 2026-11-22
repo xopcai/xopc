@@ -13,10 +13,57 @@ export type BrowserPrimitiveInput = Exclude<
   BrowserNavigateInput | BrowserObserveInput | BrowserTabsInput | { action: 'sequence' } | { action: 'close' }
 >;
 
+export type BrowserInteractiveKey =
+  | 'Enter'
+  | 'Backspace'
+  | 'Tab'
+  | 'Escape'
+  | 'Delete'
+  | 'Home'
+  | 'End'
+  | 'PageUp'
+  | 'PageDown'
+  | 'Space'
+  | 'ArrowUp'
+  | 'ArrowDown'
+  | 'ArrowLeft'
+  | 'ArrowRight';
+
+export type BrowserInteractiveInput =
+  | { kind: 'pointer'; phase: 'down' | 'move' | 'up' | 'cancel' | 'click'; x: number; y: number; button?: 'left' | 'right' | 'middle' }
+  | { kind: 'wheel'; x: number; y: number; deltaX: number; deltaY: number }
+  | { kind: 'text'; text: string }
+  | { kind: 'key'; key: BrowserInteractiveKey }
+  | { kind: 'navigate'; action: 'back' | 'forward' | 'reload' };
+
+export interface ManagedBrowserFrame {
+  bytes: Uint8Array;
+  width: number;
+  height: number;
+  timestamp: number;
+}
+
+export interface ManagedBrowserViewport {
+  width: number;
+  height: number;
+  version: number;
+}
+
+export interface ManagedBrowserLiveHandle {
+  readonly sessionId: string;
+  getViewport(): ManagedBrowserViewport;
+  getUrl(): string;
+  getTitle(): Promise<string>;
+  startScreencast(onFrame: (frame: ManagedBrowserFrame) => void): Promise<() => Promise<void>>;
+  dispatchInput(input: BrowserInteractiveInput): Promise<void>;
+  invalidateRefs(): void;
+}
+
 export interface BrowserDriver {
   readonly kind: 'playwright' | 'extension' | 'desktop';
   readonly abortClosesSession?: boolean;
   previewEndpoint?(sessionId: string): string | undefined;
+  getLiveHandle?(sessionId: string): ManagedBrowserLiveHandle | undefined;
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   createSession(sessionId: string): Promise<void>;

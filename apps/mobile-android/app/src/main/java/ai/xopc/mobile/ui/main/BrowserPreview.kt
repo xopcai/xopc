@@ -10,7 +10,9 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,14 +21,20 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -45,7 +54,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -53,17 +65,26 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.webkit.WebViewAssetLoader
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.BrowserPreviewAccess
+import ai.xopc.mobile.gateway.BrowserPreviewStatus
 import ai.xopc.mobile.gateway.GatewayHttpException
+import ai.xopc.mobile.gateway.ManagedBrowserFrameResult
 import java.io.ByteArrayInputStream
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 internal val LocalBrowserPreviewOpen = staticCompositionLocalOf<(() -> Unit)?> { null }
 
-private data class PreviewSelection(val conversationId: String, val title: String, val instanceId: String = UUID.randomUUID().toString())
+private data class PreviewSelection(
+  val conversationId: String,
+  val title: String,
+  val mode: String = "extension",
+  val instanceId: String = UUID.randomUUID().toString(),
+)
 
 private val TERMINAL_STATES = setOf("ended", "expired", "busy", "unavailable")
 
@@ -73,35 +94,359 @@ internal fun BrowserPreviewHost(access: BrowserPreviewAccess?, connection: Conne
   val conversationId = connection.selectedConversationId
   val connected = connection.realtimeStatus == "connected"
   var selection by remember(gatewayId, access) { mutableStateOf<PreviewSelection?>(null) }
-  var available by remember(gatewayId, conversationId, connection.activeRunId, connected) { mutableStateOf(false) }
+  var previewStatus by remember(gatewayId, conversationId, connected) { mutableStateOf<BrowserPreviewStatus?>(null) }
   LaunchedEffect(access, gatewayId, conversationId, connection.activeRunId, connected) {
-    if (access == null || gatewayId == null || conversationId == null || connection.activeRunId == null || !connected) return@LaunchedEffect
+    if (access == null || gatewayId == null || conversationId == null || !connected) {
+      previewStatus = null
+      return@LaunchedEffect
+    }
     while (isActive) {
-      available = try { access.available(gatewayId, conversationId) }
+      previewStatus = try { access.status(gatewayId, conversationId) }
       catch (cancelled: CancellationException) { throw cancelled }
-      catch (_: Exception) { false }
-      delay(1800)
+      catch (_: Exception) { null }
+      delay(if (connection.activeRunId != null || previewStatus?.status == "needs_user") 1800 else 3500)
     }
   }
   LaunchedEffect(connected) { if (!connected) selection = null }
-  LifecycleEventEffect(Lifecycle.Event.ON_STOP) { selection = null }
+  LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+    if (selection?.mode != "managed") selection = null
+  }
   val fallbackTitle = stringResource(R.string.browser_preview_open)
+  val available = previewStatus?.available == true
+  val detectedMode = previewStatus?.mode ?: "extension"
   val open: (() -> Unit)? = if (available && conversationId != null) {
-    { selection = PreviewSelection(conversationId, connection.conversations.find { it.id == conversationId }?.title ?: fallbackTitle) }
+    { selection = PreviewSelection(conversationId, connection.conversations.find { it.id == conversationId }?.title ?: fallbackTitle, detectedMode) }
   } else null
   CompositionLocalProvider(LocalBrowserPreviewOpen provides open) {
     Box(Modifier.fillMaxSize()) {
       content()
       val current = selection
       if (access != null && gatewayId != null && current != null) key(current) {
-        AndroidBrowserPreview(
-          access = access,
-          gatewayId = gatewayId,
-          selection = current,
-          onRetry = { selection = current.copy(instanceId = UUID.randomUUID().toString()) },
-          onClose = { selection = null },
-        )
+        if (current.mode == "managed") {
+          AndroidManagedBrowserPreview(
+            access = access,
+            gatewayId = gatewayId,
+            selection = current,
+            onClose = { selection = null },
+          )
+        } else {
+          AndroidBrowserPreview(
+            access = access,
+            gatewayId = gatewayId,
+            selection = current,
+            onRetry = { selection = current.copy(instanceId = UUID.randomUUID().toString()) },
+            onClose = { selection = null },
+          )
+        }
       }
+    }
+  }
+}
+
+private fun normalizedImagePoint(
+  boxSize: IntSize,
+  bitmapWidth: Int,
+  bitmapHeight: Int,
+  x: Float,
+  y: Float,
+): Pair<Double, Double>? {
+  if (boxSize.width <= 0 || boxSize.height <= 0 || bitmapWidth <= 0 || bitmapHeight <= 0) return null
+  val boxRatio = boxSize.width.toFloat() / boxSize.height.toFloat()
+  val contentRatio = bitmapWidth.toFloat() / bitmapHeight.toFloat()
+  var drawW = boxSize.width.toFloat()
+  var drawH = boxSize.height.toFloat()
+  var offsetX = 0f
+  var offsetY = 0f
+  if (contentRatio > boxRatio) {
+    drawH = boxSize.width.toFloat() / contentRatio
+    offsetY = (boxSize.height - drawH) / 2f
+  } else {
+    drawW = boxSize.height.toFloat() * contentRatio
+    offsetX = (boxSize.width - drawW) / 2f
+  }
+  val relX = (x - offsetX) / drawW
+  val relY = (y - offsetY) / drawH
+  if (relX < 0f || relX > 1f || relY < 0f || relY > 1f) return null
+  return relX.coerceIn(0f, 1f).toDouble() to relY.coerceIn(0f, 1f).toDouble()
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AndroidManagedBrowserPreview(
+  access: BrowserPreviewAccess,
+  gatewayId: String,
+  selection: PreviewSelection,
+  onClose: () -> Unit,
+) {
+  val scope = rememberCoroutineScope()
+  val clientId = remember { UUID.randomUUID().toString() }
+  val seq = remember { AtomicInteger(0) }
+  var expanded by remember { mutableStateOf(true) }
+  var corner by remember { mutableStateOf(Alignment.TopEnd) }
+  var status by remember { mutableStateOf<BrowserPreviewStatus?>(null) }
+  var frame by remember { mutableStateOf<Bitmap?>(null) }
+  var privacyPaused by remember { mutableStateOf(false) }
+  var ended by remember { mutableStateOf(false) }
+  var busy by remember { mutableStateOf(false) }
+  var textOpen by remember { mutableStateOf(false) }
+  var draft by remember { mutableStateOf("") }
+  var viewportBox by remember { mutableStateOf(IntSize.Zero) }
+
+  val ownControl = status?.ownControl == true
+  val controlEpoch = status?.controlEpoch ?: 0
+
+  fun sendManagedEvent(event: JSONObject) {
+    val currentEpoch = status?.controlEpoch ?: 0
+    if (status?.ownControl != true || currentEpoch <= 0) return
+    val nextSeq = seq.incrementAndGet()
+    scope.launch {
+      try {
+        access.managedInput(gatewayId, selection.conversationId, clientId, currentEpoch, nextSeq, event)
+      } catch (_: Exception) {
+        /* Status/heartbeat reconciles lost control leases. */
+      }
+    }
+  }
+
+  fun releaseControl() {
+    val currentEpoch = status?.controlEpoch
+    if (status?.ownControl != true) return
+    status = status?.copy(ownControl = false, status = if (status?.assistanceId != null) "needs_user" else "running")
+    scope.launch {
+      runCatching { access.managedRelease(gatewayId, selection.conversationId, clientId, currentEpoch) }
+    }
+  }
+
+  LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+    releaseControl()
+  }
+
+  DisposableEffect(access, gatewayId, selection.conversationId, clientId) {
+    onDispose {
+      val currentEpoch = status?.controlEpoch
+      if (status?.ownControl == true) {
+        scope.launch {
+          runCatching { access.managedRelease(gatewayId, selection.conversationId, clientId, currentEpoch) }
+        }
+      }
+    }
+  }
+
+  // Poll status
+  LaunchedEffect(access, gatewayId, selection.conversationId, clientId) {
+    while (isActive) {
+      val latest = try { access.status(gatewayId, selection.conversationId, clientId) }
+      catch (cancelled: CancellationException) { throw cancelled }
+      catch (_: Exception) { null }
+      if (latest != null) {
+        status = latest
+        privacyPaused = latest.privacyPaused
+        if (!latest.available) ended = true
+      }
+      delay(2000)
+    }
+  }
+
+  // Heartbeat while controlling
+  LaunchedEffect(ownControl, controlEpoch) {
+    if (!ownControl || controlEpoch <= 0) return@LaunchedEffect
+    while (isActive) {
+      delay(3000)
+      try {
+        status = access.managedHeartbeat(gatewayId, selection.conversationId, clientId, controlEpoch)
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        status = status?.copy(ownControl = false)
+        break
+      }
+    }
+  }
+
+  // Immediate-wakeup frame stream
+  LaunchedEffect(access, gatewayId, selection.conversationId, clientId) {
+    var after = 0L
+    while (isActive && !ended) {
+      val result = try { access.managedFrame(gatewayId, selection.conversationId, clientId, after) }
+      catch (cancelled: CancellationException) { throw cancelled }
+      catch (_: Exception) { delay(500); ManagedBrowserFrameResult.Empty }
+      when (result) {
+        is ManagedBrowserFrameResult.Frame -> {
+          after = result.seq
+          frame = result.bitmap
+          privacyPaused = false
+        }
+        ManagedBrowserFrameResult.PrivacyPaused -> {
+          frame = null
+          privacyPaused = true
+          delay(800)
+        }
+        ManagedBrowserFrameResult.Unavailable -> {
+          frame = null
+          ended = true
+        }
+        ManagedBrowserFrameResult.Empty -> Unit
+      }
+    }
+  }
+
+  fun startTakeover() {
+    if (busy) return
+    busy = true
+    scope.launch {
+      try {
+        val next = access.managedTakeover(gatewayId, selection.conversationId, clientId)
+        seq.set(0)
+        status = next
+        privacyPaused = false
+      } catch (_: Exception) {
+        /* Keep viewing state on contention or transient failure. */
+      } finally {
+        busy = false
+      }
+    }
+  }
+
+  fun completeHandback() {
+    if (busy) return
+    busy = true
+    scope.launch {
+      try {
+        val next = access.managedHandback(gatewayId, selection.conversationId, clientId, status?.controlEpoch)
+        status = next
+      } catch (_: Exception) {
+        /* User can retry handback if network dropped. */
+      } finally {
+        busy = false
+      }
+    }
+  }
+
+  if (ownControl) {
+    Surface(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding()) {
+      Column(Modifier.fillMaxSize()) {
+        Row(
+          Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Text(
+            status?.url?.ifBlank { selection.title } ?: selection.title,
+            Modifier.weight(1f).padding(end = 8.dp),
+            maxLines = 1,
+            style = MaterialTheme.typography.labelLarge,
+          )
+          TextButton(onClick = { sendManagedEvent(JSONObject().put("kind", "navigate").put("action", "back")) }) {
+            Text(stringResource(R.string.browser_preview_back))
+          }
+          TextButton(onClick = { sendManagedEvent(JSONObject().put("kind", "navigate").put("action", "reload")) }) {
+            Text(stringResource(R.string.browser_preview_reload))
+          }
+          TextButton(onClick = { releaseControl() }) {
+            Text(stringResource(R.string.browser_preview_pause_control))
+          }
+        }
+        Box(
+          Modifier.weight(1f).fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLowest)
+            .onSizeChanged { viewportBox = it }
+            .pointerInput(controlEpoch, frame) {
+              detectTapGestures { offset ->
+                val bmp = frame ?: return@detectTapGestures
+                val point = normalizedImagePoint(viewportBox, bmp.width, bmp.height, offset.x, offset.y) ?: return@detectTapGestures
+                sendManagedEvent(JSONObject().put("kind", "pointer").put("phase", "click").put("x", point.first).put("y", point.second))
+              }
+            }
+            .pointerInput(controlEpoch, frame) {
+              detectDragGestures { change, dragAmount ->
+                change.consume()
+                val bmp = frame ?: return@detectDragGestures
+                val point = normalizedImagePoint(viewportBox, bmp.width, bmp.height, change.position.x, change.position.y) ?: return@detectDragGestures
+                sendManagedEvent(JSONObject().put("kind", "wheel").put("x", point.first).put("y", point.second)
+                  .put("deltaX", -dragAmount.x * 2.0).put("deltaY", -dragAmount.y * 2.0))
+              }
+            },
+        ) {
+          val currentFrame = frame
+          if (currentFrame != null) {
+            Image(currentFrame.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+          } else {
+            CircularProgressIndicator(Modifier.align(Alignment.Center))
+          }
+        }
+        Row(
+          Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          TextButton(onClick = { draft = ""; textOpen = true }, enabled = !busy) {
+            Text(stringResource(R.string.browser_preview_type_text))
+          }
+          TextButton(onClick = { sendManagedEvent(JSONObject().put("kind", "key").put("key", "Enter")) }, enabled = !busy) {
+            Text(stringResource(R.string.browser_preview_enter_key))
+          }
+          Button(
+            onClick = { completeHandback() },
+            enabled = !busy,
+            modifier = Modifier.weight(1f).height(44.dp),
+          ) {
+            Text(stringResource(R.string.browser_preview_handback))
+          }
+        }
+      }
+    }
+    if (textOpen) {
+      ModalBottomSheet(onDismissRequest = { textOpen = false; draft = "" }) {
+        Column(Modifier.fillMaxWidth().imePadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+          Text(stringResource(R.string.browser_preview_type_text), style = MaterialTheme.typography.titleLarge)
+          OutlinedTextField(
+            value = draft,
+            onValueChange = { draft = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text(stringResource(R.string.browser_preview_type_placeholder)) },
+          )
+          Button(
+            onClick = {
+              val value = draft
+              draft = ""
+              textOpen = false
+              if (value.isNotEmpty()) sendManagedEvent(JSONObject().put("kind", "text").put("text", value))
+            },
+            enabled = draft.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Text(stringResource(R.string.browser_preview_send))
+          }
+        }
+      }
+    }
+    return
+  }
+
+  val windowState = when {
+    ended -> "ended"
+    privacyPaused -> "privacy_paused"
+    status?.status == "needs_user" -> "needs_user"
+    frame != null -> "playing"
+    else -> "connecting"
+  }
+  BrowserPreviewWindow(
+    title = selection.title,
+    source = status?.reason ?: status?.url.orEmpty(),
+    state = windowState,
+    quality = "normal",
+    expanded = expanded,
+    corner = corner,
+    onToggle = { expanded = !expanded },
+    onMove = { corner = it },
+    onClose = onClose,
+    primaryActionLabel = if (!ended && !privacyPaused) stringResource(R.string.browser_preview_takeover) else null,
+    onPrimaryAction = if (!ended && !privacyPaused && !busy) ({ startTakeover() }) else null,
+  ) {
+    val currentFrame = frame
+    if (currentFrame != null && !privacyPaused && !ended) {
+      Image(currentFrame.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+    } else if (!ended && !privacyPaused) {
+      CircularProgressIndicator(Modifier.align(Alignment.Center))
     }
   }
 }
@@ -271,6 +616,8 @@ private fun AndroidBrowserPreview(
 internal fun BrowserPreviewWindow(title: String, source: String, state: String, quality: String,
   expanded: Boolean, corner: Alignment, onToggle: () -> Unit, onMove: (Alignment) -> Unit, onClose: () -> Unit,
   onRetry: (() -> Unit)? = null,
+  primaryActionLabel: String? = null,
+  onPrimaryAction: (() -> Unit)? = null,
   content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
   var dragX by remember(expanded, corner) { mutableStateOf(0f) }
   var dragY by remember(expanded, corner) { mutableStateOf(0f) }
@@ -305,6 +652,8 @@ internal fun BrowserPreviewWindow(title: String, source: String, state: String, 
         val text = when (state) {
           "waiting" -> R.string.browser_preview_waiting
           "snapshot" -> R.string.browser_preview_snapshot
+          "needs_user" -> R.string.browser_preview_needs_user
+          "privacy_paused" -> R.string.browser_preview_privacy_paused
           "ended" -> R.string.browser_preview_ended
           "expired" -> R.string.browser_preview_expired
           "busy" -> R.string.browser_preview_busy
@@ -315,6 +664,9 @@ internal fun BrowserPreviewWindow(title: String, source: String, state: String, 
         Text(stringResource(text), Modifier.padding(horizontal = 10.dp, vertical = 5.dp), style = MaterialTheme.typography.bodySmall)
         if (expanded && source.isNotBlank()) Text(source, Modifier.padding(horizontal = 10.dp), maxLines = 1, style = MaterialTheme.typography.labelSmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+          if (primaryActionLabel != null && onPrimaryAction != null) {
+            TextButton(onClick = onPrimaryAction) { Text(primaryActionLabel) }
+          }
           if (onRetry != null) {
             TextButton(onClick = onRetry) { Text(stringResource(R.string.browser_preview_retry)) }
           }

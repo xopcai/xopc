@@ -1054,7 +1054,9 @@ export class AgentService {
     await this.cancelConfigurationSetups(key);
     const { getPhoneRuntime } = await import('../phone/runtime.js');
     const { cancelPhoneAssistance } = await import('../phone/assistance.js');
+    const { cancelBrowserAssistance } = await import('../browser/assistance.js');
     cancelPhoneAssistance(key); await getPhoneRuntime().stop(key, 'close');
+    cancelBrowserAssistance(key);
     const task = await this.sessionStore.reset(key);
     if (!task) {
       return null;

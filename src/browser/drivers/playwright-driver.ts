@@ -16,7 +16,14 @@ import type {
 import type { Browser, BrowserContext, ElementHandle, Page } from 'playwright-core';
 
 import { verifyBrowserExpectation } from '../verification/expectation.js';
-import type { BrowserDriver, BrowserPrimitiveInput } from './browser-driver.js';
+import type {
+  BrowserDriver,
+  BrowserInteractiveInput,
+  BrowserPrimitiveInput,
+  ManagedBrowserFrame,
+  ManagedBrowserLiveHandle,
+  ManagedBrowserViewport,
+} from './browser-driver.js';
 
 export interface PlaywrightConnection {
   browser: Browser;
@@ -90,6 +97,153 @@ export class PlaywrightDriver implements BrowserDriver {
   constructor(private readonly options: PlaywrightDriverOptions) {}
 
   get abortClosesSession(): boolean { return this.options.isolateSessions === true; }
+
+  getLiveHandle(sessionId: string): ManagedBrowserLiveHandle | undefined {
+    if (!this.sessions.has(sessionId)) return undefined;
+    const activePage = (): Page => {
+      const session = this.sessions.get(sessionId);
+      const state = session?.tabs.get(session.activeTabId);
+      if (!state) throw new Error('The managed browser session is closed.');
+      return state.page;
+    };
+    const getViewport = (): ManagedBrowserViewport => {
+      const session = this.sessions.get(sessionId);
+      const state = session?.tabs.get(session.activeTabId);
+      const size = state?.page.viewportSize();
+      return { width: size?.width ?? 1280, height: size?.height ?? 720, version: 1 };
+    };
+    return {
+      sessionId,
+      getViewport,
+      getUrl: () => {
+        const session = this.sessions.get(sessionId);
+        return session?.tabs.get(session.activeTabId)?.page.url() ?? '';
+      },
+      getTitle: async () => {
+        const session = this.sessions.get(sessionId);
+        const page = session?.tabs.get(session.activeTabId)?.page;
+        return page ? await page.title().catch(() => '') : '';
+      },
+      startScreencast: async (onFrame: (frame: ManagedBrowserFrame) => void) => {
+        const session = this.sessions.get(sessionId);
+        const state = session?.tabs.get(session.activeTabId);
+        if (!session || !state) throw new Error('The managed browser session is closed.');
+        let stopped = false;
+        let currentCdp: Awaited<ReturnType<BrowserContext['newCDPSession']>> | undefined;
+        let attachedPage: Page | undefined;
+
+        const attach = async (page: Page): Promise<void> => {
+          if (stopped || attachedPage === page) return;
+          const previous = currentCdp;
+          currentCdp = undefined;
+          attachedPage = page;
+          if (previous) {
+            await previous.send('Page.stopScreencast').catch(() => {});
+            await previous.detach().catch(() => {});
+          }
+          const initial = await page.screenshot({ type: 'jpeg', quality: 65, fullPage: false, scale: 'css' }).catch(() => null);
+          if (!stopped && initial && initial.length > 0) {
+            const vp = getViewport();
+            onFrame({ bytes: Uint8Array.from(initial), width: vp.width, height: vp.height, timestamp: Date.now() });
+          }
+          if (stopped) return;
+          const cdp = await session.context.newCDPSession(page);
+          if (stopped) { await cdp.detach().catch(() => {}); return; }
+          currentCdp = cdp;
+          cdp.on('Page.screencastFrame', (event: { data: string; sessionId: number; metadata?: { deviceWidth?: number; deviceHeight?: number } }) => {
+            void cdp.send('Page.screencastFrameAck', { sessionId: event.sessionId }).catch(() => {});
+            if (stopped || currentCdp !== cdp) return;
+            const bytes = Uint8Array.from(Buffer.from(event.data, 'base64'));
+            const vp = getViewport();
+            onFrame({
+              bytes,
+              width: event.metadata?.deviceWidth ?? vp.width,
+              height: event.metadata?.deviceHeight ?? vp.height,
+              timestamp: Date.now(),
+            });
+          });
+          await cdp.send('Page.startScreencast', {
+            format: 'jpeg',
+            quality: 65,
+            maxWidth: 1280,
+            maxHeight: 720,
+            everyNthFrame: 1,
+          });
+        };
+
+        await attach(state.page);
+        const tabWatcher = setInterval(() => {
+          if (stopped) return;
+          const current = this.sessions.get(sessionId);
+          const nextPage = current?.tabs.get(current.activeTabId)?.page;
+          if (nextPage && nextPage !== attachedPage) void attach(nextPage).catch(() => {});
+        }, 500);
+        tabWatcher.unref?.();
+
+        return async () => {
+          if (stopped) return;
+          stopped = true;
+          clearInterval(tabWatcher);
+          const cdp = currentCdp;
+          currentCdp = undefined;
+          attachedPage = undefined;
+          if (cdp) {
+            await cdp.send('Page.stopScreencast').catch(() => {});
+            await cdp.detach().catch(() => {});
+          }
+        };
+      },
+      dispatchInput: async (input: BrowserInteractiveInput) => {
+        const page = activePage();
+        const vp = getViewport();
+        const clamp = (value: number) => Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
+        if (input.kind === 'pointer') {
+          const px = Math.round(clamp(input.x) * vp.width);
+          const py = Math.round(clamp(input.y) * vp.height);
+          const button = input.button ?? 'left';
+          if (input.phase === 'click') {
+            await page.mouse.click(px, py, { button });
+          } else if (input.phase === 'down') {
+            await page.mouse.move(px, py);
+            await page.mouse.down({ button });
+          } else if (input.phase === 'move') {
+            await page.mouse.move(px, py);
+          } else if (input.phase === 'up') {
+            await page.mouse.move(px, py);
+            await page.mouse.up({ button });
+          } else if (input.phase === 'cancel') {
+            await page.mouse.up({ button }).catch(() => {});
+          }
+        } else if (input.kind === 'wheel') {
+          const px = Math.round(clamp(input.x) * vp.width);
+          const py = Math.round(clamp(input.y) * vp.height);
+          const dx = Math.max(-2000, Math.min(2000, Number.isFinite(input.deltaX) ? input.deltaX : 0));
+          const dy = Math.max(-2000, Math.min(2000, Number.isFinite(input.deltaY) ? input.deltaY : 0));
+          await page.mouse.move(px, py);
+          await page.mouse.wheel(dx, dy);
+        } else if (input.kind === 'text') {
+          if (input.text.length > 0 && input.text.length <= 1024) {
+            await page.keyboard.insertText(input.text);
+          }
+        } else if (input.kind === 'key') {
+          await page.keyboard.press(input.key);
+        } else if (input.kind === 'navigate') {
+          if (input.action === 'back') await page.goBack({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
+          else if (input.action === 'forward') await page.goForward({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
+          else if (input.action === 'reload') await page.reload({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
+        }
+      },
+      invalidateRefs: () => {
+        const session = this.sessions.get(sessionId);
+        if (!session) return;
+        for (const tab of session.tabs.values()) {
+          tab.refs.clear();
+          tab.lastNodes = [];
+          tab.documentMarker = '';
+        }
+      },
+    };
+  }
 
   async connect(): Promise<void> {
     if (this.connection?.browser.isConnected()) return;

@@ -1,4 +1,5 @@
 import { isPhoneAssistanceSuspended } from '../../phone/assistance.js';
+import { isBrowserAssistanceSuspended } from '../../browser/assistance.js';
 import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
 import { isClarificationSuspended } from '../../storage/sqlite/clarification-wait-repository.js';
 import crypto from 'crypto';
@@ -312,14 +313,15 @@ export async function *runGatewayAgent(
 
         const connectionSuspended = isConnectionSuspended(conversationId, runId);
         const clarificationSuspended = isClarificationSuspended(conversationId, runId);
-        const suspended = connectionSuspended || clarificationSuspended || isPhoneAssistanceSuspended(conversationId, runId);
+        const browserSuspended = isBrowserAssistanceSuspended(conversationId, runId);
+        const suspended = connectionSuspended || clarificationSuspended || isPhoneAssistanceSuspended(conversationId, runId) || browserSuspended;
         const cancelled = mergedSignal.aborted || embeddedAborted;
         const endStatus = cancelled ? 'cancelled' : suspended ? 'suspended' : streamError ? 'error' : 'success';
         const endSummary = cancelled
           ? 'Interrupted'
           : connectionSuspended
             ? 'Waiting for connection'
-            : clarificationSuspended
+            : clarificationSuspended || browserSuspended
               ? 'Waiting for user input'
               : streamError ?? 'Message processed successfully';
         taskRunStatus = cancelled ? 'cancelled' : streamError ? 'failed' : 'succeeded';

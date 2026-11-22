@@ -1,8 +1,10 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { BrowserControlResult, BrowserObservation } from '@xopcai/browser-control-contract';
+import { requireBrowserAssistance } from '../../../../browser/assistance.js';
 import { formatBrowserObservation } from '../../../../browser/observation/format.js';
 import type { BrowserNotReadyError } from '../../../../browser/readiness.js';
 import type { BrowserRuntime } from '../../../../browser/runtime/browser-runtime.js';
+import { getEmbeddedExecutionRunId } from '../../../embedded/execution-context.js';
 
 import { BrowserUseSchema, browserUseInputError, decodeBrowserUseInput, type BrowserUseInput } from './schemas.js';
 
@@ -21,10 +23,39 @@ export function createBrowserUseTool(
     name: 'browser_use',
     label: '🌐 Browser',
     description:
-      'Control a persistent browser through typed semantic actions. Start with observe or navigate. Every click, fill, select, press, scroll, wait, upload, and sequence requires the numeric revision from the latest observation, even without an element ref. Use refs from that same observation. Read visible data from the latest observation, including labeled textbox values. Once the requested result is visible, report it and finish. Keep any verification in this browser session. Screenshots are attached only when requested or semantic observation is insufficient.',
+      'Control a persistent browser through typed semantic actions. Start with observe or navigate. Every click, fill, select, press, scroll, wait, upload, and sequence requires the numeric revision from the latest observation, even without an element ref. Use refs from that same observation. When a page requires manual login, CAPTCHA, MFA, or explicit user confirmation in the managed browser, call action="request_user" with a short reason to pause and let the user take over the live browser tab. Read visible data from the latest observation, including labeled textbox values. Once the requested result is visible, report it and finish. Keep any verification in this browser session. Screenshots are attached only when requested or semantic observation is insufficient.',
     parameters: BrowserUseSchema,
 
-    async execute(_toolCallId, params: BrowserUseInput, signal) {
+    async execute(toolCallId, params: BrowserUseInput, signal) {
+      if (params.action === 'request_user') {
+        const reason = typeof params.reason === 'string' && params.reason.trim()
+          ? params.reason.trim().slice(0, 400)
+          : '需要在浏览器中完成登录或人工确认。';
+        const conversationId = deps.getTaskId();
+        const runtime = deps.getRuntime();
+        const liveHandle = runtime.getLiveHandle(conversationId);
+        const browserSessionId = params.sessionId || liveHandle?.sessionId || runtime.getSessionId(conversationId);
+        const runId = getEmbeddedExecutionRunId();
+        if (!browserSessionId || !runId) {
+          return {
+            content: [{ type: 'text', text: '[INVALID_INPUT] Start a browser session first before requesting user takeover.' }],
+            details: { ok: false, kind: 'browser_error', error: { code: 'INVALID_INPUT', message: 'No active browser session for takeover.' } },
+          };
+        }
+        runtime.pinSession(conversationId);
+        const url = liveHandle?.getUrl() ?? '';
+        const title = liveHandle ? await liveHandle.getTitle().catch(() => '') : '';
+        const wait = requireBrowserAssistance(conversationId, runId, toolCallId, {
+          browserSessionId,
+          reason,
+          url,
+          title,
+        });
+        return {
+          content: [{ type: 'text', text: reason }],
+          details: { ok: true, kind: 'browser_assistance_required', waitId: wait.id, reason, browserSessionId, url },
+        };
+      }
       const input = decodeBrowserUseInput(params);
       if (!input) {
         const message = browserUseInputError(params.action, params.revision);
