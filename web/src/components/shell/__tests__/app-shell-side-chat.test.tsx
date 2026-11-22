@@ -163,12 +163,15 @@ describe('AppShell task Sidechat', () => {
     await render();
     await click('Open side chat');
     vi.mocked(fetchTask).mockResolvedValue(detail('replacement-conversation'));
-    await act(async () => {
-      window.dispatchEvent(new CustomEvent('task-changed-v2', { detail: {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await act(async () => window.dispatchEvent(new CustomEvent('task-changed-v2', { detail: {
         taskId: 'task-1', version: 2, source: 'agent', changedFields: ['conversation'], occurredAt: 1,
-      } }));
-      await new Promise((resolve) => window.setTimeout(resolve, 150));
-    });
+      } })));
+      await act(async () => vi.advanceTimersByTimeAsync(120));
+    } finally {
+      vi.useRealTimers();
+    }
     expect(container.querySelector('#app-side-chat-panel')).toBeNull();
     await click('Open side chat');
     expect(container.querySelector('#app-side-chat-panel')?.getAttribute('data-parent')).toBe('replacement-conversation');

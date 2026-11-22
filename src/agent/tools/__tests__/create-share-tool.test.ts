@@ -94,7 +94,7 @@ describe('create_share tool', () => {
     const text = res.content[0].text as string;
     expect(text).toContain('分享链接已生成');
     expect(text).toContain('标题：');
-    expect(text).toContain('当前可达性'); // local-only triggers warning
+    expect(text).toContain('当前访问范围'); // local-only triggers warning
   });
 
   it('renders text in en when getLocale returns en', async () => {
