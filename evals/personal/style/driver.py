@@ -74,7 +74,7 @@ def finish(result):
     if local.case_id != result["caseId"]:
         result["captureCaseId"] = local.case_id
     save(out / "cases" / (result["caseId"] + ".json"), result)
-    bridge("/finish", {"caseId": local.case_id, "suite": local.suite, "result": result})
+    bridge("/finish", {"caseId": local.case_id, "suite": local.suite, "result": result, **({"agentId": result["agentId"]} if result.get("agentId") else {})})
     return result
 
 
@@ -140,11 +140,12 @@ dimensions = [line.split(":", 1)[0].strip() for line in rubric.splitlines() if "
 def run_scripted(doc):
     local.case_id, local.suite = getattr(local, "capture_override", None) or doc["id"], "personal-p0-scripted"
     started = time.monotonic()
-    result = {"caseId": doc["id"], "category": doc["category"], "transcript": [], "turnObservations": []}
+    agent_id = doc.get("agentId")
+    result = {"caseId": doc["id"], "category": doc["category"], **({"agentId": agent_id} if agent_id else {}), "transcript": [], "turnObservations": []}
     try:
         for user_text in doc["userTurns"]:
             result["transcript"].append({"role": "user", "content": user_text})
-            response = completion("evaluated", result["transcript"])
+            response = completion("evaluated", result["transcript"], **({"agentId": agent_id} if agent_id else {}))
             answer = response["content"]
             result["turnObservations"].append({"turn": len(result["turnObservations"]) + 1, "latencyMs": response.get("latencyMs"), "firstDeltaMs": response.get("firstDeltaMs"), "usage": response.get("usage")})
             result["transcript"].append({"role": "assistant", "content": answer})

@@ -100,6 +100,7 @@ Object.assign(process.env, { XOPC_STATE_DIR: state, XOPC_CONFIG_PATH: configPath
 await import('../../../src/infra/http-proxy-env.js');
 const { openXopcDatabase, closeXopcDatabase, getSqliteDatabase, setSessionConfig } = await import('../../../src/storage/sqlite/index.js');
 const { AgentCatalogRepository } = await import('../../../src/agent-catalog/repository.js');
+const { ensureStarterAgentsInitialized } = await import('../../../src/agent/starter-agents.js');
 const { createConversation } = await import('../../../src/storage/sqlite/conversation-repository.js');
 const { GatewayService } = await import('../../../src/gateway/service.js');
 const { createHonoApp } = await import('../../../src/gateway/hono/app.js');
@@ -107,6 +108,9 @@ const { resolveModel } = await import('../../../src/providers/index.js');
 const { completeWithResolvedCredentials } = await import('../../../src/providers/model-call.js');
 openXopcDatabase({ path: join(state, 'xopc.db') });
 const catalog = new AgentCatalogRepository(); catalog.ensureInitialized(defaults);
+if (dialogueFixtures && JSON.parse(readFileSync(dialogueFixtures, 'utf8')).cases?.some((c: any) => typeof c.agentId === 'string' && c.agentId.trim())) {
+  ensureStarterAgentsInitialized();
+}
 const service = new GatewayService({ configPath, enableHotReload: false, listenPort: 0 });
 const store = new EvalStore(join(out, 'evals.db'));
 const artifacts = new ArtifactStore(join(out, 'artifacts'));
@@ -139,25 +143,28 @@ try {
     service.refreshAgentCatalog();
   }
   write('runtime.json', { personalAgentId: personal.agentId, profile: catalog.get(personal.agentId)?.profile, model });
-  const ensureRun = async (caseId: string, suite: string) => {
+  const ensureRun = async (caseId: string, suite: string, targetAgentId?: string) => {
     if (runs.has(caseId)) return runs.get(caseId)!;
+    const effectiveAgentId = targetAgentId || personal.agentId;
+    const isPersonalCase = !targetAgentId;
+    if (targetAgentId && !catalog.get(targetAgentId)) throw new Error(`Unknown starter/catalog agentId: ${targetAgentId}`);
     let experimentId = experiments.get(suite);
     if (!experimentId) {
       experimentId = randomUUID(); experiments.set(suite, experimentId);
       store.createExperiment({ id: experimentId, name: `Personal style ${suite}`, suiteId: suite, suiteVersion: '1.0.0', suiteHash: hash(JSON.stringify(manifest)),
-        spec: { name: 'Personal style baseline', variants: [{ id: 'personal', adapter: 'personal-dialogue', agentId: personal.agentId, model, reasoning: 'off', config: { judge, persona: personaModel } }], repetitions: 1 } });
+        spec: { name: 'Personal style baseline', variants: [{ id: 'personal', adapter: 'personal-dialogue', agentId: effectiveAgentId, model, reasoning: 'off', config: { judge, persona: personaModel } }], repetitions: 1 } });
     }
     const runId = randomUUID(), conversationId = randomUUID();
     const caseWorkspace = join(workspace, runId); mkdirSync(caseWorkspace);
-    createConversation({ agentId: personal.agentId, sourceChannel: 'webchat', name: caseId, hiddenFromSessionList: true,
-      customData: { personalAgent: true, keepHiddenFromSessionList: true } }, caseWorkspace, conversationId);
+    createConversation({ agentId: effectiveAgentId, sourceChannel: 'webchat', name: caseId, hiddenFromSessionList: true,
+      customData: isPersonalCase ? { personalAgent: true, keepHiddenFromSessionList: true } : { keepHiddenFromSessionList: true } }, caseWorkspace, conversationId);
     setSessionConfig(conversationId, { modelOverride: model, fixedModel: true, thinkingLevel: 'off', workingDirectoryOverride: caseWorkspace }, caseWorkspace);
-    const evalCase: EvalCase = { id: caseId, task: 'Dialogue style evaluation; private fixtures remain evaluator-side', repo: { source: 'local', path: caseWorkspace, commit: manifest.commit }, budget: { timeoutMs: 1_800_000 }, graders: [], tags: ['dialogue', suite] };
+    const evalCase: EvalCase = { id: caseId, task: 'Dialogue style evaluation; private fixtures remain evaluator-side', repo: { source: 'local', path: caseWorkspace, commit: manifest.commit }, budget: { timeoutMs: 1_800_000 }, graders: [], tags: ['dialogue', suite, effectiveAgentId] };
     store.createRun({ id: runId, experimentId, evalCase, variantId: 'personal', adapter: 'personal-dialogue', sourceCommit: manifest.commit, fixtureCommit: dialogueFixtureHash ?? pins[suite === 'followbench-zh-style' ? 'followbench' : 'eqbench4'].commit });
     const trace = new TraceEmitter(runId, event => store.appendEvent(event));
-    const runtimeIdentity = await api(`/api/eval/runtime-identity?agentId=${encodeURIComponent(personal.agentId)}`);
+    const runtimeIdentity = await api(`/api/eval/runtime-identity?agentId=${encodeURIComponent(effectiveAgentId)}`);
     const run = { runId, conversationId, trace, usage: {} as Record<string, number>, runtimeIdentity, done: false, startedAt: Date.now(), calls: 0 };
-    runs.set(caseId, run); await trace.emit('run.started', { caseId, suite }); return run;
+    runs.set(caseId, run); await trace.emit('run.started', { caseId, suite, agentId: effectiveAgentId }); return run;
   };
   const evaluator = async (body: Record<string, any>) => {
     const modelRef = body.role === 'persona' ? personaModel : judge;
@@ -180,7 +187,7 @@ try {
       let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 4_000_000) throw new Error('Request too large'); }
       const body = JSON.parse(raw) as Record<string, any>;
       if (req.url === '/finish') {
-        const run = await ensureRun(body.caseId, body.suite);
+        const run = await ensureRun(body.caseId, body.suite, body.agentId);
         if (run.done) throw new Error('Duplicate case completion');
         const artifact = artifacts.putText(run.runId, 'style-result', JSON.stringify(body.result), 'application/json'); store.recordArtifact(artifact);
         const error = body.result.error as string | undefined;
@@ -196,7 +203,7 @@ try {
         run.done = true; console.log(`${body.caseId}: ${error ? 'ERROR' : follow ? grade.passed ? 'PASS' : 'FAIL' : 'PROFILE'}`);
         res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}'); return;
       }
-      const run = await ensureRun(body.caseId, body.suite);
+      const run = await ensureRun(body.caseId, body.suite, body.agentId);
       if (++run.calls > 48 || Date.now() - run.startedAt > 1_800_000) throw new Error('Case request/time budget exceeded');
       await run.trace.emit('model.request', { role: body.role, messages: body.messages, model: body.role === 'evaluated' ? model : body.role === 'persona' ? personaModel : judge });
       let result: Record<string, any>;

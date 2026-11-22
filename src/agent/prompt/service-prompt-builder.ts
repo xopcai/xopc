@@ -104,7 +104,7 @@ export class SystemPromptBuilder {
         options.extraSystemPrompt,
         getConversationalConfigurationGuide(reg),
         agentSetup
-          ? 'This conversation is for creating a new expert. Treat the user’s description of responsibilities and expected deliverables as requirements. Ask about missing details when needed, and give the expert a short profile description of its responsibilities. Follow Response Language for every question and reply. A language requested for the new Agent configures that Agent only. Keep the current conversation language unless the user asks to switch it.'
+          ? 'This conversation is for creating a new expert. Treat the user’s description of responsibilities and expected deliverables as requirements. Ask about missing details when needed, and give the expert a short profile description of its responsibilities. Unless the user explicitly asks for a formal or template-heavy style, set the new expert’s style and instructions to sound natural, human-like, and easy to read—plain everyday phrasing rather than stiff bureaucratic prose, scattered bolding, or mandatory bullet walls. Follow Response Language for every question and reply. A language requested for the new Agent configures that Agent only. Keep the current conversation language unless the user asks to switch it.'
           : undefined,
         interactionPrompt,
       ].filter(Boolean).join('\n\n'),

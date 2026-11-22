@@ -44,6 +44,7 @@ Commands: \`list\`, \`get\`, \`create\`, \`update\`, \`set_default\`, \`disable\
 
 An Agent profile stores \`name\` and optional \`description\`, \`creature\`, \`style\`, \`language\`,
 \`emoji\`, and \`avatar\` identity fields. Use \`instructions\` for short execution rules.
+Unless the user asks for a formal or rigid template, keep a new Agent's \`style\` and \`instructions\` natural, human-like, and easy to read (plain phrasing over stiff jargon, scattered bolding, or unnecessary bullet walls).
 Put personality in SOUL.md and ongoing work guidance in AGENTS.md.
 
 \`\`\`json

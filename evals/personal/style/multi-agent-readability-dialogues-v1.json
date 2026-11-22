@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "protocolVersion": "multi-agent-readability-v1",
+  "name": "Multi-Agent Human-Likeness & Readability Benchmark v1 (main, coder, writer, researcher — 6 dev, 6 val)",
+  "purpose": "Evaluate natural human-like expression and reading comfort across non-personal agents (Smart Assistant, Coding Expert, Writing Assistant, Research Assistant) while preserving specialist rigor, accuracy, and boundaries.",
+  "cases": [
+    {
+      "id": "P0-MA-D01",
+      "agentId": "main",
+      "category": "main_casual_explain",
+      "split": "development",
+      "userTurns": [
+        "为什么手机连着 Wi-Fi 信号是满格，有时候却完全刷不出网页？",
+        "那重启一下路由器为什么经常就好了？",
+        "给我一句最好记的大白话总结。"
+      ],
+      "expectations": "用自然好懂的中文直接讲清“连上路由器≠外网畅通”以及缓存/DHCP/死锁等常见原因，不堆标题、满屏加粗或大百科清单；窄追问只答重启原因不重讲前文；一句总结像真人说话。"
+    },
+    {
+      "id": "P0-MA-D02",
+      "agentId": "main",
+      "category": "main_decision_tradeoff",
+      "split": "development",
+      "userTurns": [
+        "我想学游泳，基本零基础，一周能去两次。先报个小班还是直接办月卡自己看视频练？",
+        "我预算一般，而且挺怕报了贵课后面忙起来坚持不下去。",
+        "行，那我先试试你的思路。"
+      ],
+      "expectations": "首轮直接给核心权衡和清晰建议（零基础前几次动作/换气有人带少走弯路），不套五六条加粗百科清单；第二轮结合预算和怕浪费给出务实折中方案；第三轮自然简短收口不拖尾。"
+    },
+    {
+      "id": "P0-MA-D03",
+      "agentId": "coder",
+      "category": "coder_debug_explain",
+      "split": "development",
+      "userTurns": [
+        "Node.js 里 `try/catch` 抓不到异步报错或者冒出 `UnhandledPromiseRejection`，日常开发最容易踩哪几个坑？直接讲实用点。",
+        "那在 `async` 函数里，`return someAsync()` 和 `return await someAsync()` 放在 `try/catch` 里有区别吗？",
+        "清楚了，谢谢。"
+      ],
+      "expectations": "像资深工程师当面交流一样清晰直接、准确无误，不写冗长教科书前言和满段乱加粗；第二轮精准讲清 `return someAsync()` 绕过当前 `try/catch`、`return await` 才能被当前 `catch` 捕获（以及调用栈差异）；结尾干脆收口。"
+    },
+    {
+      "id": "P0-MA-D04",
+      "agentId": "coder",
+      "category": "coder_detailed_compare",
+      "split": "development",
+      "userTurns": [
+        "请详细对比一下数据库里的 B+Tree 索引和 Hash 索引的核心差异、各自优缺点和选型原则，重点别漏掉。",
+        "联合索引最左前缀里，如果中间某一列用了范围查询（比如 `>` 或 `BETWEEN`），后面的列还能用到索引吗？",
+        "用一句话帮我记住 B+Tree 和 Hash 怎么选。"
+      ],
+      "expectations": "首轮明确要求详细对比，必须完整准确涵盖等值/范围查询、排序、最左前缀、回表/IO、哈希冲突等核心点，同时排版清爽克制，不膨胀成带冗余 ASCII 图和重复回顾的 5000 字教材；第二轮紧扣窄追问准确回答；第三轮一句话准确顺口。"
+    },
+    {
+      "id": "P0-MA-D05",
+      "agentId": "writer",
+      "category": "writer_draft_rewrite",
+      "split": "development",
+      "userTurns": [
+        "帮我把这段发给合作方张总的催进度微信改自然一点，别像公文：\n“尊敬的张总，您好！关于上周提交的合同审核事宜，恳请贵司尽快反馈意见，以免影响后续项目推进，感谢配合！”",
+        "再短一点，把多余的客套话删掉，只留直接能复制发送的一段正文，不要引号和解释。",
+        "就这句。"
+      ],
+      "expectations": "改出真诚自然的职场微信口吻，保留“上周合同审核”和礼貌跟进的意思，不编造新截止时间或未给出的承诺；第二轮彻底去掉客套、引号、前言和解释，只输出干净正文；第三轮简短收口。"
+    },
+    {
+      "id": "P0-MA-D06",
+      "agentId": "researcher",
+      "category": "researcher_synthesis",
+      "split": "development",
+      "userTurns": [
+        "下面是我整理的 4 条团队调研笔记，关于要不要把现有工单系统迁移到某 SaaS 工具。帮我先给个清晰的初步判断和关键风险，别把原文重抄一遍：\n1. 财务测算：SaaS 年费比自维服务器贵约 18 万，但预计省下 0.5 个后端运维人力。\n2. 客服主管：现有系统工单检索慢、经常卡顿，一线每天平均多花 20 分钟。\n3. 销售宣称：该 SaaS “一周即可无痛迁移完历史数据”，但我们还没拿到他们对百万级历史工单的真实迁移案例。\n4. 安全同事：客户工单含手机号与订单号，还没确认该 SaaS 是否支持国内独立部署或符合现有合规条款。",
+        "这四条里，哪两件事最应该在拍板前先核实？简短直说。",
+        "明白了，我先让安全和研发去核这两项。"
+      ],
+      "expectations": "先给清晰判断（暂不建议立刻拍板，需先过合规与迁移验证），把成本/效率权衡和未核实宣称分开说清，阅读轻松不堆套话和机械复述；次轮精准点出数据合规/部署形态与百万级历史迁移实测；结尾干脆收口。"
+    },
+    {
+      "id": "P0-MA-V01",
+      "agentId": "main",
+      "category": "main_casual_explain",
+      "split": "validation",
+      "userTurns": [
+        "为什么坐飞机起飞和降落的时候，耳朵经常会发闷甚至有点疼？",
+        "那嚼口香糖或者吞口水为什么能缓解？",
+        "给我一句最好记的话总结一下。"
+      ],
+      "expectations": "用平实好读的中文讲清客舱气压变化与中耳鼓膜内外压差，不堆砌加粗和教科书结构；次轮直接讲咽鼓管打开平衡气压，不重讲前文；一句总结自然顺口。"
+    },
+    {
+      "id": "P0-MA-V02",
+      "agentId": "main",
+      "category": "main_decision_tradeoff",
+      "split": "validation",
+      "userTurns": [
+        "一个人住、厨房台面很小，想买个省事的小家电学做饭，空气炸锅和电蒸锅哪个更实用？",
+        "我平时爱吃清淡少油的，偶尔也会热一下外卖或馒头。",
+        "行，那我心里有数了。"
+      ],
+      "expectations": "开头直接给核心权衡和清晰方向，排版清爽少加粗；第二轮结合清淡少油、热馒头/外卖给出明确倾向（电蒸锅更贴合，同时客观提一句空气炸锅复脆炸物的差别）；第三轮自然简短收口。"
+    },
+    {
+      "id": "P0-MA-V03",
+      "agentId": "coder",
+      "category": "coder_debug_explain",
+      "split": "validation",
+      "userTurns": [
+        "React 里 `useEffect` 经常莫名执行两次，或者回调里拿到旧的 state，最常见的原因和解决思路是什么？讲人话别背官方文档。",
+        "那用函数式更新比如 `setCount(c => c + 1)`，是不是就能绕开闭包拿到旧值的问题？",
+        "懂了，谢啦。"
+      ],
+      "expectations": "像有经验的前端同事当面讲清 StrictMode 开发态双调用、依赖数组缺失与闭包捕获旧值，准确易读不堆冗长模板；次轮准确说明函数式更新能解决基于前值更新的问题，但读状态做其他副作用时仍需依赖数组或 ref；收口干脆。"
+    },
+    {
+      "id": "P0-MA-V04",
+      "agentId": "coder",
+      "category": "coder_detailed_compare",
+      "split": "validation",
+      "userTurns": [
+        "请详细对比一下 REST API 和 GraphQL 的核心优缺点、适用场景和常见坑，不要为了简短漏掉重点。",
+        "GraphQL 常见的 N+1 查询问题一般怎么解？",
+        "用一句话帮我记住什么时候该选哪个。"
+      ],
+      "expectations": "首轮明确要求详细对比，必须完整涵盖按需取数/过度获取、缓存（HTTP 缓存）、版本演进、类型契约、复杂度与安全限流等重点，同时结构清爽有节制，不膨胀成冗长教材；次轮精准讲清 DataLoader 批量合并与缓存；第三轮一句话准确顺口。"
+    },
+    {
+      "id": "P0-MA-V05",
+      "agentId": "writer",
+      "category": "writer_draft_rewrite",
+      "split": "validation",
+      "userTurns": [
+        "帮我把这段生硬的群通知改得自然好读、像真人同事说话：\n“各位同事请注意：鉴于本周五下午将进行办公区网络割接维护，请大家务必于17:30前保存所有工作资料并及时下线，如因此造成不便敬请谅解！”",
+        "再精简成一句话正文，不要客套、引号和说明，我直接复制发群里。",
+        "好，就发这句。"
+      ],
+      "expectations": "去公文腔保留“本周五下午网络维护”与“17:30前保存资料并下线”两个核心事实，不编造恢复时间；第二轮彻底去掉客套、引号与说明，只留一句可直接复制的正文；收口干净。"
+    },
+    {
+      "id": "P0-MA-V06",
+      "agentId": "researcher",
+      "category": "researcher_synthesis",
+      "split": "validation",
+      "userTurns": [
+        "下面是我整理的 4 条调研笔记，团队在讨论搜索功能是自建 Elasticsearch 还是买托管搜索服务。帮我先给结论和关键权衡，别重抄原文：\n1. 托管服务按查询量计费，当前流量下每月约 1.2 万，如果明年流量翻三倍费用会接近翻三倍。\n2. 自建集群服务器成本每月约 4000，但团队目前没有专职熟悉 ES 调优和故障恢复的运维。\n3. 研发预估自建搭起来只要两周，但没算高可用演练、监控告警和升级迁移的长期工时。\n4. 托管厂商博客称“平均延迟低于 20ms”，但那是海外区域的基准测试，没提供我们中文分词场景的数据。",
+        "这里面哪条数据最不能直接拿来做决策依据？直说就行。",
+        "清楚了。"
+      ],
+      "expectations": "先给清晰判断（短期更适合先用托管避开运维短板，同时评估明年流量增长的成本拐点），明确标出研发工时漏算和厂商延迟数据的可比性局限，阅读顺畅无八股包装；次轮精准指出第 4 条（海外基准无法代表中文分词实际延迟，也可顺带点出第 3 条估算不完整）；收口利落。"
+    }
+  ]
+}

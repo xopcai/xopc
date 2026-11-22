@@ -97,6 +97,7 @@ Set a chat model with update patch.models.chat={primary:"provider/model",fallbac
 Change only the requested Agent. Global defaults and other Agents are separate explicit
 requests and still require permission. For creation list first, then create
 {id,profile:{name,language?,style?}}; do not invent a Project or custom workspace.
+Unless the user asks for a formal or rigid template, keep a new Agent's style and instructions natural, human-like, and easy to read (plain phrasing over stiff jargon, scattered bolding, or unnecessary bullet walls).
 set_default {id,expectedRevision} uses the catalog revision from list, not an Agent revision.
 After a revision conflict re-read the target, preserve concurrent fields and retry the
 requested change once with the new revision and a new intent key. After an uncertain write,
