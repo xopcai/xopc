@@ -94,7 +94,7 @@ it('submits managed scene credentials to /api/setup/:scene and preserves resumeO
     setupId: 'setup-models-1',
     payload: { providerId: 'openai', apiKey: 'sk-demo-key' },
   });
-  const destination = container.querySelector('output')!.textContent!;
+  const destination = container.querySelector('output')!.textContent;
   expect(destination.startsWith(`/chat/${conversationId}?`)).toBe(true);
   const query = new URL(destination, 'https://xopc.test').searchParams;
   expect(query.get('autoSend')).toBe('1');
