@@ -97,9 +97,9 @@ export const recordingOutcomeStages = {
     "Audio and existing text remain available. Regenerate text and notes from the original audio."
   ],
   "analysis_stale": [
-    "原文已更新",
+    "转写原文已更新",
     "Transcript updated",
-    "当前笔记基于修改前的原文，可保留查看，也可按新版原文重新整理。",
+    "当前笔记基于修改前的转写原文，可保留查看，也可按新版转写原文重新整理。",
     "Existing notes use an earlier transcript. Keep them or generate notes from the updated text."
   ],
   "source_missing": [
@@ -134,7 +134,7 @@ export const recordingOutcomePhrases = {
   ],
   "cloud_hint": [
     "后续转写与笔记整理在后台继续；失败时可在这条笔记中重试。",
-    "Transcription and notes continue on the server. Retry here if processing fails."
+    "Transcription and notes continue in the background. Retry from this note if processing fails."
   ],
   "retry_sync": [
     "重试同步",
@@ -165,7 +165,7 @@ export const recordingOutcomePhrases = {
     "Regenerate from audio"
   ],
   "retry_analyze": [
-    "按新版原文整理",
+    "按新版转写原文整理",
     "Update notes from transcript"
   ],
   "audio": [
@@ -173,7 +173,7 @@ export const recordingOutcomePhrases = {
     "Audio"
   ],
   "text": [
-    "文字",
+    "转写原文",
     "Transcript"
   ],
   "note": [
