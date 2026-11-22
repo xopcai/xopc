@@ -15,9 +15,12 @@ import { XopcListSkeleton } from './MobileComponents';
 
 interface CapabilityChoice { id: string; label: string; }
 interface CapabilityFieldVisibility { field: string; value: string; }
+interface CapabilityPanelLink { label: string; url: string; visibleWhen?: CapabilityFieldVisibility; }
+interface CapabilityPanelCopyable { label: string; content: string; note?: string; visibleWhen?: CapabilityFieldVisibility; }
 interface CapabilityField {
-  id: string; label: string; type: string; value?: string; hint?: string; options?: CapabilityChoice[]; advanced?: boolean;
-  visibleWhen?: CapabilityFieldVisibility; presentation?: string; retain?: boolean;
+  id: string; label: string; type: string; value?: string; hint?: string; description?: string; required?: boolean;
+  format?: string; addLabel?: string; keyLabel?: string; valueLabel?: string; keyPlaceholder?: string; maxItems?: number;
+  options?: CapabilityChoice[]; advanced?: boolean; visibleWhen?: CapabilityFieldVisibility; presentation?: string; retain?: boolean;
 }
 interface CapabilityAction {
   id: string; label: string; confirmation?: string; inlineReview?: boolean; advanced?: boolean;
@@ -26,7 +29,8 @@ interface CapabilityAction {
 interface CapabilitySearchResult { id: string; name: string; summary?: string; source: string; iconUrl?: string; action?: CapabilityAction; }
 interface CapabilityPanelPayload {
   fields?: CapabilityField[]; actions?: CapabilityAction[]; message?: string; details?: string;
-  headline?: string; subtitle?: string; reviewText?: string; tone?: string; advancedLabel?: string; detailsLabel?: string;
+  headline?: string; subtitle?: string; steps?: string[]; links?: CapabilityPanelLink[]; copyable?: CapabilityPanelCopyable;
+  reviewText?: string; tone?: string; advancedLabel?: string; detailsLabel?: string;
   authorizationUrl?: string; qrUrl?: string; flow?: string; revision?: number;
   deviceVerificationCode?: string; expiresAt?: number;
   pollAction?: string; results?: CapabilitySearchResult[]; chatPrompt?: string;
@@ -48,6 +52,8 @@ export struct XopcCapabilityPanelView {
   @Param avatarReference: string = '';
   @Param appearance: string = 'configured';
   @Param avatarRevision: number = 0;
+  @Param initialId: string = '';
+  @Param initialUrl: string = '';
   @Event onClose: () => void = (): void => {};
   @Event onChanged: () => void = (): void => {};
   @Event onExpandedChange: (expanded: boolean) => void = (_expanded: boolean): void => {};
@@ -65,6 +71,8 @@ export struct XopcCapabilityPanelView {
   @Local showQr: boolean = false;
   @Local savingQr: boolean = false;
   @Local qrFeedback: string = '';
+  @Local copiedBlock: boolean = false;
+  private appliedInitial: boolean = false;
   private generation: number = 0;
   private alive: boolean = false;
   private pollTimer: number = -1;
@@ -100,6 +108,7 @@ export struct XopcCapabilityPanelView {
     const shownFields = this.advanced ? this.fields(false).concat(extraFields) : this.fields(false);
     const expanded = (Boolean(this.panel?.qrUrl) && (!this.panel?.authorizationUrl || this.showQr)) ||
       Boolean(this.panel?.reviewText) ||
+      this.panelStepsList().length > 0 || Boolean(this.visibleCopyable()) || this.visibleLinks().length > 0 ||
       (this.advanced && (extraFields.length > 0 || this.actions(true).length > 0)) ||
       (this.detailsOpen && Boolean(this.panel?.details)) || shownFields.length >= 3 ||
       shownFields.some((field: CapabilityField): boolean => ['multiline', 'list', 'headers'].includes(field.type)) ||
@@ -180,15 +189,22 @@ export struct XopcCapabilityPanelView {
       if (generation !== this.generation) return;
       if (this.panel?.qrUrl !== result.payload.qrUrl) this.qrFeedback = '';
       if (this.panel?.authorizationUrl !== result.payload.authorizationUrl) this.showQr = false;
+      if (this.panel?.copyable?.content !== result.payload.copyable?.content) this.copiedBlock = false;
       this.panel = result.payload;
       const actions = result.payload.actions ?? [];
       if (actions.some((entry: CapabilityAction): boolean => entry.dismiss === true) &&
           !actions.some((entry: CapabilityAction): boolean => entry.id === 'add-another')) this.retainedValues.clear();
       const next = new Map<string, string>();
       for (const field of result.payload.fields ?? []) {
-        next.set(field.id, (polling ? this.values.get(field.id) : undefined) ??
-          (field.retain ? this.retainedValues.get(field.id) : undefined) ?? (field.type === 'secret' ? '' : field.value ?? ''));
+        let initial = (polling ? this.values.get(field.id) : undefined) ??
+          (field.retain ? this.retainedValues.get(field.id) : undefined) ?? (field.type === 'secret' ? '' : field.value ?? '');
+        if (!this.appliedInitial && !action && !initial) {
+          if (field.id === 'id' && this.initialId) initial = this.initialId;
+          else if (field.id === 'url' && this.initialUrl) initial = this.initialUrl;
+        }
+        next.set(field.id, initial);
       }
+      if (!action) this.appliedInitial = true;
       this.values = next;
       if (!polling) this.newGroup = '';
       this.errorMessage = '';
@@ -323,6 +339,101 @@ export struct XopcCapabilityPanelView {
     return Math.max(0, (field.options ?? []).findIndex((option: CapabilityChoice): boolean => option.id === this.values.get(field.id)));
   }
 
+  private panelStepsList(): string[] {
+    return (this.panel?.steps ?? []).filter((step: string): boolean => step.trim().length > 0);
+  }
+
+  private visibleCopyable(): CapabilityPanelCopyable | undefined {
+    const block = this.panel?.copyable;
+    if (!block || !block.content || !this.isVisible(block.visibleWhen)) return undefined;
+    return block;
+  }
+
+  private visibleLinks(): CapabilityPanelLink[] {
+    return (this.panel?.links ?? []).filter((link: CapabilityPanelLink): boolean =>
+      this.isVisible(link.visibleWhen) && Boolean(link.label.trim()) && link.url.startsWith('https://') && Boolean(markdownLink(link.url)));
+  }
+
+  private async copyBlock(content: string): Promise<void> {
+    if (!content) return;
+    try {
+      await pasteboard.getSystemPasteboard().setData(pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, content));
+      this.copiedBlock = true;
+    } catch (_) {
+      this.errorMessage = this.t('无法复制内容。', 'Could not copy content.');
+    }
+  }
+
+  private async openPanelLink(raw: string): Promise<void> {
+    const url = raw.startsWith('https://') ? markdownLink(raw) : '';
+    if (!url) return;
+    try {
+      await (this.getUIContext().getHostContext() as common.UIAbilityContext).openLink(url, { appLinkingOnly: false });
+    } catch (_) {
+      this.errorMessage = this.t('无法打开链接，请重试。', 'Could not open the link. Try again.');
+    }
+  }
+
+  @Builder
+  private panelSteps() {
+    if (this.panelStepsList().length > 0) {
+      Column({ space: 8 }) {
+        ForEach(this.panelStepsList(), (step: string, index: number) => {
+          Row({ space: 8 }) {
+            if (this.panelStepsList().length > 1) {
+              Text((index + 1) + '.').fontSize(13).fontWeight(FontWeight.SemiBold).fontColor(this.colors.accent)
+            }
+            Text(step).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1)
+          }.width('100%').alignItems(VerticalAlign.Top)
+        }, (step: string, index: number): string => index + ':' + step)
+      }.id('capability-panel-steps').width('100%').padding(14).backgroundColor(this.colors.panel)
+        .borderRadius(this.colors.corner(16)).alignItems(HorizontalAlign.Start)
+    }
+  }
+
+  @Builder
+  private panelCopyable() {
+    if (this.visibleCopyable()) {
+      Column({ space: 8 }) {
+        Row({ space: 8 }) {
+          Text(this.visibleCopyable()?.label ?? '').fontSize(14).fontWeight(FontWeight.Medium)
+            .fontColor(this.colors.foreground).layoutWeight(1)
+          Button(this.copiedBlock ? this.t('已复制', 'Copied') : this.t('复制', 'Copy'))
+            .id('capability-panel-copy-block').height(36).backgroundColor(this.colors.input)
+            .fontColor(this.colors.chat.action).enabled(!this.busy)
+            .onClick((): void => { void this.copyBlock(this.visibleCopyable()?.content ?? ''); })
+        }.width('100%')
+        Scroll() {
+          Text(this.visibleCopyable()?.content ?? '').fontSize(12).fontFamily('monospace')
+            .fontColor(this.colors.foreground).width('100%').copyOption(CopyOptions.LocalDevice)
+        }.width('100%').constraintSize({ maxHeight: 136 }).padding(10)
+          .backgroundColor(this.colors.input).borderRadius(this.colors.corner(12))
+        if (this.visibleCopyable()?.note) {
+          Text(this.visibleCopyable()?.note ?? '').fontSize(12).fontColor(this.colors.secondary).width('100%')
+        }
+      }.id('capability-panel-copyable').width('100%').padding(14).backgroundColor(this.colors.panel)
+        .borderRadius(this.colors.corner(16)).alignItems(HorizontalAlign.Start)
+    }
+  }
+
+  @Builder
+  private panelLinks() {
+    if (this.visibleLinks().length > 0) {
+      Column({ space: 8 }) {
+        ForEach(this.visibleLinks(), (link: CapabilityPanelLink) => {
+          Button() {
+            Row({ space: 8 }) {
+              Text(link.label).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.chat.action).layoutWeight(1)
+              SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.chat.action]).accessibilityLevel('no')
+            }.width('100%').padding({ left: 14, right: 14 })
+          }.width('100%').height(44).padding(0).backgroundColor(this.colors.panel)
+            .borderRadius(this.colors.corner(14)).enabled(!this.busy)
+            .onClick((): void => { void this.openPanelLink(link.url); })
+        }, (link: CapabilityPanelLink): string => link.url + ':' + link.label)
+      }.id('capability-panel-links').width('100%')
+    }
+  }
+
   @Builder
   field(field: CapabilityField) {
     Column({ space: 6 }) {
@@ -347,18 +458,26 @@ export struct XopcCapabilityPanelView {
             .onChange((enabled: boolean): void => { this.set(field.id, String(enabled)); })
         }.width('100%').padding(12).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
       } else {
-        Text(field.label).fontSize(14).fontColor(this.colors.foreground)
+        Row({ space: 4 }) {
+          Text(field.label).fontSize(14).fontColor(this.colors.foreground)
+          if (field.required) {
+            Text('*').fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
+          }
+        }.width('100%')
         if (field.type === 'headers') {
           XopcCapabilityKeyValueEditor({ encoded: this.values.get(field.id) ?? '', locked: this.busy,
             isEnvironment: field.id === 'mcp-env',
+            keyLabel: field.keyLabel ?? '', valueLabel: field.valueLabel ?? '',
+            keyPlaceholder: field.keyPlaceholder ?? '', addLabel: field.addLabel ?? '',
+            maxItems: field.maxItems ?? 0,
             onUpdate: (text: string): void => { this.setField(field, text); } })
         } else if (field.type === 'list') {
           this.groupList(field)
         } else if (field.type === 'multiline') {
           TextArea({ text: this.values.get(field.id) ?? '', placeholder: field.hint ?? '' })
-            .id('capability-field-' + field.id).width('100%').height(field.id === 'mcp-json' ? 144 : 96)
-            .maxLength(field.id === 'mcp-json' ? 32768 : field.id === 'args' ? 8192 : 2000)
-            .fontFamily(field.id === 'mcp-json' ? 'monospace' : 'HarmonyOS Sans')
+            .id('capability-field-' + field.id).width('100%').height(field.format === 'json' || field.id === 'mcp-json' ? 144 : 96)
+            .maxLength(field.format === 'json' || field.id === 'mcp-json' ? 32768 : field.id === 'args' ? 8192 : 2000)
+            .fontFamily(field.format === 'json' || field.id === 'mcp-json' ? 'monospace' : 'HarmonyOS Sans')
             .backgroundColor(this.colors.input).fontColor(this.colors.foreground).enabled(!this.busy).borderRadius(this.colors.corner(14))
             .onChange((value: string): void => { this.setField(field, value); })
         } else if (field.type === 'select') {
@@ -370,7 +489,7 @@ export struct XopcCapabilityPanelView {
         } else {
           TextInput({ text: this.values.get(field.id) ?? '', placeholder: field.hint ?? '' })
             .id('capability-field-' + field.id).width('100%').height(46).maxLength(8192)
-            .type(field.type === 'secret' ? InputType.Password : InputType.Normal)
+            .type(field.type === 'secret' ? InputType.Password : field.format === 'url' ? InputType.URL : InputType.Normal)
             .enterKeyType(field.id === 'query' ? EnterKeyType.Search : EnterKeyType.Done)
             .backgroundColor(this.colors.input).fontColor(this.colors.foreground).enabled(!this.busy).borderRadius(this.colors.corner(14))
             .onSubmit((): void => {
@@ -381,6 +500,9 @@ export struct XopcCapabilityPanelView {
             })
             .onChange((value: string): void => { this.set(field.id, value); })
         }
+      }
+      if (field.description) {
+        Text(field.description).fontSize(12).fontColor(this.colors.secondary).width('100%')
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -412,7 +534,7 @@ export struct XopcCapabilityPanelView {
         TextInput({ text: this.newGroup, placeholder: field.hint ?? '' }).layoutWeight(1).height(44).maxLength(160)
           .enabled(!this.busy).onChange((value: string): void => { this.newGroup = value; })
           .onSubmit((): void => { this.addGroup(field.id); })
-        Button(this.t('添加群聊', 'Add group')).height(44).enabled(!this.busy && this.newGroup.trim().length > 0)
+        Button(field.addLabel || this.t('添加项目', 'Add item')).height(44).enabled(!this.busy && this.newGroup.trim().length > 0)
           .backgroundColor(this.colors.accentSoft).fontColor(this.colors.chat.action).onClick((): void => { this.addGroup(field.id); })
       }.width('100%')
     }.width('100%').id('capability-field-' + field.id).padding(8).backgroundColor(this.colors.input)
@@ -633,10 +755,12 @@ export struct XopcCapabilityPanelView {
   panelBody() {
     Scroll() {
       Column({ space: 14 }) {
-        if (this.panel?.headline) {
+        if (this.panel?.headline || this.panel?.subtitle) {
           Column({ space: 4 }) {
-            Text(this.panel.headline).fontSize(20).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
-            if (this.panel.subtitle) {
+            if (this.panel?.headline) {
+              Text(this.panel.headline).fontSize(20).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
+            }
+            if (this.panel?.subtitle) {
               Text(this.panel.subtitle).fontSize(13).fontColor(this.colors.secondary).width('100%')
             }
           }.width('100%').padding({ left: 4, right: 4 })
@@ -655,6 +779,9 @@ export struct XopcCapabilityPanelView {
         } else if (this.panel && this.description && this.category !== 'agents') {
           Text(this.description).fontSize(14).fontColor(this.colors.secondary).width('100%')
         }
+        this.panelSteps()
+        this.panelCopyable()
+        this.panelLinks()
         if (this.panel?.reviewText) {
           Text(this.panel.reviewText).id('capability-panel-review-text').width('100%').padding(14)
             .fontSize(13).fontFamily('monospace').fontColor(this.colors.foreground)
@@ -727,6 +854,11 @@ struct XopcCapabilityKeyValueEditor {
   @Param encoded: string = '';
   @Param locked: boolean = false;
   @Param isEnvironment: boolean = false;
+  @Param keyLabel: string = '';
+  @Param valueLabel: string = '';
+  @Param keyPlaceholder: string = '';
+  @Param addLabel: string = '';
+  @Param maxItems: number = 0;
   @Event onUpdate: (text: string) => void = (_text: string): void => {};
   @Local rows: CapabilityRequestHeaderRow[] = [];
   @Local colors: XopcThemeColors = appThemeColors;
@@ -741,6 +873,26 @@ struct XopcCapabilityKeyValueEditor {
 
   private t(zh: string, en: string): string {
     return appSettings.effectiveLanguage().startsWith('zh') ? zh : en;
+  }
+
+  private resolvedKeyLabel(): string {
+    return this.keyLabel || (this.isEnvironment ? this.t('变量名', 'Variable name') : this.t('请求头名称', 'Header name'));
+  }
+
+  private resolvedValueLabel(): string {
+    return this.valueLabel || (this.isEnvironment ? this.t('变量值', 'Variable value') : this.t('请求头值', 'Header value'));
+  }
+
+  private resolvedKeyPlaceholder(): string {
+    return this.keyPlaceholder || (this.isEnvironment ? 'API_KEY' : 'X-API-Key');
+  }
+
+  private resolvedAddLabel(): string {
+    return this.addLabel || (this.isEnvironment ? this.t('添加变量', 'Add variable') : this.t('添加请求头', 'Add header'));
+  }
+
+  private resolvedMaxItems(): number {
+    return this.maxItems > 0 ? this.maxItems : (this.isEnvironment ? 32 : 16);
   }
 
   private restore(): void {
@@ -768,14 +920,13 @@ struct XopcCapabilityKeyValueEditor {
       ForEach(this.rows, (row: CapabilityRequestHeaderRow) => {
         Row({ space: 4 }) {
           Column({ space: 4 }) {
-            TextInput({ text: row.headerName, placeholder: this.isEnvironment ? 'API_KEY' : 'X-API-Key' })
-              .accessibilityText(this.isEnvironment ? this.t('变量名', 'Variable name') : this.t('请求头名称', 'Header name'))
+            TextInput({ text: row.headerName, placeholder: this.resolvedKeyPlaceholder() })
+              .accessibilityText(this.resolvedKeyLabel())
               .width('100%').height(44).maxLength(128)
               .backgroundColor(this.colors.input).borderRadius(this.colors.corner(12)).fontColor(this.colors.foreground)
               .enabled(!this.locked).onChange((text: string): void => { this.update(row.id, text, true); })
-            TextInput({ text: row.headerValue, placeholder: this.isEnvironment ? this.t('变量值', 'Variable value')
-              : this.t('请求头值', 'Header value') })
-              .accessibilityText(this.isEnvironment ? this.t('变量值', 'Variable value') : this.t('请求头值', 'Header value'))
+            TextInput({ text: row.headerValue, placeholder: this.resolvedValueLabel() })
+              .accessibilityText(this.resolvedValueLabel())
               .width('100%').height(44).maxLength(4096)
               .type(InputType.Password).backgroundColor(this.colors.input).borderRadius(this.colors.corner(12))
               .fontColor(this.colors.foreground).enabled(!this.locked)
@@ -791,11 +942,11 @@ struct XopcCapabilityKeyValueEditor {
           }
         }.width('100%').alignItems(VerticalAlign.Top)
       }, (row: CapabilityRequestHeaderRow): string => String(row.id))
-      if (this.rows.length < (this.isEnvironment ? 32 : 16)) {
+      if (this.rows.length < this.resolvedMaxItems()) {
         Button() {
           Row({ space: 6 }) {
             SymbolGlyph($r('sys.symbol.plus')).fontSize(15).fontColor([this.colors.accent])
-            Text(this.isEnvironment ? this.t('添加变量', 'Add variable') : this.t('添加请求头', 'Add header')).fontColor(this.colors.accent)
+            Text(this.resolvedAddLabel()).fontColor(this.colors.accent)
           }
         }.height(44).padding({ left: 4, right: 4 }).backgroundColor(Color.Transparent).enabled(!this.locked)
           .onClick((): void => { this.write(this.rows.concat([{ id: this.nextId++, headerName: '', headerValue: '' }])); })

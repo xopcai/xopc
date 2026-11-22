@@ -364,6 +364,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
       }, request = { body ->
         onPanel(category.key, if (category == CapabilityCategory.Connections) row.id else row.targetId ?: row.id, body)
       }, onChanged = { load(category, refresh = true) }, onChat = chat, onClose = { detail = null },
+        onUseInChat = { prompt -> detail = null; onSetupChat(prompt, false) },
         isMcpSetup = row.id == "mcp:setup")
     }
   }
@@ -475,7 +476,8 @@ internal fun ConversationMcpAction(conversationId: String, activeRun: Boolean,
       sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
       CapabilitySettingsPanel(title, "", null, icon = {
         CapabilityLogo(null, null, "", R.drawable.action_capabilities, 44.dp)
-      }, request = { body -> onPanel("connections", key, body) }, onChanged = {}, onChat = null, onClose = close)
+      }, request = { body -> onPanel("connections", key, body) }, onChanged = {}, onChat = null, onClose = close,
+        onUseInChat = { close() }, isConversation = true)
     }
   }
 }
@@ -486,10 +488,19 @@ private fun JSONObject.objects(key: String): List<JSONObject> = optJSONArray(key
 
 private fun JSONObject.value(key: String): String? = (opt(key) as? String)?.takeIf(String::isNotBlank)
 
+private fun JSONObject.strings(key: String): List<String> = optJSONArray(key)?.let { array ->
+  (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) }
+}.orEmpty()
+
+private fun safeHttpsUrl(raw: String?): String? = raw?.takeIf { value ->
+  val uri = Uri.parse(value)
+  uri.scheme == "https" && uri.host != null && uri.userInfo == null
+}
+
 @Composable
 private fun CapabilitySettingsPanel(name: String, summary: String, origin: String?, icon: @Composable () -> Unit,
   request: suspend (JSONObject?) -> JSONObject, onChanged: () -> Unit, onChat: (() -> Unit)?, onClose: () -> Unit,
-  isMcpSetup: Boolean = false) {
+  onUseInChat: ((String) -> Unit)? = null, isMcpSetup: Boolean = false, isConversation: Boolean = false) {
   val scope = rememberCoroutineScope()
   val browser = LocalUriHandler.current
   val keyboard = LocalSoftwareKeyboardController.current
@@ -612,14 +623,30 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
   val qrOnly = if (authUrl == null) qrValue else null
   val visibleFields = allFields.filter { advanced || !it.optBoolean("advanced") }
   val results = panel?.objects("results").orEmpty()
+  val steps = panel?.strings("steps").orEmpty()
+  val visibleLinks = panel?.objects("links").orEmpty().filter { link ->
+    capabilityItemVisible(link, values) && safeHttpsUrl(link.value("url")) != null && link.value("label") != null
+  }
+  val visibleCopyable = panel?.optJSONObject("copyable")?.takeIf { block ->
+    capabilityItemVisible(block, values) && block.value("content") != null
+  }
+  val readyPrompt = panel?.value("chatPrompt")?.takeIf {
+    pollAction == null && errorMessage == null && onUseInChat != null &&
+      panel?.objects("fields").orEmpty().none { field ->
+        val id = field.getString("id")
+        val initial = if (field.value("type") == "secret") "" else field.optString("value", "")
+        values[id].orEmpty() != initial
+      }
+  }
   val expanded = (qrValue != null && (qrOnly != null || showQr)) ||
     panel?.value("reviewText") != null ||
+    steps.isNotEmpty() || visibleLinks.isNotEmpty() || visibleCopyable != null ||
     (hasAdvanced && advanced) || (detailsOpen && panel?.value("details") != null) ||
     visibleFields.size >= 3 || visibleFields.any { it.value("type") in setOf("multiline", "list", "headers") } || results.size >= 3
   val drawerHeight = if (expanded) Modifier.fillMaxHeight(.82f)
     else Modifier.heightIn(max = if (isMcpSetup) 460.dp else 420.dp).fillMaxHeight()
   val expiresAt = panel?.optLong("expiresAt") ?: 0L
-  val primary = mainActions.firstOrNull()?.takeIf { authUrl == null && qrOnly == null && pollAction == null }
+  val primary = mainActions.firstOrNull()?.takeIf { readyPrompt == null && authUrl == null && qrOnly == null && pollAction == null }
   val cancel = mainActions.find { it.value("id") == "pair-cancel" }
   val colors = MaterialTheme.colorScheme
   Column(Modifier.fillMaxWidth().then(drawerHeight)) {
@@ -641,25 +668,33 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
     Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
       .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp),
       verticalArrangement = Arrangement.spacedBy(14.dp)) {
-      panel?.value("headline")?.let { headline ->
+      val headline = panel?.value("headline")
+      val subtitle = panel?.value("subtitle")
+      if (headline != null || subtitle != null) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-          Text(headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-          panel?.value("subtitle")?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant) }
+          headline?.let { Text(it, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
+          subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant) }
         }
       }
       val status = panel?.value("message")
-      if (status != null) Row(Modifier.fillMaxWidth().background(colors.surfaceContainerLow, themedCorners(16))
+      if (status != null || readyPrompt != null) Row(Modifier.fillMaxWidth().background(colors.surfaceContainerLow, themedCorners(16))
         .padding(horizontal = 14.dp, vertical = 12.dp).testTag("capability-panel-status"),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (panel?.value("tone") == "success") {
+        if (panel?.value("tone") == "success" || readyPrompt != null) {
           val success = if (colors.surface.luminance() < .5f) Color(0xFF66D89A) else Color(0xFF187B49)
           ActionIcon(R.drawable.action_check_circle, color = success, contentDescription = null, size = 18.dp)
         } else if (pollAction != null) {
           Box(Modifier.size(8.dp).background(colors.primary, CircleShape))
         }
-        Text(status, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+        Text(status ?: capabilityLabel("可在对话中使用", "Ready to use in chat"),
+          style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
       }
       else if (summary.isNotEmpty()) Text(summary, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (steps.isNotEmpty()) CapabilityPanelSteps(steps)
+      visibleCopyable?.let { CapabilityCopyableCard(it, busy) }
+      if (visibleLinks.isNotEmpty()) CapabilityPanelLinks(visibleLinks, busy) { url ->
+        runCatching { browser.openUri(url) }.onFailure { errorMessage = requestFailure }
+      }
       panel?.value("reviewText")?.let { review ->
         Text(review, Modifier.fillMaxWidth().background(colors.surfaceContainerLow, themedCorners(16))
           .padding(14.dp).testTag("capability-panel-review-text"),
@@ -733,10 +768,18 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
         }
       }
     }
-    if (authUrl != null || qrOnly != null || primary != null || cancel != null) {
+    if (readyPrompt != null || authUrl != null || qrOnly != null || primary != null || cancel != null) {
       HorizontalDivider(color = colors.outlineVariant.copy(alpha = .5f))
       Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 8.dp)) {
         when {
+          readyPrompt != null -> Button(onClick = {
+            focus.clearFocus()
+            keyboard?.hide()
+            onUseInChat?.invoke(readyPrompt)
+          }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .testTag("capability-use-in-chat")) {
+            Text(if (isConversation) capabilityLabel("返回对话", "Back to chat") else capabilityLabel("通过对话使用", "Use in chat"))
+          }
           authUrl != null -> Button(onClick = {
             runCatching { browser.openUri(authUrl) }.onSuccess { openedUrl = authUrl }
               .onFailure { errorMessage = requestFailure }
@@ -937,17 +980,93 @@ private fun CapabilityActionButton(action: JSONObject, primary: Boolean, busy: B
 }
 
 @Composable
+private fun CapabilityPanelSteps(steps: List<String>) {
+  val colors = MaterialTheme.colorScheme
+  Column(Modifier.fillMaxWidth().background(colors.surfaceContainerLow, themedCorners(16))
+    .padding(14.dp).testTag("capability-panel-steps"),
+    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    steps.forEachIndexed { index, step ->
+      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+        if (steps.size > 1) {
+          Text("${index + 1}.", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = colors.primary)
+        }
+        Text(step, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+      }
+    }
+  }
+}
+
+@Composable
+private fun CapabilityCopyableCard(block: JSONObject, busy: Boolean) {
+  val context = LocalContext.current
+  val colors = MaterialTheme.colorScheme
+  val label = block.value("label").orEmpty()
+  val content = block.value("content").orEmpty()
+  val note = block.value("note")
+  var copied by remember(content) { mutableStateOf(false) }
+  Column(Modifier.fillMaxWidth().background(colors.surfaceContainerLow, themedCorners(16))
+    .padding(14.dp).testTag("capability-panel-copyable"),
+    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      Text(label, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = colors.onSurface)
+      FilledTonalButton(onClick = {
+        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("", content))
+        copied = true
+      }, enabled = !busy, modifier = Modifier.heightIn(min = 38.dp).testTag("capability-panel-copy-block")) {
+        ActionIcon(if (copied) R.drawable.action_check_circle else R.drawable.message_copy, contentDescription = null, size = 15.dp)
+        Spacer(Modifier.size(6.dp))
+        Text(if (copied) capabilityLabel("已复制", "Copied") else capabilityLabel("复制", "Copy"))
+      }
+    }
+    Box(Modifier.fillMaxWidth().heightIn(max = 140.dp).background(colors.surfaceContainer, themedCorners(12))
+      .verticalScroll(rememberScrollState()).padding(10.dp)) {
+      Text(content, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = colors.onSurface)
+    }
+    if (note != null) {
+      Text(note, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+    }
+  }
+}
+
+@Composable
+private fun CapabilityPanelLinks(links: List<JSONObject>, busy: Boolean, onOpen: (String) -> Unit) {
+  val colors = MaterialTheme.colorScheme
+  Column(Modifier.fillMaxWidth().testTag("capability-panel-links"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    for (link in links) {
+      val label = link.value("label") ?: continue
+      val url = safeHttpsUrl(link.value("url")) ?: continue
+      Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(themedCorners(14))
+        .background(colors.surfaceContainerLow).clickable(enabled = !busy, role = Role.Button) { onOpen(url) }
+        .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = colors.primary)
+        ActionIcon(R.drawable.action_chevron_right, color = colors.primary, contentDescription = null, size = 14.dp)
+      }
+    }
+  }
+}
+
+@Composable
 private fun CapabilityInput(field: JSONObject, values: Map<String, String>, busy: Boolean,
   onChange: (String, String) -> Unit, onSearch: () -> Unit = {}) {
       val id = field.getString("id")
-      val label = field.getString("label")
+      val rawLabel = field.getString("label")
+      val required = field.optBoolean("required")
+      val label = if (required) "$rawLabel *" else rawLabel
+      val description = field.value("description")
+      val format = field.value("format")
+      val isJson = format == "json" || id == "mcp-json"
+      val isUrl = format == "url" || id == "url"
+      val isCode = format == "code" || isJson || isUrl || id in setOf("mcp-json", "url", "command", "args", "cwd")
       val value = values[id].orEmpty()
       val change: (String) -> Unit = { onChange(id, it) }
+      Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
       when (field.getString("type")) {
         "list" -> {
           val groups = value.lineSequence().map(String::trim).filter(String::isNotEmpty).distinct().toList()
           var pending by remember(id, value) { mutableStateOf("") }
           val removeLabel = capabilityLabel("移除", "Remove")
+          val addLabel = field.value("addLabel") ?: capabilityLabel("添加项目", "Add item")
           val addGroup = {
             val item = pending.trim()
             if (item.isNotEmpty() && item.none { it == ',' || it == '\n' || it == '\r' }) {
@@ -970,28 +1089,31 @@ private fun CapabilityInput(field: JSONObject, values: Map<String, String>, busy
               TextField(pending, { pending = it.take(160) }, Modifier.weight(1f), singleLine = true, enabled = !busy,
                 placeholder = { Text(field.optString("hint")) }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { addGroup() }))
-              TextButton(onClick = addGroup, enabled = !busy && pending.isNotBlank()) { Text(capabilityLabel("添加群聊", "Add group")) }
+              TextButton(onClick = addGroup, enabled = !busy && pending.isNotBlank()) { Text(addLabel) }
             }
           }
         }
         "toggle" -> Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14))
           .padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-          Text(label, Modifier.weight(1f))
+          Text(rawLabel, Modifier.weight(1f))
           Switch(checked = value == "true", onCheckedChange = { change(it.toString()) }, enabled = !busy,
-            modifier = Modifier.semantics { contentDescription = label }.testTag("capability-field-$id"))
+            modifier = Modifier.semantics { contentDescription = rawLabel }.testTag("capability-field-$id"))
         }
-        "headers" -> CapabilityKeyValueEditor(id, value, busy, change)
+        "headers" -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Text(label, style = MaterialTheme.typography.labelLarge)
+          CapabilityKeyValueEditor(field, id, value, busy, change)
+        }
         "select" -> {
           val options = field.objects("options")
           var open by remember(id) { mutableStateOf(false) }
           if (field.value("presentation") == "segmented") {
-            CapabilityModeSelector(id, label, options, value, busy, change)
+            CapabilityModeSelector(id, rawLabel, options, value, busy, change)
           } else Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14)).padding(12.dp)) {
             Text(label, style = MaterialTheme.typography.labelLarge)
             Box {
               TextButton(onClick = { open = true }, enabled = !busy,
                 modifier = Modifier.testTag("capability-field-$id")) {
-                Text(options.firstOrNull { it.optString("id") == value }?.optString("label") ?: label)
+                Text(options.firstOrNull { it.optString("id") == value }?.optString("label") ?: rawLabel)
               }
               DropdownMenu(open, onDismissRequest = { open = false }) {
                 options.forEach { option ->
@@ -1011,20 +1133,25 @@ private fun CapabilityInput(field: JSONObject, values: Map<String, String>, busy
             disabledIndicatorColor = androidx.compose.ui.graphics.Color.Transparent),
           keyboardOptions = KeyboardOptions(
             keyboardType = when {
-              id == "url" -> KeyboardType.Uri
+              isUrl -> KeyboardType.Uri
               field.value("type") == "secret" -> KeyboardType.Password
               else -> KeyboardType.Text
             },
-            autoCorrectEnabled = id !in setOf("mcp-json", "url", "command", "args", "cwd") && field.value("type") != "secret",
+            autoCorrectEnabled = !isCode && field.value("type") != "secret",
             imeAction = if (id == "query") ImeAction.Search else ImeAction.Default),
           keyboardActions = KeyboardActions(onSearch = { onSearch() }),
           singleLine = field.value("type") != "multiline",
-          minLines = if (id == "mcp-json") 5 else 1,
-          maxLines = when (id) { "mcp-json" -> 9; "args" -> 6; else -> Int.MAX_VALUE },
-          textStyle = if (id == "mcp-json") MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace)
+          minLines = if (isJson) 5 else 1,
+          maxLines = when { isJson -> 9; id == "args" -> 6; else -> Int.MAX_VALUE },
+          textStyle = if (isJson) MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace)
             else MaterialTheme.typography.bodyLarge,
           visualTransformation = if (field.value("type") == "secret") PasswordVisualTransformation()
             else VisualTransformation.None)
+      }
+      if (description != null) {
+        Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.padding(horizontal = 4.dp))
+      }
       }
 }
 
@@ -1057,7 +1184,7 @@ private fun CapabilityModeSelector(id: String, label: String, options: List<JSON
 }
 
 @Composable
-private fun CapabilityKeyValueEditor(id: String, encoded: String, busy: Boolean, onChange: (String) -> Unit) {
+private fun CapabilityKeyValueEditor(field: JSONObject, id: String, encoded: String, busy: Boolean, onChange: (String) -> Unit) {
   val rows = remember(encoded) {
     val input = runCatching { JSONArray(encoded) }.getOrNull()
     List(input?.length() ?: 0) { index ->
@@ -1070,8 +1197,11 @@ private fun CapabilityKeyValueEditor(id: String, encoded: String, busy: Boolean,
   }
   val environment = id == "mcp-env"
   val prefix = if (environment) "mcp-env" else "mcp-header"
-  val nameLabel = if (environment) capabilityLabel("变量名", "Variable name") else capabilityLabel("请求头名称", "Header name")
-  val valueLabel = if (environment) capabilityLabel("变量值", "Variable value") else capabilityLabel("请求头值", "Header value")
+  val nameLabel = field.value("keyLabel") ?: if (environment) capabilityLabel("变量名", "Variable name") else capabilityLabel("请求头名称", "Header name")
+  val valueLabel = field.value("valueLabel") ?: if (environment) capabilityLabel("变量值", "Variable value") else capabilityLabel("请求头值", "Header value")
+  val keyPlaceholder = field.value("keyPlaceholder") ?: if (environment) "API_KEY" else "X-API-Key"
+  val addLabel = field.value("addLabel") ?: if (environment) capabilityLabel("添加变量", "Add variable") else capabilityLabel("添加请求头", "Add header")
+  val maxItems = field.optInt("maxItems", if (environment) 32 else 16).coerceAtLeast(1)
   val removeLabel = if (environment) capabilityLabel("移除变量", "Remove variable") else capabilityLabel("移除请求头", "Remove header")
   Column(Modifier.fillMaxWidth().testTag("capability-field-$id"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
     rows.forEachIndexed { index, (name, value) ->
@@ -1081,7 +1211,7 @@ private fun CapabilityKeyValueEditor(id: String, encoded: String, busy: Boolean,
             unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent)
           TextField(name, { text -> update(rows.toMutableList().apply { this[index] = text to value }) },
             Modifier.fillMaxWidth().testTag("$prefix-name-$index"), enabled = !busy,
-            label = { Text(nameLabel) }, placeholder = { Text(if (environment) "API_KEY" else "X-API-Key") }, singleLine = true,
+            label = { Text(nameLabel) }, placeholder = { Text(keyPlaceholder) }, singleLine = true,
             shape = themedCorners(12), colors = fieldColors, keyboardOptions = KeyboardOptions(autoCorrectEnabled = false))
           TextField(value, { text -> update(rows.toMutableList().apply { this[index] = name to text }) },
             Modifier.fillMaxWidth().testTag("$prefix-value-$index"), enabled = !busy,
@@ -1095,11 +1225,11 @@ private fun CapabilityKeyValueEditor(id: String, encoded: String, busy: Boolean,
         }
       }
     }
-    if (rows.size < (if (environment) 32 else 16)) {
+    if (rows.size < maxItems) {
       TextButton(onClick = { update(rows + ("" to "")) }, enabled = !busy) {
         ActionIcon(R.drawable.action_add, color = MaterialTheme.colorScheme.primary, contentDescription = null, size = 16.dp)
         Spacer(Modifier.size(6.dp))
-        Text(if (environment) capabilityLabel("添加变量", "Add variable") else capabilityLabel("添加请求头", "Add header"))
+        Text(addLabel)
       }
     }
   }

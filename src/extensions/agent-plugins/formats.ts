@@ -16,7 +16,7 @@ export interface PluginLayout {
   skillRoots: string[];
   mcpConfigs: unknown[];
   compatibility: CompatibilityItem[];
-  userConfig: Record<string, { type: 'string' | 'number' | 'boolean'; title: string; required: boolean; sensitive: boolean; default?: string | number | boolean }>;
+  userConfig: Record<string, { type: 'string' | 'number' | 'boolean'; title: string; description?: string; required: boolean; sensitive: boolean; default?: string | number | boolean }>;
   tasks: string[];
 }
 
@@ -85,6 +85,7 @@ export function readPluginLayout(root: string, read: (path: string) => string, s
       continue;
     }
     userConfig[key] = { type: field.type as 'string' | 'number' | 'boolean', title: String(field.title ?? key), required: field.required === true, sensitive: field.sensitive === true,
+      ...(typeof field.description === 'string' && field.description.trim() ? { description: field.description.trim() } : {}),
       ...(['string', 'number', 'boolean'].includes(typeof field.default) ? { default: field.default as string | number | boolean } : {}) };
   }
   const ui = object(overlay.interface);

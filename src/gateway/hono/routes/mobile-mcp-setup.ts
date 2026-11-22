@@ -229,27 +229,51 @@ function importCandidates(raw: string | undefined, host: McpSetupHost, t: Transl
   return { candidates, unsupported: entries.length - candidates.length };
 }
 
-function entry(t: Translator, options: { source?: 'link' | 'json' | 'stdio'; candidate?: Candidate; method?: AuthMethod; message?: string } = {}): Panel {
+function entry(t: Translator, options: {
+  source?: 'link' | 'json' | 'stdio';
+  candidate?: Candidate;
+  method?: AuthMethod;
+  message?: string;
+  allowStdio?: boolean;
+} = {}): Panel {
   const server = options.candidate?.server;
   const link = { field: 'mcp-mode', value: 'link' };
   const json = { field: 'mcp-mode', value: 'json' };
   const stdio = { field: 'mcp-mode', value: 'stdio' };
   return {
     message: options.message,
+    ...(options.allowStdio === false ? {
+      copyable: {
+        label: t('先在电脑端启用命令启动', 'Enable command launch on Gateway first'),
+        content: 'xopc config set gateway.mobileMcpAllowStdio true',
+        note: t('当前 Gateway 未允许移动端命令启动。请先在电脑终端执行上方命令，再返回审阅并添加。',
+          'Mobile command launch is currently disabled on the Gateway. Run the command above on your computer, then return here.'),
+        visibleWhen: stdio,
+      },
+    } : {}),
     fields: [
       { id: 'mcp-mode', label: t('添加方式', 'Add method'), type: 'select', presentation: 'segmented',
         value: options.source ?? 'link', options: [
           { id: 'link', label: t('服务链接', 'Server URL') }, { id: 'json', label: t('粘贴 JSON', 'Paste JSON') },
           { id: 'stdio', label: t('命令启动', 'Command') },
         ] },
-      { id: 'url', label: t('服务地址', 'Server URL'), type: 'text', value: typeof server?.url === 'string' ? server.url : '',
-        hint: 'https://example.com/mcp', visibleWhen: link },
-      { id: 'mcp-json', label: t('MCP JSON 配置', 'MCP JSON configuration'), type: 'multiline', retain: true,
-        hint: '{ "mcpServers": { … } }', visibleWhen: json },
-      { id: 'command', label: t('可执行程序', 'Executable'), type: 'text', value: server?.command ?? '',
-        hint: t('Gateway 上的程序名称或路径', 'Program name or path on the Gateway'), visibleWhen: stdio },
-      { id: 'args', label: t('参数（选填）', 'Arguments (optional)'), type: 'multiline', value: server?.args?.join('\n') ?? '',
-        hint: t('每行一个参数，空格会保留', 'One argument per line. Spaces are preserved.'), visibleWhen: stdio },
+      { id: 'url', label: t('服务地址', 'Server URL'), type: 'text', format: 'url', required: true,
+        value: typeof server?.url === 'string' ? server.url : '',
+        hint: 'https://example.com/mcp',
+        description: t('支持公网 HTTPS 或 Gateway 所在内网的 HTTP(S) 地址。', 'Supports public HTTPS or Gateway private-network HTTP(S) URLs.'),
+        visibleWhen: link },
+      { id: 'mcp-json', label: t('MCP JSON 配置', 'MCP JSON configuration'), type: 'multiline', format: 'json', required: true, retain: true,
+        hint: '{ "mcpServers": { … } }',
+        description: t('可直接粘贴 Claude Desktop、Cursor 或服务文档里的 JSON 配置片段。', 'Paste a JSON snippet from Claude Desktop, Cursor, or MCP server docs.'),
+        visibleWhen: json },
+      { id: 'command', label: t('可执行程序', 'Executable'), type: 'text', format: 'code', required: true, value: server?.command ?? '',
+        hint: t('Gateway 上的程序名称或路径', 'Program name or path on the Gateway'),
+        description: t('运行在 Gateway 主机上的程序名或绝对路径（如 npx、uvx、node）。', 'Program name or path on the Gateway host (for example: npx, uvx, node).'),
+        visibleWhen: stdio },
+      { id: 'args', label: t('参数（选填）', 'Arguments (optional)'), type: 'multiline', format: 'code', value: server?.args?.join('\n') ?? '',
+        hint: t('每行一个参数，空格会保留', 'One argument per line. Spaces are preserved.'),
+        description: t('每个参数占一行，无需手动添加引号。', 'Enter one argument per line without extra quotes.'),
+        visibleWhen: stdio },
       { id: 'id', label: t('名称（选填）', 'Name (optional)'), type: 'text', value: options.candidate?.name ?? '',
         hint: t('默认使用服务域名', 'Defaults to the server domain'), advanced: true, visibleWhen: link },
       { id: 'transport', label: t('传输协议', 'Transport'), type: 'select', value: server?.type === 'sse' ? 'sse' : 'http',
@@ -261,12 +285,15 @@ function entry(t: Translator, options: { source?: 'link' | 'json' | 'stdio'; can
           { id: 'auto', label: t('自动识别', 'Detect automatically') }, { id: 'private', label: t('Gateway 内网', 'Gateway private network') },
         ] },
       { id: 'authMethod', label: t('认证方式', 'Authentication'), type: 'select', value: options.method ?? 'auto',
+        description: t('不确定时保持「自动探测」，系统会自动识别是否需要 OAuth 或访问密钥。', 'Keep Detect automatically if unsure; the Gateway will detect OAuth or API keys.'),
         visibleWhen: link, options: authOptions(t) },
       { id: 'commandName', label: t('名称（选填）', 'Name (optional)'), type: 'text',
         value: options.source === 'stdio' ? options.candidate?.name : '', advanced: true, visibleWhen: stdio },
-      { id: 'cwd', label: t('工作目录（选填）', 'Working directory (optional)'), type: 'text', value: server?.cwd ?? '',
+      { id: 'cwd', label: t('工作目录（选填）', 'Working directory (optional)'), type: 'text', format: 'code', value: server?.cwd ?? '',
         hint: t('默认使用 Gateway 工作区', 'Defaults to the Gateway workspace'), advanced: true, visibleWhen: stdio },
       { id: 'mcp-env', label: t('环境变量（选填）', 'Environment variables (optional)'), type: 'headers', retain: true,
+        keyLabel: t('变量名', 'Variable name'), valueLabel: t('变量值', 'Variable value'),
+        keyPlaceholder: 'API_KEY', addLabel: t('添加变量', 'Add variable'), maxItems: 32,
         advanced: true, visibleWhen: stdio },
     ],
     advancedLabel: t('高级设置', 'Advanced settings'),
@@ -375,15 +402,24 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
       flow: flow.id,
       ...reviewSummary(flow.candidate, t),
       message: message ?? t('填写服务商提供的凭据。', 'Enter the credentials provided by the service.'),
+      steps: [
+        t('按服务商文档选择对应的认证方式并填写凭据。', 'Choose the authentication method specified by the provider and enter your credentials.'),
+        t('凭据会加密保存在 Gateway，点击「检查连接」验证后即可添加。', 'Credentials are encrypted on the Gateway. Tap Check connection to verify before adding.'),
+      ],
       fields: [
-        { id: 'method', label: t('认证方式', 'Authentication'), type: 'select', value: initial, options: [
+        { id: 'method', label: t('认证方式', 'Authentication'), type: 'select', required: true, value: initial, options: [
           { id: '', label: t('选择认证方式', 'Choose an authentication method') }, ...authOptions(t),
         ] },
-        { id: 'token', label: 'Bearer Token', type: 'secret', visibleWhen: { field: 'method', value: 'bearer' } },
-        { id: 'apiKeyHeader', label: t('API Key 请求头名称', 'API Key header name'), type: 'text',
+        { id: 'token', label: 'Bearer Token', type: 'secret', required: true,
+          description: t('填写服务商颁发的访问令牌，无需手动加 Bearer 前缀。', 'Enter the access token; the Bearer prefix is added automatically.'),
+          visibleWhen: { field: 'method', value: 'bearer' } },
+        { id: 'apiKeyHeader', label: t('API Key 请求头名称', 'API Key header name'), type: 'text', required: true,
           value: previousKeyHeader ?? 'X-API-Key', hint: 'X-API-Key', visibleWhen: apiKey },
-        { id: 'apiKey', label: 'API Key', type: 'secret', visibleWhen: apiKey },
-        { id: 'requestHeaders', label: t('请求头', 'Request headers'), type: 'headers', visibleWhen: { field: 'method', value: 'headers' } },
+        { id: 'apiKey', label: 'API Key', type: 'secret', required: true, visibleWhen: apiKey },
+        { id: 'requestHeaders', label: t('请求头', 'Request headers'), type: 'headers',
+          keyLabel: t('请求头名称', 'Header name'), valueLabel: t('请求头值', 'Header value'),
+          keyPlaceholder: 'X-API-Key', addLabel: t('添加请求头', 'Add header'), maxItems: 16,
+          visibleWhen: { field: 'method', value: 'headers' } },
       ],
       actions: [{ id: 'verify', label: t('检查连接', 'Check connection') }, backAction(t)],
     };
@@ -393,6 +429,10 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
     flow.phase = 'oauth';
     return { flow: flow.id, ...reviewSummary(flow.candidate, t),
       message: message ?? t('在服务商页面登录并授权。', 'Sign in and authorize access on the provider’s website.'),
+      steps: [
+        t('点击下方「打开浏览器授权」登录服务商账号。', 'Tap Authorize in browser to sign in with the provider.'),
+        t('授权完成后切回本应用，系统会自动检测并加载工具列表。', 'Return to this app after authorizing; connection verification runs automatically.'),
+      ],
       actions: [{ id: 'authorize', label: t('打开浏览器授权', 'Authorize in browser') },
         { id: 'change-auth', label: t('更改认证方式', 'Change authentication') }, backAction(t)] };
   }
@@ -516,7 +556,7 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
   }
 
   return async function mobileMcpSetup(owner: string, t: Translator, command?: Command): Promise<Panel> {
-    if (!command) return entry(t);
+    if (!command) return entry(t, { allowStdio: readHost().allowStdio });
     const { action, values } = command;
     if (!command.flow && action === 'preview') {
       const imported = importCandidates(values['mcp-json'], readHost(), t);
@@ -559,7 +599,7 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
     }
 
     const flow = command.flow ? flows.get(command.flow) : undefined;
-    if (!flow || flow.owner !== owner) return entry(t, { message: t('配置已过期，请重新检查。', 'Setup expired. Check the connection again.') });
+    if (!flow || flow.owner !== owner) return entry(t, { message: t('配置已过期，请重新检查。', 'Setup expired. Check the connection again.'), allowStdio: readHost().allowStdio });
     if (flow.busy) throw new McpDraftError(409, t('正在处理，请稍后重试。', 'An operation is in progress. Try again shortly.'));
     if (flow.receipt?.action === action && flow.receipt.revision === command.revision) return flow.receipt.panel;
     if (command.revision !== flow.revision) {
@@ -597,8 +637,8 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
       }
       clearTimeout(flow.timer);
       flows.delete(flow.id);
-      return entry(t, flow.candidates ? { source: 'json' } : {
-        source: flow.candidate?.server.type === 'stdio' ? 'stdio' : 'link', candidate: flow.candidate, method: flow.method,
+      return entry(t, flow.candidates ? { source: 'json', allowStdio: readHost().allowStdio } : {
+        source: flow.candidate?.server.type === 'stdio' ? 'stdio' : 'link', candidate: flow.candidate, method: flow.method, allowStdio: readHost().allowStdio,
       });
     }
     if (action === 'select' && flow.phase === 'preview') {

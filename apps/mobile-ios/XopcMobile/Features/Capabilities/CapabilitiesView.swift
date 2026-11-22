@@ -497,12 +497,34 @@ private struct CapabilityPanelPayload: Decodable {
 
     struct Visibility: Decodable { let field: String; let value: String }
 
+    struct Link: Decodable, Identifiable {
+        let label: String
+        let url: URL
+        let visibleWhen: Visibility?
+        var id: String { url.absoluteString + ":" + label }
+    }
+
+    struct Copyable: Decodable {
+        let label: String
+        let content: String
+        let note: String?
+        let visibleWhen: Visibility?
+    }
+
     struct Field: Decodable, Identifiable {
         let id: String
         let label: String
         let type: String
         let value: String?
         let hint: String?
+        let description: String?
+        let required: Bool?
+        let format: String?
+        let addLabel: String?
+        let keyLabel: String?
+        let valueLabel: String?
+        let keyPlaceholder: String?
+        let maxItems: Int?
         let advanced: Bool?
         let options: [Choice]?
         let visibleWhen: Visibility?
@@ -533,6 +555,9 @@ private struct CapabilityPanelPayload: Decodable {
     let actions: [Action]?
     let headline: String?
     let subtitle: String?
+    let steps: [String]?
+    let links: [Link]?
+    let copyable: Copyable?
     let reviewText: String?
     let tone: String?
     let advancedLabel: String?
@@ -644,6 +669,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     @State private var confirmation: CapabilityPanelPayload.Action?
     @State private var confirmationOpen = false
     @State private var requestRevision = 0
+    @State private var copiedBlock = false
     @FocusState private var focusedField: String?
     @State private var focusedCredential: String?
 
@@ -678,6 +704,9 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     panelStatus
+                    panelSteps
+                    panelCopyable
+                    panelLinks
                     if let review = panel?.reviewText {
                         Text(verbatim: review)
                             .font(.system(.footnote, design: .monospaced))
@@ -789,6 +818,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             Task { await load(action, polling: true) }
         }
         .onChange(of: panel?.qrUrl) { qrFeedback = nil }
+        .onChange(of: panel?.copyable?.content) { copiedBlock = false }
         .onChange(of: verifiedURL) { showQr = false }
         .onChange(of: needsExpandedDrawer, initial: true) {
             drawerDetent = needsExpandedDrawer ? capabilityExpandedDetent : capabilityCompactDetent
@@ -904,12 +934,14 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     }
 
     @ViewBuilder private var panelStatus: some View {
-        if let headline = panel?.headline {
+        if panel?.headline != nil || panel?.subtitle != nil {
             VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: headline)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(theme.foreground)
-                    .accessibilityAddTraits(.isHeader)
+                if let headline = panel?.headline {
+                    Text(verbatim: headline)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(theme.foreground)
+                        .accessibilityAddTraits(.isHeader)
+                }
                 if let subtitle = panel?.subtitle {
                     Text(verbatim: subtitle).font(.footnote).foregroundStyle(theme.secondary)
                         .textSelection(.enabled)
@@ -934,6 +966,109 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             .accessibilityIdentifier("capability-panel-status")
         } else if panel != nil, !summary.isEmpty, category != "agents" {
             Text(verbatim: summary).font(.subheadline).foregroundStyle(theme.secondary)
+        }
+    }
+
+    @ViewBuilder private var panelSteps: some View {
+        let steps = (panel?.steps ?? []).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        if !steps.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                    HStack(alignment: .top, spacing: 8) {
+                        if steps.count > 1 {
+                            Text("\(index + 1).")
+                                .font(.footnote.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(theme.action)
+                        }
+                        Text(verbatim: step)
+                            .font(.footnote)
+                            .foregroundStyle(theme.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            .padding(14)
+            .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
+            .accessibilityIdentifier("capability-panel-steps")
+        }
+    }
+
+    private var visibleCopyable: CapabilityPanelPayload.Copyable? {
+        guard let block = panel?.copyable, !block.content.isEmpty, isVisible(block.visibleWhen) else { return nil }
+        return block
+    }
+
+    @ViewBuilder private var panelCopyable: some View {
+        if let block = visibleCopyable {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text(verbatim: block.label)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(theme.foreground)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        UIPasteboard.general.setItems([["public.utf8-plain-text": block.content]], options: [.localOnly: true])
+                        copiedBlock = true
+                    } label: {
+                        Label(copiedBlock ? t("已复制", "Copied") : t("复制", "Copy"),
+                              systemImage: copiedBlock ? "checkmark" : "document.on.document")
+                            .font(.footnote.weight(.medium))
+                            .frame(minHeight: 30)
+                    }
+                    .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(theme.action)
+                    .accessibilityIdentifier("capability-panel-copy-block")
+                }
+                ScrollView(.vertical) {
+                    Text(verbatim: block.content)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(theme.foreground)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 136)
+                .padding(10)
+                .background(theme.input, in: .rect(cornerRadius: theme.corner(12)))
+                if let note = block.note, !note.isEmpty {
+                    Text(verbatim: note)
+                        .font(.caption)
+                        .foregroundStyle(theme.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(14)
+            .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
+            .accessibilityIdentifier("capability-panel-copyable")
+        }
+    }
+
+    private var visibleLinks: [CapabilityPanelPayload.Link] {
+        (panel?.links ?? []).filter { link in
+            isVisible(link.visibleWhen) && link.url.scheme == "https" && link.url.host != nil && link.url.user == nil && link.url.password == nil
+        }
+    }
+
+    @ViewBuilder private var panelLinks: some View {
+        if !visibleLinks.isEmpty {
+            VStack(spacing: 8) {
+                ForEach(visibleLinks) { link in
+                    Button { openURL(link.url) } label: {
+                        HStack(spacing: 8) {
+                            Text(verbatim: link.label)
+                                .font(.subheadline.weight(.medium))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption.weight(.semibold))
+                                .accessibilityHidden(true)
+                        }
+                        .foregroundStyle(theme.action)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 44)
+                        .background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .accessibilityIdentifier("capability-panel-links")
         }
     }
 
@@ -1009,6 +1144,9 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         let shownFields = advanced ? visibleFields : mainFields
         return (panel?.qrUrl != nil && (verifiedURL == nil || showQr))
             || panel?.reviewText != nil
+            || !(panel?.steps?.isEmpty ?? true)
+            || visibleCopyable != nil
+            || !visibleLinks.isEmpty
             || (advanced && (!extraFields.isEmpty || !extraActions.isEmpty))
             || (detailsOpen && panel?.details?.isEmpty == false)
             || shownFields.count >= 3
@@ -1083,6 +1221,24 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         }
     }
 
+    @ViewBuilder private func fieldTitle(_ field: CapabilityPanelPayload.Field) -> some View {
+        HStack(spacing: 4) {
+            Text(verbatim: field.label).font(.subheadline.weight(.medium)).foregroundStyle(theme.foreground)
+            if field.required == true {
+                Text("*").font(.subheadline.weight(.semibold)).foregroundStyle(theme.action).accessibilityLabel(t("必填", "Required"))
+            }
+        }
+    }
+
+    @ViewBuilder private func fieldDescription(_ field: CapabilityPanelPayload.Field) -> some View {
+        if let description = field.description, !description.isEmpty {
+            Text(verbatim: description)
+                .font(.caption)
+                .foregroundStyle(theme.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     @ViewBuilder private func input(_ field: CapabilityPanelPayload.Field) -> some View {
         let value = Binding(get: { values[field.id] ?? "" }, set: {
             values[field.id] = $0
@@ -1093,29 +1249,37 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                 dismissPanelKeyboard(); errorMessage = nil
             }
         })
-        if field.type == "toggle" {
-            Toggle(isOn: Binding(get: { value.wrappedValue == "true" }, set: { value.wrappedValue = String($0) })) {
-                Text(verbatim: field.label)
+        VStack(alignment: .leading, spacing: 6) {
+            if field.type == "toggle" {
+                Toggle(isOn: Binding(get: { value.wrappedValue == "true" }, set: { value.wrappedValue = String($0) })) {
+                    Text(verbatim: field.label)
+                }
+            } else if field.presentation == "segmented" {
+                Picker(selection: value) {
+                    ForEach(field.options ?? []) { option in Text(verbatim: option.label).tag(option.id) }
+                } label: { Text(verbatim: field.label) }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("capability-field-\(field.id)")
+            } else if field.type == "select" {
+                selectInput(field, value: value)
+            } else if field.type == "list" {
+                groupList(field, selection: value)
+            } else if field.type == "headers" {
+                VStack(alignment: .leading, spacing: 6) {
+                    fieldTitle(field)
+                    CapabilityKeyValueEditor(
+                        encoded: value, focus: $focusedField, credentialFocus: $focusedCredential,
+                        isEnvironment: field.id == "mcp-env",
+                        keyLabel: field.keyLabel, valueLabel: field.valueLabel,
+                        keyPlaceholder: field.keyPlaceholder, addLabel: field.addLabel, maxItems: field.maxItems
+                    )
+                }
+            } else if field.format == "json" || field.id == "mcp-json" {
+                jsonInput(field, value: value)
+            } else {
+                textInput(field, value: value)
             }
-        } else if field.presentation == "segmented" {
-            Picker(selection: value) {
-                ForEach(field.options ?? []) { option in Text(verbatim: option.label).tag(option.id) }
-            } label: { Text(verbatim: field.label) }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("capability-field-\(field.id)")
-        } else if field.type == "select" {
-            selectInput(field, value: value)
-        } else if field.type == "list" {
-            groupList(field, selection: value)
-        } else if field.type == "headers" {
-            CapabilityKeyValueEditor(
-                encoded: value, focus: $focusedField, credentialFocus: $focusedCredential,
-                isEnvironment: field.id == "mcp-env"
-            )
-        } else if field.id == "mcp-json" {
-            jsonInput(field, value: value)
-        } else {
-            textInput(field, value: value)
+            fieldDescription(field)
         }
     }
 
@@ -1125,10 +1289,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         } label: { Text(verbatim: field.label) }
         if itemID == "mcp:setup" {
             HStack(spacing: 8) {
-                Text(verbatim: field.label)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(theme.foreground)
-                    .accessibilityHidden(true)
+                fieldTitle(field).accessibilityHidden(true)
                 Spacer(minLength: 0)
                 picker
                     .pickerStyle(.menu)
@@ -1146,7 +1307,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
 
     private func jsonInput(_ field: CapabilityPanelPayload.Field, value: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: field.label).font(.subheadline.weight(.medium))
+            fieldTitle(field)
             ZStack(alignment: .topLeading) {
                 if value.wrappedValue.isEmpty, let hint = field.hint {
                     Text(verbatim: hint).foregroundStyle(theme.secondary)
@@ -1159,7 +1320,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .accessibilityLabel(Text(verbatim: field.label))
-                    .accessibilityIdentifier("capability-field-mcp-json")
+                    .accessibilityIdentifier("capability-field-\(field.id)")
             }
             .font(.system(.footnote, design: .monospaced))
             .frame(height: 144)
@@ -1168,8 +1329,10 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     }
 
     private func textInput(_ field: CapabilityPanelPayload.Field, value: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: field.label).font(.subheadline.weight(.medium))
+        let isUrl = field.format == "url" || (itemID == "mcp:setup" && field.id == "url")
+        let isCode = field.format == "code" || isUrl || itemID == "mcp:setup"
+        return VStack(alignment: .leading, spacing: 6) {
+            fieldTitle(field)
             if field.type == "secret", itemID == "mcp:setup" {
                 McpCredentialInput(
                     label: field.label, placeholder: field.hint ?? field.label,
@@ -1182,9 +1345,9 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             } else {
                 TextField(field.hint ?? field.label, text: value, axis: field.type == "multiline" ? .vertical : .horizontal)
                     .lineLimit(field.type == "multiline" ? 3 ... 6 : 1 ... 1)
-                    .keyboardType(itemID == "mcp:setup" && field.id == "url" ? .URL : .default)
-                    .textInputAutocapitalization(itemID == "mcp:setup" ? .never : nil)
-                    .autocorrectionDisabled(itemID == "mcp:setup")
+                    .keyboardType(isUrl ? .URL : .default)
+                    .textInputAutocapitalization(isCode ? .never : nil)
+                    .autocorrectionDisabled(isCode)
                     .submitLabel(field.id == "query" ? .search : .done)
                     .focused($focusedField, equals: field.id)
                     .onSubmit {
@@ -1214,7 +1377,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             newGroup = ""
         }
         return VStack(alignment: .leading, spacing: 8) {
-            Text(verbatim: field.label).font(.subheadline.weight(.medium))
+            fieldTitle(field)
             ForEach(groups, id: \.self) { group in
                 HStack {
                     Text(verbatim: group)
@@ -1230,7 +1393,8 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                             newGroup = String(value.prefix(160))
                         }
                     }
-                Button(t("添加群聊", "Add group"), action: addGroup).disabled(newGroup.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button(field.addLabel ?? t("添加项目", "Add item"), action: addGroup)
+                    .disabled(newGroup.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding(12).background(theme.input, in: .rect(cornerRadius: theme.corner(14)))
@@ -1448,6 +1612,11 @@ private struct CapabilityKeyValueEditor: View {
     let focus: FocusState<String?>.Binding
     @Binding var credentialFocus: String?
     let isEnvironment: Bool
+    var keyLabel: String?
+    var valueLabel: String?
+    var keyPlaceholder: String?
+    var addLabel: String?
+    var maxItems: Int?
     @Environment(\.locale) private var locale
     @Environment(\.mobileTheme) private var theme
 
@@ -1455,12 +1624,24 @@ private struct CapabilityKeyValueEditor: View {
         isEnvironment ? "mcp-env" : "mcp-header"
     }
 
-    private var nameLabel: String {
-        isEnvironment ? t("变量名", "Variable name") : t("请求头名称", "Header name")
+    private var resolvedNameLabel: String {
+        keyLabel ?? (isEnvironment ? t("变量名", "Variable name") : t("请求头名称", "Header name"))
     }
 
-    private var valueLabel: String {
-        isEnvironment ? t("变量值", "Variable value") : t("请求头值", "Header value")
+    private var resolvedValueLabel: String {
+        valueLabel ?? (isEnvironment ? t("变量值", "Variable value") : t("请求头值", "Header value"))
+    }
+
+    private var resolvedKeyPlaceholder: String {
+        keyPlaceholder ?? (isEnvironment ? "API_KEY" : "X-API-Key")
+    }
+
+    private var resolvedAddLabel: String {
+        addLabel ?? (isEnvironment ? t("添加变量", "Add variable") : t("添加请求头", "Add header"))
+    }
+
+    private var resolvedMaxItems: Int {
+        maxItems ?? (isEnvironment ? 32 : 16)
     }
 
     private var rows: [[String]] {
@@ -1474,14 +1655,14 @@ private struct CapabilityKeyValueEditor: View {
             ForEach(rows.indices, id: \.self) { index in
                 HStack(alignment: .top, spacing: 4) {
                     VStack(spacing: 0) {
-                        TextField(isEnvironment ? "API_KEY" : "X-API-Key", text: cell(index, 0))
+                        TextField(resolvedKeyPlaceholder, text: cell(index, 0))
                             .focused(focus, equals: "\(prefix)-name-\(index)")
-                            .accessibilityLabel(nameLabel)
+                            .accessibilityLabel(resolvedNameLabel)
                             .accessibilityIdentifier("\(prefix)-name-\(index)")
                             .padding(10)
                         Divider().padding(.horizontal, 10)
                         McpCredentialInput(
-                            label: valueLabel, placeholder: valueLabel, text: cell(index, 1),
+                            label: resolvedValueLabel, placeholder: resolvedValueLabel, text: cell(index, 1),
                             focus: $credentialFocus, fieldID: "\(prefix)-value-\(index)"
                         )
                         .accessibilityIdentifier("\(prefix)-value-\(index)")
@@ -1506,11 +1687,11 @@ private struct CapabilityKeyValueEditor: View {
                     }
                 }
             }
-            if rows.count < (isEnvironment ? 32 : 16) {
+            if rows.count < resolvedMaxItems {
                 Button {
                     write(rows + [["", ""]])
                 } label: {
-                    Label(isEnvironment ? t("添加变量", "Add variable") : t("添加请求头", "Add header"), systemImage: "plus")
+                    Label(resolvedAddLabel, systemImage: "plus")
                         .frame(minHeight: 44)
                 }
                 .buttonStyle(.plain)

@@ -1,5 +1,5 @@
 import { XopcCapabilitiesView } from './CapabilitiesView';
-import { XopcCapabilitySetupView } from './CapabilitySetupView';
+import { XopcCapabilityPanelView } from './CapabilityPanelView';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcPersonalAgentSettings } from './PersonalAgentSettings';
@@ -484,11 +484,18 @@ export struct XopcHomeView {
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else if (page === 'capability-mcp-setup') {
       NavDestination() {
-        Column() {
-          XopcPageHeader({ heading: $r('app.string.cap_native_mcp'), onBack: (): void => { this.pathStack.pop(); } })
-          XopcCapabilitySetupView({ mode: 'mcp', itemId: (param as XopcMobileRoute).itemId,
-            initialUrl: (param as XopcMobileRoute).prompt ?? '' })
-        }.width('100%').height('100%')
+        XopcCapabilityPanelView({
+          category: 'connections',
+          itemId: 'mcp:setup',
+          itemName: this.getUIContext().getHostContext()?.resourceManager.getStringSync($r('app.string.cap_native_mcp').id) ?? 'MCP',
+          initialId: (param as XopcMobileRoute).itemId,
+          initialUrl: (param as XopcMobileRoute).prompt ?? '',
+          onClose: (): void => { this.pathStack.pop(); },
+          onUseInChat: (prompt: string): void => {
+            this.pathStack.pop();
+            void this.openOrdinaryChat('', prompt, false);
+          },
+        })
       }.hideTitleBar(true).backgroundColor(this.colors.surface)
     } else if (page === 'capabilities') {
       NavDestination() {
