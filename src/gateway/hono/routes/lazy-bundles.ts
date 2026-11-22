@@ -1,7 +1,13 @@
 import type { Hono } from 'hono';
 
 import { MCP_BRIDGE_PATH } from '../../../mcp/connection-grants.js';
-import { MCP_RESOURCE_METADATA_PATH, REMOTE_MCP_PATH } from '../../../mcp/remote-config.js';
+import {
+  MCP_OAUTH_AS_METADATA_PATH,
+  MCP_OAUTH_BASE_PATH,
+  MCP_RESOURCE_METADATA_PATH,
+  MCP_ROOT_RESOURCE_METADATA_PATH,
+  REMOTE_MCP_PATH,
+} from '../../../mcp/remote-config.js';
 
 import type { GatewayService } from '../../service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -148,6 +154,21 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     load: async () => {
       const { registerMcpBridgeRoutes } = await import('./mcp-bridge.js');
       return { register: registerMcpBridgeRoutes };
+    },
+  },
+  {
+    id: 'mcp-server-admin',
+    match: path => path === '/api/mcp-server/overview'
+      || path === '/api/mcp-server/config'
+      || path === '/api/mcp-server/audit'
+      || path === '/api/mcp-server/grants/local'
+      || /^\/api\/mcp-server\/grants\/local\/[^/]+$/.test(path)
+      || path === '/api/mcp-server/grants/remote'
+      || /^\/api\/mcp-server\/grants\/remote\/[^/]+$/.test(path)
+      || /^\/api\/mcp-server\/oauth-clients\/[^/]+$/.test(path),
+    load: async () => {
+      const { registerMcpServerAdminRoutes } = await import('./mcp-server-admin.js');
+      return { register: registerMcpServerAdminRoutes };
     },
   },
   {
@@ -639,8 +660,22 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
 export const APP_LAZY_ROUTE_BUNDLES: readonly AppLazyRouteBundle[] = [
   {
     id: 'mcp-remote',
-    prefixes: [REMOTE_MCP_PATH, MCP_RESOURCE_METADATA_PATH],
-    match: path => path === REMOTE_MCP_PATH || path === MCP_RESOURCE_METADATA_PATH,
+    prefixes: [
+      REMOTE_MCP_PATH,
+      MCP_RESOURCE_METADATA_PATH,
+      MCP_ROOT_RESOURCE_METADATA_PATH,
+      MCP_OAUTH_AS_METADATA_PATH,
+      MCP_OAUTH_BASE_PATH,
+    ],
+    match: path => path === REMOTE_MCP_PATH
+      || path === MCP_RESOURCE_METADATA_PATH
+      || path === MCP_ROOT_RESOURCE_METADATA_PATH
+      || path === MCP_OAUTH_AS_METADATA_PATH
+      || path === `${MCP_OAUTH_BASE_PATH}/jwks`
+      || path === `${MCP_OAUTH_BASE_PATH}/register`
+      || path === `${MCP_OAUTH_BASE_PATH}/authorize`
+      || path === `${MCP_OAUTH_BASE_PATH}/token`
+      || path === `${MCP_OAUTH_BASE_PATH}/revoke`,
     load: async () => {
       const { registerRemoteMcpRoutes } = await import('./mcp-remote.js');
       return { registerOnApp: registerRemoteMcpRoutes };

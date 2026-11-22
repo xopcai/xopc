@@ -811,6 +811,42 @@ export class TaskRunRepository {
     });
   }
 
+  listByMcpPrincipal(
+    principalId: string,
+    options: { statuses?: readonly TaskRunStatus[]; limit?: number; offset?: number } = {},
+  ): TaskRun[] {
+    const db = getSqliteDatabase();
+    const limit = Math.max(1, Math.min(100, options.limit ?? 25));
+    const offset = Math.max(0, options.offset ?? 0);
+    const statuses = options.statuses?.length ? options.statuses : undefined;
+    const statusClause = statuses ? `AND status IN (${statuses.map(() => '?').join(', ')})` : '';
+    const rows = db.prepare(
+      `SELECT * FROM task_runs
+       WHERE executor_kind = 'agent'
+         AND parent_run_id IS NULL
+         AND json_extract(trigger_json, '$.actor.kind') = 'integration'
+         AND json_extract(trigger_json, '$.actor.id') = ?
+         ${statusClause}
+       ORDER BY queued_at DESC, run_id DESC
+       LIMIT ? OFFSET ?`,
+    ).all(principalId, ...(statuses ?? []), limit, offset) as TaskRunRow[];
+    return rows.map(fromRow);
+  }
+
+  countActiveByMcpPrincipal(principalId: string): number {
+    const db = getSqliteDatabase();
+    const placeholders = ACTIVE_RUN_STATUSES.map(() => '?').join(', ');
+    const row = db.prepare(
+      `SELECT COUNT(*) AS count FROM task_runs
+       WHERE executor_kind = 'agent'
+         AND parent_run_id IS NULL
+         AND json_extract(trigger_json, '$.actor.kind') = 'integration'
+         AND json_extract(trigger_json, '$.actor.id') = ?
+         AND status IN (${placeholders})`,
+    ).get(principalId, ...ACTIVE_RUN_STATUSES) as { count: number };
+    return row.count;
+  }
+
   private appendEvent(
     db: ReturnType<typeof getSqliteDatabase>,
     runId: string,

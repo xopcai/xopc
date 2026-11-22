@@ -182,17 +182,20 @@ it('combines OAuth scopes with revocable Gateway authority for remote reads and 
     expect(await ungrantedWrite.json()).toMatchObject({ result: { isError: true } });
     await writer.connect(new StreamableHTTPClientTransport(new URL(resource), { requestInit: { headers: headers(writeToken) } }));
     expect((await writer.listTools()).tools.some(tool => tool.name === 'xopc_notes_create')).toBe(true);
+    const parseError = (res: unknown) => {
+      const result = res as { isError?: boolean; content: Array<{ text: string }> };
+      expect(result.isError).toBe(true);
+      return JSON.parse(result.content[0]!.text) as { code: string; operationId?: string; hint?: string };
+    };
     const create = (args: Record<string, string>) => writer.callTool({ name: 'xopc_notes_create', arguments: args });
-    expect(await create({ title: 'Missing key' })).toMatchObject({ isError: true, content: [{ text: '{"code":"INVALID_INPUT"}' }] });
+    expect(parseError(await create({ title: 'Missing key' }))).toMatchObject({ code: 'INVALID_INPUT', hint: expect.stringContaining('idempotencyKey') });
     const payload = { title: 'Remote fixture discoverable', markdown: '文'.repeat(25_000), idempotencyKey: 'fixture-key' };
     const [first, replay] = await Promise.all([create(payload), create(payload)]);
     expect(first.structuredContent).toMatchObject({ note: { title: payload.title, markdown: payload.markdown } });
     expect(replay.structuredContent).toEqual(first.structuredContent);
     const modernReplay = await rpc('tools/call', { name: 'xopc_notes_create', arguments: payload }, writeToken, true);
     expect(await modernReplay.json()).toMatchObject({ result: { structuredContent: first.structuredContent } });
-    expect(await create({ ...payload, title: 'Changed' })).toMatchObject({
-      isError: true, content: [{ text: '{"code":"REVISION_CONFLICT"}' }],
-    });
+    expect(parseError(await create({ ...payload, title: 'Changed' }))).toMatchObject({ code: 'REVISION_CONFLICT' });
     const found = await client.callTool({ name: 'xopc_workspace_search', arguments: { query: 'discoverable' } });
     expect(found.structuredContent).toMatchObject({ hits: [{ kind: 'note', title: payload.title }] });
 
@@ -223,16 +226,16 @@ it('combines OAuth scopes with revocable Gateway authority for remote reads and 
     expect(new TaskRepository().require(delegatedTaskId).contract?.brief).toContain('OAuth fixture');
     const firstPage = (await delegate('events', { runId, limit: 1 })).structuredContent;
     expect(firstPage).toMatchObject({ status: 'queued', events: [{ sequence: 1, type: 'task_run.created' }], nextSequence: 1 });
-    expect(await delegate('start', { ...delegatedInput, callback: true, idempotencyKey: 'missing-callback' })).toMatchObject({
-      isError: true, content: [{ text: '{"code":"UNAVAILABLE"}' }],
+    expect(parseError(await delegate('start', { ...delegatedInput, callback: true, idempotencyKey: 'missing-callback' }))).toMatchObject({
+      code: 'UNAVAILABLE',
     });
     expect((await delegate('start', delegatedInput)).structuredContent).toEqual(delegated.structuredContent);
-    expect(await delegate('start', { ...delegatedInput, prompt: 'Changed' })).toMatchObject({
-      isError: true, content: [{ text: '{"code":"REVISION_CONFLICT"}' }],
+    expect(parseError(await delegate('start', { ...delegatedInput, prompt: 'Changed' }))).toMatchObject({
+      code: 'REVISION_CONFLICT',
     });
     const otherToken = await sign({ clientId: otherWriter.clientId, scope: 'mcp.read mcp.write' });
-    expect(await delegate('steer', { runId, message: 'Too early', idempotencyKey: 'queued-steer' })).toMatchObject({
-      isError: true, content: [{ text: '{"code":"REVISION_CONFLICT"}' }],
+    expect(parseError(await delegate('steer', { runId, message: 'Too early', idempotencyKey: 'queued-steer' }))).toMatchObject({
+      code: 'REVISION_CONFLICT',
     });
     const foreignArgs = { get: {}, result: {}, events: {}, artifact_read: { artifactId: 'test' },
       cancel: { idempotencyKey: 'foreign' }, steer: { message: 'Foreign steer', idempotencyKey: 'foreign' },
@@ -240,7 +243,8 @@ it('combines OAuth scopes with revocable Gateway authority for remote reads and 
     for (const [name, args] of Object.entries(foreignArgs)) {
       const argumentsForTool = { runId, ...args };
       const denied = await rpc('tools/call', { name: 'xopc_agent_runs_' + name, arguments: argumentsForTool }, otherToken, true);
-      expect(await denied.json()).toMatchObject({ result: { isError: true, content: [{ text: '{"code":"NOT_FOUND"}' }] } });
+      const body = await denied.json() as { result: { isError: boolean; content: Array<{ text: string }> } };
+      expect(parseError(body.result)).toMatchObject({ code: 'NOT_FOUND' });
     }
     const conversationId = randomUUID();
     ensureSessionRecord(conversationId, join(directory, 'workspace'), { agentId });
@@ -372,7 +376,7 @@ it('combines OAuth scopes with revocable Gateway authority for remote reads and 
     } finally {
       release();
     }
-    expect(await inFlight).toMatchObject({ isError: true, content: [{ text: '{"code":"FORBIDDEN"}' }] });
+    expect(parseError(await inFlight)).toMatchObject({ code: 'FORBIDDEN' });
     expect((await rpc('tools/list', {}, writeToken)).status).toBe(403);
   } finally {
     await Promise.all([client.close(), writer.close()]);

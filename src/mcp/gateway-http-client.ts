@@ -13,16 +13,29 @@ import { createLogger } from '../utils/logger.js';
 const log = createLogger('Mcp:GatewayClient');
 
 export class GatewayHttpError extends Error {
-  constructor(readonly status: number, readonly code?: CapabilityErrorCode, readonly operationId?: string) {
+  constructor(
+    readonly status: number,
+    readonly code?: CapabilityErrorCode,
+    readonly operationId?: string,
+    readonly hint?: string,
+  ) {
     super(`Gateway request failed (${status})`);
   }
 }
 
 async function responseError(res: Awaited<ReturnType<typeof undiciFetch>>): Promise<GatewayHttpError> {
-  const body = await res.json().catch(() => null) as { code?: unknown; operationId?: unknown } | null;
+  const body = await res.json().catch(() => null) as { code?: unknown; operationId?: unknown; error?: unknown } | null;
   const code = CapabilityErrorCodeSchema.safeParse(body?.code);
-  return new GatewayHttpError(res.status, code.success ? code.data : undefined,
-    typeof body?.operationId === 'string' && body.operationId.length <= 200 ? body.operationId : undefined);
+  const parsedCode = code.success ? code.data : undefined;
+  const rawHint = parsedCode && parsedCode !== 'INTERNAL' && parsedCode !== 'OUTCOME_UNKNOWN' && typeof body?.error === 'string'
+    ? body.error.slice(0, 300)
+    : undefined;
+  return new GatewayHttpError(
+    res.status,
+    parsedCode,
+    typeof body?.operationId === 'string' && body.operationId.length <= 200 ? body.operationId : undefined,
+    rawHint,
+  );
 }
 
 function resolveGatewayCredentialFromConfig(cfg: Config): GatewayCredential | undefined {

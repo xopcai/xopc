@@ -6,7 +6,8 @@ import { assertSafeUrl } from '../media-shared/http/ssrf-guard.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/connection.js';
 import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { createLogger } from '../utils/logger.js';
-import { readMcpConnectionGrant } from './connection-grants.js';
+import { resolveMcpCallbackSecret, type McpConnectionCallback } from './callback-config.js';
+import { isMcpGrantExpired, readMcpConnectionGrant } from './connection-grants.js';
 import { listRemoteMcpGrants } from './remote-grants.js';
 import { mcpRunCallbackSubscriptions as subscriptions, type CallbackConfig } from './run-callback-subscriptions.js';
 
@@ -39,6 +40,27 @@ async function postEvent(url: URL, secret: string, eventId: string, payload: str
   });
 }
 
+function resolveConnectionGrantCallback(
+  connectionId: string,
+  remoteGrants: ReturnType<typeof listRemoteMcpGrants>,
+): { active: boolean; callback?: McpConnectionCallback } {
+  const remote = remoteGrants.find(grant => grant.connectionId === connectionId);
+  if (remote) {
+    return {
+      active: remote.capabilityIds.includes('xopc.agent_runs.start'),
+      callback: remote.callback,
+    };
+  }
+  const local = readMcpConnectionGrant(connectionId);
+  if (local && !isMcpGrantExpired(local)) {
+    return {
+      active: local.capabilityIds.includes('xopc.agent_runs.start'),
+      callback: local.callback,
+    };
+  }
+  return { active: false };
+}
+
 export class McpRunCallbackDispatcher {
   readonly #inFlight = new Set<string>();
   readonly #stop = new AbortController();
@@ -50,19 +72,20 @@ export class McpRunCallbackDispatcher {
   }
 
   dispatch(getConfig: () => CallbackConfig): void {
-    const config = getConfig();
-    const secret = config && process.env[config.secretEnv];
+    const globalConfig = getConfig();
     const now = Date.now();
-    if (!config || !secret || this.#stop.signal.aborted || now < this.#nextDispatch) return;
+    if (this.#stop.signal.aborted || now < this.#nextDispatch) return;
     this.#nextDispatch = now + 2_000;
-    const remoteConnections = new Set(listRemoteMcpGrants()
-      .filter(grant => grant.capabilityIds.includes('xopc.agent_runs.start')).map(grant => grant.connectionId));
+    const remoteGrants = listRemoteMcpGrants();
+
     for (const [runId, subscription] of subscriptions) {
       if (this.#inFlight.size >= 4) break;
       if (this.#inFlight.has(runId) || subscription.nextAttemptAt > now) continue;
       const id = subscription.principalId.slice('mcp:'.length);
-      if (subscription.url !== config.url || !this.#runs.get(runId)
-        || !(remoteConnections.has(id) || readMcpConnectionGrant(id)?.capabilityIds.includes('xopc.agent_runs.start'))) {
+      const grantState = resolveConnectionGrantCallback(id, remoteGrants);
+      const target = subscription.perConnection ? grantState.callback : (grantState.callback?.url === subscription.url ? grantState.callback : globalConfig);
+      const secret = resolveMcpCallbackSecret(target);
+      if (!grantState.active || !target || !secret || subscription.url !== target.url || !this.#runs.get(runId)) {
         subscriptions.delete(runId);
         continue;
       }
@@ -71,11 +94,21 @@ export class McpRunCallbackDispatcher {
       if (!event) continue;
       const payload = JSON.stringify({ eventId: event.id, runId, type: event.type, sequence: event.sequence, occurredAt: event.occurredAt });
       this.#inFlight.add(runId);
-      void postEvent(new URL(config.url), secret, event.id, payload,
+      void postEvent(
+        new URL(target.url),
+        secret,
+        event.id,
+        payload,
         AbortSignal.any([this.#stop.signal, AbortSignal.timeout(5_000)]),
-        () => isXopcDatabaseOpen() && getConfig()?.url === config.url
-          && Boolean(readMcpConnectionGrant(id)?.capabilityIds.includes('xopc.agent_runs.start')
-            || listRemoteMcpGrants().some(grant => grant.connectionId === id && grant.capabilityIds.includes('xopc.agent_runs.start'))))
+        () => {
+          if (!isXopcDatabaseOpen()) return false;
+          const currentRemote = listRemoteMcpGrants();
+          const currentGrant = resolveConnectionGrantCallback(id, currentRemote);
+          if (!currentGrant.active) return false;
+          const currentTarget = subscription.perConnection ? currentGrant.callback : (currentGrant.callback?.url === subscription.url ? currentGrant.callback : getConfig());
+          return currentTarget?.url === subscription.url && Boolean(resolveMcpCallbackSecret(currentTarget));
+        },
+      )
         .then(() => {
           if (this.#stop.signal.aborted || !isXopcDatabaseOpen()) return;
           if (terminalEvents.has(event.type)) subscriptions.delete(runId);

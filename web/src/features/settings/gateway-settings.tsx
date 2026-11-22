@@ -3,6 +3,7 @@ import {
   KeyRound,
   Loader2,
   Network,
+  Plug,
   Route,
   RefreshCw,
   RotateCw,
@@ -15,6 +16,7 @@ import useSWR from 'swr';
 
 import { useDesktopGatewayConnection } from '@/features/gateway/use-desktop-gateway-connection';
 import { DesktopGatewayConnection } from './desktop-gateway-connection';
+import { McpServerSettingsPanel } from './mcp-server/mcp-server-settings-panel';
 import { SettingsAdvancedSection } from '@/features/settings/settings-advanced-section';
 import { NumberInput } from '@/components/ui/number-input';
 import { uiPatchReducer } from '@/lib/settings-form-draft';
@@ -73,6 +75,7 @@ function inputClassName(): string {
 const GATEWAY_SETTINGS_TABS: readonly GatewaySettingsTabId[] = [
   'network',
   'access',
+  'mcp-server',
   'updates',
   'security',
   'proxy',
@@ -82,6 +85,7 @@ const GATEWAY_SETTINGS_TABS: readonly GatewaySettingsTabId[] = [
 const GATEWAY_SETTINGS_TAB_ICONS: Record<GatewaySettingsTabId, LucideIcon> = {
   network: Network,
   access: KeyRound,
+  'mcp-server': Plug,
   updates: RefreshCw,
   security: Shield,
   proxy: Route,
@@ -98,6 +102,7 @@ function parseGatewaySettingsTab(raw: string | null): GatewaySettingsTabId {
 function gatewaySettingsTabLabel(g: GatewaySettingsMessages, tab: GatewaySettingsTabId): string {
   if (tab === 'network') return g.tabNetwork;
   if (tab === 'access') return g.tabAccess;
+  if (tab === 'mcp-server') return g.tabMcpServer;
   if (tab === 'updates') return g.tabUpdates;
   if (tab === 'security') return g.tabSecurity;
   if (tab === 'proxy') return g.outboundProxyTitle;
@@ -107,6 +112,7 @@ function gatewaySettingsTabLabel(g: GatewaySettingsMessages, tab: GatewaySetting
 function gatewaySettingsTabHint(g: GatewaySettingsMessages, tab: GatewaySettingsTabId): string {
   if (tab === 'network') return g.networkTabHint;
   if (tab === 'access') return g.accessTabHint;
+  if (tab === 'mcp-server') return g.mcpServerTabHint;
   if (tab === 'updates') return g.updatesTabHint;
   if (tab === 'security') return g.securitySectionHint;
   if (tab === 'proxy') return g.outboundProxyHint;
@@ -791,6 +797,10 @@ function GatewayServerSettingsPanel() {
           </div>
           </SettingsAdvancedGate>
         </div>
+      </GatewayTabPanel>
+
+      <GatewayTabPanel g={g} id="mcp-server" activeTab={activeTab}>
+        <McpServerSettingsPanel />
       </GatewayTabPanel>
 
       <GatewayTabPanel g={g} id="security" activeTab={activeTab}>

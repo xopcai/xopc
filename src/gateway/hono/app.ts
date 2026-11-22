@@ -8,7 +8,13 @@ import { VIDEO_IMAGE_MAX_BYTES } from '@xopcai/gateway-contract';
 import { ENDPOINT_MAX_FILE_BYTES } from '@xopcai/endpoint-tools-protocol';
 
 import { authenticateMcpConnection, getMcpBearerToken, MCP_BRIDGE_PATH } from '../../mcp/connection-grants.js';
-import { REMOTE_MCP_PATH } from '../../mcp/remote-config.js';
+import {
+  MCP_OAUTH_AS_METADATA_PATH,
+  MCP_OAUTH_BASE_PATH,
+  MCP_RESOURCE_METADATA_PATH,
+  MCP_ROOT_RESOURCE_METADATA_PATH,
+  REMOTE_MCP_PATH,
+} from '../../mcp/remote-config.js';
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { createLogger } from '../../utils/logger.js';
 import type { GatewayService } from '../service.js';
@@ -139,25 +145,40 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // Host header matches `*.<publicHostSuffix>` (default `*.share.xopc.ai`) or
   // the path starts with `/site/:token/`. Otherwise it falls through.
   registerSiteShareMiddleware(app, service);
-  app.use(
-    cors({
-      origin: (origin) => {
-        const allowed = resolveAllBrowserOrigins();
-        if (!origin) {
-          return allowed[0] ?? `http://127.0.0.1:${gatewayPort}`;
-        }
-        const normalized = origin.toLowerCase();
-        if (isChromeExtensionOrigin(normalized)) return origin;
-        const hit = allowed.find((entry) => entry.toLowerCase() === normalized);
-        if (hit) return origin;
-        return allowed.includes('*') ? '*' : '';
-      },
-      allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Session-Id', 'Last-Event-ID', 'Idempotency-Key'],
-      credentials: true,
-      maxAge: 86400,
-    }),
-  );
+  const isRemoteMcpSurfacePath = (path: string): boolean =>
+    path === REMOTE_MCP_PATH
+    || path === MCP_RESOURCE_METADATA_PATH
+    || path === MCP_ROOT_RESOURCE_METADATA_PATH
+    || path === MCP_OAUTH_AS_METADATA_PATH
+    || path === MCP_OAUTH_BASE_PATH
+    || path.startsWith(`${MCP_OAUTH_BASE_PATH}/`);
+
+  const globalCors = cors({
+    origin: (origin) => {
+      const allowed = resolveAllBrowserOrigins();
+      if (!origin) {
+        return allowed[0] ?? `http://127.0.0.1:${gatewayPort}`;
+      }
+      const normalized = origin.toLowerCase();
+      if (isChromeExtensionOrigin(normalized)) return origin;
+      const hit = allowed.find((entry) => entry.toLowerCase() === normalized);
+      if (hit) return origin;
+      return allowed.includes('*') ? '*' : '';
+    },
+    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: [
+      'Content-Type', 'Authorization', 'Accept', 'X-Session-Id', 'Last-Event-ID', 'Idempotency-Key',
+      'MCP-Protocol-Version', 'Mcp-Session-Id', 'Mcp-Method', 'Mcp-Name',
+    ],
+    exposeHeaders: ['Mcp-Session-Id', 'WWW-Authenticate', 'MCP-Protocol-Version'],
+    credentials: true,
+    maxAge: 86400,
+  });
+
+  app.use(async (c, next) => {
+    if (isRemoteMcpSurfacePath(c.req.path)) return next();
+    return globalCors(c, next);
+  });
 
   // Build CSP header once at startup (no inline script hashes needed for SPA)
   const gatewayConsoleCsp = buildGatewayConsoleCspHeader();

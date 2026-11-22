@@ -55,13 +55,18 @@ Use `type`, `cwd`, `timeout` in seconds, and the `oauth` object in place of old 
 
 ## Let an external client use Gateway tools
 
+Manage local and remote Gateway MCP connections either from the CLI below or in the Gateway Console under **Settings → Gateway → MCP Server** (`#/settings/gateway?tab=mcp-server`), which also generates ready-to-copy client snippets and displays recent call audit logs.
+
 ### Local stdio
 
-With the Gateway listening on loopback on the same host, issue a read-only grant or grant selected operations. For read/write access, add `--write`.
+With the Gateway listening on loopback on the same host, issue a read-only grant, choose a capability toolset (`core-read`, `memory-read`, `workspace-write`, `delegation`, `automations`, `full-read`, `full-write`), or restrict access to specific projects or exact capability IDs.
 
 ```sh
-xopc mcp grant
+xopc mcp toolsets
+xopc mcp grant --name "Cursor" --toolset core-read
+xopc mcp grant --name "Project Agent" --toolset workspace-write --project <project-id> --expires-in 30
 xopc mcp grant --allow-capability xopc.notes.list xopc.notes.get
+xopc mcp list-grants
 ```
 
 The response includes a `connectionId` and a token shown only when the grant is created. Provide the token via `XOPC_MCP_TOKEN` to the stdio process. For example, in Codex `config.toml`:
@@ -77,26 +82,50 @@ Use an absolute command path if xopc is outside the client's PATH. If the Gatewa
 
 ### Remote Streamable HTTP
 
-Configure `gateway.mcp` to enable `/mcp` and its OAuth protected-resource metadata. The external authorization server handles authentication, access tokens, and renewal.
+Configure `gateway.mcp` to enable `/mcp` and OAuth discovery metadata (`/.well-known/oauth-protected-resource` and `/.well-known/oauth-protected-resource/mcp`). Two authentication modes are supported:
+
+#### Option A: Built-in OAuth 2.1 + Dynamic Client Registration (Recommended, zero external IdP)
 
 ```json
 {
   "gateway": {
     "mcp": {
+      "mode": "builtin",
       "resource": "https://gateway.example.com/mcp",
-      "issuer": "https://login.example.com/",
-      "jwksUrl": "https://login.example.com/.well-known/jwks.json"
+      "allowedOrigins": ["https://claude.ai", "http://localhost:6274"],
+      "rateLimitMax": 120
     }
   }
 }
 ```
 
-- Use HTTPS for remote access. Keep the canonical host, Authorization and MCP headers, and `WWW-Authenticate` through the proxy. Configure `gateway.trustedProxies` for HTTP forwarding from a proxy on another host.
-- Register the OAuth client and its actual callback with the issuer. Use authorization code flow with PKCE S256. The issuer must provide RFC 9068 access tokens with the configured issuer, the full Gateway resource URL in the audience, and `mcp.read` scope. Write calls also require `mcp.write` and a Gateway grant with `--write`.
-- On the Gateway host, grant the OAuth subject and client ID access. Existing grants retain the tool list they were issued with.
+In `builtin` mode, xopc serves `/.well-known/oauth-authorization-server` and `/mcp/oauth/{register,authorize,token,jwks,revoke}` with mandatory PKCE S256, RFC 8707 resource binding, rotating refresh tokens, and an owner-authenticated browser consent page where you can pick a toolset and optional project scope.
+
+#### Option B: External OAuth Authorization Server
+
+```json
+{
+  "gateway": {
+    "mcp": {
+      "mode": "external",
+      "resource": "https://gateway.example.com/mcp",
+      "issuer": "https://login.example.com/",
+      "jwksUrl": "https://login.example.com/.well-known/jwks.json",
+      "allowedOrigins": ["https://claude.ai"],
+      "acceptedTokenTypes": ["at+jwt", "JWT"],
+      "clientIdClaims": ["client_id", "azp"],
+      "requireJti": false
+    }
+  }
+}
+```
+
+- Use HTTPS for remote access. Keep the canonical host, Authorization and MCP headers (`MCP-Protocol-Version`, `Mcp-Session-Id`), and `WWW-Authenticate` through the proxy. Configure `gateway.trustedProxies` for HTTP forwarding from a proxy on another host.
+- By default, external mode requires strict RFC 9068 access tokens (`typ: "at+jwt"`, `client_id`, `jti`, `mcp.read` scope, plus `mcp.write` for writes). For mainstream IdPs that emit `typ: "JWT"`, `azp`, or opaque tokens, configure `acceptedTokenTypes`, `clientIdClaims`, `requireJti`, or `introspectionUrl`.
+- On the Gateway host, grant the OAuth subject and client ID access (optionally with `--toolset`, `--project`, `--expires-in`, or `--max-concurrent-runs`):
 
 ```sh
-xopc mcp remote grant --subject '<oauth-sub>' --client-id '<registered-client-id>'
+xopc mcp remote grant --subject '<oauth-sub>' --client-id '<registered-client-id>' --toolset core-read
 xopc mcp remote list
 xopc mcp remote revoke '<connection-id>'
 ```
@@ -104,21 +133,27 @@ xopc mcp remote revoke '<connection-id>'
 For Codex, add the remote server and sign in with the scope that matches your grant:
 
 ```sh
-codex mcp add xopc-remote --url https://gateway.example.com/mcp --oauth-client-id '<registered-client-id>'
+codex mcp add xopc-remote --url https://gateway.example.com/mcp
 codex mcp login xopc-remote --scopes mcp.read
 ```
 
 A read/write grant uses `--scopes mcp.read,mcp.write`.
 
-### Gateway capabilities and delegation
+### Gateway capabilities, resources, prompts, tasks, and delegation
 
-Read access covers the personal workspace, including projects, tasks, notes, and automation history. A grant can restrict permitted operation IDs with `--allow-capability`. Tool names use underscores, such as `xopc_notes_get`. Grant IDs use dots, such as `xopc.notes.get`. If a write returns an unknown outcome, retry with the same parameters and `idempotencyKey`.
+Read access covers projects, tasks, notes, workspace files (`xopc_files_spaces/list/search/get`), automation history & simulation, and (when granted) non-sensitive user context & knowledge memory (`xopc_user_context_profile`, `xopc_knowledge_list/search`). Both stdio and remote `/mcp` also expose:
 
-1. Call `xopc_agent_runs_agents` to list the available Agents. Start work with `xopc_agent_runs_start`, a title, prompt, and stable `idempotencyKey`. Optionally pass an Agent, project, or up to eight project, task, note, or file references. Keep the returned Task and run IDs.
-2. Read status with `xopc_agent_runs_get` or poll `xopc_agent_runs_events` using `nextSequence` as the next cursor. Use `xopc_agent_runs_steer` to send updated instructions or `xopc_agent_runs_cancel` to cancel. A cancellation receipt can arrive before execution stops.
+- **MCP Resources & Templates**: `xopc://workspace/overview`, `xopc://user/context`, `xopc://agents/directory`, `xopc://files/spaces`, `xopc://projects/{id}`, `xopc://notes/{id}`, `xopc://tasks/{id}`, `xopc://files/{id}`, and `xopc://runs/{runId}/result` (strictly gated by the connection's granted capabilities and project scope).
+- **MCP Prompts**: `xopc_workspace_briefing`, `xopc_delegate_specialist`, `xopc_capture_meeting_notes`, and `xopc_project_status_report`.
+- **MCP Tasks Protocol**: `tasks/list`, `tasks/get`, `tasks/result`, and `tasks/cancel` mapped directly onto delegated runs owned by the connection.
+
+A grant can restrict permitted operation IDs with `--allow-capability` or restrict data to specific projects with `--project`. Tool names use underscores (`xopc_notes_get`); grant IDs use dots (`xopc.notes.get`). If a write returns an unknown outcome, retry with the same parameters and `idempotencyKey`.
+
+1. Call `xopc_agent_runs_agents` to inspect available Agents along with their descriptions, purposes, specialties, and skills. Start work with `xopc_agent_runs_start`, a title, prompt, and stable `idempotencyKey`. Optionally pass an Agent, project, or up to eight project, task, note, or workspace file references.
+2. Recover or monitor delegated runs with `xopc_agent_runs_list`, `xopc_agent_runs_get`, `xopc_agent_runs_events`, or standard MCP `tasks/*` methods. Use `xopc_agent_runs_steer` to send updated instructions or `xopc_agent_runs_cancel` to cancel.
 3. When a run requests clarification, respond through `xopc_agent_runs_respond` using its clarification ID and expected version. Complete approvals and device confirmations in the Gateway's own interface.
-4. Use `xopc_agent_runs_result` to inspect the final reply and published artifacts. Paginate text and artifacts independently. Retrieve readable files with `xopc_agent_runs_artifact_read`, continuing with the returned offset and original revision. Access a delegated run through the grant that created it.
+4. Use `xopc_agent_runs_result` to inspect the final reply and published artifacts. Paginate text and artifacts independently. Retrieve readable files with `xopc_agent_runs_artifact_read` or `xopc_files_get`. Access a delegated run through the grant that created it.
 
-For callbacks, set `gateway.mcpCallback.url` to the receiving HTTPS address and set `gateway.mcpCallback.secretEnv` to the Gateway's signing-secret environment variable name. Pass `callback: true` when starting a run. Verify `X-Xopc-Signature` as HMAC-SHA256 over `<X-Xopc-Timestamp>.<raw request body>`; the header format is `sha256=<hex>`. Deduplicate by `X-Xopc-Event-Id` and acknowledge with HTTP 2xx. Callbacks cover waits and terminal results. Use the events and result tools to recover state.
+For callbacks, configure either a per-connection callback on the grant or a Gateway-wide `gateway.mcpCallback.url` and `gateway.mcpCallback.secretEnv`, then pass `callback: true` when starting a run. Verify `X-Xopc-Signature` as HMAC-SHA256 over `<X-Xopc-Timestamp>.<raw request body>`; the header format is `sha256=<hex>`. Deduplicate by `X-Xopc-Event-Id` and acknowledge with HTTP 2xx.
 
 [中文配置与完整调用示例](../zh/cli/mcp.md) · [pi MCP reference](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/docs/mcp.md)

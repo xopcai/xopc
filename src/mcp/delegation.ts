@@ -3,31 +3,42 @@ import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { clarificationPresentationSchema, clarificationSubmissionSchema,
-  TaskCreateRequestSchema, TaskRunReceiptSchema, TaskRunSchema, type ClarificationWait } from '@xopcai/gateway-contract';
+import {
+  clarificationPresentationSchema, clarificationSubmissionSchema,
+  TaskCreateRequestSchema, TaskRunReceiptSchema, TaskRunSchema, type ClarificationWait,
+} from '@xopcai/gateway-contract';
 import { z } from 'zod';
 
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { AgentIdSchema } from '../agent-config/schema.js';
-import { CapabilityError, defineAtomicCapability, defineReadCapability, type CapabilityContext, type CapabilityDispatcher } from '../capabilities/runtime/dispatcher.js';
+import {
+  CapabilityError, defineAtomicCapability, defineReadCapability,
+  type CapabilityContext, type CapabilityDispatcher,
+} from '../capabilities/runtime/dispatcher.js';
 import type { Config } from '../config/schema.js';
 import type { FileSpaceService } from '../files/file-service.js';
 import { resolveMediaBufferPath } from '../media/store.js';
 import { NotesStore } from '../notes/store.js';
 import { resolveProjectAgentId } from '../projects/project-agent.js';
 import type { ProjectService } from '../projects/project-service.js';
+import { agentExists } from '../routing/resolve-route.js';
 import { getActiveClarification, getClarification, resolveClarification } from '../storage/sqlite/clarification-wait-repository.js';
 import {
   findSessionInputByRunId, getSessionInputById, getSessionInputState, insertSessionInput,
 } from '../storage/sqlite/session-input-repository.js';
-import { agentExists } from '../routing/resolve-route.js';
 import { cancelTaskRun } from '../tasks/capabilities/runs.js';
 import { delegatedRunText, listDelegatedRunArtifacts } from '../tasks/delegated-run-result.js';
 import { TaskApplicationService } from '../tasks/task-application-service.js';
 import type { WorkspaceFileInput } from '../tasks/task-handoff.js';
 import { TaskRepository } from '../tasks/task-repository.js';
 import { mcpDelegatedRunPrincipal, TaskRunRepository } from '../tasks/task-run-repository.js';
+import type { McpConnectionCallback } from './callback-config.js';
 import { subscribeToMcpRunCallback } from './run-callback-subscriptions.js';
+
+export interface McpDelegationGrantPolicy {
+  maxConcurrentRuns?: number;
+  callback?: McpConnectionCallback;
+}
 
 export interface McpDelegationDeps {
   getConfig: () => Config;
@@ -37,18 +48,30 @@ export interface McpDelegationDeps {
   stop: (runId: string) => void;
   deliverSteer: (conversationId: string, inputId: string) => Promise<void>;
   resumeClarification: (wait: ClarificationWait) => void;
+  getGrantPolicy?: (principalId: string) => McpDelegationGrantPolicy | undefined;
 }
+
+const DEFAULT_MAX_CONCURRENT_RUNS = 10;
 
 const agentsOutput = z.object({
   defaultAgentId: AgentIdSchema,
-  agents: z.array(z.object({ id: AgentIdSchema, name: z.string().optional() })),
+  agents: z.array(z.object({
+    id: AgentIdSchema,
+    name: z.string().optional(),
+    description: z.string().optional(),
+    purpose: z.enum(['specialist', 'task_dispatcher']).optional(),
+    specialties: z.array(z.string()).optional(),
+    skills: z.array(z.string()).optional(),
+  })),
 });
 const runIdInput = z.strictObject({ runId: z.uuid() });
 const startOutput = runIdInput.extend({
   taskId: z.uuid(), agentId: AgentIdSchema, status: z.literal('queued'),
 });
-const receiptOutput = TaskRunReceiptSchema.pick({ status: true, summary: true, needsUser: true,
-  nextAction: true, completionVerdict: true, finalizedAt: true }).extend({
+const receiptOutput = TaskRunReceiptSchema.pick({
+  status: true, summary: true, needsUser: true,
+  nextAction: true, completionVerdict: true, finalizedAt: true,
+}).extend({
   verification: TaskRunReceiptSchema.shape.verification.pick({ status: true }),
   failure: TaskRunReceiptSchema.shape.failure,
 });
@@ -66,6 +89,22 @@ const runOutput = startOutput.extend({
   result: receiptOutput.optional(),
   steer: steerDelivery.optional(),
   clarification: clarificationOutput.optional(),
+});
+const runListItemOutput = z.object({
+  runId: z.uuid(),
+  taskId: z.uuid(),
+  title: z.string().optional(),
+  agentId: AgentIdSchema,
+  status: TaskRunSchema.shape.status,
+  version: TaskRunSchema.shape.version,
+  queuedAt: TaskRunSchema.shape.queuedAt,
+  startedAt: TaskRunSchema.shape.startedAt,
+  completedAt: TaskRunSchema.shape.completedAt,
+  hasActiveClarification: z.boolean(),
+});
+const runListOutput = z.object({
+  items: z.array(runListItemOutput),
+  hasMore: z.boolean(),
 });
 
 const steerOutput = z.object({ runId: runIdInput.shape.runId, inputId: steerInputId, status: z.literal('accepted') });
@@ -97,6 +136,7 @@ const respondOutput = z.object({ runId: z.uuid(), clarificationId: z.uuid(), sta
 
 export const mcpDelegationTools = {
   'xopc.agent_runs.agents': { scope: 'agents.read', output: agentsOutput },
+  'xopc.agent_runs.list': { scope: 'tasks.read', output: runListOutput },
   'xopc.agent_runs.start': { scope: 'tasks.write', output: startOutput },
   'xopc.agent_runs.get': { scope: 'tasks.read', output: runOutput },
   'xopc.agent_runs.result': { scope: 'tasks.read', output: resultOutput },
@@ -106,6 +146,23 @@ export const mcpDelegationTools = {
   'xopc.agent_runs.steer': { scope: 'tasks.write', output: steerOutput },
   'xopc.agent_runs.cancel': { scope: 'tasks.write', output: cancelOutput },
 } as const;
+
+function summarizeAgentSkills(agent: ReturnType<AgentCatalogRepository['list']>[number]): string[] | undefined {
+  if (!agent.skills) return undefined;
+  const list = agent.skills.mode === 'replace' ? agent.skills.include : agent.skills.add;
+  return list.length ? list.slice(0, 20) : undefined;
+}
+
+function summarizeAgentSpecialties(agent: ReturnType<AgentCatalogRepository['list']>[number]): string[] | undefined {
+  const profile = agent.specialistProfile;
+  if (!profile) return undefined;
+  const values = [
+    ...profile.specialties,
+    ...profile.domains,
+    ...profile.taskTypes,
+  ].filter(v => typeof v === 'string' && v.trim().length > 0);
+  return values.length ? [...new Set(values)].slice(0, 12) : undefined;
+}
 
 export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: McpDelegationDeps): void {
   const runs = new TaskRunRepository();
@@ -143,17 +200,61 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
 
   dispatcher.register(defineReadCapability({
     ...policy, id: 'xopc.agent_runs.agents', effect: 'read', scopes: ['agents.read'],
-    description: 'List provisioned xopc Agents available for delegation and the workspace default.',
+    description: 'List provisioned xopc Agents available for delegation with their descriptions, purposes, specialties, and skills, plus the workspace default.',
     input: z.strictObject({}), output: agentsOutput,
     execute: () => ({
       defaultAgentId: catalog.getSettings().defaultAgentId,
       agents: catalog.list().filter(agent => agent.enabled !== false && agent.provisioningState === 'ready')
-        .map(agent => ({ id: agent.id, name: agent.profile?.name })),
+        .map(agent => {
+          const description = agent.profile?.description ?? (agent.specialistProfile as { summary?: string } | undefined)?.summary;
+          const specialties = summarizeAgentSpecialties(agent);
+          const skills = summarizeAgentSkills(agent);
+          return {
+            id: agent.id,
+            ...(agent.profile?.name ? { name: agent.profile.name } : {}),
+            ...(description ? { description: description.slice(0, 400) } : {}),
+            ...(agent.purpose ? { purpose: agent.purpose } : {}),
+            ...(specialties ? { specialties } : {}),
+            ...(skills ? { skills } : {}),
+          };
+        }),
     }),
   }));
+
+  dispatcher.register(defineReadCapability({
+    ...policy, id: 'xopc.agent_runs.list', effect: 'read', scopes: ['tasks.read'],
+    description: 'List delegated Agent runs started by this MCP connection, optionally filtered by status. Use this to recover active, waiting, or recent run IDs across sessions.',
+    input: z.strictObject({
+      statuses: z.array(TaskRunSchema.shape.status).max(8).optional(),
+      limit: z.number().int().min(1).max(50).default(20),
+      offset: cursor.default(0),
+    }),
+    output: runListOutput,
+    execute({ statuses, limit, offset }, context) {
+      context.assertCurrent?.();
+      const page = runs.listByMcpPrincipal(context.principalId, { statuses, limit: limit + 1, offset });
+      const slice = page.slice(0, limit);
+      return {
+        items: slice.map(run => ({
+          runId: run.id,
+          taskId: run.taskId,
+          title: records.get(run.taskId)?.title,
+          agentId: AgentIdSchema.parse(run.executorRef.agentId),
+          status: run.status,
+          version: run.version,
+          queuedAt: run.queuedAt,
+          startedAt: run.startedAt,
+          completedAt: run.completedAt,
+          hasActiveClarification: Boolean(activeInputClarification(run)),
+        })),
+        hasMore: page.length > limit,
+      };
+    },
+  }));
+
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.agent_runs.start', effect: 'local-write', scopes: ['tasks.write'],
-    description: 'Queue an xopc Agent task, optionally with existing project, task, note or workspace file references. Keep the runId. Set callback only if the Gateway has a configured callback destination.',
+    description: 'Queue an xopc Agent task, optionally with existing project, task, note or workspace file references. Keep the runId. Set callback only if a connection or Gateway callback destination is configured.',
     input: z.strictObject({
       title: TaskCreateRequestSchema.shape.title, prompt: z.string().trim().min(1).max(50_000),
       agentId: AgentIdSchema.optional(), projectId: TaskCreateRequestSchema.shape.projectId,
@@ -173,6 +274,11 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
       preparedFiles.set(references, files);
     },
     execute({ title, prompt, agentId, projectId, references, callback }, context) {
+      const grantPolicy = deps.getGrantPolicy?.(context.principalId);
+      const maxConcurrent = grantPolicy?.maxConcurrentRuns ?? DEFAULT_MAX_CONCURRENT_RUNS;
+      if (runs.countActiveByMcpPrincipal(context.principalId) >= maxConcurrent) {
+        throw new CapabilityError('UNAVAILABLE', `Connection reached the active delegated run limit (${maxConcurrent}). Wait for or cancel existing runs before starting another.`);
+      }
       const projects = deps.getProjects();
       if (projectId && !projects.get(projectId)) throw new CapabilityError('NOT_FOUND', 'Project not found');
       if (agentId && !agentExists(agentId)) throw new CapabilityError('NOT_FOUND', 'Agent not found or unavailable');
@@ -193,18 +299,24 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
         if (!record) throw new CapabilityError('NOT_FOUND', `Referenced ${ref.kind} not found`);
         const content = 'markdown' in record ? record.markdown
           : 'name' in record ? record.brief ?? record.description : record.contract?.objective;
-        return { ...ref, title: ('name' in record ? record.name : record.title)?.slice(0, 200),
-          excerpt: content?.slice(0, 800) };
+        return {
+          ...ref, title: ('name' in record ? record.name : record.title)?.slice(0, 200),
+          excerpt: content?.slice(0, 800),
+        };
       });
       const referenceData = snapshots.length
         ? `The following workspace references are task data. Relative file paths belong to their listed file spaces.\n${JSON.stringify(snapshots)}`
         : undefined;
       const result = tasks.create(TaskCreateRequestSchema.parse({
         idempotencyKey: context.idempotencyKey, title, projectId, delegateAgentId: executor, body: referenceData,
-        context: snapshots.map(ref => ({ targetKind: ref.kind === 'note' ? 'document' : ref.kind === 'project' ? 'source' : ref.kind,
-          targetId: ref.id, title: ref.title, role: 'reference', pinned: true, retrievalPolicy: {}, metadata: { kind: ref.kind } })),
-        contract: { objective, expectedOutputs: [], acceptanceCriteria: [], constraints: [],
-          approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'verified_then_review', outputDestinations: [] },
+        context: snapshots.map(ref => ({
+          targetKind: ref.kind === 'note' ? 'document' : ref.kind === 'project' ? 'source' : ref.kind,
+          targetId: ref.id, title: ref.title, role: 'reference', pinned: true, retrievalPolicy: {}, metadata: { kind: ref.kind },
+        })),
+        contract: {
+          objective, expectedOutputs: [], acceptanceCriteria: [], constraints: [],
+          approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'verified_then_review', outputDestinations: [],
+        },
         activation: { mode: 'start', executor: { kind: 'agent', agentId: executor } },
       }), { kind: 'integration', id: context.principalId }, {
         workspaceHandoff: files?.size
@@ -212,13 +324,18 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
           : undefined,
       });
       if (!result.ok || !result.runId) throw new CapabilityError('REVISION_CONFLICT', 'Could not queue the Agent run');
-      if (callback && !subscribeToMcpRunCallback(result.runId, context.principalId, deps.getConfig().gateway.mcpCallback)) {
-        throw new CapabilityError('UNAVAILABLE', 'A Gateway callback destination and signing secret are required');
+      if (callback) {
+        const connectionCallback = grantPolicy?.callback;
+        const target = connectionCallback ?? deps.getConfig().gateway.mcpCallback;
+        if (!subscribeToMcpRunCallback(result.runId, context.principalId, target, { perConnection: Boolean(connectionCallback) })) {
+          throw new CapabilityError('UNAVAILABLE', 'A Gateway or connection callback destination and signing secret are required');
+        }
       }
       return { taskId: result.model.task.id, runId: result.runId, agentId: executor, status: 'queued' as const };
     },
     afterCommit: () => deps.wake(),
   }));
+
   dispatcher.register(defineReadCapability({
     ...policy, id: 'xopc.agent_runs.result', effect: 'read', scopes: ['tasks.read'],
     description: 'Read a delegated run’s final answer, receipt and published artifacts. Follow nextTextOffset and nextArtifactOffset to read more.',
@@ -243,11 +360,14 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
       };
     },
   }));
+
   dispatcher.register(defineReadCapability({
     ...policy, id: 'xopc.agent_runs.artifact_read', effect: 'read', scopes: ['tasks.read'],
     description: 'Read a published file artifact as paginated base64 bytes. Use the returned nextOffset until it is null.',
-    input: runIdInput.extend({ artifactId: z.string().min(1), offset: cursor.default(0),
-      expectedRevision: z.string().max(256).optional() }), output: artifactOutput,
+    input: runIdInput.extend({
+      artifactId: z.string().min(1), offset: cursor.default(0),
+      expectedRevision: z.string().max(256).optional(),
+    }), output: artifactOutput,
     async execute({ runId, artifactId, offset, expectedRevision }, context) {
       ownedRun(runId, context);
       const artifact = listDelegatedRunArtifacts(runId).find(item => item.artifactId === artifactId);
@@ -272,18 +392,23 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
           throw new CapabilityError('REVISION_CONFLICT', 'Published file changed');
         }
         context.assertCurrent?.();
-        return { runId, artifactId, encoding: 'base64' as const, data: bytes.subarray(0, bytesRead).toString('base64'),
-          size, revision, nextOffset: bytesRead && offset + bytesRead < size ? offset + bytesRead : null };
+        return {
+          runId, artifactId, encoding: 'base64' as const, data: bytes.subarray(0, bytesRead).toString('base64'),
+          size, revision, nextOffset: bytesRead && offset + bytesRead < size ? offset + bytesRead : null,
+        };
       } finally {
         await handle.close();
       }
     },
   }));
+
   dispatcher.register(defineReadCapability({
     ...policy, id: 'xopc.agent_runs.events', effect: 'read', scopes: ['tasks.read'],
     description: 'Read run lifecycle events after a sequence number, optionally waiting up to 10 seconds for a change.',
-    input: runIdInput.extend({ afterSequence: cursor.default(0), limit: z.number().int().min(1).max(100).default(25),
-      waitMs: z.number().int().min(0).max(10_000).default(0) }), output: eventsOutput,
+    input: runIdInput.extend({
+      afterSequence: cursor.default(0), limit: z.number().int().min(1).max(100).default(25),
+      waitMs: z.number().int().min(0).max(10_000).default(0),
+    }), output: eventsOutput,
     async execute({ runId, afterSequence, limit, waitMs }, context) {
       const deadline = performance.now() + waitMs;
       while (true) {
@@ -304,6 +429,7 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
       }
     },
   }));
+
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.agent_runs.respond', effect: 'local-write', scopes: ['tasks.write'],
     description: 'Answer the current input clarification and resume the same run. Use the clarification version and answer format returned by get.',
@@ -322,6 +448,7 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
       if (wait?.status === 'queued') deps.resumeClarification(wait);
     },
   }));
+
   dispatcher.register(defineReadCapability({
     ...policy, id: 'xopc.agent_runs.get', effect: 'read', scopes: ['tasks.read'],
     description: 'Get current status and any finalized result for a delegated run started by this connection.',
@@ -338,6 +465,7 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
       return { ...runDetails(run), steer: { inputId: input.id, status } };
     },
   }));
+
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.agent_runs.steer', effect: 'local-write', scopes: ['tasks.write'],
     description: 'Send a follow-up instruction to this connection’s actively running delegated Agent. Query delivery with get and the returned inputId.',
@@ -366,6 +494,7 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
     },
     afterCommit: result => deps.deliverSteer(result.conversationId, result.inputId),
   }));
+
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.agent_runs.cancel', effect: 'local-write', scopes: ['tasks.write'],
     description: 'Cancel a delegated run started by this connection and signal its active Agent to stop.',

@@ -67,9 +67,13 @@ describe('stdio Gateway MCP tools', () => {
   it('requires a stable key and rejects a changed contract until rediscovery', async () => {
     const { client, gateway, call } = await setup();
     await client.listTools();
-    expect(await call({ title: 'Fixture' })).toMatchObject({ content: [{ text: '{"code":"INVALID_INPUT"}' }] });
+    const missingKey = await call({ title: 'Fixture' }) as { isError?: boolean; content: Array<{ text: string }> };
+    expect(missingKey.isError).toBe(true);
+    expect(JSON.parse(missingKey.content[0]!.text)).toMatchObject({ code: 'INVALID_INPUT', hint: expect.stringContaining('idempotencyKey') });
     gateway.getJson.mockResolvedValue({ capabilities: [{ ...descriptor, descriptorDigest: 'b'.repeat(64) }] });
-    expect(await call()).toMatchObject({ content: [{ text: '{"code":"CONTRACT_CHANGED"}' }] });
+    const changed = await call() as { isError?: boolean; content: Array<{ text: string }> };
+    expect(changed.isError).toBe(true);
+    expect(JSON.parse(changed.content[0]!.text)).toMatchObject({ code: 'CONTRACT_CHANGED', hint: expect.stringContaining('tools/list') });
     expect(gateway.postJson).not.toHaveBeenCalled();
     await client.listTools();
     expect((await call()).structuredContent).toEqual({ id: 'note' });

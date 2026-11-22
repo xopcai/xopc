@@ -3,6 +3,7 @@ import type { SettingsMode } from '@/stores/settings-mode-store';
 export type GatewaySettingsTabId =
   | 'network'
   | 'access'
+  | 'mcp-server'
   | 'updates'
   | 'security'
   | 'proxy'

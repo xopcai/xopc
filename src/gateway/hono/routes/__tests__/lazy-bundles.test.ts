@@ -17,20 +17,52 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/tasks/task-id/commands')?.id).not.toBe('task-retry');
     expect(findAuthenticatedLazyRouteBundle('/api/tasks/task-id/retry/extra')?.id).not.toBe('task-retry');
   });
-  it('mounts remote MCP and its discovery document on their own exact paths', () => {
+  it('mounts remote MCP, discovery documents, and built-in OAuth endpoints on their own exact paths', () => {
     const bundle = APP_LAZY_ROUTE_BUNDLES.find(candidate => candidate.id === 'mcp-remote');
-    expect(bundle?.prefixes).toEqual(['/mcp', '/.well-known/oauth-protected-resource/mcp']);
-    for (const path of bundle!.prefixes) {
+    expect(bundle?.prefixes).toEqual([
+      '/mcp',
+      '/.well-known/oauth-protected-resource/mcp',
+      '/.well-known/oauth-protected-resource',
+      '/.well-known/oauth-authorization-server',
+      '/mcp/oauth',
+    ]);
+    for (const path of [
+      '/mcp',
+      '/.well-known/oauth-protected-resource/mcp',
+      '/.well-known/oauth-protected-resource',
+      '/.well-known/oauth-authorization-server',
+      '/mcp/oauth/jwks',
+      '/mcp/oauth/register',
+      '/mcp/oauth/authorize',
+      '/mcp/oauth/token',
+      '/mcp/oauth/revoke',
+    ]) {
       expect(bundle?.match(path)).toBe(true);
       expect(bundle?.match(path + '/other')).toBe(false);
       expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
     }
+    expect(bundle?.match('/mcp/other')).toBe(false);
+    expect(bundle?.match('/mcp/oauth/unknown')).toBe(false);
   });
 
-  it('isolates the local MCP bridge from outbound MCP routes', () => {
+  it('isolates the local MCP bridge and MCP server admin routes from outbound MCP routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/mcp/bridge')?.id).toBe('mcp-bridge');
     expect(findAuthenticatedLazyRouteBundle('/api/mcp/bridge/other')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers')?.id).toBe('mcp');
+    for (const path of [
+      '/api/mcp-server/overview',
+      '/api/mcp-server/config',
+      '/api/mcp-server/audit',
+      '/api/mcp-server/grants/local',
+      '/api/mcp-server/grants/local/conn-1',
+      '/api/mcp-server/grants/remote',
+      '/api/mcp-server/grants/remote/conn-2',
+      '/api/mcp-server/oauth-clients/client-1',
+    ]) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('mcp-server-admin');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp-server/grants/local/conn-1/extra')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp-server/unknown')).toBeUndefined();
   });
 
   it('routes the mobile catalog through the capability bundle', () => {
@@ -639,4 +671,10 @@ it('matches the authenticated Space routes without taking neighboring paths', ()
   expect(findAuthenticatedLazyRouteBundle('/api/spaces/items/item/workbook/content')?.id).not.toBe('space');
   expect(findAuthenticatedLazyRouteBundle('/api/spaces/workbooks')?.id).not.toBe('space');
   expect(findAuthenticatedLazyRouteBundle('/api/notes')?.id).toBe('notes');
+});
+
+it('maps the screenshot AI analysis endpoint without matching neighboring routes', () => {
+  expect(findAuthenticatedLazyRouteBundle('/api/screenshot/analyze')?.id).toBe('screenshot-ai');
+  expect(findAuthenticatedLazyRouteBundle('/api/screenshot/analyze/extra')).toBeUndefined();
+  expect(findAuthenticatedLazyRouteBundle('/api/screenshot-other/analyze')).toBeUndefined();
 });
