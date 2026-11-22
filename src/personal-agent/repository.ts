@@ -16,6 +16,7 @@ export interface PersonalAgentRecord {
   ownerId: string;
   agentId: string;
   conversationId: string;
+  transcriptId?: string;
   state: PersonalAgentState;
   displayName: string;
   userCallName: string | null;
@@ -40,11 +41,11 @@ export function resolveMessageReactionsEnabled(preference: boolean | undefined, 
   return preference ?? (config?.experimental?.personalAgentMessageReactions === true);
 }
 
-type PersonalSession = { conversation_id: string; agent_id: string };
+type PersonalSession = { conversation_id: string; agent_id: string; active_transcript_id: string | null };
 
 function personalSession(column: 'agent_id' | 'conversation_id', value: string): PersonalSession | null {
   if (!isXopcDatabaseOpen()) return null;
-  const row = getSqliteDatabase().prepare(`SELECT conversation_id, agent_id
+  const row = getSqliteDatabase().prepare(`SELECT conversation_id, agent_id, active_transcript_id
     FROM sessions WHERE ${column} = ? AND json_extract(custom_data_json, '$.personalAgent') = 1
     ORDER BY created_at LIMIT 1`).get(value) as PersonalSession | undefined;
   return row ?? null;
@@ -65,6 +66,7 @@ function toRecord(ownerId: string, agent: StoredAgent, session: PersonalSession 
     ownerId,
     agentId: agent.id,
     conversationId: session?.conversation_id ?? personalConversationId(ownerId),
+    ...(session?.active_transcript_id ? { transcriptId: session.active_transcript_id } : {}),
     state: agent.provisioningState === 'error' ? 'error' : ready ? 'ready' : 'provisioning',
     displayName: agent.profile?.name ?? 'Ada',
     userCallName: getUserProfileSnapshot().callName ?? null,

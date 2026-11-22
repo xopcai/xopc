@@ -20,6 +20,7 @@ import { usePersonalWorkOverview, useRefreshPersonalWork } from './use-personal-
 export type PersonalAgent = {
   agentId: string;
   conversationId: string;
+  transcriptId?: string;
   state: 'provisioning' | 'ready' | 'error';
   displayName: string;
   userCallName?: string | null;

@@ -9,6 +9,8 @@ import { useGatewayStore } from '@/stores/gateway-store';
 type PersonalProfile = {
   agentId: string;
   conversationId: string;
+  transcriptId?: string;
+  state?: 'provisioning' | 'ready' | 'error';
   displayName: string;
   appearance: PersonalAppearance;
 };

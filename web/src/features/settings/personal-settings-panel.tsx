@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { PersonalConversationResetSetting } from '@/features/personal-agent/personal-conversation-reset-setting';
 import { usePersonalProfile } from '@/features/personal-agent/use-personal-profile';
 import { PersonalProactivitySetting } from '@/features/personal-agent/personal-proactivity-setting';
 import { PersonalProfileSettings } from '@/features/personal-agent/personal-profile-settings';
@@ -8,7 +9,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { VoiceSettingsPanel } from './voice-settings';
 
 export function PersonalSettingsPanel() {
-  const { displayName } = usePersonalProfile();
+  const { profile, displayName } = usePersonalProfile();
   const zh = useLocaleStore(state => state.language) === 'zh';
   const [servicesOpen, setServicesOpen] = useState(false);
   const [servicesMounted, setServicesMounted] = useState(false);
@@ -24,5 +25,6 @@ export function PersonalSettingsPanel() {
       <summary className="cursor-pointer text-sm font-medium text-fg">{zh ? '语音服务设置' : 'Voice service settings'}</summary>
       <div className="mt-4">{servicesMounted && <VoiceSettingsPanel capability="conversation" />}</div>
     </details>
+    <PersonalConversationResetSetting zh={zh} displayName={displayName} profile={profile} />
   </SettingsPageFrame>;
 }

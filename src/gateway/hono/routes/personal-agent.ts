@@ -17,10 +17,12 @@ import { finishPersonalWelcome, getPersonalOnboarding, PersonalOnboardingDraftSc
 import { TaskOriginRepository } from '../../../tasks/task-origin-repository.js';
 import { getPersonalRequest, listPersonalRequests } from '../../../personal-agent/request-repository.js';
 import { cancelPersonalRequest, personalRequestSnapshot, publishPersonalRequest } from '../../../personal-agent/request-service.js';
+import { resetPersonalConversation } from '../../../personal-agent/conversation-reset.js';
 import {
   createOrResumePersonalAgent, ensurePersonalConversationVisibility, listPersonalModels, patchPersonalProfile, refreshPersonalDelegationGuidance,
   PersonalAppearanceSchema,
 } from '../../../personal-agent/service.js';
+import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const AvatarSchema = z.object({
@@ -61,6 +63,9 @@ const PersonalSchedulePatchSchema = PersonalScheduleSchema.partial().extend({
   enabled: z.boolean().optional(),
   expectedRevision: z.number().int().nonnegative(),
 }).refine(value => Object.keys(value).length > 1);
+const ConversationResetSchema = z.object({
+  expectedTranscriptId: z.string().trim().min(1).optional(),
+}).strict();
 
 export function registerPersonalAgentRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const profilePayload = (record: PersonalAgentRecord | null) => record && ({
@@ -322,5 +327,34 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
     return updated
       ? c.json({ ok: true, payload: profilePayload(updated) })
       : c.json({ ok: false, error: 'Profile changed or personal Agent is unavailable' }, 409);
+  });
+
+  authenticated.post('/api/personal-agent/conversation/reset', deps.strictRateLimitMiddleware, async c => {
+    if (!deps.service.isGatewayReady()) return respondStartupUnavailable(c, 'sessions.reset');
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const rawBody = await c.req.text().catch(() => '');
+    let parsedBody: unknown = {};
+    if (rawBody.trim()) {
+      try { parsedBody = JSON.parse(rawBody); }
+      catch { return c.json({ ok: false, error: 'Invalid conversation reset request' }, 400); }
+    }
+    const parsed = ConversationResetSchema.safeParse(parsedBody);
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid conversation reset request' }, 400);
+    const result = await resetPersonalConversation(deps.service, ownerId, {
+      expectedTranscriptId: parsed.data.expectedTranscriptId,
+    });
+    if (result.ok === false) {
+      return c.json({ ok: false, error: result.error }, result.status);
+    }
+    return c.json({
+      ok: true,
+      payload: {
+        conversationId: result.conversationId,
+        transcriptId: result.transcriptId,
+        previousTranscriptId: result.previousTranscriptId,
+        profile: profilePayload(getPersonalAgent(ownerId)),
+      },
+    });
   });
 }
