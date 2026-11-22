@@ -7,6 +7,7 @@ import { createServer, type IncomingMessage } from 'node:http';
 import { XopcGatewayAdapter } from '@agent-evals/adapter-xopc';
 import type { RunRequest, TraceEvent } from '@agent-evals/protocol';
 import { endpointHelloSigningPayload, endpointPrincipalRegistrationSchema, endpointTurnClaimSchema } from '@xopcai/endpoint-tools-protocol';
+import { ENDPOINT_V3_CAPABILITY, REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { WebSocketServer } from 'ws';
 import { expect, it } from 'vitest';
 
@@ -40,9 +41,16 @@ async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' = 'success'
       return res.end('{"ok":true}');
     }
     if (url === '/api/realtime/tickets') {
-      expect(body.protocolVersion).toBe(2);
+      expect(body.protocolVersion).toBe(REALTIME_PROTOCOL_VERSION);
       return res.end(JSON.stringify({
-        payload: { ticket: 'x'.repeat(40), realtime: { minVersion: 2, maxVersion: 2, capabilities: [] } },
+        payload: {
+          ticket: 'x'.repeat(40),
+          realtime: {
+            minVersion: REALTIME_PROTOCOL_VERSION,
+            maxVersion: REALTIME_PROTOCOL_VERSION,
+            capabilities: [ENDPOINT_V3_CAPABILITY],
+          },
+        },
       }));
     }
     if (url.endsWith('/inputs')) {
@@ -55,7 +63,7 @@ async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' = 'success'
   });
   const sockets = new WebSocketServer({ server, path: '/api/realtime/v1/ws' });
   sockets.on('connection', socket => {
-    const send = (kind: string, payload: unknown) => socket.send(JSON.stringify({ protocolVersion: 2, messageId: randomUUID(), sentAt: Date.now(), kind, payload }));
+    const send = (kind: string, payload: unknown) => socket.send(JSON.stringify({ protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: randomUUID(), sentAt: Date.now(), kind, payload }));
     socket.on('message', raw => {
       const frame = JSON.parse(String(raw));
       if (frame.kind === 'realtime.hello') {
