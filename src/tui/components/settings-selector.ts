@@ -296,7 +296,7 @@ export class SettingsSelector implements Component {
     this.settingsList.invalidate();
   }
 
-  render(width: number): string[] {
+  render(width: number): readonly string[] {
     return this.settingsList.render(width);
   }
 }

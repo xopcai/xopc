@@ -176,7 +176,7 @@ export class ToolExecutionComponent extends Container implements ModeAwareCell {
     this.refresh();
   }
 
-  override render(width: number): string[] {
+  override render(width: number): readonly string[] {
     if (this.renderMode === 'raw') {
       return new Text(JSON.stringify({
         type: 'tool',

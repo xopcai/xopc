@@ -27,7 +27,7 @@ export class SemanticCellComponent extends Container implements ModeAwareCell {
     this.renderMode = mode;
   }
 
-  override render(width: number): string[] {
+  override render(width: number): readonly string[] {
     if (this.renderMode === 'raw') {
       return new Text(JSON.stringify(this.data.raw ?? this.data, null, 2), 0, 0).render(width);
     }

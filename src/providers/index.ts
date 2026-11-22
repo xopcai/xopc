@@ -393,6 +393,7 @@ export const PROVIDER_META: Record<string, ProviderMeta> = {
   'qwen-token-plan-cn': { name: 'Alibaba Bailian Subscription (China)', category: 'domestic', supportsApiKey: true },
   'qwen-token-plan': { name: 'Qwen Token Plan (International)', category: 'domestic', supportsApiKey: true },
   'qwen-token-plan-individual': { name: 'Qwen Token Plan Individual (International)', category: 'domestic', supportsApiKey: true },
+  'qwen-token-plan-individual-cn': { name: 'Qwen Token Plan Individual (China)', category: 'domestic', supportsApiKey: true },
   'dashscope': { name: 'DashScope (Alibaba)', category: 'domestic', supportsApiKey: true },
   'dashscope-cn': { name: 'Alibaba Bailian / DashScope China', category: 'domestic', supportsApiKey: true },
   'dashscope-intl': { name: 'Alibaba Bailian / DashScope International', category: 'domestic', supportsApiKey: true },

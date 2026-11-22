@@ -15,7 +15,7 @@ export class TextViewer implements Component, Focusable {
   private prompt: 'search' | 'line' | undefined;
   private input = '';
   private query = '';
-  private rendered: string[] = [];
+  private rendered: readonly string[] = [];
 
   constructor(
     private readonly title: string,

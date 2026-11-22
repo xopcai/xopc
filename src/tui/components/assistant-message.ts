@@ -172,15 +172,16 @@ export class AssistantMessageComponent extends Container implements ModeAwareCel
     this.refresh();
   }
 
-  override render(width: number): string[] {
+  override render(width: number): readonly string[] {
     if (this.renderMode === 'raw') {
       return new Text(JSON.stringify(this.message ?? {}, null, 2), 0, 0).render(width);
     }
     const lines = super.render(width);
     if (hasToolCalls(this.message) || this.linkedToolCall || lines.length === 0) return lines;
-    lines[0] = OSC133_ZONE_START + lines[0];
-    lines[lines.length - 1] = OSC133_ZONE_END + OSC133_ZONE_FINAL + lines[lines.length - 1];
-    return lines;
+    const decorated = [...lines];
+    decorated[0] = OSC133_ZONE_START + decorated[0];
+    decorated[decorated.length - 1] = OSC133_ZONE_END + OSC133_ZONE_FINAL + decorated[decorated.length - 1];
+    return decorated;
   }
 
   private refresh(): void {

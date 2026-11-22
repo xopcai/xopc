@@ -23,7 +23,7 @@ export function truncateToVisualLines(
 
   const rendered = new Text(text, paddingX, 0).render(width);
   if (rendered.length <= maxVisualLines) {
-    return { visualLines: rendered, skippedCount: 0 };
+    return { visualLines: [...rendered], skippedCount: 0 };
   }
 
   return {
@@ -44,7 +44,7 @@ export function truncateToVisualLinesMiddle(
 
   const rendered = new Text(text, paddingX, 0).render(width);
   if (rendered.length <= maxVisualLines) {
-    return { visualLines: rendered, skippedCount: 0 };
+    return { visualLines: [...rendered], skippedCount: 0 };
   }
 
   if (maxVisualLines === 1) {
