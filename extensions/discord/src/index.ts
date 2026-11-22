@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { createEnterpriseChannel, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
+import { createEnterpriseChannel, type EnterpriseMedia, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
 import type { ChannelSetupLink, EnterpriseCredentials } from '@xopcai/xopc/channels/enterprise/setup.js';
 import { fetchJson, record, string } from '@xopcai/xopc/channels/enterprise/socket.js';
 import { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';
@@ -38,8 +38,8 @@ const setupLink: ChannelSetupLink = (locale, identity) => {
   const applicationId = identity?.split(':')[1];
   if (applicationId && snowflake.test(applicationId)) {
     const url = new URL('https://discord.com/oauth2/authorize');
-    // View Channel, Send Messages, Read Message History, and Send Messages in Threads.
-    const permissions = (1n << 10n) | (1n << 11n) | (1n << 16n) | (1n << 38n);
+    // View Channel, Send Messages, Attach Files, Read Message History, and Send Messages in Threads.
+    const permissions = (1n << 10n) | (1n << 11n) | (1n << 15n) | (1n << 16n) | (1n << 38n);
     url.search = new URLSearchParams({ client_id: applicationId, scope: 'bot', permissions: String(permissions) }).toString();
     return {
       url: url.href,
@@ -84,10 +84,12 @@ function discordTransport(credentials: EnterpriseCredentials, receive: (message:
     });
     return botCheck;
   }
-  async function sendChunk(target: string, body: object) {
+  async function postChannelMessage(target: string, buildRequest: () => RequestInit, timeoutMs = 10_000) {
     const post = () => fetch(`${api}/channels/${target}/messages`, {
-      method: 'POST', headers, body: JSON.stringify(body), redirect: 'error',
-      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
+      ...buildRequest(),
+      method: 'POST',
+      redirect: 'error',
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
     });
     let response = await post();
     if (response.status === 429) {
@@ -105,6 +107,10 @@ function discordTransport(credentials: EnterpriseCredentials, receive: (message:
     const id = string(record(await response.json()).id);
     if (!snowflake.test(id)) throw new Error('Discord did not confirm message delivery');
     return id;
+  }
+
+  function sendChunk(target: string, body: object) {
+    return postChannelMessage(target, () => ({ headers, body: JSON.stringify(body) }), 10_000);
   }
 
   return {
@@ -127,6 +133,21 @@ function discordTransport(credentials: EnterpriseCredentials, receive: (message:
         });
       }
       return sent;
+    },
+    async sendMedia(target: string, _group: boolean, media: EnterpriseMedia, caption?: string, replyId?: string) {
+      if (!snowflake.test(target) || (replyId && !snowflake.test(replyId))) throw new Error('Invalid Discord message target');
+      await ensureBot(signal);
+      return postChannelMessage(target, () => {
+        const form = new FormData();
+        form.append('payload_json', JSON.stringify({
+          ...(caption ? { content: caption.slice(0, 2000) } : {}),
+          allowed_mentions: { parse: [], replied_user: false },
+          ...(replyId ? { message_reference: { message_id: replyId, fail_if_not_exists: false } } : {}),
+          attachments: [{ id: 0, filename: media.filename }],
+        }));
+        form.append('files[0]', new Blob([new Uint8Array(media.buffer)], { type: media.mimeType }), media.filename);
+        return { headers: { authorization: `Bot ${credentials.id}` }, body: form };
+      }, 30_000);
     },
     run(abort: AbortSignal, online: Parameters<typeof runDiscordGateway>[0]['online'], onFailure: (message?: string) => void) {
       signal = abort;
@@ -153,6 +174,7 @@ export const discordPlugin = createEnterpriseChannel({
   credentialFields: ['botToken'], credentialLabels: ['Bot Token'],
   credentialIdIsSecret: true,
   threads: true,
+  media: true,
   sendWhileDisconnected: true,
   setupLink,
   verify: verifySetup,

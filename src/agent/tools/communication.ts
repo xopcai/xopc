@@ -2,6 +2,7 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { MessageBus, OutboundMessage } from '../../infra/bus/index.js';
 import { createLogger } from '../../utils/logger.js';
+import { buildOutboundMediaMetadata } from './tool-media.js';
 
 const log = createLogger('MessageTool');
 
@@ -42,6 +43,7 @@ const MessageSendSchema = Type.Object({
 interface MessageContext {
   channel: string;
   chatId: string;
+  metadata?: Record<string, unknown>;
 }
 
 type MessageSendParams = {
@@ -115,14 +117,21 @@ When TTS is enabled, you may also use the \`text_to_speech\` tool to send a stan
       const channel = requestedChannel || ctx!.channel;
       const chatId = requestedChatId || ctx!.chatId;
       const accountId = p.accountId?.trim();
+      const mediaUrl = p.mediaUrl?.trim()
+        || (p.buffer ? `data:${p.contentType?.trim() || 'application/octet-stream'};base64,${p.buffer}` : undefined);
+      const baseMeta = !requestedChannel ? ctx?.metadata : undefined;
+      const metadata = buildOutboundMediaMetadata(
+        accountId ? { ...baseMeta, accountId } : baseMeta,
+        p.filename?.trim() || undefined,
+      );
 
       try {
         const msg: OutboundMessage = {
           channel,
           chat_id: chatId,
           content: p.content,
-          ...(accountId ? { metadata: { accountId } } : {}),
-          mediaUrl: p.mediaUrl,
+          ...(metadata ? { metadata } : {}),
+          mediaUrl,
           mediaType: p.mediaType,
           replyToMessageId: p.replyTo,
           quoteText: p.quoteText,
@@ -133,7 +142,7 @@ When TTS is enabled, you may also use the \`text_to_speech\` tool to send a stan
 
         await bus.publishOutbound(msg);
 
-        const mediaInfo = p.mediaUrl ? ` + ${p.mediaType || 'media'}` : '';
+        const mediaInfo = mediaUrl ? ` + ${p.mediaType || 'media'}` : '';
         const replyInfo = p.replyTo ? ' (as reply)' : '';
 
         return {

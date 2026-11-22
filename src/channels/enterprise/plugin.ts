@@ -7,11 +7,14 @@ import type { Config } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import { resolveStandardPairingPath, resolveStandardAllowFromPath } from '../pairing/paths.js';
 import { readAllowFromIdsSync } from '../pairing/allow-from-file.js';
-import type { ChannelPlugin, ChannelPluginInitOptions, DmPolicy, GroupPolicy } from '../plugin-types.js';
+import type { ChannelOutboundContext, ChannelPlugin, ChannelPluginInitOptions, DmPolicy, GroupPolicy } from '../plugin-types.js';
 import { evaluateAccess } from '../security.js';
 import { redactEnterpriseChannelSecret } from './config-surface.js';
+import { loadEnterpriseMedia, type EnterpriseMedia } from './media.js';
 import { createEnterpriseSetup, type ChannelSetupLink, type EnterpriseCredentials, type EnterpriseRegistration } from './setup.js';
 import { record, string } from './socket.js';
+
+export type { EnterpriseMedia, EnterpriseMediaKind } from './media.js';
 
 const accountId = 'default';
 
@@ -29,6 +32,7 @@ export type EnterpriseMessage = {
 export type EnterpriseTransport = {
   run: (signal: AbortSignal, online: (socket?: WebSocket) => void, onFailure: (message?: string) => void) => Promise<void>;
   send: (target: string, group: boolean, text: string, replyId?: string) => Promise<string>;
+  sendMedia?: (target: string, group: boolean, media: EnterpriseMedia, caption?: string, replyId?: string) => Promise<string>;
 };
 
 export function createEnterpriseChannel(options: {
@@ -40,6 +44,7 @@ export function createEnterpriseChannel(options: {
   begin?: (signal: AbortSignal) => Promise<EnterpriseRegistration>;
   credentialIdIsSecret?: boolean;
   threads?: boolean;
+  media?: boolean;
   sendWhileDisconnected?: boolean;
   setupLink?: ChannelSetupLink;
   setupTemplate?: { content: string; url: string; instructions: { zh: string; en: string } };
@@ -73,7 +78,7 @@ export function createEnterpriseChannel(options: {
   const plugin: ChannelPlugin = {
     id,
     meta: { id, label, selectionLabel: label, docsPath: `/channels/${id}`, blurb: `${label} bot messaging`, order: options.order },
-    capabilities: { chatTypes: ['direct', 'group'], reactions: false, threads: options.threads === true, media: false, nativeCommands: false, blockStreaming: false },
+    capabilities: { chatTypes: ['direct', 'group'], reactions: false, threads: options.threads === true, media: options.media === true, nativeCommands: false, blockStreaming: false },
     reload: { configPrefixes: [`channels.${id}`] },
     config: {
       listAccountIds: (config) => configured(credentialsFor(config)) ? [accountId] : [],
@@ -195,20 +200,45 @@ export function createEnterpriseChannel(options: {
     outbound: {
       deliveryMode: 'direct',
       textChunkLimit: 1800,
-      async sendText({ to, text, accountId: targetAccount, mediaUrl, threadId, replyToId, outboundMetadata }) {
-        const separator = to.indexOf(':');
-        const kind = to.slice(0, separator);
-        const target = to.slice(separator + 1);
-        if (!runtime || (!online && !options.sendWhileDisconnected) || (targetAccount && targetAccount !== accountId)) {
-          throw new Error(`${label} is disconnected`);
-        }
-        if (!target || (kind !== 'user' && kind !== 'group')) throw new Error(`Invalid ${label} target`);
-        if (mediaUrl) throw new Error(`${label} only supports text delivery`);
-        const reply = string(outboundMetadata?.channelReplyId) || (options.threads ? string(threadId) : '') || replyToId || undefined;
-        const messageId = await runtime.transport.send(target, kind === 'group', text, reply);
-        return { success: true, messageId, chatId: to };
+      async sendText(ctx: ChannelOutboundContext) {
+        const { active, target, isGroup, reply } = resolveOutbound(ctx);
+        if (ctx.mediaUrl) throw new Error(`${label} sendText does not accept mediaUrl; use sendMedia`);
+        const messageId = await active.transport.send(target, isGroup, ctx.text, reply);
+        return { success: true, messageId, chatId: ctx.to };
       },
+      ...(options.media ? {
+        async sendMedia(ctx: ChannelOutboundContext) {
+          const { active, target, isGroup, reply } = resolveOutbound(ctx);
+          if (!active.transport.sendMedia) throw new Error(`${label} only supports text delivery`);
+          const mediaUrl = ctx.mediaUrl?.trim();
+          if (!mediaUrl) throw new Error(`${label} sendMedia requires mediaUrl`);
+          const filenameHint = typeof ctx.outboundMetadata?.mediaFileName === 'string'
+            ? ctx.outboundMetadata.mediaFileName
+            : undefined;
+          const media = await loadEnterpriseMedia(ctx.cfg as Config, mediaUrl, {
+            mediaType: ctx.mediaType,
+            filenameHint,
+            localRoots: ctx.mediaLocalRoots,
+          });
+          const caption = ctx.text?.trim() || undefined;
+          const messageId = await active.transport.sendMedia(target, isGroup, media, caption, reply);
+          return { success: true, messageId, chatId: ctx.to };
+        },
+      } : {}),
     },
   };
+
+  function resolveOutbound(ctx: ChannelOutboundContext) {
+    const separator = ctx.to.indexOf(':');
+    const kind = ctx.to.slice(0, separator);
+    const target = ctx.to.slice(separator + 1);
+    if (!runtime || (!online && !options.sendWhileDisconnected) || (ctx.accountId && ctx.accountId !== accountId)) {
+      throw new Error(`${label} is disconnected`);
+    }
+    if (!target || (kind !== 'user' && kind !== 'group')) throw new Error(`Invalid ${label} target`);
+    const reply = string(ctx.outboundMetadata?.channelReplyId) || (options.threads ? string(ctx.threadId) : '') || ctx.replyToId || undefined;
+    return { active: runtime, target, isGroup: kind === 'group', reply };
+  }
+
   return plugin;
 }

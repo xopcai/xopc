@@ -56,6 +56,7 @@ export function createOutboundSender(deps: OutboundSenderDeps) {
       replyToMessageId,
       mediaUrl,
       mediaType,
+      mediaFileName,
       silent,
       audioAsVoice,
     } = options;
@@ -112,6 +113,7 @@ export function createOutboundSender(deps: OutboundSenderDeps) {
           threadId,
           replyToMessageId,
           silent,
+          filename: mediaFileName,
         });
       }
       // Handle remote URL media
@@ -181,7 +183,7 @@ export function createOutboundSender(deps: OutboundSenderDeps) {
     chatId: string,
     dataUrl: string,
     content?: string,
-    options?: { threadId?: string; replyToMessageId?: string; silent?: boolean }
+    options?: { threadId?: string; replyToMessageId?: string; silent?: boolean; filename?: string }
   ): Promise<number> {
     const parsed = parseDataUrl(dataUrl);
     if (!parsed) {
@@ -189,7 +191,7 @@ export function createOutboundSender(deps: OutboundSenderDeps) {
     }
 
     const { mimeType, buffer } = parsed;
-    const file = new InputFile(buffer);
+    const file = options?.filename ? new InputFile(buffer, options.filename) : new InputFile(buffer);
 
     const { caption, followUpText } = content ? splitTelegramCaption(content) : { caption: '', followUpText: undefined };
     const htmlCaption = caption ? renderTelegramHtmlText(caption) : undefined;

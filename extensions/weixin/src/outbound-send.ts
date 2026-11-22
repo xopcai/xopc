@@ -1,3 +1,4 @@
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { Config } from '@xopcai/xopc/config/schema.js';
@@ -301,6 +302,7 @@ export function createWeixinOutboundHandlers() {
       return { messageId: '', chatId: ctx.to, success: false, error: 'No media URL' };
     }
     const caption = formatWeixinOutboundText(ctx.text ?? '');
+    let tempCleanupPath: string | undefined;
     try {
       let filePath: string;
 
@@ -313,11 +315,17 @@ export function createWeixinOutboundHandlers() {
           buffer: parsed.buffer,
           mimeType: parsed.mimeType,
           destDir: MEDIA_OUTBOUND_TEMP_DIR,
+          filenameHint: typeof ctx.outboundMetadata?.mediaFileName === 'string'
+            ? ctx.outboundMetadata.mediaFileName
+            : undefined,
         });
+        const parentDir = path.dirname(filePath);
+        tempCleanupPath = path.resolve(parentDir) !== path.resolve(MEDIA_OUTBOUND_TEMP_DIR) ? parentDir : filePath;
       } else if (isLocalFilePath(mediaUrl) || mediaUrl.startsWith('file://')) {
         filePath = resolveLocalPath(mediaUrl);
       } else if (isRemoteUrl(mediaUrl)) {
         filePath = await downloadRemoteImageToTemp(mediaUrl, MEDIA_OUTBOUND_TEMP_DIR);
+        tempCleanupPath = filePath;
       } else {
         await sendMessageWeixin({
           to: ctx.to,
@@ -364,6 +372,10 @@ export function createWeixinOutboundHandlers() {
         errLog: (m) => logger.warn(m),
       });
       return { messageId: '', chatId: ctx.to, success: false, error: msg };
+    } finally {
+      if (tempCleanupPath) {
+        await rm(tempCleanupPath, { recursive: true, force: true }).catch(() => undefined);
+      }
     }
   };
 

@@ -28,8 +28,10 @@ import type {
 } from '../image/generation/types.js';
 import { applyImageGenerationModelConfigDefaults } from '../image/image-helpers.js';
 import type { ToolModelConfig } from '../image/tool-model-config.js';
-import { persistToolMedia } from './tool-media.js';
+import { buildOutboundMediaMetadata, persistToolMedia } from './tool-media.js';
+import { isExternalMessagingChannel } from '../../channels/internal-outbound.js';
 import { buildCapabilityPlansForConfig } from '../../capabilities/readiness/index.js';
+import type { MessageBus } from '../../infra/bus/index.js';
 
 const DEFAULT_COUNT = 1;
 const MAX_COUNT = 9;
@@ -274,6 +276,8 @@ export function createImageGenerateTool(options: {
   config?: Config;
   workspace: string;
   agentId: string;
+  bus?: MessageBus;
+  getContext?: () => { channel: string; chatId: string; metadata?: Record<string, unknown> } | null;
 }): AgentTool<any, Record<string, unknown>> | null {
   const imageGenerationModelConfig = resolveImageGenerationModelConfigForTool({
     cfg: options.config,
@@ -403,8 +407,28 @@ export function createImageGenerateTool(options: {
           ),
         );
 
+        const deliveryCtx = options.getContext?.();
+        let deliveredToChannel: string | undefined;
+        if (options.bus && deliveryCtx && isExternalMessagingChannel(deliveryCtx.channel)) {
+          for (let index = 0; index < result.images.length; index += 1) {
+            const image = result.images[index]!;
+            const item = media[index]!;
+            const outboundMetadata = buildOutboundMediaMetadata(deliveryCtx.metadata, item.name);
+            await options.bus.publishOutbound({
+              channel: deliveryCtx.channel,
+              chat_id: deliveryCtx.chatId,
+              content: '',
+              mediaUrl: `data:${item.mimeType};base64,${image.buffer.toString('base64')}`,
+              mediaType: 'photo',
+              ...(outboundMetadata ? { metadata: outboundMetadata } : {}),
+            });
+          }
+          deliveredToChannel = deliveryCtx.channel;
+        }
+
         const lines: string[] = [
           `Generated and published ${paths.length} image(s) with ${result.provider}/${result.model}.`,
+          ...(deliveredToChannel ? [`Delivered ${paths.length} image(s) directly to ${deliveredToChannel}.`] : []),
           'In a Task, select the returned artifact IDs in publish_task_result.finalArtifactIds for final delivery. Publication alone does not confirm delivery to the originating chat.',
           ...paths.map((p) => `Saved: ${p}`),
         ];

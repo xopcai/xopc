@@ -206,7 +206,12 @@ export class InboundLoop {
         origin: { type: 'channel', channel: context.channel },
         metadata: {
           accountId: msg.metadata?.accountId,
+          threadId: msg.metadata?.threadId,
+          inboundMessageId: msg.metadata?.messageId,
+          ...(typeof msg.metadata?.channelReplyId === 'string' ? { channelReplyId: msg.metadata.channelReplyId } : {}),
           transcribedVoice: msg.metadata?.transcribedVoice === true,
+          sessionWebhook: msg.metadata?.sessionWebhook,
+          conversationId: context.conversationId,
         },
       };
 

@@ -1,11 +1,15 @@
+import { extname } from 'node:path';
+
 import { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';
-import { createEnterpriseChannel, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
+import { createEnterpriseChannel, type EnterpriseMedia, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
 import type { EnterpriseCredentials, EnterpriseRegistration } from '@xopcai/xopc/channels/enterprise/setup.js';
 import { postJson, record, runChannelSocket, string } from '@xopcai/xopc/channels/enterprise/socket.js';
 
 const registrationBase = 'https://oapi.dingtalk.com/app/registration';
+const oapi = 'https://oapi.dingtalk.com';
 const api = 'https://api.dingtalk.com/v1.0';
 const topic = '/v1.0/im/bot/messages/get';
+const dingtalkImageMimes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp']);
 
 async function registration(action: string, body: object, signal: AbortSignal) {
   const response = record(await postJson(`${registrationBase}/${action}`, body, signal));
@@ -83,6 +87,43 @@ function transport(credentials: EnterpriseCredentials, receive: (message: Enterp
     return tokenRequest;
   };
 
+  const sendRobotMessage = async (target: string, group: boolean, msgKey: string, msgParam: object) => {
+    const accessToken = await getToken();
+    const route = group ? 'groupMessages/send' : 'oToMessages/batchSend';
+    const response = record(await postJson(`${api}/robot/${route}`, {
+      robotCode: credentials.id,
+      ...(group ? { openConversationId: target } : { userIds: [target] }),
+      msgKey,
+      msgParam: JSON.stringify(msgParam),
+    }, undefined, { 'x-acs-dingtalk-access-token': accessToken }));
+    const id = string(response.processQueryKey);
+    if (!id) throw new Error('DingTalk did not confirm message delivery');
+    return id;
+  };
+
+  const uploadMedia = async (media: EnterpriseMedia, uploadType: 'image' | 'file') => {
+    const accessToken = await getToken();
+    const form = new FormData();
+    form.append('type', uploadType);
+    form.append('media', new Blob([new Uint8Array(media.buffer)], { type: media.mimeType }), media.filename);
+    const response = await fetch(`${oapi}/media/upload?access_token=${encodeURIComponent(accessToken)}`, {
+      method: 'POST',
+      body: form,
+      redirect: 'error',
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error(`DingTalk media upload failed (${response.status})`);
+    }
+    const body = record(await response.json());
+    const mediaId = string(body.media_id);
+    if (body.errcode !== 0 || !mediaId) {
+      throw new Error(`DingTalk media upload rejected (${string(body.errmsg) || String(body.errcode ?? 'unknown')})`);
+    }
+    return mediaId;
+  };
+
   return {
     run(signal: AbortSignal, online: Parameters<typeof runChannelSocket>[2], onFailure: () => void) {
       return runChannelSocket(signal, async () => ({
@@ -112,24 +153,30 @@ function transport(credentials: EnterpriseCredentials, receive: (message: Enterp
         },
       }), online, onFailure);
     },
-    async send(target: string, group: boolean, text: string) {
-      const accessToken = await getToken();
-      const route = group ? 'groupMessages/send' : 'oToMessages/batchSend';
-      const response = record(await postJson(`${api}/robot/${route}`, {
-        robotCode: credentials.id,
-        ...(group ? { openConversationId: target } : { userIds: [target] }),
-        msgKey: 'sampleText',
-        msgParam: JSON.stringify({ content: text }),
-      }, undefined, { 'x-acs-dingtalk-access-token': accessToken }));
-      const id = string(response.processQueryKey);
-      if (!id) throw new Error('DingTalk did not confirm message delivery');
-      return id;
+    send(target: string, group: boolean, text: string) {
+      return sendRobotMessage(target, group, 'sampleText', { content: text });
+    },
+    async sendMedia(target: string, group: boolean, media: EnterpriseMedia, caption?: string) {
+      const asImage = media.kind === 'image' && dingtalkImageMimes.has(media.mimeType.toLowerCase());
+      const mediaId = await uploadMedia(media, asImage ? 'image' : 'file');
+      const messageId = asImage
+        ? await sendRobotMessage(target, group, 'sampleImageMsg', { photoURL: mediaId })
+        : await sendRobotMessage(target, group, 'sampleFile', {
+            mediaId,
+            fileName: media.filename,
+            fileType: extname(media.filename).slice(1).toLowerCase() || 'bin',
+          });
+      if (caption) {
+        await sendRobotMessage(target, group, 'sampleText', { content: caption });
+      }
+      return messageId;
     },
   };
 }
 
 export const dingtalkPlugin = createEnterpriseChannel({
   id: 'dingtalk', label: 'DingTalk', order: 40,
+  media: true,
   credentialFields: ['clientId', 'clientSecret'], credentialLabels: ['Client ID', 'Client Secret'],
   begin, verify: async (credentials) => { await streamEndpoint(credentials); }, transport,
 });

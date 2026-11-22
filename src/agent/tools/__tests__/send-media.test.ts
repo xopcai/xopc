@@ -84,7 +84,11 @@ describe('send_media', () => {
     const tool = createSendMediaTool(
       '/tmp/workspace',
       { publishOutbound } as any,
-      () => ({ channel: 'telegram', chatId: '123456' }),
+      () => ({
+        channel: 'telegram',
+        chatId: '123456',
+        metadata: { accountId: 'personal', threadId: '42', channelReplyId: 'msg-9' },
+      }),
     );
 
     const result = await tool.execute('call-1', { filePath: '/tmp/workspace/icon.svg' });
@@ -93,6 +97,12 @@ describe('send_media', () => {
       channel: 'telegram',
       mediaType: 'document',
       mediaUrl: expect.stringMatching(/^data:image\/svg\+xml;base64,/),
+      metadata: {
+        accountId: 'personal',
+        threadId: '42',
+        channelReplyId: 'msg-9',
+        mediaFileName: 'icon.svg',
+      },
     }));
     expect(result.details).toMatchObject({
       media: [{ uri: 'media://outbound/photo---id.webp' }],

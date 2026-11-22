@@ -40,6 +40,27 @@ export function mediaTypeFromMimeType(mimeType: string): ToolMediaType {
   return 'document';
 }
 
+export function buildOutboundMediaMetadata(
+  contextMetadata?: Record<string, unknown>,
+  mediaFileName?: string,
+): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = {};
+  if (contextMetadata) {
+    if (contextMetadata.accountId !== undefined) out.accountId = contextMetadata.accountId;
+    if (contextMetadata.threadId !== undefined) out.threadId = contextMetadata.threadId;
+    if (contextMetadata.inboundMessageId !== undefined) out.inboundMessageId = contextMetadata.inboundMessageId;
+    if (typeof contextMetadata.channelReplyId === 'string' && contextMetadata.channelReplyId) {
+      out.channelReplyId = contextMetadata.channelReplyId;
+    }
+    if (contextMetadata.sessionWebhook !== undefined) out.sessionWebhook = contextMetadata.sessionWebhook;
+    if (contextMetadata.conversationId !== undefined) out.conversationId = contextMetadata.conversationId;
+  }
+  if (mediaFileName) {
+    out.mediaFileName = mediaFileName;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export async function persistToolMedia(params: {
   buffer: Buffer;
   filePath: string;

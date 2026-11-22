@@ -59,7 +59,7 @@ it('configures Discord and preserves direct, mention and thread delivery across 
   const connectionHosts: string[] = [];
   const resumes: Array<{ session_id: string; seq: number }> = [];
   const heartbeats: Array<number | null> = [];
-  const sends: Array<{ channel: string; body: Record<string, unknown> }> = [];
+  const sends: Array<{ channel: string; body: Record<string, unknown>; file?: { name: string; bytes: number } }> = [];
   let cfg: Config = ConfigSchema.parse({});
   let bus: MessageBus | undefined;
   let manager: ChannelManager | undefined;
@@ -113,7 +113,13 @@ it('configures Discord and preserves direct, mention and thread delivery across 
     if (url.pathname === '/api/v10/gateway/bot') return Response.json({ url: 'wss://gateway.discord.gg' });
     const target = /^\/api\/v10\/channels\/(\d+)\/messages$/.exec(url.pathname);
     if (target) {
-      sends.push({ channel: target[1], body: JSON.parse(String(init?.body)) });
+      if (init?.body instanceof FormData) {
+        const payload = JSON.parse(String(init.body.get('payload_json')));
+        const file = init.body.get('files[0]') as File;
+        sends.push({ channel: target[1], body: payload, file: { name: file.name, bytes: (await file.arrayBuffer()).byteLength } });
+      } else {
+        sends.push({ channel: target[1], body: JSON.parse(String(init?.body)) });
+      }
       return Response.json({ id: messageId(1000 + sends.length) });
     }
     throw new Error(`Unexpected Discord API: ${url.pathname}`);
@@ -241,6 +247,25 @@ it('configures Discord and preserves direct, mention and thread delivery across 
     expect(admitted.at(-1)).toMatchObject({ content: 'hello 8' });
     await reply(admitted.at(-1)!, 'thread after restart');
     expect(sends.at(-1)).toMatchObject({ channel: thread, body: { message_reference: { message_id: messageId(8) } } });
+
+    const pngBase64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x02]).toString('base64');
+    await manager!.send({
+      channel: 'discord',
+      chat_id: `group:${thread}`,
+      content: 'Attached preview',
+      mediaUrl: `data:image/png;base64,${pngBase64}`,
+      mediaType: 'photo',
+      metadata: { channelReplyId: messageId(8), mediaFileName: 'preview.png' },
+    }, { requireDelivery: true });
+    expect(sends.at(-1)).toMatchObject({
+      channel: thread,
+      body: {
+        content: 'Attached preview',
+        message_reference: { message_id: messageId(8) },
+        attachments: [{ id: 0, filename: 'preview.png' }],
+      },
+      file: { name: 'preview.png', bytes: 9 },
+    });
   } finally {
     await manager?.stop();
     bus?.shutdown();

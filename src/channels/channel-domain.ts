@@ -64,6 +64,7 @@ export interface ChannelSendOptions {
   replyToMessageId?: string;
   mediaUrl?: string;
   mediaType?: 'photo' | 'video' | 'audio' | 'document' | 'animation';
+  mediaFileName?: string;
   silent?: boolean;
   audioAsVoice?: boolean;
 }

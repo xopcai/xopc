@@ -7,7 +7,8 @@ import { AgentTool, type AgentToolResult } from '@earendil-works/pi-agent-core';
 import { turnOutcomeKindFromFileName } from '@xopcai/gateway-contract';
 import { checkFileSafety } from '../prompt/safety.js';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
-import { persistToolMedia, type ToolMediaType } from './tool-media.js';
+import { buildOutboundMediaMetadata, persistToolMedia, type ToolMediaType } from './tool-media.js';
+import { isExternalMessagingChannel } from '../../channels/internal-outbound.js';
 import type { MessageBus, OutboundMessage } from '../../infra/bus/index.js';
 
 const SendMediaSchema = Type.Object({
@@ -27,6 +28,7 @@ const SendMediaSchema = Type.Object({
 interface MessageContext {
   channel: string;
   chatId: string;
+  metadata?: Record<string, unknown>;
 }
 
 type SendMediaParams = {
@@ -78,13 +80,15 @@ export function createSendMediaTool(
           ...(p.mediaType ? { mediaType: p.mediaType as ToolMediaType } : {}),
         });
 
-        if (ctx.channel !== 'webchat') {
+        if (isExternalMessagingChannel(ctx.channel)) {
+          const outboundMetadata = buildOutboundMediaMetadata(ctx.metadata, media.name);
           const msg: OutboundMessage = {
             channel: ctx.channel,
             chat_id: ctx.chatId,
             content: p.caption || '',
             mediaUrl: `data:${media.mimeType};base64,${fileBuffer.toString('base64')}`,
             mediaType: media.type as ToolMediaType,
+            ...(outboundMetadata ? { metadata: outboundMetadata } : {}),
           };
           await bus.publishOutbound(msg);
         }

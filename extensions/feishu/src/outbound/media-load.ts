@@ -28,7 +28,7 @@ function isPathUnderRoots(resolved: string, roots: string[]): boolean {
 export async function loadMediaForFeishu(
   cfg: Config,
   rawInput: string,
-  opts: { maxBytes: number; localRoots?: readonly string[] },
+  opts: { maxBytes: number; localRoots?: readonly string[]; filenameHint?: string },
 ): Promise<LoadedMedia> {
   const input = rawInput.trim().startsWith('@') ? rawInput.trim().slice(1).trim() : rawInput.trim();
   if (!input) throw new Error('empty media reference');
@@ -57,7 +57,8 @@ export async function loadMediaForFeishu(
     const dataPart = input.slice(m[0].length);
     const buf = isB64 ? Buffer.from(dataPart, 'base64') : Buffer.from(decodeURIComponent(dataPart), 'utf8');
     if (buf.length > opts.maxBytes) throw new Error(`Media too large (${buf.length} bytes, max ${opts.maxBytes})`);
-    const filename = mime.startsWith('image/') ? `image.${mime.split('/')[1] || 'bin'}` : 'media.bin';
+    const hint = opts.filenameHint ? safeBasename(opts.filenameHint) : '';
+    const filename = hint || (mime.startsWith('image/') ? `image.${mime.split('/')[1] || 'bin'}` : 'media.bin');
     return { buffer: buf, mimeType: mime, filename, stream: Readable.from(buf) };
   }
 

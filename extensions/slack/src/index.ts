@@ -1,8 +1,8 @@
 import type WebSocket from 'ws';
 
-import { createEnterpriseChannel, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
+import { createEnterpriseChannel, type EnterpriseMedia, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
 import type { EnterpriseCredentials } from '@xopcai/xopc/channels/enterprise/setup.js';
-import { postJson, record, runChannelSocket, string } from '@xopcai/xopc/channels/enterprise/socket.js';
+import { fetchJson, postJson, record, runChannelSocket, string } from '@xopcai/xopc/channels/enterprise/socket.js';
 import { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';
 
 import { slackAppManifest } from './manifest.js';
@@ -14,6 +14,23 @@ type BotIdentity = { teamId: string; userId: string; botId: string };
 
 async function slackCall(method: string, token: string, body: object, signal?: AbortSignal) {
   const result = record(await postJson(`https://slack.com/api/${method}`, body, signal, { authorization: `Bearer ${token}` }));
+  if (result.ok !== true) {
+    const code = string(result.error);
+    throw new Error(`Slack ${method} failed (${/^[a-z_]+$/.test(code) ? code : 'invalid_response'})`);
+  }
+  return result;
+}
+
+async function slackFormCall(method: string, token: string, params: Record<string, string>, signal?: AbortSignal) {
+  const result = record(await fetchJson(`https://slack.com/api/${method}`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams(params).toString(),
+    signal,
+  }));
   if (result.ok !== true) {
     const code = string(result.error);
     throw new Error(`Slack ${method} failed (${/^[a-z_]+$/.test(code) ? code : 'invalid_response'})`);
@@ -98,8 +115,41 @@ function slackTransport(credentials: EnterpriseCredentials, receive: (message: E
     return ts;
   };
 
+  const sendMedia = async (target: string, _group: boolean, media: EnterpriseMedia, caption?: string, threadId?: string) => {
+    if (!slackId.test(target) || (threadId && !timestamp.test(threadId))) throw new Error('Invalid Slack message target');
+    const upload = await slackFormCall('files.getUploadURLExternal', credentials.id, {
+      filename: media.filename,
+      length: String(media.buffer.length),
+    });
+    const uploadUrl = new URL(string(upload.upload_url));
+    const fileId = string(upload.file_id);
+    if (uploadUrl.protocol !== 'https:' || !uploadUrl.hostname.endsWith('.slack.com') || uploadUrl.username || uploadUrl.password || !fileId) {
+      throw new Error('Slack returned an invalid file upload URL');
+    }
+    const uploadResponse = await fetch(uploadUrl.href, {
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream' },
+      body: new Uint8Array(media.buffer),
+      redirect: 'error',
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!uploadResponse.ok) {
+      await uploadResponse.body?.cancel();
+      throw new Error(`Slack file upload failed (${uploadResponse.status})`);
+    }
+    await uploadResponse.body?.cancel();
+    await slackCall('files.completeUploadExternal', credentials.id, {
+      files: [{ id: fileId, title: media.filename }],
+      channel_id: target,
+      ...(threadId ? { thread_ts: threadId } : {}),
+      ...(caption ? { initial_comment: caption } : {}),
+    });
+    return fileId;
+  };
+
   return {
     send,
+    sendMedia,
     run(signal: AbortSignal, online: Parameters<typeof runChannelSocket>[2], onFailure: (message?: string) => void) {
       return runChannelSocket(signal, async () => {
         const identity = bot ??= await authenticateBot(credentials.id, signal);
@@ -171,6 +221,7 @@ export const slackPlugin = createEnterpriseChannel({
   credentialLabels: ['Bot Token (xoxb-)', 'App Token (xapp-)'],
   credentialIdIsSecret: true,
   threads: true,
+  media: true,
   setupTemplate: {
     content: JSON.stringify(slackAppManifest, null, 2),
     url: 'https://api.slack.com/apps',

@@ -136,6 +136,9 @@ export function createFeishuOutboundAdapter(): ChannelOutboundAdapter {
       const loaded = await loadMediaForFeishu(cfg, ctx.mediaUrl, {
         maxBytes: 20 * 1024 * 1024,
         localRoots: ctx.mediaLocalRoots,
+        filenameHint: typeof ctx.outboundMetadata?.mediaFileName === 'string'
+          ? ctx.outboundMetadata.mediaFileName
+          : undefined,
       });
 
       const { createFeishuClient } = await import('../transport/client/client.js');

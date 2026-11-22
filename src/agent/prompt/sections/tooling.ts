@@ -1,3 +1,5 @@
+import { isExternalMessagingChannel } from '../../../channels/internal-outbound.js';
+
 const CORE_TOOL_ORDER = [
   'read_file',
   'data_batch',
@@ -89,6 +91,7 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
 export function buildToolingSection(params: {
   toolNames?: string[];
   toolSummaries?: Record<string, string>;
+  currentChannel?: string;
 }): string {
   const rawToolNames = (params.toolNames ?? []).map((tool) => tool.trim()).filter(Boolean);
   const canonicalByNormalized = new Map<string, string>();
@@ -145,7 +148,11 @@ export function buildToolingSection(params: {
   const hasExec = availableTools.has('exec_command');
   const hasPlan = availableTools.has('update_plan');
   const hasPublishArtifacts = availableTools.has('publish_artifacts');
+  const hasSendMedia = availableTools.has('send_media');
+  const hasImageGenerate = availableTools.has('image_generate');
   const hasXopcUse = availableTools.has('xopc_use');
+  const currentChannel = params.currentChannel?.trim().toLowerCase();
+  const isExternalChannel = isExternalMessagingChannel(currentChannel);
 
   const orchestrationLines: string[] = [];
   if (hasDelegate) {
@@ -162,7 +169,9 @@ export function buildToolingSection(params: {
     (availableTools.has('tool_search') || availableTools.has('xopc_tool_execute')) ? 'Use tool_search as the single tool discovery entry. loadedTools can be called after their schemas load; externalTools require xopc_tool_describe then xopc_tool_execute. Connection candidates are recovery options, not proof of missing authorization. Respect the current execution scope.' : '',
     hasPublishArtifacts && !hasRead && !hasWrite && !hasPatch && !hasExec
       ? 'Only publication is available for workspace files. For a request to edit then publish, editing is blocked: make no publication call and explain the limitation. Publish an existing file only when the user requests that existing content without an outstanding edit.' : '',
-    'When a tool returns an xopc product link, reuse its exact URL in a Markdown link with a short descriptive label in the user\'s language (for example, [打开会话](url)). Do not invent link parameters, escape the link brackets/parentheses, or wrap a navigation link in a code span. Avoid repeating raw URLs or internal object metadata unless requested.',
+    !isExternalChannel
+      ? 'When a tool returns an xopc product link, reuse its exact URL in a Markdown link with a short descriptive label in the user\'s language (for example, [打开会话](url)). Do not invent link parameters, escape the link brackets/parentheses, or wrap a navigation link in a code span. Avoid repeating raw URLs or internal object metadata unless requested.'
+      : '',
     toolLines.length > 0
       ? toolLines.join('\n')
       : '- No tools are registered for this session.',
@@ -195,9 +204,13 @@ export function buildToolingSection(params: {
     availableTools.has('review_workspace')
       ? `After code changes, use \`${resolveToolName('review_workspace')}\` to inspect the final diff.`
       : '',
-    hasWrite || hasExec
-      ? 'When delivering a user-facing workspace file, include a clickable Markdown link in the final response using `xopc://workspace/file?path=<workspace-relative-path>`; URL-encode spaces and special characters, and do not invent an HTTP or `file://` URL.'
-      : '',
+    isExternalChannel
+      ? hasSendMedia
+        ? `You are replying in an external messaging channel (\`${currentChannel}\`). Do not output \`xopc://\` or \`file://\` links because users in external channels cannot open them. When delivering a workspace file or image to the user, send it directly with \`${resolveToolName('send_media')}\`${hasImageGenerate ? ` (newly generated images from \`${resolveToolName('image_generate')}\` are already delivered automatically; use \`${resolveToolName('send_media')}\` to send existing files or resend)` : ''}.`
+        : `You are replying in an external messaging channel (\`${currentChannel}\`). Do not output \`xopc://\` or \`file://\` links because users in external channels cannot open them.`
+      : (hasWrite || hasExec)
+        ? 'When delivering a user-facing workspace file, include a clickable Markdown link in the final response using `xopc://workspace/file?path=<workspace-relative-path>`; URL-encode spaces and special characters, and do not invent an HTTP or `file://` URL.'
+        : '',
     hasPublishArtifacts
       ? hasExec
         ? `Default delivery is a link to the completed workspace file. Only when downloadable copies are requested, declare those files in \`${execToolName}.outputs\`; use \`${resolveToolName('publish_artifacts')}\` only for requested downloads still missing a receipt. Keep source, tests and helpers in the workspace unless downloadable copies were explicitly requested. Publication requires a completed requested deliverable; never publish an original file when its requested edit is blocked. A successful receipt completes delivery: do not publish or rerun a check just to attach it again.`

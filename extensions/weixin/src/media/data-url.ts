@@ -26,11 +26,23 @@ export async function writeDataUrlBufferToTemp(params: {
   buffer: Buffer;
   mimeType: string;
   destDir: string;
+  filenameHint?: string;
 }): Promise<string> {
   await fs.mkdir(params.destDir, { recursive: true });
   const ext = getExtensionFromMime(params.mimeType);
-  const name = `weixin-data-${randomBytes(8).toString("hex")}${ext}`;
-  const filePath = path.join(params.destDir, name);
+  const safeHint = params.filenameHint
+    ? path.basename(params.filenameHint.trim()).replace(/[\\/:*?"<>|\r\n\0]/g, '_').trim()
+    : '';
+  const baseDir = safeHint && safeHint !== '.' && safeHint !== '..'
+    ? path.join(params.destDir, randomBytes(6).toString('hex'))
+    : params.destDir;
+  if (baseDir !== params.destDir) {
+    await fs.mkdir(baseDir, { recursive: true });
+  }
+  const name = safeHint && safeHint !== '.' && safeHint !== '..'
+    ? safeHint
+    : `weixin-data-${randomBytes(8).toString('hex')}${ext}`;
+  const filePath = path.join(baseDir, name);
   await fs.writeFile(filePath, params.buffer);
   return filePath;
 }

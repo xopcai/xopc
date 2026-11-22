@@ -57,6 +57,7 @@ it('connects Slack, confirms durable events, replies in the original thread and 
   const usedTickets: string[] = [];
   const acknowledged = new Set<string>();
   const sends: Array<Record<string, unknown>> = [];
+  const uploads: Array<{ filename: string; length: string; bytes?: number; complete?: Record<string, unknown> }> = [];
   let tickets = 0;
   let cfg: Config = ConfigSchema.parse({});
   let manager: ChannelManager | undefined;
@@ -74,6 +75,11 @@ it('connects Slack, confirms durable events, replies in the original thread and 
 
   vi.stubGlobal('fetch', vi.fn(async (input, init) => {
     const url = new URL(String(input));
+    if (url.hostname === 'files.slack.com' && url.pathname.startsWith('/upload/v1/')) {
+      const current = uploads.at(-1)!;
+      current.bytes = (init?.body as Uint8Array).byteLength;
+      return new Response('OK', { status: 200 });
+    }
     expect(url.origin).toBe('https://slack.com');
     const authorization = new Headers(init?.headers).get('authorization');
     switch (url.pathname) {
@@ -89,6 +95,17 @@ it('connects Slack, confirms durable events, replies in the original thread and 
         expect(authorization).toBe(`Bearer ${botToken}`);
         sends.push(JSON.parse(String(init?.body)));
         return Response.json({ ok: true, ts: `1900000000.${sends.length}` });
+      case '/api/files.getUploadURLExternal': {
+        expect(authorization).toBe(`Bearer ${botToken}`);
+        expect(new Headers(init?.headers).get('content-type')).toBe('application/x-www-form-urlencoded');
+        const params = new URLSearchParams(String(init?.body));
+        uploads.push({ filename: params.get('filename') ?? '', length: params.get('length') ?? '' });
+        return Response.json({ ok: true, upload_url: `https://files.slack.com/upload/v1/${uploads.length}`, file_id: `F${uploads.length}` });
+      }
+      case '/api/files.completeUploadExternal':
+        expect(authorization).toBe(`Bearer ${botToken}`);
+        uploads.at(-1)!.complete = JSON.parse(String(init?.body));
+        return Response.json({ ok: true, files: [{ id: `F${uploads.length}` }] });
       default:
         throw new Error(`Unexpected Slack API: ${url.pathname}`);
     }
@@ -141,7 +158,7 @@ it('connects Slack, confirms durable events, replies in the original thread and 
     const form = (await setup()).payload;
     if (form?.type !== 'form') throw new Error('Missing Slack setup form');
     expect(JSON.parse(form.setupTemplate!.content)).toMatchObject({
-      oauth_config: { scopes: { bot: ['app_mentions:read', 'chat:write', 'im:history'] } },
+      oauth_config: { scopes: { bot: ['app_mentions:read', 'chat:write', 'files:write', 'im:history'] } },
       settings: { socket_mode_enabled: true, event_subscriptions: { bot_events: ['app_mention', 'message.im'] } },
     });
     expect(form.schema.properties).toMatchObject({
@@ -230,6 +247,27 @@ it('connects Slack, confirms durable events, replies in the original thread and 
     expect(admitted.at(-1)).toMatchObject({ chat_id: 'user:DDIRECT', metadata: { threadId: '1800000000.02' } });
     await reply(admitted.at(-1)!, 'Reply in the private thread');
     expect(sends.at(-1)).toMatchObject({ channel: 'DDIRECT', thread_ts: '1800000000.02' });
+
+    const pngBase64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]).toString('base64');
+    await manager!.send({
+      channel: 'slack',
+      chat_id: 'group:CGENERAL',
+      content: 'Here is the chart',
+      mediaUrl: `data:image/png;base64,${pngBase64}`,
+      mediaType: 'photo',
+      metadata: { threadId: mention.ts, mediaFileName: 'chart.png' },
+    }, { requireDelivery: true });
+    expect(uploads.at(-1)).toMatchObject({
+      filename: 'chart.png',
+      length: '9',
+      bytes: 9,
+      complete: {
+        files: [{ id: 'F1', title: 'chart.png' }],
+        channel_id: 'CGENERAL',
+        thread_ts: mention.ts,
+        initial_comment: 'Here is the chart',
+      },
+    });
   } finally {
     await manager?.stop();
     bus?.shutdown();

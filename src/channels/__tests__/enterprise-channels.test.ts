@@ -74,6 +74,7 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
   const connections: WebSocket[] = [];
   const frames: Array<Record<string, any>> = [];
   const sends: Array<{ path: string; body: Record<string, unknown> }> = [];
+  const uploads: Array<{ type: string; filename: string; bytes: number }> = [];
   let tickets = 0;
   let allowRegistration = true;
   let registrationPending = true;
@@ -83,12 +84,29 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
     socket.on('message', (raw) => {
       const frame = JSON.parse(raw.toString());
       frames.push(frame);
-      if (channel === 'wecom') socket.send(JSON.stringify({ headers: frame.headers, errcode: 0 }));
+      if (channel === 'wecom') {
+        if (frame.cmd === 'aibot_upload_media_init') {
+          socket.send(JSON.stringify({ headers: frame.headers, errcode: 0, body: { upload_id: `upload-${frames.length}` } }));
+        } else if (frame.cmd === 'aibot_upload_media_finish') {
+          socket.send(JSON.stringify({ headers: frame.headers, errcode: 0, body: { media_id: `wecom-media-${frames.length}` } }));
+        } else {
+          socket.send(JSON.stringify({ headers: frame.headers, errcode: 0 }));
+        }
+      }
     });
   });
 
   vi.stubGlobal('fetch', vi.fn(async (input, init) => {
     const url = new URL(String(input));
+    if (url.pathname === '/media/upload') {
+      expect(url.searchParams.get('access_token')).toBe('fixture-token');
+      const form = init?.body as FormData;
+      const uploadType = String(form.get('type') ?? '');
+      const file = form.get('media') as File;
+      const bytes = (await file.arrayBuffer()).byteLength;
+      uploads.push({ type: uploadType, filename: file.name, bytes });
+      return Response.json({ errcode: 0, errmsg: 'ok', type: uploadType, media_id: `@media-${uploads.length}` });
+    }
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     switch (url.pathname) {
       case '/app/registration/init':
@@ -183,6 +201,8 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
     expect(group.metadata?.conversationId).not.toBe(admitted[0]!.metadata?.conversationId);
 
     const sendText = plugin.outbound!.sendText!;
+    const sendMedia = plugin.outbound!.sendMedia!;
+    expect(plugin.capabilities.media).toBe(true);
     await sendText({ cfg, to: admitted[0]!.chat_id, text: 'direct reply', outboundMetadata: admitted[0]!.metadata });
     await sendText({ cfg, to: group.chat_id, text: 'group reply', outboundMetadata: group.metadata });
     if (channel === 'dingtalk') {
@@ -192,6 +212,52 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
       expect(frames.at(-1)).toMatchObject({
         cmd: 'aibot_respond_msg', headers: { req_id: 'reply-group' }, body: { markdown: { content: 'group reply' } },
       });
+    }
+
+    const pngBase64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]).toString('base64');
+    const pdfBase64 = Buffer.from('%PDF-1.4\nhello').toString('base64');
+    await sendMedia({
+      cfg,
+      to: admitted[0]!.chat_id,
+      text: 'Generated portrait',
+      mediaUrl: `data:image/png;base64,${pngBase64}`,
+      mediaType: 'photo',
+      outboundMetadata: { ...admitted[0]!.metadata, mediaFileName: 'portrait.png' },
+    });
+    await sendMedia({
+      cfg,
+      to: group.chat_id,
+      text: '',
+      mediaUrl: `data:application/pdf;base64,${pdfBase64}`,
+      mediaType: 'document',
+      outboundMetadata: { ...group.metadata, mediaFileName: 'report.pdf' },
+    });
+    if (channel === 'dingtalk') {
+      expect(uploads).toEqual([
+        { type: 'image', filename: 'portrait.png', bytes: 9 },
+        { type: 'file', filename: 'report.pdf', bytes: 14 },
+      ]);
+      expect(sends.slice(-3)).toMatchObject([
+        { path: '/v1.0/robot/oToMessages/batchSend', body: { userIds: ['owner'], msgKey: 'sampleImageMsg', msgParam: '{"photoURL":"@media-1"}' } },
+        { path: '/v1.0/robot/oToMessages/batchSend', body: { userIds: ['owner'], msgKey: 'sampleText', msgParam: '{"content":"Generated portrait"}' } },
+        { path: '/v1.0/robot/groupMessages/send', body: { openConversationId: 'team', msgKey: 'sampleFile', msgParam: '{"mediaId":"@media-2","fileName":"report.pdf","fileType":"pdf"}' } },
+      ]);
+    } else {
+      const initFrames = frames.filter((f) => f.cmd === 'aibot_upload_media_init');
+      const chunkFrames = frames.filter((f) => f.cmd === 'aibot_upload_media_chunk');
+      const finishFrames = frames.filter((f) => f.cmd === 'aibot_upload_media_finish');
+      const mediaSends = frames.filter((f) => f.cmd === 'aibot_send_msg');
+      expect(initFrames.map((f) => ({ type: f.body.type, filename: f.body.filename }))).toEqual([
+        { type: 'image', filename: 'portrait.png' },
+        { type: 'file', filename: 'report.pdf' },
+      ]);
+      expect(chunkFrames).toHaveLength(2);
+      expect(finishFrames).toHaveLength(2);
+      expect(mediaSends.slice(-3)).toMatchObject([
+        { cmd: 'aibot_send_msg', body: { chatid: 'owner', msgtype: 'image', image: { media_id: expect.stringMatching(/^wecom-media-/) } } },
+        { cmd: 'aibot_send_msg', body: { chatid: 'owner', msgtype: 'markdown', markdown: { content: 'Generated portrait' } } },
+        { cmd: 'aibot_send_msg', body: { chatid: 'team', msgtype: 'file', file: { media_id: expect.stringMatching(/^wecom-media-/) } } },
+      ]);
     }
 
     const connectionCount = connections.length;

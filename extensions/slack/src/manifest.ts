@@ -6,7 +6,7 @@ export const slackAppManifest = {
     bot_user: { display_name: 'xopc', always_online: false },
     app_home: { messages_tab_enabled: true, messages_tab_read_only_enabled: false },
   },
-  oauth_config: { scopes: { bot: ['app_mentions:read', 'chat:write', 'im:history'] } },
+  oauth_config: { scopes: { bot: ['app_mentions:read', 'chat:write', 'files:write', 'im:history'] } },
   settings: {
     event_subscriptions: { bot_events: ['app_mention', 'message.im'] },
     org_deploy_enabled: false,

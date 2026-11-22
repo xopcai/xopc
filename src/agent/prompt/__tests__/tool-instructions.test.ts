@@ -50,4 +50,22 @@ describe('prompt tool capability boundaries', () => {
     expect(prompt).not.toContain('verify.test.cjs');
     expect(prompt).not.toContain('run the smallest meaningful assertion test');
   });
+
+  it('uses send_media instead of xopc:// workspace links in external messaging channels', () => {
+    const external = buildSystemPrompt('/ws', {
+      toolNames: ['write_file', 'send_media', 'image_generate'],
+      runtime: { channel: 'dingtalk' },
+      channels: ['dingtalk', 'webchat'],
+    });
+    expect(external).toContain('external messaging channel (`dingtalk`)');
+    expect(external).toContain('send it directly with `send_media`');
+    expect(external).not.toContain('xopc://workspace/file?path=');
+
+    const webchat = buildSystemPrompt('/ws', {
+      toolNames: ['write_file', 'send_media'],
+      runtime: { channel: 'webchat' },
+      channels: ['webchat'],
+    });
+    expect(webchat).toContain('xopc://workspace/file?path=<workspace-relative-path>');
+  });
 });

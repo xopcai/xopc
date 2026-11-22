@@ -476,6 +476,12 @@ export class AgentToolsFactory {
       config: cfg,
       workspace,
       agentId: options?.agentId ?? (cfg ? resolveDefaultAgentId() : 'main'),
+      bus,
+      getContext: () =>
+        executionToolPolicy.taskExecution
+          || (currentConversationId() && getSessionMetadata(currentConversationId()!)?.sessionType === 'heartbeat')
+          ? null
+          : this.deps.getCurrentContext(),
     });
     const agentId = options?.agentId;
     const resolvedAgentId = agentId

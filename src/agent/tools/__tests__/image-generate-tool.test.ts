@@ -294,3 +294,59 @@ it('rejects credential symlinks before sending image inputs to a provider', asyn
   expect(generateImageMock).not.toHaveBeenCalled();
   expect(JSON.stringify(result)).toContain('not readable');
 });
+
+it('publishes generated images directly to external channels with filename and routing metadata', async () => {
+  generateImageMock.mockResolvedValueOnce({
+    images: [{ buffer: PNG_HEADER, mimeType: 'image/png' }],
+    provider: 'mock',
+    model: 'mock-default',
+    attempts: [],
+  });
+  const publishOutbound = vi.fn().mockResolvedValue(undefined);
+  const tool = createImageGenerateTool({
+    workspace,
+    agentId: 'studio',
+    bus: { publishOutbound } as any,
+    getContext: () => ({
+      channel: 'dingtalk',
+      chatId: 'user:owner',
+      metadata: { accountId: 'default', channelReplyId: 'reply-1' },
+    }),
+  })!;
+
+  const res = await tool.execute('tc-ext', { prompt: 'portrait', filename: 'portrait' } as any, {} as any, () => {});
+
+  expect(publishOutbound).toHaveBeenCalledTimes(1);
+  expect(publishOutbound).toHaveBeenCalledWith(expect.objectContaining({
+    channel: 'dingtalk',
+    chat_id: 'user:owner',
+    mediaType: 'photo',
+    mediaUrl: expect.stringMatching(/^data:image\/png;base64,/),
+    metadata: expect.objectContaining({
+      accountId: 'default',
+      channelReplyId: 'reply-1',
+      mediaFileName: expect.stringMatching(/^portrait-.*\.png$/),
+    }),
+  }));
+  expect(res.content[0]?.text).toContain('Delivered 1 image(s) directly to dingtalk.');
+});
+
+it('does not publish generated images to bus for webchat sessions', async () => {
+  generateImageMock.mockResolvedValueOnce({
+    images: [{ buffer: PNG_HEADER, mimeType: 'image/png' }],
+    provider: 'mock',
+    model: 'mock-default',
+    attempts: [],
+  });
+  const publishOutbound = vi.fn().mockResolvedValue(undefined);
+  const tool = createImageGenerateTool({
+    workspace,
+    agentId: 'studio',
+    bus: { publishOutbound } as any,
+    getContext: () => ({ channel: 'webchat', chatId: 'chat-1' }),
+  })!;
+
+  await tool.execute('tc-webchat', { prompt: 'portrait' } as any, {} as any, () => {});
+
+  expect(publishOutbound).not.toHaveBeenCalled();
+});

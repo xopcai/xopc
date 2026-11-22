@@ -78,6 +78,9 @@ export function createTelegramOutboundSendMethods(
 
     sendPayload: async (ctx: ChannelOutboundContext & { payload: unknown }) => {
       const payload = ctx.payload as OutboundMessage;
+      const mediaFileName = typeof ctx.outboundMetadata?.mediaFileName === 'string'
+        ? ctx.outboundMetadata.mediaFileName
+        : undefined;
       const result = await send({
         chatId: ctx.to,
         content: ctx.text,
@@ -87,6 +90,8 @@ export function createTelegramOutboundSendMethods(
         replyToMessageId: resolveReply(ctx),
         silent: ctx.silent,
         mediaUrl: ctx.mediaUrl,
+        mediaType: ctx.mediaType,
+        mediaFileName,
         audioAsVoice: ctx.audioAsVoice,
       });
       return toDelivery(result);
@@ -97,6 +102,9 @@ export function createTelegramOutboundSendMethods(
       if (!mediaUrl) {
         return { messageId: '', chatId: ctx.to, success: false, error: 'No media URL' };
       }
+      const mediaFileName = typeof ctx.outboundMetadata?.mediaFileName === 'string'
+        ? ctx.outboundMetadata.mediaFileName
+        : undefined;
       const result = await send({
         chatId: ctx.to,
         content: ctx.text ?? '',
@@ -106,6 +114,7 @@ export function createTelegramOutboundSendMethods(
         silent: ctx.silent,
         mediaUrl,
         mediaType: ctx.mediaType,
+        mediaFileName,
         audioAsVoice: ctx.audioAsVoice,
       });
       return toDelivery(result);
