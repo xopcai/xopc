@@ -507,7 +507,7 @@ export class TaskRunRepository {
         return { ...check, checkId: index >= 0 ? taskCheckId(run.taskId, run.contractVersion, index) : undefined };
       });
       db.prepare(
-        `INSERT INTO task_run_receipts (
+        `INSERT OR REPLACE INTO task_run_receipts (
           run_id, status, summary, changes_json, evidence_json, verification_json,
           remaining_work_json, next_action, needs_user, completion_verdict,
           failure_json, judgment_json, context_trace_id, finalized_at

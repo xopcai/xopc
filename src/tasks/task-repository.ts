@@ -269,6 +269,18 @@ export class TaskRepository {
     return this.list({ projectId, limit, order: 'board' });
   }
 
+  listChildren(parentTaskId: string, limit = 50): TaskAggregate[] {
+    const rows = getSqliteDatabase().prepare(
+      `SELECT * FROM tasks WHERE parent_task_id = ?
+       ORDER BY CASE WHEN phase = 'closed' THEN 1 ELSE 0 END ASC, board_rank ASC, created_at ASC, task_id ASC
+       LIMIT ?`,
+    ).all(parentTaskId, Math.max(1, Math.min(200, Math.floor(limit)))) as TaskRow[];
+    return rows.map((row) => taskFromRow(
+      row,
+      this.getContract(row.task_id, row.latest_contract_version),
+    ));
+  }
+
   getContract(taskId: string, version?: number): TaskContract | undefined {
     const row = (version === undefined
       ? getSqliteDatabase().prepare(
@@ -504,6 +516,8 @@ export class TaskRepository {
         `DELETE FROM domain_outbox WHERE subject_kind = 'task' AND subject_id = ?`,
       ).run(taskId);
       db.prepare(`UPDATE home_followups SET status='paused',next_step='',waiting_for='Step history changed; review before resuming',revision=revision+1,updated_at=? WHERE id=(SELECT followup_id FROM home_followup_steps WHERE task_id=?)`).run(Date.now(),taskId);
+      db.prepare('DELETE FROM home_observation_trials WHERE task_id = ?').run(taskId);
+      db.prepare('DELETE FROM observation_routine_executions WHERE task_id = ?').run(taskId);
       const deleted = db.prepare('DELETE FROM tasks WHERE task_id = ?').run(taskId).changes > 0;
       db.prepare(
         `DELETE FROM context_snapshots WHERE owner_kind = 'task' AND owner_id = ?`,

@@ -216,8 +216,8 @@ struct ProjectDetailView: View {
                     NavigationLink {
                         TaskConversationView(configuration: configuration, taskID: item.task.id)
                     } label: {
-                        ProgressRow(title: item.task.title, subtitle: item.task.contract?.objective ?? item.task.body,
-                                    state: item.operationalState, date: item.task.updatedAt.millisecondsDate, symbol: "checklist")
+                        ProgressRow(title: item.task.title, subtitle: item.presentation?.reason ?? item.task.contract?.objective ?? item.task.body,
+                                    state: taskPresentationLabel(item.displayStatus), date: item.task.updatedAt.millisecondsDate, symbol: "checklist")
                     }
                 }
             }

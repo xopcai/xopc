@@ -28,7 +28,7 @@ export function TaskDetailDisclosure({ panelId, title, defaultOpen = false, chil
     <summary className={cn(summaryClassName ?? 'cursor-pointer py-2 text-xs text-fg-muted hover:text-fg',
       chevron && 'flex list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden')} onClick={(event) => {
       event.preventDefault();
-      setParams((current) => setTaskPanelOpen(current, panelId, !open), { preventScrollReset: true });
+      setParams((current) => setTaskPanelOpen(current, panelId, !open), { replace: true, preventScrollReset: true });
     }}>{chevron ? <>
       <span className="min-w-0 flex-1">{title}</span>
       <ChevronRight aria-hidden className={cn('size-4 shrink-0 text-fg-subtle motion-safe:transition-transform motion-safe:duration-150', open && 'rotate-90')} />

@@ -55,6 +55,17 @@ export function taskCompletionBlock(item: XopcWorkspaceItem): string {
     taskCriterionState(info, criterion, index) === 'passed') ? '' : 'acceptance';
 }
 
+export function taskPausedWaitId(item: XopcWorkspaceItem): string {
+  const wait = (item.taskDetail?.waits ?? []).find((entry: XopcMobileTaskWait): boolean =>
+    entry.status === 'active' && entry.kind === 'paused');
+  return wait?.id ?? '';
+}
+
+export function taskActiveRootRun(item: XopcWorkspaceItem): XopcMobileTaskRun | undefined {
+  return (item.taskDetail?.runs ?? []).find((run: XopcMobileTaskRun): boolean =>
+    !run.parentRunId && ['queued', 'running', 'waiting', 'verifying'].includes(run.status ?? ''));
+}
+
 export function taskPhaseAction(item: XopcWorkspaceItem, phase: string): string {
   if (phase === item.status || !['backlog', 'ready', 'active', 'review', 'closed'].includes(phase)) return '';
   return item.actions.includes('move') ? 'move:' + phase : '';
@@ -67,7 +78,10 @@ export function taskCommand(item: XopcWorkspaceItem, action: string, agentId: st
     return { type: 'signoff', resultId };
   }
   const parts = action.split(':');
-  const kind = parts[0] === 'cancel_task' ? 'close' : parts[0];
+  const kind = parts[0] === 'cancel_task' ? 'close'
+    : parts[0] === 'pause_task' ? 'add_wait'
+      : parts[0] === 'resume_task' ? 'resolve_wait'
+        : parts[0];
   if (!item.actions.includes(kind)) throw new Error('INVALID_ACTION');
   const command: XopcTaskCommand = { type: kind };
   if (kind === 'move' || kind === 'reopen') {
@@ -80,6 +94,12 @@ export function taskCommand(item: XopcWorkspaceItem, action: string, agentId: st
     command.executor = { kind: 'agent', agentId: agentId.trim() };
   } else if (kind === 'close') {
     command.resolution = action === 'cancel_task' ? 'cancelled' : 'done';
+  } else if (kind === 'add_wait') {
+    command.wait = { kind: 'paused', reason: 'Paused from mobile', condition: {} };
+  } else if (kind === 'resolve_wait') {
+    const waitId = taskPausedWaitId(item);
+    if (!waitId) throw new Error('INVALID_ACTION');
+    command.waitId = waitId;
   } else if (!['mark_ready', 'request_review'].includes(kind)) throw new Error('INVALID_ACTION');
   return command;
 }

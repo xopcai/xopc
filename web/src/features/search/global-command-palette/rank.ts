@@ -46,7 +46,7 @@ export function hitRank(hit: Omit<GlobalHit, 'rank'>, query: string): number | n
   const kindBias =
     hit.kind === 'route'
       ? -0.15
-      : hit.kind === 'project'
+      : hit.kind === 'project' || hit.kind === 'task'
         ? -0.12
         : hit.kind === 'connector'
           ? -0.1

@@ -15,6 +15,7 @@ struct TaskConversationView: View {
     @State private var voiceCall = RealtimeVoiceCall()
     @State private var error: String?
     @State private var showingDetails = false
+    @State private var showingConversation = false
     @State private var showingStatus = false
     @State private var optionsRevision = 0
     @State private var searchRevision = 0
@@ -32,6 +33,9 @@ struct TaskConversationView: View {
         detailsContent
             .mobilePageTitle(Text("任务详情"))
             .task(id: taskID) { await refresh() }
+            .navigationDestination(isPresented: $showingConversation) {
+                TaskConversationView(configuration: configuration, taskID: taskID, opensDetails: false)
+            }
     }
 
     private var detailsContent: some View {
@@ -177,6 +181,13 @@ struct TaskConversationView: View {
 
     private func taskActions(_ task: TaskRecord) -> some View {
         HStack(spacing: 8) {
+            if opensDetails {
+                Button { showingConversation = true } label: {
+                    Text("任务对话").frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("task-detail-open-chat")
+            }
             Button { editingTask = task } label: {
                 Text("编辑任务").frame(maxWidth: .infinity, minHeight: 44)
             }
@@ -199,10 +210,14 @@ extension TaskConversationView {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text(detail.task.title).mobileTextStyle(.rowTitle)
-                Text(LocalizedStringKey(detail.task.resolution ?? detail.task.phase))
+                Text(taskPresentationLabel(detail.presentation?.status ?? (detail.operationalState != "idle" ? detail.operationalState : (detail.task.resolution ?? detail.task.phase))))
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(mobileTheme.action)
-                LabeledContent("运行状态") { Text(LocalizedStringKey(detail.operationalState)) }
+                if let reason = detail.presentation?.reason, !reason.isEmpty {
+                    Text(reason).font(.subheadline).foregroundStyle(.secondary)
+                }
+                LabeledContent("阶段") { Text(LocalizedStringKey(detail.task.phase)) }
+                LabeledContent("运行状态") { Text(taskPresentationLabel(detail.operationalState == "idle" ? "ready" : detail.operationalState)) }
                 if let attention = detail.attention, !attention.isEmpty {
                     overviewSection("需要留意") {
                         ForEach(attention.enumerated().map { TaskAttentionDisplay(index: $0.offset, text: $0.element.summary) }) {
@@ -282,7 +297,7 @@ extension TaskConversationView {
             self.detail = detail
             let id = try await client.ensureTaskConversation(taskID: taskID)
             try Task.checkCancellation()
-            conversation = .existing(id: id, title: detail.task.title, agentId: detail.task.delegateAgentId ?? "main")
+            conversation = .existing(id: id, title: detail.task.title, agentId: detail.task.delegateAgentId ?? "main", taskID: taskID)
             error = nil
         } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }

@@ -186,4 +186,34 @@ describe('Harmony task management', () => {
     expect(model.runs).toEqual([]);
   });
 
+  it('supports pausing, resuming, stopping active runs, and projects presentation status on list items', async () => {
+    const repository = new XopcWorkspaceRepository();
+    const response = detail();
+    response.allowedCommands = ['add_wait', 'resolve_wait', 'move'];
+    response.presentation = { status: 'needsUser', reason: 'Approve release' };
+    response.runs = [{ id: 'run-active', contractVersion: 2, version: 4, status: 'running' }];
+    const item = taskDetailItem(response);
+    expect(item.displayStatus).toBe('needsUser');
+    expect(item.statusReason).toBe('Approve release');
+    expect(item.needsAttention).toBe(true);
+
+    expect(taskCommand(item, 'pause_task', '')).toEqual({
+      type: 'add_wait',
+      wait: { kind: 'paused', reason: 'Paused from mobile', condition: {} },
+    });
+
+    item.taskDetail!.waits = [{ id: 'wait-pause', status: 'active', kind: 'paused', reason: 'Paused from mobile' }];
+    expect(taskCommand(item, 'resume_task', '')).toEqual({
+      type: 'resolve_wait',
+      waitId: 'wait-pause',
+    });
+
+    await repository.action('tasks', item, 'stop_run', '', 'key');
+    expect(mocks.request).toHaveBeenCalledWith(
+      '/api/task-runs/run-active/cancel',
+      'POST',
+      JSON.stringify({ expectedVersion: 4, reason: 'Cancelled from mobile' }),
+    );
+  });
+
 });

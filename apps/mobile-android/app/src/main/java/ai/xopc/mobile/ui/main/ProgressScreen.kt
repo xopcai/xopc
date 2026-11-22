@@ -810,7 +810,9 @@ private fun ProgressProjectDetail(project: ProgressProject, section: String, tas
         modifier = Modifier.fillMaxWidth().testTag("progress-project-task-${task.id}")) {
         Column(modifier = Modifier.padding(16.dp)) {
           Text(task.title, style = MaterialTheme.typography.titleMedium)
-          Text(progressPhaseLabel(task.phase), color = MaterialTheme.colorScheme.onSurfaceVariant)
+          Text(taskPresentationLabel(task.displayStatus), color = MaterialTheme.colorScheme.onSurfaceVariant)
+          task.presentationReason?.let { Text(it, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis) }
         }
       }
     }
@@ -897,6 +899,7 @@ private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterCha
   searchOpen: Boolean, onCloseSearch: () -> Unit, onOpenTask: (ProgressTask) -> Unit) {
   val shown = state.tasks.filter { task -> when (filter) {
     "open" -> task.phase != "closed"
+    "attention" -> task.phase != "closed" && task.needsUserAttention
     "closed" -> task.phase == "closed"
     else -> true
   } }
@@ -928,6 +931,7 @@ private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterCha
       listOf(
         SegmentOption("all", stringResource(R.string.progress_filter_all), "progress-filter-all"),
         SegmentOption("open", stringResource(R.string.progress_filter_open), "progress-filter-open"),
+        SegmentOption("attention", stringResource(R.string.personal_overview_attention), "progress-filter-attention"),
         SegmentOption("closed", stringResource(R.string.progress_filter_closed), "progress-filter-closed"),
       ), filter, onFilterChange, swipeToSelect = true,
     )
@@ -947,9 +951,10 @@ private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterCha
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
           Text(task.title, style = MaterialTheme.typography.titleMedium, maxLines = 2,
             overflow = TextOverflow.Ellipsis)
-          Text(progressPhaseLabel(task.phase), style = MaterialTheme.typography.bodySmall,
+          Text(taskPresentationLabel(task.displayStatus), style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-          if (task.body.isNotBlank()) MarkdownContent(task.body, maxLines = 2)
+          val preview = task.presentationReason?.takeIf { it.isNotBlank() } ?: task.body
+          if (preview.isNotBlank()) MarkdownContent(preview, maxLines = 2)
         }
       }
     }
@@ -1150,7 +1155,37 @@ internal fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError:
           Text(stringResource(R.string.progress_command_start))
         }
       }
+      if (task.pausedWaitId != null && "resolve_wait" in task.allowedCommands) {
+        OutlinedButton(onClick = { onCommand("resume_task") }, enabled = !busy,
+          modifier = Modifier.fillMaxWidth().testTag("progress-command-resume")) {
+          Text(stringResource(R.string.task_resume))
+        }
+      } else if (task.phase != "closed" && "add_wait" in task.allowedCommands) {
+        OutlinedButton(onClick = { onCommand("pause_task") }, enabled = !busy,
+          modifier = Modifier.fillMaxWidth().testTag("progress-command-pause")) {
+          Text(stringResource(R.string.task_pause))
+        }
+      }
+      if (task.activeRunId != null && task.activeRunVersion > 0) {
+        OutlinedButton(onClick = { confirmAction = "stop_run" }, enabled = !busy,
+          modifier = Modifier.fillMaxWidth().testTag("progress-command-stop-run")) {
+          Text(stringResource(R.string.task_stop_run), color = MaterialTheme.colorScheme.error)
+        }
+      }
       if ("close" in task.allowedCommands) {
+        if (task.runCount == 0) {
+          OutlinedButton(onClick = { confirmAction = "close" }, enabled = !busy,
+            modifier = Modifier.fillMaxWidth().testTag("progress-command-close")) {
+            Text(stringResource(R.string.progress_command_close))
+          }
+        } else if (task.signoffResultId == null) {
+          val blockRes = when (task.completionBlock) {
+            "execution" -> R.string.task_block_execution
+            "acceptance" -> R.string.task_block_acceptance
+            else -> R.string.task_block_criteria
+          }
+          Text(stringResource(blockRes), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         TextButton(onClick = { confirmAction = "cancel_task" }, enabled = !busy,
           modifier = Modifier.fillMaxWidth().testTag("progress-command-cancel")) {
           Text(stringResource(R.string.progress_cancel_task), color = MaterialTheme.colorScheme.error)
@@ -1160,8 +1195,16 @@ internal fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError:
   }
   confirmAction?.let { action ->
     AlertDialog(onDismissRequest = { confirmAction = null },
-      title = { Text(stringResource(if (action == "cancel_task") R.string.progress_cancel_task else R.string.progress_command_close)) },
-      text = { Text(stringResource(if (action == "cancel_task") R.string.progress_cancel_task_help else R.string.progress_command_confirm)) },
+      title = { Text(stringResource(when (action) {
+        "cancel_task" -> R.string.progress_cancel_task
+        "stop_run" -> R.string.task_stop_run
+        else -> R.string.progress_command_close
+      })) },
+      text = { Text(stringResource(when (action) {
+        "cancel_task" -> R.string.progress_cancel_task_help
+        "stop_run" -> R.string.task_stop_run_help
+        else -> R.string.progress_command_confirm
+      })) },
       confirmButton = {
         TextButton(onClick = { confirmAction = null; onCommand(action) },
           modifier = Modifier.testTag("progress-command-confirm")) { Text(stringResource(R.string.progress_confirm)) }

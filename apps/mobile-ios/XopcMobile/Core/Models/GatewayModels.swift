@@ -136,6 +136,7 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
     let projectId: String?
     let executionMode: String?
     let agentSetupLanguage: String?
+    let taskID: String?
 
     private init(
         id: String,
@@ -147,7 +148,8 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
         thinkingLevel: String?,
         projectId: String?,
         executionMode: String?,
-        agentSetupLanguage: String? = nil
+        agentSetupLanguage: String? = nil,
+        taskID: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -159,6 +161,7 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
         self.projectId = projectId
         self.executionMode = executionMode
         self.agentSetupLanguage = agentSetupLanguage
+        self.taskID = taskID
     }
 
     init(summary: ConversationSummary) {
@@ -172,6 +175,7 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
         projectId = summary.projectId
         executionMode = nil
         agentSetupLanguage = nil
+        taskID = nil
     }
 
     static func draft(agentId: String, id: String = UUID().uuidString.lowercased(), agentSetupLanguage: String? = nil) -> ConversationSelection {
@@ -214,7 +218,7 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
         )
     }
 
-    static func existing(id: String, title: String, agentId: String) -> ConversationSelection {
+    static func existing(id: String, title: String, agentId: String, taskID: String? = nil) -> ConversationSelection {
         ConversationSelection(
             id: id,
             title: title,
@@ -224,7 +228,8 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
             model: nil,
             thinkingLevel: nil,
             projectId: nil,
-            executionMode: nil
+            executionMode: nil,
+            taskID: taskID
         )
     }
 
@@ -238,7 +243,9 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
             model: model,
             thinkingLevel: thinkingLevel,
             projectId: projectId,
-            executionMode: executionMode
+            executionMode: executionMode,
+            agentSetupLanguage: agentSetupLanguage,
+            taskID: taskID
         )
     }
 
@@ -253,7 +260,8 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
             thinkingLevel: thinkingLevel,
             projectId: projectId,
             executionMode: executionMode,
-            agentSetupLanguage: agentSetupLanguage
+            agentSetupLanguage: agentSetupLanguage,
+            taskID: taskID
         )
     }
 }

@@ -3,6 +3,7 @@ export type GlobalHitKind =
   | 'extension'
   | 'route'
   | 'project'
+  | 'task'
   | 'session'
   | 'file'
   | 'command'

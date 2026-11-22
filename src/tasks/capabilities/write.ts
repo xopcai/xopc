@@ -88,10 +88,12 @@ export function registerTaskWriteCapabilities(dispatcher: CapabilityDispatcher, 
       const denied = command.type === 'resolve_wait' && (command.resolution as { kind?: string; decision?: string } | undefined)?.kind === 'task_approval'
         && (command.resolution as { decision?: string }).decision === 'deny';
       if ((command.type === 'add_wait' && command.wait.kind === 'paused') || (command.type === 'close' && command.resolution !== 'done') || denied) {
-        const activeRun = new TaskRunRepository().getActiveRoot(input.taskId);
+        const runs = new TaskRunRepository();
+        const targetRun = runs.getActiveRoot(input.taskId)
+          ?? (command.type === 'close' && command.resolution !== 'done' ? runs.getLatestRoot(input.taskId) : undefined);
         // Replaying an old pause must not abort a newer execution of the same task.
-        if (activeRun?.conversationId && new TaskRepository().get(input.taskId)?.version === result.model.task.version) {
-          await deps.abortConversation?.(activeRun.conversationId);
+        if (targetRun?.conversationId && new TaskRepository().get(input.taskId)?.version === result.model.task.version) {
+          await deps.abortConversation?.(targetRun.conversationId);
         }
       }
       deps.wake?.(Boolean(result.runId || result.model.allocation) || command.type === 'resolve_wait' || command.type === 'close');

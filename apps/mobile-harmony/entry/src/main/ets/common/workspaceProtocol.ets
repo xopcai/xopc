@@ -6,7 +6,14 @@ import type {
 export function taskItem(result: XopcTaskResult): XopcWorkspaceItem {
   const task = result.task;
   if (!task?.id || typeof task.title !== 'string' || !Number.isInteger(task.version)) throw new Error('INVALID_TASK');
+  const displayStatus = result.presentation?.status
+    || (result.operationalState && result.operationalState !== 'idle' ? result.operationalState : undefined)
+    || task.resolution
+    || task.phase;
+  const needsAttention = (result.attention?.length ?? 0) > 0
+    || ['needsUser', 'review', 'blocked', 'failed', 'paused'].includes(displayStatus);
   return { id: task.id, title: task.title, body: task.body ?? '', status: task.phase, version: task.version,
+    displayStatus, statusReason: result.presentation?.reason, needsAttention,
     projectId: task.projectId, priority: task.priority, dueAt: task.dueAt, resolution: task.resolution, updatedAt: task.updatedAt,
     editable: true, actions: result.allowedCommands ?? [] };
 }

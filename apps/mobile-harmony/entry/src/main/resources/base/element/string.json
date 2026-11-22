@@ -1742,6 +1742,18 @@
     {"name": "capability_agent_setup_prompt", "value": "Help me create an assistant or expert. Ask what it should do."},
     {"name": "capability_skill_setup_prompt", "value": "Help me create a reusable skill. Ask what it should do."},
     {"name": "capability_connect", "value": "Connect"},
-    {"name": "capability_mcp_continue", "value": "Continue setup"}
+    {"name": "capability_mcp_continue", "value": "Continue setup"},
+    {"name": "task_status_allocating", "value": "Assigning"},
+    {"name": "task_status_needs_user", "value": "Needs attention"},
+    {"name": "task_status_completed", "value": "Completed"},
+    {"name": "task_status_ended", "value": "Ended"},
+    {"name": "filter_attention", "value": "Attention"},
+    {"name": "task_block_execution", "value": "This task still has an active run or pending wait. Finish or resolve it first."},
+    {"name": "task_block_acceptance", "value": "Some acceptance criteria are still unmet. Review them before signing off."},
+    {"name": "task_block_criteria", "value": "The current result is not ready for sign-off yet. Check the execution result."},
+    {"name": "task_pause", "value": "Pause task"},
+    {"name": "task_resume", "value": "Resume task"},
+    {"name": "task_stop_run", "value": "Stop active run"},
+    {"name": "task_stop_run_help", "value": "Request cancellation of the active run without closing the task."}
   ]
 }

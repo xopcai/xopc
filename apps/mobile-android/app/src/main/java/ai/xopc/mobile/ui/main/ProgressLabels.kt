@@ -29,6 +29,29 @@ internal fun taskPriorityLabel(value: String): String {
 }
 
 @Composable
+internal fun taskPresentationLabel(status: String): String = when (status) {
+  "allocating" -> stringResource(R.string.task_status_allocating)
+  "captured", "backlog" -> progressPhaseLabel("backlog")
+  "ready" -> progressPhaseLabel("ready")
+  "queued" -> stringResource(R.string.execution_status_queued)
+  "running", "active", "in_progress" -> progressPhaseLabel("active")
+  "verifying" -> stringResource(R.string.task_status_verifying)
+  "waiting" -> stringResource(R.string.task_status_waiting)
+  "paused" -> stringResource(R.string.automation_paused)
+  "blocked" -> stringResource(R.string.task_status_blocked)
+  "needsUser", "needs_user", "waiting_for_user" -> stringResource(R.string.personal_overview_attention)
+  "review" -> progressPhaseLabel("review")
+  "failed" -> stringResource(R.string.execution_status_failed)
+  "cancelled" -> stringResource(R.string.execution_status_cancelled)
+  "completed", "done" -> taskResolutionLabel("done")
+  "ended" -> stringResource(R.string.task_status_ended)
+  "closed" -> progressPhaseLabel("closed")
+  "duplicate" -> taskResolutionLabel("duplicate")
+  "wont_do" -> taskResolutionLabel("wont_do")
+  else -> progressPhaseLabel(status)
+}
+
+@Composable
 internal fun runStatusLabel(value: String): String = stringResource(when (value) {
   "queued" -> R.string.execution_status_queued
   "running" -> R.string.execution_status_running

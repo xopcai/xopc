@@ -8,6 +8,7 @@ import type { ComposerAttachmentSummary, ComposerContextRef } from '@/features/c
 import { NewChatLink } from '@/features/chat/session/new-chat-navigation';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
+import { formatTaskRawStatus } from '@/features/tasks/task-status';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { noteDetailHref } from '@/features/notes/note-detail-route';
 import { chatProductHref } from '@/features/chat/product-preview/product-preview-route';
@@ -98,7 +99,7 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
                   <FolderKanban className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={currentProject.title}>{currentProject.title}</span>
                 </Link> : null}
                 {task ? <Link className={rowClass} to={taskDetailModalHref(returnTo, task.id)} onClick={close}>
-                  <Target className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={task.title}>{task.title}</span><span className="shrink-0 text-xs text-fg-muted">{task.phase}</span>
+                  <Target className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={task.title}>{task.title}</span><span className="shrink-0 text-xs text-fg-muted">{formatTaskRawStatus(task.phase, language)}</span>
                 </Link> : null}
                 {delegatedTasks.length ? <>
                   {delegatedTasks.length > 2 ? <button type="button" className={`${rowClass} w-full text-left`} onClick={() => setShowAllTasks(!showAllTasks)} aria-expanded={showAllTasks}>
@@ -107,7 +108,7 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
                   {(showAllTasks ? delegatedTasks : delegatedTasks.slice(0, 2)).map((delegated) => <Link key={delegated.id} className={`${rowClass} pl-9`}
                     to={taskDetailModalHref(returnTo, delegated.id)} onClick={close}>
                     <span className="min-w-0 flex-1 truncate" title={delegated.title}>{delegated.title}</span>
-                    <span className="shrink-0 text-xs text-fg-muted">{delegated.runStatus ?? delegated.phase}</span>
+                    <span className="shrink-0 text-xs text-fg-muted">{formatTaskRawStatus(delegated.runStatus ?? delegated.phase, language)}</span>
                   </Link>)}
                 </> : null}
                 {!hasWork ? <p className="px-2 py-2 text-sm text-fg-muted">{workUnavailable ? copy.unavailable : copy.independent}</p> : null}

@@ -5,11 +5,16 @@ function commandPaletteGroups(language: StoredLanguage) {
   return messages(language).commandPalette.groups;
 }
 
+function taskGroupLabel(language: StoredLanguage): string {
+  return language === 'zh' ? '任务' : 'Tasks';
+}
+
 function commandPaletteGroupOrder(language: StoredLanguage): Record<string, number> {
   const g = commandPaletteGroups(language);
   return {
     [g.navigate]: 0,
     [g.projects]: 1,
+    [taskGroupLabel(language)]: 1.5,
     [g.connectors]: 2,
     [g.quickSettings]: 3,
     [g.extensions]: 4,
@@ -26,6 +31,7 @@ export function commandPaletteGroupCaps(language: StoredLanguage): Record<string
   return {
     [g.navigate]: 12,
     [g.projects]: 8,
+    [taskGroupLabel(language)]: 8,
     [g.connectors]: 6,
     [g.quickSettings]: 12,
     [g.actions]: 8,

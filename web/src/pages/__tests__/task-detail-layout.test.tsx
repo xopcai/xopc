@@ -156,7 +156,6 @@ describe('task detail action-first layout', () => {
       await render();
       const report = container.querySelector<HTMLDetailsElement>('[data-task-section="report"]')!;
       report.scrollIntoView = vi.fn();
-      act(() => report.querySelector('summary')!.click());
       expect(report.open).toBe(false);
       const nav = container.querySelector('nav[aria-label="任务详情分区"]')!;
       const reportButton = [...nav.querySelectorAll('button')].find(item => item.textContent === '执行报告')!;
@@ -323,7 +322,7 @@ describe('task detail action-first layout', () => {
     expect(report.textContent).not.toMatch(/Claim c-ac0-scope|Research claim: c-file/);
     expect(report.textContent).toContain(copy.doneWell);
     const management = container.querySelector<HTMLDetailsElement>('[aria-label="任务管理"]')!;
-    expect(management.open).toBe(true);
+    expect(management.open).toBe(false);
     const followUp = container.querySelector('[aria-label="执行待办"]')!;
     expect(followUp.textContent).toContain('Confirm the public release scope');
     expect(followUp.textContent).toContain('Choose internal or public release');

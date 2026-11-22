@@ -448,9 +448,9 @@
       "phases": {
         "backlog": "Backlog",
         "ready": "Ready",
-        "active": "In progress",
+        "active": "Active",
         "review": "Review",
-        "closed": "Done"
+        "closed": "Closed"
       },
       "operationalStates": {
         "allocating": "Allocating",

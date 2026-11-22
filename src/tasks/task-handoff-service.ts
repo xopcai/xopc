@@ -84,6 +84,7 @@ export class TaskHandoffService {
       };
     }
     if (task.version !== input.expectedVersion) throw new Error('Task changed');
+    if (task.phase === 'closed') throw new Error('Cannot hand off a closed task');
     const previousState = conversations.requireState(task.id);
     if (previousState.currentExecutorAgentId === toAgentId) {
       throw new Error('Executor is already active');
@@ -155,6 +156,24 @@ export class TaskHandoffService {
       throw error;
     }
     const oldConversationId = completed.snapshot.fromConversationId;
+    const queuedOrWaiting = runs.getActiveRoot(task.id);
+    if (queuedOrWaiting && (queuedOrWaiting.status === 'queued' || queuedOrWaiting.status === 'waiting')) {
+      runs.finalize({
+        runId: queuedOrWaiting.id,
+        expectedVersion: queuedOrWaiting.version,
+        terminalCode: 'handoff_superseded',
+        terminalMessage: 'Superseded by executor handoff',
+        receipt: {
+          status: 'cancelled',
+          summary: 'Superseded by executor handoff',
+          changes: [],
+          evidence: [],
+          verification: { status: 'unverified', checks: [] },
+          remainingWork: [],
+          needsUser: false,
+        },
+      });
+    }
     await this.abortPreviousSession(oldConversationId);
 
     return {

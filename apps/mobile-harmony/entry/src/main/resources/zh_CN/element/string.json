@@ -1739,6 +1739,18 @@
     {"name": "capability_agent_setup_prompt", "value": "帮我创建一个助手或专家，先问我要做什么。"},
     {"name": "capability_skill_setup_prompt", "value": "帮我创建一个技能，先问我它要处理什么。"},
     {"name": "capability_connect", "value": "连接"},
-    {"name": "capability_mcp_continue", "value": "继续连接"}
+    {"name": "capability_mcp_continue", "value": "继续连接"},
+    {"name": "task_status_allocating", "value": "正在分配"},
+    {"name": "task_status_needs_user", "value": "需要你处理"},
+    {"name": "task_status_completed", "value": "已完成"},
+    {"name": "task_status_ended", "value": "已结束"},
+    {"name": "filter_attention", "value": "需处理"},
+    {"name": "task_block_execution", "value": "任务仍在执行或等待处理，请先完成当前运行或等待项。"},
+    {"name": "task_block_acceptance", "value": "尚有未通过的验收项，请先完成逐项验收后再签收。"},
+    {"name": "task_block_criteria", "value": "当前任务结果尚未达到签收条件，请先查看执行结果。"},
+    {"name": "task_pause", "value": "暂停任务"},
+    {"name": "task_resume", "value": "继续任务"},
+    {"name": "task_stop_run", "value": "停止当前执行"},
+    {"name": "task_stop_run_help", "value": "将请求中止当前正在执行的运行，不会关闭任务。"}
   ]
 }

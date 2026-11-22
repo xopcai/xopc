@@ -17,7 +17,10 @@ import {
   type TaskCreateResponse,
   type TaskCriterionReview,
   type TaskDetailResponse,
+  type TaskListResponse,
   type TaskPatchRequest,
+  type TaskPhase,
+  type TaskPriority,
   type TaskRetryResult,
 } from '@xopcai/gateway-contract';
 
@@ -27,6 +30,20 @@ import { readCapability } from '@/lib/capabilities';
 
 export type { HomeAttention, HomeDecision, HomeResponse };
 export type TaskDetail = TaskDetailResponse;
+export type TaskListItem = TaskListResponse['items'][number];
+
+export async function listTasks(query: {
+  search?: string;
+  phase?: TaskPhase;
+  excludeClosed?: boolean;
+  priority?: TaskPriority;
+  projectId?: string;
+  limit?: number;
+  offset?: number;
+  order?: 'recent' | 'board';
+} = {}): Promise<{ ok: true; items: TaskListItem[]; total: number }> {
+  return readCapability('xopc.tasks.list', query);
+}
 
 export async function createTask(input: TaskCreateRequest): Promise<TaskCreateResponse> {
   return TaskCreateResponseSchema.parse(await fetchJson<unknown>(apiUrl('/api/tasks'), {

@@ -142,7 +142,16 @@ export class TaskReadModelProjector {
     attention: TaskAttentionItem[], commands: string[], latestRun: ReturnType<TaskRunRepository['getLatestRoot']>, workspaceBlocked: boolean,
     acceptance?: TaskAcceptanceTarget): TaskPresentation {
     if (task.phase === 'closed') {
-      return { status: task.resolution === 'done' ? 'completed' : 'ended', primaryAction: { type: 'view_results' } };
+      const stillActive = task.resolution === 'done' && (state !== 'idle' || waits.length > 0);
+      return {
+        status: task.resolution === 'done' ? 'completed' : 'ended',
+        ...(stillActive ? {
+          reason: resolveTaskLocale(task) === 'zh'
+            ? '后台运行或待处理项仍未结束。'
+            : 'A background run or pending wait is still active.',
+        } : {}),
+        primaryAction: { type: 'view_results' },
+      };
     }
     const pause = waits.find(wait => wait.kind === 'paused');
     if (pause) return { status: 'paused', reason: pause.reason, primaryAction: { type: 'resume', waitId: pause.id } };
@@ -168,6 +177,13 @@ export class TaskReadModelProjector {
     if (commands.includes('retry_allocation')) return { status: state === 'failed' ? 'failed' : 'blocked',
       reason: attention.find(item => item.kind === 'allocation_failed' || item.kind === 'allocation_blocked')?.summary,
       primaryAction: { type: 'retry_allocation' } };
+    if (state === 'cancelled') {
+      return {
+        status: 'cancelled',
+        ...(latestRun?.terminalMessage ? { reason: latestRun.terminalMessage } : {}),
+        ...(commands.includes('start') ? { primaryAction: { type: 'start' } } : {}),
+      };
+    }
     if (state !== 'idle') return { status: state, reason: waits[0]?.reason };
     if (task.phase === 'review') {
       if (workspaceBlocked) return { status: 'blocked', reason: resolveTaskLocale(task) === 'zh'
@@ -185,6 +201,7 @@ export class TaskReadModelProjector {
         primaryAction: acceptance.canSignOff ? { type: 'signoff', resultId: acceptance.id } : { type: 'review' } };
     }
     if (commands.includes('mark_ready')) return { status: 'captured', primaryAction: { type: 'mark_ready' } };
+    if (task.phase === 'active') return { status: 'active', primaryAction: commands.includes('start') ? { type: 'start' } : undefined };
     return { status: 'ready', primaryAction: commands.includes('start') ? { type: 'start' } : undefined };
   }
 

@@ -51,6 +51,7 @@ const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default:
 const SetupInteractionPage = lazy(() => import('@/features/settings/setup-interaction-page').then(m => ({ default: m.SetupInteractionPage })));
 const McpConversationSetupPage = lazy(() => import('@/features/connectors/mcp/mcp-conversation-setup-page').then(m => ({ default: m.McpConversationSetupPage })));
 const HomePage = lazy(() => loadHomePage().then((m) => ({ default: m.HomePage })));
+const TasksPage = lazy(() => import('@/pages/tasks-page').then((m) => ({ default: m.TasksPage })));
 const TaskDetailPage = lazy(() => loadTaskDetailPage().then((m) => ({ default: m.TaskDetailPage })));
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
 const ProjectDetailPage = lazy(() => loadProjectDetailPage().then((m) => ({ default: m.ProjectDetailPage })));
@@ -216,6 +217,14 @@ const router = createHashRouter([
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
             <UserModelPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'tasks',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <TasksPage />
           </Suspense>
         ),
       },

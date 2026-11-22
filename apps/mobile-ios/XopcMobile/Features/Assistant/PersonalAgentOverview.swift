@@ -13,18 +13,32 @@ struct PersonalOverviewWork: Decodable, Identifiable, Sendable {
     struct Presentation: Decodable, Sendable { let status: String }
 
     var requiresAttention: Bool {
-        attention != nil || ["needs_user", "waiting_for_user", "blocked"].contains(presentation?.status ?? operationalState ?? phase)
+        let current = presentation?.status ?? operationalState ?? phase
+        return attention != nil || ["needsUser", "review", "needs_user", "waiting_for_user", "blocked", "failed"].contains(current)
     }
 
     var status: LocalizedStringKey {
+        let current = presentation?.status ?? operationalState ?? phase
+        if current == "review" {
+            return "等待验收"
+        }
+        if current == "failed" {
+            return "执行失败"
+        }
         if requiresAttention {
             return "需要你处理"
         }
-        return switch presentation?.status ?? operationalState ?? phase {
-        case "paused": "已暂停"
-        case "completed", "done", "closed": "已完成"
+        return switch current {
+        case "allocating": "正在分配"
+        case "captured", "backlog": "待规划"
+        case "ready": "等待开始"
+        case "queued": "排队中"
         case "running", "active", "in_progress": "进行中"
-        case "failed": "执行失败"
+        case "verifying": "验证中"
+        case "waiting": "等待条件"
+        case "paused": "已暂停"
+        case "completed", "done": "已完成"
+        case "ended", "closed": "已结束"
         case "cancelled": "已取消"
         default: "待处理"
         }

@@ -396,8 +396,19 @@ export const TaskBoardPositionRequestSchema = z.object({
   beforeTaskId: z.string().trim().min(1).nullable().optional(),
 }).strict();
 
+export const TaskPresentationStageSchema = z.enum([
+  'backlog',
+  'ready',
+  'in_progress',
+  'needs_user',
+  'review',
+  'completed',
+  'ended',
+]);
+export type TaskPresentationStage = z.infer<typeof TaskPresentationStageSchema>;
+
 export const TaskPresentationSchema = z.object({
-  status: z.enum(['allocating', 'captured', 'ready', 'queued', 'running', 'verifying',
+  status: z.enum(['allocating', 'captured', 'ready', 'active', 'queued', 'running', 'verifying',
     'waiting', 'blocked', 'failed', 'cancelled', 'needsUser', 'review', 'completed', 'ended', 'paused']),
   reason: z.string().optional(),
   primaryAction: z.discriminatedUnion('type', [
@@ -415,6 +426,34 @@ export const TaskPresentationSchema = z.object({
 });
 
 export type TaskPresentation = z.infer<typeof TaskPresentationSchema>;
+
+export function taskPresentationStage(status: TaskPresentation['status']): TaskPresentationStage {
+  switch (status) {
+    case 'captured':
+      return 'backlog';
+    case 'ready':
+      return 'ready';
+    case 'allocating':
+    case 'active':
+    case 'queued':
+    case 'running':
+    case 'verifying':
+    case 'waiting':
+      return 'in_progress';
+    case 'needsUser':
+    case 'blocked':
+    case 'failed':
+    case 'cancelled':
+    case 'paused':
+      return 'needs_user';
+    case 'review':
+      return 'review';
+    case 'completed':
+      return 'completed';
+    case 'ended':
+      return 'ended';
+  }
+}
 export const TaskAcceptanceTargetSchema = z.object({ id: z.string(), runId: z.string().optional(), canSignOff: z.boolean() });
 export type TaskAcceptanceTarget = z.infer<typeof TaskAcceptanceTargetSchema>;
 
@@ -511,6 +550,8 @@ export const TaskDetailResponseSchema = z.object({
   authorityGrants: z.array(TaskAuthorityGrantSchema),
   dependencies: z.array(TaskDependencySummarySchema),
   dependents: z.array(TaskDependencySummarySchema),
+  parentTask: TaskDependencySummarySchema.optional(),
+  children: z.array(TaskDependencySummarySchema).optional(),
   allowedCommands: z.array(z.string()),
 });
 

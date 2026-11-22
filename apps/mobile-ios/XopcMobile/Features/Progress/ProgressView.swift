@@ -472,6 +472,7 @@ private struct TasksView: View {
 
     @State private var items: [TaskListItem] = []
     @State private var filter = "open"
+    @State private var searchText = ""
     @State private var isLoading = false
     @State private var error: String?
 
@@ -479,6 +480,7 @@ private struct TasksView: View {
         List {
             SegmentedTabs(options: [
                 SegmentOption(id: "open", title: "进行中", accessibilityID: "tasks-filter-open"),
+                SegmentOption(id: "attention", title: "需处理", accessibilityID: "tasks-filter-attention"),
                 SegmentOption(id: "closed", title: "已关闭", accessibilityID: "tasks-filter-closed"),
                 SegmentOption(id: "all", title: "全部", accessibilityID: "tasks-filter-all")
             ], selected: filter, label: "筛选", swipeToSelect: true) { filter = $0 }
@@ -496,8 +498,8 @@ private struct TasksView: View {
                     } label: {
                         ProgressRow(
                             title: item.task.title,
-                            subtitle: item.task.contract?.objective ?? item.task.body,
-                            state: item.operationalState,
+                            subtitle: item.presentation?.reason ?? item.task.contract?.objective ?? item.task.body,
+                            state: taskPresentationLabel(item.displayStatus),
                             date: item.task.updatedAt.millisecondsDate,
                             symbol: "checklist"
                         )
@@ -506,6 +508,7 @@ private struct TasksView: View {
                 }
             }
         }
+        .searchable(text: $searchText, prompt: "搜索任务")
         .refreshable { await load() }
         .task { await load() }
         .alert("无法读取任务", isPresented: errorBinding) {
@@ -515,7 +518,20 @@ private struct TasksView: View {
     }
 
     private var visibleItems: [TaskListItem] {
-        items.filter { filter == "all" || (filter == "closed") == ($0.task.phase == "closed") }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return items.filter { item in
+            let matchesFilter = switch filter {
+            case "all": true
+            case "closed": item.task.phase == "closed"
+            case "attention": item.task.phase != "closed" && item.needsUserAttention
+            default: item.task.phase != "closed"
+            }
+            guard matchesFilter else { return false }
+            if query.isEmpty { return true }
+            return item.task.title.lowercased().contains(query)
+                || (item.task.contract?.objective?.lowercased().contains(query) ?? false)
+                || (item.task.body?.lowercased().contains(query) ?? false)
+        }
     }
 
     private var errorBinding: Binding<Bool> {

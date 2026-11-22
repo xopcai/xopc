@@ -8,7 +8,7 @@ import {
   XopcAutomationRuns, XopcAutomationRun, XopcAutomationRunResult, XopcMobileTaskDetailResult
 } from '../model/workspace';
 import { taskItem, taskDetailItem, projectItem, automationItem, newTask, scheduledAutomationPatch } from '../common/workspaceProtocol';
-import { taskCommand, taskPatch, taskReviewMutation, taskRetryRunId } from '../common/taskManagement';
+import { taskActiveRootRun, taskCommand, taskPatch, taskReviewMutation, taskRetryRunId } from '../common/taskManagement';
 
 interface XopcCreatedWorkspaceId { id: string; }
 interface XopcWorkspaceCreated {
@@ -94,6 +94,13 @@ export class XopcWorkspaceRepository {
   async action(section: XopcSection, item: XopcWorkspaceItem, action: string, agentId: string, idempotencyKey: string): Promise<void> {
     const path = '/api/' + section + '/' + encodeURIComponent(item.id);
     if (section === 'tasks') {
+      if (action === 'stop_run') {
+        const activeRun = taskActiveRootRun(item);
+        if (!activeRun || !activeRun.version) throw new Error('INVALID_ACTION');
+        await gatewaySession.request('/api/task-runs/' + encodeURIComponent(activeRun.id) + '/cancel', 'POST',
+          JSON.stringify({ expectedVersion: activeRun.version, reason: 'Cancelled from mobile' }));
+        return;
+      }
       if (action.startsWith('review:')) {
         const mutation = taskReviewMutation(item, action);
         const checkId = action.slice('review:'.length).split('|')[1];

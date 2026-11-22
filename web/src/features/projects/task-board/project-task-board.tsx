@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import type { TaskPriority, ProjectTaskCard, ProjectTaskDependencyEdge, TaskPhase } from '@xopcai/gateway-contract';
-import { AlertCircle, ArrowRight, CalendarClock, CheckCircle2, Circle, CircleCheck, CircleDot, GitBranch, Hourglass, LayoutGrid, ListChecks, Paperclip, UserRound } from 'lucide-react';
-import { type FormEvent, type PointerEvent, type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { AlertCircle, ArrowRight, CalendarClock, CheckCircle2, Circle, CircleCheck, CircleDot, GitBranch, Hourglass, LayoutGrid, ListChecks, Paperclip, Search, UserRound } from 'lucide-react';
+import { type FormEvent, type PointerEvent, type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
@@ -12,6 +12,7 @@ import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attac
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
 import { DependencyPicker } from '@/features/tasks/dependency-picker';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
+import { formatTaskResolution } from '@/features/tasks/task-status';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
@@ -130,13 +131,16 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart, onDropBef
   onDragStart: (taskId: string) => void;
   onDropBefore: (beforeTaskId: string) => void;
 }) {
+  const language = useLocaleStore((state) => state.language);
   const primaryAction = primaryTaskAction(task);
   const secondaryAction = primaryAction !== 'review' && task.allowedCommands.includes('request_review') ? 'review' : undefined;
   const isClosed = task.phase === 'closed';
   const overdue = Boolean(task.dueAt && task.dueAt < Date.now() && !isClosed);
   const TaskStatusIcon = isClosed ? CircleCheck : Circle;
   const showPriority = task.priority !== 'normal';
+  const showResolution = isClosed && Boolean(task.resolution);
   const showMetadata = showPriority
+    || showResolution
     || task.operationalState !== 'idle'
     || Boolean(task.latestVerification)
     || task.acceptanceCriteriaCount > 0
@@ -190,6 +194,16 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart, onDropBef
           </p>
         ) : null}
         {showMetadata ? <div className="ml-6.5 mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+          {showResolution && task.resolution ? (
+            <span className={cn(
+              'inline-flex min-h-6 items-center rounded-md border px-2 font-medium',
+              task.resolution === 'done'
+                ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                : 'border-edge-subtle bg-surface-hover text-fg-muted',
+            )}>
+              {formatTaskResolution(task.resolution, language)}
+            </span>
+          ) : null}
           {showPriority ? (
             <span className={cn(
               'inline-flex min-h-6 items-center rounded-md border px-2 font-medium',
@@ -286,6 +300,10 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
   const [isPanningBoard, setIsPanningBoard] = useState(false);
   const [undoMove, setUndoMove] = useState<{ taskId: string; phase: TaskPhase; beforeTaskId: string | null; resolution?: ProjectTaskCard['resolution'] } | null>(null);
   const [viewMode, setViewMode] = useState<'board' | 'graph'>('board');
+  const [boardSearch, setBoardSearch] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState<TaskPriority | ''>('');
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const [hideClosed, setHideClosed] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createRequestId, setCreateRequestId] = useState(() => crypto.randomUUID());
   const [objective, setObjective] = useState('');
@@ -296,7 +314,18 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
   const [createError, setCreateError] = useState<string | null>(null);
   const language = useLocaleStore((state) => state.language);
   const attachmentState = useComposerAttachments({ chat: messages(language).chat });
-  const grouped = groupProjectTasks(tasks);
+  const filteredTasks = useMemo(() => {
+    const query = boardSearch.trim().toLowerCase();
+    return tasks.filter((task) => {
+      if (hideClosed && task.phase === 'closed') return false;
+      if (priorityFilter && task.priority !== priorityFilter) return false;
+      if (attentionOnly && task.attention.length === 0 && !['blocked', 'failed', 'waiting'].includes(task.operationalState)) return false;
+      if (query && !task.title.toLowerCase().includes(query) && !task.attention.some((item) => item.summary.toLowerCase().includes(query))) return false;
+      return true;
+    });
+  }, [attentionOnly, boardSearch, hideClosed, priorityFilter, tasks]);
+  const visiblePhases = hideClosed ? PROJECT_TASK_PHASES.filter((phase) => phase !== 'closed') : PROJECT_TASK_PHASES;
+  const grouped = groupProjectTasks(filteredTasks);
   const dependencyCandidates = tasks.filter((task) => task.phase !== 'closed');
   const performAction = (task: ProjectTaskCard, action: TaskBoardAction) => void onAction(task, action);
   const dropTask = async (targetPhase: TaskPhase, beforeTaskId: string | null) => {
@@ -420,6 +449,52 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
           </SlidingTabList>
         </div>
       </div>
+      {viewMode === 'board' ? <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2">
+        <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-subtle" aria-hidden />
+          <input
+            type="search"
+            value={boardSearch}
+            onChange={(event) => setBoardSearch(event.target.value)}
+            placeholder={language === 'zh' ? '筛选任务…' : 'Filter tasks…'}
+            className="h-8 w-full rounded-lg border border-edge bg-surface-panel pl-8 pr-2.5 text-xs text-fg placeholder:text-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          />
+        </div>
+        <Select
+          value={priorityFilter}
+          onChange={(event) => setPriorityFilter(event.target.value as TaskPriority | '')}
+          aria-label={copy.priority}
+          triggerClassName="h-8 min-w-[7rem] rounded-lg border border-edge bg-surface-panel px-2 text-xs text-fg"
+        >
+          <SelectOption value="">{language === 'zh' ? '全部优先级' : 'All priorities'}</SelectOption>
+          <SelectOption value="critical">{copy.priorityOptions.critical}</SelectOption>
+          <SelectOption value="high">{copy.priorityOptions.high}</SelectOption>
+          <SelectOption value="normal">{copy.priorityOptions.normal}</SelectOption>
+          <SelectOption value="low">{copy.priorityOptions.low}</SelectOption>
+        </Select>
+        <button
+          type="button"
+          aria-pressed={attentionOnly}
+          onClick={() => setAttentionOnly((value) => !value)}
+          className={cn(
+            'h-8 rounded-lg border px-2.5 text-xs font-medium transition-colors',
+            attentionOnly ? 'border-warning/40 bg-warning/10 text-warning' : 'border-edge bg-surface-panel text-fg-muted hover:text-fg',
+          )}
+        >
+          {language === 'zh' ? '仅看需处理' : 'Needs attention'}
+        </button>
+        <button
+          type="button"
+          aria-pressed={hideClosed}
+          onClick={() => setHideClosed((value) => !value)}
+          className={cn(
+            'h-8 rounded-lg border px-2.5 text-xs font-medium transition-colors',
+            hideClosed ? 'border-accent/40 bg-accent-soft text-accent-fg' : 'border-edge bg-surface-panel text-fg-muted hover:text-fg',
+          )}
+        >
+          {language === 'zh' ? '隐藏已关闭' : 'Hide closed'}
+        </button>
+      </div> : null}
       {viewMode === 'board' ? <div
         ref={boardScrollerRef}
         className={cn(
@@ -437,8 +512,8 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
           }
         }}
       >
-        <div className="grid h-full min-h-0 min-w-[103rem] grid-cols-5 gap-3">
-          {PROJECT_TASK_PHASES.map((phase) => {
+        <div className={cn('grid h-full min-h-0 gap-3', hideClosed ? 'min-w-[56rem] grid-cols-4' : 'min-w-[70rem] grid-cols-5')}>
+          {visiblePhases.map((phase) => {
             const Icon = LANE_ICONS[phase];
             const items = grouped[phase];
             return (

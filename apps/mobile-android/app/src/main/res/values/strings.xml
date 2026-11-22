@@ -1116,4 +1116,16 @@
     <string name="notes_search_body">Search note text</string>
     <string name="notes_no_headings">No headings</string>
     <string name="notes_no_matches">No matching text</string>
+    <string name="task_status_allocating">Assigning</string>
+    <string name="task_status_verifying">Verifying</string>
+    <string name="task_status_waiting">Waiting</string>
+    <string name="task_status_blocked">Blocked</string>
+    <string name="task_status_ended">Ended</string>
+    <string name="task_block_execution">This task still has an active run or pending wait. Finish or resolve it first.</string>
+    <string name="task_block_acceptance">Some acceptance criteria are still unmet. Review them before signing off.</string>
+    <string name="task_block_criteria">The current result is not ready for sign-off yet. Check the execution result.</string>
+    <string name="task_pause">Pause task</string>
+    <string name="task_resume">Resume task</string>
+    <string name="task_stop_run">Stop active run</string>
+    <string name="task_stop_run_help">Request cancellation of the active run without closing the task.</string>
 </resources>

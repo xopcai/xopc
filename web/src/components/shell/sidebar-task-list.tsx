@@ -43,6 +43,7 @@ import { navigateToNewChat } from '@/features/chat/session/new-chat-navigation';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
 import { taskDetailHref } from '@/features/tasks/task-detail-route';
+import { formatTaskRawStatus } from '@/features/tasks/task-status';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
@@ -87,6 +88,7 @@ const SidebarTaskChildRow = memo(function SidebarTaskChildRow({
   sb: ReturnType<typeof messages>['sidebar'];
 }) {
   const location = useLocation();
+  const language = useLocaleStore((state) => state.language);
   const runPresence = useChatRunPresenceStore((state) => (
     child.activeConversationId ? state.runs[child.activeConversationId] : undefined
   ));
@@ -99,7 +101,7 @@ const SidebarTaskChildRow = memo(function SidebarTaskChildRow({
     {runPresence?.unread ? <span className="size-1.5 shrink-0 rounded-full bg-accent"
       aria-label={runPresence.status === 'failed' ? sb.taskSessionAgentFailed : sb.taskSessionAgentCompleted} /> : null}
     <span className="min-w-0 flex-1 truncate">{child.title}</span>
-    <span className="shrink-0 text-xs text-fg-subtle">{sidebarTaskStatus(child.runStatus ?? child.phase, sb)}</span>
+    <span className="shrink-0 text-xs text-fg-subtle">{formatTaskRawStatus(child.runStatus ?? child.phase, language)}</span>
   </Link>;
 });
 
@@ -254,14 +256,6 @@ function chatConversationIdFromPath(pathname: string): string | undefined {
 
 function interpolate(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
-}
-
-function sidebarTaskStatus(status: string, labels: ReturnType<typeof messages>['sidebar']): string {
-  if (status === 'running' || status === 'active' || status === 'verifying') return labels.delegatedTaskRunning;
-  if (status === 'completed' || status === 'succeeded' || status === 'closed') return labels.delegatedTaskCompleted;
-  if (status === 'failed') return labels.delegatedTaskFailed;
-  if (status === 'backlog' || status === 'ready' || status === 'queued' || status === 'waiting') return labels.delegatedTaskWaiting;
-  return status;
 }
 
 function sessionUpdatedAtMs(session: SessionMetadata): number {

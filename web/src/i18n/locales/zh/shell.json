@@ -57,6 +57,7 @@
     },
     "sections": {
       "work-overview": "工作台",
+      "work-tasks": "任务",
       "work-projects": "项目",
       "work-notes": "笔记",
       "automation-triggers": "自动化",

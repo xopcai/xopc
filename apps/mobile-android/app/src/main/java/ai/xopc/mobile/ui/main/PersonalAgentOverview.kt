@@ -279,11 +279,9 @@ private fun OverviewSection(title: String) {
 
 @Composable
 private fun OverviewTaskRow(task: PersonalWork, onTask: (String) -> Unit) {
-  val status = when {
-    task.needsAttention -> stringResource(R.string.personal_overview_attention)
-    task.operationalState == "paused" -> stringResource(R.string.automation_paused)
-    else -> progressPhaseLabel(task.phase)
-  }
+  val status = taskPresentationLabel(
+    task.status.ifBlank { task.operationalState.takeIf { it != "idle" && it.isNotBlank() } ?: task.phase },
+  )
   val stamp = task.updatedAt.takeIf { it > 0 }?.let { DateFormat.getDateInstance(DateFormat.SHORT).format(Date(it)) }
   OverviewRow(task.title, listOfNotNull(status, stamp).joinToString(" · "), R.drawable.tab_progress,
     "personal-overview-task-${task.id}", task.needsAttention) { onTask(task.id) }

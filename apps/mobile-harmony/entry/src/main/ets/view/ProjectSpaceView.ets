@@ -49,6 +49,18 @@ export struct XopcProjectSpaceView {
   }
 
   private taskStatus(status: string): ResourceStr {
+    if (status === 'needsUser' || status === 'needs_user') return $r('app.string.task_status_needs_user');
+    if (status === 'failed') return $r('app.string.status_failed');
+    if (status === 'blocked') return $r('app.string.task_execution_blocked');
+    if (status === 'paused') return $r('app.string.paused');
+    if (status === 'running') return $r('app.string.status_running');
+    if (status === 'verifying') return $r('app.string.task_execution_verifying');
+    if (status === 'queued') return $r('app.string.status_queued');
+    if (status === 'allocating') return $r('app.string.task_status_allocating');
+    if (status === 'waiting') return $r('app.string.task_execution_waiting');
+    if (status === 'cancelled') return $r('app.string.status_cancelled');
+    if (status === 'completed' || status === 'done') return $r('app.string.task_status_completed');
+    if (status === 'ended') return $r('app.string.task_status_ended');
     if (status === 'closed') return $r('app.string.task_phase_closed');
     if (status === 'in_progress' || status === 'active') return $r('app.string.task_phase_in_progress');
     if (status === 'ready') return $r('app.string.task_phase_ready');
@@ -64,7 +76,7 @@ export struct XopcProjectSpaceView {
         Column({ space: 5 }) {
           Text(item.title).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
             .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-          Text(this.taskStatus(item.status)).fontSize(12).fontColor(this.colors.secondary)
+          Text(this.taskStatus(item.displayStatus || item.status)).fontSize(12).fontColor(this.colors.secondary)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)

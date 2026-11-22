@@ -300,6 +300,51 @@ describe('project association routes', () => {
     });
   });
 
+  it('searches tasks through /api/search?types=task with projected presentation status', async () => {
+    const projects = new ProjectService();
+    const tasks = new TaskApplicationService();
+    const created = tasks.create({
+      idempotencyKey: 'search-task-hit',
+      title: 'Prepare basalt release checklist',
+      priority: 'high',
+      contract: {
+        objective: 'Prepare basalt release checklist',
+        expectedOutputs: [],
+        acceptanceCriteria: [],
+        constraints: [],
+        approvalRequired: [],
+        assumptions: [],
+        risks: [],
+        acceptancePolicy: 'manual',
+        outputDestinations: [],
+      },
+      dependencies: [],
+      context: [],
+      authorityGrants: [],
+      activation: { mode: 'capture', phase: 'ready' },
+    });
+    if (!created.ok) throw new Error('Expected created task');
+    const app = registerSearchRouteApp({ projects });
+
+    const res = await app.request('/api/search?q=basalt&types=task');
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.hits).toHaveLength(1);
+    expect(body.hits[0]).toMatchObject({
+      kind: 'task',
+      id: `task:${created.model.task.id}`,
+      title: 'Prepare basalt release checklist',
+      href: `/tasks/${encodeURIComponent(created.model.task.id)}`,
+      payload: {
+        task: { id: created.model.task.id },
+        operationalState: 'idle',
+        presentation: { status: 'ready' },
+      },
+    });
+  });
+
   it('pins and unpins projects through project routes', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Pin Route Project' });

@@ -24,8 +24,9 @@ extension GatewayClient {
             conversation: conversation,
             clientMessageID: clientMessageID
         )
+        let inputPath = conversation.taskID.map { "/api/tasks/\($0)/inputs" } ?? "/api/sessions/\(conversation.id)/inputs"
         let envelope: GatewayEnvelope<SessionCommandResult> = try await request(
-            path: "/api/sessions/\(conversation.id)/inputs",
+            path: inputPath,
             queryItems: [URLQueryItem(name: "view", value: "compact")],
             method: "POST",
             body: body

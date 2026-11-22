@@ -40,10 +40,20 @@ describe('ProductSectionHeader', () => {
 
     expect([...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual([
       'Workbench',
+      'Tasks',
       'Projects',
       'Notes',
     ]);
     expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Projects');
+  });
+
+  it('shows the Tasks section on /tasks and hides section tabs on task detail routes', () => {
+    renderAt('/tasks');
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Tasks');
+    act(unmount);
+    container.remove();
+    renderAt('/tasks/task-123');
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
   });
 
   it('keeps activity inside the Automations section', () => {

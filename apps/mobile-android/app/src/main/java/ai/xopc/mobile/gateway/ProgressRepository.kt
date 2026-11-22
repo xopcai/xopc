@@ -28,7 +28,14 @@ data class ProgressTask(val id: String, val title: String, val body: String, val
   val activeWaitCount: Int = 0, val latestResult: String = "", val remainingWork: List<String> = emptyList(),
   val phaseChanges: List<TaskPhaseChange> = emptyList(),
   val attention: List<String> = emptyList(), val expectedOutputs: List<String> = emptyList(),
-  val latestContractVersion: Int = 0, val acceptanceResultId: String? = null, val signoffResultId: String? = null, val presentationReason: String? = null) {
+  val latestContractVersion: Int = 0, val acceptanceResultId: String? = null, val signoffResultId: String? = null, val presentationReason: String? = null,
+  val presentationStatus: String? = null, val runCount: Int = 0,
+  val pausedWaitId: String? = null, val activeRunId: String? = null, val activeRunVersion: Int = 0) {
+  val displayStatus: String get() = presentationStatus?.takeIf { it.isNotBlank() }
+    ?: operationalState.takeIf { it != "idle" && it.isNotBlank() }
+    ?: resolution?.takeIf { it.isNotBlank() }
+    ?: phase
+  val needsUserAttention: Boolean get() = attention.isNotEmpty() || displayStatus in setOf("needsUser", "review", "blocked", "failed", "paused")
   fun reviewAction(check: TaskCriterion): String? = acceptanceResultId?.takeIf {
     phase != "closed" && activeWaitCount == 0 && check.id.isNotBlank()
   }?.let { "review:$it|${check.id}|${if (check.status == "passed") "unverified" else "passed"}" }
@@ -82,6 +89,14 @@ class ProgressRepository(private val gateway: GatewaySession) {
         body.put("kind", action.subjectKind).put("runId", action.runId)
         if (action.type == "retry_run") "/api/home/attention/retry"
         else "/api/home/attention/acknowledge"
+      }
+      "retry_task" -> {
+        val taskId = action.taskId
+        val runId = action.runId
+        require(taskId?.matches(Regex("[A-Za-z0-9_-]{1,128}")) == true &&
+          runId?.matches(Regex("[A-Za-z0-9_-]{1,200}")) == true) { "INVALID_HOME_ACTION" }
+        body.put("expectedRunId", runId).put("idempotencyKey", java.util.UUID.randomUUID().toString())
+        "/api/tasks/${URLEncoder.encode(taskId, "UTF-8")}/retry"
       }
       else -> throw IllegalArgumentException("INVALID_HOME_ACTION")
     }
@@ -172,8 +187,21 @@ class ProgressRepository(private val gateway: GatewaySession) {
   }
 
   fun command(task: ProgressTask, action: String, idempotencyKey: String, agentId: String = ""): ProgressTask {
-    val kind = if (action == "cancel_task") "close" else action.substringBefore(':')
+    val kind = when (action) {
+      "cancel_task" -> "close"
+      "pause_task" -> "add_wait"
+      "resume_task" -> "resolve_wait"
+      else -> action.substringBefore(':')
+    }
     require(task.id.matches(Regex("[A-Za-z0-9_-]{1,128}")) && task.version > 0) { "INVALID_TASK_COMMAND" }
+    if (action == "stop_run") {
+      val runId = task.activeRunId
+      require(runId != null && runId.matches(Regex("[A-Za-z0-9_-]{1,200}")) && task.activeRunVersion > 0) { "INVALID_TASK_RUN" }
+      val body = JSONObject().put("expectedVersion", task.activeRunVersion).put("reason", "Cancelled from mobile")
+      val response = JSONObject(gateway.request("/api/task-runs/$runId/cancel", "POST", body.toString()))
+      require(response.getBoolean("ok")) { "INVALID_TASK_RUN_CANCEL" }
+      return parseTaskDetail(task.id, gateway.request("/api/tasks/${task.id}"), minimumVersion = task.version)
+    }
     if (kind == "review") {
       val fields = action.substringAfter(':').split('|')
       require(fields.size == 3 && task.acceptanceResultId == fields[0] && task.phase != "closed" &&
@@ -187,13 +215,21 @@ class ProgressRepository(private val gateway: GatewaySession) {
       return parseTaskDetail(task.id, gateway.request("/api/tasks/${task.id}"), minimumVersion = response.getInt("version"))
     }
     require(kind == "signoff" && task.signoffResultId == action.substringAfter(':') ||
-      kind in task.allowedCommands && kind in setOf("move", "mark_ready", "request_review", "close", "reopen", "start")) {
+      kind in task.allowedCommands && kind in setOf("move", "mark_ready", "request_review", "close", "reopen", "start", "add_wait", "resolve_wait")) {
       "INVALID_TASK_COMMAND"
     }
     val selectedAgent = agentId.trim()
     require(kind != "start" || selectedAgent.isNotEmpty() && selectedAgent.length <= 128) { "INVALID_TASK_AGENT" }
     val command = JSONObject().put("type", kind)
     if (kind == "signoff") command.put("resultId", task.signoffResultId)
+    if (kind == "add_wait") {
+      command.put("wait", JSONObject().put("kind", "paused").put("reason", "Paused from mobile").put("condition", JSONObject()))
+    }
+    if (kind == "resolve_wait") {
+      val waitId = task.pausedWaitId
+      require(!waitId.isNullOrBlank()) { "INVALID_TASK_WAIT" }
+      command.put("waitId", waitId)
+    }
     if (kind == "close") {
       command.put("resolution", if (action == "cancel_task") "cancelled" else "done")
     }
@@ -311,6 +347,9 @@ class ProgressRepository(private val gateway: GatewaySession) {
           "retry_run", "acknowledge_run" -> action.takeIf {
             it.subjectKind in setOf("automation_run") &&
               it.runId?.matches(Regex("[A-Za-z0-9_-]{1,200}")) == true && it.label.isNotBlank() }
+          "retry_task" -> action.takeIf {
+            it.taskId?.matches(Regex("[A-Za-z0-9_-]{1,128}")) == true &&
+              it.runId?.matches(Regex("[A-Za-z0-9_-]{1,200}")) == true && it.label.isNotBlank() }
           else -> null
         }
       }
@@ -367,7 +406,18 @@ class ProgressRepository(private val gateway: GatewaySession) {
       val rows = root.getJSONArray("items")
       require(rows.length() <= 200) { "INVALID_PROGRESS_TASKS" }
       val tasks = (0 until rows.length()).map { index ->
-        parseTask(rows.getJSONObject(index).getJSONObject("task"))
+        val row = rows.getJSONObject(index)
+        val base = parseTask(row.getJSONObject("task"))
+        val presentation = row.optJSONObject("presentation")
+        val attention = row.optJSONArray("attention")
+        base.copy(
+          operationalState = row.optString("operationalState", "idle"),
+          presentationStatus = presentation?.optString("status")?.takeIf { it.isNotBlank() },
+          presentationReason = presentation?.optString("reason")?.takeIf { it.isNotBlank() },
+          attention = (0 until (attention?.length() ?: 0))
+            .map { attention!!.getJSONObject(it).optString("summary") }
+            .filter { it.isNotBlank() },
+        )
       }
       val total = root.optInt("total", tasks.size)
       require(total >= tasks.size) { "INVALID_PROGRESS_TASKS" }
@@ -382,10 +432,14 @@ class ProgressRepository(private val gateway: GatewaySession) {
       val commands = root.getJSONArray("allowedCommands")
       require(commands.length() <= 30) { "INVALID_PROGRESS_TASK" }
       val runs = root.optJSONArray("runs")
-      val hasActiveRun = (0 until (runs?.length() ?: 0)).map { runs!!.getJSONObject(it) }.any {
+      val activeRunObj = (0 until (runs?.length() ?: 0)).map { runs!!.getJSONObject(it) }.firstOrNull {
         it.isNull("parentRunId") && it.optString("status") in setOf("queued", "running", "waiting", "verifying")
       }
+      val hasActiveRun = activeRunObj != null
       val waits = root.optJSONArray("waits")
+      val pausedWaitId = (0 until (waits?.length() ?: 0)).map { waits!!.getJSONObject(it) }.firstOrNull {
+        it.optString("status") == "active" && it.optString("kind") == "paused"
+      }?.optString("id")?.takeIf { it.isNotBlank() }
       val receipts = root.optJSONArray("receipts")
       val latest = (0 until (receipts?.length() ?: 0)).map { receipts!!.getJSONObject(it) }
         .maxByOrNull { it.optLong("finalizedAt") }
@@ -419,6 +473,11 @@ class ProgressRepository(private val gateway: GatewaySession) {
         signoffResultId = resultId?.takeIf { acceptance.optBoolean("canSignOff") &&
           primary?.optString("type") == "signoff" && primary.optString("resultId") == it },
         presentationReason = presentation?.optString("reason")?.takeIf { it.isNotBlank() },
+        presentationStatus = presentation?.optString("status")?.takeIf { it.isNotBlank() },
+        runCount = runs?.length() ?: 0,
+        pausedWaitId = pausedWaitId,
+        activeRunId = activeRunObj?.optString("id")?.takeIf { it.isNotBlank() },
+        activeRunVersion = activeRunObj?.optInt("version") ?: 0,
         criteria = parseTaskCriteria(root))
     }
 

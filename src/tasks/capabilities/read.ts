@@ -77,6 +77,18 @@ export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): 
         context: context.list(id), conversation: conversations.requireState(id), sessions: conversations.listSessions(id),
         authorityGrants: context.listActiveGrants(id),
         dependencies: dependencies.listDependencies(id), dependents: dependencies.listDependents(id),
+        ...(task.parentTaskId ? { parentTask: projector.summary(task.parentTaskId) } : {}),
+        children: tasks.listChildren(id).map(child => {
+          const childModel = projector.project(child);
+          return {
+            id: child.id,
+            title: child.title,
+            phase: child.phase,
+            ...(child.resolution ? { resolution: child.resolution } : {}),
+            ...(childModel.allocation ? { allocation: childModel.allocation } : {}),
+            operationalState: childModel.operationalState,
+          };
+        }),
       };
     },
   }));

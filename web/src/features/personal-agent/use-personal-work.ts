@@ -5,6 +5,7 @@ import type { TaskOperationalState, TaskPresentation, TaskResolution, TurnOutcom
 
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { taskCopy } from '@/features/tasks/task-copy';
+import { taskStatusDotTone } from '@/features/tasks/task-status';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -141,10 +142,7 @@ export function isOpenPersonalPrompt(prompt: PersonalPrompt | null | undefined):
 
 export function personalWorkStatus(item: PersonalWorkItem, zh: boolean): [string, string] {
   const { status } = item.presentation;
-  const tone = status === 'failed' ? 'bg-danger'
-    : ['needsUser', 'review', 'waiting', 'blocked', 'paused'].includes(status) ? 'bg-warning'
-      : ['running', 'verifying', 'completed'].includes(status) ? 'bg-accent' : 'bg-fg-subtle';
-  return [taskCopy(zh ? 'zh' : 'en').detailStatuses[status], tone];
+  return [taskCopy(zh ? 'zh' : 'en').detailStatuses[status], taskStatusDotTone(status)];
 }
 
 export function usePersonalWorkOverview(conversationId: string | undefined, zh: boolean) {

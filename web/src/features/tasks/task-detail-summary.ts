@@ -63,15 +63,13 @@ export function summarizeTaskResult(detail: TaskDetail) {
   };
 }
 
+import { taskStatusBadgeTone } from './task-status';
+
 export type DetailStatusKey = TaskPresentation['status'];
 export function detailStatusKey(detail: TaskDetail): DetailStatusKey {
   return detail.presentation.status;
 }
 
 export function detailStatusTone(status: DetailStatusKey): string {
-  if (status === 'failed') return 'bg-danger/10 text-danger';
-  if (status === 'needsUser' || status === 'blocked') return 'bg-warning/10 text-warning';
-  if (status === 'completed') return 'bg-success-soft text-success';
-  if (status === 'running' || status === 'verifying' || status === 'review') return 'bg-accent-soft text-accent-fg';
-  return 'bg-surface-hover text-fg-muted';
+  return taskStatusBadgeTone(status);
 }

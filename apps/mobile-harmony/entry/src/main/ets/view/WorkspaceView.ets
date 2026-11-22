@@ -8,7 +8,7 @@ import {
   XopcMobileTaskAttention, XopcTaskAcceptanceCheck
 } from '../model/workspace';
 import type { XopcTaskPhaseChange } from '../model/workspace';
-import { taskCriterionState, taskPhaseAction, taskReviewAction, taskSignoffResult } from '../common/taskManagement';
+import { taskActiveRootRun, taskCompletionBlock, taskCriterionState, taskPausedWaitId, taskPhaseAction, taskReviewAction, taskSignoffResult } from '../common/taskManagement';
 import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
 import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
@@ -239,6 +239,9 @@ export struct XopcWorkspaceView {
     if (action.startsWith('signoff:')) return $r('app.string.task_signoff');
     if (action.startsWith('move:') || action.startsWith('reopen:')) return this.statusLabel(action.split(':')[1]);
     if (action === 'cancel_task') return $r('app.string.task_cancel');
+    if (action === 'pause_task') return $r('app.string.task_pause');
+    if (action === 'resume_task') return $r('app.string.task_resume');
+    if (action === 'stop_run') return $r('app.string.task_stop_run');
     if (action === 'mark_ready') return $r('app.string.mark_ready');
     if (action === 'request_review') return $r('app.string.request_review');
     if (action === 'close') return $r('app.string.complete');
@@ -272,6 +275,11 @@ export struct XopcWorkspaceView {
   }
 
   private statusLabel(status: string): ResourceStr {
+    if (status === 'allocating') return $r('app.string.task_status_allocating');
+    if (status === 'captured') return $r('app.string.task_phase_backlog');
+    if (status === 'needsUser' || status === 'needs_user') return $r('app.string.task_status_needs_user');
+    if (status === 'completed' || status === 'done') return $r('app.string.task_status_completed');
+    if (status === 'ended') return $r('app.string.task_status_ended');
     if (status === 'enabled') return $r('app.string.enabled');
     if (status === 'paused') return $r('app.string.paused');
     if (status === 'idle') return $r('app.string.task_execution_idle');
@@ -309,7 +317,10 @@ export struct XopcWorkspaceView {
   private matchesFilter(item: XopcWorkspaceItem, filter: string = this.filter): boolean {
     if (this.section !== 'tasks' && !item.title.toLowerCase().includes(this.search.trim().toLowerCase())) return false;
     if (filter === 'all') return true;
-    if (this.section === 'tasks') return filter === 'primary' ? item.status !== 'closed' : item.status === 'closed';
+    if (this.section === 'tasks') {
+      if (filter === 'attention') return item.status !== 'closed' && item.needsAttention === true;
+      return filter === 'primary' ? item.status !== 'closed' : item.status === 'closed';
+    }
     if (this.section === 'projects') return filter === 'primary' ? item.status !== 'archived' : item.status === 'archived';
     if (filter === 'attention') {
       const status = item.automation?.state?.lastRunStatus;
@@ -330,8 +341,11 @@ export struct XopcWorkspaceView {
     const options: XopcSegmentOption[] = [
       { key: 'all', label: $r('app.string.filter_all'), count: this.filterCount('all') },
       { key: 'primary', label: this.firstFilterLabel(), count: this.filterCount('primary') },
-      { key: 'secondary', label: this.secondFilterLabel(), count: this.filterCount('secondary') }
     ];
+    if (this.section === 'tasks') {
+      options.push({ key: 'attention', label: $r('app.string.filter_attention'), count: this.filterCount('attention') });
+    }
+    options.push({ key: 'secondary', label: this.secondFilterLabel(), count: this.filterCount('secondary') });
     if (this.section === 'automations') {
       options.push({ key: 'attention', label: $r('app.string.progress_action_required'), count: this.filterCount('attention') });
     }
@@ -387,10 +401,12 @@ export struct XopcWorkspaceView {
 
   private async action(action: string, listItem?: XopcWorkspaceItem): Promise<void> {
     if (this.model.busy || !action) return;
-    if (['delete', 'archive', 'cancel_task', 'run', 'start'].includes(action)) {
+    if (['delete', 'archive', 'cancel_task', 'stop_run', 'run', 'start'].includes(action)) {
       try {
         const result = await this.getUIContext().getPromptAction().showDialog({
-          title: this.label(action), message: action === 'cancel_task' ? $r('app.string.task_cancel_help') : $r('app.string.confirm_action_help'),
+          title: this.label(action), message: action === 'cancel_task' ? $r('app.string.task_cancel_help')
+            : action === 'stop_run' ? $r('app.string.task_stop_run_help')
+              : $r('app.string.confirm_action_help'),
           buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
             { text: $r('app.string.confirm'), color: this.colors.accent }]
         });
@@ -561,6 +577,26 @@ export struct XopcWorkspaceView {
             }.width('100%').alignItems(HorizontalAlign.Start)
           }
         }
+        if (taskPausedWaitId(item) && item.actions.includes('resolve_wait')) {
+          ListItem() {
+            Button($r('app.string.task_resume')).width('100%').height(48).backgroundColor(this.colors.input)
+              .fontColor(this.colors.foreground).enabled(!this.model.busy)
+              .onClick((): void => { this.applySheetAction('resume_task'); })
+          }
+        } else if (item.status !== 'closed' && item.actions.includes('add_wait')) {
+          ListItem() {
+            Button($r('app.string.task_pause')).width('100%').height(48).backgroundColor(this.colors.input)
+              .fontColor(this.colors.foreground).enabled(!this.model.busy)
+              .onClick((): void => { this.applySheetAction('pause_task'); })
+          }
+        }
+        if (taskActiveRootRun(item)?.version) {
+          ListItem() {
+            Button($r('app.string.task_stop_run')).width('100%').height(48).backgroundColor(Color.Transparent)
+              .fontColor(this.colors.danger).enabled(!this.model.busy)
+              .onClick((): void => { this.applySheetAction('stop_run'); })
+          }
+        }
         if (item.actions.includes('close')) {
           ListItem() {
             Column({ space: 8 }) {
@@ -568,6 +604,13 @@ export struct XopcWorkspaceView {
                 Button(this.label('close')).width('100%').height(48).backgroundColor(this.colors.input)
                   .fontColor(this.colors.foreground).enabled(!this.model.busy)
                   .onClick((): void => { this.applySheetAction('close'); })
+              } else if (!taskSignoffResult(item)) {
+                Text(taskCompletionBlock(item) === 'execution'
+                  ? $r('app.string.task_block_execution')
+                  : taskCompletionBlock(item) === 'acceptance'
+                    ? $r('app.string.task_block_acceptance')
+                    : $r('app.string.task_block_criteria'))
+                  .fontSize(13).lineHeight(19).fontColor(this.colors.secondary)
               }
 
               Button($r('app.string.task_cancel')).width('100%').height(48).backgroundColor(Color.Transparent)
@@ -680,15 +723,16 @@ export struct XopcWorkspaceView {
           Column({ space: 4 }) {
             Text(item.title || $r('app.string.untitled')).fontSize(16).lineHeight(22).fontWeight(FontWeight.Medium)
               .fontColor(this.colors.foreground).width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-            Text(this.statusLabel(item.status)).fontSize(12).fontWeight(FontWeight.Medium)
-              .fontColor(item.status === 'failed' ? this.colors.danger : item.status === 'review' ? this.colors.attentionForeground
-                : item.enabled || item.status === 'active'
-                || item.status === 'in_progress' || item.status === 'ready' ? this.colors.accent : this.colors.secondary)
+            Text(this.statusLabel(item.displayStatus || item.status)).fontSize(12).fontWeight(FontWeight.Medium)
+              .fontColor((item.displayStatus || item.status) === 'failed' ? this.colors.danger
+                : ['review', 'needsUser', 'blocked', 'paused'].includes(item.displayStatus || item.status) ? this.colors.attentionForeground
+                : item.enabled || ['active', 'in_progress', 'running', 'verifying', 'queued', 'allocating', 'ready'].includes(item.displayStatus || item.status)
+                  ? this.colors.accent : this.colors.secondary)
           }.layoutWeight(1).alignItems(HorizontalAlign.Start)
           SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
         }.width('100%')
-        if (this.itemSummary(item)) {
-          Text(this.itemSummary(item)).fontSize(14).lineHeight(20).fontColor(this.colors.secondary)
+        if (item.statusReason || this.itemSummary(item)) {
+          Text(item.statusReason || this.itemSummary(item)).fontSize(14).lineHeight(20).fontColor(this.colors.secondary)
             .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         if ((this.section === 'tasks' && !!(item.projectId || item.priority))
@@ -744,7 +788,7 @@ export struct XopcWorkspaceView {
       }
       ForEach(this.filteredItems(), (item: XopcWorkspaceItem) => {
         ListItem() { if (this.section === 'automations') this.automationCard(item); else this.workspaceCard(item); }
-      }, (item: XopcWorkspaceItem): string => item.id + ':' + item.version + ':' + item.title + ':' + item.status)
+      }, (item: XopcWorkspaceItem): string => item.id + ':' + item.version + ':' + item.title + ':' + (item.displayStatus || item.status))
       if (!this.model.busy && this.section === 'automations' && !this.model.error && !this.model.hasMore
         && this.filter === 'all' && !this.search.trim() && !this.model.loadedSearch) {
         ListItem() {

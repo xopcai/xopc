@@ -1,18 +1,34 @@
+import type { Task, TaskOperationalState, TaskPresentation } from '@xopcai/gateway-contract';
+
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import type { Project } from '@/features/projects/api';
 
-export type GlobalSearchHit = {
-  kind: 'project';
-  id: string;
-  title: string;
-  subtitle?: string;
-  href: string;
-  score: number;
-  payload: {
-    project: Project;
+export type GlobalSearchHit =
+  | {
+    kind: 'project';
+    id: string;
+    title: string;
+    subtitle?: string;
+    href: string;
+    score: number;
+    payload: {
+      project: Project;
+    };
+  }
+  | {
+    kind: 'task';
+    id: string;
+    title: string;
+    subtitle?: string;
+    href: string;
+    score: number;
+    payload: {
+      task: Task;
+      operationalState: TaskOperationalState;
+      presentation: TaskPresentation;
+    };
   };
-};
 
 export async function searchGlobal(query: string, options: { types?: string[]; limit?: number } = {}) {
   const params = new URLSearchParams();

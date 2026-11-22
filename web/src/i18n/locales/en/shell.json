@@ -57,6 +57,7 @@
     },
     "sections": {
       "work-overview": "Workbench",
+      "work-tasks": "Tasks",
       "work-projects": "Projects",
       "work-notes": "Notes",
       "automation-triggers": "Automations",
@@ -165,7 +166,7 @@
     "taskRename": "Rename",
     "taskCopyChatId": "Copy chat ID",
     "taskChatIdCopied": "Chat ID copied",
-    "taskDeleteTask": "Delete task",
+    "taskDeleteTask": "Delete chat",
     "taskRenameTitle": "Rename conversation",
     "taskRenamePlaceholder": "Session name",
     "taskRenameSave": "Save",

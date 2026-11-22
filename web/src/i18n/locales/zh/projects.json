@@ -448,9 +448,9 @@
       "phases": {
         "backlog": "待规划",
         "ready": "就绪",
-        "active": "执行中",
+        "active": "进行中",
         "review": "待验收",
-        "closed": "已完成"
+        "closed": "已关闭"
       },
       "operationalStates": {
         "allocating": "正在分配",

@@ -225,7 +225,7 @@ internal fun TaskDetailsTip(onOpen: () -> Unit, modifier: Modifier = Modifier) {
 
 @Composable
 private fun TaskChatOverview(task: ProgressTask, busy: Boolean, onCommand: (String) -> Unit) {
-  Text(task.resolution?.let { taskResolutionLabel(it) } ?: progressPhaseLabel(task.phase),
+  Text(taskPresentationLabel(task.displayStatus),
     style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
   Text(stringResource(R.string.progress_execution_state, taskExecutionLabel(task.operationalState)),
     color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -253,7 +253,15 @@ private fun TaskChatOverview(task: ProgressTask, busy: Boolean, onCommand: (Stri
   if (task.criteria.isNotEmpty()) {
     Text(stringResource(R.string.progress_criteria_passed, task.criteria.count { it.status == "passed" }, task.criteria.size),
       style = MaterialTheme.typography.labelLarge)
-    task.criteria.forEach { criterion -> Text((when (criterion.status) { "passed" -> "✓ "; "failed" -> "! "; else -> "○ " }) + criterion.text) }
+    task.criteria.forEach { criterion ->
+      val action = task.reviewAction(criterion)
+      val label = (when (criterion.status) { "passed" -> "✓ "; "failed" -> "! "; else -> "○ " }) + criterion.text
+      if (action != null) {
+        TextButton(onClick = { onCommand(action) }, enabled = !busy) { Text(label) }
+      } else {
+        Text(label)
+      }
+    }
   }
   if (task.expectedOutputs.isNotEmpty()) {
     Text(stringResource(R.string.task_chat_outputs), style = MaterialTheme.typography.labelLarge)

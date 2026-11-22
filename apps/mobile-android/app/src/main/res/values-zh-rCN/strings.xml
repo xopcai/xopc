@@ -1116,4 +1116,16 @@
     <string name="notes_search_body">搜索笔记正文</string>
     <string name="notes_no_headings">暂无标题</string>
     <string name="notes_no_matches">没有匹配内容</string>
+    <string name="task_status_allocating">正在分配</string>
+    <string name="task_status_verifying">验证中</string>
+    <string name="task_status_waiting">等待条件</string>
+    <string name="task_status_blocked">被阻塞</string>
+    <string name="task_status_ended">已结束</string>
+    <string name="task_block_execution">任务仍在执行或等待处理，请先完成当前运行或等待项。</string>
+    <string name="task_block_acceptance">尚有未通过的验收项，请先完成逐项验收后再签收。</string>
+    <string name="task_block_criteria">当前任务结果尚未达到签收条件，请先查看执行结果。</string>
+    <string name="task_pause">暂停任务</string>
+    <string name="task_resume">继续任务</string>
+    <string name="task_stop_run">停止当前执行</string>
+    <string name="task_stop_run_help">将请求中止当前正在执行的运行，不会关闭任务。</string>
 </resources>

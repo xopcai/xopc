@@ -1,4 +1,4 @@
-import { Cable, File, FolderKanban, FolderOpen, Puzzle, Settings, Sparkles, Terminal, Zap } from 'lucide-react';
+import { Cable, CheckSquare, File, FolderKanban, FolderOpen, Puzzle, Settings, Sparkles, Terminal, Zap } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -31,6 +31,7 @@ import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
 import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
 import { searchWorkspaceEntries } from '@/features/chat/palette/at-mention-api';
+import { formatTaskPresentationStatus } from '@/features/tasks/task-status';
 import { listSessions } from '@/features/sessions/session-api';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
@@ -97,6 +98,8 @@ function iconFor(hit: GlobalHit) {
       return <FolderOpen className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />;
     case 'project':
       return <FolderKanban className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />;
+    case 'task':
+      return <CheckSquare className="size-3.5 shrink-0 text-accent-fg" aria-hidden />;
     case 'session':
       return <FolderOpen className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />;
     case 'file':
@@ -366,7 +369,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
       const [commands, skillsPayload, globalSearchHits, sessions, files, desktopMenuActionHits] = await Promise.all([
         fetchCommandsCached(),
         getSkillsCached(),
-        q ? searchGlobal(q, { types: ['project'], limit: 8 }).catch(() => []) : [],
+        q ? searchGlobal(q, { types: ['project', 'task'], limit: 12 }).catch(() => []) : [],
         listSessions({ search: q || undefined, limit: 8, offset: 0 }).catch(() => ({ items: [] })),
         (async () => {
           const sk = chatConversationId?.trim();
@@ -382,23 +385,44 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
         buildDesktopMenuActionHits(language, close),
       ]);
 
-      const projectHits: Array<Omit<GlobalHit, 'rank'>> = globalSearchHits.map((h) => ({
-        kind: 'project',
-        id: h.id,
-        title: h.title,
-        subtitle: h.subtitle,
-        groupLabel: groups.projects,
-        keywords: [
-          h.payload.project.slug,
-          h.payload.project.workspaceRoot ?? '',
-          h.payload.project.defaultAgentId ?? '',
-          h.payload.project.brief ?? '',
-        ],
-        run: () => {
-          close();
-          navigate(h.href);
-        },
-      }));
+      const projectHits: Array<Omit<GlobalHit, 'rank'>> = globalSearchHits.flatMap((h) => (
+        h.kind === 'project'
+          ? [{
+            kind: 'project' as const,
+            id: h.id,
+            title: h.title,
+            subtitle: h.subtitle,
+            groupLabel: groups.projects,
+            keywords: [
+              h.payload.project.slug,
+              h.payload.project.workspaceRoot ?? '',
+              h.payload.project.defaultAgentId ?? '',
+              h.payload.project.brief ?? '',
+            ],
+            run: () => {
+              close();
+              navigate(h.href);
+            },
+          }]
+          : []
+      ));
+
+      const taskHits: Array<Omit<GlobalHit, 'rank'>> = globalSearchHits.flatMap((h) => (
+        h.kind === 'task'
+          ? [{
+            kind: 'task' as const,
+            id: h.id,
+            title: h.title,
+            subtitle: `${formatTaskPresentationStatus(h.payload.presentation.status, language)}${h.subtitle ? ` · ${h.subtitle}` : ''}`,
+            groupLabel: language === 'zh' ? '任务' : 'Tasks',
+            keywords: [h.payload.task.phase, h.payload.presentation.status, h.payload.task.priority],
+            run: () => {
+              close();
+              navigate(h.href);
+            },
+          }]
+          : []
+      ));
 
       const commandHits: Array<Omit<GlobalHit, 'rank'>> = commands.map((c) => ({
         kind: 'command',
@@ -477,6 +501,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
         ...desktopMenuActionHits,
         ...extensionHits,
         ...settingsFieldHits,
+        ...taskHits,
         ...projectHits,
         ...connectorHits,
         ...sessionHits,

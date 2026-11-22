@@ -57,6 +57,19 @@ extension GatewayClient {
     }
 
     func performHomeAction(_ action: HomeAction) async throws {
+        if action.type == "retry_task", let taskId = action.taskId, !taskId.isEmpty, let runId = action.runId, !runId.isEmpty {
+            let body = try encoder.encode(TaskRetryMutation(
+                idempotencyKey: UUID().uuidString.lowercased(),
+                expectedRunId: runId
+            ))
+            let result: TaskRetryResponse = try await request(
+                path: "/api/tasks/\(taskId)/retry", method: "POST", body: body
+            )
+            guard ["queued", "running", "waiting", "verifying", "succeeded", "waiting_connection"].contains(result.status) else {
+                throw GatewayClientError.server("重试任务未成功")
+            }
+            return
+        }
         guard let command = action.command else {
             throw GatewayClientError.server("不支持的进展操作")
         }
@@ -230,18 +243,27 @@ extension GatewayClient {
     }
 
     func commandTask(_ task: TaskRecord, command: String, phase: String? = nil,
-                     resolution: String = "done", agentID: String? = nil, resultID: String? = nil) async throws
+                     resolution: String = "done", agentID: String? = nil, resultID: String? = nil,
+                     waitID: String? = nil) async throws
     {
         let mutation = try TaskCommandMutation(
             idempotencyKey: UUID().uuidString.lowercased(), expectedVersion: task.version,
             command: .make(type: command, phase: phase, resolution: resolution,
-                           agentID: agentID ?? task.delegateAgentId, resultID: resultID)
+                           agentID: agentID ?? task.delegateAgentId, resultID: resultID, waitID: waitID)
         )
         let body = try encoder.encode(mutation)
         let result: TaskCommandAcknowledgement = try await request(
             path: "/api/tasks/\(task.id)/commands", method: "POST", body: body
         )
         guard result.ok else { throw GatewayClientError.server("任务更新未完成") }
+    }
+
+    func cancelTaskRun(runID: String, expectedVersion: Int, reason: String = "Cancelled from mobile") async throws {
+        let body = try encoder.encode(TaskRunCancelMutation(expectedVersion: expectedVersion, reason: reason))
+        let result: TaskCommandAcknowledgement = try await request(
+            path: "/api/task-runs/\(runID)/cancel", method: "POST", body: body
+        )
+        guard result.ok else { throw GatewayClientError.server("停止执行未完成") }
     }
 
     func reviewTaskCheck(_ task: TaskRecord, checkID: String, resultID: String, status: String) async throws {
@@ -722,12 +744,19 @@ struct TaskCommandMutation: Encodable {
         let resolution: String?
         let phase: String?
         let resultId: String?
+        let waitId: String?
+        let wait: WaitInput?
 
-        static func make(type: String, phase: String?, resolution: String, agentID: String?, resultID: String? = nil) throws -> Command {
-            guard ["move", "mark_ready", "start", "request_review", "close", "reopen", "signoff"].contains(type) else {
+        static func make(type: String, phase: String?, resolution: String, agentID: String?,
+                         resultID: String? = nil, waitID: String? = nil) throws -> Command
+        {
+            guard ["move", "mark_ready", "start", "request_review", "close", "reopen", "signoff", "add_wait", "resolve_wait"].contains(type) else {
                 throw GatewayClientError.invalidResponse
             }
             if type == "signoff", resultID?.isEmpty != false {
+                throw GatewayClientError.invalidResponse
+            }
+            if type == "resolve_wait", waitID?.isEmpty != false {
                 throw GatewayClientError.invalidResponse
             }
             let target = phase ?? (type == "reopen" ? "backlog" : "")
@@ -746,14 +775,36 @@ struct TaskCommandMutation: Encodable {
             return Command(type: type, executor: type == "start" ? .init(kind: "agent", agentId: selectedAgent) : nil,
                            resolution: type == "close" ? resolution : nil,
                            phase: type == "move" || type == "reopen" ? target : nil,
-                           resultId: type == "signoff" ? resultID : nil)
+                           resultId: type == "signoff" ? resultID : nil,
+                           waitId: type == "resolve_wait" ? waitID : nil,
+                           wait: type == "add_wait" ? .init(kind: "paused", reason: "Paused from mobile") : nil)
         }
+    }
+
+    struct WaitInput: Encodable {
+        let kind: String
+        let reason: String
+        let condition: [String: String] = [:]
     }
 
     struct Executor: Encodable {
         let kind: String
         let agentId: String
     }
+}
+
+private struct TaskRetryMutation: Encodable {
+    let idempotencyKey: String
+    let expectedRunId: String
+}
+
+private struct TaskRetryResponse: Decodable {
+    let status: String
+}
+
+private struct TaskRunCancelMutation: Encodable {
+    let expectedVersion: Int
+    let reason: String
 }
 
 private struct TaskCheckMutation: Encodable {

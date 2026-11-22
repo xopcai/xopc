@@ -1,7 +1,7 @@
 export type ProductDomainId = 'work' | 'automation' | 'capabilities' | 'apps' | 'me';
 
 export type ProductSectionId =
-  'work-overview' | 'work-projects' | 'work-notes' | 'automation-triggers' | 'capabilities-agents' | 'capabilities-skills' | 'capabilities-connectors' | 'capabilities-devices' | 'capabilities-channels' | 'capabilities-extensions' | 'apps-library' | 'me-overview';
+  'work-overview' | 'work-tasks' | 'work-projects' | 'work-notes' | 'automation-triggers' | 'capabilities-agents' | 'capabilities-skills' | 'capabilities-connectors' | 'capabilities-devices' | 'capabilities-channels' | 'capabilities-extensions' | 'apps-library' | 'me-overview';
 
 type ProductSectionDefinition = {
   id: ProductSectionId;
@@ -17,6 +17,7 @@ type ProductDomainDefinition = {
 
 const workSections = [
   { id: 'work-overview', domain: 'work', path: '/' },
+  { id: 'work-tasks', domain: 'work', path: '/tasks' },
   { id: 'work-projects', domain: 'work', path: '/projects' },
   { id: 'work-notes', domain: 'work', path: '/notes' },
 ] as const satisfies readonly ProductSectionDefinition[];
@@ -78,6 +79,7 @@ export function productDomainAtPath(pathname: string): ProductDomainId | null {
 
 export function productSectionAtLocation(pathname: string, _search = ''): ProductSectionId | null {
   if (pathname === '/') return 'work-overview';
+  if (pathname === '/tasks') return 'work-tasks';
   if (isPath(pathname, '/projects')) return 'work-projects';
   if (isPath(pathname, '/notes')) return 'work-notes';
   if (isPath(pathname, '/automations')) return 'automation-triggers';
@@ -99,7 +101,7 @@ export function productDomainDefinition(id: ProductDomainId): ProductDomainDefin
 }
 
 export function showsProductSectionHeader(pathname: string): boolean {
-  if (isPath(pathname, '/chat') || isPath(pathname, '/tasks')) return false;
+  if (isPath(pathname, '/chat') || pathname.startsWith('/tasks/')) return false;
   const domain = productDomainAtPath(pathname);
   return domain === 'work' || domain === 'automation' || domain === 'capabilities';
 }

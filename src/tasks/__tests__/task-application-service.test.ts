@@ -1061,4 +1061,75 @@ describe('TaskApplicationService', () => {
       runId: created.runId, rating: 'not_helpful', reason: 'Wrong output', now: 123,
     })).toMatchObject({ runId: created.runId, rating: 'not_helpful', reason: 'Wrong output', createdAt: 123 });
   });
+
+  it('projects manual active tasks as active and cancelled open runs with a restart action', () => {
+    const service = new TaskApplicationService();
+    const created = service.create({
+      idempotencyKey: 'manual-active', title: 'Manual todo', priority: 'normal', contract,
+      dependencies: [], context: [], authorityGrants: [],
+      activation: { mode: 'capture', phase: 'ready' },
+    });
+    if (!created.ok) throw new Error('Expected task');
+    const moved = service.execute({
+      taskId: created.model.task.id,
+      expectedVersion: created.model.task.version,
+      idempotencyKey: 'move-active',
+      command: { type: 'move', phase: 'active' },
+    });
+    expect(moved).toMatchObject({
+      ok: true,
+      model: { presentation: { status: 'active', primaryAction: { type: 'start' } } },
+    });
+
+    const started = service.execute({
+      taskId: created.model.task.id,
+      expectedVersion: moved.ok ? moved.model.task.version : 1,
+      idempotencyKey: 'start-then-cancel',
+      command: { type: 'start', executor: { kind: 'agent', agentId: 'main' } },
+    });
+    if (!started.ok || !started.runId) throw new Error('Expected run');
+    const run = new TaskRunRepository().require(started.runId);
+    const cancelled = service.completeRun({
+      runId: run.id,
+      expectedRunVersion: run.version,
+      terminalMessage: 'Stopped by user',
+      receipt: {
+        status: 'cancelled',
+        summary: 'Stopped by user',
+        changes: [],
+        evidence: [],
+        verification: { status: 'unverified', checks: [] },
+        remainingWork: [],
+        needsUser: false,
+      },
+    });
+    expect(cancelled).toMatchObject({
+      ok: true,
+      model: { presentation: { status: 'cancelled', reason: 'Stopped by user', primaryAction: { type: 'start' } } },
+    });
+  });
+
+  it('cancels queued runs on close(cancelled) and rejects reopening directly into review without a result', () => {
+    const service = new TaskApplicationService();
+    const created = service.create({
+      idempotencyKey: 'queued-close', title: 'Queued close', priority: 'normal', contract,
+      dependencies: [], context: [], authorityGrants: [],
+      activation: { mode: 'start', executor: { kind: 'agent', agentId: 'main' } },
+    });
+    if (!created.ok || !created.runId) throw new Error('Expected queued run');
+    const closed = service.execute({
+      taskId: created.model.task.id,
+      expectedVersion: created.model.task.version,
+      idempotencyKey: 'close-queued',
+      command: { type: 'close', resolution: 'cancelled' },
+    });
+    expect(closed).toMatchObject({ ok: true, model: { task: { phase: 'closed', resolution: 'cancelled' }, operationalState: 'idle' } });
+    expect(new TaskRunRepository().require(created.runId).status).toBe('cancelled');
+    expect(service.execute({
+      taskId: created.model.task.id,
+      expectedVersion: closed.ok ? closed.model.task.version : 1,
+      idempotencyKey: 'reopen-invalid-review',
+      command: { type: 'reopen', phase: 'review' },
+    })).toMatchObject({ ok: false, reason: 'invalid_transition' });
+  });
 });

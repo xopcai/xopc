@@ -10,6 +10,7 @@ struct TaskStatusView: View {
     @State private var error: String?
     @State private var isWorking = false
     @State private var confirmsCancel = false
+    @State private var confirmsStopRun = false
 
     private var allowed: [String] {
         detail.allowedCommands ?? []
@@ -68,11 +69,36 @@ struct TaskStatusView: View {
                         Text("选择 Agent 后开始执行，将创建一次任务运行。")
                     }
                 }
+                if let pausedWaitID = detail.pausedWaitID, allowed.contains("resolve_wait") {
+                    Section {
+                        Button("继续任务") { Task { await apply("resolve_wait", waitID: pausedWaitID) } }
+                            .accessibilityIdentifier("task-resume")
+                    }
+                } else if detail.task.phase != "closed", allowed.contains("add_wait") {
+                    Section {
+                        Button("暂停任务") { Task { await apply("add_wait") } }
+                            .accessibilityIdentifier("task-pause")
+                    }
+                }
+                if let activeRun = detail.activeRootRun, activeRun.version != nil {
+                    Section {
+                        Button("停止当前执行", role: .destructive) { confirmsStopRun = true }
+                            .accessibilityIdentifier("task-stop-run")
+                    }
+                }
                 if allowed.contains("close") {
                     Section {
                         if detail.runs?.isEmpty == true {
                             Button("完成任务") { Task { await apply("close") } }
                                 .accessibilityIdentifier("task-complete")
+                        } else if detail.signoffResultID == nil, let block = TaskAcceptanceStatus.completionBlock(in: detail) {
+                            Text(block == "execution"
+                                ? "任务仍在执行或等待处理，请先完成当前运行或等待项。"
+                                : block == "acceptance"
+                                    ? "尚有未通过的验收项，请先完成逐项验收后再签收。"
+                                    : "当前任务结果尚未达到签收条件，请查看执行结果。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
                         Button("取消任务", role: .destructive) { confirmsCancel = true }
                             .accessibilityIdentifier("task-cancel")
@@ -96,6 +122,10 @@ struct TaskStatusView: View {
                 Button("取消任务", role: .destructive) { Task { await apply("close", resolution: "cancelled") } }
                 Button("保留任务", role: .cancel) {}
             } message: { Text("结束此任务，不标记为完成。之后可以重新打开。") }
+            .confirmationDialog("停止当前执行？", isPresented: $confirmsStopRun, titleVisibility: .visible) {
+                Button("停止当前执行", role: .destructive) { Task { await stopActiveRun() } }
+                Button("保留任务", role: .cancel) {}
+            } message: { Text("将请求中止当前正在执行的运行，不会关闭任务。") }
             .alert("操作失败", isPresented: Binding(get: { error != nil }, set: {
                 if !$0 {
                     error = nil
@@ -120,7 +150,8 @@ struct TaskStatusView: View {
     }
 
     @MainActor private func apply(_ command: String, phase: String? = nil,
-                                  resolution: String = "done", agentID: String? = nil, resultID: String? = nil) async
+                                  resolution: String = "done", agentID: String? = nil,
+                                  resultID: String? = nil, waitID: String? = nil) async
     {
         guard !isWorking, allowed.contains(command) || (command == "signoff" && resultID == detail.signoffResultID && resultID != nil)
         else { return }
@@ -128,8 +159,19 @@ struct TaskStatusView: View {
         defer { isWorking = false }
         do {
             try await GatewayClient(configuration: configuration).commandTask(
-                detail.task, command: command, phase: phase, resolution: resolution, agentID: agentID, resultID: resultID
+                detail.task, command: command, phase: phase, resolution: resolution,
+                agentID: agentID, resultID: resultID, waitID: waitID
             )
+            dismiss()
+        } catch { self.error = error.localizedDescription }
+    }
+
+    @MainActor private func stopActiveRun() async {
+        guard !isWorking, let activeRun = detail.activeRootRun, let version = activeRun.version else { return }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await GatewayClient(configuration: configuration).cancelTaskRun(runID: activeRun.id, expectedVersion: version)
             dismiss()
         } catch { self.error = error.localizedDescription }
     }

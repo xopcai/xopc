@@ -161,11 +161,18 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       keywords: ['telegram', 'pairing', 'approve', 'dm'],
     },
     {
+      id: 'route:tasks',
+      title: language === 'zh' ? '任务' : 'Tasks',
+      subtitle: language === 'zh' ? '查看、筛选和管理全部任务' : 'Browse, filter, and manage all tasks',
+      path: '/tasks',
+      keywords: ['task', 'tasks', 'todo', 'work', '任务', '待办', '验收'],
+    },
+    {
       id: 'route:automations',
       title: 'Automations',
       subtitle: 'Triggers, actions, and run history',
       path: '/automations',
-      keywords: ['automation', 'automations', 'schedule', 'tasks', 'history', 'scheduler'],
+      keywords: ['automation', 'automations', 'schedule', 'history', 'scheduler'],
     },
     {
       id: 'route:settings',

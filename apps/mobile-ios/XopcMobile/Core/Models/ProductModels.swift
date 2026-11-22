@@ -209,6 +209,9 @@ struct HomeAction: Decodable, Identifiable, Sendable {
         {
             return HomeActionCommand(kind: subjectKind, runId: runId, approvalId: nil, decision: nil)
         }
+        if type == "retry_task", let taskId, !taskId.isEmpty, let runId, !runId.isEmpty {
+            return HomeActionCommand(kind: "retry_task", runId: runId, approvalId: nil, decision: nil)
+        }
         return nil
     }
 }
@@ -229,9 +232,46 @@ struct TaskPage: Decodable, Sendable {
 struct TaskListItem: Decodable, Identifiable, Hashable, Sendable {
     let task: TaskRecord
     let operationalState: String
+    let presentation: TaskDetailPresentation?
     var id: String {
         task.id
     }
+
+    var displayStatus: String {
+        if let status = presentation?.status, !status.isEmpty {
+            return status
+        }
+        if operationalState != "idle" {
+            return operationalState
+        }
+        return task.resolution ?? task.phase
+    }
+
+    var needsUserAttention: Bool {
+        ["needsUser", "review", "blocked", "failed", "paused"].contains(displayStatus)
+    }
+}
+
+func taskPresentationLabel(_ status: String) -> String {
+    let key: String = switch status {
+    case "allocating": "正在分配"
+    case "captured", "backlog": "待规划"
+    case "ready": "等待开始"
+    case "queued": "排队中"
+    case "running", "active", "in_progress": "进行中"
+    case "verifying": "验证中"
+    case "waiting": "等待条件"
+    case "paused": "已暂停"
+    case "blocked": "被阻塞"
+    case "needsUser", "needs_user", "waiting_for_user": "需要你处理"
+    case "review": "等待验收"
+    case "failed": "执行失败"
+    case "cancelled": "已取消"
+    case "completed", "done": "已完成"
+    case "ended", "closed", "duplicate", "wont_do": "已结束"
+    default: status
+    }
+    return AppLocalization.resolve(LocalizedStringResource(stringLiteral: key))
 }
 
 struct TaskRecord: Decodable, Identifiable, Hashable, Sendable {
@@ -288,11 +328,12 @@ struct TaskAcceptanceTarget: Decodable, Sendable {
     let canSignOff: Bool
 }
 
-struct TaskDetailPresentation: Decodable, Sendable {
+struct TaskDetailPresentation: Decodable, Hashable, Sendable {
+    let status: String?
     let reason: String?
     let primaryAction: Action?
 
-    struct Action: Decodable, Sendable {
+    struct Action: Decodable, Hashable, Sendable {
         let type: String
         let resultId: String?
     }
@@ -316,6 +357,7 @@ struct TaskPhaseChange: Decodable, Sendable, Identifiable {
 
 struct TaskWait: Decodable, Sendable {
     let id: String
+    let kind: String?
     let status: String
 }
 
@@ -335,12 +377,25 @@ struct TaskRun: Decodable, Identifiable, Sendable {
     let id: String
     let status: String
     let attempt: Int
+    let version: Int?
     let conversationId: String?
     let queuedAt: Int64?
     let startedAt: Int64?
     let completedAt: Int64?
     let contractVersion: Int?
     let parentRunId: String?
+}
+
+extension TaskDetailEnvelope {
+    var pausedWaitID: String? {
+        waits?.first(where: { $0.status == "active" && $0.kind == "paused" })?.id
+    }
+
+    var activeRootRun: TaskRun? {
+        runs?.first(where: {
+            $0.parentRunId == nil && ["queued", "running", "waiting", "verifying"].contains($0.status)
+        })
+    }
 }
 
 struct TaskReceipt: Decodable, Identifiable, Sendable {

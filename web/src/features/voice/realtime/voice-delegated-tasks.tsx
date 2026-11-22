@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 import { useSessionContext } from '@/features/chat/context/use-session-context';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
+import { formatTaskRawStatus } from '@/features/tasks/task-status';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export function VoiceDelegatedTasks({ conversationId }: { conversationId: string }) {
@@ -20,7 +21,7 @@ export function VoiceDelegatedTasks({ conversationId }: { conversationId: string
         <span className="min-w-0 flex-1 truncate" title={task.latestUpdate?.body}>{task.title}
           {task.latestUpdate ? <span className="block truncate text-fg-subtle">{task.latestUpdate.body}</span> : null}
         </span>
-        <span className="shrink-0 text-fg-subtle">{task.runStatus ?? task.phase}</span>
+        <span className="shrink-0 text-fg-subtle">{formatTaskRawStatus(task.runStatus ?? task.phase, language)}</span>
       </Link>)}
     </div>
   </section>;

@@ -384,6 +384,39 @@ export class TaskApplicationService {
               || (actor.kind !== 'user' && (!reviews.allPassed(task) || waits.length > 0)))
             ? { ok: false, reason: 'blocked', model }
             : lifecycle('closed', input.command.resolution);
+          if (result.ok) {
+            const now = Date.now();
+            db.prepare(
+              `UPDATE task_allocations SET status = 'cancelled', lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+               WHERE task_id = ? AND status NOT IN ('assigned', 'cancelled')`,
+            ).run(now, task.id);
+            if (input.command.resolution !== 'done') {
+              const activeRun = this.#runs.getActiveRoot(task.id);
+              if (activeRun && (activeRun.status === 'queued' || (activeRun.status === 'waiting' && activeRun.startedAt === undefined))) {
+                const reason = resolveTaskLocale(task) === 'zh' ? '任务已关闭' : 'Task closed';
+                this.#runs.finalize({
+                  runId: activeRun.id,
+                  expectedVersion: activeRun.version,
+                  actor,
+                  terminalCode: 'task_closed',
+                  terminalMessage: reason,
+                  receipt: {
+                    status: 'cancelled',
+                    summary: reason,
+                    changes: [],
+                    evidence: [],
+                    verification: { status: 'unverified', checks: [] },
+                    remainingWork: [],
+                    needsUser: false,
+                  },
+                });
+              }
+            }
+            if (!this.#runs.getActiveRoot(task.id)) {
+              db.prepare(`UPDATE task_conversation_state SET status = 'idle', updated_at = ? WHERE task_id = ?`).run(now, task.id);
+            }
+            result = { ok: true, model: this.#projector.get(task.id)! };
+          }
           break;
         }
         case 'signoff': {
@@ -395,16 +428,32 @@ export class TaskApplicationService {
           }
           result = lifecycle('closed', 'done');
           if (result.ok) {
+            const now = Date.now();
             db.prepare('INSERT INTO task_signoffs (signoff_id, result_id, signed_by_json, signed_at) VALUES (?, ?, ?, ?)')
-              .run(randomUUID(), target.id, JSON.stringify(actor), Date.now());
+              .run(randomUUID(), target.id, JSON.stringify(actor), now);
+            db.prepare(
+              `UPDATE task_allocations SET status = 'cancelled', lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+               WHERE task_id = ? AND status NOT IN ('assigned', 'cancelled')`,
+            ).run(now, task.id);
+            if (!this.#runs.getActiveRoot(task.id)) {
+              db.prepare(`UPDATE task_conversation_state SET status = 'idle', updated_at = ? WHERE task_id = ?`).run(now, task.id);
+            }
+            result = { ok: true, model: this.#projector.get(task.id)! };
           }
           break;
         }
-        case 'reopen':
-          result = task.phase === 'closed'
-            ? lifecycle(input.command.phase)
-            : { ok: false, reason: 'invalid_transition', model };
+        case 'reopen': {
+          if (task.phase !== 'closed') {
+            result = { ok: false, reason: 'invalid_transition', model };
+            break;
+          }
+          if (input.command.phase === 'review' && !new TaskCriterionReviewRepository().target(task)) {
+            result = { ok: false, reason: 'invalid_transition', model };
+            break;
+          }
+          result = lifecycle(input.command.phase);
           break;
+        }
         case 'add_wait': {
           if (task.phase === 'closed' || input.command.wait.condition.type === 'run_decision') {
             result = { ok: false, reason: 'invalid_transition', model };

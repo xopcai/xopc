@@ -13,11 +13,16 @@ type Entry = {
   deliveryStatus?: string; createdAt: number;
 };
 
-export function TaskCollaborationPanel({ taskId }: { taskId: string }) {
+export function TaskCollaborationPanel({ taskId, closed = false, hasExecutionChat = false }: {
+  taskId: string;
+  closed?: boolean;
+  hasExecutionChat?: boolean;
+}) {
   const token = useGatewayStore((state) => state.conversationId);
   const language = useLocaleStore((state) => state.language);
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [composerExpanded, setComposerExpanded] = useState(false);
   const [sending, setSending] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [older, setOlder] = useState<Entry[]>([]);
@@ -91,23 +96,41 @@ export function TaskCollaborationPanel({ taskId }: { taskId: string }) {
         <div className="mt-1 min-w-0 text-fg" data-task-collaboration-body>
           <TaskExpandableContent content={entry.body} contentKey={`${taskId}:update:${entry.id}`} language={language} breaks previewHeight={120} />
         </div>
-        {entry.kind === 'question' && entry.authorKind === 'worker_agent' ? <button type="button"
-          className="mt-2 text-xs text-accent hover:underline" onClick={() => setReplyTo(entry.id)}>
+        {!closed && entry.kind === 'question' && entry.authorKind === 'worker_agent' ? <button type="button"
+          className="mt-2 text-xs text-accent hover:underline" onClick={() => { setReplyTo(entry.id); setComposerExpanded(true); }}>
           {language === 'zh' ? '回复问题' : 'Reply'}
         </button> : null}
       </div>)}
       {data && !entries.length ? <p className="text-xs text-fg-muted">{language === 'zh' ? '暂无进展留言' : 'No updates yet'}</p> : null}
     </div>
-    {replyTo ? <p className="mt-3 text-xs text-accent">{language === 'zh' ? '正在回复执行 Agent 的问题' : 'Replying to the worker'}
-      <button type="button" className="ml-2 underline" onClick={() => setReplyTo(null)}>{language === 'zh' ? '取消' : 'Cancel'}</button></p> : null}
-    <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={2}
-      aria-label={language === 'zh' ? '任务留言' : 'Task message'}
-      placeholder={language === 'zh' ? '给执行 Agent 留言' : 'Message the worker'}
-      className="mt-3 w-full resize-y rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
-    {error ? <p role="alert" className="mt-1 text-xs text-danger">{error}</p> : null}
-    <button type="button" disabled={!draft.trim() || sending} onClick={() => void submit()}
-      className="mt-2 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white disabled:opacity-50">
-      {sending ? (language === 'zh' ? '发送中' : 'Sending') : (language === 'zh' ? '发送' : 'Send')}
-    </button>
+    {closed ? (
+      <p className="mt-3 text-xs text-fg-muted">{language === 'zh' ? '任务已关闭，仅保留历史协作记录。' : 'Task is closed. Updates are read-only.'}</p>
+    ) : hasExecutionChat && !replyTo && !composerExpanded ? (
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-edge-subtle pt-3 text-xs text-fg-muted">
+        <span>{language === 'zh' ? '常规沟通请直接使用右侧执行对话。' : 'Use Execution chat on the right for regular follow-ups.'}</span>
+        <button type="button" className="text-accent hover:underline" onClick={() => setComposerExpanded(true)}>
+          {language === 'zh' ? '发送协作留言' : 'Send worker note'}
+        </button>
+      </div>
+    ) : <>
+      {replyTo ? <p className="mt-3 text-xs text-accent">{language === 'zh' ? '正在回复执行 Agent 的问题' : 'Replying to the worker'}
+        <button type="button" className="ml-2 underline" onClick={() => setReplyTo(null)}>{language === 'zh' ? '取消' : 'Cancel'}</button></p> : null}
+      <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={2}
+        aria-label={language === 'zh' ? '任务留言' : 'Task message'}
+        placeholder={language === 'zh' ? '给执行 Agent 留言' : 'Message the worker'}
+        className="mt-3 w-full resize-y rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
+      {error ? <p role="alert" className="mt-1 text-xs text-danger">{error}</p> : null}
+      <div className="mt-2 flex items-center gap-2">
+        <button type="button" disabled={!draft.trim() || sending} onClick={() => void submit()}
+          className="rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white disabled:opacity-50">
+          {sending ? (language === 'zh' ? '发送中' : 'Sending') : (language === 'zh' ? '发送' : 'Send')}
+        </button>
+        {hasExecutionChat && !replyTo ? (
+          <button type="button" className="rounded-lg px-2 py-1.5 text-xs text-fg-muted hover:bg-surface-hover" onClick={() => setComposerExpanded(false)}>
+            {language === 'zh' ? '收起' : 'Collapse'}
+          </button>
+        ) : null}
+      </div>
+    </>}
   </section>;
 }
