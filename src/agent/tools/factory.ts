@@ -893,6 +893,7 @@ export class AgentToolsFactory {
                 getSetupSceneService: this.deps.getSetupSceneService,
                 getCurrentConversationId: currentConversationId,
                 getCurrentAgentId: () => resolvedAgentId,
+                canConfigureFromConversation: productToolDeps.canConfigureFromConversation,
               })] : []),
               createPersonalAttentionTool({ getConversationId: () => this.deps.getCurrentContext()?.conversationId, getConfig: () => this.deps.getConfig?.() }),
             ] : []),

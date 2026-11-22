@@ -699,7 +699,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         .accessibilityLabel(label)
     }
 
-    var body: some View {
+    private var panelNavigation: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -803,36 +803,52 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                 Button(t("取消", "Cancel"), role: .cancel) {}
             } message: { action in Text(verbatim: action.confirmation ?? "") }
         }
-        .presentationDetents([capabilityCompactDetent, capabilityExpandedDetent, .large], selection: $drawerDetent)
-        .presentationContentInteraction(.scrolls)
-        .presentationDragIndicator(.visible)
-        .presentationBackground(theme.canvas)
-        .onDisappear {
-            requestRevision += 1
-            values.removeAll()
-            retainedValues.removeAll()
-        }
-        .task { await load() }
-        .onChange(of: scenePhase) {
-            guard scenePhase == .active, let action = panel?.pollAction else { return }
-            Task { await load(action, polling: true) }
-        }
-        .onChange(of: panel?.qrUrl) { qrFeedback = nil }
-        .onChange(of: panel?.copyable?.content) { copiedBlock = false }
-        .onChange(of: verifiedURL) { showQr = false }
-        .onChange(of: needsExpandedDrawer, initial: true) {
-            drawerDetent = needsExpandedDrawer ? capabilityExpandedDetent : capabilityCompactDetent
-        }
-        .task(id: (panel?.pollAction ?? "") + ":" + (panel?.flow ?? "")) {
-            guard let action = panel?.pollAction else { return }
-            for _ in 0 ..< 75 {
-                do { try await Task.sleep(for: .seconds(4)) } catch { return }
-                guard panel?.pollAction == action else { return }
-                await load(action, polling: true)
+    }
+
+    private var panelPresentation: some View {
+        panelNavigation
+            .presentationDetents([capabilityCompactDetent, capabilityExpandedDetent, .large], selection: $drawerDetent)
+            .presentationContentInteraction(.scrolls)
+            .presentationDragIndicator(.visible)
+            .presentationBackground(theme.canvas)
+            .onChange(of: panel?.qrUrl) { qrFeedback = nil }
+            .onChange(of: panel?.copyable?.content) { copiedBlock = false }
+            .onChange(of: verifiedURL) { showQr = false }
+            .onChange(of: needsExpandedDrawer, initial: true) {
+                drawerDetent = needsExpandedDrawer ? capabilityExpandedDetent : capabilityCompactDetent
             }
-            if panel?.pollAction == action {
-                errorMessage = t("等待时间过长，可以刷新状态或重新开始。", "This is taking longer than expected. Refresh or start again.")
+    }
+
+    private var pollIdentity: String {
+        (panel?.pollAction ?? "") + ":" + (panel?.flow ?? "")
+    }
+
+    var body: some View {
+        panelPresentation
+            .onDisappear {
+                requestRevision += 1
+                values.removeAll()
+                retainedValues.removeAll()
             }
+            .task { await load() }
+            .onChange(of: scenePhase) { refreshActiveSetup() }
+            .task(id: pollIdentity) { await pollSetupStatus() }
+    }
+
+    private func refreshActiveSetup() {
+        guard scenePhase == .active, let action = panel?.pollAction else { return }
+        Task { await load(action, polling: true) }
+    }
+
+    private func pollSetupStatus() async {
+        guard let action = panel?.pollAction else { return }
+        for _ in 0 ..< 75 {
+            do { try await Task.sleep(for: .seconds(4)) } catch { return }
+            guard panel?.pollAction == action else { return }
+            await load(action, polling: true)
+        }
+        if panel?.pollAction == action {
+            errorMessage = t("等待时间过长，可以刷新状态或重新开始。", "This is taking longer than expected. Refresh or start again.")
         }
     }
 

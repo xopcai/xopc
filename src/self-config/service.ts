@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 
 import type { AgentDefaults } from '../agent-config/index.js';
@@ -7,6 +8,7 @@ import { ConfigSchema, type Config } from '../config/schema.js';
 import { listGlobalDefaults, prepareUpdateGlobalDefaults, updateGlobalDefaults } from '../gateway/global-defaults-admin.js';
 import { getPersonalAgent } from '../personal-agent/repository.js';
 import { patchPersonalProfile, PersonalAppearanceSchema } from '../personal-agent/service.js';
+import { isRecord } from '../utils/is-record.js';
 import { voiceCallPreferencesPatchSchema } from '@xopcai/realtime-protocol/voice';
 import {
   deleteAvatarForTarget,
@@ -138,7 +140,7 @@ const ChannelPolicyPatchSchema = z.strictObject({
   streamMode: z.enum(['off', 'partial', 'block']).optional(),
 }).refine((value) => Object.keys(value).length > 0, 'Provide at least one channel policy field.');
 
-function containsSecretKey(value: unknown): string | null {
+function containsSecretKey(value: unknown, allowCompactionLimit = false): string | null {
   if (!value || typeof value !== 'object') return null;
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -148,11 +150,28 @@ function containsSecretKey(value: unknown): string | null {
     return null;
   }
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-    if (SECRET_KEY_PATTERN.test(key)) return key;
+    if (SECRET_KEY_PATTERN.test(key) && !(allowCompactionLimit && key === 'keepRecentTokens')) return key;
     const nested = containsSecretKey(entry);
     if (nested) return `${key}.${nested}`;
   }
   return null;
+}
+
+function revertConfigChange(before: unknown, after: unknown, current: unknown, path: string): unknown {
+  if (isDeepStrictEqual(before, after)) return current;
+  if (isDeepStrictEqual(after, current)) return before;
+  const previous = isRecord(before) ? before : undefined;
+  if ((before === undefined || previous) && isRecord(after)
+    && isRecord(current) && previous?.kind === after.kind && after.kind === current.kind) {
+    const restored = { ...current };
+    for (const key of new Set([...Object.keys(previous ?? {}), ...Object.keys(after)])) {
+      const value = revertConfigChange(previous?.[key], after[key], current[key], path ? `${path}.${key}` : key);
+      if (value === undefined) delete restored[key];
+      else Object.defineProperty(restored, key, { value, enumerable: true, writable: true, configurable: true });
+    }
+    return restored;
+  }
+  throw new Error(`Configuration changed since this receipt was issued (${path}); rollback was skipped.`);
 }
 
 function normalizeModelRoute(input: z.infer<typeof ModelRouteInputSchema>): { primary: string; fallbacks: string[] } {
@@ -190,6 +209,7 @@ export interface SelfConfigServiceDeps {
 export class SelfConfigService {
   private readonly receipts = new Map<string, StoredReceipt>();
   private readonly order: string[] = [];
+  private readonly rollingBack = new Set<string>();
 
   constructor(private readonly deps: SelfConfigServiceDeps) {}
 
@@ -317,7 +337,7 @@ export class SelfConfigService {
     ownerId?: string;
   }): Promise<SelfConfigMutationResult> {
     const rawTarget = input.target.trim();
-    const secretKey = containsSecretKey(input.patch);
+    const secretKey = containsSecretKey(input.patch, rawTarget === 'compaction');
     const tier3Match = Object.entries(TIER3_TARGETS).find(
       ([prefix]) => rawTarget === prefix || rawTarget.startsWith(`${prefix}.`),
     );
@@ -350,6 +370,7 @@ export class SelfConfigService {
     const tier: 1 | 2 = TIER1_TARGETS.has(target) ? 1 : 2;
     if (tier === 2 && !input.dryRun && input.confirm !== true) {
       const preview = await this.patch({ ...input, dryRun: true });
+      if (!preview.ok) return preview;
       return {
         ...preview,
         ok: false,
@@ -470,7 +491,7 @@ export class SelfConfigService {
       const restored = await patchPersonalProfile(
         host,
         ownerId,
-        latest.revision,
+        updated.revision,
         previousSnapshot.displayName,
         previousSnapshot.appearance,
         previousSnapshot.voicePreference,
@@ -561,8 +582,11 @@ export class SelfConfigService {
       createdAt: Date.now(),
       canRollback: true,
     };
+    const appliedModels = listGlobalDefaults().defaults.models;
     this.recordReceipt(receipt, async () => {
-      const restored = updateGlobalDefaults({ defaults: previousDefaults, scope: 'models' });
+      const latest = listGlobalDefaults().defaults;
+      const models = revertConfigChange(previousDefaults.models, appliedModels, latest.models, 'models') as AgentDefaults['models'];
+      const restored = updateGlobalDefaults({ defaults: { ...latest, models }, scope: 'models' });
       if (restored.ok === false) throw new Error(restored.error);
       this.deps.onAgentCatalogMutate?.();
       this.deps.emitEvent?.('config.reload', { section: 'models', source: 'self-config-rollback' });
@@ -817,18 +841,7 @@ export class SelfConfigService {
     this.recordReceipt(receipt, async () => {
       const latest = this.deps.getConfig();
       if (!latest || !this.deps.saveConfig) throw new Error('Host configuration is unavailable');
-      const restored = structuredClone(latest);
-      if (target === 'appearance.activity_detail') restored.gateway = structuredClone(expected.gateway);
-      else if (target === 'voice.tts') restored.messages = structuredClone(expected.messages);
-      else if (target === 'voice.stt') restored.tools = { ...restored.tools, media: structuredClone(expected.tools?.media) };
-      else if (target === 'compaction') restored.userContext = {
-        ...restored.userContext,
-        contextPlanning: { ...restored.userContext.contextPlanning, compaction: structuredClone(expected.userContext.contextPlanning.compaction) },
-      };
-      else if (target === 'web_search') restored.tools = { ...restored.tools, web: structuredClone(expected.tools?.web) };
-      else if (target === 'browser') restored.browser = structuredClone(expected.browser);
-      else if (target === 'computer') restored.computer = structuredClone(expected.computer);
-      else if (target === 'channels.telegram' || target === 'channels.weixin') restored.channels = structuredClone(expected.channels);
+      const restored = ConfigSchema.parse(revertConfigChange(expected, validated.data, latest, ''));
       const res = await this.deps.saveConfig(restored, latest);
       if (!res.saved) throw new Error(res.error ?? 'Rollback save failed');
       this.deps.emitEvent?.('config.reload', { section: target, source: 'self-config-rollback' });
@@ -848,6 +861,10 @@ export class SelfConfigService {
     if (!entry.receipt.canRollback) {
       return { ok: false, error: 'This change cannot be rolled back automatically.' };
     }
+    if (this.rollingBack.has(changeId)) {
+      return { ok: false, error: 'This change is already being rolled back.' };
+    }
+    this.rollingBack.add(changeId);
     try {
       await entry.rollback();
       entry.receipt.rolledBackAt = Date.now();
@@ -855,6 +872,8 @@ export class SelfConfigService {
       return { ok: true, receipt: { ...entry.receipt } };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      this.rollingBack.delete(changeId);
     }
   }
 }

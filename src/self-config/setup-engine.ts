@@ -69,8 +69,11 @@ const ChannelsSecretSchema = z.strictObject({
 
 const ComputerConfirmSchema = z.strictObject({
   enabled: z.boolean().default(true),
-  permissionsConfirmed: z.boolean().default(true),
-});
+  permissionsConfirmed: z.boolean().optional(),
+}).refine(
+  (value) => !value.enabled || value.permissionsConfirmed === true,
+  'Confirm the required permissions before enabling Computer Use.',
+);
 
 export interface UnifiedSetupSceneDeps {
   getConfig: () => Config | undefined;
@@ -170,6 +173,10 @@ export class UnifiedSetupSceneService {
     if (dryRun) {
       const info = await this.inspectScene(scene, context);
       return { ...info, dryRun: true, message: 'No changes made.' };
+    }
+
+    if (command === 'start' && !context.canConfigure) {
+      throw new Error('SETUP_INTERACTIVE_REQUIRED: Continue in an authorized interactive conversation.');
     }
 
     if (command === 'start') {
@@ -351,12 +358,12 @@ export class UnifiedSetupSceneService {
         next.messages = {
           ...next.messages,
           tts: {
-            enabled: true,
-            provider: parsed.provider,
             trigger: prevTts?.trigger ?? 'off',
             maxTextLength: prevTts?.maxTextLength ?? 512,
             timeoutMs: prevTts?.timeoutMs ?? 60_000,
             ...(prevTts ?? {}),
+            enabled: true,
+            provider: parsed.provider,
             providers: {
               ...(prevTts?.providers ?? {}),
               [parsed.provider]: {
@@ -376,10 +383,10 @@ export class UnifiedSetupSceneService {
           media: {
             ...(next.tools?.media ?? {}),
             audio: {
-              enabled: true,
-              provider: parsed.provider,
               fallback: prevStt?.fallback ?? { enabled: false, order: [] },
               ...(prevStt ?? {}),
+              enabled: true,
+              provider: parsed.provider,
               providers: {
                 ...(prevStt?.providers ?? {}),
                 [parsed.provider]: {

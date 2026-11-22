@@ -1,6 +1,7 @@
 import type { XopcWorkspaceItem, XopcMobileTaskDetail, XopcMobileTaskReview,
   XopcMobileTaskRun, XopcMobileTaskReceipt, XopcMobileTaskCheck, XopcMobileTaskEvidence,
-  XopcMobileTaskWait, XopcTaskAcceptanceCheck, XopcTaskCheckMutation, XopcTaskCommand, XopcTaskPatch, XopcMobileTaskDetailResult } from '../model/workspace';
+  XopcMobileTaskWait, XopcTaskAcceptanceCheck, XopcTaskCheckMutation, XopcTaskCommand, XopcTaskPatch,
+  XopcTaskWaitInput, XopcMobileTaskDetailResult } from '../model/workspace';
 
 export function taskCriterionState(info: XopcMobileTaskDetail, criterion: string, index: number): string {
   const id = info.acceptanceChecks?.[index]?.id;
@@ -95,7 +96,9 @@ export function taskCommand(item: XopcWorkspaceItem, action: string, agentId: st
   } else if (kind === 'close') {
     command.resolution = action === 'cancel_task' ? 'cancelled' : 'done';
   } else if (kind === 'add_wait') {
-    command.wait = { kind: 'paused', reason: 'Paused from mobile', condition: {} };
+    const condition: Record<string, string> = {};
+    const wait: XopcTaskWaitInput = { kind: 'paused', reason: 'Paused from mobile', condition };
+    command.wait = wait;
   } else if (kind === 'resolve_wait') {
     const waitId = taskPausedWaitId(item);
     if (!waitId) throw new Error('INVALID_ACTION');

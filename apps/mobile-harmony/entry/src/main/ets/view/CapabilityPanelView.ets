@@ -381,7 +381,7 @@ export struct XopcCapabilityPanelView {
         ForEach(this.panelStepsList(), (step: string, index: number) => {
           Row({ space: 8 }) {
             if (this.panelStepsList().length > 1) {
-              Text((index + 1) + '.').fontSize(13).fontWeight(FontWeight.SemiBold).fontColor(this.colors.accent)
+              Text((index + 1) + '.').fontSize(13).fontWeight(600).fontColor(this.colors.accent)
             }
             Text(step).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1)
           }.width('100%').alignItems(VerticalAlign.Top)

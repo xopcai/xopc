@@ -167,6 +167,43 @@ describe('self-configuration engine (pillars 1-5)', () => {
     });
   });
 
+  it('rolls back only the fields changed by a receipt and rejects a superseded value', async () => {
+    const { selfConfig } = createServices();
+    const patchSearch = (maxResults: number) => selfConfig.patch({
+      target: 'web_search', patch: { maxResults }, confirm: true,
+    });
+
+    const first = await patchSearch(7);
+    const second = await patchSearch(9);
+    expect(await selfConfig.rollback(first.receipt!.changeId)).toMatchObject({ ok: false });
+    expect(config.tools?.web?.search?.maxResults).toBe(9);
+
+    config.tools!.web!.search!.providers = [{ type: 'tavily', apiKey: 'rotated-key', disabled: false }];
+    expect(await selfConfig.rollback(second.receipt!.changeId)).toMatchObject({ ok: true });
+    expect(config.tools?.web?.search).toMatchObject({
+      maxResults: 7, providers: [{ apiKey: 'rotated-key' }],
+    });
+  });
+
+  it('rejects an avatar receipt after a newer avatar change', async () => {
+    const { selfConfig } = createServices();
+    writeFileSync(join(tempDir, 'avatar.png'), TINY_PNG);
+    const original = await selfConfig.setAvatar({ target: 'user', source: 'avatar.png' });
+    const removed = await selfConfig.deleteAvatar({ target: 'user' });
+
+    expect(await selfConfig.rollback(original.receipt!.changeId))
+      .toMatchObject({ ok: false, error: expect.stringContaining('Avatar changed') });
+    expect(await selfConfig.rollback(removed.receipt!.changeId)).toMatchObject({ ok: true });
+    expect(await selfConfig.rollback(original.receipt!.changeId)).toMatchObject({ ok: true });
+  });
+
+  it('accepts context token limits as ordinary compaction preferences', async () => {
+    const { selfConfig } = createServices();
+    expect(await selfConfig.patch({ target: 'compaction', patch: { keepRecentTokens: 24000 } }))
+      .toMatchObject({ ok: true, tier: 1, receipt: { target: 'compaction' } });
+    expect(config.userContext.contextPlanning.compaction.keepRecentTokens).toBe(24000);
+  });
+
   it('drives unified setup scenes with resumeObjective and secure Tier-3 input submission', async () => {
     const { setupScenes, saveProviderApiKey } = createServices();
     const started = await setupScenes.command(
@@ -196,8 +233,32 @@ describe('self-configuration engine (pillars 1-5)', () => {
       { conversationId: 'conv-comp', agentId: 'main', canConfigure: true },
     );
     const compId = (compStart.setup as { id: string }).id;
-    await setupScenes.submitSecureInput('computer', compId, 'conv-comp', { enabled: true });
+    await expect(setupScenes.submitSecureInput('computer', compId, 'conv-comp', { enabled: true }))
+      .rejects.toThrow();
+    expect(config.computer.enabled).toBe(false);
+    await setupScenes.submitSecureInput('computer', compId, 'conv-comp', { enabled: true, permissionsConfirmed: true });
     expect(config.computer.enabled).toBe(true);
+  });
+
+  it('enables voice services and switches their selected providers from an existing configuration', async () => {
+    config = ConfigSchema.parse({
+      messages: { tts: { enabled: false, provider: 'edge', trigger: 'tagged' } },
+      tools: { media: { audio: { enabled: false, provider: 'openai' } } },
+    });
+    const { setupScenes } = createServices();
+    const context = { conversationId: 'conv-voice', agentId: 'main', canConfigure: true };
+    const started = await setupScenes.command('voice', 'start', {}, context);
+    const setupId = (started.setup as { id: string }).id;
+
+    await setupScenes.submitSecureInput('voice', setupId, context.conversationId, {
+      capability: 'tts', provider: 'openai', apiKey: 'voice-test',
+    });
+    await setupScenes.submitSecureInput('voice', setupId, context.conversationId, {
+      capability: 'stt', provider: 'dashscope', apiKey: 'stt-test',
+    });
+
+    expect(config.messages?.tts).toMatchObject({ enabled: true, provider: 'openai', trigger: 'tagged' });
+    expect(config.tools?.media?.audio).toMatchObject({ enabled: true, provider: 'dashscope' });
   });
 
   it('exposes settings inspect/patch/set_avatar/rollback and setup scenes through xopc_use and personal_self_config with config_change delivery', async () => {
@@ -236,6 +297,7 @@ describe('self-configuration engine (pillars 1-5)', () => {
       getSetupSceneService: () => setupScenes,
       getCurrentConversationId: () => 'conv-personal',
       getCurrentAgentId: () => 'personal',
+      canConfigureFromConversation: () => true,
     });
     const personalInspect = await personalTool.execute('c3', { command: 'inspect', domain: 'profile' }, AbortSignal.timeout(5000));
     expect(personalInspect.details).toMatchObject({ ok: true, domain: 'profile' });
@@ -250,5 +312,26 @@ describe('self-configuration engine (pillars 1-5)', () => {
     const hint = buildSetupRecoveryHint({ scene: 'voice', capability: 'tts', reason: 'TTS disabled' });
     expect(hint.kind).toBe('setup_required');
     expect(hint.nextAction).toContain('mode: "setup"');
+  });
+
+  it('requires an authorized conversation for agent-initiated settings changes', async () => {
+    const { selfConfig, setupScenes, saveConfig } = createServices();
+    const deps = {
+      getCurrentConversationId: () => 'conv-untrusted',
+      getCurrentAgentId: () => 'personal',
+      getSelfConfigService: () => selfConfig,
+      getSetupSceneService: () => setupScenes,
+      canConfigureFromConversation: () => false,
+    };
+    const xopcUse = createXopcUseTool(deps);
+    const personal = createPersonalSelfConfigTool(deps);
+    const change = await xopcUse.execute('c1', {
+      mode: 'settings', command: 'patch',
+      args: { target: 'appearance.activity_detail', patch: { activityDetailDefault: 'off' } },
+    });
+    expect(change.content[0]).toMatchObject({ text: expect.stringContaining('authorized interactive conversation') });
+    expect((await personal.execute('c2', { command: 'start_setup', scene: 'voice' })).details)
+      .toMatchObject({ ok: false, error: expect.stringContaining('SETUP_INTERACTIVE_REQUIRED') });
+    expect(saveConfig).not.toHaveBeenCalled();
   });
 });

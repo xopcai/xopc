@@ -1132,4 +1132,21 @@ describe('TaskApplicationService', () => {
       command: { type: 'reopen', phase: 'review' },
     })).toMatchObject({ ok: false, reason: 'invalid_transition' });
   });
+
+  it('updates an existing run receipt without deleting linked memory learning records', () => {
+    const { run, runs } = createRunningTask('receipt-upsert');
+    const finished = runs.finalize({ runId: run.id, expectedVersion: run.version, receipt })!;
+    const db = getSqliteDatabase();
+    db.prepare('INSERT INTO memory_learning_receipts (run_id, learned_at) VALUES (?, ?)').run(run.id, Date.now());
+    db.prepare("UPDATE task_runs SET status = 'waiting' WHERE run_id = ?").run(run.id);
+
+    expect(runs.finalize({
+      runId: run.id,
+      expectedVersion: finished.version,
+      receipt: { ...receipt, status: 'cancelled', summary: 'Superseded' },
+    })?.status).toBe('cancelled');
+    expect(runs.getReceipt(run.id)?.summary).toBe('Superseded');
+    expect(db.prepare('SELECT run_id FROM memory_learning_receipts WHERE run_id = ?').get(run.id))
+      .toMatchObject({ run_id: run.id });
+  });
 });

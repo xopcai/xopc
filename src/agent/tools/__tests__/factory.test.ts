@@ -200,14 +200,14 @@ describe('AgentToolsFactory', () => {
   it('exposes bounded local personal reads without network or directory scanning tools', () => {
     const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,
       dispatchTaskRuns: () => {}, getSessionStore: () => ({}) as never,
+      getSelfConfigService: () => undefined,
       getPrimaryModel: () => ({ provider: 'test', id: 'fast', input: ['text'] }) as never });
     const conversationId = createConversation({ agentId: personalAgentId('local-owner'), customData: { personalAgent: true } }).key;
     const tools = factory.createCoreTools({ conversationId, toolAllowlist: PERSONAL_MAIN_TOOL_IDS });
     expect(tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['read_file', 'read_media', 'session_search', 'personal_read', 'user_context_read', 'knowledge_read']));
     expect(tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['user_context_search', 'user_context_get', 'knowledge_search', 'knowledge_get']));
     expect(PERSONAL_MAIN_TOOL_IDS).toContain('personal_attention');
-    expect(PERSONAL_MAIN_TOOL_IDS).toHaveLength(17);
-    expect(tools.map(tool => tool.name)).toContain('personal_result');
+    expect(tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['personal_result', 'personal_self_config']));
     expect(tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining(['clarify', 'web_search', 'web_fetch', 'find', 'grep', 'list_dir', 'exec_command']));
     expect(tools.find(tool => tool.name === 'session_search')?.description).toContain('No model or network calls');
   });

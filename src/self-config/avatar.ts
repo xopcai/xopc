@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve as pathResolve } from 'node:path';
 
@@ -37,6 +38,8 @@ export interface AvatarRollbackSnapshot {
   target: SelfConfigAvatarTarget;
   agentId?: string;
   hadBinary: boolean;
+  appliedBinaryDigest: string | null;
+  appliedAvatarValue?: string;
   previousBinary?: { base64: string; mimeType: SupportedImageMime };
   previousProfileAvatar?: string;
   previousPersonalAppearance?: PersonalAppearance;
@@ -62,6 +65,21 @@ export interface AvatarMutationOutcome {
 }
 
 const VALID_PERSONAL_PRESETS = new Set<PersonalAppearance>(['loopi', 'loopi-curious', 'loopi-care']);
+
+function avatarDigest(buffer: Buffer): string {
+  return createHash('sha256').update(buffer).digest('hex');
+}
+
+function assertAvatarUnchanged(
+  snapshot: AvatarRollbackSnapshot,
+  avatar: { ok: true; data: { buffer: Buffer } } | { ok: false },
+  value?: string,
+): void {
+  const digest = avatar.ok ? avatarDigest(avatar.data.buffer) : null;
+  if (digest !== snapshot.appliedBinaryDigest || value !== snapshot.appliedAvatarValue) {
+    throw new Error('Avatar changed since this receipt was issued; rollback was skipped.');
+  }
+}
 
 export function detectAvatarImageMime(buffer: Uint8Array): SupportedImageMime | null {
   if (
@@ -185,6 +203,7 @@ export async function setAvatarFromSource(
       settingsSection: 'appearance',
       rollback: {
         target: 'user',
+        appliedBinaryDigest: avatarDigest(Buffer.from(resolved.base64, 'base64')),
         hadBinary: previous.ok,
         ...(previous.ok
           ? {
@@ -229,6 +248,8 @@ export async function setAvatarFromSource(
         rollback: {
           target: 'personal_agent',
           agentId: record.agentId,
+          appliedBinaryDigest: avatarDigest(Buffer.from(resolved.base64, 'base64')),
+          appliedAvatarValue: 'custom',
           hadBinary: previousBinary.ok,
           ...(previousBinary.ok
             ? {
@@ -266,6 +287,8 @@ export async function setAvatarFromSource(
       rollback: {
         target: 'personal_agent',
         agentId: record.agentId,
+        appliedBinaryDigest: previousBinary.ok ? avatarDigest(previousBinary.data.buffer) : null,
+        appliedAvatarValue: preset,
         hadBinary: previousBinary.ok,
         ...(previousBinary.ok
           ? {
@@ -295,10 +318,12 @@ export async function setAvatarFromSource(
 
   let nextAvatarValue: string;
   let afterLabel: string;
+  let appliedBinaryDigest = previousBinary.ok ? avatarDigest(previousBinary.data.buffer) : null;
   if (input.source) {
     const resolved = await resolveAvatarBinarySource(input.source, deps.workspace);
     const written = await writeAgentAvatarFromBase64(agentId, resolved.base64, resolved.mimeType);
     if (written.ok === false) throw new Error(written.error);
+    appliedBinaryDigest = avatarDigest(Buffer.from(resolved.base64, 'base64'));
     nextAvatarValue = 'xopc:custom';
     afterLabel = `custom (${resolved.mimeType})`;
   } else if (input.preset?.trim()) {
@@ -333,6 +358,8 @@ export async function setAvatarFromSource(
     rollback: {
       target: 'agent',
       agentId,
+      appliedBinaryDigest,
+      appliedAvatarValue: nextAvatarValue,
       hadBinary: previousBinary.ok,
       ...(previousBinary.ok
         ? {
@@ -365,6 +392,7 @@ export async function deleteAvatarForTarget(
       settingsSection: 'appearance',
       rollback: {
         target: 'user',
+        appliedBinaryDigest: null,
         hadBinary: previous.ok,
         ...(previous.ok
           ? {
@@ -406,6 +434,8 @@ export async function deleteAvatarForTarget(
       rollback: {
         target: 'personal_agent',
         agentId: record.agentId,
+        appliedBinaryDigest: null,
+        appliedAvatarValue: 'loopi',
         hadBinary: previousBinary.ok,
         ...(previousBinary.ok
           ? {
@@ -451,6 +481,7 @@ export async function deleteAvatarForTarget(
     rollback: {
       target: 'agent',
       agentId,
+      appliedBinaryDigest: null,
       hadBinary: previousBinary.ok,
       ...(previousBinary.ok
         ? {
@@ -471,6 +502,7 @@ export async function restoreAvatarFromSnapshot(
 ): Promise<void> {
   const ownerId = deps.ownerId ?? 'local-owner';
   if (snapshot.target === 'user') {
+    assertAvatarUnchanged(snapshot, await readUserAvatar());
     if (snapshot.hadBinary && snapshot.previousBinary) {
       const res = await writeUserAvatar(snapshot.previousBinary.base64, snapshot.previousBinary.mimeType);
       if (res.ok === false) throw new Error(res.error);
@@ -484,9 +516,11 @@ export async function restoreAvatarFromSnapshot(
 
   if (snapshot.target === 'personal_agent') {
     const record = getPersonalAgent(ownerId);
-    if (!record || record.state !== 'ready') throw new Error('Personal AI is unavailable');
+    if (!record || record.state !== 'ready' || record.agentId !== snapshot.agentId) throw new Error('Personal AI is unavailable');
+    assertAvatarUnchanged(snapshot, await readAgentAvatarFile(record.agentId), record.appearance);
     if (snapshot.hadBinary && snapshot.previousBinary) {
-      await writeAgentAvatarFromBase64(record.agentId, snapshot.previousBinary.base64, snapshot.previousBinary.mimeType);
+      const restored = await writeAgentAvatarFromBase64(record.agentId, snapshot.previousBinary.base64, snapshot.previousBinary.mimeType);
+      if (restored.ok === false) throw new Error(restored.error);
     } else {
       await deleteAgentAvatarFile(record.agentId);
     }
@@ -507,8 +541,10 @@ export async function restoreAvatarFromSnapshot(
   if (!agentId) throw new Error('Missing agentId for avatar rollback');
   const current = new AgentCatalogRepository().get(agentId);
   if (!current) throw new Error(`Agent not found: ${agentId}`);
+  assertAvatarUnchanged(snapshot, await readAgentAvatarFile(agentId), current.profile?.avatar);
   if (snapshot.hadBinary && snapshot.previousBinary) {
-    await writeAgentAvatarFromBase64(agentId, snapshot.previousBinary.base64, snapshot.previousBinary.mimeType);
+    const restored = await writeAgentAvatarFromBase64(agentId, snapshot.previousBinary.base64, snapshot.previousBinary.mimeType);
+    if (restored.ok === false) throw new Error(restored.error);
   } else {
     await deleteAgentAvatarFile(agentId);
   }

@@ -507,11 +507,18 @@ export class TaskRunRepository {
         return { ...check, checkId: index >= 0 ? taskCheckId(run.taskId, run.contractVersion, index) : undefined };
       });
       db.prepare(
-        `INSERT OR REPLACE INTO task_run_receipts (
+        `INSERT INTO task_run_receipts (
           run_id, status, summary, changes_json, evidence_json, verification_json,
           remaining_work_json, next_action, needs_user, completion_verdict,
           failure_json, judgment_json, context_trace_id, finalized_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(run_id) DO UPDATE SET
+          status = excluded.status, summary = excluded.summary, changes_json = excluded.changes_json,
+          evidence_json = excluded.evidence_json, verification_json = excluded.verification_json,
+          remaining_work_json = excluded.remaining_work_json, next_action = excluded.next_action,
+          needs_user = excluded.needs_user, completion_verdict = excluded.completion_verdict,
+          failure_json = excluded.failure_json, judgment_json = excluded.judgment_json,
+          context_trace_id = excluded.context_trace_id, finalized_at = excluded.finalized_at`,
       ).run(
         input.runId,
         input.receipt.status,

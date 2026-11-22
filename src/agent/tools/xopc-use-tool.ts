@@ -1525,6 +1525,10 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
         if (deps.authorizeCapability && !await deps.authorizeCapability(`xopc.settings.${command}`, args)) {
           return errorText('Self-configuration access denied', details);
         }
+        if (['patch', 'set_avatar', 'delete_avatar', 'rollback'].includes(command)
+          && (!dryRun || command === 'rollback') && deps.canConfigureFromConversation?.() !== true) {
+          return errorText('Continue in an authorized interactive conversation to change settings.', details);
+        }
         const conversationId = deps.getCurrentConversationId?.();
         const agentId = deps.getCurrentAgentId?.();
         try {

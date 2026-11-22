@@ -75,6 +75,7 @@ export interface PersonalSelfConfigToolDeps {
   getSetupSceneService?: () => UnifiedSetupSceneService | undefined;
   getCurrentConversationId?: () => string | undefined;
   getCurrentAgentId?: () => string | undefined;
+  canConfigureFromConversation?: () => boolean;
 }
 
 export function deliveryForSelfConfigReceipt(
@@ -136,8 +137,13 @@ export function createPersonalSelfConfigTool(deps: PersonalSelfConfigToolDeps): 
       }
       const conversationId = deps.getCurrentConversationId?.();
       const agentId = deps.getCurrentAgentId?.() ?? 'main';
+      const canConfigure = deps.canConfigureFromConversation?.() === true;
 
       try {
+        if (['update_profile', 'set_avatar', 'delete_avatar', 'rollback'].includes(input.command)
+          && (!input.dryRun || input.command === 'rollback') && !canConfigure) {
+          return errorResult('Continue in an authorized interactive conversation to change settings.');
+        }
         if (input.command === 'inspect') {
           const result = await selfConfig.inspect((input.domain ?? 'all') as SelfConfigDomain);
           return okResult(result as unknown as Record<string, unknown>);
@@ -218,7 +224,7 @@ export function createPersonalSelfConfigTool(deps: PersonalSelfConfigToolDeps): 
               ...(input.setupId ? { setupId: input.setupId } : {}),
               ...(input.resumeObjective ? { resumeObjective: input.resumeObjective } : {}),
             },
-            { conversationId, agentId, canConfigure: true },
+            { conversationId, agentId, canConfigure },
             input.dryRun === true,
           );
           return okResult(res);

@@ -1,6 +1,7 @@
 import { listAgentEntries, normalizeAgentId } from '../agent/agent-scope.js';
 import { resolveConversationId, sanitizeSegment } from '../routing/session-key.js';
 import type { SessionIndex } from '../session/index.js';
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { createLogger } from '../utils/logger.js';
 
 import {
@@ -43,9 +44,10 @@ export class TaskHandoffService {
     const pending = (previous ? previous.catch(() => undefined) : Promise.resolve())
       .then(() => this.performHandoff(input));
     this.#inflight.set(input.taskId, pending);
-    void pending.finally(() => {
+    const release = () => {
       if (this.#inflight.get(input.taskId) === pending) this.#inflight.delete(input.taskId);
-    });
+    };
+    void pending.then(release, release);
     return pending;
   }
 
@@ -143,37 +145,40 @@ export class TaskHandoffService {
 
     let completed: ReturnType<TaskConversationRepository['completeHandoff']>;
     try {
-      completed = conversations.completeHandoff({
-        taskId: task.id,
-        expectedTaskVersion: input.expectedVersion,
-        toConversationId: conversationId,
-        toAgentId,
-        idempotencyKey: input.idempotencyKey,
-        payload,
+      completed = runSqliteWriteTransaction(() => {
+        const handoff = conversations.completeHandoff({
+          taskId: task.id,
+          expectedTaskVersion: input.expectedVersion,
+          toConversationId: conversationId,
+          toAgentId,
+          idempotencyKey: input.idempotencyKey,
+          payload,
+        });
+        const previousRun = runs.getActiveRoot(task.id);
+        if (previousRun && (previousRun.status === 'queued' || previousRun.status === 'waiting')) {
+          runs.finalize({
+            runId: previousRun.id,
+            expectedVersion: previousRun.version,
+            terminalCode: 'handoff_superseded',
+            terminalMessage: 'Superseded by executor handoff',
+            receipt: {
+              status: 'cancelled',
+              summary: 'Superseded by executor handoff',
+              changes: [],
+              evidence: [],
+              verification: { status: 'unverified', checks: [] },
+              remainingWork: [],
+              needsUser: false,
+            },
+          });
+        }
+        return handoff;
       });
     } catch (error) {
       await this.deps.sessionIndex.delete(conversationId);
       throw error;
     }
     const oldConversationId = completed.snapshot.fromConversationId;
-    const queuedOrWaiting = runs.getActiveRoot(task.id);
-    if (queuedOrWaiting && (queuedOrWaiting.status === 'queued' || queuedOrWaiting.status === 'waiting')) {
-      runs.finalize({
-        runId: queuedOrWaiting.id,
-        expectedVersion: queuedOrWaiting.version,
-        terminalCode: 'handoff_superseded',
-        terminalMessage: 'Superseded by executor handoff',
-        receipt: {
-          status: 'cancelled',
-          summary: 'Superseded by executor handoff',
-          changes: [],
-          evidence: [],
-          verification: { status: 'unverified', checks: [] },
-          remainingWork: [],
-          needsUser: false,
-        },
-      });
-    }
     await this.abortPreviousSession(oldConversationId);
 
     return {

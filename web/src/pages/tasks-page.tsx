@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, Clock, FolderKanban, Plus, Search, Target, X
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import useSWR from 'swr';
+import useSWRInfinite from 'swr/infinite';
 
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,6 +27,8 @@ import { showActivity } from '@/stores/activity-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 type TaskStageFilter = 'open' | 'needs_user' | 'in_progress' | 'review' | 'ready' | 'closed' | 'all';
+
+const TASK_PAGE_SIZE = 100;
 
 const PRIORITY_TONES: Record<TaskPriority, string> = {
   low: 'text-fg-subtle',
@@ -66,16 +69,20 @@ export function TasksPage() {
   const [newCriteriaText, setNewCriteriaText] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const { data, isLoading, error, mutate } = useSWR(
-    ['global-tasks', search.trim(), projectId, priority],
-    () => listTasks({
-      ...(search.trim() ? { search: search.trim() } : {}),
-      ...(projectId ? { projectId } : {}),
-      ...(priority ? { priority } : {}),
-      limit: 200,
-      order: 'recent',
+  const { data, isLoading, isValidating, error, mutate, size, setSize } = useSWRInfinite(
+    (index, previous: Awaited<ReturnType<typeof listTasks>> | null) => {
+      const offset = index * TASK_PAGE_SIZE;
+      if (previous && offset >= previous.total) return null;
+      return ['global-tasks', search.trim(), projectId, priority, offset] as const;
+    },
+    ([, query, project, taskPriority, offset]) => listTasks({
+      ...(query ? { search: query } : {}),
+      ...(project ? { projectId: project } : {}),
+      ...(taskPriority ? { priority: taskPriority } : {}),
+      limit: TASK_PAGE_SIZE,
+      offset,
     }),
-    { revalidateOnFocus: true },
+    { revalidateAll: true },
   );
 
   const { data: projectsData } = useSWR('global-tasks-projects', () => fetchProjects({ limit: 100 }));
@@ -107,7 +114,12 @@ export function TasksPage() {
     [projectsData?.items],
   );
 
-  const allItems = data?.items ?? [];
+  const allItems = useMemo(() => {
+    const items = data?.flatMap((page) => page.items) ?? [];
+    return [...new Map(items.map((item) => [item.task.id, item])).values()];
+  }, [data]);
+  const total = data?.[0]?.total ?? 0;
+  const hasMore = (data?.length ?? 0) * TASK_PAGE_SIZE < total;
 
   const counts = useMemo(() => {
     const map: Record<TaskStageFilter, number> = {
@@ -250,12 +262,12 @@ export function TasksPage() {
               )}
             >
               <span>{tab.label}</span>
-              <span className={cn(
+              {!hasMore && <span className={cn(
                 'rounded-full px-1.5 py-0.5 text-[11px]',
                 active ? 'bg-surface-panel text-fg' : 'bg-surface-inset text-fg-subtle',
               )}>
                 {count}
-              </span>
+              </span>}
             </button>
           );
         })}
@@ -324,7 +336,9 @@ export function TasksPage() {
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-edge py-14 text-center">
             <Target className="size-8 text-fg-subtle" aria-hidden />
             <p className="mt-3 text-sm font-medium text-fg">
-              {search.trim()
+              {hasMore
+                ? (zh ? '已加载的任务中没有匹配项' : 'No matching tasks in the loaded results')
+                : search.trim()
                 ? (zh ? '没有匹配的任务' : 'No matching tasks')
                 : (zh ? '当前筛选下暂无任务' : 'No tasks in this view')}
             </p>
@@ -387,6 +401,18 @@ export function TasksPage() {
               );
             })}
           </ul>
+        )}
+        {!error && hasMore && (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              disabled={isValidating}
+              onClick={() => void setSize(size + 1)}
+              className="rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50"
+            >
+              {zh ? `加载更多（${allItems.length}/${total}）` : `Load more (${allItems.length}/${total})`}
+            </button>
+          </div>
         )}
       </div>
 
