@@ -60,7 +60,10 @@ internal class VoiceRecordingStore(context: Context) :
     ORDER BY recorded_at DESC
   """.trimIndent(), arrayOf(gateway)).use { cursor ->
     buildList {
-      while (cursor.moveToNext()) add(PendingVoiceNote(cursor.getString(0), cursor.getLong(1), cursor.getString(2), segmented = true))
+      while (cursor.moveToNext()) {
+        val noteId = if (cursor.isNull(2)) null else cursor.getString(2)
+        add(PendingVoiceNote(cursor.getString(0), cursor.getLong(1), noteId, segmented = true))
+      }
     }
   }
 
@@ -98,7 +101,7 @@ internal class VoiceRecordingStore(context: Context) :
 
   fun discussionId(gateway: String, id: String): String? = readableDatabase.rawQuery(
     "SELECT discussion_id FROM recordings WHERE gateway = ? AND id = ?", arrayOf(gateway, id)
-  ).use { if (it.moveToFirst()) it.getString(0) else null }
+  ).use { if (it.moveToFirst() && !it.isNull(0)) it.getString(0) else null }
 
   fun link(gateway: String, id: String, discussionId: String, noteId: String) =
     update(gateway, id, ContentValues().apply {

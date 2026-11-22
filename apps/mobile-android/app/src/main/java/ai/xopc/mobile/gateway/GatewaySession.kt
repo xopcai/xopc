@@ -51,6 +51,9 @@ class GatewaySession(
   private var clockOffsetMs: Long = 0
 
   @Synchronized
+  internal fun nowMs(): Long = (System.currentTimeMillis() + clockOffsetMs).coerceAtLeast(0L)
+
+  @Synchronized
   fun voiceAuth(): VoiceGatewayAuth {
     val current = profile ?: throw IllegalStateException("NOT_PAIRED")
     val expected = scopedGatewayId.get()

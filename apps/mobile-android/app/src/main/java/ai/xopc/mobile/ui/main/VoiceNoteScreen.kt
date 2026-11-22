@@ -144,14 +144,15 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
       catch (_: Exception) { delay(3_000) }
     }
   }
-  LaunchedEffect(recorder.phase) {
-    if (recorder.phase == "ready") {
+  LaunchedEffect(recorder.phase, confirmClose) {
+    if (recorder.phase == "ready" && !confirmClose) {
       live?.commit()
       val saved = draft ?: return@LaunchedEffect
       pending = listOf(saved) + pending.filter { it.id != saved.id }
       recorder.reset()
       submit(saved)
     } else if (recorder.phase == "error") {
+      confirmClose = false
       live = null
       revision++
     }
@@ -162,9 +163,9 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
       PageBackButton("voice-note-back", close, enabled = !busy && !finishing)
       Text(stringResource(R.string.voice_note_title), style = MaterialTheme.typography.headlineSmall)
     }
-    if (confirmClose) AlertDialog(onDismissRequest = { confirmClose = false },
+    if (confirmClose) AlertDialog(onDismissRequest = { if (!busy && !finishing) confirmClose = false },
       title = { Text(stringResource(R.string.voice_note_discard)) },
-      confirmButton = { TextButton(onClick = {
+      confirmButton = { TextButton(enabled = !busy && !finishing, onClick = {
         confirmClose = false
         scope.launch {
           val current = draft
@@ -181,7 +182,7 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
           } finally { busy = false }
         }
       }) { Text(stringResource(R.string.progress_confirm)) } },
-      dismissButton = { TextButton(onClick = { confirmClose = false }) { Text(stringResource(R.string.progress_cancel)) } })
+      dismissButton = { TextButton(enabled = !busy && !finishing, onClick = { confirmClose = false }) { Text(stringResource(R.string.progress_cancel)) } })
     if (issue != 0) Text(stringResource(issue), color = MaterialTheme.colorScheme.error,
       modifier = Modifier.testTag("voice-note-error"))
     if (busy || finishing) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("voice-note-saving"))
@@ -230,7 +231,9 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
       }
       settings?.acknowledged == true -> {
         Text(stringResource(R.string.voice_note_record_limit), style = MaterialTheme.typography.bodySmall)
-        if (recorder.phase == "error") Text(stringResource(R.string.voice_record_error))
+        if (recorder.phase == "error") {
+          Text(stringResource(if (recorder.saveFailed) R.string.voice_note_save_error else R.string.voice_record_error))
+        }
         Button(enabled = !busy, onClick = {
           if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start()
           else permission.launch(Manifest.permission.RECORD_AUDIO)

@@ -77,7 +77,8 @@ internal class DiscussionLiveTranscription(
       } ?: return false
       val events = Channel<String>(64)
       val request = runInterruptible(Dispatchers.IO) {
-        Request.Builder().url(opened.origin.trimEnd('/').replaceFirst("https://", "wss://") + opened.websocketPath)
+        val url = PairingProtocol.secureOrigin(opened.origin).replaceFirst("https://", "wss://") + opened.websocketPath
+        Request.Builder().url(url)
           .header("X-Xopc-Proof", DeviceRequestProof.connection(opened.origin, opened.websocketPath, opened.ticket))
           .build()
       }
@@ -90,6 +91,9 @@ internal class DiscussionLiveTranscription(
         }
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
           webSocket.close(code, null)
+          events.close()
+        }
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
           events.close()
         }
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -178,6 +182,6 @@ internal class DiscussionLiveTranscription(
     JSONObject().put("sessionId", call.sessionId).put("ticket", call.ticket)
 
   private companion object {
-    val client = OkHttpClient.Builder().pingInterval(15, TimeUnit.SECONDS).build()
+    val client = OkHttpClient.Builder().followRedirects(false).pingInterval(15, TimeUnit.SECONDS).build()
   }
 }

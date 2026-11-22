@@ -553,8 +553,8 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
         const setup = await setupInstalledMcp(key, server.displayName ?? key, server, Boolean(server.oauth));
         if (setup) return setup;
       }
+      if (command?.flow) throw new McpDraftError(409, 'The connection setup is unavailable. Reopen the connection.');
       if (command?.action === 'save') {
-        if (command.flow) throw new McpDraftError(409, 'The connection setup is unavailable. Reopen the connection.');
         await withGatewayConfigWriteLock(service, async () => {
           const before = service.currentConfig;
           const next = structuredClone(before);
@@ -635,8 +635,8 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
           const setup = await setupInstalledMcp(instance.instanceId, instance.displayName, remote, oauth, guide);
           if (setup) return setup;
         }
+        if (command?.flow) throw new McpDraftError(409, 'The connection setup is unavailable. Reopen the connection.');
         if (command?.action === 'save') {
-          if (command.flow) throw new McpDraftError(409, 'The connection setup is unavailable. Reopen the connection.');
           await withGatewayConfigWriteLock(service, async () => {
             const previous = service.currentConfig;
             const next = structuredClone(previous);

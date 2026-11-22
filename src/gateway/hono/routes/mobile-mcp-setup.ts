@@ -415,9 +415,10 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
     const previousKeyHeader = flow.method === 'apiKey' ? Object.keys(flow.candidate?.server.headers ?? {})[0] : undefined;
     return {
       flow: flow.id,
-      ...reviewSummary(flow.candidate, t),
+      ...connectionSummary(flow, t),
       message: message ?? t('填写服务商提供的凭据。', 'Enter the credentials provided by the service.'),
       steps: [
+        ...(flow.installed?.guide?.steps ?? []),
         t('按服务商文档选择对应的认证方式并填写凭据。', 'Choose the authentication method specified by the provider and enter your credentials.'),
         t('凭据会加密保存在 Gateway，点击「检查连接」验证后即可添加。', 'Credentials are encrypted on the Gateway. Tap Check connection to verify before adding.'),
       ],
@@ -540,7 +541,7 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
     }
     if (result.state === 'oauth_required' || result.state === 'token_required' || result.state === 'auth_unknown' ||
         (flow.candidate?.server.url && result.errorCode === 'access_denied')) {
-      const hasCredentials = Object.keys(flow.candidate?.server.headers ?? {}).length > 0;
+      const hasCredentials = Boolean(flow.candidate?.server.auth) || Object.keys(flow.candidate?.server.headers ?? {}).length > 0;
       if (isManagedSetup(flow)) return { flow: flow.id, ...connectionSummary(flow, t),
         message: t('连接需要有效凭据。请返回连接设置检查服务商配置。', 'The connection requires valid credentials. Return to connection settings and check the provider configuration.'),
         actions: [backAction(t)] };
@@ -625,6 +626,7 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
     if (installed && !command.flow && action === 'configure-mcp') {
       const flow = newFlow(owner, t);
       flow.installed = installed;
+      flow.reviewed = true;
       flow.candidate = { id: installed.serverId, name: installed.name,
         server: { ...installed.server, displayName: installed.name } };
       flow.method = installed.method;

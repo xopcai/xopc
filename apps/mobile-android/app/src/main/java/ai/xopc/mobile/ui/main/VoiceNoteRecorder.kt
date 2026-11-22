@@ -48,6 +48,8 @@ internal class VoicePcmChunks {
 internal class VoiceNoteRecorder(private val scope: CoroutineScope) {
   var phase by mutableStateOf("idle")
     private set
+  var saveFailed by mutableStateOf(false)
+    private set
   @Volatile private var durationBytes = 0
   val elapsedSeconds get() = durationBytes / (VOICE_BYTES_PER_MS * 1000)
   private val command = MutableStateFlow("idle")
@@ -56,6 +58,8 @@ internal class VoiceNoteRecorder(private val scope: CoroutineScope) {
   @SuppressLint("MissingPermission")
   fun start(store: suspend (Int, ByteArray) -> Unit, stream: (ByteArray) -> Unit) {
     check(job?.isActive != true)
+    ai.xopc.mobile.playback.MusicPlayback.pause()
+    saveFailed = false
     phase = "recording"
     command.value = phase
     durationBytes = 0
@@ -92,15 +96,28 @@ internal class VoiceNoteRecorder(private val scope: CoroutineScope) {
               val wav = chunks.append(frame)
               durationBytes = chunks.bytes
               stream(frame)
-              if (wav != null) store(sequence++, wav)
+              if (wav != null) {
+                try {
+                  store(sequence, wav)
+                  sequence++
+                } catch (error: Exception) {
+                  saveFailed = true
+                  throw error
+                }
+              }
             }
           } finally {
             try {
               if (mic.recordingState == AudioRecord.RECORDSTATE_RECORDING) mic.stop()
             } finally {
               mic.release()
-              if (command.value != "discarding") chunks.takeTail()?.let { tail ->
-                withContext(NonCancellable) { store(sequence, tail) }
+              if (!saveFailed && command.value != "discarding") chunks.takeTail()?.let { tail ->
+                try {
+                  withContext(NonCancellable) { store(sequence, tail) }
+                } catch (error: Exception) {
+                  saveFailed = true
+                  throw error
+                }
               }
             }
           }
@@ -119,7 +136,10 @@ internal class VoiceNoteRecorder(private val scope: CoroutineScope) {
   }
 
   fun resumeRecording() {
-    if (phase == "paused") transitionTo("recording")
+    if (phase == "paused") {
+      ai.xopc.mobile.playback.MusicPlayback.pause()
+      transitionTo("recording")
+    }
   }
 
   fun stopRecording() {

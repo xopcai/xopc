@@ -1191,8 +1191,8 @@ class GatewayViewModel internal constructor(application: Application, private va
     uri: Uri, replacementName: String?): ManagedFile = runInterruptible(Dispatchers.IO) {
     val (name, mime, bytes) = readProductFile(uri)
     val uploadName = replacementName?.trim() ?: name.trim().map {
-      if (it.isISOControl() || it == '"') '_' else it
-    }.joinToString("")
+      if (it.isISOControl() || it in "/\\\"") '_' else it
+    }.joinToString("").takeIf { it.isNotBlank() && it != "." && it != ".." } ?: "attachment"
     session.withActiveGateway(gatewayId) { fileRepository.upload(spaceId, directory, uploadName, mime, bytes) }
   }
 

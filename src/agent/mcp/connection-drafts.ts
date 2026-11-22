@@ -90,7 +90,14 @@ export class McpConnectionDrafts {
       server.xopcPublicOnly = true;
     }
     for (const internal of ['xopcPlugin', 'xopcOAuthCredentialId', 'xopcConnectionCheck']) delete server[internal];
-    const endpoint = installed && server.url ? await resolveConnectorSecretReferences(server.url) : undefined;
+    let endpoint: unknown;
+    if (installed && server.url) {
+      try {
+        endpoint = await resolveConnectorSecretReferences(server.url);
+      } catch {
+        throw new McpDraftError(400, 'Invalid MCP endpoint credential.');
+      }
+    }
     if (installed && typeof endpoint !== 'string') throw new McpDraftError(409, 'The MCP endpoint credential is missing.');
     const workspace = getWorkspacePath(current) || process.cwd();
     const config = structuredClone(current);
@@ -207,7 +214,12 @@ export class McpConnectionDrafts {
         }
       }
       if (server.url) {
-        const resolvedUrl = await resolveConnectorSecretReferences(server.url);
+        let resolvedUrl: unknown;
+        try {
+          resolvedUrl = await resolveConnectorSecretReferences(server.url);
+        } catch {
+          throw new McpDraftError(400, 'Invalid MCP endpoint credential.');
+        }
         if (typeof resolvedUrl !== 'string') throw new McpDraftError(409, 'The MCP endpoint credential is missing.');
         if (draft.endpoint && draft.endpoint !== resolvedUrl) throw new McpDraftError(409, 'The MCP endpoint changed after verification. Check the connection again.');
         credentialUrl = resolvedUrl;

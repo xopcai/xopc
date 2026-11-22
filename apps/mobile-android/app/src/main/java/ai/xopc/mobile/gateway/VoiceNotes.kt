@@ -16,7 +16,8 @@ internal data class VoiceNoteSegment(val index: Int, val startedAt: Long, val te
 internal data class VoiceNoteDetail(val id: String, val noteId: String, val title: String, val status: String,
   val audioSaved: Boolean, val failureStage: String?, val job: String?, val transcript: String,
   val segments: List<VoiceNoteSegment>, val summary: String, val keyPoints: List<String>,
-  val durationMs: Long = 0, val localPending: Boolean = false) {
+  val durationMs: Long = 0, val localPending: Boolean = false, val audioDeleted: Boolean = false) {
+  val settled get() = audioSaved || audioDeleted || status == "cancelled"
   val processing get() = job in setOf("queued", "running") || status in setOf("stopping", "sealing", "organizing")
   val canRetry get() = !processing && (status == "needs_attention" || job == "failed" || status == "recording" && localPending)
 }
@@ -60,9 +61,13 @@ internal class VoiceNotesAccess(context: Context, private val gateway: GatewaySe
     scoped(gatewayId) {
       segmented.discussionId(gatewayId, draft.id)?.let { id ->
         requireVoiceId(id)
-        gateway.request("/api/discussions/$id/cancel", "POST", "{}")
+        try {
+          gateway.request("/api/discussions/$id/cancel", "POST", "{}")
+        } catch (error: GatewayHttpException) {
+          if (error.status != 404) throw error
+        }
       }
-      segmented.delete(gatewayId, draft.id)
+      forget(gatewayId, draft)
     }
   }
 
@@ -107,7 +112,7 @@ internal class VoiceNotesAccess(context: Context, private val gateway: GatewaySe
     scoped(gatewayId) {
       val created = openRecording(gatewayId, draft)
       when {
-        created.audioSaved -> {
+        created.settled -> {
           forget(gatewayId, draft)
           created
         }
@@ -149,12 +154,12 @@ internal class VoiceNotesAccess(context: Context, private val gateway: GatewaySe
     }
     require(detail.noteId == noteId)
     val pending = (segmented.list(gatewayId) + legacyPending(gatewayId)).firstOrNull { it.noteId == noteId }
-    if (pending != null && detail.audioSaved) forget(gatewayId, pending)
-    detail.copy(localPending = pending != null && !detail.audioSaved)
+    if (pending != null && detail.settled) forget(gatewayId, pending)
+    detail.copy(localPending = pending != null && !detail.settled)
   }
 
   override suspend fun retry(gatewayId: String, detail: VoiceNoteDetail): VoiceNoteDetail {
-    val saved = if (!detail.audioSaved) pending(gatewayId).firstOrNull { it.noteId == detail.noteId } else null
+    val saved = if (!detail.settled) pending(gatewayId).firstOrNull { it.noteId == detail.noteId } else null
     return if (saved != null) submit(gatewayId, saved) else scoped(gatewayId) { resume(detail) }
   }
 
@@ -166,8 +171,9 @@ internal class VoiceNotesAccess(context: Context, private val gateway: GatewaySe
   private fun openRecording(gatewayId: String, draft: PendingVoiceNote): VoiceNoteDetail {
     val consent = loadSettings()
     check(consent.acknowledged) { "DISCUSSION_CONSENT_REQUIRED" }
+    val recordedAt = minOf(draft.recordedAt, gateway.nowMs()).coerceAtLeast(0L)
     val created = parseVoiceNote(JSONObject(gateway.request("/api/discussions", "POST", JSONObject()
-      .put("clientRequestId", draft.id).put("recordedAt", draft.recordedAt).put("source", "mobile")
+      .put("clientRequestId", draft.id).put("recordedAt", recordedAt).put("source", "mobile")
       .put("consentPolicyVersion", consent.version).toString())))
     if (draft.segmented) segmented.link(gatewayId, draft.id, created.id, created.noteId)
     else records.write(recordKey(gatewayId, draft.id), created.noteId)
@@ -227,15 +233,16 @@ internal fun parseVoiceNote(root: JSONObject): VoiceNoteDetail {
   require(noteId == discussion.getString("noteId"))
   val transcript = root.getJSONObject("transcript")
   val organization = root.optJSONObject("organization")?.optJSONObject("organization")
+  val audioDeleted = !discussion.isNull("audioDeletedAt")
   return VoiceNoteDetail(id, noteId, note.optString("title", ""), discussion.getString("status"),
-    discussion.optional("audioAttachmentId") != null && discussion.isNull("audioDeletedAt"),
+    discussion.optional("audioAttachmentId") != null && !audioDeleted,
     discussion.optional("failureStage"), root.optJSONObject("recordingJob")?.optional("state"),
     transcript.optString("text", ""), transcript.optJSONArray("segments").objects().mapNotNull { item ->
       val text = item.optional("displayText") ?: item.optional("rawText") ?: return@mapNotNull null
       VoiceNoteSegment(item.getInt("sequence"), item.optLong("startedAtMs"), text, item.optional("speakerLabel"))
     }, organization?.optString("summary", "").orEmpty(),
     organization?.optJSONArray("keyPoints")?.let { values -> (0 until values.length()).map { values.getString(it) } }
-      .orEmpty(), discussion.optLong("durationMs"))
+      .orEmpty(), discussion.optLong("durationMs"), audioDeleted = audioDeleted)
 }
 
 private fun JSONObject.optional(key: String): String? = (opt(key) as? String)?.takeIf { it.isNotBlank() }

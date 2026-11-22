@@ -421,14 +421,21 @@ it('serves only category metadata to a signed mobile device through the authenti
       id: 'name', label: 'Name', type: 'text', value: 'Mobile Expert',
     });
     const connection = panel('connections', 'mcp:calendar');
+    config.mcp!.servers!.calendar.xopcPrivateNetwork = true;
     expect(await (await signed(connection)).text()).not.toMatch(/private-secret|calendar\.example/);
     expect((await (await signed(connection)).json()).payload.chatPrompt).toBeUndefined();
+    vi.mocked(probeMcpConnection).mockResolvedValueOnce({ state: 'token_required' });
+    const rejectedCalendarText = await (await signed(connection, 'POST', { action: 'configure-mcp' })).text();
+    expect(rejectedCalendarText).not.toMatch(/private-secret|calendar\.example/);
+    const rejectedCalendar = JSON.parse(rejectedCalendarText).payload;
+    expect((await signed(connection, 'POST', { action: 'edit', flow: rejectedCalendar.flow, revision: rejectedCalendar.revision })).status).toBe(200);
     const checkedCalendar = (await (await signed(connection, 'POST', { action: 'configure-mcp' })).json()).payload;
     expect(checkedCalendar).toMatchObject({ tone: 'success' });
     expect((await signed(connection, 'POST', { action: 'save', flow: checkedCalendar.flow, revision: checkedCalendar.revision })).status).toBe(200);
     expect((await (await signed(connection)).json()).payload.chatPrompt).toBe('Use “calendar” to help me with:');
     expect((await signed(connection, 'POST', { action: 'save', values: { enabled: 'false' } })).status).toBe(200);
     expect(config.mcp?.servers?.calendar?.enabled).toBe(false);
+    expect((await signed(connection, 'POST', { action: 'status', flow: checkedCalendar.flow, revision: checkedCalendar.revision })).status).toBe(409);
     expect((await (await signed(connection)).json()).payload.chatPrompt).toBeUndefined();
     expect((await (await signed(panel('connections', 'mcp:server:setup'))).json()).payload.fields)
       .toContainEqual(expect.objectContaining({ id: 'enabled', value: 'false' }));

@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { ConfigSchema, type Config } from '../../../config/schema.js';
+import { CredentialResolver } from '../../../auth/credentials.js';
+import { createMobileMcpSetup } from '../../../gateway/hono/routes/mobile-mcp-setup.js';
 import { McpConnectionDrafts } from '../connection-drafts.js';
 import * as credentialStores from '../credential-store.js';
 import { createNativeMcpCredentials } from '../credential-store.js';
@@ -207,4 +209,43 @@ it('does not return tool discovery results after the draft has been cancelled', 
   catalog.discoverMcpTools.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
   const pending = drafts.tools(owner, draft.id); drafts.remove(owner, draft.id); finish([]);
   await expect(pending).rejects.toMatchObject({ status: 404 });
+});
+
+it('verifies installed private-network MCP servers without leaking their URL on auth prompts and rejects invalid endpoint secrets', async () => {
+  vi.stubEnv('XOPC_STATE_DIR', root);
+  const setup = createMobileMcpSetup(drafts, () => ({ allowStdio: false, workspace: '/fixture-workspace' }),
+    (principal, draftId, enable) => drafts.commit(principal, draftId, enable));
+  const t = (_zh: string, en: string) => en;
+  live.mcp!.servers!.docs = {
+    url: 'https://intranet.example.internal/mcp?key=private-secret',
+    xopcPrivateNetwork: true,
+    headers: { Authorization: 'Bearer rejected-secret' },
+  };
+  const target = {
+    id: 'mcp:docs', serverId: 'docs', name: 'Intranet Docs',
+    server: live.mcp!.servers!.docs, method: 'auto' as const,
+  };
+  connection.probeMcpConnection.mockResolvedValueOnce({ state: 'token_required' });
+  const authPanel = await setup(owner, t, { action: 'configure-mcp', values: {} }, target);
+  expect(JSON.stringify(authPanel)).not.toMatch(/private-secret|intranet\.example\.internal/);
+  expect(authPanel).toMatchObject({ headline: 'Intranet Docs' });
+  await setup(owner, t, { action: 'edit', flow: authPanel.flow, revision: authPanel.revision, values: {} }, target);
+
+  const verifiedPanel = await setup(owner, t, { action: 'configure-mcp', values: {} }, target);
+  expect(verifiedPanel).toMatchObject({ tone: 'success', headline: 'Intranet Docs' });
+  expect(JSON.stringify(verifiedPanel)).not.toMatch(/private-secret|intranet\.example\.internal/);
+
+  const resolver = new CredentialResolver();
+  await resolver.saveApiKey('connector-bad-endpoint', 'https://evil.example.com/mcp');
+  live.mcp!.servers!.managed = {
+    url: {
+      xopcSecretRef: {
+        provider: 'connector-bad-endpoint',
+        fieldKey: 'endpoint',
+        urlPolicy: { domains: ['allowed.example.com'], pathPrefixes: ['/mcp'] },
+      },
+    },
+  };
+  await expect(drafts.createInstalled(owner, 'managed', live.mcp!.servers!.managed, {}))
+    .rejects.toMatchObject({ status: 400 });
 });

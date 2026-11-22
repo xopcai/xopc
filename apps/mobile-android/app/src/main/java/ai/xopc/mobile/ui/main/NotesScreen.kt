@@ -226,6 +226,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       do {
         val current = access.detail(gatewayId, id)
         if (current != null || discussion == null) discussion = current
+        if (current != null && openedVoice?.noteId == id) openedVoice = current
         voiceLookupDone = true
         voiceError = false
         if (discussion?.processing != true) break
@@ -532,7 +533,11 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           voiceBusy = true
           voiceError = false
           try {
-            if (note.canRetry) discussion = voiceNotes.retry(voiceScope, note)
+            if (note.canRetry) {
+              val updated = voiceNotes.retry(voiceScope, note)
+              discussion = updated
+              if (openedVoice?.noteId == updated.noteId) openedVoice = updated
+            }
             voiceRevision++
           } catch (error: kotlinx.coroutines.CancellationException) { throw error }
           catch (_: Exception) { voiceError = true }
