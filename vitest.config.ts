@@ -57,6 +57,7 @@ export default defineConfig({
           include: [
             'electron/computer/**/*.{test,spec}.{ts,tsx}',
             'electron/browser/**/*.{test,spec}.{ts,tsx}',
+            'electron/screenshot/**/*.{test,spec}.{ts,tsx}',
             'electron/__tests__/gateway-process*.test.ts',
             'electron/__tests__/desktop-gateway*.test.ts',
             'electron/__tests__/desktop-screenshot.test.ts',

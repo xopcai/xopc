@@ -7,6 +7,8 @@ export const DESKTOP_PACKAGE_PATHS = [
   'out/main/index.js', 'out/main/main.js',
   'out/preload/index.cjs',
   'out/preload/computer-preview.cjs', 'out/preload/computer-preview.html',
+  'out/preload/screenshot-overlay.cjs', 'out/preload/screenshot-overlay.html',
+  'out/preload/screenshot-pin.cjs', 'out/preload/screenshot-pin.html',
   'out/server/index.js', 'out/server/gateway.js', 'out/server/result-extraction.js', 'out/server/codemode-worker.js',
   'out/server/runtime-files.json',
   'out/server/schema.sql', 'out/server/workspace-templates/AGENTS.md',

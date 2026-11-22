@@ -449,6 +449,52 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
   platform: process.platform as "darwin" | "win32" | "linux",
+  screenshot: ['darwin', 'win32', 'linux'].includes(process.platform) ? {
+    start: (options?: { hideWindow?: boolean }) =>
+      ipcRenderer.invoke('screenshot:start', options) as Promise<{ ok: boolean; reason?: string }>,
+    getPreferences: () =>
+      ipcRenderer.invoke('screenshot:get-prefs') as Promise<{ hideMainWindow: boolean }>,
+    setPreferences: (patch: { hideMainWindow?: boolean }) =>
+      ipcRenderer.invoke('screenshot:set-prefs', patch) as Promise<{ hideMainWindow: boolean }>,
+    getHistory: () =>
+      ipcRenderer.invoke('screenshot:get-history') as Promise<Array<{
+        id: string;
+        createdAt: number;
+        width: number;
+        height: number;
+        action: 'copy' | 'save' | 'pin' | 'chat' | 'note';
+        previewDataUrl: string;
+      }>>,
+    takePendingDeliveries: () =>
+      ipcRenderer.invoke('screenshot:take-pending-deliveries') as Promise<Array<{
+        id: string;
+        createdAt: number;
+        pngBase64: string;
+        fileName: string;
+        width: number;
+        height: number;
+        prompt?: string;
+        targetMode: 'chat' | 'note';
+      }>>,
+    ackDelivery: (id: string) =>
+      ipcRenderer.invoke('screenshot:ack-delivery', id) as Promise<{ ok: true }>,
+    onDeliverToChat: (
+      callback: (payload: {
+        id: string;
+        createdAt: number;
+        pngBase64: string;
+        fileName: string;
+        width: number;
+        height: number;
+        prompt?: string;
+        targetMode: 'chat' | 'note';
+      }) => void,
+    ) => {
+      const handler = (_event: unknown, payload: never) => callback(payload);
+      ipcRenderer.on('screenshot:deliver-to-chat', handler);
+      return () => ipcRenderer.removeListener('screenshot:deliver-to-chat', handler);
+    },
+  } : undefined,
   screenshotShortcut: ['darwin', 'win32', 'linux'].includes(process.platform) ? {
     get: () => ipcRenderer.invoke('screenshot-shortcut:get'),
     setRecording: (active: boolean) => ipcRenderer.invoke('screenshot-shortcut:record', active),

@@ -304,15 +304,20 @@ export function KeyboardShortcutsSettingsPanel() {
   const modifier = isMac ? 'meta' : 'control';
 
   const screenshotShortcut = window.electronAPI?.screenshotShortcut;
+  const screenshotApi = window.electronAPI?.screenshot;
   const [screenshot, setScreenshot] = useState<Awaited<ReturnType<NonNullable<typeof screenshotShortcut>['get']>>>();
+  const [hideMainWindow, setHideMainWindow] = useState(false);
 
   useEffect(() => {
     let active = true;
     void screenshotShortcut?.get().then((result) => {
       if (active) setScreenshot(result);
     }).catch(() => undefined);
+    void screenshotApi?.getPreferences().then((prefs) => {
+      if (active) setHideMainWindow(prefs.hideMainWindow);
+    }).catch(() => undefined);
     return () => { active = false; };
-  }, [screenshotShortcut]);
+  }, [screenshotApi, screenshotShortcut]);
 
   const categories: ShortcutCategory[] = [];
 
@@ -388,8 +393,49 @@ export function KeyboardShortcutsSettingsPanel() {
             if (result === 'ok') setScreenshot(await screenshotShortcut.get());
             return result;
           }}
-          notice={screenshot.registered ? undefined : (
-            <p className="text-xs text-fg-muted">{k.screenshotShortcutUnavailable}</p>
+          notice={(
+            <div className="space-y-2.5">
+              {!screenshot.registered ? (
+                <div className="space-y-1">
+                  <p className="text-xs text-fg-muted">{k.screenshotShortcutUnavailable}</p>
+                  {window.electronAPI?.platform === 'linux' ? (
+                    <p className="text-xs text-fg-muted">{k.screenshotWaylandCliHint}</p>
+                  ) : null}
+                </div>
+              ) : null}
+              {screenshotApi ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label className="flex cursor-pointer items-start gap-2.5 text-xs text-fg">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 rounded border-edge accent-accent"
+                      checked={hideMainWindow}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setHideMainWindow(checked);
+                        void screenshotApi.setPreferences({ hideMainWindow: checked }).catch(() => undefined);
+                      }}
+                    />
+                    <span>
+                      <span className="block font-medium text-fg">{k.screenshotHideMainWindow}</span>
+                      <span className="block text-fg-muted">{k.screenshotHideMainWindowHint}</span>
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-lg bg-surface-base/70 px-3 py-1.5 text-xs font-medium text-fg transition-colors hover:bg-surface-hover',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    )}
+                    onClick={() => {
+                      void screenshotApi.start();
+                    }}
+                  >
+                    {k.screenshotTakeNow}
+                  </button>
+                </div>
+              ) : null}
+            </div>
           )}
         />
       ) : null}

@@ -626,6 +626,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
       return { register: registerMcpRoutes };
     },
   },
+  {
+    id: 'screenshot-ai',
+    match: (path) => path === '/api/screenshot/analyze',
+    load: async () => {
+      const { registerScreenshotAiRoutes } = await import('./screenshot-ai.js');
+      return { register: registerScreenshotAiRoutes };
+    },
+  },
 ];
 
 export const APP_LAZY_ROUTE_BUNDLES: readonly AppLazyRouteBundle[] = [

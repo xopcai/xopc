@@ -78,6 +78,8 @@ export default defineConfig({
   preload: {
     plugins: [dependencyInventoryPlugin(__dirname), { name: 'computer-preview-document', async generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'computer-preview.html', source: readFileSync(resolve(__dirname, 'electron/computer/preview-worker.html'), 'utf8') });
+      this.emitFile({ type: 'asset', fileName: 'screenshot-overlay.html', source: readFileSync(resolve(__dirname, 'electron/screenshot/overlay.html'), 'utf8') });
+      this.emitFile({ type: 'asset', fileName: 'screenshot-pin.html', source: readFileSync(resolve(__dirname, 'electron/screenshot/pin.html'), 'utf8') });
     } }],
     build: {
       minify: 'esbuild',
@@ -87,6 +89,8 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'electron/preload.ts'),
           'computer-preview': resolve(__dirname, 'electron/computer/preview-worker.ts'),
+          'screenshot-overlay': resolve(__dirname, 'electron/screenshot/overlay-worker.ts'),
+          'screenshot-pin': resolve(__dirname, 'electron/screenshot/pin-worker.ts'),
         },
         // Root package.json is `"type": "module"`, so electron-vite would default preload to ESM
         // (`index.mjs`). Electron does not execute that preload as an ES module. Force CJS (`index.cjs`).

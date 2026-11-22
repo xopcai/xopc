@@ -1432,11 +1432,19 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
               <DeviceInteractionPanel conversationId={session.conversationId} active={stream.streaming || stream.sending} />
               <ChatComposer
                 personal={personal}
-                addActions={videoAvailable && !readOnly ? {
+                addActions={!readOnly && (videoAvailable || Boolean(window.electronAPI?.screenshot)) ? {
                   label: language === 'zh' ? '添加附件或操作' : 'Add attachments or actions',
                   items: [
+                    ...(window.electronAPI?.screenshot ? [{
+                      kind: 'screenshot' as const,
+                      label: language === 'zh' ? '屏幕截图' : 'Screenshot',
+                      onSelect: () => {
+                        void window.electronAPI?.screenshot?.start();
+                      },
+                    }] : []),
+                    ...(videoAvailable ? [
                     {
-                      kind: 'video',
+                      kind: 'video' as const,
                       label: language === 'zh' ? '生成视频' : 'Generate video',
                       onSelect: () => {
                         welcomeDraftSeq.current += 1;
@@ -1445,7 +1453,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                       },
                     },
                     {
-                      kind: 'music',
+                      kind: 'music' as const,
                       label: language === 'zh' ? '创作音乐' : 'Create music',
                       onSelect: () => {
                         welcomeDraftSeq.current += 1;
@@ -1453,6 +1461,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                           text: language === 'zh' ? '帮我做一段轻快的纯音乐，适合旅行视频。' : 'Make an upbeat instrumental track for a travel video.' });
                       },
                     },
+                    ] : []),
                   ],
                 } : undefined}
                 nextTurnSuggestionsEnabled={!stream.streaming}

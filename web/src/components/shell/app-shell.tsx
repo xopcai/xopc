@@ -1,4 +1,5 @@
 import { ExternalIntakeHost } from '@/features/chat/external-intake-host';
+import { GlobalScreenshotHost } from '@/features/screenshot/global-screenshot-host';
 import { MobilePrimaryNav } from '@/components/shell/mobile-primary-nav';
 import { GlobalPhoneWorkspace } from '@/features/phone/global-phone-workspace';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useState } from 'react';
@@ -226,6 +227,7 @@ function AppShellContent() {
       <ProductNotificationCoordinator />
       <ElectronMenuListener />
       <ExternalIntakeHost />
+      <GlobalScreenshotHost />
       <NavigateToChatListener />
       <ExtensionNavigateListener />
       <GlobalCommandPaletteHost />

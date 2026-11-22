@@ -27,6 +27,8 @@ if (process.platform === 'darwin') {
       join(root, 'electron/native/voice-hotkey-macos.swift'),
       '-framework', 'AppKit',
       '-framework', 'ApplicationServices',
+      '-framework', 'ImageIO',
+      '-framework', 'Vision',
       '-O',
       '-o', slice,
     ]);

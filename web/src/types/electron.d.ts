@@ -646,6 +646,42 @@ export interface ElectronAPI {
   startup?: ElectronStartupAPI;
   gateway?: ElectronGatewayShellAPI;
   platform: "darwin" | "win32" | "linux";
+  screenshot?: {
+    start(options?: { hideWindow?: boolean }): Promise<{ ok: boolean; reason?: string }>;
+    getPreferences(): Promise<{ hideMainWindow: boolean }>;
+    setPreferences(patch: { hideMainWindow?: boolean }): Promise<{ hideMainWindow: boolean }>;
+    getHistory(): Promise<Array<{
+      id: string;
+      createdAt: number;
+      width: number;
+      height: number;
+      action: 'copy' | 'save' | 'pin' | 'chat' | 'note';
+      previewDataUrl: string;
+    }>>;
+    takePendingDeliveries(): Promise<Array<{
+      id: string;
+      createdAt: number;
+      pngBase64: string;
+      fileName: string;
+      width: number;
+      height: number;
+      prompt?: string;
+      targetMode: 'chat' | 'note';
+    }>>;
+    ackDelivery?(id: string): Promise<{ ok: true }>;
+    onDeliverToChat(
+      callback: (payload: {
+        id: string;
+        createdAt: number;
+        pngBase64: string;
+        fileName: string;
+        width: number;
+        height: number;
+        prompt?: string;
+        targetMode: 'chat' | 'note';
+      }) => void,
+    ): () => void;
+  };
   screenshotShortcut?: {
     get(): Promise<{ shortcut: string; defaultShortcut: string; registered: boolean }>;
     setRecording(active: boolean): Promise<void>;

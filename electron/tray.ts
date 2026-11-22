@@ -17,6 +17,7 @@ export type TrayActions = {
   showWindow: () => void;
   /** Open app and navigate once content can receive IPC. */
   navigate: (hashPath: string) => void;
+  screenshot?: () => void;
   toggleDesktopPet: () => void;
   openDesktopPetSettings: () => void;
   /** Main-process DevTools (works when the page is blank). */
@@ -47,6 +48,16 @@ function buildContextMenu(actions: TrayActions, t: ElectronMenuMessages): Menu {
         actions.navigate('/chat/new');
       },
     },
+    ...(actions.screenshot
+      ? [
+          {
+            label: t.tray.screenshot,
+            click: () => {
+              actions.screenshot?.();
+            },
+          },
+        ]
+      : []),
     { type: 'separator' },
     {
       label: t.tray.showWindow,

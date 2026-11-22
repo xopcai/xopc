@@ -114,6 +114,7 @@ import {
   stopTunnelStatusPolling,
 } from './tunnel-main.js';
 import { createTray, destroyTray, hasSystemTray, updateTrayLanguage } from './tray.js';
+import { ScreenshotManager } from './screenshot/screenshot-manager.js';
 import { registerScreenshotShortcut } from './screenshot-shortcut.js';
 import {
   startVoiceInputHotkey,
@@ -137,6 +138,7 @@ import {
 /** Track the main window for gateway exit notifications. */
 let mainWindow: BrowserWindow | null = null;
 let stopScreenshotShortcut: (() => void) | undefined;
+let screenshotManager: ScreenshotManager | undefined;
 let desktopEndpointHost: DesktopEndpointHost | undefined;
 let mainWindowNavigationReady = false;
 let pendingMainWindowNavigation: string | null = null;
@@ -159,7 +161,14 @@ function currentMenuMessages() {
 function refreshElectronMenus(language?: ElectronUiLanguage): void {
   const messages = getElectronMenuMessages(language ?? getElectronShellLanguage());
   if (mainWindow && !mainWindow.isDestroyed()) {
-    Menu.setApplicationMenu(buildAppMenu(mainWindow, messages, { gatewaySettings: () => navigateMainWindow('/settings/gateway') }));
+    Menu.setApplicationMenu(
+      buildAppMenu(mainWindow, messages, {
+        gatewaySettings: () => navigateMainWindow('/settings/gateway'),
+        screenshot: () => {
+          void screenshotManager?.startCapture();
+        },
+      }),
+    );
     if (process.platform === 'win32') {
       mainWindow.setMenuBarVisibility(false);
     }
@@ -406,6 +415,10 @@ if (gotTheLock) {
         }
         app.quit();
       });
+      return;
+    }
+    if (commandLine.includes('--screenshot')) {
+      void app.whenReady().then(() => screenshotManager?.startCapture());
       return;
     }
     receiveExternalFiles(intakePaths(commandLine.slice(1), workingDirectory));
@@ -999,7 +1012,14 @@ function createWindow(): void {
   });
 
   const menuMessages = currentMenuMessages();
-  Menu.setApplicationMenu(buildAppMenu(win, menuMessages, { gatewaySettings: () => navigateMainWindow('/settings/gateway') }));
+  Menu.setApplicationMenu(
+    buildAppMenu(win, menuMessages, {
+      gatewaySettings: () => navigateMainWindow('/settings/gateway'),
+      screenshot: () => {
+        void screenshotManager?.startCapture();
+      },
+    }),
+  );
   if (process.platform === 'win32') {
     win.setMenuBarVisibility(false);
   }
@@ -1015,6 +1035,9 @@ function createWindow(): void {
       },
       navigate: (hashPath) => {
         navigateMainWindow(hashPath);
+      },
+      screenshot: () => {
+        void screenshotManager?.startCapture();
       },
       openDevTools: () => {
         focusOrCreateMainWindow();
@@ -1474,7 +1497,12 @@ app.whenReady().then(async () => {
     if (!win || win.isDestroyed()) {
       return { ok: false as const, error: 'UNKNOWN_MENU_ACTION' as const };
     }
-    return invokeAppMenuAction(win, actionId, { gatewaySettings: () => navigateMainWindow('/settings/gateway') });
+    return invokeAppMenuAction(win, actionId, {
+      gatewaySettings: () => navigateMainWindow('/settings/gateway'),
+      screenshot: () => {
+        void screenshotManager?.startCapture();
+      },
+    });
   });
 
   ipcMain.handle('window:fullscreen-enter', () => {
@@ -1580,7 +1608,20 @@ app.whenReady().then(async () => {
     console.warn(`[main] Failed to register global shortcut: ${devToolsHotkey}`);
   }
 
-  stopScreenshotShortcut = registerScreenshotShortcut(() => mainWindow, assertMainRenderer);
+  screenshotManager = new ScreenshotManager({
+    getMainWindow: () => mainWindow,
+    focusOrCreateMainWindow,
+    getGatewayTarget: () => activeGateway,
+    assertMainRenderer,
+    disableSandbox: win32DisableSandbox,
+  });
+  screenshotManager.registerIpc();
+
+  stopScreenshotShortcut = registerScreenshotShortcut(
+    () => mainWindow,
+    assertMainRenderer,
+    () => screenshotManager?.startCapture(),
+  );
 
   appendElectronStartupLog(
     `app ready platform=${process.platform} packaged=${app.isPackaged} ` +
@@ -1633,6 +1674,7 @@ app.on('before-quit', (event) => {
       () => destroyDesktopPetWindow(),
       () => destroyTray(),
       () => stopVoiceInputHotkey(),
+      () => screenshotManager?.dispose(),
       () => stopScreenshotShortcut?.(),
       () => globalShortcut.unregisterAll(),
       () => stopAllPowerSaveBlockers(),

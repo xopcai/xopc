@@ -28,6 +28,7 @@ function parseShortcut(value: unknown, platform: NodeJS.Platform) {
 export function registerScreenshotShortcut(
   mainWindow: () => BrowserWindow | null,
   assertMainRenderer: (event: IpcMainInvokeEvent) => void,
+  onTrigger?: () => Promise<unknown> | void,
 ): () => void {
   const platform = process.platform;
   if (platform !== 'darwin' && platform !== 'win32' && platform !== 'linux') return () => {};
@@ -51,6 +52,12 @@ export function registerScreenshotShortcut(
   let capture: AbortController | undefined;
   const takeScreenshot = () => {
     if (capture || recordingWindow?.isFocused()) return;
+    if (onTrigger) {
+      void Promise.resolve(onTrigger()).catch((error) => {
+        console.warn('[Screenshot] Custom screenshot handler failed', error);
+      });
+      return;
+    }
     const controller = new AbortController();
     capture = controller;
     void captureDesktopScreenshot(controller.signal).catch((error) => {

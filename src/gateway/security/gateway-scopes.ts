@@ -113,7 +113,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
 
   if (path === '/api/voice/selection' || path === '/api/voice/catalog/refresh' || path === '/api/voice/boson' || path === '/api/voice/boson/reveal-api-key') return 'voice.configure';
   if (method === 'POST' && path === '/api/media/playback-ticket') return undefined;
-  if (path.startsWith('/api/voice') || path.startsWith('/api/media') || path.startsWith('/api/clarifications')) {
+  if (path.startsWith('/api/voice') || path.startsWith('/api/media') || path.startsWith('/api/clarifications') || (method === 'POST' && path === '/api/screenshot/analyze')) {
     return 'sessions.write';
   }
   if (/^\/api\/capabilities\/mobile-actions\/panel\/(?:skills|connections|agents|plugins|channels)$/.test(path)) {
