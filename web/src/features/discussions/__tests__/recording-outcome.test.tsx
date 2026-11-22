@@ -40,7 +40,7 @@ describe('recording completion product states', () => {
   it('presents the local barrier and actionable sync retry without claiming audio can already be played', async () => {
     const { container,retry } = await render(input({ localSave: 'complete',sync: 'offline',textAvailable: true }));
     expect(container.textContent).toContain('录音已在本机保存，可以离开当前页面');
-    expect(container.textContent).toContain('原音 · 尚未完成');expect(container.textContent).toContain('文字 · 可用');
+    expect(container.textContent).toContain('原音 · 尚未完成');expect(container.textContent).toContain('转写原文 · 可用');
     await act(async () => container.querySelector('button')!.click());expect(retry).toHaveBeenCalledWith('sync');
   });
   it('keeps previous text and notes usable while the failed note generation resumes in place', async () => {
