@@ -57,7 +57,9 @@ struct AppRootView: View {
         .mobileTextStyle(.body)
         .environment(\.openURL, OpenURLAction { url in
             if let target = ChatMessageLink.resolve(url.absoluteString) {
-                if settingsPresented { settingsPresented = false }
+                if settingsPresented {
+                    settingsPresented = false
+                }
                 messageLinks.open(target, appState: appState)
                 return .handled
             }
@@ -251,7 +253,7 @@ struct AppRootView: View {
             defaultAgentID = "main"
         }
         .onChange(of: appState.selectedConversation?.isDraft) { wasDraft, isDraft in
-            if wasDraft == true && isDraft == false {
+            if wasDraft == true, isDraft == false {
                 recentUpdatedAt = nil
             }
         }
@@ -529,7 +531,9 @@ struct AppRootView: View {
     }
 
     private func navigate(_ route: HomeDestination) {
-        if appState.homePath.isEmpty { reopenSidebar = sidebarOpen }
+        if appState.homePath.isEmpty {
+            reopenSidebar = sidebarOpen
+        }
         setSidebar(false)
         appState.homePath.append(route)
     }

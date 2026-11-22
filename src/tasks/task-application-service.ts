@@ -27,7 +27,7 @@ import { TaskAllocationRepository } from './task-allocation-repository.js';
 import { captureExecutionRequirements, savedExecutionRequirements } from './task-execution-capabilities.js';
 import { resolvePersonalResultReference } from '../personal-agent/result-reader.js';
 import { personalRequestForTask, updatePersonalRequest } from '../personal-agent/request-repository.js';
-import { waitForPersonalRequestConnection } from '../personal-agent/request-service.js';
+import { waitForPersonalRequestConnection } from '../personal-agent/request-connection-wait.js';
 import { TaskOriginRepository } from './task-origin-repository.js';
 import type { TurnContextRef } from '../agent/source-context/types.js';
 import { captureTaskHandoff, captureWorkspaceFileHandoff, replaceUnresolvedTaskHandoffReferences, type WorkspaceFileInput } from './task-handoff.js';
@@ -631,7 +631,7 @@ export class TaskApplicationService {
           runId: newRun.id,
         });
         if (request) {
-          let updatedReq = updatePersonalRequest(request, {
+          const updatedReq = updatePersonalRequest(request, {
             objective: `${request.objective}\n\nFollow-up:\n${instruction}`,
             state: 'queued',
             connectionWaitId: undefined,
@@ -650,7 +650,7 @@ export class TaskApplicationService {
           const conn = account?.currentConnectionId ? getConnectorConnection(account.currentConnectionId) : undefined;
           const activeConn = conn?.status === 'active' && (!conn.expiresAt || Date.parse(conn.expiresAt) > Date.now());
           if (!activeConn) {
-            updatedReq = waitForPersonalRequestConnection(updatedReq, newRun);
+            waitForPersonalRequestConnection(updatedReq, newRun);
           }
         }
         enqueueTaskChangedEvent(db, {

@@ -132,9 +132,13 @@ struct GatewayProfilesView: View {
         probeRequests = probeRequests.filter { activeIDs.contains($0.key) }
         let checks = entries.map { profile in Task { await probe(profile) } }
         await withTaskCancellationHandler {
-            for check in checks { _ = await check.value }
+            for check in checks {
+                _ = await check.value
+            }
         } onCancel: {
-            for check in checks { check.cancel() }
+            for check in checks {
+                check.cancel()
+            }
         }
     }
 

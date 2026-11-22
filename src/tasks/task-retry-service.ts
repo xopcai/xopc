@@ -5,7 +5,7 @@ import { canAccessConnectorAccount } from '../connectors/account-access.js';
 import { connectorPrincipalForSession } from '../connectors/principal.js';
 import { isPersonalConversation } from '../personal-agent/repository.js';
 import { getPersonalRequest, personalRequestForTask, updatePersonalRequest, type PersonalRequest } from '../personal-agent/request-repository.js';
-import { waitForPersonalRequestConnection } from '../personal-agent/request-service.js';
+import { waitForPersonalRequestConnection } from '../personal-agent/request-connection-wait.js';
 import { getActiveConnectionWait, getConnectionWait, publishConnectionWait } from '../storage/sqlite/connection-wait-repository.js';
 import { getConnectorAccount } from '../storage/sqlite/connector-account-repository.js';
 import { getConnectorConnection, getConnectorInstallation, listConnectorConnections } from '../storage/sqlite/connector-repository.js';

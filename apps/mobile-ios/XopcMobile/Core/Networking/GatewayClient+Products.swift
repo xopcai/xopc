@@ -223,9 +223,15 @@ extension GatewayClient {
 
     func fetchTasks(projectID: String? = nil, search: String = "", offset: Int = 0, limit: Int = 100) async throws -> TaskPage {
         var query = [URLQueryItem(name: "limit", value: String(limit))]
-        if let projectID { query.append(URLQueryItem(name: "projectId", value: projectID)) }
-        if !search.isEmpty { query.append(URLQueryItem(name: "search", value: search)) }
-        if offset > 0 { query.append(URLQueryItem(name: "offset", value: String(offset))) }
+        if let projectID {
+            query.append(URLQueryItem(name: "projectId", value: projectID))
+        }
+        if !search.isEmpty {
+            query.append(URLQueryItem(name: "search", value: search))
+        }
+        if offset > 0 {
+            query.append(URLQueryItem(name: "offset", value: String(offset)))
+        }
         return try await request(path: "/api/tasks", queryItems: query)
     }
 

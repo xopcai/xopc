@@ -506,7 +506,9 @@ private struct CapabilityPanelPayload: Decodable {
         let label: String
         let url: URL
         let visibleWhen: Visibility?
-        var id: String { url.absoluteString + ":" + label }
+        var id: String {
+            url.absoluteString + ":" + label
+        }
     }
 
     struct Copyable: Decodable {
@@ -645,7 +647,8 @@ struct LinkedMcpSetupView: View {
         CapabilitySettingsPanel(configuration: configuration, category: "connections", itemID: "mcp:setup",
                                 name: AppLocalization.string("capability_add_mcp", locale: locale), summary: "",
                                 onChanged: {}, onClose: onClose, onUseInChat: onUseInChat,
-                                initialFields: ["id": name, "url": serverURL]) {
+                                initialFields: ["id": name, "url": serverURL])
+        {
             CapabilityLogo(reference: nil, origin: configuration.baseURL, label: "", symbol: "link", extent: 44)
         }
     }
@@ -1261,7 +1264,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         }
     }
 
-    @ViewBuilder private func fieldTitle(_ field: CapabilityPanelPayload.Field) -> some View {
+    private func fieldTitle(_ field: CapabilityPanelPayload.Field) -> some View {
         HStack(spacing: 4) {
             Text(verbatim: field.label).font(.subheadline.weight(.medium)).foregroundStyle(theme.foreground)
             if field.required == true {

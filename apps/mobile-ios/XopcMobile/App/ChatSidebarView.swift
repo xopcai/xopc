@@ -122,7 +122,7 @@ struct ChatSidebarView: View {
         .background(mobileTheme.panel.ignoresSafeArea(edges: .vertical))
         .accessibilityAction(.escape, dismiss)
         .onChange(of: isPresented) {
-            if !isPresented && !busy {
+            if !isPresented, !busy {
                 selection = nil
                 mutationFailed = false
             }
@@ -275,7 +275,9 @@ extension ChatSidebarView {
                 .accessibilityHidden(true)
                 .id(recentNextOffset)
                 .task(id: isPresented) {
-                    if isPresented { onLoadMore() }
+                    if isPresented {
+                        onLoadMore()
+                    }
                 }
         }
     }
@@ -406,14 +408,18 @@ private struct ChatSidebarLayer<Sidebar: View>: View {
                 }
             }
             .onChange(of: isOpen, initial: true) {
-                if isOpen { mounted = true }
+                if isOpen {
+                    mounted = true
+                }
                 settle(open: isOpen)
             }
     }
 
     private func drag(_ distance: CGFloat, opening: Bool) {
         guard width > 0 else { return }
-        if opening { mounted = true }
+        if opening {
+            mounted = true
+        }
         let offset = opening ? distance : width + distance
         reveal = min(1, max(0, offset / width))
     }

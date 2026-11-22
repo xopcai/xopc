@@ -203,7 +203,9 @@ struct AssistantComposer: View {
             paletteSource = source
         } catch is CancellationError {
         } catch {
-            if !Task.isCancelled, activePaletteSource == source { paletteError = error.localizedDescription }
+            if !Task.isCancelled, activePaletteSource == source {
+                paletteError = error.localizedDescription
+            }
         }
     }
 
@@ -549,7 +551,9 @@ private struct ComposerCaretField: View {
         TextField(placeholder, text: $draft, selection: $selection, prompt: prompt, axis: .vertical)
             .focused($focused)
             .onChange(of: draft) {
-                if draft.isEmpty { caretOffset = nil }
+                if draft.isEmpty {
+                    caretOffset = nil
+                }
             }
             .onChange(of: selection) {
                 guard let selection, case let .selection(range) = selection.indices,

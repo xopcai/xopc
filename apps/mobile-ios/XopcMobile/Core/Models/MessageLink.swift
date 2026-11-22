@@ -42,16 +42,7 @@ enum ChatMessageLink: Equatable, Identifiable {
             return .workspaceFile(path: path)
         }
         if components.scheme == "xopc", components.host == "open", components.path.isEmpty || components.path == "/" {
-            if query["kind"] == "settings" {
-                let id = query["id"] ?? ""
-                if id.isEmpty { return .route(page: "settings", itemID: "") }
-                guard let section = MobileSettingsSection(rawValue: id) else { return nil }
-                return .route(page: "settings", itemID: section.rawValue)
-            }
-            let pages = ["note": "notes", "task": "tasks", "project": "projects", "session": "chat",
-                         "automation": "automations", "file": "files"]
-            guard let page = pages[query["kind"] ?? ""], let id = query["id"] ?? query["key"], validResourceID(id) else { return nil }
-            return .route(page: page, itemID: id)
+            return openRoute(query)
         }
         if components.scheme == "xopc", components.host == "settings" {
             return settingsRoute(components.path)
@@ -61,6 +52,21 @@ enum ChatMessageLink: Equatable, Identifiable {
         }
         guard components.scheme == nil else { return nil }
         return relativeRoute(source, components: components, query: query)
+    }
+
+    private static func openRoute(_ query: [String: String]) -> ChatMessageLink? {
+        if query["kind"] == "settings" {
+            let id = query["id"] ?? ""
+            if id.isEmpty {
+                return .route(page: "settings", itemID: "")
+            }
+            guard let section = MobileSettingsSection(rawValue: id) else { return nil }
+            return .route(page: "settings", itemID: section.rawValue)
+        }
+        let pages = ["note": "notes", "task": "tasks", "project": "projects", "session": "chat",
+                     "automation": "automations", "file": "files"]
+        guard let page = pages[query["kind"] ?? ""], let id = query["id"] ?? query["key"], validResourceID(id) else { return nil }
+        return .route(page: page, itemID: id)
     }
 
     private static func mcpSetupRoute(_ query: [String: String]) -> ChatMessageLink? {
@@ -92,7 +98,9 @@ enum ChatMessageLink: Equatable, Identifiable {
     }
 
     private static func settingsRoute(_ path: String) -> ChatMessageLink? {
-        if path.isEmpty || path == "/" { return .route(page: "settings", itemID: "") }
+        if path.isEmpty || path == "/" {
+            return .route(page: "settings", itemID: "")
+        }
         guard path.hasPrefix("/"), let section = MobileSettingsSection(rawValue: String(path.dropFirst())) else { return nil }
         return .route(page: "settings", itemID: section.rawValue)
     }

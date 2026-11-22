@@ -142,7 +142,9 @@ private struct ProgressHubView: View {
         }
         .refreshable { await load() }
         .task(id: isActive ? ProgressLoadScope(configuration: configuration, language: locale.identifier) : nil) {
-            if isActive { await load() }
+            if isActive {
+                await load()
+            }
         }
         .confirmationDialog(pendingAction?.label
             ?? AppLocalization.string("确认操作", locale: locale), isPresented: Binding(
@@ -338,7 +340,11 @@ private extension ProgressHubView {
         loadRevision += 1
         let revision = loadRevision
         isLoading = true
-        defer { if revision == loadRevision { isLoading = false } }
+        defer {
+            if revision == loadRevision {
+                isLoading = false
+            }
+        }
         let client = GatewayClient(configuration: configuration)
         async let homeRequest = client.fetchHome(locale: locale.identifier)
         async let automationRequest = client.fetchAutomationMetrics()
@@ -355,7 +361,9 @@ private extension ProgressHubView {
         }
         let metrics = try? await automationRequest
         guard !Task.isCancelled, revision == loadRevision else { return }
-        if let metrics { nextAutomation = metrics.nextRun }
+        if let metrics {
+            nextAutomation = metrics.nextRun
+        }
     }
 
     private struct ProgressLoadScope: Hashable {
@@ -439,49 +447,47 @@ enum HomeOpenRoute: Equatable {
 
     // swiftlint:disable:next cyclomatic_complexity
     init?(href: String) {
-        guard href.hasPrefix("/"), !href.hasPrefix("//"), href.utf8.count <= 4096,
-              !href.contains("\\"), href.rangeOfCharacter(from: .controlCharacters) == nil,
-              let url = URLComponents(string: href), url.scheme == nil, url.host == nil,
-              url.user == nil, url.password == nil, url.port == nil
-        else { return nil }
+        guard let url = Self.relativeComponents(href) else { return nil }
         let segments = url.path.split(separator: "/", omittingEmptySubsequences: false).dropFirst().map(String.init)
         guard (1 ... 2).contains(segments.count), !segments[0].isEmpty else { return nil }
         let rawID = segments.count == 2 ? segments[1] : nil
-        if let rawID, !rawID.isEmpty, !ChatMessageLink.validResourceID(rawID) { return nil }
+        if let rawID, !rawID.isEmpty, !ChatMessageLink.validResourceID(rawID) {
+            return nil
+        }
         let id = rawID?.isEmpty == true ? nil : rawID
-        let query = (url.queryItems ?? []).reduce(into: [String: String]()) { result, item in
-            if let value = item.value {
-                result[item.name] = value
-            }
-        }
-        func checkedID(_ candidate: String?) -> String? {
-            guard let candidate else { return nil }
-            return ChatMessageLink.validResourceID(candidate) ? candidate : nil
-        }
+        let query = Self.queryValues(url)
         switch segments[0] {
         case "tasks":
-            if rawID != nil && id == nil { return nil }
+            if rawID != nil, id == nil {
+                return nil
+            }
             self = id.map(HomeOpenRoute.task) ?? .tasks
         case "projects":
-            if rawID != nil && id == nil { return nil }
+            if rawID != nil, id == nil {
+                return nil
+            }
             self = id.map(HomeOpenRoute.project) ?? .projects
         case "automations":
             if let run = query["run"] {
-                guard let validRun = checkedID(run) else { return nil }
+                guard let validRun = Self.checkedID(run) else { return nil }
                 self = .automationRun(validRun)
             } else if let auto = query["automation"] {
-                guard let validAuto = checkedID(auto) else { return nil }
+                guard let validAuto = Self.checkedID(auto) else { return nil }
                 self = .automation(validAuto)
             } else {
-                if rawID != nil && id == nil { return nil }
+                if rawID != nil, id == nil {
+                    return nil
+                }
                 self = id.map(HomeOpenRoute.automation) ?? .automations
             }
         case "notes", "inbox":
             if let item = query["item"] {
-                guard let validItem = checkedID(item) else { return nil }
+                guard let validItem = Self.checkedID(item) else { return nil }
                 self = .note(validItem)
             } else {
-                if rawID != nil && id == nil { return nil }
+                if rawID != nil, id == nil {
+                    return nil
+                }
                 self = id.map(HomeOpenRoute.note) ?? .notes
             }
         case "files" where id == nil && rawID == nil: self = .files
@@ -489,6 +495,28 @@ enum HomeOpenRoute: Equatable {
             guard let id else { return nil }
             self = .chat(id)
         default: return nil
+        }
+    }
+
+    private static func checkedID(_ candidate: String?) -> String? {
+        guard let candidate else { return nil }
+        return ChatMessageLink.validResourceID(candidate) ? candidate : nil
+    }
+
+    private static func relativeComponents(_ href: String) -> URLComponents? {
+        guard href.hasPrefix("/"), !href.hasPrefix("//"), href.utf8.count <= 4096,
+              !href.contains("\\"), href.rangeOfCharacter(from: .controlCharacters) == nil,
+              let url = URLComponents(string: href), url.scheme == nil, url.host == nil,
+              url.user == nil, url.password == nil, url.port == nil
+        else { return nil }
+        return url
+    }
+
+    private static func queryValues(_ url: URLComponents) -> [String: String] {
+        (url.queryItems ?? []).reduce(into: [String: String]()) { result, item in
+            if let value = item.value {
+                result[item.name] = value
+            }
         }
     }
 }
@@ -526,7 +554,7 @@ private struct TasksView: View {
             ], selected: filter, label: "筛选", swipeToSelect: true) { filter = $0 }
                 .accessibilityIdentifier("tasks-filter-tabs")
                 .listRowBackground(Color.clear)
-            if visible.isEmpty && (isLoading || loadedSearch != query) && error == nil {
+            if visible.isEmpty, isLoading || loadedSearch != query, error == nil {
                 ProgressListSkeleton()
             } else if visible.isEmpty, nextOffset == nil, error == nil {
                 ContentUnavailableView(query.isEmpty ? "暂无任务" : "没有匹配的任务", systemImage: "checklist")
@@ -564,7 +592,9 @@ private struct TasksView: View {
                 .padding(.horizontal, 20).padding(.bottom, 8).background(theme.canvas)
         }
         .onChange(of: isActive) {
-            if !isActive { searchFocused = false }
+            if !isActive {
+                searchFocused = false
+            }
         }
         .refreshable { await load(search: query) }
         .task(id: isActive ? query : nil) {
@@ -582,7 +612,7 @@ private struct TasksView: View {
                         searchFocused = false
                         creating = true
                     }
-                        .accessibilityIdentifier("tasks-create")
+                    .accessibilityIdentifier("tasks-create")
                 }
             }
         }
@@ -616,7 +646,11 @@ private struct TasksView: View {
         loadRevision += 1
         let revision = loadRevision
         isLoading = true
-        defer { if revision == loadRevision { isLoading = false } }
+        defer {
+            if revision == loadRevision {
+                isLoading = false
+            }
+        }
         do {
             let page = try await GatewayClient(configuration: configuration).fetchTasks(search: search, offset: offset, limit: 40)
             guard !Task.isCancelled, revision == loadRevision, search == query else { return }

@@ -41,7 +41,11 @@ struct MarkdownBodyView: View {
         })
         .alert("打开外部链接？", isPresented: Binding(
             get: { pendingExternalURL != nil },
-            set: { if !$0 { pendingExternalURL = nil } }
+            set: {
+                if !$0 {
+                    pendingExternalURL = nil
+                }
+            }
         )) {
             Button("取消", role: .cancel) { pendingExternalURL = nil }
             Button("打开") {

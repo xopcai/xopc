@@ -95,8 +95,8 @@ struct TaskStatusView: View {
                             Text(block == "execution"
                                 ? "任务仍在执行或等待处理，请先完成当前运行或等待项。"
                                 : block == "acceptance"
-                                    ? "尚有未通过的验收项，请先完成逐项验收后再签收。"
-                                    : "当前任务结果尚未达到签收条件，请查看执行结果。")
+                                ? "尚有未通过的验收项，请先完成逐项验收后再签收。"
+                                : "当前任务结果尚未达到签收条件，请查看执行结果。")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }

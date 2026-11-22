@@ -1242,11 +1242,10 @@ final class ParityAcceptanceUITests: XCTestCase {
 
     private func openFileSpaceForUpload(_ id: String? = nil) {
         let spaces = app.descendants(matching: .any)
-        let row: XCUIElement
-        if let id {
-            row = spaces["file-space-\(id)"].firstMatch
+        let row: XCUIElement = if let id {
+            spaces["file-space-\(id)"].firstMatch
         } else {
-            row = spaces.matching(NSPredicate(format: "identifier BEGINSWITH %@", "file-space-")).firstMatch
+            spaces.matching(NSPredicate(format: "identifier BEGINSWITH %@", "file-space-")).firstMatch
         }
         XCTAssertTrue(row.waitForExistence(timeout: 8))
         row.tap()
@@ -3771,7 +3770,9 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertLessThan(app.staticTexts["正在进行"].frame.minY, app.staticTexts["接下来"].frame.minY)
         capture("progress-sections")
         let library = app.buttons["progress-open-library"]
-        if !library.isHittable { app.swipeUp() }
+        if !library.isHittable {
+            app.swipeUp()
+        }
         XCTAssertTrue(library.isHittable)
         library.tap()
         XCTAssertTrue(app.buttons["space-scope-menu"].waitForExistence(timeout: 5))

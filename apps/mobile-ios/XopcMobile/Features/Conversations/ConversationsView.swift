@@ -620,7 +620,11 @@ struct PageSearchField: View {
         .padding(.horizontal, 16)
         .frame(minHeight: 48)
         .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
-        .task { if autoFocus { focused = true } }
+        .task {
+            if autoFocus {
+                focused = true
+            }
+        }
         .onDisappear { focused = false }
     }
 }

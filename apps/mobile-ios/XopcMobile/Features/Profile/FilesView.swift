@@ -26,7 +26,9 @@ struct FilesView: View {
     @State private var loadRevision = 0
     @State private var error: String?
 
-    private var query: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var query: String {
+        search.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     var body: some View {
         let matches = loadedQuery == query ? items : []
@@ -98,7 +100,9 @@ struct FilesView: View {
     }
 
     private func isWritable(_ file: FileResource) -> Bool {
-        if initialSpace?.id == file.spaceId { return initialSpace?.writable == true }
+        if initialSpace?.id == file.spaceId {
+            return initialSpace?.writable == true
+        }
         return spaces.first { $0.id == file.spaceId }?.writable == true
     }
 
@@ -107,16 +111,19 @@ struct FilesView: View {
         loadRevision += 1
         let revision = loadRevision
         isLoading = true
-        defer { if revision == loadRevision { isLoading = false } }
+        defer {
+            if revision == loadRevision {
+                isLoading = false
+            }
+        }
         let client = GatewayClient(configuration: configuration)
         do {
-            let results: [FileResource]
-            if !request.isEmpty {
-                results = try await client.searchFiles(query: request, spaceID: initialSpace?.id)
+            let results: [FileResource] = if !request.isEmpty {
+                try await client.searchFiles(query: request, spaceID: initialSpace?.id)
             } else if let initialSpace {
-                results = try await client.fetchFiles(spaceID: initialSpace.id)
+                try await client.fetchFiles(spaceID: initialSpace.id)
             } else {
-                results = try await client.fetchRecentFiles()
+                try await client.fetchRecentFiles()
             }
             guard !Task.isCancelled, revision == loadRevision, request == query else { return }
             items = results

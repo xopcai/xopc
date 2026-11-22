@@ -40,23 +40,41 @@ struct ComposerPaletteItem: Identifiable {
     let aliases: [String]
 
     private var bareID: String {
-        if id.hasPrefix("skill:") { return String(id.dropFirst(6)) }
-        if id.hasPrefix("command:") { return String(id.dropFirst(8)) }
+        if id.hasPrefix("skill:") {
+            return String(id.dropFirst(6))
+        }
+        if id.hasPrefix("command:") {
+            return String(id.dropFirst(8))
+        }
         return id
     }
 
     func rank(for query: String) -> Int? {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if needle.isEmpty { return 0 }
+        if needle.isEmpty {
+            return 0
+        }
         let name = title.lowercased()
         let key = bareID.lowercased()
         let lowerAliases = aliases.map { $0.lowercased() }
-        if name == needle || key == needle { return 0 }
-        if lowerAliases.contains(needle) { return 1 }
-        if name.hasPrefix(needle) || key.hasPrefix(needle) { return 2 }
-        if lowerAliases.contains(where: { $0.hasPrefix(needle) }) { return 3 }
-        if name.contains(needle) || key.contains(needle) { return 4 }
-        if lowerAliases.contains(where: { $0.contains(needle) }) { return 5 }
+        if name == needle || key == needle {
+            return 0
+        }
+        if lowerAliases.contains(needle) {
+            return 1
+        }
+        if name.hasPrefix(needle) || key.hasPrefix(needle) {
+            return 2
+        }
+        if lowerAliases.contains(where: { $0.hasPrefix(needle) }) {
+            return 3
+        }
+        if name.contains(needle) || key.contains(needle) {
+            return 4
+        }
+        if lowerAliases.contains(where: { $0.contains(needle) }) {
+            return 5
+        }
         return detail.lowercased().contains(needle) ? 100 : nil
     }
 

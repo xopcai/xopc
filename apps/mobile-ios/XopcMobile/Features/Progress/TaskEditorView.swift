@@ -153,7 +153,7 @@ struct TaskEditorView: View {
                     activation: .init(mode: "capture", phase: "backlog")
                 )
                 creation = mutation
-                onCreated(try await client.createTask(mutation))
+                try await onCreated(client.createTask(mutation))
             }
             dismiss()
         } catch {

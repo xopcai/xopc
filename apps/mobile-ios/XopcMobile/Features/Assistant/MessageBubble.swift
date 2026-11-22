@@ -301,7 +301,7 @@ struct MessageBubble: View {
     }
 
     private var showsPreview: Bool {
-        guard (message.role == "assistant" || message.role == "user"), previewEligible, !message.isPending else { return false }
+        guard message.role == "assistant" || message.role == "user", previewEligible, !message.isPending else { return false }
         let lineLimit = message.role == "user" ? 4 : 8
         var lines = 0
         for rawLine in message.text.split(separator: "\n", omittingEmptySubsequences: false) {

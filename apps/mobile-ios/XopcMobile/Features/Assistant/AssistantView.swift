@@ -231,8 +231,8 @@ struct AssistantView<Dock: View>: View {
                         .init(color: mobileTheme.canvas, location: 0.84),
                         .init(color: mobileTheme.canvas.opacity(0), location: 1)
                     ], startPoint: .top, endPoint: .bottom)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                 }
             }
         }
@@ -942,7 +942,7 @@ struct AssistantView<Dock: View>: View {
         return "\(ComposerDraftStore.accountScope(configuration))|\(id)|\(transcript)"
     }
 
-    // Scroll callbacks update this cache without invalidating the message hierarchy.
+    /// Scroll callbacks update this cache without invalidating the message hierarchy.
     private final class ChatReadingHistory {
         var towardLatest = false
         var bottomScrollTask: Task<Void, Never>?

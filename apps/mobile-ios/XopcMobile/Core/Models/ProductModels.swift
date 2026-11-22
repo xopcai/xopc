@@ -254,26 +254,35 @@ struct TaskListItem: Decodable, Identifiable, Hashable, Sendable {
 }
 
 func taskPresentationLabel(_ status: String) -> String {
-    let key: String = switch status {
-    case "allocating": "正在分配"
-    case "captured", "backlog": "待规划"
-    case "ready": "等待开始"
-    case "queued": "排队中"
-    case "running", "active", "in_progress": "进行中"
-    case "verifying": "验证中"
-    case "waiting": "等待条件"
-    case "paused": "已暂停"
-    case "blocked": "被阻塞"
-    case "needsUser", "needs_user", "waiting_for_user": "需要你处理"
-    case "review": "等待验收"
-    case "failed": "执行失败"
-    case "cancelled": "已取消"
-    case "completed", "done": "已完成"
-    case "ended", "closed", "duplicate", "wont_do": "已结束"
-    default: status
-    }
-    return AppLocalization.resolve(LocalizedStringResource(stringLiteral: key))
+    AppLocalization.resolve(LocalizedStringResource(stringLiteral: taskPresentationLabels[status] ?? status))
 }
+
+private let taskPresentationLabels = [
+    "allocating": "正在分配",
+    "captured": "待规划",
+    "backlog": "待规划",
+    "ready": "等待开始",
+    "queued": "排队中",
+    "running": "进行中",
+    "active": "进行中",
+    "in_progress": "进行中",
+    "verifying": "验证中",
+    "waiting": "等待条件",
+    "paused": "已暂停",
+    "blocked": "被阻塞",
+    "needsUser": "需要你处理",
+    "needs_user": "需要你处理",
+    "waiting_for_user": "需要你处理",
+    "review": "等待验收",
+    "failed": "执行失败",
+    "cancelled": "已取消",
+    "completed": "已完成",
+    "done": "已完成",
+    "ended": "已结束",
+    "closed": "已结束",
+    "duplicate": "已结束",
+    "wont_do": "已结束"
+]
 
 struct TaskRecord: Decodable, Identifiable, Hashable, Sendable {
     let id: String

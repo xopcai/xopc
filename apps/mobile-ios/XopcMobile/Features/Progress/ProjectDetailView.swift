@@ -106,7 +106,6 @@ struct ProjectDetailView: View {
                 Task { await load() }
             }
         }
-
     }
 
     private func projectPage(_ project: ProjectRecord, section: ProjectSection) -> some View {
@@ -132,7 +131,7 @@ struct ProjectDetailView: View {
                     }
                 }
             }
-            if (section == .overview || section == .notes), !deliveries.isEmpty {
+            if section == .overview || section == .notes, !deliveries.isEmpty {
                 Section("近期成果") {
                     ForEach(deliveries.prefix(5)) { item in
                         HomeDeliveryLink(item: item, configuration: configuration,
@@ -332,7 +331,11 @@ struct ProjectDetailView: View {
         isLoading = true
         error = nil
         projectLoadError = nil
-        defer { if revision == loadRevision { isLoading = false } }
+        defer {
+            if revision == loadRevision {
+                isLoading = false
+            }
+        }
         do {
             localChats = try ComposerDraftStore().readProjectDrafts(configuration, projectID: projectID)
         } catch { self.error = error.localizedDescription }
@@ -342,23 +345,23 @@ struct ProjectDetailView: View {
         let language = locale.identifier
         await withTaskGroup(of: ProjectLoadResult.self) { group in
             group.addTask {
-                do { return .project(try await client.fetchProject(id: id)) }
+                do { return try await .project(client.fetchProject(id: id)) }
                 catch { return .projectFailed(error.localizedDescription) }
             }
             group.addTask {
-                do { return .sessions(try await client.fetchProjectSessions(id: id)) }
+                do { return try await .sessions(client.fetchProjectSessions(id: id)) }
                 catch { return .failed(error.localizedDescription) }
             }
             group.addTask {
-                do { return .tasks(try await client.fetchTasks(projectID: id).items) }
+                do { return try await .tasks(client.fetchTasks(projectID: id).items) }
                 catch { return .failed(error.localizedDescription) }
             }
             group.addTask {
-                do { return .notes(try await client.fetchNotes(projectID: id).items) }
+                do { return try await .notes(client.fetchNotes(projectID: id).items) }
                 catch { return .failed(error.localizedDescription) }
             }
             group.addTask {
-                do { return .automations(try await client.fetchAutomations(projectID: id)) }
+                do { return try await .automations(client.fetchAutomations(projectID: id)) }
                 catch { return .failed(error.localizedDescription) }
             }
             group.addTask {
@@ -380,7 +383,9 @@ struct ProjectDetailView: View {
         case let .project(record): project = record
         case let .projectFailed(message):
             projectLoadError = message
-            if project != nil { error = message }
+            if project != nil {
+                error = message
+            }
         case let .sessions(rows):
             sessions = rows
             reconcileLocalDrafts(with: rows)
@@ -388,10 +393,18 @@ struct ProjectDetailView: View {
         case let .notes(rows): notes = rows
         case let .automations(rows): automations = rows
         case let .homeSnapshot(needsUser, rows):
-            if let needsUser { attention = needsUser.filter { $0.projectId == projectID } }
-            if let rows { deliveries = rows.filter { $0.projectId == projectID && $0.destination != nil } }
+            applyHomeSnapshot(needsUser, rows)
         case let .failed(message):
             error = error ?? message
+        }
+    }
+
+    private func applyHomeSnapshot(_ needsUser: [HomeItem]?, _ rows: [HomeDelivery]?) {
+        if let needsUser {
+            attention = needsUser.filter { $0.projectId == projectID }
+        }
+        if let rows {
+            deliveries = rows.filter { $0.projectId == projectID && $0.destination != nil }
         }
     }
 

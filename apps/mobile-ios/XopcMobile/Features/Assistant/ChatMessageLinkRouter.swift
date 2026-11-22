@@ -75,7 +75,7 @@ struct ChatMessageLinkDestination: View {
             case "projects": ProjectDetailView(configuration: appState.gatewayConfiguration, projectID: id,
                                                onOpenConversation: openConversation)
             case "automation-run": AutomationRunDetailView(configuration: appState.gatewayConfiguration, runID: id,
-                                                            initialRun: nil, onOpenConversation: openConversation)
+                                                           initialRun: nil, onOpenConversation: openConversation)
             case "automations": AutomationDetailView(configuration: appState.gatewayConfiguration, automationID: id,
                                                      onOpenConversation: openConversation)
             default: ChatLinkedFileView(link: link, configuration: appState.gatewayConfiguration, conversationID: appState.selectedConversation?.id)
