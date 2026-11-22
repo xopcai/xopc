@@ -28,8 +28,8 @@ android {
         minSdk = 26
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 137
-        versionName = "0.0.137"
+        versionCode = 138
+        versionName = "0.0.138"
     }
 
     val releaseSigning = if (missingReleaseSigningKeys.isEmpty()) {
