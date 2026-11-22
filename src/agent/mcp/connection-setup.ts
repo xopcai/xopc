@@ -1,4 +1,5 @@
 import { resolveMcpSetupConfig } from './effective-server.js';
+import { hasMcpAuthorizationHeader } from './authentication.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { lookup } from 'node:dns';
 import { Agent } from 'undici';
@@ -143,7 +144,8 @@ export async function probeMcpConnection(config: Config, workspace: string, serv
     const last = failed ?? observations.at(-1);
     const observation = last ? (({ challenge: _challenge, ...safe }) => safe)(last) : undefined;
     const category = failed ? classifyMcpConnectionError(`HTTP ${failed.status}`) : classifyMcpConnectionError(error);
-    const hasCredentials = Boolean(server?.auth || Object.keys(server?.headers ?? {}).some(n => n.toLowerCase() === 'authorization') || JSON.stringify(server?.headers ?? {}).includes('xopcSecretRef'));
+    const hasCredentials = Boolean(server?.auth || hasMcpAuthorizationHeader(server?.headers)
+      || (!server?.oauth && Object.values(server?.headers ?? {}).some(value => typeof value === 'object')));
     const denied = error instanceof McpAuthenticationRequiredError || category === 'access_denied';
     if (server?.url && denied) {
       if (hasCredentials) {
@@ -172,6 +174,7 @@ export type McpAuthorization = {
   acceptsRedirect?: boolean;
   toolCount?: number;
   error?: string;
+  errorCode?: 'client_registration_failed';
 };
 type Attempt = {
   scope: string;
@@ -209,7 +212,7 @@ export function startMcpAuthorization(config: Config, workspace: string, serverI
   const server = config.mcp?.servers?.[serverId];
   if (!server?.url || server.enabled === false || (isManagedConnectorServer(server) && server.xopcConnector.enabled === false)) throw new Error('An enabled HTTP MCP server is required.');
   if (typeof server.url === 'string') httpUrl(server.url);
-  if (server.auth || Object.keys(server.headers ?? {}).some(name => name.toLowerCase() === 'authorization')) {
+  if (server.auth || hasMcpAuthorizationHeader(server.headers)) {
     throw new Error('This server uses configured credentials. Remove Authorization before using OAuth.');
   }
   const scope = options?.authorizationScope ?? serverId;
@@ -250,6 +253,7 @@ export function startMcpAuthorization(config: Config, workspace: string, serverI
     if (!attempt.controller.signal.aborted) {
       attempt.result.state = 'error';
       attempt.result.error = error instanceof Error ? error.message : String(error);
+      if (attempt.result.error.includes('OAuth dynamic client registration failed')) attempt.result.errorCode = 'client_registration_failed';
       delete attempt.result.authorizationUrl;
     }
   }).finally(() => { clearTimeout(expiry); finish(attempt); });

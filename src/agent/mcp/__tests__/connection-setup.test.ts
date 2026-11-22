@@ -30,11 +30,16 @@ it('discovers verified OAuth metadata from a 403 challenge', async () => {
   expect(await probeMcpConnection(config, '/fixture', 'docs')).toMatchObject({ state: 'oauth_required', auth: { method: 'oauth', metadata: 'valid' }, observation: { status: 403 } });
 });
 
-it('recognizes advertised OAuth after a native transport reports a generic HTTP 401', async () => {
+it.each([false, true])('recognizes advertised OAuth after HTTP 401 with configured supplementary credentials %s', async supplemental => {
+  const target = structuredClone(config);
+  if (supplemental) {
+    target.mcp!.servers!.docs.oauth = {};
+    target.mcp!.servers!.docs.headers = { 'X-Workspace': { xopcSecretRef: { provider: 'fixture', fieldKey: 'workspace' } } };
+  }
   native.discover.mockImplementationOnce(async (_config, _workspace, _server, options) => { options.diagnostics.observe({ method: 'POST', stage: 'initialize', status: 401, contentType: 'application/json', challenge: 'Bearer resource_metadata="https://fixture.example/.well-known/oauth-protected-resource"' }); throw new Error('HTTP 401'); });
   fetcher.mockResolvedValueOnce(Response.json({ resource: 'https://fixture.example/', authorization_servers: ['https://login.example/'] }))
     .mockResolvedValueOnce(Response.json({ issuer: 'https://login.example/', authorization_endpoint: 'https://login.example/authorize', token_endpoint: 'https://login.example/token' }));
-  expect(await probeMcpConnection(config, '/fixture', 'docs')).toMatchObject({ state: 'oauth_required', auth: { metadata: 'valid', method: 'oauth' } });
+  expect(await probeMcpConnection(target, '/fixture', 'docs')).toMatchObject({ state: 'oauth_required', auth: { metadata: 'valid', method: 'oauth' } });
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
 

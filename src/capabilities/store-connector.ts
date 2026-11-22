@@ -4,6 +4,8 @@ import { isIP } from 'node:net';
 
 import AdmZip from 'adm-zip';
 
+import { hasMcpAuthorizationHeader } from '../agent/mcp/authentication.js';
+import { isPublicMcpTarget } from '../agent/mcp/network-policy.js';
 import type { Config } from '../config/schema.js';
 import { installConnectorDefinition } from '../connectors/install.js';
 import { listConnectorInstances } from '../connectors/instances.js';
@@ -125,9 +127,14 @@ function asStringArray(value: unknown, label: string): string[] {
 const TEMPLATE_PATTERN = /^\{\{(secrets|config)\.([A-Za-z0-9_.-]+)\}\}$/;
 const SETUP_KEY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 
-function readSetup(value: unknown): { setup: ConnectorDefinition['setup']; keys: Set<string> } {
-  if (value === undefined) return { setup: {}, keys: new Set() };
-  const record = asRecord(value, 'Connector setup');
+function setupLink(href: unknown, label?: string): NonNullable<ConnectorDefinition['setup']['links']>[number][] {
+  const url = typeof href === 'string' && href.length <= 2048 ? URL.parse(href) : null;
+  if (!url || url.protocol !== 'https:' || url.username || url.password || !isPublicMcpTarget(url)) return [];
+  return [{ label: label ?? url.hostname, href: url.href, external: true }];
+}
+
+function readSetup(value: unknown, listing: unknown): { setup: ConnectorDefinition['setup']; keys: Set<string> } {
+  const record = value === undefined ? {} : asRecord(value, 'Connector setup');
   const keys = new Set<string>();
   const secrets = record.secrets === undefined
     ? undefined
@@ -164,7 +171,21 @@ function readSetup(value: unknown): { setup: ConnectorDefinition['setup']; keys:
           ...(typeof field.description === 'string' ? { description: field.description } : {}),
         };
       });
-  return { setup: { ...(secrets ? { secrets } : {}), ...(config ? { config } : {}) }, keys };
+  const rawInstructions = (listing as { instructions?: Record<string, unknown> } | undefined)?.instructions;
+  const instructions = Object.fromEntries(['en', 'zh-CN'].flatMap(locale => {
+    const value = rawInstructions?.[locale];
+    return typeof value === 'string' && value.trim() ? [[locale, value.trim().slice(0, 1200)]] : [];
+  }));
+  const explicitLinks = (Array.isArray(record.links) ? record.links : []).slice(0, 8).flatMap(value => {
+    const label = typeof value?.label === 'string' ? value.label.trim() : '';
+    return label && label.length <= 120 && value.external !== false ? setupLink(value.href, label) : [];
+  });
+  // Older packages sometimes give a credential page in the instructions alone.
+  const links = explicitLinks.length ? explicitLinks : [...new Set(Object.values(instructions).flatMap(value =>
+    (value as string).match(/https:\/\/[^\s<>"'，。；！？、「」]+/g)?.map(url => url.replace(/[.,;!?)\]}]+$/, '')) ?? []))]
+    .slice(0, 8).flatMap(href => setupLink(href));
+  return { setup: { ...(secrets ? { secrets } : {}), ...(config ? { config } : {}),
+    ...(links.length ? { links } : {}), ...(Object.keys(instructions).length ? { instructions } : {}) }, keys };
 }
 
 function assertDeclaredTemplateReferences(value: unknown, setupKeys: Set<string>): void {
@@ -287,7 +308,7 @@ function readConnectorManifest(
     if (runtime.adapterVersion !== adapter.version || runtime.binaryVersion !== adapter.binaryVersion
       || Object.keys(runtime).some(key => !['type', 'adapterId', 'adapterVersion', 'binaryVersion'].includes(key))) throw new Error('Store CLI runtime must reference an exact registered adapter.');
     if (asRecord(manifest.auth, 'Connector auth').mode !== 'cli') throw new Error('CLI connectors require managed CLI authorization.');
-    const { setup, keys } = readSetup(manifest.setup);
+    const { setup, keys } = readSetup(manifest.setup, manifest.listing);
     if (keys.size) throw new Error('CLI credentials are managed through authorization.');
     const category = asString(manifest.category, 'Connector category');
     if (!['code', 'docs', 'browser', 'data', 'automation', 'custom'].includes(category)) throw new Error('Unsupported connector category.');
@@ -317,6 +338,9 @@ function readConnectorManifest(
     throw new Error('Store connectors support only none, apiKey, or oauth authentication.');
   }
   if (authMode === 'oauth' && localPackage) throw new Error('MCP OAuth requires a remote Store connector.');
+  if (authMode === 'oauth' && hasMcpAuthorizationHeader(serverTemplate.headers)) {
+    throw new Error('An OAuth connector cannot also specify an Authorization header.');
+  }
   const clientId = auth.clientId === undefined ? undefined : asString(auth.clientId, 'Connector OAuth clientId');
   if (clientId && authMode !== 'oauth') throw new Error('Connector OAuth clientId requires oauth authentication.');
   const normalizedAuth: ConnectorDefinition['auth'] = authMode === 'oauth'
@@ -345,7 +369,7 @@ function readConnectorManifest(
   if ((expectedAuthCapability ? declaredAuthCapabilities.length !== 1 || declaredAuthCapabilities[0] !== expectedAuthCapability : declaredAuthCapabilities.length > 0)) {
     throw new Error('Connector authentication capabilities must match the declared auth mode.');
   }
-  const { setup, keys: setupKeys } = readSetup(manifest.setup);
+  const { setup, keys: setupKeys } = readSetup(manifest.setup, manifest.listing);
   assertDeclaredTemplateReferences(serverTemplate, setupKeys);
   const permissions = readPermissions(manifest.permissions, Boolean(localPackage));
   const endpointReference = typeof serverTemplate.url === 'string' ? TEMPLATE_PATTERN.exec(serverTemplate.url) : null;
@@ -386,6 +410,7 @@ function readConnectorManifest(
             ...Object.fromEntries(Object.entries(serverTemplate).filter(([key]) => !['transport', 'connectionTimeoutMs', 'requestTimeoutMs', 'oauth'].includes(key))),
             url: endpoint,
             type: 'http',
+            xopcPublicOnly: true,
             ...(typeof serverTemplate.requestTimeoutMs === 'number' || typeof serverTemplate.connectionTimeoutMs === 'number'
               ? { timeout: serverTemplate.requestTimeoutMs ?? serverTemplate.connectionTimeoutMs } : {}),
             ...(authMode === 'oauth' ? { oauth: { ...(clientId ? { clientId } : {}) } } : {}),

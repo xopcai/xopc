@@ -53,6 +53,8 @@ class GatewaySession(
   @Synchronized
   fun voiceAuth(): VoiceGatewayAuth {
     val current = profile ?: throw IllegalStateException("NOT_PAIRED")
+    val expected = scopedGatewayId.get()
+    check(expected == null || current.gatewayId == expected) { "GATEWAY_CHANGED" }
     val route = current.routes.firstOrNull { it.id == current.activeRouteId }
       ?: throw IllegalStateException("NO_VERIFIED_ROUTE")
     verifyRoute(current, route)
@@ -77,6 +79,26 @@ class GatewaySession(
         mutationId, durationSeconds)
     }
   }
+  internal fun writeProductMedia(path: String, method: String, contentType: String,
+    parts: List<ByteArray>, headers: Map<String, String> = emptyMap()): String {
+    val expected = scopedGatewayId.get()
+    fun auth(): VoiceGatewayAuth {
+      check(expected == null || profile?.gatewayId == expected) { "GATEWAY_CHANGED" }
+      return voiceAuth()
+    }
+    val initial = synchronized(this) { auth() }
+    return try {
+      http.writeProductMedia(initial.origin, path, method, initial.bearer, contentType, parts, headers)
+    } catch (error: GatewayHttpException) {
+      if (error.status != 401) throw error
+      val refreshed = synchronized(this) {
+        if (accessToken == initial.bearer && (expected == null || profile?.gatewayId == expected)) accessToken = null
+        auth()
+      }
+      http.writeProductMedia(refreshed.origin, path, method, refreshed.bearer, contentType, parts, headers)
+    }
+  }
+
   fun transcribeAudio(bytes: ByteArray, language: String): String {
     val auth = voiceAuth()
     val raw = try { http.transcribeAudio(auth.origin, auth.bearer, bytes, language) }
@@ -168,6 +190,9 @@ class GatewaySession(
     }
     http.downloadMedia(origin, path, bearer, destination)
   }
+
+  internal fun downloadVoiceRecording(path: String, destination: java.io.File) =
+    readMedia { origin, bearer -> http.downloadMedia(origin, path, bearer, destination) }
 
   private fun <T> readMedia(request: (String, String) -> T): T {
     val requiredGatewayId = scopedGatewayId.get()

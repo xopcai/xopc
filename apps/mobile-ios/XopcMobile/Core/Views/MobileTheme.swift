@@ -136,10 +136,11 @@ struct MobilePressStyle: ButtonStyle {
     @Environment(\.mobileTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let radius: CGFloat
+    var restingBackground = Color.clear
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(configuration.isPressed ? theme.active : Color.clear, in: .rect(cornerRadius: radius))
+            .background(configuration.isPressed ? theme.active : restingBackground, in: .rect(cornerRadius: radius))
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }

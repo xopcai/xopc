@@ -44,6 +44,8 @@ internal class VoiceMemoRecorder(private val context: Context) {
       @Suppress("DEPRECATION")
       val capture = if (android.os.Build.VERSION.SDK_INT >= 31) MediaRecorder(context)
         else MediaRecorder()
+      recorder = capture
+      file = output
       capture.setAudioSource(MediaRecorder.AudioSource.MIC)
       capture.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
       capture.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
@@ -54,7 +56,7 @@ internal class VoiceMemoRecorder(private val context: Context) {
       capture.setOutputFile(output.absolutePath)
       capture.setOnInfoListener { _, _, _ -> stopRecording() }
       capture.prepare(); capture.start()
-      recorder = capture; file = output; recordedMs = 0L
+      recordedMs = 0L
       segmentStartedAt = SystemClock.elapsedRealtime()
       phase = "recording"
     } catch (failure: Exception) {

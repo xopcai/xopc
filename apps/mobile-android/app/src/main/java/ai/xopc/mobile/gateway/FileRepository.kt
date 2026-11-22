@@ -37,6 +37,25 @@ class FileRepository(private val gateway: GatewaySession) {
     }
   }
 
+  internal fun upload(spaceId: String, directory: String, name: String, mime: String, bytes: ByteArray): ManagedFile {
+    requireValidFileId(spaceId)
+    require(directory.length <= 4096 && directory.split('/').none { it == "." || it == ".." } &&
+      !directory.startsWith('/') && directory.none { it.isISOControl() || it == '\\' })
+    require(name.isNotBlank() && name.length <= 255 && name != "." && name != ".." &&
+      name.none { it.isISOControl() || it in "/\\\"" })
+    require(bytes.size <= FILE_UPLOAD_LIMIT && mime.matches(Regex("[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+")))
+    val boundary = "xopc-${UUID.randomUUID()}"
+    val prefix = ("--$boundary\r\nContent-Disposition: form-data; name=\"directory\"\r\n\r\n$directory\r\n" +
+      "--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"$name\"\r\n" +
+      "Content-Type: $mime\r\n\r\n").toByteArray()
+    val raw = gateway.writeProductMedia("/api/files/spaces/${encodeSegment(spaceId)}/upload", "POST",
+      "multipart/form-data; boundary=$boundary", listOf(prefix, bytes, "\r\n--$boundary--\r\n".toByteArray()))
+    return parseFile(JSONObject(raw).getJSONObject("resource")).also {
+      require(it.spaceId == spaceId && it.kind == "file" && it.relativePath == listOf(directory, name)
+        .filter(String::isNotEmpty).joinToString("/")) { "INVALID_UPLOAD_RESULT" }
+    }
+  }
+
   fun resource(id: String): ManagedFile {
     requireValidFileId(id)
     return parseFile(
@@ -97,3 +116,5 @@ class FileRepository(private val gateway: GatewaySession) {
 
   private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8")
 }
+
+internal const val FILE_UPLOAD_LIMIT = 8 * 1024 * 1024

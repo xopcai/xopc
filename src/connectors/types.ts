@@ -134,6 +134,7 @@ export type ConnectorDefinition = {
     secrets?: ConnectorSecretField[];
     config?: ConnectorConfigField[];
     links?: ConnectorSetupLink[];
+    instructions?: Partial<Record<'en' | 'zh-CN', string>>;
   };
   runtime: ConnectorRuntimeDefinition;
   permissions?: ConnectorPermissions;

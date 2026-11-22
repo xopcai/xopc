@@ -102,11 +102,9 @@ export function listConnectorInstances(config: Config): ConnectorInstance[] {
               : 'unknown';
       const authStatus: ConnectorInstance['authStatus'] = definition?.auth.mode === 'none'
         ? 'none'
-        : lastHealthStatus === 'missing_secret'
-          ? 'missing'
-          : lastHealthStatus === 'unauthorized'
-            ? 'unauthorized'
-            : 'unknown';
+        : lastHealthStatus === 'ok' ? 'connected'
+          : lastHealthStatus === 'missing_secret' ? 'missing'
+            : lastHealthStatus === 'unauthorized' ? 'unauthorized' : 'unknown';
       const status: ConnectorInstance['status'] = enabled ? (lastHealthStatus === 'ok' ? 'connected' : 'installed') : 'disabled';
       return [
         {

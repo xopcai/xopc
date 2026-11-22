@@ -359,6 +359,8 @@ struct ChatSidebarPresentation<Sidebar: View>: ViewModifier {
                                      animation: reduceMotion ? nil : .easeOut(duration: 0.22),
                                      onSetOpen: onSetOpen, sidebar: sidebar())
                 }
+                .allowsHitTesting(isOpen)
+                .accessibilityHidden(!isOpen)
             }
     }
 }

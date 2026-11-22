@@ -11,6 +11,9 @@ import ai.xopc.mobile.gateway.NoteAttachment
 import ai.xopc.mobile.gateway.NoteSummary
 import ai.xopc.mobile.gateway.ManagedFile
 import ai.xopc.mobile.gateway.ManagedFileSpace
+import ai.xopc.mobile.gateway.GatewayHttpException
+import ai.xopc.mobile.gateway.VoiceNotesGateway
+import ai.xopc.mobile.gateway.VoiceNoteDetail
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -139,6 +142,8 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   onNoteFileSpaces: suspend () -> List<ManagedFileSpace> = { emptyList() },
   onNoteFiles: suspend (String?, String, String) -> List<ManagedFile> = { _, _, _ -> emptyList() },
   onNoteFileContent: suspend (String) -> ByteArray = { byteArrayOf() },
+  onUploadSpaceFile: (suspend (String, String, String, Uri, String?) -> ManagedFile)? = null,
+  voiceNotes: VoiceNotesGateway? = null,
   onExit: (() -> Unit)? = null,
   initialNoteId: String? = null,
   initialProjectDraft: Boolean = false) {
@@ -200,6 +205,35 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     }
   }
   var selectedId by rememberSaveable(state.gatewayId) { mutableStateOf(initialNoteId) }
+  var voiceCapture by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  var openedVoice by remember(state.gatewayId) { mutableStateOf<VoiceNoteDetail?>(null) }
+  var voiceRevision by remember(state.gatewayId, selectedId) { mutableStateOf(0) }
+  var voiceBusy by remember(state.gatewayId, selectedId) { mutableStateOf(false) }
+  var voiceError by remember(state.gatewayId, selectedId) { mutableStateOf(false) }
+  var voiceLookupDone by remember(state.gatewayId, selectedId) { mutableStateOf(false) }
+  val voiceId = selectedId?.takeIf { id -> openedVoice?.noteId == id ||
+    (state.detail?.id == id && state.detail.kind == "voice") ||
+    state.items.any { it.id == id && it.kind == "voice" } }
+  val voiceScope = state.gatewayId
+  var discussion by remember(voiceScope, voiceId) {
+    mutableStateOf(openedVoice?.takeIf { it.noteId == voiceId })
+  }
+  LaunchedEffect(voiceScope, voiceId, voiceRevision, voiceNotes) {
+    val id = voiceId ?: return@LaunchedEffect
+    val gatewayId = voiceScope ?: return@LaunchedEffect
+    val access = voiceNotes ?: return@LaunchedEffect
+    try {
+      do {
+        val current = access.detail(gatewayId, id)
+        if (current != null || discussion == null) discussion = current
+        voiceLookupDone = true
+        voiceError = false
+        if (discussion?.processing != true) break
+        delay(2500)
+      } while (true)
+    } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+    catch (_: Exception) { voiceError = true }
+  }
   val detailScroll = key(state.gatewayId, selectedId) { rememberScrollState() }
   var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(initialProjectDraft) }
   var fileBrowserOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
@@ -220,6 +254,40 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   }
   var filesLoading by remember(state.gatewayId, fileSpaceId, filePath) { mutableStateOf(true) }
   var filesError by remember(state.gatewayId, fileSpaceId, filePath) { mutableStateOf(false) }
+  var uploadTarget by rememberSaveable(state.gatewayId) { mutableStateOf<Pair<String, String>?>(null) }
+  var uploadBusy by remember(state.gatewayId) { mutableStateOf(false) }
+  var uploadIssue by remember(state.gatewayId) { mutableStateOf(0) }
+  var conflictUri by rememberSaveable(state.gatewayId) { mutableStateOf<Uri?>(null) }
+  var replacementName by rememberSaveable(state.gatewayId) { mutableStateOf("") }
+  fun uploadFile(uri: Uri, name: String?) {
+    val (space, directory) = uploadTarget ?: return
+    val gatewayId = state.gatewayId ?: return
+    val upload = onUploadSpaceFile ?: return
+    if (uploadBusy || !fileBrowserOpen || fileSpaceId != space || filePath != directory ||
+      fileSpaces.none { it.id == space && it.writable }) return
+    uploadBusy = true
+    uploadIssue = 0
+    scope.launch {
+      try {
+        upload(gatewayId, space, directory, uri, name)
+        conflictUri = null
+        fileSearch = ""
+        fileRefreshRevision++
+      } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+      catch (error: Exception) {
+        if (error is GatewayHttpException && error.status == 409) {
+          conflictUri = uri
+          replacementName = name.orEmpty()
+        } else {
+          conflictUri = null
+          uploadIssue = if (error.message == "UPLOAD_LIMIT_8_MB") R.string.file_space_upload_limit else R.string.file_space_upload_failed
+        }
+      } finally { uploadBusy = false }
+    }
+  }
+  val uploadPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+    if (it != null) uploadFile(it, null)
+  }
   LaunchedEffect(fileBrowserOpen, fileSpaceId, filePath, fileSearch, fileRefreshRevision, state.gatewayId) {
     if (!fileBrowserOpen) return@LaunchedEffect
     val trimmedSearch = fileSearch.trim()
@@ -294,6 +362,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   }
   val closeFile = {
     when {
+      uploadBusy -> Unit
       selectedFile != null -> selectedFile = null
       filePath.isNotEmpty() -> filePath = filePath.substringBeforeLast('/', "")
       fileSpaceId != null -> fileSpaceId = null
@@ -347,6 +416,30 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     deleteConfirmOpen = false
     onDismissShare()
   }
+  if (voiceCapture && voiceNotes != null && voiceScope != null) {
+    VoiceNoteCapture(voiceScope, voiceNotes, insets, onClose = { voiceCapture = false }) { result ->
+      openedVoice = result
+      selectedId = result.noteId
+      voiceCapture = false
+      onOpen(result.noteId)
+      onSearch(query.trim(), state.status)
+    }
+    return
+  }
+  if (conflictUri != null) AlertDialog(onDismissRequest = { if (!uploadBusy) conflictUri = null },
+    title = { Text(stringResource(R.string.file_space_upload_conflict)) },
+    text = {
+      OutlinedTextField(replacementName, { replacementName = it }, singleLine = true, enabled = !uploadBusy,
+        label = { Text(stringResource(R.string.file_space_upload_new_name)) },
+        modifier = Modifier.testTag("notes-file-upload-name"))
+    },
+    confirmButton = {
+      TextButton(enabled = !uploadBusy && replacementName.isNotBlank() && replacementName.length <= 255 &&
+        replacementName.trim() !in setOf(".", "..") && replacementName.none { it.isISOControl() || it in "/\\\"" },
+        onClick = { conflictUri?.let { uploadFile(it, replacementName) } },
+        modifier = Modifier.testTag("notes-file-upload-rename")) { Text(stringResource(R.string.file_space_upload)) }
+    },
+    dismissButton = { TextButton(enabled = !uploadBusy, onClick = { conflictUri = null }) { Text(stringResource(R.string.progress_cancel)) } })
   Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
@@ -367,7 +460,13 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         Text(if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
           style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
           modifier = Modifier.weight(1f).padding(end = 12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(if (fileBrowserOpen) "" else if (!editorOpen ||
+        if (fileBrowserOpen && selectedFile == null && onUploadSpaceFile != null &&
+          fileSpaces.any { it.id == fileSpaceId && it.writable }) {
+          TextButton(enabled = !uploadBusy, onClick = {
+            uploadTarget = (fileSpaceId ?: return@TextButton) to filePath
+            uploadPicker.launch(arrayOf("*/*"))
+          }, modifier = Modifier.testTag("notes-file-upload")) { Text(stringResource(R.string.file_space_upload)) }
+        } else Text(if (fileBrowserOpen) "" else if (!editorOpen ||
           state.draft?.version == state.draftSyncedVersion) stringResource(R.string.notes_saved)
           else if (state.draftSaving) stringResource(R.string.notes_syncing)
           else if (state.draft?.version == state.draftSavedVersion)
@@ -382,6 +481,12 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(end = 12.dp),
           maxLines = 1, overflow = TextOverflow.Ellipsis)
         PageSearchButton(searchOpen, R.string.notes_search, "notes-open-search", ::toggleSearch)
+        if (voiceNotes != null && voiceScope != null) {
+          IconButton(onClick = { focusManager.clearFocus(force = true); voiceCapture = true },
+            modifier = Modifier.testTag("notes-new-voice")) {
+            ActionIcon(R.drawable.action_microphone, size = 24.dp, contentDescription = stringResource(R.string.voice_note_title))
+          }
+        }
         IconButton(onClick = {
           focusManager.clearFocus(force = true)
           fileSpaceId = null
@@ -399,6 +504,8 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         }
       }
     }
+    if (fileBrowserOpen && uploadBusy) androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
+    if (fileBrowserOpen && uploadIssue != 0) Text(stringResource(uploadIssue), color = MaterialTheme.colorScheme.error)
     val visibleFileSpaces = if (fileSpaceId == null && fileSearch.isBlank()) fileSpaces else emptyList()
     val visibleFileItems = if (fileSpaceId != null) folderItems else
       recentFileItems.orEmpty()
@@ -418,6 +525,24 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       { onSearch(query.trim(), state.status) }, { status -> onSearch(query.trim(), status) },
       { id -> selectedId = id; onOpen(id) }, onLoadMore, Modifier.weight(1f),
       { id -> editorOpen = true; onOpenDraft(id) }, searchOpen = searchOpen, listState = notesListState, filtersOpen = filtersOpen)
+    } else if (discussion != null && voiceNotes != null && voiceScope != null) {
+      val note = requireNotNull(discussion)
+      VoiceNoteResult(note, { file -> voiceNotes.downloadAudio(voiceScope, note, file) }, onRetry = {
+        if (!voiceBusy) scope.launch {
+          voiceBusy = true
+          voiceError = false
+          try {
+            if (note.canRetry) discussion = voiceNotes.retry(voiceScope, note)
+            voiceRevision++
+          } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+          catch (_: Exception) { voiceError = true }
+          finally { voiceBusy = false }
+        }
+      }, busy = voiceBusy, retryError = voiceError, modifier = Modifier.weight(1f))
+    } else if (voiceId != null && voiceNotes != null && !voiceLookupDone) {
+      if (voiceError) OutlinedButton(onClick = { voiceError = false; voiceRevision++ },
+        modifier = Modifier.testTag("voice-note-detail-retry")) { Text(stringResource(R.string.voice_note_load_error)) }
+      else BrandLoadingPanel(modifier = Modifier.weight(1f))
     } else NotesDetailContent(state, selectedId!!, { onOpen(selectedId!!) }, Modifier.weight(1f),
       { editorOpen = true; onEditNote() }, { moreOpen = true }, {
         historyTimestamp = null

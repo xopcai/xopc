@@ -204,17 +204,17 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             maxHeight: `calc(100dvh - ${callPosition.top + 12}px)`,
           } : {}) }}
           className={cn('xopc-session-context-popover data-[state=closed]:pointer-events-none fixed right-3 top-[calc(4.5rem+env(safe-area-inset-top))] z-[71] flex flex-col overflow-hidden border bg-surface-overlay text-fg shadow-float focus:outline-none',
-            callAnchor ? 'h-[min(34rem,calc(100dvh-6rem))] w-[min(27rem,calc(100vw-1.5rem))] rounded-[1.75rem] border-edge-subtle' : 'h-[min(480px,calc(100dvh-6rem))] w-[min(380px,calc(100vw-1.5rem))] rounded-xl border-edge')}>
-          <header className={cn('flex shrink-0 items-center justify-between gap-3 px-4 py-3', !callAnchor && 'border-b border-edge')}>
+            callAnchor ? 'h-[min(19rem,calc(100dvh-6rem))] w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border-edge-subtle' : 'h-[min(480px,calc(100dvh-6rem))] w-[min(380px,calc(100vw-1.5rem))] rounded-xl border-edge')}>
+          <header className={cn('flex shrink-0 items-center justify-between gap-3 px-4', callAnchor ? 'py-2' : 'border-b border-edge py-3')}>
             <div className="min-w-0"><Dialog.Title className="truncate font-medium">{target?.name ?? lastTargetName.current}</Dialog.Title><Dialog.Description className="text-xs text-fg-muted">{m.callSessionHint}</Dialog.Description></div>
             <div className="flex"><Button variant="ghost" onClick={() => setMore(!more)} aria-label={m.callMore} aria-expanded={more}><Ellipsis className="size-4" /></Button><Button variant="ghost" onClick={() => setExpanded(false)} aria-label={m.callMinimize}><Minimize2 className="size-4" /></Button></div>
           </header>
           {more ? <div className="flex shrink-0 items-center justify-between border-b border-edge px-4 py-2"><Button variant="ghost" aria-pressed={captions} onClick={() => setCaptions(!captions)}><Captions className="size-4" />{m.callCaptions}</Button>{settingsLink}</div> : null}
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-5 py-5">
-            <div className={cn('flex flex-col gap-4', callAnchor && 'items-center py-3 text-center')}>
-              {callAnchor ? <div className="size-24 rounded-full bg-surface-inset" aria-hidden>{presentation?.avatar}</div>
+          <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain', callAnchor ? 'gap-3 px-4 py-3' : 'gap-4 px-5 py-5')}>
+            <div className={cn('flex shrink-0 flex-col', callAnchor ? 'items-center gap-2 py-2 text-center' : 'gap-4')}>
+              {callAnchor ? <div className="size-16 rounded-full bg-surface-inset" aria-hidden>{presentation?.avatar}</div>
                 : <AudioLines className="size-10 text-accent-fg" aria-hidden="true" />}
-              <div><p className="text-lg font-medium" role="status">{status}</p>{connected || !active ? <p className="mt-1 text-xs tabular-nums text-fg-muted">{connected ? voice.elapsedLabel : m.callContinuity}{connected && voice.muted && voice.responsePhase !== 'idle' ? ` · ${m.callMicMuted}` : ''}</p> : null}</div>
+              <div><p className={cn('font-medium', callAnchor ? 'text-base' : 'text-lg')} role="status">{status}</p>{connected || !active ? <p className="mt-1 text-xs tabular-nums text-fg-muted">{connected ? voice.elapsedLabel : m.callContinuity}{connected && voice.muted && voice.responsePhase !== 'idle' ? ` · ${m.callMicMuted}` : ''}</p> : null}</div>
             </div>
             {voice.error ? <details className="text-sm text-fg-muted"><summary className="cursor-pointer">{m.callErrorDetails}</summary><p role="alert" className="mt-2 break-words text-xs">{voice.error}</p></details> : null}
             {!active && voice.failureKind === 'session' ? <div className="space-y-2 text-sm text-fg-muted">
@@ -231,7 +231,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             {connected && target ? <VoiceDelegatedTasks conversationId={target.conversationId} /> : null}
             {connected && target ? <VoiceCallWork key={target.conversationId} voice={voice} conversationId={target.conversationId} m={m} /> : null}
           </div>
-          <footer className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-edge px-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3">
+          <footer className={cn('flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-edge px-3',
+            callAnchor ? 'pb-[max(.5rem,env(safe-area-inset-bottom))] pt-2' : 'pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3')}>
             {active ? <>
               <Button variant="secondary" disabled={!connected} onClick={voice.toggleMute} aria-pressed={voice.muted}>{voice.muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}{voice.muted ? m.callUnmute : m.callMute}</Button>
               {voice.responsePhase !== 'idle' ? <Button variant="ghost" onClick={voice.interruptResponse}>{m.voiceResponseInterrupt}</Button> : null}

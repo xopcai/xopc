@@ -78,6 +78,7 @@ struct AssistantView<Dock: View>: View {
     @State private var personalHeaderHeight: CGFloat = 0
     @State private var ordinaryHeaderHeight: CGFloat = 0
     @State private var positionedTimeline = false
+    @State private var timelineConversationID: String?
     @State private var readingHistory = ChatReadingHistory()
     @State private var timelineScrollCommands = ChatTimelineScrollCommands()
     @State private var stickyMusicHeight: CGFloat = 0
@@ -292,10 +293,7 @@ struct AssistantView<Dock: View>: View {
                 assistantAudio.stop()
                 executionPresentation = nil
                 presentedGeneratedVideo = nil
-                isAtBottom = true
-                followingBottom = true
-                positionedTimeline = false
-                userScrollingMessages = false
+                resetTimelineIfNeeded()
                 if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
                     state.select(agent)
                 }
@@ -616,7 +614,7 @@ struct AssistantView<Dock: View>: View {
 
     private func messageTimeline(cards: [String: [GeneratedMediaCard]]) -> some View {
         GeometryReader { viewport in
-            let maximumMessageWidth = max(0, min(viewport.size.width, 720) - 24) * ChatAppearance.messageWidthRatio
+            let maximumMessageWidth = ChatAppearance.maximumMessageWidth(in: viewport.size.width)
             ScrollViewReader { scroller in
                 ScrollView {
                     timelineContent(cards: cards, maximumMessageWidth: maximumMessageWidth,
@@ -679,7 +677,7 @@ struct AssistantView<Dock: View>: View {
             if userScrollingMessages {
                 readingHistory.towardLatest = towardLatest
             }
-        })
+        }, onBottomChange: { isAtBottom = $0 })
     }
 
     @ViewBuilder
@@ -747,7 +745,7 @@ struct AssistantView<Dock: View>: View {
             }
         }
         .coordinateSpace(name: "chat-timeline-content")
-        .padding(.horizontal, 12)
+        .padding(.horizontal, ChatAppearance.timelineHorizontalPadding)
         .padding(.vertical, 16)
         .frame(maxWidth: 720)
         .frame(maxWidth: .infinity)
@@ -793,20 +791,26 @@ struct AssistantView<Dock: View>: View {
         timelineBottomMarker(scroller: scroller, viewportHeight: viewportHeight)
     }
 
+    @ViewBuilder
     private func timelineBottomMarker(scroller: ScrollViewProxy, viewportHeight: CGFloat) -> some View {
-        Color.clear.frame(height: 1)
+        let marker = Color.clear.frame(height: 1)
             .id("chat-bottom")
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.frame(in: .named("chat-timeline-content")).maxY
             } action: { _ in
                 scheduleBottomScroll(scroller)
             }
-            .onGeometryChange(for: Bool.self) { proxy in
+
+        if #available(iOS 18, *) {
+            marker
+        } else {
+            marker.onGeometryChange(for: Bool.self) { proxy in
                 proxy.frame(in: .named("chat-scroll")).maxY <= viewportHeight + 24
             } action: { atBottom in
                 isAtBottom = atBottom
             }
             .onDisappear { isAtBottom = false }
+        }
     }
 
     private struct TimelineLayout {
@@ -964,7 +968,21 @@ struct AssistantView<Dock: View>: View {
         }
     }
 
+    private func resetTimelineIfNeeded() {
+        let conversationID = conversation?.id
+        guard timelineConversationID != conversationID else { return }
+        timelineConversationID = conversationID
+        isAtBottom = true
+        followingBottom = true
+        positionedTimeline = false
+        userScrollingMessages = false
+        bottomJumpID = nil
+        readingHistory.bottomScrollTask?.cancel()
+        readingHistory.bottomScrollTask = nil
+    }
+
     private func restoreTimeline(_ scroller: ScrollViewProxy) {
+        resetTimelineIfNeeded()
         guard !positionedTimeline, !state.isLoadingHistory, let id = conversation?.id,
               state.isCurrentConversation(id), !state.messages.isEmpty else { return }
         positionedTimeline = true
@@ -1327,9 +1345,9 @@ struct AssistantView<Dock: View>: View {
         Button(action: action) {
             icon.font(.title3).frame(width: 44, height: 44)
                 .foregroundStyle(mobileTheme.foreground)
-                .background(mobileTheme.card, in: Circle())
+                .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MobilePressStyle(radius: 22, restingBackground: mobileTheme.card))
         .accessibilityLabel(title)
     }
 }

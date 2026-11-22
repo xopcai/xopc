@@ -34,6 +34,7 @@ import {
 } from '../connectors-api';
 import { ConnectionUsageGuide } from './connection-usage-guide';
 import { ConnectorLogo } from './connector-logo';
+import { ConnectorSetupGuide } from './connector-setup-guide';
 import type { InstallDraft } from './install-connector-draft';
 
 const inputClass = cn(
@@ -379,25 +380,7 @@ function StandardInstallConnectorDialog({
             </section>
           ) : null}
 
-          {(connector.setup.links ?? []).length > 0 ? (
-            <div className="flex flex-wrap gap-2 rounded-xl border border-edge bg-surface-base p-3">
-              {(connector.setup.links ?? []).map((link) => {
-                const external = link.external !== false && /^https:\/\//i.test(link.href);
-                return (
-                  <a
-                    key={`${link.label}:${link.href}`}
-                    href={external ? link.href : `#${link.href}`}
-                    target={external ? '_blank' : undefined}
-                    rel={external ? 'noopener noreferrer' : undefined}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-fg hover:underline"
-                  >
-                    {link.label}
-                    {external ? <ExternalLink className="size-3.5" aria-hidden /> : null}
-                  </a>
-                );
-              })}
-            </div>
-          ) : null}
+          <ConnectorSetupGuide setup={connector.setup} />
 
           {(connector.setup.secrets ?? []).map((field) => (
             <label key={field.key} className="flex flex-col gap-1.5">

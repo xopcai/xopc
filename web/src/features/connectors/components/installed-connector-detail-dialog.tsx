@@ -24,6 +24,7 @@ import { formatConnectorMessage } from '../utils/connector-i18n';
 import { ComposioConnectorPanel } from './composio-connector-panel';
 import { ConnectionUsageGuide } from './connection-usage-guide';
 import { ConnectorLogo } from './connector-logo';
+import { ConnectorSetupGuide } from './connector-setup-guide';
 
 
 const inputClass = cn(
@@ -186,6 +187,7 @@ function StandardInstalledConnectorDetailDialog({
 
             {isMcp ? (
               <div className="space-y-3 rounded-xl border border-edge bg-surface-base p-3 text-sm">
+                <ConnectorSetupGuide setup={definition?.setup} />
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-fg-muted" role="status">{health?.ok
                     ? formatConnectorMessage(t.toolsAvailable, { count: String(health.toolCount) })

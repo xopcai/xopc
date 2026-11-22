@@ -1,6 +1,6 @@
 import { resolveMcpSetupConfig } from '../../../agent/mcp/effective-server.js';
 import type { Context, Hono } from 'hono';
-import { McpConnectionDrafts, McpDraftError, mcpConfigRevision } from '../../../agent/mcp/connection-drafts.js';
+import { getMcpConnectionCheck, McpConnectionDrafts, McpDraftError, mcpConfigRevision } from '../../../agent/mcp/connection-drafts.js';
 import { withGatewayConfigWriteLock } from '../lib/config-write-lock.js';
 import { discoverMcpTools } from '../../../agent/mcp/tool-catalog.js';
 import { cancelMcpAuthorization, getMcpAuthorization, probeMcpConnection, startMcpAuthorization, submitMcpRedirect } from '../../../agent/mcp/connection-setup.js';
@@ -126,10 +126,9 @@ export function registerMcpRoutes(app: Hono, deps: AuthenticatedRouteDeps): void
     const merged = loadMergedMcpConfig({ workspaceDir: getWorkspacePath(cfg) || './workspace', cfg, scope: 'management' });
     return c.json({ ok: true, payload: {
       servers: Object.entries(merged.config.mcpServers).map(([id, server]) => {
-        const { xopcConnectionCheck, ...configuration } = server;
-        const check = xopcConnectionCheck as { revision?: string; checkedAt?: string; toolCount?: number } | undefined;
+        const check = getMcpConnectionCheck(server);
         return { id, plugin: server.xopcPlugin,
-        lastCheck: check?.revision === mcpConfigRevision(configuration) ? { checkedAt: check.checkedAt, toolCount: check.toolCount } : undefined,
+        lastCheck: check ? { checkedAt: check.checkedAt, toolCount: check.toolCount } : undefined,
         managed: isManagedConnectorServer(server),
         connectorId: isManagedConnectorServer(server) ? server.xopcConnector.connectorId : undefined,
       }; }).sort((a, b) => a.id.localeCompare(b.id)),

@@ -452,6 +452,29 @@ describe('discussion note document', () => {
     }
   });
 
+  it.skipIf(spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status !== 0)('saves Android AAC and transcribes from the resulting note', async () => {
+    const path = join(stateDir, 'android-recording.m4a');
+    const fixture = spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i',
+      'sine=frequency=440:sample_rate=16000:duration=1', '-ac', '1', '-c:a', 'aac', '-b:a', '32k', path], { timeout: 10_000 });
+    expect(fixture.status).toBe(0);
+    const consentPolicyVersion = service.settings().consentPolicyVersion;
+    service.acknowledgeConsent(consentPolicyVersion);
+    const capture = await service.create({ clientRequestId: 'android-aac', consentPolicyVersion, source: 'mobile' });
+    const id = capture.discussion.id;
+    const bytes = await readFile(path);
+    await service.uploadRecordingChunk(id, 0, createHash('sha256').update(bytes).digest('hex'), new Blob([bytes]).stream());
+    const saved = await finalizeRecording(service, id, { chunkCount: 1, mimeType: 'audio/mp4', fileName: 'recording.m4a' });
+    expect(saved.discussion).toMatchObject({ noteId: capture.note.id, mimeType: 'audio/mp4' });
+    expect(saved.discussion.audioAttachmentId).toBeTruthy();
+    const transcribeSegment = vi.fn(async (audio: Buffer) => {
+      expect(audio.subarray(0, 4).toString()).toBe('RIFF');
+      return { text: 'Transcribed from Android audio', provider: 'controlled' };
+    });
+    await new DiscussionSealer({ notes, getConfig: () => ({}) as never, transcribeSegment }).tick();
+    expect(transcribeSegment).toHaveBeenCalledOnce();
+    expect((await service.getByNoteId(capture.note.id))?.transcript.text).toBe('Transcribed from Android audio');
+  });
+
   it.skipIf(process.env.XOPC_MEETING_LONG_SMOKE !== '1')('ingests two hours and resumes transcription after a midpoint rate limit and database restart', async () => {
     const source = join(stateDir, 'two-hour.wav');
     const generated = spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono', '-t', '7200', '-c:a', 'pcm_s16le', source], { timeout: 30_000 });

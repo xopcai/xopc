@@ -35,7 +35,7 @@ internal fun voiceClientEvent(type: String, payload: JSONObject): String = JSONO
 internal fun voiceUplink(epoch: Int, utteranceId: String, sequence: Int,
   capturedAtMs: Double, start: Boolean, end: Boolean, audio: ByteArray): ByteArray {
   val id = utteranceId.toByteArray(Charsets.UTF_8)
-  require(epoch > 0 && sequence > 0 && id.isNotEmpty() && id.size <= 160 &&
+  require(epoch != 0 && sequence > 0 && id.isNotEmpty() && id.size <= 160 &&
     audio.isNotEmpty() && audio.size % 2 == 0 &&
     HEADER_BYTES + id.size + audio.size <= MAX_FRAME_BYTES) { "INVALID_VOICE_FRAME" }
   return ByteBuffer.allocate(HEADER_BYTES + id.size + audio.size).order(ByteOrder.BIG_ENDIAN).apply {
@@ -62,7 +62,7 @@ internal fun parseVoiceDownlink(bytes: ByteArray): VoiceDownlinkFrame {
   val idLength = buffer.short.toInt() and 0xffff
   val payloadLength = buffer.int
   require(magic == MAGIC && version == 3 && direction == 2 && codec == 1 && flags == 0 &&
-    epoch > 0 && sequence > 0 && timestamp.isFinite() && duration == 20 &&
+    epoch != 0 && sequence > 0 && timestamp.isFinite() && duration == 20 &&
     idLength in 1..160 && payloadLength > 0 && payloadLength % 2 == 0 &&
     HEADER_BYTES + idLength + payloadLength == bytes.size) { "INVALID_VOICE_FRAME" }
   val id = ByteArray(idLength).also(buffer::get).toString(Charsets.UTF_8)

@@ -5,6 +5,7 @@ struct ChatScrollInteraction: ViewModifier {
     let onStart: () -> Void
     let onEnd: () -> Void
     let onDirectionChange: (Bool) -> Void
+    let onBottomChange: (Bool) -> Void
     @State private var previousDragTranslation = CGSize.zero
 
     func body(content: Content) -> some View {
@@ -17,6 +18,11 @@ struct ChatScrollInteraction: ViewModifier {
                 if current != previous {
                     onDirectionChange(current > previous)
                 }
+            }.onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentSize.height + geometry.contentInsets.bottom
+                    - geometry.containerSize.height - geometry.contentOffset.y <= 24
+            } action: { _, atBottom in
+                onBottomChange(atBottom)
             }.onScrollPhaseChange { previous, phase in
                 if phase == .interacting {
                     onStart()

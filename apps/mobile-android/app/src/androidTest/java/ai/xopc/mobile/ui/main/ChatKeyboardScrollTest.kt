@@ -12,12 +12,16 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertIsNotFocused
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.core.view.ViewCompat
@@ -33,18 +37,21 @@ class ChatKeyboardScrollTest {
 
   private data class Frame(val time: Long, val messageBottom: Float, val composerTop: Float, val imeVisible: Boolean)
 
-  @Test fun keyboardKeepsLongReplyAtComposerWithoutJumpingOrRebounding() {
+  @Test fun tappingLongReplyDismissesImeAndKeepsDraftWithoutRebounding() {
     val reply = (0 until 36).joinToString("\n\n") { "Paragraph $it: a long response that fills several screens." }
     showChat(listOf(ConversationMessage("question", "user", "Show me a long answer"),
       ConversationMessage("long-reply", "assistant", reply)))
     val message = rule.onNodeWithTag("message-assistant-card-long-reply").fetchSemanticsNode()
     val composer = rule.onNodeWithTag("assistant-bottom-surface").fetchSemanticsNode()
-    val opening = captureKeyboardTransition(message, composer, visible = true) {
-      rule.onNodeWithTag("assistant-input").performClick()
-    }
+    val input = rule.onNodeWithTag("assistant-input")
+    val opening = captureKeyboardTransition(message, composer, visible = true) { input.performClick() }
     assertTracksComposer(opening, opening = true)
-    val closing = captureKeyboardTransition(message, composer, visible = false) { Espresso.pressBack() }
+    input.performTextInput("Keep this draft")
+    val closing = captureKeyboardTransition(message, composer, visible = false) {
+      rule.onNodeWithTag("message-assistant-card-long-reply").performTouchInput { click() }
+    }
     assertTracksComposer(closing, opening = false)
+    input.assertIsNotFocused().assertTextContains("Keep this draft")
   }
 
   @Test fun openingKeyboardWhileReadingHistoryDoesNotJumpToLatest() {
@@ -52,13 +59,15 @@ class ChatKeyboardScrollTest {
     rule.onNodeWithTag("assistant-message-list").performScrollToNode(hasText("Reply 1"))
       .performTouchInput { swipeDown() }
     rule.onNodeWithText("Reply 0").assertIsDisplayed()
+    val jump = rule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
     val message = rule.onNodeWithTag("message-assistant-card-message-5").fetchSemanticsNode()
     val composer = rule.onNodeWithTag("assistant-bottom-surface").fetchSemanticsNode()
     captureKeyboardTransition(message, composer, visible = true) {
       rule.onNodeWithTag("assistant-input").performClick()
     }
+    rule.onNodeWithText("Reply 0").assertIsDisplayed()
     rule.onNodeWithText("Reply 29").assertIsNotDisplayed()
-    rule.onNodeWithTag("assistant-jump-bottom").assertDoesNotExist()
+    jump.assertIsDisplayed()
     Espresso.pressBack()
   }
 

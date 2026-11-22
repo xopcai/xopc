@@ -119,6 +119,8 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onNoteFileSpaces = gateway::noteFileSpaces,
             onNoteFiles = gateway::noteFiles,
             onNoteFileContent = gateway::noteFileContent,
+            onUploadSpaceFile = gateway::uploadSpaceFile,
+            voiceNotes = gateway.voiceNotes,
             onLoadMoreNotes = gateway::loadMoreNotes,
             onOpenNote = gateway::openNote,
             onNewNote = gateway::beginNoteDraft,

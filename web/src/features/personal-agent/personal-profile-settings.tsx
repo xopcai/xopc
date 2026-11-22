@@ -7,6 +7,7 @@ import type { VoiceCallPreferencesPatch } from '@xopcai/realtime-protocol/voice'
 import { Skeleton } from '@/components/ui/skeleton';
 import { bumpAgentAvatarCacheRevision } from '@/features/settings/agents/agent-avatar-cache';
 import { bosonVoiceSettingsUrl, fetchBosonVoiceSettings } from '@/features/settings/voice-config-api';
+import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { PersonalAvatar, type PersonalAppearance } from './personal-avatar';
@@ -30,10 +31,11 @@ const APPEARANCES = [
   { id: 'loopi-care', zh: '温和', en: 'Gentle', color: 'bg-violet-100/50 dark:bg-violet-400/10' },
 ] as const;
 
-export function PersonalProfileSettings({ zh, onOpenVoiceServices, showMessageReactions = false }: {
+export function PersonalProfileSettings({ zh, onOpenVoiceServices, showMessageReactions = false, compact = false }: {
   zh: boolean;
   onOpenVoiceServices?: () => void;
   showMessageReactions?: boolean;
+  compact?: boolean;
 }) {
   const [record, setRecord] = useState<PersonalAgent | null>(null);
   const recordRef = useRef<PersonalAgent | null>(null);
@@ -156,7 +158,7 @@ export function PersonalProfileSettings({ zh, onOpenVoiceServices, showMessageRe
     }
   };
 
-  if (loading) return <div className="space-y-4"><Skeleton className="h-20 w-full" /><Skeleton className="h-48 w-full" /></div>;
+  if (loading) return <div className={compact ? 'space-y-3' : 'space-y-4'}><Skeleton className={compact ? 'h-11 w-full' : 'h-20 w-full'} /><Skeleton className="h-48 w-full" /></div>;
   if (record?.state !== 'ready') return <div className="space-y-3 text-sm text-fg-muted">
     {error ? <p role="alert">{error}</p> : null}
     <Link to="/personal" className="text-accent hover:underline">{zh ? '前往 Ada 完成设置' : 'Finish setting up Ada'}</Link>
@@ -164,10 +166,11 @@ export function PersonalProfileSettings({ zh, onOpenVoiceServices, showMessageRe
   </div>;
   const messageReactionsLabel = zh ? '消息表情' : 'Message reactions';
   const messageReactionsEnabled = record.messageReactionsEnabled === true;
-  return <section className="space-y-5" aria-label={zh ? 'Ada 助手设置' : 'Ada assistant settings'}>
-    <div className="relative flex flex-col items-center text-center">
-      <button type="button" disabled={uploadingAvatar} onClick={() => setShowAppearanceChoices(open => !open)} aria-expanded={showAppearanceChoices} aria-controls="personal-appearance-options" aria-label={zh ? '选择头像' : 'Choose avatar'} className="rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
-        <PersonalAvatar appearance={appearance} agentId={record.agentId} className="size-16" />
+  const sectionSpacing = compact ? 'space-y-3' : 'space-y-5';
+  return <section className={sectionSpacing} aria-label={zh ? 'Ada 助手设置' : 'Ada assistant settings'}>
+    <div className={cn('flex items-center', compact ? 'gap-2' : 'flex-col')}>
+      <button type="button" disabled={uploadingAvatar} onClick={() => setShowAppearanceChoices(open => !open)} aria-expanded={showAppearanceChoices} aria-controls="personal-appearance-options" aria-label={zh ? '选择头像' : 'Choose avatar'} className="shrink-0 rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
+        <PersonalAvatar appearance={appearance} agentId={record.agentId} className={compact ? 'size-11' : 'size-16'} />
       </button>
       <input id="personal-name" aria-label={zh ? '助手名称' : 'Assistant name'}
         value={displayName} onChange={event => setDisplayName(event.target.value)}
@@ -184,9 +187,10 @@ export function PersonalProfileSettings({ zh, onOpenVoiceServices, showMessageRe
             event.currentTarget.blur();
           }
         }} maxLength={60} placeholder="Ada"
-        className="mt-2 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 py-1 text-center text-lg font-semibold text-fg outline-none transition-colors hover:border-edge focus:border-edge focus:bg-surface-base focus-visible:ring-2 focus-visible:ring-accent" />
+        className={cn('w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 py-1 font-semibold text-fg outline-none transition-colors hover:border-edge focus:border-edge focus:bg-surface-base focus-visible:ring-2 focus-visible:ring-accent',
+          compact ? 'text-sm' : 'mt-2 text-center text-lg')} />
     </div>
-    <div className="space-y-5">
+    <div className={sectionSpacing}>
         {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         {showAppearanceChoices && <section id="personal-appearance-options">
           <h3 className="mb-3 text-sm font-medium text-fg">{zh ? '形象' : 'Appearance'}</h3>

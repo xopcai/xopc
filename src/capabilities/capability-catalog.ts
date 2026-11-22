@@ -1,4 +1,5 @@
 import { listAgentEntries, resolveDefaultAgentId } from '../agent/agent-scope.js';
+import { getMcpConnectionCheck } from '../agent/mcp/connection-drafts.js';
 import { listStoreConnectorCatalog } from '../capabilities/store-connector.js';
 import { isBundledChannelExtension } from '../channels/bundled-channel-extensions.js';
 import { buildChannelCatalogForConfig, buildChannelCatalogFromSnapshot, getChannelSetupStatus } from '../channels/catalog/channel-catalog-service.js';
@@ -124,7 +125,8 @@ async function connections(config: Config, locale: Locale): Promise<CapabilityCa
   for (const [targetId, server] of Object.entries(config.mcp?.servers ?? {})) {
     if (isManagedConnectorServer(server)) continue;
     const id = targetId === 'setup' ? 'mcp:server:setup' : 'mcp:' + targetId;
-    rows.set(id, { id, targetId, name: server.displayName ?? targetId, group: server.enabled === false ? 'disabled' : 'configured' });
+    rows.set(id, { id, targetId, name: server.displayName ?? targetId,
+      group: server.enabled === false ? 'disabled' : server.url && getMcpConnectionCheck(server) ? 'connected' : 'configured' });
   }
 
   try {

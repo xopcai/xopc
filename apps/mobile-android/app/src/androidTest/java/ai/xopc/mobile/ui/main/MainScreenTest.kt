@@ -314,7 +314,7 @@ class MainScreenTest {
   @Test fun assistantFollowsNewMessagesAtBottomAndOffersJumpAfterReadingBack() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val id = "11111111-2222-3333-4444-555555555555"
-    val initial = (0 until 30).map { index ->
+    val initial = (0 until 117).map { index ->
       ConversationMessage("message-$index", "assistant", "Reply $index")
     }
     val state = mutableStateOf(ConnectionUiState(profile = profile,
@@ -324,12 +324,12 @@ class MainScreenTest {
         MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value)
       }
     }
-    composeTestRule.onNodeWithText("Reply 29").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Reply 116").assertIsDisplayed()
     composeTestRule.runOnIdle {
       state.value = state.value.copy(messages = initial +
-        ConversationMessage("message-30", "assistant", "Reply 30"))
+        ConversationMessage("message-117", "assistant", "Reply 117"))
     }
-    composeTestRule.onNodeWithText("Reply 30").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Reply 117").assertIsDisplayed()
 
     composeTestRule.onNodeWithTag("assistant-message-list").performScrollToNode(hasText("Reply 1"))
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
@@ -348,11 +348,11 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-jump-working", useUnmergedTree = true).assertDoesNotExist()
     composeTestRule.runOnIdle {
       state.value = state.value.copy(messages = state.value.messages +
-        ConversationMessage("message-31", "assistant", "Reply 31"))
+        ConversationMessage("message-118", "assistant", "Reply 118"))
     }
-    composeTestRule.onNodeWithText("Reply 31").assertIsNotDisplayed()
+    composeTestRule.onNodeWithText("Reply 118").assertIsNotDisplayed()
     composeTestRule.onNodeWithTag("assistant-jump-bottom").performClick()
-    composeTestRule.onNodeWithText("Reply 31").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Reply 118").assertIsDisplayed()
     composeTestRule.onNodeWithTag("assistant-jump-bottom").assertDoesNotExist()
   }
 
@@ -3529,7 +3529,8 @@ class MainScreenTest {
             ConversationMessage("answer-latest", "assistant", "最新消息保持展开", "turn-latest"))))
     }
     composeTestRule.onNodeWithTag("message-preview-answer-long", useUnmergedTree = true).assertExists()
-    composeTestRule.onNodeWithTag("message-view-more-answer-long").performClick()
+    composeTestRule.onNodeWithTag("message-view-more-answer-long").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("message-assistant-card-answer-long").performTouchInput { click() }
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_message_detail)).assertDoesNotExist()
     composeTestRule.onNode(hasText("第9行内容", substring = true) and
       hasAnyAncestor(hasTestTag("message-detail-scroll"))).assertExists()

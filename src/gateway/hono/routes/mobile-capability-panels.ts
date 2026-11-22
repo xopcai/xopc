@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 import { AgentCatalogService } from '../../../agent-catalog/service.js';
 import type { SkillCatalogEntry } from '../../../agent/agent-manager.js';
-import { McpConnectionDrafts, McpDraftError } from '../../../agent/mcp/connection-drafts.js';
+import { getMcpConnectionCheck, McpConnectionDrafts, McpDraftError } from '../../../agent/mcp/connection-drafts.js';
 import { evictAllEmbeddedSessionRunners } from '../../../agent/embedded/session-runner.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { getStoreConnectorInstallPlan, installStoreConnector } from '../../../capabilities/store-connector.js';
@@ -15,6 +15,7 @@ import { buildChannelCatalogForConfig, buildChannelCatalogFromSnapshot, getChann
 import type { ChannelCatalogEntry } from '../../../channels/catalog/channel-catalog-types.js';
 import { isBundledChannelExtension } from '../../../channels/bundled-channel-extensions.js';
 import type { Config as SurfaceConfig } from '../../../config/config-surface.js';
+import type { McpServerConfig } from '../../../config/schema.js';
 import { getWorkspacePath } from '../../../config/workspace-path-helpers.js';
 import { startConnectorAuthorization } from '../../../connectors/auth-provider-registry.js';
 import { getConnectorDefinition } from '../../../connectors/catalog.js';
@@ -23,7 +24,7 @@ import { assertComposioAccessConfigured } from '../../../connectors/composio-ses
 import { getInstalledConnectorDefinition, listConnectorInstances } from '../../../connectors/instances.js';
 import { installConnectorDefinition, updateConnectorConfig } from '../../../connectors/install.js';
 import { setConnectorEnabled } from '../../../connectors/lifecycle.js';
-import { materializeConnectorMcpServer } from '../../../connectors/materialize.js';
+import { isManagedConnectorServer, materializeConnectorMcpServer } from '../../../connectors/materialize.js';
 import { connectorSecretProviderId } from '../../../connectors/secret-store.js';
 import type { ConnectorDefinition, ConnectorInstallInput } from '../../../connectors/types.js';
 import { listAgentPluginInventory } from '../../../extensions/agent-plugins/inventory.js';
@@ -302,22 +303,31 @@ function connectorLinks(definition: ConnectorDefinition): PanelLink[] | undefine
 }
 
 function connectorSetupSteps(definition: ConnectorDefinition, t: Translator): string[] | undefined {
-  const steps: string[] = [];
+  const { instructions } = definition.setup;
+  const guide = instructions && t(instructions['zh-CN'] ?? instructions.en ?? '', instructions.en ?? instructions['zh-CN'] ?? '');
+  const steps: string[] = guide ? [guide] : [];
   const hasLinks = Boolean(definition.setup.links?.some(link => safeLink(link.href)));
   const hasPath = Boolean(definition.setup.config?.some(field => field.type === 'path'));
   const hasSecrets = Boolean(definition.setup.secrets?.length);
-  if (hasLinks) {
+  if (hasLinks && !guide) {
     steps.push(t('可先打开下方链接获取所需凭据或查看说明。', 'Open the link below to get the required credentials or instructions.'));
   }
   if (hasPath) {
     steps.push(t('目录路径填写运行 Gateway 的电脑上的本地路径。', 'Folder paths refer to directories on the computer running the Gateway.'));
   }
   if (hasSecrets) {
+    if (!hasLinks && !guide && definition.auth.mode === 'apiKey') {
+      steps.push(t('请在服务商后台创建或复制所需凭据，再回到这里填写。', 'Create or copy the credential in the provider’s console, then return here to enter it.'));
+    }
     steps.push(t('填写下方凭据后保存，密钥会加密保存在 Gateway。', 'Enter the credentials below and save. Secrets are stored encrypted on the Gateway.'));
   } else if (definition.setup.config?.length) {
-    steps.push(t('填写下方配置项后点击添加即可在对话中使用。', 'Fill in the settings below and add the connection to use it in chat.'));
+    steps.push(t('填写并保存下方设置。', 'Enter and save the settings below.'));
   }
   return steps.length ? steps : undefined;
+}
+
+function connectorSetupGuide(definition: ConnectorDefinition, t: Translator): Pick<Panel, 'links' | 'steps'> {
+  return { links: connectorLinks(definition), steps: connectorSetupSteps(definition, t) };
 }
 
 function connectorInput(definition: ConnectorDefinition, values: Record<string, string>): ConnectorInstallInput {
@@ -439,6 +449,15 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
   }
 
   async function connection(c: Context, id: string, t: Translator, command?: Command): Promise<Panel> {
+    async function setupInstalledMcp(serverId: string, name: string, server: McpServerConfig, oauth: boolean,
+      guide?: Pick<Panel, 'steps' | 'links'>) {
+      if (!command || (!command.flow && command.action !== 'configure-mcp')) return;
+      const panel = await mobileMcpSetup(getGatewayPrincipal(c).principalId, t, command, {
+        id, serverId, name, server, method: oauth ? 'oauth' : 'auto', guide,
+      });
+      return command.action === 'edit' && !panel.flow ? await connection(c, id, t) : panel;
+    }
+
     if (id.startsWith('conversation:')) {
       const conversationId = z.uuid().parse(id.slice('conversation:'.length));
       if (!connectorPrincipalForSession(conversationId).isLocalOwner) return { available: false };
@@ -529,8 +548,13 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
     if (id.startsWith('mcp:')) {
       const key = id === 'mcp:server:setup' ? 'setup' : id.slice(4);
       const server = Object.hasOwn(service.currentConfig.mcp?.servers ?? {}, key) ? service.currentConfig.mcp?.servers?.[key] : undefined;
-      if (!server) throw new McpDraftError(404, 'Connection not found.');
+      if (!server || isManagedConnectorServer(server)) throw new McpDraftError(404, 'Connection not found.');
+      if (server.url && server.enabled !== false) {
+        const setup = await setupInstalledMcp(key, server.displayName ?? key, server, Boolean(server.oauth));
+        if (setup) return setup;
+      }
       if (command?.action === 'save') {
+        if (command.flow) throw new McpDraftError(409, 'The connection setup is unavailable. Reopen the connection.');
         await withGatewayConfigWriteLock(service, async () => {
           const before = service.currentConfig;
           const next = structuredClone(before);
@@ -560,17 +584,24 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
           ? t('远程 MCP · 旧版 SSE', 'Remote MCP · Legacy SSE')
           : t('远程 MCP · Streamable HTTP', 'Remote MCP · Streamable HTTP');
       const subtitle = [transportLabel, server.description?.trim()].filter(Boolean).join(' · ');
+      const ready = server.enabled !== false && (!server.url || Boolean(getMcpConnectionCheck(server)));
       return {
         subtitle,
-        message: server.enabled !== false
-          ? t('已启用，可在对话中直接使用此 MCP 服务。', 'Enabled and ready to use in chat.')
-          : t('已停用，开启后即可在对话中使用。', 'Disabled. Enable it to use in chat.'),
+        message: ready ? t('已启用，可在对话中直接使用此 MCP 服务。', 'Enabled and ready to use in chat.')
+          : server.enabled === false ? t('连接已停用。', 'The connection is disabled.')
+          : t('请先验证连接。', 'Verify this connection before using it.'),
         detailsLabel: t('关于此连接', 'About this connection'),
         details: t('服务地址与认证凭据保存在 Gateway。如需修改连接地址或凭据，可移除后重新添加。',
           'Server address and credentials are stored on the Gateway. To change them, remove this connection and add it again.'),
         fields: [toggle('enabled', t('启用连接', 'Enable connection'), server.enabled !== false)],
-        chatPrompt: server.enabled !== false ? useCapability(server.displayName ?? key, key, t) : undefined,
+        chatPrompt: ready ? useCapability(server.displayName ?? key, key, t) : undefined,
         actions: [
+          ...(server.url && server.enabled !== false ? [{
+            id: 'configure-mcp',
+            label: server.oauth ? ready ? t('重新授权', 'Reauthorize') : t('连接账号', 'Connect account')
+              : t('验证连接', 'Verify connection'),
+            advanced: ready,
+          }] : []),
           { id: 'save', label: t('保存配置', 'Save settings') },
           {
             id: 'remove',
@@ -586,7 +617,26 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
       const instance = listConnectorInstances(service.currentConfig).find(row => row.connectorId === id);
       const known = instance ? getInstalledConnectorDefinition(service.currentConfig, instance.instanceId) ?? definition : definition;
       if (known) {
+        let guide = connectorSetupGuide(known, t);
+        const guideSource = instance && known.source === 'store' && !known.setup.links?.length && !known.setup.instructions
+          ? known.provenance : undefined;
+        if (guideSource && command?.action === 'setup-guide') {
+          const { packageName, sha256 } = guideSource;
+          const published = await getStoreConnectorInstallPlan(service.currentConfig, packageName, known.version).catch(() => undefined);
+          if (published?.definition.provenance?.sha256 !== sha256) {
+            throw new McpDraftError(409, t('暂时无法读取此版本的官方配置说明。', 'The setup guide for this installed version is unavailable.'));
+          }
+          guide = connectorSetupGuide(published.definition, t);
+        }
+        const server = instance?.materialized.type === 'mcp' ? service.currentConfig.mcp?.servers?.[instance.instanceId] : undefined;
+        const remote = server?.url ? server : undefined;
+        const oauth = known.auth.mode === 'oauth' || Boolean(remote?.oauth);
+        if (instance?.enabled && remote) {
+          const setup = await setupInstalledMcp(instance.instanceId, instance.displayName, remote, oauth, guide);
+          if (setup) return setup;
+        }
         if (command?.action === 'save') {
+          if (command.flow) throw new McpDraftError(409, 'The connection setup is unavailable. Reopen the connection.');
           await withGatewayConfigWriteLock(service, async () => {
             const previous = service.currentConfig;
             const next = structuredClone(previous);
@@ -620,17 +670,24 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
           });
           return { ...await connection(c, id, t), message: t('连接设置已保存。', 'Connection settings saved.') };
         }
-        const ready = instance?.enabled && !['unauthorized', 'error'].includes(instance.connectionStatus)
-          && !['missing', 'unauthorized'].includes(instance.authStatus);
-        const links = connectorLinks(known);
-        const steps = instance ? undefined : connectorSetupSteps(known, t);
+        const ready = instance?.enabled && (remote ? instance.connectionStatus === 'connected'
+          : !['unauthorized', 'error'].includes(instance.connectionStatus) && !['missing', 'unauthorized'].includes(instance.authStatus));
         return {
-          ...(steps ? { steps } : {}),
-          ...(links ? { links } : {}),
+          ...guide,
+          ...(instance?.enabled && remote && !ready ? { message: oauth
+            ? t('此连接需要完成 OAuth 授权和验证。', 'Complete OAuth authorization and verification to use this connection.')
+            : t('请先验证连接。', 'Verify this connection before using it.') } : {}),
           fields: [...connectorFields(known, instance?.config, t), ...(instance
             ? [toggle('enabled', t('启用连接', 'Enable connection'), instance.enabled)] : [])],
           chatPrompt: ready ? useCapability(instance.displayName, id, t) : undefined,
-          actions: [{ id: 'save', label: instance ? t('保存设置', 'Save settings') : t('添加连接', 'Add connection'),
+          actions: [...(instance?.enabled && remote ? [{
+            id: 'configure-mcp', label: oauth
+              ? ready ? t('重新授权', 'Reauthorize') : t('连接账号', 'Connect account')
+              : t('验证连接', 'Verify connection'),
+            advanced: Boolean(ready),
+          }] : []), ...(guideSource && command?.action !== 'setup-guide' && (known.auth.mode === 'apiKey' || oauth) ? [{
+            id: 'setup-guide', label: t('查看服务商配置说明', 'View provider setup guide'), advanced: true,
+          }] : []), { id: 'save', label: instance ? t('保存设置', 'Save settings') : t('添加连接', 'Add connection'),
             ...(!instance ? { confirmation: [known.displayName, ...(known.capabilities ?? [])].join('\n') } : {}) }],
         };
       }
@@ -643,12 +700,12 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
         if (connectorReviews.size >= 128) connectorReviews.delete(connectorReviews.keys().next().value!);
         const flow = randomUUID();
         connectorReviews.set(flow, { principal, id, plan, expires: Date.now() + 600_000 });
-        const links = connectorLinks(plan.definition);
-        const steps = connectorSetupSteps(plan.definition, t);
         return {
           flow,
-          ...(steps ? { steps } : {}),
-          ...(links ? { links } : {}),
+          ...(plan.definition.runtime.type === 'mcp' && plan.definition.auth.mode === 'oauth' ? {
+            message: t('安装后需要在服务商页面授权。', 'After installation, authorize with the provider.'),
+          } : {}),
+          ...connectorSetupGuide(plan.definition, t),
           fields: connectorFields(plan.definition, {}, t),
           actions: [{ id: 'install',
             label: t('安装连接', 'Install connection'),
@@ -670,7 +727,8 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
               review.plan.version, review.plan.reviewHash);
             if (!(await service.saveConfig(next, previous)).saved) throw new McpDraftError(409, 'Connection settings changed.');
           });
-          return { ...await connection(c, id, t), message: t('连接已安装。', 'Connection installed.') };
+          const installed = await connection(c, id, t);
+          return { ...installed, message: [t('连接已安装。', 'Connection installed.'), installed.message].filter(Boolean).join(' ') };
         } catch (error) {
           connectorReviews.set(flow, review);
           throw error;

@@ -4,15 +4,16 @@ import { basename, resolve } from 'node:path';
 
 import { z } from 'zod';
 
+import { hasMcpAuthorizationHeader } from '../../../agent/mcp/authentication.js';
 import { McpDraftError, type McpConnectionDrafts } from '../../../agent/mcp/connection-drafts.js';
 import type { McpAuthorization, McpConnectionProbe } from '../../../agent/mcp/connection-setup.js';
 import { isPrivateMcpTarget, isPublicMcpTarget, suggestsPrivateMcpHostname } from '../../../agent/mcp/network-policy.js';
 import { McpServerSchema, type McpServerConfig } from '../../../config/schema.js';
+import { isManagedConnectorServer } from '../../../connectors/materialize.js';
 import { isRecord } from '../../../utils/is-record.js';
 import type { Command, Field, Panel, PanelAction, Translator } from './mobile-capability-panels.js';
 
 const TTL_MS = 10 * 60_000;
-const AUTHORIZATION_HEADER = 'authorization';
 const transportHeaders = new Set([
   'accept', 'connection', 'content-length', 'content-type', 'expect', 'host', 'keep-alive', 'last-event-id',
   'mcp-protocol-version', 'mcp-session-id', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade',
@@ -23,6 +24,7 @@ const oauthSchema = z.strictObject({
   clientName: z.string().trim().min(1).max(128).optional(),
   clientRegistration: z.enum(['dcr', 'cimd']).optional(),
   scope: z.string().trim().max(512).optional(),
+  callbackPort: z.number().int().min(1024).max(65535).optional(),
 });
 const authSchema = z.enum(['auto', 'none', 'bearer', 'apiKey', 'headers', 'oauth']);
 const urlTransport = z.enum(['http', 'streamable-http', 'sse']);
@@ -45,7 +47,11 @@ type Candidate = {
   name: string;
   server: McpServerConfig & { displayName: string };
 };
-type Phase = 'preview' | 'review' | 'auth' | 'retry' | 'oauth' | 'authorizing' | 'verified' | 'saved';
+type InstalledTarget = {
+  id: string; serverId: string; name: string; server: McpServerConfig; method: 'auto' | 'oauth';
+  guide?: Pick<Panel, 'steps' | 'links'>;
+};
+type Phase = 'preview' | 'review' | 'auth' | 'retry' | 'oauth' | 'oauth-settings' | 'authorizing' | 'verified' | 'saved';
 type Flow = {
   id: string;
   owner: string;
@@ -57,6 +63,7 @@ type Flow = {
   unsupported?: number;
   selected?: Candidate;
   candidate?: Candidate;
+  installed?: InstalledTarget;
   method?: AuthMethod;
   reviewed?: boolean;
   draftId?: string;
@@ -140,6 +147,16 @@ function importedHeaderEntries(value: unknown, t: Translator): [string, string][
   return Object.entries(parsed.data);
 }
 
+function assertOAuthHeaders(headers: McpServerConfig['headers'], t: Translator): void {
+  if (hasMcpAuthorizationHeader(headers)) {
+    throw new McpDraftError(400, t('OAuth 配置不能同时指定 Authorization 请求头。', 'An OAuth configuration cannot also specify an Authorization header.'));
+  }
+}
+
+function isManagedSetup(flow: Flow): boolean {
+  return isManagedConnectorServer(flow.installed?.server);
+}
+
 function candidateId(label: string, identity: string, importId: string): string {
   if (/^[a-zA-Z0-9_-]{1,64}$/.test(importId) && !['__proto__', 'constructor', 'prototype'].includes(importId.toLowerCase())) return importId;
   const slug = label.replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 42);
@@ -212,9 +229,7 @@ function importCandidates(raw: string | undefined, host: McpSetupHost, t: Transl
       }
       const entries = item.headers === undefined ? [] : importedHeaderEntries(item.headers, t);
       const staticHeaders = entries.length ? headerMap(entries, t) : undefined;
-      if (oauthConfig.data && Object.keys(staticHeaders ?? {}).some(name => name.toLowerCase() === AUTHORIZATION_HEADER)) {
-        throw new McpDraftError(400, t('OAuth 配置不能同时指定 Authorization 请求头。', 'An OAuth configuration cannot also specify an Authorization header.'));
-      }
+      if (oauthConfig.data) assertOAuthHeaders(staticHeaders, t);
       candidates.push(linkCandidate(address, assignedName.data, {
         ...base.data, type: base.data.type ?? 'http', headers: staticHeaders, oauth: oauthConfig.data,
       }, key));
@@ -427,24 +442,54 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
 
   function oauthReady(flow: Flow, t: Translator, message?: string): Panel {
     flow.phase = 'oauth';
-    return { flow: flow.id, ...reviewSummary(flow.candidate, t),
+    return { flow: flow.id, ...connectionSummary(flow, t),
       message: message ?? t('在服务商页面登录并授权。', 'Sign in and authorize access on the provider’s website.'),
       steps: [
+        ...(flow.installed?.guide?.steps ?? []),
         t('点击下方「打开浏览器授权」登录服务商账号。', 'Tap Authorize in browser to sign in with the provider.'),
         t('授权完成后切回本应用，系统会自动检测并加载工具列表。', 'Return to this app after authorizing; connection verification runs automatically.'),
       ],
       actions: [{ id: 'authorize', label: t('打开浏览器授权', 'Authorize in browser') },
-        { id: 'change-auth', label: t('更改认证方式', 'Change authentication') }, backAction(t)] };
+        { id: 'oauth-settings', label: t('OAuth 客户端设置', 'OAuth client settings') },
+        ...(!isManagedSetup(flow) ? [{ id: 'change-auth', label: t('更改认证方式', 'Change authentication') }] : []), backAction(t)] };
+  }
+
+  function connectionSummary(flow: Flow, t: Translator): Partial<Panel> {
+    return flow.installed ? { headline: flow.installed.name, ...flow.installed.guide } : reviewSummary(flow.candidate, t);
+  }
+
+  function oauthSettings(flow: Flow, t: Translator): Panel {
+    flow.phase = 'oauth-settings';
+    const oauth = flow.candidate!.server.oauth;
+    return { flow: flow.id, ...connectionSummary(flow, t),
+      message: t('如果服务商要求预注册客户端，请填写服务商分配的客户端 ID。', 'If the provider requires a pre-registered client, enter the client ID it issued.'),
+      fields: [
+        { id: 'oauthClientId', label: t('客户端 ID', 'Client ID'), type: 'text', format: 'code', value: oauth?.clientId },
+        { id: 'oauthClientSecret', label: t('客户端密钥', 'Client secret'), type: 'secret',
+          hint: oauth?.clientSecret ? t('留空保留已配置的密钥', 'Leave blank to keep the configured secret') : undefined },
+        { id: 'oauthScope', label: t('权限范围', 'Scope'), type: 'text', format: 'code', value: oauth?.scope },
+        { id: 'oauthCallbackPort', label: t('本地回调端口', 'Local callback port'), type: 'text', format: 'code',
+          value: oauth?.callbackPort?.toString(), hint: '1024–65535',
+          description: t('如服务商要求固定回调地址，请注册 http://127.0.0.1:<端口>/callback。', 'If the provider requires a fixed redirect URI, register http://127.0.0.1:<port>/callback.') },
+        ...(!isManagedSetup(flow) ? [{
+          id: 'requestHeaders', label: t('附加请求头', 'Additional request headers'), type: 'headers' as const,
+          description: t('留空保留已配置的请求头。Authorization 由 OAuth 提供。', 'Leave blank to keep existing headers. OAuth supplies Authorization.'),
+          keyLabel: t('请求头名称', 'Header name'), valueLabel: t('请求头值', 'Header value'),
+          addLabel: t('添加请求头', 'Add header'), maxItems: 16,
+        }] : []),
+      ],
+      actions: [{ id: 'save-oauth-settings', label: t('应用 OAuth 设置', 'Apply OAuth settings') },
+        { id: 'back-to-oauth', label: t('返回授权', 'Back to authorization') }, backAction(t)] };
   }
 
   function verified(flow: Flow, t: Translator, toolCount: number): Panel {
     flow.phase = 'verified';
     flow.toolCount = toolCount;
     return {
-      flow: flow.id, ...reviewSummary(flow.candidate, t), tone: 'success',
+      flow: flow.id, ...connectionSummary(flow, t), tone: 'success',
       message: toolCount === 0 ? t('连接检查通过 · 未发现工具', 'Connection verified · No tools found')
         : t(`连接检查通过 · 发现 ${toolCount} 个工具`, `Connection verified · ${toolCount} tools found`),
-      actions: [{ id: 'save', label: t('添加连接', 'Add connection') }, backAction(t)],
+      actions: [{ id: 'save', label: flow.installed ? t('保存连接', 'Save connection') : t('添加连接', 'Add connection') }, backAction(t)],
     };
   }
 
@@ -461,7 +506,7 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
         : result.errorCode === 'access_denied'
           ? t('服务拒绝访问，请检查凭据或访问权限。', 'Access was denied. Check your credentials or access permissions.')
           : t('无法连接到此服务，请检查地址和网络后重试。', 'Could not reach this service. Check the URL and network, then try again.');
-    return { flow: flow.id, ...reviewSummary(flow.candidate, t), message,
+    return { flow: flow.id, ...connectionSummary(flow, t), message,
       actions: [{ id: 'retry', label: stdio ? t('再次运行并检查', 'Run and check again') : t('重新检查', 'Check again') }, backAction(t)] };
   }
 
@@ -487,10 +532,18 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
     if (flow.candidate?.server.type === 'stdio') assertMobileStdioAllowed(readHost().allowStdio, t);
     const result = await drafts.probe(flow.owner, flow.draftId!);
     if (result.state === 'connected') return verified(flow, t, result.toolCount ?? 0);
-    if (result.state === 'oauth_required' && flow.method !== 'none') return oauthReady(flow, t);
+    if (result.state === 'oauth_required' && flow.method === 'auto' && !isManagedSetup(flow) && flow.candidate) {
+      const candidate = flow.candidate;
+      flow.candidate = { ...candidate, server: { ...candidate.server, oauth: candidate.server.oauth ?? {} } };
+      flow.method = 'oauth';
+      return testDraft(flow, t);
+    }
     if (result.state === 'oauth_required' || result.state === 'token_required' || result.state === 'auth_unknown' ||
         (flow.candidate?.server.url && result.errorCode === 'access_denied')) {
       const hasCredentials = Object.keys(flow.candidate?.server.headers ?? {}).length > 0;
+      if (isManagedSetup(flow)) return { flow: flow.id, ...connectionSummary(flow, t),
+        message: t('连接需要有效凭据。请返回连接设置检查服务商配置。', 'The connection requires valid credentials. Return to connection settings and check the provider configuration.'),
+        actions: [backAction(t)] };
       flow.rejectedHeaders = hasCredentials;
       return needsAuth(flow, t, hasCredentials
         ? t('服务拒绝了访问。请检查凭据和权限，或切换认证方式。', 'Access was denied. Check your credentials and permissions, or choose another authentication method.')
@@ -520,15 +573,18 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
       throw new McpDraftError(409, t('请先审阅连接。', 'Review the connection first.'));
     }
     if (candidate.server.type === 'stdio') assertMobileStdioAllowed(readHost().allowStdio, t);
+    if (flow.method === 'oauth') assertOAuthHeaders(candidate.server.headers, t);
     clearDraft(flow);
     flow.phase = 'retry';
     try {
-      const draft = await drafts.create(flow.owner, { serverId: candidate.id, server: candidate.server }, { protectCredentials: true });
+      const draft = flow.installed
+        ? await drafts.createInstalled(flow.owner, candidate.id, flow.installed.server, candidate.server)
+        : await drafts.create(flow.owner, { serverId: candidate.id, server: candidate.server }, { protectCredentials: true });
       flow.draftId = draft.id;
       renew(flow, draft.expiresAt);
       return flow.method === 'oauth' ? oauthReady(flow, t) : await probe(flow, t);
     } catch (error) {
-      if (!(error instanceof McpDraftError) || error.status !== 409) throw error;
+      if (flow.installed || !(error instanceof McpDraftError) || error.status !== 409) throw error;
       return { flow: flow.id, ...reviewSummary(candidate, t),
         message: t('此服务已添加，请返回修改地址或选择其他配置。', 'This server is already added. Go back to change the URL or select another configuration.'),
         actions: [backAction(t)] };
@@ -538,16 +594,24 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
   function authorization(flow: Flow, t: Translator, result: McpAuthorization): Panel {
     if (result.state === 'connected') return verified(flow, t, result.toolCount ?? 0);
     if (result.state === 'error' || result.state === 'cancelled') {
-      return oauthReady(flow, t, t('授权未完成，可以重试或返回配置。', 'Authorization did not finish. Try again or go back.'));
+      return oauthReady(flow, t, result.errorCode === 'client_registration_failed'
+        ? t('服务商拒绝了 OAuth 客户端注册。请在 OAuth 客户端设置中填写服务商认可的客户端 ID。',
+          'The provider rejected OAuth client registration. Enter a client ID approved by the provider in OAuth client settings.')
+        : t('授权未完成，可以重试或返回配置。', 'Authorization did not finish. Try again or go back.'));
     }
     flow.phase = 'authorizing';
     let authorizationUrl: string | undefined;
     if (result.authorizationUrl) {
       authorizationUrl = browserAuthorizationUrl(result.authorizationUrl, flow.candidate?.server);
-      if (!authorizationUrl) return oauthReady(flow, t, t('服务未提供可用的授权链接。', 'The provider did not return a usable authorization link.'));
+      if (!authorizationUrl) {
+        drafts.cancelAuthorization(flow.owner, flow.draftId!);
+        return oauthReady(flow, t, t('服务未提供可用的授权链接。', 'The provider did not return a usable authorization link.'));
+      }
     }
-    return { flow: flow.id, ...reviewSummary(flow.candidate, t), authorizationUrl, pollAction: 'status',
-      message: t('请在浏览器完成授权，返回后将自动检查连接。', 'Finish authorization in the browser. The connection will be checked when you return.'),
+    return { flow: flow.id, ...connectionSummary(flow, t), authorizationUrl, pollAction: 'status',
+      message: authorizationUrl
+        ? t('请在浏览器完成授权，返回后将自动检查连接。', 'Finish authorization in the browser. The connection will be checked when you return.')
+        : t('正在向服务商请求授权链接…', 'Requesting an authorization link from the provider…'),
       fields: result.acceptsRedirect ? [{ id: 'callback', label: t('浏览器最后打开的地址', 'Final browser address'),
         type: 'secret', advanced: true, hint: t('仅在授权未自动完成时使用', 'Use only if authorization does not finish automatically') }] : undefined,
       actions: [backAction(t), ...(result.acceptsRedirect ? [{
@@ -555,9 +619,25 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
       }] : [])] };
   }
 
-  return async function mobileMcpSetup(owner: string, t: Translator, command?: Command): Promise<Panel> {
+  return async function mobileMcpSetup(owner: string, t: Translator, command?: Command, installed?: InstalledTarget): Promise<Panel> {
     if (!command) return entry(t, { allowStdio: readHost().allowStdio });
     const { action, values } = command;
+    if (installed && !command.flow && action === 'configure-mcp') {
+      const flow = newFlow(owner, t);
+      flow.installed = installed;
+      flow.candidate = { id: installed.serverId, name: installed.name,
+        server: { ...installed.server, displayName: installed.name } };
+      flow.method = installed.method;
+      flow.busy = true;
+      try {
+        return { ...await testDraft(flow, t), revision: flow.revision };
+      } catch (error) {
+        clearTimeout(flow.timer);
+        clearDraft(flow);
+        flows.delete(flow.id);
+        throw error;
+      } finally { flow.busy = false; }
+    }
     if (!command.flow && action === 'preview') {
       const imported = importCandidates(values['mcp-json'], readHost(), t);
       const flow = newFlow(owner, t);
@@ -584,7 +664,8 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
         if (!transport.success || !network.success) throw new McpDraftError(400, t('请检查传输协议和网络范围。', 'Check the transport and network scope.'));
         const address = serverAddress(values.url, network.data, t);
         const headers = method.data === 'bearer' && values.token ? bearerHeaders(values.token, t) : undefined;
-        candidate = linkCandidate(address, name.data, { type: transport.data, headers });
+        candidate = linkCandidate(address, name.data, { type: transport.data, headers,
+          ...(method.data === 'oauth' ? { oauth: {} } : {}) });
       }
       const flow = newFlow(owner, t);
       flow.busy = true;
@@ -599,7 +680,10 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
     }
 
     const flow = command.flow ? flows.get(command.flow) : undefined;
-    if (!flow || flow.owner !== owner) return entry(t, { message: t('配置已过期，请重新检查。', 'Setup expired. Check the connection again.'), allowStdio: readHost().allowStdio });
+    if (!flow || flow.owner !== owner || flow.installed?.id !== installed?.id) {
+      if (installed || flow?.installed) throw new McpDraftError(409, t('配置已过期，请重新打开连接。', 'Setup expired. Reopen the connection.'));
+      return entry(t, { message: t('配置已过期，请重新检查。', 'Setup expired. Check the connection again.'), allowStdio: readHost().allowStdio });
+    }
     if (flow.busy) throw new McpDraftError(409, t('正在处理，请稍后重试。', 'An operation is in progress. Try again shortly.'));
     if (flow.receipt?.action === action && flow.receipt.revision === command.revision) return flow.receipt.panel;
     if (command.revision !== flow.revision) {
@@ -637,6 +721,7 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
       }
       clearTimeout(flow.timer);
       flows.delete(flow.id);
+      if (flow.installed) return {};
       return entry(t, flow.candidates ? { source: 'json', allowStdio: readHost().allowStdio } : {
         source: flow.candidate?.server.type === 'stdio' ? 'stdio' : 'link', candidate: flow.candidate, method: flow.method, allowStdio: readHost().allowStdio,
       });
@@ -666,13 +751,38 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
         const entries = keyValueRows(values.requestHeaders, t);
         server.headers = headerMap(entries.filter(([name, value]) => name.trim() || value.trim()), t);
       }
-      if (method.data !== 'oauth') server.oauth = undefined;
+      server.oauth = method.data === 'oauth' ? server.oauth ?? {} : undefined;
+      if (method.data !== 'auto') server.auth = undefined;
       flow.candidate = { ...flow.candidate, server };
       flow.method = method.data;
       flow.rejectedHeaders = false;
       return await testDraft(flow, t);
     }
-    if (action === 'change-auth' && flow.phase === 'oauth') return needsAuth(flow, t);
+    if (action === 'change-auth' && flow.phase === 'oauth' && !isManagedSetup(flow)) return needsAuth(flow, t);
+    if (action === 'oauth-settings' && flow.phase === 'oauth') return oauthSettings(flow, t);
+    if (action === 'back-to-oauth' && flow.phase === 'oauth-settings') return oauthReady(flow, t);
+    if (action === 'save-oauth-settings' && flow.phase === 'oauth-settings' && flow.candidate) {
+      const server = flow.candidate.server;
+      const current = server.oauth;
+      const parsed = oauthSchema.safeParse({
+        clientId: values.oauthClientId?.trim() || undefined,
+        clientSecret: values.oauthClientSecret?.trim() || undefined,
+        scope: values.oauthScope?.trim() || undefined,
+        callbackPort: values.oauthCallbackPort?.trim() ? Number(values.oauthCallbackPort) : undefined,
+      });
+      if (!parsed.success) throw new McpDraftError(400, t('请检查 OAuth 客户端设置。', 'Check the OAuth client settings.'));
+      const { clientId, clientSecret, scope, callbackPort } = parsed.data;
+      const secret = clientSecret ?? (clientId === current?.clientId ? current?.clientSecret : undefined);
+      if (secret && !clientId) throw new McpDraftError(400, t('客户端密钥需要搭配客户端 ID。', 'A client secret requires a client ID.'));
+      const entries = isManagedSetup(flow) ? [] : keyValueRows(values.requestHeaders, t)
+        .filter(([name, value]) => name.trim() || value.trim());
+      const headers = entries.length ? headerMap(entries, t) : server.headers;
+      assertOAuthHeaders(headers, t);
+      flow.candidate = { ...flow.candidate, server: { ...server, headers,
+        oauth: { ...current, clientId, clientSecret: secret, scope, callbackPort } } };
+      flow.method = 'oauth';
+      return await testDraft(flow, t);
+    }
     if (action === 'retry' && flow.phase === 'retry' && flow.draftId) return await probe(flow, t);
     if (action === 'authorize' && flow.phase === 'oauth' && flow.draftId) {
       return authorization(flow, t, drafts.authorize(owner, flow.draftId));
@@ -691,8 +801,9 @@ export function createMobileMcpSetup(drafts: McpConnectionDrafts, readHost: () =
       const result = await publish(owner, flow.draftId, enable, candidate.server.type === 'stdio', t);
       const remaining = flow.candidates?.filter(item => item.id !== candidate.id) ?? [];
       const message = result.reloadRequired ? t('连接已保存，重启网关后生效。', 'Connection saved. Restart the Gateway to apply it.')
+        : flow.installed ? t('连接已验证并保存', 'Connection verified and saved')
         : enable ? t('连接已添加', 'Connection added') : t('连接已添加 · 已停用', 'Connection added · Disabled');
-      const saved: Panel = { flow: flow.id, ...reviewSummary(candidate, t), message, tone: 'success',
+      const saved: Panel = { flow: flow.id, ...connectionSummary(flow, t), message, tone: 'success',
         actions: [{ id: 'done', label: t('完成', 'Done'), dismiss: true }, ...(remaining.length
           ? [{ id: 'add-another', label: t('继续导入其他服务', 'Import another server') }] : [])] };
       flow.phase = 'saved';

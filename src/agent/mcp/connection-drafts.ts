@@ -4,7 +4,9 @@ import { CredentialResolver } from '../../auth/credentials.js';
 import { McpServerSchema, type Config, type McpServerConfig } from '../../config/schema.js';
 import { getWorkspacePath } from '../../config/workspace-path-helpers.js';
 import { isManagedConnectorServer } from '../../connectors/materialize.js';
-import { createConnectorSecretReference } from '../../connectors/secret-store.js';
+import { createConnectorSecretReference, resolveConnectorSecretReferences } from '../../connectors/secret-store.js';
+import { recordConnectorHealthUsage } from '../../connectors/usage.js';
+import { hasMcpAuthorizationHeader } from './authentication.js';
 import { loadMergedMcpConfig } from './config.js';
 import { createNativeMcpCredentials, type NativeMcpCredentials } from './credential-store.js';
 import { cancelMcpAuthorization, getMcpAuthorization, probeMcpConnection, startMcpAuthorization, submitMcpRedirect,
@@ -21,6 +23,15 @@ function canonical(value: unknown): unknown {
 export function mcpConfigRevision(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(canonical(value)) ?? 'null').digest('hex');
 }
+function verificationRevision({ xopcConnectionCheck: _check, enabled: _enabled, xopcConnector: _marker, ...server }: McpServerConfig): string {
+  return mcpConfigRevision(server);
+}
+export function getMcpConnectionCheck(server: McpServerConfig) {
+  const { xopcConnectionCheck: check, ...previous } = server;
+  if (!check || typeof check !== 'object' || !('revision' in check)) return;
+  if (check.revision !== verificationRevision(server) && check.revision !== mcpConfigRevision(previous)) return;
+  return check as { checkedAt?: string; toolCount?: number };
+}
 export class McpDraftError extends Error {
   constructor(public readonly status: 400 | 404 | 409 | 429 | 500, message: string) { super(message); }
 }
@@ -30,6 +41,7 @@ type Draft = {
   expiresAt: number; timer: ReturnType<typeof setTimeout>; probe?: McpConnectionProbe; authorizationId?: string;
   running: boolean; committing: boolean; checkedAt?: string;
   protectCredentials: boolean;
+  endpoint?: string;
   toolsPending?: ReturnType<typeof discoverMcpTools>;
 };
 export type McpDraftInput = { serverId: string; sourceServerId?: string; expectedServer?: unknown; server: unknown };
@@ -44,20 +56,45 @@ export class McpConnectionDrafts {
   }) {}
 
   async create(owner: string, input: McpDraftInput, options?: { protectCredentials?: boolean }) {
+    return this.createDraft(owner, input, options?.protectCredentials === true, false);
+  }
+
+  /** Only internal callers may start from a Gateway-owned connector definition. */
+  async createInstalled(owner: string, serverId: string, expectedServer: McpServerConfig,
+    authentication: Pick<McpServerConfig, 'oauth' | 'headers' | 'auth'>) {
+    if (!expectedServer.url) throw new McpDraftError(400, 'An installed remote MCP server is required.');
+    return this.createDraft(owner, {
+      serverId, sourceServerId: serverId, expectedServer,
+      server: { ...expectedServer, oauth: authentication.oauth, ...(isManagedConnectorServer(expectedServer) ? {} : {
+        headers: authentication.headers, auth: authentication.auth,
+      }) },
+    }, true, true);
+  }
+
+  private async createDraft(owner: string, input: McpDraftInput, protectCredentials: boolean, installed: boolean) {
     const current = this.options.readConfig();
     if (!/^[a-zA-Z0-9_-]+$/.test(input.serverId) || input.sourceServerId && input.sourceServerId !== input.serverId) throw new McpDraftError(400, 'Invalid or changed MCP server ID.');
     const source = Object.hasOwn(current.mcp?.servers ?? {}, input.serverId) ? current.mcp?.servers?.[input.serverId] : undefined;
-    if (input.sourceServerId && (!source || isManagedConnectorServer(source))) throw new McpDraftError(409, 'The original custom server no longer exists.');
+    if (input.sourceServerId && (!source || (!installed && isManagedConnectorServer(source)))) throw new McpDraftError(409, 'The original server is unavailable for this operation.');
     if (input.sourceServerId && mcpConfigRevision(source) !== mcpConfigRevision(input.expectedServer)) throw new McpDraftError(409, 'The original configuration changed. Reload before testing.');
     this.assertAvailable(current, input.serverId, input.sourceServerId);
     const parsed = McpServerSchema.safeParse(input.server);
     if (!parsed.success) throw new McpDraftError(400, 'Invalid MCP configuration.');
+    if (parsed.data.oauth && (parsed.data.auth || hasMcpAuthorizationHeader(parsed.data.headers))) {
+      throw new McpDraftError(400, 'OAuth cannot be combined with another Authorization credential.');
+    }
     const revision = mcpConfigRevision(source);
     const server = structuredClone(parsed.data);
-    for (const internal of ['xopcConnector', 'xopcPlugin', 'xopcOAuthCredentialId', 'xopcConnectionCheck']) delete server[internal];
+    if (!installed) delete server.xopcConnector;
+    if (installed && isManagedConnectorServer(server) && server.xopcConnector.source === 'store') {
+      server.xopcPublicOnly = true;
+    }
+    for (const internal of ['xopcPlugin', 'xopcOAuthCredentialId', 'xopcConnectionCheck']) delete server[internal];
+    const endpoint = installed && server.url ? await resolveConnectorSecretReferences(server.url) : undefined;
+    if (installed && typeof endpoint !== 'string') throw new McpDraftError(409, 'The MCP endpoint credential is missing.');
     const workspace = getWorkspacePath(current) || process.cwd();
     const config = structuredClone(current);
-    config.mcp = { servers: { [input.serverId]: { ...server, enabled: true } } };
+    config.mcp = { servers: { [input.serverId]: { ...server, ...(typeof endpoint === 'string' ? { url: endpoint } : {}), enabled: true } } };
     const credentials = await createNativeMcpCredentials(true);
     if (this.drafts.size >= 100 || [...this.drafts.values()].filter(draft => draft.owner === owner).length >= 8) throw new McpDraftError(429, 'Too many unsaved MCP connection tests.');
     const id = randomUUID();
@@ -67,8 +104,9 @@ export class McpConnectionDrafts {
     }, TTL_MS);
     timer.unref();
     const draft: Draft = { id, owner, serverId: input.serverId, sourceServerId: input.sourceServerId,
-      revision, workspace, server, config, credentials, protectCredentials: options?.protectCredentials === true, controller: new AbortController(),
-      timer, expiresAt: Date.now() + TTL_MS, running: false, committing: false };
+      revision, workspace, server, config, credentials, protectCredentials, controller: new AbortController(),
+      timer, expiresAt: Date.now() + TTL_MS, running: false, committing: false,
+      endpoint: typeof endpoint === 'string' ? endpoint : undefined };
     this.drafts.set(id, draft);
     return { id, serverId: draft.serverId, expiresAt: draft.expiresAt };
   }
@@ -139,6 +177,7 @@ export class McpConnectionDrafts {
     this.assertAvailable(current, draft.serverId, draft.sourceServerId);
     draft.committing = true;
     let alias: string | undefined;
+    let credentialUrl: string | undefined;
     let durable: NativeMcpCredentials | undefined;
     const protectedProviders: string[] = [];
     const resolver = draft.protectCredentials ? new CredentialResolver() : undefined;
@@ -167,25 +206,35 @@ export class McpConnectionDrafts {
           server.oauth.clientSecret = await protect('oauth-client-secret', server.oauth.clientSecret);
         }
       }
-      if (typeof server.url === 'string') {
-        const state = await draft.credentials.forServer(draft.serverId, server.url).load();
+      if (server.url) {
+        const resolvedUrl = await resolveConnectorSecretReferences(server.url);
+        if (typeof resolvedUrl !== 'string') throw new McpDraftError(409, 'The MCP endpoint credential is missing.');
+        if (draft.endpoint && draft.endpoint !== resolvedUrl) throw new McpDraftError(409, 'The MCP endpoint changed after verification. Check the connection again.');
+        credentialUrl = resolvedUrl;
+        const state = await draft.credentials.forServer(draft.serverId, credentialUrl).load();
         // An empty native state is intentional: without it pi could adopt historical
         // credentials by server name or the legacy URL key after a public/static-auth test.
         const candidateAlias = `mcp_draft_${randomUUID().replaceAll('-', '')}`;
         durable = await createNativeMcpCredentials();
-        await durable.forServer(candidateAlias, server.url).save(state?.tokens
+        await durable.forServer(candidateAlias, credentialUrl).save(state?.tokens
           ? { ...state, codeVerifier: undefined, oauthState: undefined }
-          : { serverUrl: server.url });
+          : { serverUrl: credentialUrl });
         alias = candidateAlias;
         server.xopcOAuthCredentialId = alias;
       }
       server.xopcConnectionCheck = { checkedAt: draft.checkedAt, toolCount: draft.probe.toolCount ?? 0,
-        revision: mcpConfigRevision(server) };
+        revision: verificationRevision(server) };
       const latest = this.options.readConfig();
       if (mcpConfigRevision(latest.mcp?.servers?.[draft.serverId]) !== draft.revision || (getWorkspacePath(latest) || process.cwd()) !== draft.workspace) throw new McpDraftError(409, 'Configuration changed while preparing the save. Test again.');
       this.assertAvailable(latest, draft.serverId, draft.sourceServerId);
       const next = structuredClone(latest);
       next.mcp = { ...next.mcp, servers: { ...next.mcp?.servers, [draft.serverId]: server } };
+      if (isManagedConnectorServer(server)) {
+        recordConnectorHealthUsage(next, draft.serverId, {
+          serverId: draft.serverId, ok: true, status: 'ok', toolCount: draft.probe.toolCount ?? 0,
+          resourceCount: 0, promptCount: 0, tools: [], resources: [], prompts: [],
+        });
+      }
       const result = await this.options.saveConfig(next, structuredClone(latest));
       // Some persistence implementations can report a post-write reload error. Do not delete credentials now in use.
       published = result.persisted === true || alias !== undefined && this.options.readConfig().mcp?.servers?.[draft.serverId]?.xopcOAuthCredentialId === alias;
@@ -200,7 +249,7 @@ export class McpConnectionDrafts {
     } finally {
       draft.committing = false;
       if (alias && this.options.readConfig().mcp?.servers?.[draft.serverId]?.xopcOAuthCredentialId === alias) published = true;
-      if (!published && alias && durable && typeof draft.server.url === 'string') durable.remove(alias, draft.server.url);
+      if (!published && alias && durable && credentialUrl) durable.remove(alias, credentialUrl);
       if (!published && resolver) {
         await Promise.allSettled(protectedProviders.map(provider => resolver.deleteProfile(`${provider}:default`)));
       }

@@ -17,6 +17,9 @@ import java.security.spec.ECPublicKeySpec
 import java.util.Base64
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -26,6 +29,12 @@ import org.bouncycastle.crypto.signers.Ed25519Signer
 import org.bouncycastle.asn1.ASN1EncodableVector
 import org.bouncycastle.asn1.ASN1Integer
 import org.bouncycastle.asn1.DERSequence
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import okio.ByteString
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -35,6 +44,230 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GatewaySessionTest {
+  @Test fun fileAndVoiceRecordingUploadsUseTheScopedGatewayContracts() = runBlocking {
+    val app = ApplicationProvider.getApplicationContext<Context>()
+    val store = AndroidSecureStore(app, "product_media_credentials_test", "xopc.product.media.test")
+    val base = FakeGateway()
+    var uploadAttempts = 0
+    var capture = "recording"
+    var acknowledged = false
+    var postedRequestId = ""
+    val originals = mutableListOf<ByteArray>()
+    var liveSegment = false
+    var draftId = ""
+    fun detail() = JSONObject()
+      .put("discussion", JSONObject().put("id", "discussion-test").put("noteId", "note-test").put("status", capture)
+        .apply { if (capture == "completed") put("audioAttachmentId", "audio-test") })
+      .put("note", JSONObject().put("id", "note-test").put("title", "Voice note"))
+      .put("transcript", JSONObject().put("text", if (capture == "completed") "Generated transcript" else ""))
+      .apply { if (capture == "completed") put("organization", JSONObject().put("organization",
+        JSONObject().put("summary", "Generated summary"))) }.toString()
+    val fake = object : GatewayHttp by base {
+      override fun requestWithHeaders(origin: String, path: String, method: String, body: String, bearer: String,
+        headers: Map<String, String>): String = when {
+        path == "/api/discussion-capture/settings" -> {
+          if (method == "PUT") {
+            assertEquals(1, JSONObject(body).getInt("consentPolicyVersion"))
+            acknowledged = true
+          }
+          JSONObject().put("consentPolicyVersion", 1)
+            .put("consentAcknowledgedAt", if (acknowledged) 1 else JSONObject.NULL).toString()
+        }
+        path == "/api/discussions" && method == "POST" -> {
+          val request = JSONObject(body)
+          postedRequestId = request.getString("clientRequestId")
+          assertEquals("mobile", request.getString("source"))
+          detail()
+        }
+        path == "/api/discussions/discussion-test/capture/seal" && method == "POST" -> {
+          val manifest = JSONObject(body)
+          assertEquals("audio/wav", manifest.getString("mimeType"))
+          assertEquals("independent_wav", manifest.getString("containerMode"))
+          assertEquals(3, manifest.getInt("chunkCount"))
+          assertEquals(-1, manifest.getInt("lastSequence"))
+          assertEquals(3, originals.size)
+          capture = "stopping"
+          """{"state":"queued"}"""
+        }
+        path == "/api/discussions/by-note/note-test" -> detail()
+        path == "/api/discussions/discussion-test/transcript" ->
+          JSONObject().put("text", if (liveSegment) "Live words" else "").toString()
+        else -> base.requestWithHeaders(origin, path, method, body, bearer, headers)
+      }
+
+      override fun downloadMedia(origin: String, path: String, bearer: String, destination: java.io.File) {
+        assertEquals("/api/discussions/discussion-test/audio", path)
+        destination.writeBytes(originals.first())
+      }
+
+      override fun writeProductMedia(origin: String, path: String, method: String, bearer: String,
+        contentType: String, parts: List<ByteArray>, headers: Map<String, String>): String {
+        assertEquals("https://gateway.example", origin)
+        if (path == "/api/files/spaces/space-test/upload") {
+          assertEquals("POST", method)
+          check(contentType.startsWith("multipart/form-data; boundary="))
+          check(parts.first().decodeToString().contains("name=\"directory\"\r\n\r\nReports"))
+          check(parts.first().decodeToString().contains("filename=\"report.txt\""))
+          assertEquals("test payload", parts[1].decodeToString())
+          return """{"resource":{"id":"file-test","spaceId":"space-test","name":"report.txt","relativePath":"Reports/report.txt","kind":"file"}}"""
+        }
+        assertEquals("PUT", method)
+        if (path == "/api/discussions/discussion-test/segments/0") {
+          check(contentType.startsWith("multipart/form-data; boundary="))
+          val fields = parts.first().decodeToString()
+          check(fields.contains("name=\"startedAtMs\"\r\n\r\n0"))
+          check(fields.contains("name=\"endedAtMs\"\r\n\r\n6000"))
+          check(fields.contains(DeviceRequestProof.digest(parts[1])))
+          assertEquals(VOICE_CHUNK_BYTES * 2 + 44, parts[1].size)
+          liveSegment = true
+          return "{}"
+        }
+        assertEquals("/api/discussions/discussion-test/recording/chunks/${originals.size}", path)
+        assertEquals("application/octet-stream", contentType)
+        if (++uploadAttempts == 2) throw GatewayHttpException(503)
+        val original = parts.single()
+        assertEquals(DeviceRequestProof.digest(original), headers.getValue("x-audio-sha256"))
+        originals += original
+        return """{"sequence":${originals.size - 1}}"""
+      }
+    }
+    val session = GatewaySession(app, fake, DeviceIdentity("xopc.product.media.device.test"), store)
+    clear(store)
+    try {
+      session.pair(invitation()) {}
+      val id = checkNotNull(session.currentProfile()).gatewayId
+      val file = session.withActiveGateway(id) {
+        FileRepository(session).upload("space-test", "Reports", "report.txt", "text/plain", "test payload".toByteArray())
+      }
+      assertEquals("file-test", file.id)
+      val voice = VoiceNotesAccess(app, session)
+      val pcm = ByteArray(VOICE_CHUNK_BYTES) { (it % 251).toByte() }
+      val payload = voiceWav(pcm, pcm.size)
+      voice.acknowledge(id, voice.settings(id).version)
+      val draft = PendingVoiceNote(java.util.UUID.randomUUID().toString(), 1, segmented = true)
+      draftId = draft.id
+      voice.append(id, draft, 0, payload)
+      voice.append(id, draft, 1, payload)
+      assertEquals("Live words", voice.publishLive(id, draft, fallback = true))
+      voice.append(id, draft, 2, voiceWav(pcm, 640))
+      assertEquals(503, (runCatching { voice.submit(id, draft) }.exceptionOrNull() as GatewayHttpException).status)
+      val restored = VoiceNotesAccess(app, session)
+      val pending = restored.pending(id).single { it.id == draft.id }
+      assertEquals("note-test", pending.noteId)
+      assertEquals("queued", restored.submit(id, pending).job)
+      assertEquals(draft.id, postedRequestId)
+      check(payload.contentEquals(originals.first()))
+      capture = "completed"
+      val complete = checkNotNull(restored.detail(id, "note-test"))
+      assertEquals("Generated transcript", complete.transcript)
+      assertEquals("Generated summary", complete.summary)
+      assertEquals(true, complete.audioSaved)
+      val downloaded = java.io.File.createTempFile("voice-test", ".wav", app.cacheDir)
+      try {
+        restored.downloadAudio(id, complete, downloaded)
+        check(payload.contentEquals(downloaded.readBytes()))
+      } finally { downloaded.delete() }
+      assertEquals(false, restored.pending(id).any { it.id == draft.id })
+    } finally {
+      if (draftId.isNotBlank()) {
+        VoiceRecordingStore(app).use { it.delete(gatewayId.toString(), draftId) }
+      }
+      clear(store)
+    }
+  }
+
+  @Test fun discussionDictationSendsSignedPcmAndDisplaysRevisedText() = runBlocking {
+    val app = ApplicationProvider.getApplicationContext<Context>()
+    val store = AndroidSecureStore(app, "discussion_dictation_test", "xopc.discussion.dictation.test")
+    val base = FakeGateway()
+    val voiceSession = UUID.randomUUID().toString()
+    val epoch = 3_500_000_000L
+    val ticket = "dictation-ticket"
+    val operations = Channel<String>(8)
+    val fake = object : GatewayHttp by base {
+      override fun requestWithHeaders(origin: String, path: String, method: String, body: String, bearer: String,
+        headers: Map<String, String>): String = when (path) {
+        "/api/voice/realtime/status" -> """{"payload":{"enabled":true,"capabilities":{"dictation":{"available":true}}}}"""
+        "/api/voice/realtime/preflight" -> {
+          assertEquals("dictation", JSONObject(body).getString("purpose"))
+          operations.trySend("preflight")
+          "{}"
+        }
+        "/api/voice/realtime/sessions" -> {
+          assertEquals("POST", method)
+          assertEquals("websocket-pcm", JSONObject(body).getJSONArray("mediaPreferences").getString(0))
+          """{"payload":{"sessionId":"$voiceSession","ticket":"$ticket","websocketPath":"$VOICE_WS_PATH","connectionEpoch":$epoch,
+            "protocolVersion":3,"inputFormat":{"sampleRate":16000},"limits":{"maxSessionMs":600000},"route":{"engine":"fixture"}}}"""
+        }
+        else -> base.requestWithHeaders(origin, path, method, body, bearer, headers)
+      }
+
+      override fun cancelVoiceCall(origin: String, bearer: String, body: String) {
+        assertEquals(ticket, JSONObject(body).getString("ticket"))
+        operations.trySend("cancel")
+      }
+    }
+    val controls = Channel<JSONObject>(8)
+    val audio = Channel<ByteString>(2)
+    val events = Channel<Pair<WebSocket, WebSocketListener>>(1)
+    val sockets = WebSocket.Factory { request, listener ->
+      assertEquals("wss://gateway.example$VOICE_WS_PATH", request.url.toString().replaceFirst("https://", "wss://"))
+      check(!request.header("X-Xopc-Proof").isNullOrBlank())
+      val socket = object : WebSocket {
+        override fun request(): Request = request
+        override fun queueSize(): Long = 0
+        override fun send(text: String): Boolean = controls.trySend(JSONObject(text)).isSuccess
+        override fun send(bytes: ByteString): Boolean = audio.trySend(bytes).isSuccess
+        override fun close(code: Int, reason: String?): Boolean = true
+        override fun cancel() = Unit
+      }
+      listener.onOpen(socket, Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+        .code(101).message("Switching Protocols").build())
+      check(events.trySend(socket to listener).isSuccess)
+      socket
+    }
+    clear(store)
+    try {
+      val gateway = GatewaySession(app, fake, DeviceIdentity("xopc.discussion.dictation.device.test"), store)
+      gateway.pair(invitation()) {}
+      val live = DiscussionLiveTranscription(gateway, checkNotNull(gateway.currentProfile()).gatewayId, sockets)
+      val connection = launch { live.connect() }
+      try {
+        withTimeout(8_000) {
+          assertEquals("preflight", operations.receive())
+          val (socket, listener) = events.receive()
+          val start = controls.receive()
+          assertEquals("session.start", start.getString("type"))
+          assertEquals(ticket, start.getJSONObject("payload").getString("ticket"))
+          var sequence = 0
+          fun emit(type: String, payload: JSONObject) {
+            listener.onMessage(socket, JSONObject().put("protocolVersion", 3).put("sessionId", voiceSession)
+              .put("seq", ++sequence).put("type", type).put("payload", payload).toString())
+          }
+          emit("session.ready", JSONObject().put("connectionEpoch", epoch).put("route", JSONObject().put("engine", "fixture")))
+          live.available.first { it }
+          live.audio(ByteArray(640) { 25 })
+          val frame = audio.receive().toByteArray()
+          assertEquals(epoch, ByteBuffer.wrap(frame).getInt(8).toLong() and 0xffffffffL)
+          assertEquals(25.toByte(), frame.last())
+          fun transcript(text: String, revision: Int) =
+            JSONObject().put("utteranceId", "utterance").put("revision", revision).put("text", text)
+          emit("input.transcript.delta", transcript("Partial", 3))
+          live.transcript.first { it == "Partial" }
+          emit("input.transcript.delta", transcript("Stale", 2))
+          emit("input.transcript.final", transcript("Final text", 3))
+          live.transcript.first { it == "Final text" }
+          live.commit()
+          assertEquals("input.commit", controls.receive().getString("type"))
+          emit("session.closed", JSONObject())
+          connection.join()
+          assertEquals("cancel", operations.receive())
+          assertEquals(false, live.available.value)
+        }
+      } finally { connection.cancelAndJoin() }
+    } finally { clear(store) }
+  }
+
   @Test fun recentConversationsFillSidebarAcrossPages() = runBlocking {
     val app = ApplicationProvider.getApplicationContext<Context>()
     val store = AndroidSecureStore(app, "sidebar_recents_credentials", "xopc.gateway.credentials.sidebar.recents")

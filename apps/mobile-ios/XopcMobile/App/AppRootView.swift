@@ -192,7 +192,7 @@ struct AppRootView: View {
 
     private var homeShell: some View {
         NavigationStack(path: $appState.homePath) {
-            chatScreen
+            homeChatRoot
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: HomeDestination.self, destination: destination)
         }
@@ -271,6 +271,14 @@ struct AppRootView: View {
                 setSidebar(true)
             }
             reopenSidebar = false
+        }
+    }
+
+    @ViewBuilder private var homeChatRoot: some View {
+        if #available(iOS 18, *) {
+            chatScreen.containerBackground(mobileTheme.canvas, for: .navigation)
+        } else {
+            chatScreen
         }
     }
 

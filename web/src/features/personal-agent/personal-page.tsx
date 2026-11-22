@@ -190,16 +190,16 @@ export function PersonalPage() {
             onInteractOutside={event => {
               if (event.target instanceof Node && (settingsButtonRef.current?.contains(event.target) || tasksButtonRef.current?.contains(event.target) || settingsPopoverRef.current?.contains(event.target) || (event.target instanceof Element && event.target.closest('[data-voice-call-mini]')))) event.preventDefault();
             }}
-            className={`xopc-session-context-popover data-[state=closed]:pointer-events-none z-50 flex h-[min(34rem,calc(100dvh-6rem))] ${voiceCall.active ? 'max-h-[min(var(--radix-popover-content-available-height),calc(100dvh-12rem))]' : 'max-h-[var(--radix-popover-content-available-height)]'} min-h-0 w-[min(27rem,calc(100vw-1.5rem))] max-w-[var(--radix-popover-content-available-width)] flex-col overflow-hidden rounded-[1.75rem] border border-edge-subtle bg-surface-overlay shadow-float outline-none`}>
-            <div className="flex shrink-0 items-center justify-between gap-3 px-5 pb-2 pt-4">
-              <h2 className="text-base font-semibold text-fg">{zh ? '快捷设置' : 'Quick settings'}</h2>
+            className={`xopc-session-context-popover data-[state=closed]:pointer-events-none z-50 flex h-[min(25rem,calc(100dvh-6rem))] ${voiceCall.active ? 'max-h-[min(var(--radix-popover-content-available-height),calc(100dvh-12rem))]' : 'max-h-[var(--radix-popover-content-available-height)]'} min-h-0 w-[min(22rem,calc(100vw-1.5rem))] max-w-[var(--radix-popover-content-available-width)] flex-col overflow-hidden rounded-2xl border border-edge-subtle bg-surface-overlay shadow-float outline-none`}>
+            <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-2">
+              <h2 className="text-sm font-semibold text-fg">{zh ? '快捷设置' : 'Quick settings'}</h2>
               <Popover.Close className="touch-target -mr-2 rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭设置' : 'Close settings'}><X className="size-4" /></Popover.Close>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-2">
-              <PersonalProfileSettings zh={zh} onOpenVoiceServices={openSettings} />
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3">
+              <PersonalProfileSettings zh={zh} onOpenVoiceServices={openSettings} compact />
             </div>
-            <div className="shrink-0 border-t border-edge-subtle p-3">
-              <button type="button" onClick={openSettings} className="w-full rounded-full bg-surface-hover px-4 py-2.5 text-center text-sm font-medium text-fg hover:bg-surface-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '更多设置' : 'More settings'}</button>
+            <div className="shrink-0 border-t border-edge-subtle px-3 py-2">
+              <button type="button" onClick={openSettings} className="touch-target w-full rounded-full bg-surface-hover px-4 py-2 text-center text-sm font-medium text-fg hover:bg-surface-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '更多设置' : 'More settings'}</button>
             </div>
           </Popover.Content>
         </Popover.Portal>

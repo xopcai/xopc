@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import { getCliAdapter } from './cli/adapterRegistry.js';
 import { installCli } from './cli/installer.js';
 import { stopCliInstance } from './cli/lifecycle.js';
@@ -96,6 +98,15 @@ function uninstallRecord(config: Config, instanceId: string): void {
   config.connectors = { ...(config.connectors ?? {}), instances: nextInstances };
 }
 
+function retainMcpOAuthSettings(existing: unknown, replacement: Record<string, unknown>): void {
+  if (!isManagedConnectorServer(existing) || !isManagedConnectorServer(replacement)) return;
+  if (existing.oauth && replacement.oauth && isDeepStrictEqual(existing.url, replacement.url)
+    && existing.xopcConnector.connectorId === replacement.xopcConnector.connectorId
+    && isDeepStrictEqual(existing.xopcConnector.definition?.runtime, replacement.xopcConnector.definition?.runtime)) {
+    replacement.oauth = existing.oauth;
+  }
+}
+
 registerConnectorRuntimeAdapter({
   type: 'cli',
   async install({ config, definition }) {
@@ -128,6 +139,7 @@ registerConnectorRuntimeAdapter({
     if (existingServer && !isManagedConnectorServer(existingServer)) {
       throw new Error(`MCP server "${serverId}" already exists and is not managed by Connectors.`);
     }
+    retainMcpOAuthSettings(existingServer, server);
     await saveConnectorSecrets(definition, input, resolver);
     config.mcp = config.mcp ?? {};
     config.mcp.servers = { ...(config.mcp.servers ?? {}), [serverId]: server };
@@ -158,17 +170,24 @@ registerConnectorRuntimeAdapter({
     if (serverId !== instanceId) {
       throw new Error(`Connector config update cannot change server id from "${instanceId}" to "${serverId}".`);
     }
+    retainMcpOAuthSettings(existingServer, server);
+    const changed = ['url', 'type', 'oauth', 'auth', 'headers', 'command', 'args', 'cwd', 'env']
+      .some(key => !isDeepStrictEqual(existingServer[key], server[key]));
+    const { usage, lastConnectedAt, lastError, ...previousMarker } = existingServer.xopcConnector as Record<string, unknown>;
     config.mcp = config.mcp ?? {};
     config.mcp.servers = {
       ...(config.mcp.servers ?? {}),
       [serverId]: {
         ...server,
+        ...(!changed ? {
+          xopcOAuthCredentialId: typeof existingServer.xopcOAuthCredentialId === 'string' ? existingServer.xopcOAuthCredentialId : undefined,
+          xopcConnectionCheck: existingServer.xopcConnectionCheck,
+        } : {}),
         xopcConnector: {
-          ...existingServer.xopcConnector,
+          ...previousMarker,
           ...(server.xopcConnector as Record<string, unknown>),
           enabled: existingServer.xopcConnector.enabled,
-          lastConnectedAt: existingServer.xopcConnector.lastConnectedAt,
-          lastError: existingServer.xopcConnector.lastError,
+          ...(!changed ? { usage, lastConnectedAt, lastError } : {}),
         },
       },
     };

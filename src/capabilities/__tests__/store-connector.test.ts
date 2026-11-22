@@ -212,9 +212,43 @@ describe('store connector install plans', () => {
     const { server } = materializeConnectorMcpServer(plan.definition, {});
     expect(plan.definition.category).toBe('automation');
     expect(McpServerSchema.safeParse(server).success).toBe(true);
-    expect(server).toMatchObject({ type: 'http', oauth: {}, timeout: 15000 });
+    expect(server).toMatchObject({ type: 'http', oauth: {}, timeout: 15000, xopcPublicOnly: true });
     expect(server).not.toHaveProperty('transport');
     expect(server).not.toHaveProperty('auth');
+  });
+
+  it('rejects OAuth Store connector manifests that also set a static Authorization header', async () => {
+    const value = { ...manifest, capabilities: [...manifest.capabilities, 'auth.oauth'], auth: { mode: 'oauth' },
+      runtime: { ...manifest.runtime, serverTemplate: { ...manifest.runtime.serverTemplate, headers: { authorization: 'Bearer fixture' } } } };
+    mockStore(archiveForManifest(value), undefined, value);
+    await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).rejects.toThrow('cannot also specify an Authorization header');
+  });
+
+  it('retains verified setup links and instructions and drops unusable links', async () => {
+    const value = { ...manifest,
+      setup: { links: [
+        { label: 'Create a token', href: 'https://accounts.example.com/tokens' },
+        { label: 'Insecure', href: 'http://accounts.example.com/tokens' },
+        { label: 'Embedded credentials', href: 'https://user:secret@accounts.example.com/tokens' },
+        { label: 'Private portal', href: 'https://localhost/tokens' },
+      ] },
+      listing: { instructions: { en: 'Create a read-only token.', 'zh-CN': '创建只读令牌。' } },
+    };
+    mockStore(archiveForManifest(value), undefined, value);
+    await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).resolves.toMatchObject({
+      definition: { setup: {
+        links: [{ label: 'Create a token', href: 'https://accounts.example.com/tokens', external: true }],
+        instructions: { en: 'Create a read-only token.', 'zh-CN': '创建只读令牌。' },
+      } },
+    });
+  });
+
+  it('makes a credential portal named in legacy instructions clickable', async () => {
+    const value = { ...manifest, listing: { instructions: { en: 'Visit https://accounts.example.com/token. Then copy the key.' } } };
+    mockStore(archiveForManifest(value), undefined, value);
+    await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).resolves.toMatchObject({
+      definition: { setup: { links: [{ label: 'accounts.example.com', href: 'https://accounts.example.com/token', external: true }] } },
+    });
   });
 
   it('keeps a user MCP URL in the credential store and constrains the resolved provider URL', async () => {

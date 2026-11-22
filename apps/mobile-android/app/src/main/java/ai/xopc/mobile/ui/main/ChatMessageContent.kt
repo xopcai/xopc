@@ -140,6 +140,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
   val showPreview = !selectingText && previewEligible && needsPreview
   val voiceOnly = isUser && message.text.isBlank() && message.references.isEmpty() &&
     message.media.size == 1 && mediaPreviewKind(message.media.first()) == "audio"
+  val horizontalPadding = if (voiceOnly) 4.dp else 10.dp
   BoxWithConstraints(modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
     awaitPointerEventScope {
       while (true) {
@@ -148,7 +149,9 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       }
     }
   }) {
-    val maxBubbleWidth = maxWidth * CHAT_MESSAGE_WIDTH
+    // Keep the reading lane narrower than the list even when the bubble sits near the edge.
+    val maxBubbleWidth = (maxWidth - 24.dp).coerceIn(0.dp, 680.dp) * CHAT_MESSAGE_WIDTH
+    val textWidthAllowance = horizontalPadding * 2 + 2.dp
     val contentCount = message.media.size + message.references.size + message.targets.size +
       message.outcome?.artifacts.orEmpty().size
     val hasWideSyntax = remember(isUser, message.text) { !isUser && assistantWideText.containsMatchIn(message.text) }
@@ -167,12 +170,12 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
         val longestLine = message.text.lineSequence().maxOfOrNull { line ->
           line.sumOf { if (it.code > 255) 16.0 else 8.8 }
         } ?: 0.0
-        (longestLine + 30).dp.coerceIn(minimumWidth, 360.dp)
+        (longestLine.dp + textWidthAllowance).coerceIn(minimumWidth, 360.dp)
       }
       else -> {
         val measured = rememberTextMeasurer().measure(message.text, MaterialTheme.typography.bodyLarge,
           maxLines = 1, softWrap = false).size.width
-        (with(LocalDensity.current) { measured.toDp() } + 30.dp).coerceAtLeast(minimumWidth)
+        (with(LocalDensity.current) { measured.toDp() } + textWidthAllowance).coerceAtLeast(minimumWidth)
       }
     }.coerceAtMost(maxBubbleWidth)
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment =
@@ -192,7 +195,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
         onLongClickLabel = stringResource(R.string.assistant_message_more))
         .then(if (isUser) Modifier.testTag("message-more-${message.id}") else Modifier)
         else Modifier)
-      .padding(start = if (voiceOnly) 4.dp else 14.dp, end = if (voiceOnly) 4.dp else 14.dp,
+      .padding(start = horizontalPadding, end = horizontalPadding,
         top = if (voiceOnly) 0.dp else if (isUser) 10.dp else 12.dp,
         bottom = if (voiceOnly) 0.dp else if (isUser) 10.dp else 12.dp)
       .then(if (isUser) Modifier else Modifier.testTag("message-assistant-card-${message.id}")),
@@ -217,7 +220,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
             MessageReadingImage(media, loadMedia) { onOpenPreview(media, listOf(media)) }
           })
       }
-      if (showPreview) TextButton(onClick = onViewMore, modifier = Modifier.testTag("message-view-more-${message.id}")) {
+      if (isUser && showPreview) TextButton(onClick = onViewMore, modifier = Modifier.testTag("message-view-more-${message.id}")) {
         Text(stringResource(R.string.assistant_view_more), color = chat.action)
       }
       if (isUser) MessageReferences(message.references, onOpenTarget)

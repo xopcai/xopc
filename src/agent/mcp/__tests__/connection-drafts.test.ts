@@ -40,6 +40,13 @@ it('does not change live configuration on failed tests or allow saving an untest
   expect(live).toEqual(before); expect(save).not.toHaveBeenCalled();
 });
 
+it('accepts supplementary headers with OAuth and rejects a second Authorization credential', async () => {
+  const url = 'https://example.com/mcp';
+  await expect(edit({ url, oauth: {}, headers: { authorization: 'Bearer fixture' } })).rejects.toMatchObject({ status: 400 });
+  await expect(edit({ url, oauth: {}, auth: { provider: 'fixture' } })).rejects.toMatchObject({ status: 400 });
+  await expect(edit({ url, oauth: {}, headers: { 'X-Workspace': 'fixture' } })).resolves.toHaveProperty('id');
+});
+
 it('checks source versions at creation and commit, preserves unrelated updates and prevents ID collisions', async () => {
   await expect(drafts.create(owner, { serverId: 'docs', sourceServerId: 'docs', expectedServer: { command: 'old' }, server: { command: 'node' } })).rejects.toMatchObject({ status: 409 });
   const draft = await edit(); await drafts.probe(owner, draft.id);

@@ -9,7 +9,7 @@ import { serve } from '@hono/node-server';
 import { expect, it, vi } from 'vitest';
 
 import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
-import { getMcpAuthorization, probeMcpConnection } from '../../agent/mcp/connection-setup.js';
+import { getMcpAuthorization, probeMcpConnection, startMcpAuthorization } from '../../agent/mcp/connection-setup.js';
 import { createCapabilityCatalogTool } from '../../agent/tools/capability-catalog-tool.js';
 import { CredentialResolver } from '../../auth/credentials.js';
 import { buildChannelCatalogForConfig, getChannelSetupStatus } from '../../channels/catalog/channel-catalog-service.js';
@@ -20,6 +20,8 @@ import { startConnectorAuthorization } from '../../connectors/auth-provider-regi
 import { listComposioConnections } from '../../connectors/composio.js';
 import { assertComposioAccessConfigured } from '../../connectors/composio-sessions.js';
 import { listConnectorInstances } from '../../connectors/instances.js';
+import { installConnectorDefinition } from '../../connectors/install.js';
+import type { ConnectorDefinition } from '../../connectors/types.js';
 import { AgentPluginStore } from '../../extensions/agent-plugins/store.js';
 import { withAgentPluginSource } from '../../extensions/agent-plugins/sources.js';
 import { personalAgentId } from '../../personal-agent/repository.js';
@@ -95,13 +97,32 @@ vi.mock('../../extensions/agent-plugins/inventory.js', () => ({
   }],
 }));
 
-vi.mock('../../capabilities/store-connector.js', async (importActual) => ({
-  ...await importActual<typeof import('../../capabilities/store-connector.js')>(),
-  listStoreConnectorCatalog: async () => [
-    { name: 'sample-service', description: 'Example service', localizations: { 'zh-CN': { displayName: '示例服务' } },
-      branding: { iconUrl: 'https://example.com/connector.svg', iconSha256: 'fixture-hash' } },
-  ],
-}));
+vi.mock('../../capabilities/store-connector.js', async (importActual) => {
+  const actual = await importActual<typeof import('../../capabilities/store-connector.js')>();
+  const definition: ConnectorDefinition = {
+    id: 'sample-service', version: '1.0.0', displayName: 'Sample service', description: 'Example service',
+    source: 'store', kind: 'mcp', category: 'data', capabilities: ['tools', 'auth.oauth'],
+    auth: { mode: 'oauth' }, setup: {
+      links: [{ label: 'Open account settings', href: 'https://example.com/account' }],
+      instructions: { en: 'Ask your administrator for an approved client ID.', 'zh-CN': '请向管理员获取已批准的客户端 ID。' },
+    },
+    provenance: { packageName: 'sample-service', sha256: 'fixture-sha' },
+    runtime: { type: 'mcp', serverId: 'sample_service', serverTemplate: {
+      type: 'http', url: 'https://example.com/sample', oauth: {}, headers: { 'X-Workspace': 'sample-workspace' },
+    } },
+  };
+  const plan = { packageName: definition.id, version: definition.version, definition, permissions: {},
+    requiresRestart: false, reviewHash: 'fixture-review' } as const;
+  return {
+    ...actual,
+    getStoreConnectorInstallPlan: async () => plan,
+    installStoreConnector: (async config => ({ plan, instance: await installConnectorDefinition(config, definition, {}) })) as typeof actual.installStoreConnector,
+    listStoreConnectorCatalog: async () => [
+      { name: 'sample-service', description: 'Example service', localizations: { 'zh-CN': { displayName: '示例服务' } },
+        branding: { iconUrl: 'https://example.com/connector.svg', iconSha256: 'fixture-hash' } },
+    ],
+  };
+});
 
 it.each(['dingtalk', 'wecom', 'slack', 'discord'])('saves disabled %s preferences while preserving activation requirements', id => {
   initializeTestAgentCatalog();
@@ -401,6 +422,10 @@ it('serves only category metadata to a signed mobile device through the authenti
     });
     const connection = panel('connections', 'mcp:calendar');
     expect(await (await signed(connection)).text()).not.toMatch(/private-secret|calendar\.example/);
+    expect((await (await signed(connection)).json()).payload.chatPrompt).toBeUndefined();
+    const checkedCalendar = (await (await signed(connection, 'POST', { action: 'configure-mcp' })).json()).payload;
+    expect(checkedCalendar).toMatchObject({ tone: 'success' });
+    expect((await signed(connection, 'POST', { action: 'save', flow: checkedCalendar.flow, revision: checkedCalendar.revision })).status).toBe(200);
     expect((await (await signed(connection)).json()).payload.chatPrompt).toBe('Use “calendar” to help me with:');
     expect((await signed(connection, 'POST', { action: 'save', values: { enabled: 'false' } })).status).toBe(200);
     expect(config.mcp?.servers?.calendar?.enabled).toBe(false);
@@ -646,7 +671,19 @@ it('serves only category metadata to a signed mobile device through the authenti
       url: 'https://example.com/oauth', id: 'OAuth service',
     })).json()).payload;
     expect(oauthDraft.actions).toContainEqual({ id: 'authorize', label: 'Authorize in browser' });
-    const waitingForOAuth = (await (await setupMcp('authorize', oauthDraft)).json()).payload;
+    const oauthOptions = (await (await setupMcp('oauth-settings', oauthDraft)).json()).payload;
+    expect(oauthOptions.fields).toContainEqual(expect.objectContaining({ id: 'requestHeaders', type: 'headers' }));
+    expect((await setupMcp('save-oauth-settings', oauthOptions, {
+      requestHeaders: JSON.stringify([['authorization', 'Bearer conflict']]),
+    })).status).toBe(400);
+    const withHeaders = (await (await setupMcp('save-oauth-settings', oauthOptions, {
+      requestHeaders: JSON.stringify([['X-Workspace', 'custom-oauth-workspace']]),
+    })).json()).payload;
+    const waitingForOAuth = (await (await setupMcp('authorize', withHeaders)).json()).payload;
+    const customOAuth = Object.values(vi.mocked(startMcpAuthorization).mock.lastCall?.[0].mcp?.servers ?? {});
+    expect(customOAuth).toContainEqual(expect.objectContaining({
+      displayName: 'OAuth service', oauth: {}, headers: { 'X-Workspace': 'custom-oauth-workspace' },
+    }));
     expect(waitingForOAuth.pollAction).toBe('status');
     vi.mocked(getMcpAuthorization).mockReturnValueOnce({ id: 'test-authorization', serverId: 'test', state: 'connected', toolCount: 1 });
     const authorized = (await (await setupMcp('status', waitingForOAuth)).json()).payload;
@@ -675,6 +712,64 @@ it('serves only category metadata to a signed mobile device through the authenti
     const oauthSecret = confidentialConfig?.clientSecret;
     if (!oauthSecret || typeof oauthSecret === 'string') throw new Error('Missing OAuth credential reference');
     expect(await new CredentialResolver().resolveApiKey(oauthSecret.xopcSecretRef.provider)).toBe('fixture-client-secret');
+
+    const storeConnector = panel('connections', 'sample-service');
+    const storeAction = async (action: string, previous?: { flow: string; revision?: number }, values?: Record<string, string>) => {
+      const response = await signed(storeConnector, 'POST', { action, flow: previous?.flow, revision: previous?.revision, values });
+      expect(response.status).toBe(200);
+      return (await response.json()).payload;
+    };
+    const storeReview = await storeAction('inspect');
+    expect(storeReview).toMatchObject({ fields: [], message: 'After installation, authorize with the provider.' });
+    expect(storeReview.steps).toContain('Ask your administrator for an approved client ID.');
+    expect(storeReview.links).toContainEqual({ label: 'Open account settings', url: 'https://example.com/account' });
+    const pendingConnector = await storeAction('install', storeReview);
+    expect(pendingConnector.actions).toContainEqual(expect.objectContaining({ id: 'configure-mcp', label: 'Connect account' }));
+    expect(pendingConnector.chatPrompt).toBeUndefined();
+    const originalServer = structuredClone(config.mcp?.servers?.sample_service);
+    const initialAuthorization = await storeAction('configure-mcp');
+    expect(initialAuthorization.links).toEqual(storeReview.links);
+    const startingAuthorization = await storeAction('authorize', initialAuthorization);
+    vi.mocked(getMcpAuthorization).mockReturnValueOnce({ id: 'test-authorization', serverId: 'sample_service',
+      state: 'error', errorCode: 'client_registration_failed', error: 'provider body with confidential information' });
+    const rejectedRegistration = await storeAction('status', startingAuthorization);
+    expect(rejectedRegistration.message).toContain('rejected OAuth client registration');
+    expect(JSON.stringify(rejectedRegistration)).not.toContain('confidential information');
+    expect(config.mcp?.servers?.sample_service).toEqual(originalServer);
+    expect((await setupMcp('oauth-settings', rejectedRegistration)).status).toBe(409);
+    const clientSettings = await storeAction('oauth-settings', rejectedRegistration);
+    expect(clientSettings.links).toEqual(storeReview.links);
+    expect(clientSettings.fields).not.toContainEqual(expect.objectContaining({ id: 'requestHeaders' }));
+    const clientConfigured = await storeAction('save-oauth-settings', clientSettings, {
+      oauthClientId: 'provider-approved-client', oauthClientSecret: 'managed-oauth-secret', oauthCallbackPort: '8471',
+    });
+    const providerAuthorization = await storeAction('authorize', clientConfigured);
+    expect(vi.mocked(startMcpAuthorization).mock.lastCall?.[0].mcp?.servers?.sample_service).toMatchObject({
+      oauth: { clientId: 'provider-approved-client', callbackPort: 8471 },
+      headers: { 'X-Workspace': 'sample-workspace' },
+    });
+    const connectedManagedOAuth = { ...connectedOAuth, serverId: 'sample_service', toolCount: 2 };
+    vi.mocked(getMcpAuthorization).mockReturnValueOnce(connectedManagedOAuth);
+    const verifiedConnector = await storeAction('status', providerAuthorization);
+    expect(verifiedConnector).toMatchObject({ tone: 'success' });
+    expect(config.mcp?.servers?.sample_service).toEqual(originalServer);
+    vi.mocked(getMcpAuthorization).mockReturnValueOnce(connectedManagedOAuth);
+    expect(await storeAction('save', verifiedConnector)).toMatchObject({ message: 'Connection verified and saved' });
+    expect(config.mcp?.servers?.sample_service).toMatchObject({
+      oauth: { clientId: 'provider-approved-client', callbackPort: 8471, clientSecret: { xopcSecretRef: {} } },
+      xopcConnector: { connectorId: 'sample-service', usage: { lastHealthStatus: 'ok', lastToolCount: 2 } },
+    });
+    expect(JSON.stringify(config.mcp?.servers?.sample_service)).not.toContain('managed-oauth-secret');
+    expect(listConnectorInstances(config).find(instance => instance.connectorId === 'sample-service')).toMatchObject({
+      authStatus: 'connected', connectionStatus: 'connected',
+    });
+    expect((await (await signed(storeConnector)).json()).payload.chatPrompt).toContain('sample-service');
+    const marker = config.mcp?.servers?.sample_service?.xopcConnector as { definition: ConnectorDefinition };
+    marker.definition.setup = {};
+    const legacyDetails = (await (await signed(storeConnector)).json()).payload;
+    expect(legacyDetails.actions).toContainEqual(expect.objectContaining({ id: 'setup-guide' }));
+    expect(await storeAction('setup-guide')).toMatchObject({ links: storeReview.links, steps: storeReview.steps });
+    expect(marker.definition.setup).toEqual({});
     const signIn = panel('connections', 'composio-gmail');
     expect((await (await signed(signIn)).json()).payload.actions).toContainEqual({ id: 'authorize', label: 'Connect account' });
     vi.mocked(assertComposioAccessConfigured).mockRejectedValueOnce(new Error('Missing connection service'));

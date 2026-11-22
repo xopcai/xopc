@@ -60,6 +60,7 @@ export type ConnectorDefinition = {
     secrets?: ConnectorSecretField[];
     config?: ConnectorConfigField[];
     links?: ConnectorSetupLink[];
+    instructions?: Partial<Record<'en' | 'zh-CN', string>>;
   };
   runtime:
     | { type: 'cli'; adapterId: string; adapterVersion: string; binaryVersion: string }

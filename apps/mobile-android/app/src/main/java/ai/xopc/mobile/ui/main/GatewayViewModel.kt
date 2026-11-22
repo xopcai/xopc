@@ -455,6 +455,7 @@ class GatewayViewModel internal constructor(application: Application, private va
   private val noteRepository = NoteRepository(session)
   private var unfilteredNotes: NotesUiState? = null
   private val fileRepository = FileRepository(session)
+  internal val voiceNotes = ai.xopc.mobile.gateway.VoiceNotesAccess(application, session)
   private val shareRepository = ShareRepository(session)
   private val personalRepository = PersonalRepository(session)
   private val personalAgentRepository = PersonalAgentRepository(session)
@@ -1158,30 +1159,41 @@ class GatewayViewModel internal constructor(application: Application, private va
     return conversationId
   }
 
-  suspend fun attachNoteFile(uri: Uri) {
+  private fun readProductFile(uri: Uri): Triple<String, String, ByteArray> {
     require(uri.scheme == "content") { "INVALID_ATTACHMENT_URI" }
-    val media = runInterruptible(Dispatchers.IO) {
-      val resolver = getApplication<Application>().contentResolver
-      val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-        ?.use { if (it.moveToFirst()) it.getString(0) else null }
-        ?.substringAfterLast('/')?.substringAfterLast('\\')?.take(255)?.ifBlank { null }
-        ?: "attachment"
-      val mimeType = resolver.getType(uri)?.takeIf {
-        it.matches(Regex("[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+"))
-      } ?: "application/octet-stream"
-      val output = java.io.ByteArrayOutputStream()
-      resolver.openInputStream(uri)?.use { input ->
-        val buffer = ByteArray(8192)
-        while (true) {
-          val count = input.read(buffer)
-          if (count < 0) break
-          require(output.size() + count <= 8 * 1024 * 1024) { "UPLOAD_LIMIT_8_MB" }
-          output.write(buffer, 0, count)
-        }
-      } ?: throw IllegalStateException("ATTACHMENT_UNAVAILABLE")
-      Triple(name, mimeType, output.toByteArray())
-    }
-    attachNoteBytes(media.first, media.second, media.third)
+    val resolver = getApplication<Application>().contentResolver
+    val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+      ?.use { if (it.moveToFirst()) it.getString(0) else null }
+      ?.substringAfterLast('/')?.substringAfterLast('\\')?.take(255)?.ifBlank { null }
+      ?: "attachment"
+    val mimeType = resolver.getType(uri)?.takeIf {
+      it.matches(Regex("[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+"))
+    } ?: "application/octet-stream"
+    val output = java.io.ByteArrayOutputStream()
+    resolver.openInputStream(uri)?.use { input ->
+      val buffer = ByteArray(8192)
+      while (true) {
+        val count = input.read(buffer)
+        if (count < 0) break
+        require(output.size() + count <= 8 * 1024 * 1024) { "UPLOAD_LIMIT_8_MB" }
+        output.write(buffer, 0, count)
+      }
+    } ?: throw IllegalStateException("ATTACHMENT_UNAVAILABLE")
+    return Triple(name, mimeType, output.toByteArray())
+  }
+
+  suspend fun attachNoteFile(uri: Uri) {
+    val (name, mime, bytes) = runInterruptible(Dispatchers.IO) { readProductFile(uri) }
+    attachNoteBytes(name, mime, bytes)
+  }
+
+  internal suspend fun uploadSpaceFile(gatewayId: String, spaceId: String, directory: String,
+    uri: Uri, replacementName: String?): ManagedFile = runInterruptible(Dispatchers.IO) {
+    val (name, mime, bytes) = readProductFile(uri)
+    val uploadName = replacementName?.trim() ?: name.trim().map {
+      if (it.isISOControl() || it == '"') '_' else it
+    }.joinToString("")
+    session.withActiveGateway(gatewayId) { fileRepository.upload(spaceId, directory, uploadName, mime, bytes) }
   }
 
   suspend fun attachNoteVoice(bytes: ByteArray, durationSeconds: Int) {

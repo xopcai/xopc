@@ -262,6 +262,7 @@ final class PhoneTouchHost: UIView {
 }
 
 struct PhoneConversationPages<Chat: View>: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let showingPhone: Bool
     let canPage: Bool
     let onPage: (Bool) -> Void
@@ -270,8 +271,12 @@ struct PhoneConversationPages<Chat: View>: View {
     var body: some View {
         GeometryReader { proxy in
             HStack(spacing: 0) {
-                chat().frame(width: proxy.size.width).accessibilityHidden(showingPhone)
-                PhoneWorkspaceView(model: phone, onReturn: { onPage(false) }).frame(width: proxy.size.width).accessibilityHidden(!showingPhone)
+                chat().frame(width: proxy.size.width)
+                    .allowsHitTesting(!showingPhone)
+                    .accessibilityHidden(showingPhone)
+                PhoneWorkspaceView(model: phone, onReturn: { onPage(false) }).frame(width: proxy.size.width)
+                    .allowsHitTesting(showingPhone)
+                    .accessibilityHidden(!showingPhone)
             }.frame(width: proxy.size.width * 2, alignment: .leading)
                 .offset(x: showingPhone ? -proxy.size.width : 0)
                 .animation(.easeInOut(duration: 0.22), value: showingPhone)
@@ -279,6 +284,8 @@ struct PhoneConversationPages<Chat: View>: View {
                     guard canPage, abs(value.translation.width) > 70, abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
                     onPage(value.translation.width < 0)
                 }, including: canPage ? .all : .subviews)
-        }.clipped()
+        }
+        .clipped()
+        .background(mobileTheme.canvas, ignoresSafeAreaEdges: .all)
     }
 }

@@ -27,6 +27,9 @@ interface GatewayHttp {
   fun uploadMultipart(origin: String, path: String, bearer: String, name: String,
     mimeType: String, bytes: ByteArray, mutationId: String, durationSeconds: Int? = null): String =
     throw UnsupportedOperationException("MULTIPART_UNAVAILABLE")
+  fun writeProductMedia(origin: String, path: String, method: String, bearer: String,
+    contentType: String, parts: List<ByteArray>, headers: Map<String, String>): String =
+    throw UnsupportedOperationException("PRODUCT_MEDIA_UNAVAILABLE")
   fun transcribeAudio(origin: String, bearer: String, bytes: ByteArray, language: String): String =
     throw UnsupportedOperationException("TRANSCRIPTION_UNAVAILABLE")
 }
@@ -174,6 +177,27 @@ class GatewayTransport : GatewayHttp {
       val status = connection.responseCode
       if (status !in 200..299) throw GatewayHttpException(status)
       return connection.inputStream.use(::readMediaBounded)
+    } finally { connection.disconnect() }
+  }
+
+  override fun writeProductMedia(origin: String, path: String, method: String, bearer: String,
+    contentType: String, parts: List<ByteArray>, headers: Map<String, String>): String {
+    val connection = URL(PairingProtocol.secureOrigin(origin) + apiPath(path)).openConnection() as HttpsURLConnection
+    try {
+      connection.requestMethod = method
+      connection.instanceFollowRedirects = false
+      connection.connectTimeout = 8_000
+      connection.readTimeout = 60_000
+      connection.doOutput = true
+      connection.setFixedLengthStreamingMode(parts.sumOf { it.size.toLong() })
+      connection.setRequestProperty("Content-Type", contentType)
+      connection.setRequestProperty("Authorization", "Bearer $bearer")
+      headers.forEach(connection::setRequestProperty)
+      DeviceRequestProof.apply(connection, bearer, parts)
+      connection.outputStream.use { output -> parts.forEach { output.write(it) } }
+      val status = connection.responseCode
+      if (status !in 200..299) throw GatewayHttpException(status)
+      return connection.inputStream.use { readBounded(it).toString(Charsets.UTF_8) }
     } finally { connection.disconnect() }
   }
 

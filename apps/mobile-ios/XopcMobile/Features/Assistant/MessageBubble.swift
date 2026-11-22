@@ -5,6 +5,13 @@ import SwiftUI
 
 enum ChatAppearance {
     static let messageWidthRatio: CGFloat = 0.84
+    static let timelineHorizontalPadding: CGFloat = 10
+    static let bubbleHorizontalPadding: CGFloat = 10
+
+    static func maximumMessageWidth(in viewportWidth: CGFloat) -> CGFloat {
+        // HarmonyOS bases its message widths on a list with 20-point side insets.
+        max(0, min(viewportWidth, 720) - 40) * messageWidthRatio
+    }
 }
 
 // swiftlint:disable:next type_body_length
@@ -66,7 +73,7 @@ struct MessageBubble: View {
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, isUserAudioBubble ? 4 : 14)
+            .padding(.horizontal, isUserAudioBubble ? 4 : ChatAppearance.bubbleHorizontalPadding)
             .padding(.vertical, isUserAudioBubble ? 0 : message.role == "user" ? 10 : 12)
             .frame(width: bubbleWidth, alignment: .leading)
             .foregroundStyle(mobileTheme.foreground)
@@ -152,10 +159,11 @@ struct MessageBubble: View {
     }
 
     private var bubbleWidth: CGFloat? {
-        guard let maximumWidth else { return nil }
+        guard let availableWidth = maximumWidth else { return nil }
         if isUserAudioBubble {
-            return min(maximumWidth, 132)
+            return min(availableWidth, 132)
         }
+        let maximumWidth = message.role == "user" ? min(availableWidth, 360) : availableWidth
         if !message.attachments.isEmpty || !message.references.isEmpty || !message.taskReceipts.isEmpty
             || !message.resultLinks.isEmpty || !message.unavailableOutputs.isEmpty || showsPreview
         {
@@ -166,12 +174,12 @@ struct MessageBubble: View {
                 return maximumWidth
             }
             let width = (message.text as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: assistantTextSize)]).width
-            return min(maximumWidth, max(44, ceil(width) + 30))
+            return min(maximumWidth, max(44, ceil(width) + 2 * ChatAppearance.bubbleHorizontalPadding + 2))
         }
         let longest = message.text.split(separator: "\n").map { line in
             line.reduce(0.0) { $0 + ($1.isASCII ? 8.8 : 16) }
         }.max() ?? 0
-        return min(maximumWidth, max(44, ceil(longest) + 30))
+        return min(maximumWidth, max(44, ceil(longest) + 2 * ChatAppearance.bubbleHorizontalPadding + 2))
     }
 
     private var hasMessageActions: Bool {
@@ -280,10 +288,12 @@ struct MessageBubble: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("chat-message-preview-\(message.id)")
                 .accessibilityHint("打开完整消息")
-                Button("查看更多") { isDetailPresented = true }
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(mobileTheme.action)
-                    .frame(minHeight: 44)
+                if message.role == "user" {
+                    Button("查看更多") { isDetailPresented = true }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(mobileTheme.action)
+                        .frame(minHeight: 44)
+                }
             } else if message.role == "assistant" {
                 ConfirmedAnswerView(message: message, configuration: configuration, conversationID: conversationID,
                                     animate: animateStreaming)

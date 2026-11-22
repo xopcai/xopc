@@ -130,12 +130,12 @@ class MarkdownContentTest {
           onOpenLink = {}, onCopy = {}, actionsEnabled = false)
       }
     }
-    // The card tag is inside its 12dp horizontal content padding.
-    composeTestRule.onNodeWithTag("message-assistant-card-wide").assertWidthIsEqualTo(264.dp)
-    composeTestRule.onNodeWithTag("markdown-content").assertWidthIsEqualTo(264.dp)
+    // The card tag is inside its 10dp horizontal content padding.
+    composeTestRule.onNodeWithTag("message-assistant-card-wide").assertWidthIsEqualTo(228.64.dp)
+    composeTestRule.onNodeWithTag("markdown-content").assertWidthIsEqualTo(228.64.dp)
   }
 
-  @Test fun longUserMessageHasNarrowerWidthThanAssistant() {
+  @Test fun longUserMessageRespectsBubbleWidthLimit() {
     composeTestRule.setContent {
       Box(Modifier.width(320.dp)) {
         ChatMessageCard(ConversationMessage("user-wide", "user", "较长的用户消息".repeat(12)),
@@ -143,7 +143,7 @@ class MarkdownContentTest {
           onOpenLink = {}, onCopy = {})
       }
     }
-    composeTestRule.onNodeWithTag("message-more-user-wide").assertWidthIsEqualTo(268.8.dp)
+    composeTestRule.onNodeWithTag("message-more-user-wide").assertWidthIsEqualTo(248.64.dp)
   }
 
   @Test fun nestedListsUseSmallIndentationIndependentOfMarkerWidth() {

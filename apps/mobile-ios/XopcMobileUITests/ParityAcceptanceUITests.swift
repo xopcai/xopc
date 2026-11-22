@@ -2247,9 +2247,12 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(latest.waitForExistence(timeout: 10))
         XCTAssertTrue(latest.isHittable)
         let jump = app.buttons["chat-jump-bottom"]
-        for _ in 0 ..< 4 where !jump.isHittable {
-            timeline.swipeDown()
+        let dragStart = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.83, dy: 0.32))
+        let dragEnd = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.83, dy: 0.76))
+        for _ in 0 ..< 4 where !jump.exists {
+            dragStart.press(forDuration: 0.05, thenDragTo: dragEnd, withVelocity: .slow, thenHoldForDuration: 0)
         }
+        capture("long-timeline-after-drag")
         XCTAssertTrue(jump.isHittable)
         XCTAssertFalse(app.buttons["chat-sidebar-close"].isHittable)
         XCTAssertFalse(latest.isHittable)
@@ -2257,6 +2260,22 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(jump.waitForNonExistence(timeout: 6))
         XCTAssertTrue(latest.isHittable)
         capture("long-timeline-latest")
+    }
+
+    func testHistoricalAssistantPreviewOpensFullMessageWithoutViewMore() {
+        openChat()
+        let timeline = app.scrollViews["chat-message-timeline"]
+        let preview = app.buttons["chat-message-preview-long-ai"]
+        XCTAssertTrue(timeline.waitForExistence(timeout: 8))
+        if !preview.isHittable {
+            timeline.swipeDown(velocity: .slow)
+        }
+        XCTAssertTrue(preview.isHittable)
+        XCTAssertFalse(app.buttons["查看更多"].exists)
+        XCTAssertFalse(app.buttons["View more"].exists)
+        capture("historical-assistant-preview")
+        preview.tap()
+        XCTAssertTrue(app.scrollViews["message-detail-content"].waitForExistence(timeout: 6))
     }
 
     func testFirstSentMessageAppearsBelowTheHeader() {
@@ -2377,7 +2396,9 @@ final class MobileLayoutParityUITests: XCTestCase {
         let shortWidth = try assistantBubbleFillWidth(in: short.frame, image: image)
         let codeWidth = try assistantBubbleFillWidth(in: code.frame, image: image)
         XCTAssertGreaterThan(codeWidth, 200)
+        XCTAssertLessThanOrEqual(codeWidth, (app.frame.width - 40) * 0.84 + 2)
         XCTAssertLessThan(shortWidth, codeWidth / 2)
+        capture("message-bubble-widths")
     }
 
     private func assistantBubbleFillWidth(in row: CGRect, image: CGImage) throws -> CGFloat {
