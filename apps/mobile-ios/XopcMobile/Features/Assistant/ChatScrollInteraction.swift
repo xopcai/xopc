@@ -1,3 +1,4 @@
+import Observation
 import SwiftUI
 
 struct ChatScrollInteraction: ViewModifier {
@@ -38,5 +39,58 @@ struct ChatScrollInteraction: ViewModifier {
                 onEnd()
             })
         }
+    }
+}
+
+@MainActor
+@Observable
+final class ChatTimelineScrollCommands {
+    struct BottomRequest: Equatable {
+        let id = UUID()
+        let jumpID: UUID?
+    }
+
+    var bottomRequest: BottomRequest?
+
+    func scrollToBottom(jumpID: UUID? = nil) {
+        bottomRequest = BottomRequest(jumpID: jumpID)
+    }
+}
+
+struct ChatTimelineAlignment: ViewModifier {
+    let commands: ChatTimelineScrollCommands
+    let onJumpCompleted: (UUID) -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.modifier(EdgePositionedChatTimeline(commands: commands, onJumpCompleted: onJumpCompleted))
+        } else {
+            content.defaultScrollAnchor(.top)
+        }
+    }
+}
+
+@available(iOS 18, *)
+private struct EdgePositionedChatTimeline: ViewModifier {
+    let commands: ChatTimelineScrollCommands
+    let onJumpCompleted: (UUID) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var position = ScrollPosition()
+
+    func body(content: Content) -> some View {
+        content
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .defaultScrollAnchor(.top, for: .alignment)
+            .scrollPosition($position)
+            .onChange(of: commands.bottomRequest) { _, request in
+                guard let request else { return }
+                withAnimation(request.jumpID != nil && !reduceMotion ? .easeInOut(duration: 0.3) : nil) {
+                    position.scrollTo(edge: .bottom)
+                } completion: {
+                    if let id = request.jumpID {
+                        onJumpCompleted(id)
+                    }
+                }
+            }
     }
 }

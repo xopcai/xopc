@@ -16,35 +16,50 @@ struct FileDestinationView: View {
 
 struct FilesView: View {
     let configuration: GatewayConfiguration
-    let initialSpace: FileSpace?
+    var initialSpace: FileSpace?
 
-    @State private var space: FileSpace?
+    @State private var spaces: [FileSpace] = []
     @State private var items: [FileResource] = []
     @State private var search = ""
+    @State private var loadedQuery: String?
     @State private var isLoading = true
+    @State private var loadRevision = 0
     @State private var error: String?
 
-    init(configuration: GatewayConfiguration, initialSpace: FileSpace? = nil) {
-        self.configuration = configuration
-        self.initialSpace = initialSpace
-        _space = State(initialValue: initialSpace)
-    }
+    private var query: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
+        let matches = loadedQuery == query ? items : []
         List {
-            if let error, items.isEmpty {
-                ContentUnavailableView("无法读取文件", systemImage: "exclamationmark.triangle", description: Text(error))
-                    .listRowBackground(Color.clear)
-                Button("重试") { Task { await load() } }
-            } else if !isLoading, items.isEmpty {
-                ContentUnavailableView(emptyTitle, systemImage: "folder", description: Text("可在 Gateway 工作区中添加文件。"))
-                    .listRowBackground(Color.clear)
-            } else {
-                ForEach(items) { item in
+            if initialSpace == nil, query.isEmpty, !spaces.isEmpty {
+                Section("文件空间") {
+                    ForEach(spaces) { space in
+                        NavigationLink {
+                            FileFolderView(configuration: configuration, spaceID: space.id, path: "",
+                                           title: space.title, writable: space.writable)
+                        } label: {
+                            Label(space.title, systemImage: "folder")
+                        }
+                        .accessibilityIdentifier("file-space-\(space.id)")
+                    }
+                }
+            }
+            Section(query.isEmpty && initialSpace == nil ? "最近文件" : "") {
+                if let error {
+                    Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+                    Button("重试") { Task { await load(query) } }
+                }
+                if matches.isEmpty, isLoading || loadedQuery != query, error == nil {
+                    ProgressListSkeleton()
+                } else if matches.isEmpty, error == nil {
+                    ContentUnavailableView(query.isEmpty ? "暂无文件" : "没有匹配文件", systemImage: "folder")
+                        .listRowBackground(Color.clear)
+                }
+                ForEach(matches) { item in
                     NavigationLink {
                         if item.kind == "directory" {
                             FileFolderView(configuration: configuration, spaceID: item.spaceId, path: item.relativePath,
-                                           title: item.name, writable: space?.writable == true)
+                                           title: item.name, writable: isWritable(item))
                         } else {
                             FilePreviewView(configuration: configuration, file: item)
                         }
@@ -54,60 +69,67 @@ struct FilesView: View {
                 }
             }
         }
-        .overlay {
-            if isLoading, items.isEmpty {
-                ProgressView()
-            }
-        }
-        .mobilePageTitle(Text(verbatim: space?.title ?? AppLocalization.string("文件", locale: AppLocalization.selectedLocale)))
+        .mobilePageTitle(Text(verbatim: initialSpace?.title ?? AppLocalization.string("文件", locale: AppLocalization.selectedLocale)))
         .toolbar {
-            if let space, space.writable {
-                FileUploadButton(configuration: configuration, spaceID: space.id, directory: "") {
-                    await load()
+            if let initialSpace, initialSpace.writable {
+                FileUploadButton(configuration: configuration, spaceID: initialSpace.id, directory: "") {
+                    await load(query)
                 }
             }
         }
         .searchable(text: $search, prompt: "搜索文件")
-        .onSubmit(of: .search) { Task { await load() } }
-        .refreshable { await load() }
-        .task { await load() }
-        .alert("无法读取文件", isPresented: errorBinding) { Button("重试") { Task { await load() } }; Button("取消", role: .cancel) {} } message: { Text(error ?? "未知错误") }
-    }
-
-    private var emptyTitle: LocalizedStringResource {
-        search.isEmpty ? "暂无文件" : "没有匹配文件"
-    }
-
-    private var errorBinding: Binding<Bool> {
-        Binding(get: { error != nil }, set: {
-            if !$0 {
-                error = nil
+        .refreshable { await load(query) }
+        .task(id: configuration) {
+            if initialSpace == nil,
+               let available = try? await GatewayClient(configuration: configuration).fetchFileSpaces(),
+               !Task.isCancelled
+            {
+                spaces = available
             }
-        })
-    }
-
-    @MainActor private func load() async {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            let client = GatewayClient(configuration: configuration)
-            if search.isEmpty {
-                let loadedSpace: FileSpace = if let initialSpace {
-                    initialSpace
-                } else {
-                    try await client.fetchDefaultFileSpace()
-                }
-                space = loadedSpace
-                items = try await client.fetchFiles(spaceID: loadedSpace.id)
-            } else {
-                items = try await client.searchFiles(query: search)
-            }
+        }
+        .task(id: query) {
+            let request = query
             error = nil
-        } catch is CancellationError {} catch { self.error = error.localizedDescription }
+            if !request.isEmpty {
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            }
+            await load(request)
+        }
+    }
+
+    private func isWritable(_ file: FileResource) -> Bool {
+        if initialSpace?.id == file.spaceId { return initialSpace?.writable == true }
+        return spaces.first { $0.id == file.spaceId }?.writable == true
+    }
+
+    @MainActor private func load(_ request: String) async {
+        guard request == query else { return }
+        loadRevision += 1
+        let revision = loadRevision
+        isLoading = true
+        defer { if revision == loadRevision { isLoading = false } }
+        let client = GatewayClient(configuration: configuration)
+        do {
+            let results: [FileResource]
+            if !request.isEmpty {
+                results = try await client.searchFiles(query: request, spaceID: initialSpace?.id)
+            } else if let initialSpace {
+                results = try await client.fetchFiles(spaceID: initialSpace.id)
+            } else {
+                results = try await client.fetchRecentFiles()
+            }
+            guard !Task.isCancelled, revision == loadRevision, request == query else { return }
+            items = results
+            loadedQuery = request
+            error = nil
+        } catch {
+            guard !Task.isCancelled, revision == loadRevision, request == query else { return }
+            self.error = error.localizedDescription
+        }
     }
 }
 
-private struct FileFolderView: View {
+struct FileFolderView: View {
     let configuration: GatewayConfiguration
     let spaceID: String
     let path: String
@@ -154,7 +176,7 @@ private struct FileFolderView: View {
             }
         }
         .refreshable { await load() }
-        .task { await load() }
+        .task(id: configuration) { await load() }
     }
 
     @MainActor private func load() async {
@@ -270,7 +292,7 @@ struct FilePreviewView: View {
                 downloadError = nil
             }
         })) { Button("好", role: .cancel) {} } message: { Text(downloadError ?? "未知错误") }
-        .task { await load() }
+        .task(id: configuration) { await load() }
     }
 
     private static func isTextFile(_ file: FileResource) -> Bool {

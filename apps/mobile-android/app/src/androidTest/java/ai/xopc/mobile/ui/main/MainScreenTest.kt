@@ -371,7 +371,7 @@ class MainScreenTest {
     }
     val stream = (0 until 24).joinToString("\n\n") { "Paragraph $it" } + "\n\nTail marker"
     composeTestRule.runOnIdle { state.value = state.value.copy(liveMessages = listOf(ConversationMessage("live:run-1", "assistant", stream, "run-1"))) }
-    composeTestRule.onNodeWithText("Tail marker").assertIsDisplayed()
+    composeTestRule.waitUntil(5_000) { composeTestRule.onNodeWithText("Tail marker").isDisplayed() }
 
     composeTestRule.onNodeWithTag("assistant-message-list").performScrollToNode(hasText("Reply 1"))
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
@@ -604,6 +604,40 @@ class MainScreenTest {
     link.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
     link.performTouchInput { click(layouts.single().getBoundingBox(0).center) }
     assertEquals("task-1", openedTask)
+  }
+
+  @Test fun assistantSettingsAndMcpLinksOpenAndReturnToChat() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    var tab by mutableStateOf(HomeTab.Assistant)
+    var mutations = 0
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = tab, onSelectTab = { tab = it },
+          connection = ConnectionUiState(profile = profile, selectedConversationId = "chat",
+            messages = listOf(ConversationMessage("link", "assistant",
+              "[Language](xopc://settings/language)\n\n[MCP](xopc://capabilities/mcp?id=example&url=https%3A%2F%2Fexample.com%2Fmcp)"))),
+          onCapabilityPanel = { _, _, request ->
+            if (request != null) mutations++
+            JSONObject("""{"fields":[{"id":"url","label":"Server URL","type":"text"}],
+              "actions":[{"id":"create","label":"Check connection"}]}""")
+          })
+      }
+    }
+    fun tapLink(label: String) {
+      val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+      val link = composeTestRule.onNodeWithText(label, useUnmergedTree = true)
+      link.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+      link.performTouchInput { click(layouts.single().getBoundingBox(0).center) }
+    }
+    tapLink("Language")
+    composeTestRule.onNodeWithTag("language-system").assertExists()
+    androidx.test.espresso.Espresso.pressBack()
+    tapLink("MCP")
+    composeTestRule.onNodeWithTag("capability-field-url").assertTextContains("https://example.com/mcp")
+    composeTestRule.onNodeWithTag("capability-panel-create").assertExists()
+    assertEquals(0, mutations)
+    composeTestRule.onNodeWithTag("capability-panel-close").performClick()
+    composeTestRule.onNodeWithTag("assistant-content-area").assertExists()
   }
 
   @Test fun assistantHttpLinkRequestsExternalConfirmation() {
@@ -1452,6 +1486,8 @@ class MainScreenTest {
       composeTestRule.onNodeWithTag(tag).performClick()
     }
     selectSidebar("chat-sidebar-library")
+    composeTestRule.onNodeWithTag("space-scope-menu").performClick()
+    composeTestRule.onNodeWithTag("space-tab-all").performClick()
     composeTestRule.onNodeWithTag("space-search").performClick().performTextInput("persistent")
     Espresso.closeSoftKeyboard()
     composeTestRule.onNodeWithTag("library-back").performClick()
@@ -1544,8 +1580,8 @@ class MainScreenTest {
     val openTasks = composeTestRule.onNodeWithTag("progress-filter-open")
     openTasks.performClick()
     openTasks.assertIsSelected()
-    openTasks.performTouchInput { swipeLeft() }
-    composeTestRule.onNodeWithTag("progress-filter-closed").assertIsSelected()
+    composeTestRule.onNodeWithTag("progress-task-filter-strip").performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithTag("progress-filter-attention").assertIsSelected()
     composeTestRule.onNodeWithTag("projects-open-search").assertDoesNotExist()
     composeTestRule.onNodeWithTag("work-page-pager").performTouchInput { swipeLeft() }
     composeTestRule.onNodeWithTag("projects-open-search").assertIsDisplayed()
@@ -1570,7 +1606,7 @@ class MainScreenTest {
         onRefreshHome = {}, onRefreshTasks = {}, onLoadMore = {}, onOpenTask = {},
         onSearchChange = {}, onSubmitSearch = {}, onTaskCommand = {}, onStartTask = {},
         onCreateTaskWithChat = {}, onLoadProjects = {}, onOpenProject = {},
-        onCreateTask = { _, _, _ -> }, onOpenTaskChat = {}, onSaveTask = { _, _, _ -> },
+        onCreateTask = {}, onOpenTaskChat = {}, onSaveTask = { _, _, _ -> },
         onOpenChat = {}, onLoadAutomations = {}, onOpenAutomation = { id ->
           state.value = state.value.copy(automations = state.value.automations.copy(selectedId = id, detail = current))
         }, onUpdateAutomation = { _, name, _, _, _ ->
@@ -1578,9 +1614,8 @@ class MainScreenTest {
           current = current.copy(name = name, updatedAtMs = 124L)
           state.value = state.value.copy(automations = state.value.automations.copy(detail = current,
             editedRevision = state.value.automations.editedRevision + 1))
-        })
+        }, initialPage = "automations")
     }
-    composeTestRule.onNodeWithTag("progress-automations").performClick()
     composeTestRule.onNodeWithTag("automation-auto-edit").performClick()
     composeTestRule.onNodeWithTag("automation-edit").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("automation-edit-name").performTextClearance()
@@ -1606,7 +1641,7 @@ class MainScreenTest {
       ProgressScreen(progress.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, { id ->
         openedTask = id
         progress.value = progress.value.copy(detailTaskId = id, detailTask = task)
-      }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, { openedChat = it })
+      }, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, { openedChat = it })
     }
     composeTestRule.onNodeWithText("Review release").performClick()
     assert(openedChat == "chat-1")
@@ -1632,7 +1667,7 @@ class MainScreenTest {
         onRefreshHome = {}, onRefreshTasks = {}, onLoadMore = {}, onOpenTask = {},
         onSearchChange = {}, onSubmitSearch = {}, onTaskCommand = {}, onStartTask = {},
         onCreateTaskWithChat = {}, onLoadProjects = {}, onOpenProject = {},
-        onCreateTask = { _, _, _ -> }, onOpenTaskChat = {}, onSaveTask = { _, _, _ -> },
+        onCreateTask = {}, onOpenTaskChat = {}, onSaveTask = { _, _, _ -> },
         onOpenChat = {}, onOpenAutomation = { id ->
           openedAutomation = id
           state.value = state.value.copy(automations = AutomationUiState(selectedId = id, detail = automation))
@@ -1653,7 +1688,7 @@ class MainScreenTest {
     composeTestRule.setContent {
       ProgressScreen(ProgressUiState(needsUser = listOf(item)),
         androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-        { _, _, _ -> }, { requested = it }, { _, _, _ -> }, {})
+        {}, { requested = it }, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-item-wait-2").performClick()
     assertEquals("task-2", requested)
@@ -1668,7 +1703,7 @@ class MainScreenTest {
     composeTestRule.setContent {
       ProgressScreen(ProgressUiState(needsUser = listOf(item)),
         androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, {}, {}, {}, {}, {}, {},
-        {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
+        {}, {}, {}, {}, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-item-unsafe").assertIsNotEnabled()
   }
@@ -1684,7 +1719,7 @@ class MainScreenTest {
         onRefreshHome = {}, onRefreshTasks = {}, onLoadMore = {}, onOpenTask = {},
         onSearchChange = {}, onSubmitSearch = {}, onTaskCommand = {}, onStartTask = {},
         onCreateTaskWithChat = {}, onLoadProjects = {}, onOpenProject = {},
-        onCreateTask = { _, _, _ -> }, onOpenTaskChat = {},
+        onCreateTask = {}, onOpenTaskChat = {},
         onSaveTask = { _, _, _ -> }, onHomeAction = { requested = it }, onOpenChat = {})
     }
     composeTestRule.onNodeWithTag("progress-review-approval").performClick()
@@ -1707,7 +1742,7 @@ class MainScreenTest {
       ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, {},
         { state.value = state.value.copy(taskSearchText = it) },
         { submitted = state.value.taskSearchText; state.value = state.value.copy(taskSearch = submitted.trim()) },
-        {}, {}, {}, {}, {}, { _, _, _ -> },
+        {}, {}, {}, {}, {}, {},
         {}, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("work-page-menu").performClick()
@@ -1742,24 +1777,12 @@ class MainScreenTest {
     }
   }
 
-  @Test fun progressOverviewKeepsRecentClosedWhenTaskSearchChanges() {
-    val closed = ProgressTask("task-done", "Previously done", "", "closed", "done", 11, 11, null)
-    val searching = ProgressTask("task-found", "Search result", "", "active", null, 12, null, null)
-    composeTestRule.setContent {
-      ProgressScreen(ProgressUiState(tasks = listOf(searching), recentClosedTasks = listOf(closed),
-        taskSearch = "search", taskTotal = 1), androidx.compose.foundation.layout.PaddingValues(),
-        {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> },
-        {}, { _, _, _ -> }, {})
-    }
-    composeTestRule.onNodeWithTag("progress-closed-task-done").assertExists()
-  }
-
   @Test fun progressNewTaskOpensCreationChatWithoutSubmitting() {
     val state = mutableStateOf(ProgressUiState())
     var prepared = 0
     composeTestRule.setContent {
       ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, {},
-        {}, {}, {}, {}, { prepared++ }, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
+        {}, {}, {}, {}, { prepared++ }, {}, {}, {}, {}, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("work-page-menu").performClick()
     composeTestRule.onNodeWithTag("work-page-tasks").performClick()
@@ -1769,6 +1792,31 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-create-task-chat").assertIsNotEnabled()
     state.value = state.value.copy(creatingTaskChat = false, createTaskChatError = true)
     composeTestRule.onNodeWithTag("progress-create-task-error").assertExists()
+  }
+
+  @Test fun globalTaskCreationDoesNotRequireProjectAndOpensTheNewTask() {
+    val state = mutableStateOf(ProgressUiState())
+    var openedTask = ""
+    var submittedProject: String? = null
+    composeTestRule.setContent {
+      ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(),
+        onRefreshHome = {}, onRefreshTasks = {}, onLoadMore = {}, onOpenTask = { openedTask = it },
+        onSearchChange = {}, onSubmitSearch = {}, onTaskCommand = {}, onStartTask = {},
+        onCreateTaskWithChat = {}, onLoadProjects = {}, onOpenProject = {},
+        onCreateTask = { draft ->
+          submittedProject = draft.projectId
+          state.value = state.value.copy(createSavedRevision = 1, createdTaskId = "new-task")
+        }, onOpenTaskChat = {}, onSaveTask = { _, _, _ -> }, onOpenChat = {}, initialPage = "tasks")
+    }
+    composeTestRule.onNodeWithTag("progress-create-task").performClick()
+    composeTestRule.onNodeWithTag("progress-create-title").performTextInput("New task")
+    androidx.test.espresso.Espresso.closeSoftKeyboard()
+    composeTestRule.onNodeWithTag("progress-create-save").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("progress-detail-loading").assertExists()
+    composeTestRule.runOnIdle {
+      assertEquals("", submittedProject)
+      assertEquals("new-task", openedTask)
+    }
   }
 
   @Test fun progressProjectTaskCreateKeepsFormAndReturnsToProject() {
@@ -1781,15 +1829,18 @@ class MainScreenTest {
       ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, {},
         {}, {}, {}, {}, {}, { loadedProjects++ }, { id ->
           state.value = state.value.copy(projectId = id, project = project)
-        }, { title, _, projectId ->
-          savedTitle = title
-          savedProject = projectId
+        }, { draft ->
+          savedTitle = draft.title
+          savedProject = draft.projectId
           state.value = state.value.copy(createSavedRevision = 1)
         }, {}, { _, _, _ -> }, {})
     }
-    composeTestRule.onNodeWithTag("progress-projects").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-projects").performClick()
     assert(loadedProjects == 1)
     composeTestRule.onNodeWithTag("progress-project-project-1").performClick()
+    composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
+    composeTestRule.onNodeWithTag("progress-project-tab-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-project-add-task").performClick()
     composeTestRule.onNodeWithTag("progress-create-save").assertIsNotEnabled()
     composeTestRule.onNodeWithTag("progress-create-title").performTextInput("New task")
@@ -1819,10 +1870,11 @@ class MainScreenTest {
     composeTestRule.setContent {
       ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, {},
         {}, {}, {}, {}, {}, {}, { id -> state.value = state.value.copy(projectId = id, project = project) },
-        { _, _, _ -> }, {}, { _, _, _ -> }, {}, onOpenNote = { openedNote = it },
+        {}, {}, { _, _, _ -> }, {}, onOpenNote = { openedNote = it },
         onOpenAutomation = { openedAutomation = it })
     }
-    composeTestRule.onNodeWithTag("progress-projects").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-projects").performClick()
     composeTestRule.onNodeWithTag("progress-project-project-1").performClick()
     composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
     composeTestRule.onNodeWithTag("progress-project-tab-notes").performClick()
@@ -1874,7 +1926,7 @@ class MainScreenTest {
     composeTestRule.setContent {
       ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, { id ->
         state.value = state.value.copy(detailTaskId = id, detailTask = task)
-      }, {}, {}, { command = it }, {}, {}, {}, {}, { _, _, _ -> },
+      }, {}, {}, { command = it }, {}, {}, {}, {}, {},
         {}, { _, _, _ -> }, {}, initialPage = "detail", initialItemId = task.id)
     }
     composeTestRule.onNodeWithTag("progress-task-status").performClick()
@@ -1893,7 +1945,7 @@ class MainScreenTest {
     composeTestRule.setContent {
       ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, { id ->
         state.value = state.value.copy(detailTaskId = id, detailTask = task)
-      }, {}, {}, {}, { startedWith = it }, {}, {}, {}, { _, _, _ -> },
+      }, {}, {}, {}, { startedWith = it }, {}, {}, {}, {},
         {}, { _, _, _ -> }, {}, initialPage = "detail", initialItemId = task.id)
     }
     composeTestRule.onNodeWithTag("progress-task-status").performClick()
@@ -1915,7 +1967,7 @@ class MainScreenTest {
     composeTestRule.setContent {
       ProgressScreen(ProgressUiState(tasks = listOf(task), taskTotal = 1),
         androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-        { _, _, _ -> }, { opened = it }, { _, _, _ -> }, {})
+        {}, { opened = it }, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("work-page-menu").performClick()
     composeTestRule.onNodeWithTag("work-page-tasks").performClick()
@@ -1932,7 +1984,7 @@ class MainScreenTest {
     composeTestRule.setContent {
       ProgressScreen(ProgressUiState(needsUser = listOf(item)),
         androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-        { _, _, _ -> }, { opened = it }, { _, _, _ -> }, {}, onHomeAction = { mutated = true })
+        {}, { opened = it }, { _, _, _ -> }, {}, onHomeAction = { mutated = true })
     }
     composeTestRule.onNodeWithTag("progress-home-primary-review").performClick()
     composeTestRule.onNodeWithTag("progress-task-detail").assertDoesNotExist()
@@ -1950,7 +2002,7 @@ class MainScreenTest {
     composeTestRule.setContent {
       ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, { id ->
         state.value = state.value.copy(detailTaskId = id, detailTask = task)
-      }, {}, {}, { command = it }, { started = true }, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {}, initialPage = "detail", initialItemId = task.id)
+      }, {}, {}, { command = it }, { started = true }, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, initialPage = "detail", initialItemId = task.id)
     }
     composeTestRule.onNodeWithTag("progress-task-status").performClick()
     composeTestRule.onNodeWithTag("progress-phase-active").performScrollTo().performClick()
@@ -1973,7 +2025,7 @@ class MainScreenTest {
     composeTestRule.setContent {
       ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, { id ->
         state.value = state.value.copy(detailTaskId = id, detailTask = task)
-      }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, version, edit ->
+      }, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, version, edit ->
         assertEquals(3, version); saved = edit
       }, {}, initialPage = "detail", initialItemId = task.id)
     }
@@ -1998,7 +2050,7 @@ class MainScreenTest {
     composeTestRule.setContent {
       ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, { id ->
         state.value = state.value.copy(detailTaskId = id, detailTask = task)
-      }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, version, edit ->
+      }, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, version, edit ->
         val title = edit.title
         savedTitle = title
         savedVersion = version
@@ -2028,7 +2080,7 @@ class MainScreenTest {
       ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, { id ->
         opens++
         state.value = state.value.copy(detailTaskId = id, detailTask = task)
-      }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {}, initialPage = "detail", initialItemId = task.id)
+      }, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, initialPage = "detail", initialItemId = task.id)
     }
     composeTestRule.onNodeWithTag("progress-task-edit").performClick()
     composeTestRule.onNodeWithTag("progress-edit-title").performTextInput(" changed")
@@ -2390,7 +2442,12 @@ class MainScreenTest {
         }
       }
       captureCategory(kind)
-      composeTestRule.onNodeWithTag("capability-row-$kind").performClick()
+      if (kind == "agents") {
+        composeTestRule.onNodeWithTag("capability-row-$kind").assertIsEnabled()
+        composeTestRule.onNodeWithTag("capability-settings-$kind").performClick()
+      } else {
+        composeTestRule.onNodeWithTag("capability-row-$kind").performClick()
+      }
       if (kind == "skills") {
         composeTestRule.onNodeWithTag("capability-field-enabled").performClick()
         composeTestRule.onNodeWithTag("capability-panel-save").performClick()
@@ -3011,6 +3068,43 @@ class MainScreenTest {
           pendingDeleteId = id, draftText = "Do not send", realtimeStatus = "connected"))
     }
     composeTestRule.onNodeWithTag("assistant-send").assertIsNotEnabled()
+  }
+
+  @Test fun inlineSkillReplacesOnlyTheSlashToken() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    var requests = 0
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(profile = profile, selectedConversationId = "chat"),
+        onLoadComposerPalette = {
+          requests++
+          listOf(ai.xopc.mobile.gateway.ComposerPaletteItem("skill:meeting", "Meeting", insertion = "/skill:meeting ", skill = true))
+        })
+    }
+    val input = composeTestRule.onNodeWithTag("assistant-input")
+    input.performClick().performTextInput("Please ")
+    composeTestRule.runOnIdle { assertEquals(0, requests) }
+    input.performTextInput("/meet")
+    composeTestRule.onNodeWithTag("composer-palette-skill:meeting").performClick()
+    input.assertTextContains("Please /skill:meeting ")
+    composeTestRule.runOnIdle { assertEquals(1, requests) }
+  }
+
+  @Test fun tappingChatDismissesKeyboardWithoutLosingDraft() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(profile = profile, selectedConversationId = "chat",
+          messages = (1..50).map { ConversationMessage("message-$it", "assistant", "Reply $it") },
+          draftText = "Keep this draft"))
+    }
+    val input = composeTestRule.onNodeWithTag("assistant-input")
+    input.performClick().assertIsFocused()
+    val list = composeTestRule.onNodeWithTag("assistant-message-list")
+    list.performTouchInput { swipeDown() }
+    input.assertIsFocused()
+    list.performTouchInput { click() }
+    input.assertIsNotFocused().assertTextContains("Keep this draft")
   }
 
   @Test fun assistantActionsAndKeyboardFocusAreMutuallyExclusive() {

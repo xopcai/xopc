@@ -10,6 +10,7 @@ import ai.xopc.mobile.gateway.ConversationAgent
 import ai.xopc.mobile.gateway.ConversationHistoryScope
 import ai.xopc.mobile.gateway.ClarificationCommand
 
+import ai.xopc.mobile.gateway.ComposerPaletteItem
 import ai.xopc.mobile.gateway.ProgressTaskEdit
 
 import android.Manifest
@@ -400,6 +401,7 @@ internal fun MainScreen(
   onDraftChange: (String) -> Unit = {},
   onObserveSuggestion: (String?) -> Unit = {},
   onAcceptSuggestion: (String) -> String? = { null },
+  onLoadComposerPalette: suspend (String) -> List<ComposerPaletteItem> = { emptyList() },
   onAddDraftAttachment: (String, String, Uri) -> Unit = { _, _, _ -> },
   onAddCapturedDraftAttachment: (String, String, Uri) -> Unit = { _, _, _ -> },
   onRemoveDraftAttachment: (String) -> Unit = {},
@@ -448,7 +450,7 @@ internal fun MainScreen(
   onOpenProgressProject: (String) -> Unit = {},
   onWriteProgressProject: suspend (ai.xopc.mobile.gateway.ProjectMutation) -> ai.xopc.mobile.gateway.ProgressProject = { error("UNAVAILABLE") },
   onCreateProjectNote: (String) -> Unit = {},
-  onCreateProgressTask: (String, String, String) -> Unit = { _, _, _ -> },
+  onCreateProgressTask: (ProgressTaskEdit) -> Unit = {},
   onOpenTaskChat: (String) -> Unit = {},
   onSaveProgressTask: (String, Int, ProgressTaskEdit) -> Unit = { _, _, _ -> },
   onProgressTaskSearchChange: (String) -> Unit = {},
@@ -713,7 +715,7 @@ internal fun MainScreen(
     onScheduleDelete = onScheduleDelete, onUndoDelete = onUndoDelete,
     onDismissComposerErrors = onDismissComposerErrors,
     onDraftChange = onDraftChange, onObserveSuggestion = onObserveSuggestion,
-    onAcceptSuggestion = onAcceptSuggestion, onRemoveDraftRef = onRemoveDraftRef,
+    onAcceptSuggestion = onAcceptSuggestion, onLoadComposerPalette = onLoadComposerPalette, onRemoveDraftRef = onRemoveDraftRef,
     onPickDraftAttachment = { kind ->
       val gatewayId = connection.profile?.gatewayId
       val conversationId = connection.selectedConversationId
@@ -929,6 +931,7 @@ internal fun MainContent(
   onDraftChange: (String) -> Unit = {},
   onObserveSuggestion: (String?) -> Unit = {},
   onAcceptSuggestion: (String) -> String? = { null },
+  onLoadComposerPalette: suspend (String) -> List<ComposerPaletteItem> = { emptyList() },
   onPickDraftAttachment: (String) -> Unit = {},
   onRemoveDraftAttachment: (String) -> Unit = {},
   onPreviewDraftImage: suspend (String, ChatAttachment) -> Bitmap? = { _, _ -> null },
@@ -976,7 +979,7 @@ internal fun MainContent(
   onOpenProgressProject: (String) -> Unit = {},
   onWriteProgressProject: suspend (ai.xopc.mobile.gateway.ProjectMutation) -> ai.xopc.mobile.gateway.ProgressProject = { error("UNAVAILABLE") },
   onCreateProjectNote: (String) -> Unit = {},
-  onCreateProgressTask: (String, String, String) -> Unit = { _, _, _ -> },
+  onCreateProgressTask: (ProgressTaskEdit) -> Unit = {},
   onOpenTaskChat: (String) -> Unit = {},
   onSaveProgressTask: (String, Int, ProgressTaskEdit) -> Unit = { _, _, _ -> },
   onProgressTaskSearchChange: (String) -> Unit = {},
@@ -1274,6 +1277,7 @@ internal fun MainContent(
   val libraryDeliveryKind = deliveryRoute.substringBefore(':')
   val libraryDeliveryId = deliveryRoute.substringAfter(':', "")
   var linkedDetails by remember(gatewayId) { mutableStateOf(emptyList<LinkedDetail>()) }
+  var linkedMcp by remember(gatewayId, conversationId) { mutableStateOf<ConversationTarget?>(null) }
   val linkedDetailId = linkedDetails.lastOrNull()?.takeIf { it.destination == selectedTab }?.id
   fun openLinkedDetail(destination: HomeTab, id: String) {
     if (selectedTab == HomeTab.Assistant) linkedDetails = emptyList()
@@ -1297,7 +1301,12 @@ internal fun MainContent(
     previousGatewayId = gatewayId
   }
   fun leavePersonalPage() {
-    if (personalPage == "detail") {
+    val linkedSettings = linkedDetails.lastOrNull()?.takeIf { it.destination == HomeTab.Me && it.id == personalPage }
+    if (linkedSettings != null) {
+      linkedDetails = linkedDetails.dropLast(1)
+      personalPage = "settings"
+      onSelectTab(linkedSettings.source)
+    } else if (personalPage == "detail") {
       personalPage = personalReturnPage
       onClosePersonalAssertion()
     } else if (personalPage == "settings-gateways") {
@@ -1328,7 +1337,6 @@ internal fun MainContent(
     }
   }
   LaunchedEffect(selectedTab, gatewayId) {
-    if (selectedTab == HomeTab.Progress && isPaired) onRefreshProgressTasks()
     if (linkedDetailId == null && selectedTab == HomeTab.Projects && isPaired) onLoadProgressProjects()
     if (linkedDetailId == null && selectedTab == HomeTab.Automations && isPaired) onLoadAutomations()
   }
@@ -1594,6 +1602,7 @@ internal fun MainContent(
     }
   }
   LaunchedEffect(selectedTab) {
+    if (selectedTab == HomeTab.Assistant) returnToSidebar = false
     if (selectedTab != HomeTab.Assistant) sidebar.open = false
     if (selectedTab != HomeTab.Conversations) startConversationSearch = false
   }
@@ -1645,7 +1654,9 @@ internal fun MainContent(
               }, onVoiceRetry = { deliverInputVoice(inputVoiceRetryDestination) },
               onDismissVoiceError = inputVoiceNotice::clear,
               onDismissError = { onDismissComposerErrors(gatewayId, conversationId) },
-              onObserveSuggestion = onObserveSuggestion, onAcceptSuggestion = onAcceptSuggestion)
+              onObserveSuggestion = onObserveSuggestion, onAcceptSuggestion = onAcceptSuggestion,
+              onLoadComposerPalette = onLoadComposerPalette,
+              projectChatTitle = projectChatTitle.takeIf { showingProjectChat })
             AnimatedVisibility(visible = assistantActionsOpen,
               enter = expandVertically(animationSpec = tween(220), expandFrom = Alignment.Bottom) +
                 fadeIn(animationSpec = tween(220)),
@@ -1702,8 +1713,8 @@ internal fun MainContent(
     val contentTab = if (showLibraryDelivery) HomeTab.Progress else selectedTab
     val tabStateKey = when {
       showLibraryDelivery -> "library-delivery-${gatewayId}-$libraryDeliveryKind-$libraryDeliveryId"
-      linkedDetailId != null -> "linked-detail-$gatewayId-${contentTab.name}-$linkedDetailId"
       selectedTab == HomeTab.Library -> "library-root-${gatewayId}"
+      linkedDetailId != null -> "linked-detail-$gatewayId-${contentTab.name}-$linkedDetailId"
       else -> "${gatewayId}:${selectedTab.name}"
     }
     tabStateHolder.SaveableStateProvider(tabStateKey) {
@@ -1733,12 +1744,17 @@ internal fun MainContent(
               "task" -> taskNavigation.open(target.id, connection, onOpen = onOpenTaskChat)
               "project" -> openLinkedDetail(HomeTab.Projects, target.id)
               "automation" -> openLinkedDetail(HomeTab.Automations, target.id)
+              "automation-run" -> openLinkedDetail(HomeTab.Automations, "run:${target.id}")
+              "mcp-setup" -> linkedMcp = target
               "session" -> { onSelectConversation(target.id); onSelectTab(HomeTab.Assistant) }
               "user_assertion" -> {
                 personalReturnPage = "settings"; personalDetailId = target.id; personalPage = "detail"
                 onOpenPersonalAssertion(target.id); onSelectTab(HomeTab.Me)
               }
-              "settings" -> { personalPage = "settings"; onSelectTab(HomeTab.Me) }
+              "settings" -> {
+                personalPage = if (target.id.isEmpty()) "settings" else "settings-${target.id}"
+                openLinkedDetail(HomeTab.Me, personalPage)
+              }
             }
           },
           { value ->
@@ -1849,10 +1865,14 @@ internal fun MainContent(
         }, chatBusy = connection.creatingConversation || openingProjectChat,
           initialPage = when (selectedTab) {
             HomeTab.Projects -> if (linkedDetailId == null) "projects" else "project"
-            HomeTab.Automations -> if (linkedDetailId == null) "automations" else "automation"
+            HomeTab.Automations -> when {
+              linkedDetailId == null -> "automations"
+              linkedDetailId.startsWith("run:") -> "automation-run"
+              else -> "automation"
+            }
             else -> if (linkedDetailId == null) "overview" else "detail"
           },
-          initialItemId = linkedDetailId,
+          initialItemId = linkedDetailId?.removePrefix("run:"),
           onExit = {
             if (linkedDetailId != null) tabStateHolder.removeState(tabStateKey)
             exitDestination()
@@ -1863,6 +1883,7 @@ internal fun MainContent(
             tabStateHolder.removeState(tabStateKey)
             libraryDelivery.value = ""
           },
+          onOpenLibrary = { openLinkedDetail(HomeTab.Library, "workbench-library") },
         )
       }
       HomeTab.Capabilities -> CapabilitiesScreen(rootInsets, connection.personal, connection.agentAvatars, onLoadCapabilities,
@@ -1997,6 +2018,19 @@ internal fun MainContent(
     }
     },
     overlays = { sidebarWidth ->
+    linkedMcp?.let { target ->
+      target.summary?.let { address ->
+        val origin = connection.profile?.let { current ->
+          current.routes.firstOrNull { it.id == current.activeRouteId }?.url
+        }
+        LinkedMcpSetupSheet(target.id, address, origin,
+          request = { onCapabilityPanel("connections", "mcp:setup", it) },
+          onClose = { linkedMcp = null }, onUseInChat = { prompt ->
+            linkedMcp = null
+            onCapabilitySetupChat(prompt, false)
+          })
+      }
+    }
     if (showOverview) {
       overviewState.SaveableStateProvider("personal-overview-$gatewayId") {
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -2420,9 +2454,12 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
   onVoiceMove: (Float, Float) -> Unit, onVoiceFinish: (String) -> Unit,
   onVoiceCancel: () -> Unit, onVoiceRetry: () -> Unit,
   onDismissVoiceError: () -> Unit, onDismissError: () -> Unit,
-  onObserveSuggestion: (String?) -> Unit, onAcceptSuggestion: (String) -> String?) {
+  onObserveSuggestion: (String?) -> Unit, onAcceptSuggestion: (String) -> String?,
+  onLoadComposerPalette: suspend (String) -> List<ComposerPaletteItem>,
+  projectChatTitle: String? = null) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
+  var composerFocused by remember { mutableStateOf(false) }
   val expandedComposer = composerValue.text.isNotEmpty() || connection.draftRefs.isNotEmpty() ||
     connection.draftAttachments.isNotEmpty()
   val showVoicePad = voiceMode || voicePhase != "idle"
@@ -2501,6 +2538,8 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
       { item -> connection.selectedConversationId?.let { onPreviewImage(it, item) } },
       { item -> connection.selectedConversationId?.let { onPreviewFile(it, item) } })
     }
+    ComposerPaletteSuggestions(composerValue, composerFocused && !showVoicePad && !actionsOpen,
+      connection.profile?.gatewayId, locale, onLoadComposerPalette, onComposerValueChange)
     val personalAgent = connection.personal.agent?.takeIf { it.conversationId == connection.selectedConversationId }
     Column(modifier = Modifier.fillMaxWidth()
       .background(if (actionsOpen) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
@@ -2516,15 +2555,22 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
             onVoiceCancel, onVoiceRetry)
         } else BasicTextField(value = composerValue, onValueChange = onComposerValueChange,
           modifier = Modifier.weight(1f).heightIn(min = 48.dp).focusRequester(composerFocus)
-            .onFocusChanged { if (it.isFocused) onActionsOpenChange(false) }
+            .onFocusChanged {
+              composerFocused = it.isFocused
+              if (it.isFocused) onActionsOpenChange(false)
+            }
             .padding(horizontal = 12.dp, vertical = 10.dp).testTag("assistant-input"),
           textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
           maxLines = 5, enabled = !connection.historyLoading &&
             connection.pendingDeleteId != connection.selectedConversationId,
           decorationBox = { innerTextField ->
             Box {
-              if (composerValue.text.isEmpty() && suggestion == null) Text(if (personalAgent == null) stringResource(R.string.assistant_input_hint)
-                else stringResource(R.string.chat_ask_personal, personalAgent.displayName),
+              if (composerValue.text.isEmpty() && suggestion == null) Text(
+                when {
+                  personalAgent != null -> stringResource(R.string.chat_ask_personal, personalAgent.displayName)
+                  !projectChatTitle.isNullOrBlank() -> projectChatTitle
+                  else -> stringResource(R.string.assistant_input_hint)
+                },
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
               innerTextField()
@@ -2979,7 +3025,8 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   val openLink: (String) -> Unit = { link ->
     val target = messageLinkTarget(link)
     if (target != null && target.kind in setOf("file", "workspace_file")) {
-      selectedMessageConversationId?.let { conversationId ->
+      val conversationId = selectedMessageConversationId ?: "".takeIf { target.kind == "file" }
+      if (conversationId != null) {
         val file = ConversationMedia(target.id, target.title, "file", "application/octet-stream", 0,
           if (target.kind == "file") "xopc-file:${target.id}" else "",
           workspaceRelativePath = target.id.takeIf { target.kind == "workspace_file" })
@@ -2995,6 +3042,9 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   var positionedAtLatest by readingPosition.positionedAtLatest
   var followBottom by readingPosition.followBottom
   var waitingForUserScrollEnd by remember(readingPosition) { mutableStateOf(false) }
+  var timelineTailHeight by remember(readingPosition) { mutableIntStateOf(0) }
+  val historyMessageIds = remember(connection.messages) { connection.messages.mapTo(HashSet()) { it.id } }
+  val liveMessageIds = remember(connection.liveMessages) { connection.liveMessages.mapTo(HashSet()) { it.id } }
   var userScrolledTowardLatest by remember(readingPosition) { mutableStateOf(false) }
   var olderAnchor by remember(readingPosition) { mutableStateOf<Pair<String, Int>?>(null) }
   val messageDragged by messageListState.interactionSource.collectIsDraggedAsState()
@@ -3092,7 +3142,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
       listOf(latest.messages.lastOrNull(), latest.liveMessages.lastOrNull(), latest.activeRunId,
         latest.historyLoading, latest.historyLoadingOlder, latest.optimisticText, generatedMedia.items.isNotEmpty(),
         layout.totalItemsCount, layout.viewportSize.height, layout.beforeContentPadding,
-        layout.visibleItemsInfo.lastOrNull { it.key == "assistant-latest" }?.offset, followBottom, waitingForUserScrollEnd)
+        timelineTailHeight, followBottom, waitingForUserScrollEnd)
     }.conflate().collect {
       val latest = latestConnection
       if (!latest.historyLoading && !latest.historyLoadingOlder &&
@@ -3135,12 +3185,19 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(insets)
     .onGloballyPositioned { chatContentBounds = it.boundsInWindow() }
     .pointerInput(focusManager, keyboardController) {
-      awaitPointerEventScope {
+      awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         while (true) {
           val event = awaitPointerEvent(PointerEventPass.Final)
-          if (event.changes.any { !it.pressed && it.previousPressed }) {
-            focusManager.clearFocus(force = true)
-            keyboardController?.hide()
+          if (event.changes.size != 1) break
+          val change = event.changes.single()
+          if (change.id != down.id || (change.position - down.position).getDistance() > viewConfiguration.touchSlop) break
+          if (!change.pressed) {
+            if (change.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis) {
+              focusManager.clearFocus(force = true)
+              keyboardController?.hide()
+            }
+            break
           }
         }
       }
@@ -3235,9 +3292,14 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
           it.role == "user" || it.role == "assistant"
         }?.id
         items(displayMessages, key = { it.renderId }) { message ->
-          Column(Modifier.then(if (connection.liveMessages.any { it.id in message.sourceIds })
-            Modifier.testTag("assistant-live-output") else Modifier)) {
-          ChatMessageCard(message, onReading = { followBottom = false }, streaming = followBottom && !messageListState.isScrollInProgress && connection.activeRunId != null && connection.liveMessages.any { it.id in message.sourceIds }, actionsEnabled = connection.messages.any { it.id == message.id },
+          val isLive = message.sourceIds.any(liveMessageIds::contains)
+          val tailMeasurement = if (message.renderId == displayMessages.lastOrNull()?.renderId) {
+            Modifier.onSizeChanged { timelineTailHeight = it.height }
+          } else Modifier
+          Column(tailMeasurement.then(if (isLive) Modifier.testTag("assistant-live-output") else Modifier)) {
+          ChatMessageCard(message, onReading = { followBottom = false },
+            streaming = followBottom && connection.activeRunId != null && isLive,
+            actionsEnabled = message.id in historyMessageIds,
             onMore = {
               selectingMessageId = null
               messageActionsId = message.id
@@ -4821,15 +4883,13 @@ private fun SessionFilesDetails(panel: ContextPanelUiState,
       if (content == null) BrandLoadingPanel(modifier = Modifier.testTag("session-file-loading"))
       else if (content!!.isEmpty()) Text(stringResource(R.string.notes_file_preview_unavailable))
       else if (isBitmapPreview(file.name, file.mimeType)) {
-        val bitmap = remember(content) {
-          val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-          BitmapFactory.decodeByteArray(content!!, 0, content!!.size, bounds)
-          var sample = 1
-          while (bounds.outWidth / sample > 2048 || bounds.outHeight / sample > 2048) sample *= 2
-          BitmapFactory.decodeByteArray(content!!, 0, content!!.size,
-            BitmapFactory.Options().apply { inSampleSize = sample })
+        val bytes = content!!
+        val decoded by produceState<Pair<Boolean, Bitmap?>>(false to null, bytes) {
+          value = true to withContext(Dispatchers.Default) { decodeChatThumbnail(bytes, 2048) }
         }
-        if (bitmap != null) Image(bitmap.asImageBitmap(), file.name,
+        val bitmap = decoded.second
+        if (!decoded.first) BrandLoadingPanel(modifier = Modifier.testTag("session-file-loading"))
+        else if (bitmap != null) Image(bitmap.asImageBitmap(), file.name,
           modifier = Modifier.fillMaxWidth().weight(1f).testTag("session-file-image"),
           contentScale = ContentScale.Fit)
         else Text(stringResource(R.string.notes_file_preview_unavailable))

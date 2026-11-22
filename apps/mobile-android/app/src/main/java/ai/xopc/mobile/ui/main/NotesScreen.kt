@@ -81,6 +81,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -142,6 +143,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   initialNoteId: String? = null,
   initialProjectDraft: Boolean = false) {
   val context = LocalContext.current
+  val focusManager = LocalFocusManager.current
   val lifecycleOwner = LocalLifecycleOwner.current
   val scope = rememberCoroutineScope()
   var attachmentSheetOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
@@ -203,6 +205,8 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   var fileBrowserOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var fileSpaceId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var filePath by rememberSaveable(state.gatewayId) { mutableStateOf("") }
+  var fileSearch by rememberSaveable(state.gatewayId) { mutableStateOf("") }
+  var pendingExternalUrl by remember(state.gatewayId) { mutableStateOf<String?>(null) }
   var selectedFile by remember(state.gatewayId) { mutableStateOf<ManagedFile?>(null) }
   var fileRefreshRevision by rememberSaveable(state.gatewayId) { mutableStateOf(0) }
   var fileSpaces by remember(state.gatewayId) { mutableStateOf<List<ManagedFileSpace>>(emptyList()) }
@@ -216,17 +220,25 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   }
   var filesLoading by remember(state.gatewayId, fileSpaceId, filePath) { mutableStateOf(true) }
   var filesError by remember(state.gatewayId, fileSpaceId, filePath) { mutableStateOf(false) }
-  LaunchedEffect(fileBrowserOpen, fileSpaceId, filePath, fileRefreshRevision, state.gatewayId) {
+  LaunchedEffect(fileBrowserOpen, fileSpaceId, filePath, fileSearch, fileRefreshRevision, state.gatewayId) {
     if (!fileBrowserOpen) return@LaunchedEffect
+    val trimmedSearch = fileSearch.trim()
+    if (trimmedSearch.isNotEmpty()) delay(250)
     filesLoading = true
     filesError = false
     try {
-      if (fileSpaceId == null) {
-        val spaces = onNoteFileSpaces()
-        coroutineContext.ensureActive()
-        fileSpaces = spaces
+      if (fileSpaceId == null && trimmedSearch.isEmpty()) {
+        try {
+          val spaces = onNoteFileSpaces()
+          coroutineContext.ensureActive()
+          fileSpaces = spaces
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+          throw cancelled
+        } catch (_: Exception) {
+          filesError = true
+        }
       }
-      val files = onNoteFiles(fileSpaceId, filePath, "")
+      val files = onNoteFiles(fileSpaceId, filePath, trimmedSearch)
       coroutineContext.ensureActive()
       if (fileSpaceId == null) recentFileItems = files else folderItems = files
     } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -234,6 +246,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     } catch (_: Exception) {
       filesError = true
     } finally {
+      coroutineContext.ensureActive()
       filesLoading = false
     }
   }
@@ -369,6 +382,16 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(end = 12.dp),
           maxLines = 1, overflow = TextOverflow.Ellipsis)
         PageSearchButton(searchOpen, R.string.notes_search, "notes-open-search", ::toggleSearch)
+        IconButton(onClick = {
+          focusManager.clearFocus(force = true)
+          fileSpaceId = null
+          filePath = ""
+          fileSearch = ""
+          selectedFile = null
+          fileBrowserOpen = true
+        }, modifier = Modifier.testTag("notes-open-files")) {
+          ActionIcon(R.drawable.action_folder, size = 24.dp, contentDescription = stringResource(R.string.notes_files))
+        }
         IconButton(onClick = { editorOpen = true; onNew() },
           enabled = !state.draftLoading && !state.draftSaving,
           modifier = Modifier.testTag("notes-new")) {
@@ -376,17 +399,17 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         }
       }
     }
-    val visibleFileSpaces = if (fileSpaceId == null) fileSpaces else emptyList()
+    val visibleFileSpaces = if (fileSpaceId == null && fileSearch.isBlank()) fileSpaces else emptyList()
     val visibleFileItems = if (fileSpaceId != null) folderItems else
       recentFileItems.orEmpty()
     if (fileBrowserOpen) NotesFilesContent(visibleFileSpaces, visibleFileItems, selectedFile, fileContent,
       if (selectedFile != null) fileContentLoading else filesLoading,
       selectedFile == null && filesError, { fileRefreshRevision++ }, { space ->
-        selectedFile = null; filePath = ""; fileSpaceId = space.id
+        selectedFile = null; filePath = ""; fileSearch = ""; fileSpaceId = space.id
       }, { file ->
-        if (file.kind == "directory") { fileSpaceId = file.spaceId; filePath = file.relativePath }
+        if (file.kind == "directory") { fileSpaceId = file.spaceId; filePath = file.relativePath; fileSearch = "" }
         else selectedFile = file
-      }, Modifier.weight(1f))
+      }, Modifier.weight(1f), search = fileSearch, onSearchChange = { fileSearch = it })
     else if (editorOpen) NoteDraftContent(state, onDraftChange, onSaveDraft,
       Modifier.weight(1f), onResolveConflict, onAddAttachment = { attachmentSheetOpen = true },
       attachmentBusy = attachmentBusy, attachmentError = attachmentError)
@@ -419,19 +442,36 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
             if (parts.size == 2 && parts[0] == selectedId)
               previewAttachment = state.detail?.attachments?.firstOrNull { it.id == parts[1] }
           }
-          uri.scheme == "https" -> runCatching { uriHandler.openUri(link) }
+          externalMessageLink(link) -> pendingExternalUrl = link
           uri.scheme == "xopc" && uri.host == "workspace" && uri.path == "/file" -> {
-            val path = uri.getQueryParameter("path").orEmpty().trim('/')
-            val parts = path.split('/').filter(String::isNotBlank)
-            if (parts.isNotEmpty() && parts.none { it == "." || it == ".." }) {
+            val rawPath = uri.getQueryParameter("path").orEmpty()
+            val parts = rawPath.split('/')
+            if (!rawPath.startsWith('/') && !rawPath.endsWith('/') &&
+              parts.isNotEmpty() && parts.all { it.isNotBlank() && it != "." && it != ".." }) {
               fileSpaceId = null
               filePath = parts.dropLast(1).joinToString("/")
+              fileSearch = ""
               selectedFile = null
               fileBrowserOpen = true
             }
           }
         }
       }, onPreviewAttachment = { previewAttachment = it }, scroll = detailScroll)
+  }
+  pendingExternalUrl?.let { url ->
+    val externalLinkFailure = stringResource(R.string.message_open_link_failed)
+    AlertDialog(onDismissRequest = { pendingExternalUrl = null },
+      title = { Text(stringResource(R.string.message_open_external_title)) },
+      text = { Text(url, maxLines = 4, overflow = TextOverflow.Ellipsis) },
+      confirmButton = { TextButton(onClick = {
+        pendingExternalUrl = null
+        runCatching { uriHandler.openUri(url) }.onFailure {
+          android.widget.Toast.makeText(context, externalLinkFailure, android.widget.Toast.LENGTH_SHORT).show()
+        }
+      }) { Text(stringResource(R.string.message_open_external)) } },
+      dismissButton = { TextButton(onClick = { pendingExternalUrl = null }) {
+        Text(stringResource(R.string.progress_cancel))
+      } })
   }
   val attachmentToPreview = previewAttachment
   if (attachmentToPreview != null && selectedId != null) {
@@ -445,6 +485,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       File(context.cacheDir, "note-preview-${attachmentToPreview.id}.tmp")
     }
     var audioPlayer by remember(noteId, attachmentToPreview.id) { mutableStateOf<MediaPlayer?>(null) }
+    var audioPreparing by remember(noteId, attachmentToPreview.id) { mutableStateOf(false) }
     DisposableEffect(noteId, attachmentToPreview.id) { onDispose {
       runCatching { audioPlayer?.stop() }; audioPlayer?.release(); audioFile.delete()
     } }
@@ -455,28 +496,38 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         !preview.first -> BrandLoadingPanel(minHeight = 120.dp)
         content == null -> Text(stringResource(R.string.notes_file_preview_unavailable))
         attachmentToPreview.type == "image" -> {
-          val image = remember(content) {
-            val bytes = content
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-            var sample = 1
-            while (bounds.outWidth / sample > 1200 || bounds.outHeight / sample > 1200) sample *= 2
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
-              BitmapFactory.Options().apply { inSampleSize = sample })
+          val decoded by produceState<Pair<Boolean, android.graphics.Bitmap?>>(false to null, content) {
+            value = true to kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+              decodeChatThumbnail(content, 1200)
+            }
           }
-          if (image != null) Image(image.asImageBitmap(), contentDescription = attachmentToPreview.fileName,
+          val image = decoded.second
+          if (!decoded.first) BrandLoadingPanel(minHeight = 120.dp)
+          else if (image != null) Image(image.asImageBitmap(), contentDescription = attachmentToPreview.fileName,
             modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp), contentScale = ContentScale.Fit)
           else Text(stringResource(R.string.notes_file_preview_unavailable))
         }
-        attachmentToPreview.type == "audio" -> Button(onClick = {
+        attachmentToPreview.type == "audio" -> Button(enabled = !audioPreparing, onClick = {
           if (audioPlayer != null) {
             runCatching { audioPlayer?.stop() }; audioPlayer?.release(); audioPlayer = null
-          } else runCatching {
-            audioFile.writeBytes(content)
-            audioPlayer = MediaPlayer().apply {
-              setDataSource(audioFile.absolutePath)
-              setOnCompletionListener { player -> player.release(); audioPlayer = null }
-              prepare(); start()
+          } else scope.launch {
+            audioPreparing = true
+            val prepared = runCatching {
+              kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                audioFile.writeBytes(content)
+                MediaPlayer().apply {
+                  setDataSource(audioFile.absolutePath)
+                  prepare()
+                }
+              }
+            }.getOrNull()
+            audioPreparing = false
+            if (prepared != null) {
+              prepared.setOnCompletionListener { player -> player.release(); audioPlayer = null }
+              audioPlayer = prepared
+              runCatching { prepared.start() }.onFailure {
+                prepared.release(); audioPlayer = null
+              }
             }
           }
         }) { Text(stringResource(if (audioPlayer == null) R.string.voice_preview
@@ -1053,8 +1104,14 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
 private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<ManagedFile>,
   selected: ManagedFile?, content: ByteArray?, loading: Boolean, error: Boolean,
   onRetry: () -> Unit, onOpenSpace: (ManagedFileSpace) -> Unit,
-  onOpenFile: (ManagedFile) -> Unit, modifier: Modifier = Modifier) {
+  onOpenFile: (ManagedFile) -> Unit, modifier: Modifier = Modifier,
+  search: String = "", onSearchChange: (String) -> Unit = {}) {
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    if (selected == null) {
+      OutlinedTextField(value = search, onValueChange = { onSearchChange(it.take(200)) },
+        modifier = Modifier.fillMaxWidth().testTag("notes-files-search"),
+        placeholder = { Text(stringResource(R.string.notes_search_files)) }, singleLine = true)
+    }
     if (error) OutlinedButton(onClick = onRetry, modifier = Modifier.testTag("notes-files-retry")) {
       Text(stringResource(R.string.progress_load_failed))
     }
@@ -1063,16 +1120,22 @@ private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<Manage
         modifier = Modifier.testTag("notes-file-title"))
       Text(selected.relativePath, style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
-      val bitmap = remember(content) { content?.takeIf { isBitmapPreview(selected.name, selected.mimeType) }
-        ?.let { bytes ->
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        var sample = 1
-        while (bounds.outWidth / sample > 2048 || bounds.outHeight / sample > 2048) sample *= 2
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
-          BitmapFactory.Options().apply { inSampleSize = sample })
-      } }
-      if (bitmap != null) Image(bitmap.asImageBitmap(), selected.name,
+      val isBitmap = isBitmapPreview(selected.name, selected.mimeType)
+      val decodedBitmap by produceState<Pair<Boolean, android.graphics.Bitmap?>>(false to null, content, isBitmap) {
+        if (content != null && isBitmap) {
+          value = true to kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            decodeChatThumbnail(content, 2048)
+          }
+        } else {
+          value = false to null
+        }
+      }
+      val bitmap = decodedBitmap.second
+      if (content != null && isBitmap && !decodedBitmap.first) {
+        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+          BrandLoadingIndicator(extent = 28.dp, modifier = Modifier.testTag("notes-files-loading"))
+        }
+      } else if (bitmap != null) Image(bitmap.asImageBitmap(), selected.name,
         modifier = Modifier.fillMaxWidth().weight(1f).testTag("notes-file-image"),
         contentScale = ContentScale.Fit)
       else if (content != null) FilePreviewContent(selected.name, selected.mimeType, content,

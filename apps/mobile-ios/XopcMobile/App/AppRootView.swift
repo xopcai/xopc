@@ -1,6 +1,7 @@
 // swiftlint:disable file_length
 import AVFoundation
 import SwiftUI
+import UIKit
 
 // swiftlint:disable:next type_body_length
 struct AppRootView: View {
@@ -11,13 +12,10 @@ struct AppRootView: View {
     @State private var realtimeVoiceCall = RealtimeVoiceCall()
     @State private var personalAgent = PersonalAgentState()
     @State private var settingsPresented = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sidebarOpen = false
     @State private var composerFocused = false
     @State private var phoneVisible = false
     @State private var actionPanelVisible = false
-    @GestureState private var sidebarDrag: CGFloat = 0
-    @State private var sidebarDismissDrag: CGFloat = 0
     @State private var reopenSidebar = false
     @State private var recentConversations: [ConversationSummary]?
     @State private var recentNextOffset: Int?
@@ -25,6 +23,7 @@ struct AppRootView: View {
     @State private var recentError = false
     @State private var recentLoading = false
     @State private var recentRevision = 0
+    @State private var recentUpdatedAt: Date?
     @State private var recentDeleteFailures: Set<String> = []
     @State private var homeRetry = 0
     @State private var pendingAttention = 0
@@ -58,10 +57,14 @@ struct AppRootView: View {
         .mobileTextStyle(.body)
         .environment(\.openURL, OpenURLAction { url in
             if let target = ChatMessageLink.resolve(url.absoluteString) {
+                if settingsPresented { settingsPresented = false }
                 messageLinks.open(target, appState: appState)
                 return .handled
             }
-            return ChatMessageLink.externalURL(url) ? .systemAction(url) : .discarded
+            if url.absoluteString == UIApplication.openSettingsURLString || ChatMessageLink.externalURL(url) {
+                return .systemAction(url)
+            }
+            return .discarded
         })
         .environment(\.locale, (AppLanguage(rawValue: language) ?? .system).locale)
         .preferredColorScheme((AppAppearance(rawValue: appearance) ?? .system).colorScheme)
@@ -107,7 +110,7 @@ struct AppRootView: View {
             }
             return messageLinks.destination
         }, set: { messageLinks.destination = $0 })) { link in
-            ChatMessageLinkDestination(link: link, appState: appState, router: messageLinks)
+            ChatMessageLinkDestination(link: link, appState: appState, router: messageLinks, defaultAgentID: defaultAgentID)
         }
         .fullScreenCover(item: Binding(get: {
             if case .route("tasks", _) = messageLinks.destination {
@@ -115,7 +118,7 @@ struct AppRootView: View {
             }
             return nil
         }, set: { messageLinks.destination = $0 })) { link in
-            ChatMessageLinkDestination(link: link, appState: appState, router: messageLinks)
+            ChatMessageLinkDestination(link: link, appState: appState, router: messageLinks, defaultAgentID: defaultAgentID)
         }
         .alert("无法打开链接", isPresented: Binding(get: { messageLinks.errorMessage != nil }, set: {
             if !$0 {
@@ -186,45 +189,18 @@ struct AppRootView: View {
     }
 
     private var homeShell: some View {
-        GeometryReader { geometry in
-            let width = min(350, geometry.size.width * 0.84)
-            let reveal = sidebarOpen
-                ? max(0, 1 + sidebarDismissDrag / max(1, width))
-                : min(1, sidebarDrag / max(1, width))
-
-            NavigationStack(path: $appState.homePath) {
-                chatScreen
-                    .toolbar(.hidden, for: .navigationBar)
-                    .navigationDestination(for: HomeDestination.self, destination: destination)
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !appState.homePath.isEmpty || phoneVisible {
-                    GeneratedMusicDock(playback: music)
-                }
-            }
-            .simultaneousGesture(sidebarGesture(width: width), including: canDragSidebar ? .all : .none)
-            .accessibilityHidden(sidebarOpen)
-            .overlay(alignment: .leading) {
-                Color.black.opacity(0.4 * reveal).ignoresSafeArea()
-                    .onTapGesture { setSidebar(false) }
-                    .allowsHitTesting(sidebarOpen).accessibilityHidden(true)
-            }
-            .overlay(alignment: .leading) {
-                if sidebarOpen || sidebarDrag > 0 {
-                    sidebar.frame(width: width)
-                        .offset(x: (reveal - 1) * width)
-                        .background {
-                            if sidebarOpen {
-                                HorizontalSwipeCapture(leftOnly: true, onDrag: { sidebarDismissDrag = min(0, $0) },
-                                                       onEnd: { finishSidebarDismiss($0, velocity: $1, width: width) })
-                            }
-                        }
-                        .allowsHitTesting(sidebarOpen)
-                        .accessibilityHidden(!sidebarOpen)
-                        .transition(reduceMotion ? .opacity : .move(edge: .leading))
-                }
+        NavigationStack(path: $appState.homePath) {
+            chatScreen
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: HomeDestination.self, destination: destination)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !appState.homePath.isEmpty || phoneVisible {
+                GeneratedMusicDock(playback: music)
             }
         }
+        .modifier(ChatSidebarPresentation(isOpen: sidebarOpen, canOpenBySwipe: canDragSidebar,
+                                          onSetOpen: setSidebar) { sidebar })
         .background(mobileTheme.canvas.ignoresSafeArea())
         .task(id: SidebarAttentionLoad(configuration: appState.gatewayConfiguration, language: language)) {
             let configuration = appState.gatewayConfiguration
@@ -254,13 +230,18 @@ struct AppRootView: View {
             await loadRecent(using: appState.gatewayConfiguration)
         }
         .task(id: sidebarOpen) {
-            if sidebarOpen {
-                await loadAttention(using: appState.gatewayConfiguration)
+            guard sidebarOpen else { return }
+            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            let recentsAreStale = recentUpdatedAt.map { Date.now.timeIntervalSince($0) > 30 } ?? true
+            if !recentLoading, recentsAreStale {
+                recentRevision += 1
             }
+            await loadAttention(using: appState.gatewayConfiguration)
         }
         .onChange(of: ComposerDraftStore.accountScope(appState.gatewayConfiguration)) {
             setSidebar(false)
             reopenSidebar = false
+            recentUpdatedAt = nil
             recentConversations = nil
             recentDeleteFailures = []
             recentNextOffset = nil
@@ -269,7 +250,13 @@ struct AppRootView: View {
             pendingAttention = 0
             defaultAgentID = "main"
         }
+        .onChange(of: appState.selectedConversation?.isDraft) { wasDraft, isDraft in
+            if wasDraft == true && isDraft == false {
+                recentUpdatedAt = nil
+            }
+        }
         .onChange(of: appState.listCacheRevision) {
+            recentUpdatedAt = nil
             recentConversations = nil
             recentNextOffset = nil
             recentScope = nil
@@ -277,14 +264,11 @@ struct AppRootView: View {
             recentRevision += 1
         }
         .onChange(of: appState.homePath) { old, current in
-            if old == [.conversations] || old == [.conversationSearch] || old == [.progress] || old == [.automations],
-               current.isEmpty, reopenSidebar
-            {
+            guard !old.isEmpty, current.isEmpty else { return }
+            if reopenSidebar {
                 setSidebar(true)
             }
-            if current.isEmpty {
-                reopenSidebar = false
-            }
+            reopenSidebar = false
         }
     }
 
@@ -340,9 +324,13 @@ struct AppRootView: View {
                               personalConversationID: personalAgent.record(using: configuration)?.conversationId,
                               onOpenSettings: { settingsPresented = true }, startSearching: route == .conversationSearch, onDelete: appState.conversationUnavailable)
         case .progress:
-            WorkPagesView(configuration: configuration, initialPage: .progress, onOpenConversation: appState.openConversation)
+            WorkPagesView(configuration: configuration, initialPage: .progress, onOpenConversation: appState.openConversation) {
+                navigate(.library)
+            }
         case .projects:
-            WorkPagesView(configuration: configuration, initialPage: .projects, onOpenConversation: appState.openConversation)
+            WorkPagesView(configuration: configuration, initialPage: .projects, onOpenConversation: appState.openConversation) {
+                navigate(.library)
+            }
         case .automations:
             AutomationsView(configuration: configuration, onOpenConversation: appState.openConversation)
         case .notes:
@@ -400,6 +388,8 @@ struct AppRootView: View {
                                       onEdit: { personalAgent.applyProfile($0, using: configuration) },
                                       onModelSaved: appState.updateConversation, onOpenConversation: appState.openConversation)
             }
+        case let .settingsSection(section):
+            SettingsSectionView(configuration: configuration, section: section)
         case .settings:
             AppSettingsView(configuration: configuration,
                             gatewayName: appState.gatewayProfiles.first { $0.id == appState.activeGatewayProfileID }?.name ?? "Gateway",
@@ -420,7 +410,7 @@ struct AppRootView: View {
                                openingPersonal: personalAgent.isOpening, selectedID: appState.selectedConversation?.id,
                                recent: recents ?? [], recentNextOffset: recents == nil ? nil : recentNextOffset,
                                recentLoading: recentLoading || (recents == nil && !recentError), recentError: recentError,
-                               attention: pendingAttention, onClose: { setSidebar(false) }, onNavigate: navigate,
+                               attention: pendingAttention, isPresented: sidebarOpen, onClose: { setSidebar(false) }, onNavigate: navigate,
                                onPersonal: { Task { await openPersonalAgent(remember: true) } },
                                onConversation: selectConversation, onNew: startNew, onRetry: { recentRevision += 1 },
                                onLoadMore: { Task { await loadRecent(using: configuration, more: true) } },
@@ -511,6 +501,7 @@ struct AppRootView: View {
             guard !Task.isCancelled, appState.activeGatewayProfileID == profile.id else { return }
             defer { push.forget(route) }
             guard let target else { return }
+            reopenSidebar = false
             appState.homePath.removeAll()
             setSidebar(false)
             openMobilePushTarget(target)
@@ -538,7 +529,7 @@ struct AppRootView: View {
     }
 
     private func navigate(_ route: HomeDestination) {
-        reopenSidebar = route == .conversations || route == .conversationSearch || route == .progress || route == .automations
+        if appState.homePath.isEmpty { reopenSidebar = sidebarOpen }
         setSidebar(false)
         appState.homePath.append(route)
     }
@@ -571,43 +562,11 @@ struct AppRootView: View {
     }
 
     private func setSidebar(_ open: Bool) {
-        if open, !sidebarOpen, !recentLoading {
-            recentNextOffset = nil
-            recentRevision += 1
-        }
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { sidebarOpen = open }
+        sidebarOpen = open
     }
 
     private var canDragSidebar: Bool {
         appState.homePath.isEmpty && !sidebarOpen && !composerFocused && !phoneVisible && !actionPanelVisible
-    }
-
-    private func sidebarGesture(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 18, coordinateSpace: .global)
-            .updating($sidebarDrag) { value, progress, _ in
-                guard sidebarSwipe(value) else { return }
-                progress = value.translation.width
-            }
-            .onEnded { value in
-                guard sidebarSwipe(value) else { return }
-                let distance = value.translation.width
-                if distance >= min(width * 0.32, 96)
-                    || (distance > 28 && value.predictedEndTranslation.width >= width * 0.55)
-                {
-                    setSidebar(true)
-                }
-            }
-    }
-
-    private func sidebarSwipe(_ value: DragGesture.Value) -> Bool {
-        value.startLocation.x >= 24 && value.translation.width > abs(value.translation.height) * 1.5
-    }
-
-    private func finishSidebarDismiss(_ offset: CGFloat, velocity: CGFloat, width: CGFloat) {
-        if -offset >= min(width * 0.32, 96) || (-offset >= 24 && -velocity >= 550) {
-            setSidebar(false)
-        }
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { sidebarDismissDrag = 0 }
     }
 
     private func restoreRecents(using configuration: GatewayConfiguration) async {
@@ -658,6 +617,7 @@ struct AppRootView: View {
             }
             recentConversations = retained + fresh + failedRows
             recentNextOffset = page.nextOffset
+            recentUpdatedAt = .now
             if !more {
                 await RecentConversationsStore.shared.write(page.items, scope: scope, requestedAt: requestedAt)
             }

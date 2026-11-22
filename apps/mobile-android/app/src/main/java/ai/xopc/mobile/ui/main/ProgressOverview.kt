@@ -18,37 +18,32 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
-  onOpenChat: (String) -> Unit, onOpenTaskList: () -> Unit, onOpenProjects: () -> Unit,
-  onOpenAutomations: () -> Unit, onOpenAutomation: (String) -> Unit,
+  onOpenChat: (String) -> Unit, onOpenAutomations: () -> Unit, onOpenAutomation: (String) -> Unit,
   onOpenTask: (String) -> Unit, onRequestAction: (ProgressHomeAction) -> Unit,
-  onOpenRun: (String) -> Unit) {
+  onOpenRun: (String) -> Unit, onOpenLibrary: (() -> Unit)? = null) {
   val (scheduled, running) = remember(state.background) {
     state.background.partition { it.kind == "scheduled" }
   }
   val pendingCount = state.needsUser.size
-  val runningCount = running.size
   val deliveries = state.deliveries.take(5)
-  val runningIndex = 1 + (if (pendingCount > 0) pendingCount + 1 else 0) +
-    (if (deliveries.isNotEmpty()) deliveries.size + 1 else 0)
-  val initialLoading = state.homeLoading && state.needsUser.isEmpty() && state.background.isEmpty()
-  val largeText = LocalDensity.current.fontScale > 1.3f
+  val initialLoading = state.homeLoading && state.needsUser.isEmpty() && state.background.isEmpty() &&
+    deliveries.isEmpty() && state.automationMetrics?.nextRun == null
   val listState = rememberLazyListState()
-  val scope = rememberCoroutineScope()
   fun open(item: ProgressItem) {
     item.openAction?.href?.let(::progressDestination)?.let { (page, id) ->
       when (page) {
@@ -64,27 +59,6 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("progress-overview-list"),
       verticalArrangement = Arrangement.spacedBy(8.dp),
       contentPadding = PaddingValues(bottom = 20.dp)) {
-      item(key = "summary", contentType = "summary") {
-        if (largeText) {
-          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ProgressCount(pendingCount, R.string.progress_action_required, "progress-pending-count", Modifier.fillMaxWidth()) {
-              scope.launch { listState.animateScrollToItem(1) }
-            }
-            ProgressCount(runningCount, R.string.progress_ongoing, "progress-running-count", Modifier.fillMaxWidth()) {
-              scope.launch { listState.animateScrollToItem(runningIndex) }
-            }
-          }
-        } else {
-          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ProgressCount(pendingCount, R.string.progress_action_required, "progress-pending-count", Modifier.weight(1f)) {
-              scope.launch { listState.animateScrollToItem(1) }
-            }
-            ProgressCount(runningCount, R.string.progress_ongoing, "progress-running-count", Modifier.weight(1f)) {
-              scope.launch { listState.animateScrollToItem(runningIndex) }
-            }
-          }
-        }
-      }
       if (state.homeActionError) item(key = "action-error", contentType = "error") {
         Text(stringResource(R.string.progress_home_action_error), color = MaterialTheme.colorScheme.error,
           modifier = Modifier.testTag("progress-home-action-error"))
@@ -104,13 +78,18 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
         }
       } else {
         if (state.needsUser.isNotEmpty()) {
-          item(key = "needs-heading", contentType = "heading") { ProgressOverviewSection(R.string.progress_action_required) }
+          item(key = "needs-heading", contentType = "heading") {
+            ProgressOverviewSection(R.string.progress_action_required, count = pendingCount)
+          }
           items(state.needsUser, key = { "needs-${it.id}" }, contentType = { "attention" }) { item ->
             ProgressAttentionRow(item, state.homeActionBusy, { open(item) }, onRequestAction)
           }
         }
         if (deliveries.isNotEmpty()) {
-          item(key = "delivery-heading", contentType = "heading") { ProgressOverviewSection(R.string.progress_delivered) }
+          item(key = "delivery-heading", contentType = "heading") {
+            ProgressOverviewSection(R.string.progress_delivered, R.string.progress_view_library,
+              "progress-open-library", onOpenLibrary)
+          }
           items(deliveries, key = { "delivery-${it.id}" }, contentType = { "work" }) { item ->
             ProgressHubRow(item.title, item.summary, R.drawable.tab_progress, "progress-delivery-${item.id}") {
               if (item.kind == "task") onOpenTask(item.subjectId) else onOpenRun(item.subjectId)
@@ -119,7 +98,7 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
         }
         if (running.isNotEmpty()) {
           item(key = "running-heading", contentType = "heading") { ProgressOverviewSection(R.string.progress_ongoing) }
-          items(running, key = { "ongoing-${it.id}" }, contentType = { "work" }) { item ->
+          items(running.take(5), key = { "ongoing-${it.id}" }, contentType = { "work" }) { item ->
             ProgressHubRow(item.title, listOfNotNull(item.statusLabel, item.summary.takeIf(String::isNotBlank)).joinToString(" · "),
               R.drawable.action_clock, "progress-item-${item.id}",
               navigable = item.openAction?.href?.let(::progressDestination) != null) { open(item) }
@@ -131,109 +110,54 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
           }
         }
         if (scheduled.isNotEmpty()) {
-          item(key = "upcoming-heading", contentType = "heading") { ProgressOverviewSection(R.string.progress_upcoming) }
-          items(scheduled, key = { "scheduled-${it.id}" }, contentType = { "work" }) { item ->
+          item(key = "upcoming-heading", contentType = "heading") {
+            ProgressOverviewSection(R.string.progress_upcoming, R.string.progress_view_automations,
+              "progress-automations", onOpenAutomations)
+          }
+          items(scheduled.take(5), key = { "scheduled-${it.id}" }, contentType = { "work" }) { item ->
             ProgressHubRow(item.title, listOfNotNull(item.statusLabel, item.summary.takeIf(String::isNotBlank)).joinToString(" · "),
               R.drawable.action_clock, "progress-item-${item.id}",
               navigable = item.openAction?.href?.let(::progressDestination) != null) { open(item) }
           }
         } else state.automationMetrics?.nextRun?.let { next ->
-          item(key = "upcoming-heading", contentType = "heading") { ProgressOverviewSection(R.string.progress_upcoming) }
+          item(key = "upcoming-heading", contentType = "heading") {
+            ProgressOverviewSection(R.string.progress_upcoming, R.string.progress_view_automations,
+              "progress-automations", onOpenAutomations)
+          }
           item(key = "upcoming-${next.automationId}", contentType = "work") {
             ProgressHubRow(next.name, DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(next.runAtMs)),
               R.drawable.action_clock, "progress-upcoming-${next.automationId}") { onOpenAutomation(next.automationId) }
           }
         }
-        if (state.tasksError) item(key = "tasks-error", contentType = "error") {
-          Text(stringResource(R.string.progress_tasks_error), color = MaterialTheme.colorScheme.error)
-        } else if (state.recentClosedTasks.isNotEmpty()) {
-          item(key = "closed-heading", contentType = "heading") { ProgressOverviewSection(R.string.progress_history) }
-          items(state.recentClosedTasks.take(2), key = { "closed-${it.id}" }, contentType = { "work" }) { task ->
-            ProgressHubRow(task.title, task.resolution?.let { taskResolutionLabel(it) }.orEmpty(),
-              R.drawable.tab_progress, "progress-closed-${task.id}") { onOpenTask(task.id) }
-          }
+        if (!state.homeError && pendingCount == 0 && deliveries.isEmpty() && state.background.isEmpty() &&
+          state.automationMetrics?.nextRun == null) item(key = "empty") {
+          Text(stringResource(R.string.progress_overview_empty), Modifier.padding(vertical = 16.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-      }
-      item(key = "tools-heading", contentType = "heading") { ProgressOverviewSection(R.string.progress_frequent_tools) }
-      item(key = "task-project-shortcuts", contentType = "shortcuts") {
-        if (largeText) {
-          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ProgressShortcut(R.string.progress_tasks, R.drawable.tab_progress, onOpenTaskList,
-              Modifier.fillMaxWidth().testTag("progress-tasks"))
-            ProgressShortcut(R.string.progress_projects, R.drawable.action_folder, onOpenProjects,
-              Modifier.fillMaxWidth().testTag("progress-projects"))
-          }
-        } else {
-          Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ProgressShortcut(R.string.progress_tasks, R.drawable.tab_progress, onOpenTaskList,
-              Modifier.weight(1f).testTag("progress-tasks"))
-            ProgressShortcut(R.string.progress_projects, R.drawable.action_folder, onOpenProjects,
-              Modifier.weight(1f).testTag("progress-projects"))
-          }
-        }
-      }
-      item(key = "automation-shortcut", contentType = "shortcut") {
-        ProgressShortcut(R.string.progress_automations, R.drawable.action_clock, onOpenAutomations,
-          Modifier.fillMaxWidth().padding(top = 4.dp).testTag("progress-automations"))
       }
     }
   }
 }
 
 @Composable
-private fun ProgressCount(count: Int, label: Int, tag: String, modifier: Modifier, onClick: () -> Unit) {
-  Card(onClick = onClick, enabled = count > 0, modifier = modifier.testTag(tag),
-    shape = MaterialTheme.shapes.medium, colors = CardDefaults.cardColors(
-      containerColor = MaterialTheme.colorScheme.surfaceContainer,
-      disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer)) {
-    val countColor = if (count > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    if (LocalDensity.current.fontScale > 1.3f) {
-      Row(Modifier.fillMaxWidth().heightIn(min = 80.dp).padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(count.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = countColor)
-        Text(stringResource(label), style = MaterialTheme.typography.labelLarge,
-          modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (count > 0) ProgressChevron(MaterialTheme.colorScheme.primary)
-      }
-    } else {
-      Column(Modifier.fillMaxWidth().heightIn(min = 96.dp).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-          Text(count.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1f), color = countColor)
-          if (count > 0) ProgressChevron(MaterialTheme.colorScheme.primary)
-        }
-        Text(stringResource(label), style = MaterialTheme.typography.labelLarge,
-          color = MaterialTheme.colorScheme.onSurfaceVariant)
-      }
+private fun ProgressOverviewSection(label: Int, actionLabel: Int? = null, actionTag: String = "",
+  onAction: (() -> Unit)? = null, count: Int? = null) {
+  Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+    verticalAlignment = Alignment.CenterVertically) {
+    Text(stringResource(label), style = MaterialTheme.typography.titleSmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+      modifier = Modifier.weight(1f).semantics { heading() })
+    count?.let { Text(it.toString(), style = MaterialTheme.typography.labelLarge,
+      color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    if (actionLabel != null && onAction != null) TextButton(onClick = onAction, modifier = Modifier.testTag(actionTag)) {
+      Text(stringResource(actionLabel))
     }
   }
-}
-
-@Composable
-private fun ProgressOverviewSection(label: Int) {
-  Text(stringResource(label), fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium,
-    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp))
 }
 
 @Composable
 private fun ProgressChevron(color: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant) {
   Icon(painterResource(R.drawable.action_chevron_right), contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
-}
-
-@Composable
-private fun ProgressShortcut(label: Int, icon: Int, onClick: () -> Unit, modifier: Modifier) {
-  Card(onClick = onClick, modifier = modifier, shape = MaterialTheme.shapes.medium,
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 12.dp, vertical = 12.dp),
-      verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-      Box(Modifier.size(34.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape), contentAlignment = Alignment.Center) {
-        Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-      }
-      Text(stringResource(label), modifier = Modifier.weight(1f), fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-      ProgressChevron()
-    }
-  }
 }
 
 @Composable
@@ -259,11 +183,25 @@ private fun ProgressHubRow(title: String, summary: String, icon: Int, tag: Strin
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-private fun ProgressAttentionRow(item: ProgressItem, busy: Boolean, onOpen: () -> Unit,
+internal fun ProgressAttentionRow(item: ProgressItem, busy: Boolean, onOpen: () -> Unit,
   onRequestAction: (ProgressHomeAction) -> Unit) {
   var reviewExpanded by rememberSaveable(item.id) { mutableStateOf(false) }
-  val canOpen = item.openAction?.href?.let(::progressDestination) != null
-  val hasActions = item.primaryAction != null || item.secondaryActions.isNotEmpty()
+  val openAction = item.openAction
+  val canOpen = openAction?.href?.let(::progressDestination) != null
+  val dedupedSecondary = remember(item.secondaryActions, openAction, canOpen) {
+    if (openAction == null || !canOpen) item.secondaryActions else item.secondaryActions.filterNot { action ->
+      action.label == openAction.label ||
+        (action.reviewTaskId != null && openAction.href == "/tasks/${action.reviewTaskId}")
+    }
+  }
+  val hasActions = item.primaryAction != null || dedupedSecondary.isNotEmpty()
+  val localizedSummary = when {
+    item.summary.contains("provider_setup_required", ignoreCase = true) ->
+      stringResource(R.string.progress_attention_provider_setup)
+    item.summary.contains("run was still active", ignoreCase = true) ->
+      stringResource(R.string.progress_attention_interrupted_run)
+    else -> item.summary
+  }
   val attention = LocalAttentionColors.current
   Card(shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth(),
     colors = CardDefaults.cardColors(containerColor = attention.fill, contentColor = MaterialTheme.colorScheme.onSurface)) {
@@ -279,7 +217,7 @@ private fun ProgressAttentionRow(item: ProgressItem, busy: Boolean, onOpen: () -
         }
         Text(item.title, fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium,
           maxLines = 3, overflow = TextOverflow.Ellipsis)
-        if (item.summary.isNotBlank() && item.summary != item.title) Text(item.summary, fontSize = 13.sp, lineHeight = 19.sp,
+        if (localizedSummary.isNotBlank() && localizedSummary != item.title) Text(localizedSummary, fontSize = 13.sp, lineHeight = 19.sp,
           color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (canOpen) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
           Text(item.openAction.label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
@@ -302,7 +240,7 @@ private fun ProgressAttentionRow(item: ProgressItem, busy: Boolean, onOpen: () -
             FilledTonalButton(onClick = { onRequestAction(action) }, enabled = !busy,
               modifier = Modifier.heightIn(min = 44.dp).testTag("progress-home-primary-${item.id}")) { Text(action.label) }
           }
-          item.secondaryActions.forEachIndexed { index, action ->
+          dedupedSecondary.forEachIndexed { index, action ->
             TextButton(onClick = { onRequestAction(action) }, enabled = !busy,
               modifier = Modifier.heightIn(min = 44.dp).testTag("progress-home-secondary-${item.id}-$index")) { Text(action.label) }
           }

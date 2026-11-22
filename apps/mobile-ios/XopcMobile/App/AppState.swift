@@ -324,6 +324,7 @@ private extension AppState {
 
 enum HomeDestination: Hashable {
     case conversations, conversationSearch, progress, projects, automations, notes, library, capabilities, settings
+    case settingsSection(MobileSettingsSection)
     case personalOverview(allowsConversationSharing: Bool)
     case libraryTask(String), libraryAutomationRun(String), notificationTask(String)
 }

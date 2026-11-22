@@ -1,10 +1,12 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.R
 import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Column
@@ -24,8 +26,11 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.WebViewAssetLoader
+import java.io.ByteArrayInputStream
 import org.json.JSONObject
 import org.commonmark.node.Block
 import org.commonmark.node.CustomBlock
@@ -38,9 +43,24 @@ import org.commonmark.parser.block.MatchedBlockParser
 import org.commonmark.parser.block.ParserState
 
 internal object MathMarkdownSyntax {
-  fun candidateCount(source: String): Int = Regex("""\\[\(\[]|\$\$|\$(?=[^\s$])|(?:`{3,}|~{3,})math\b""").findAll(source).count()
+  private val CANDIDATE_REGEX = Regex("""\\[\(\[]|\$\$|\$(?=[^\s$])|(?:`{3,}|~{3,})math\b""")
+  private val INLINE_MATH_REGEX = Regex("\\$[^\\s$][^\\n]*\\$")
+  private val FONT_ASSET_REGEX = Regex("^fonts/[A-Za-z0-9._-]+\\.(?:woff2|woff|ttf)$")
+
+  fun candidateCount(source: String): Int = CANDIDATE_REGEX.findAll(source).count()
   fun mayContain(source: String): Boolean = source.contains("\\(") || source.contains("\\[") || source.contains("$$") ||
-    Regex("\\$[^\\s$][^\\n]*\\$").containsMatchIn(source)
+    INLINE_MATH_REGEX.containsMatchIn(source)
+  fun allowedAssetMime(path: String): String? = when {
+    path == "index.html" -> "text/html"
+    path == "host.js" -> "application/javascript"
+    path == "host.css" || path == "katex.min.css" -> "text/css"
+    FONT_ASSET_REGEX.matches(path) && !path.contains("..") -> when {
+      path.endsWith(".woff2") -> "font/woff2"
+      path.endsWith(".woff") -> "font/woff"
+      else -> "font/ttf"
+    }
+    else -> null
+  }
   fun closingOffset(source: String): Int {
     val closer = if (source.startsWith("\\[")) "\\]" else "$$"
     var comment = false
@@ -101,22 +121,31 @@ internal fun MathMarkdownView(source: String, streaming: Boolean, modifier: Modi
     } else {
       AndroidView(modifier = Modifier.fillMaxWidth().height(height.dp).testTag("markdown-math"),
         factory = { androidContext ->
+          val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/math/", object : WebViewAssetLoader.PathHandler {
+            override fun handle(path: String): WebResourceResponse? {
+              val mime = MathMarkdownSyntax.allowedAssetMime(path) ?: return null
+              val encoding = if (mime.startsWith("font/")) null else "UTF-8"
+              return runCatching { WebResourceResponse(mime, encoding, androidContext.assets.open("math/$path")) }.getOrNull()
+            }
+          }).build()
           WebView(androidContext).apply {
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = false
             settings.blockNetworkLoads = true
             settings.allowContentAccess = false
-            settings.allowFileAccess = true
+            settings.allowFileAccess = false
+            settings.setSupportMultipleWindows(false)
             isVerticalScrollBarEnabled = false
             addJavascriptInterface(MathBridge { message ->
               post {
+                if (message.length > 262_144) return@post
                 val data = runCatching { JSONObject(message) }.getOrNull() ?: return@post
                 val current = tag as? JSONObject ?: return@post
                 if (data.optInt("revision", -1) != current.optInt("revision")) return@post
                 if (data.has("href")) {
                   val href = data.optString("href")
-                  if (href.startsWith("https://") || href.startsWith("http://") || href.startsWith("xopc://")) latestLink?.invoke(href)
+                  if (externalMessageLink(href) || messageLinkTarget(href) != null) latestLink?.invoke(href)
                 } else {
                   val measured = data.optDouble("height", 48.0)
                   if (measured.isFinite()) height = measured.toFloat().coerceIn(24f, 8192f)
@@ -124,14 +153,16 @@ internal fun MathMarkdownView(source: String, streaming: Boolean, modifier: Modi
               }
             }, "XopcMathBridge")
             webViewClient = object : WebViewClient() {
-              override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                !request.url.toString().startsWith("file:///android_asset/math/")
+              override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = true
+              override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse =
+                loader.shouldInterceptRequest(request.url) ?: WebResourceResponse("text/plain", "UTF-8", 403,
+                  "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
               override fun onPageFinished(view: WebView, url: String) {
                 val payload = view.tag as? JSONObject ?: return
                 view.evaluateJavascript("window.xopcMath.update(${payload});", null)
               }
             }
-            loadUrl("file:///android_asset/math/index.html")
+            loadUrl("https://appassets.androidplatform.net/assets/math/index.html")
           }
         },
         update = { view ->
@@ -153,6 +184,6 @@ internal fun MathMarkdownView(source: String, streaming: Boolean, modifier: Modi
     if (display) TextButton(onClick = {
       if (onCopy != null) onCopy(source) else (context.getSystemService(ClipboardManager::class.java))
         .setPrimaryClip(ClipData.newPlainText("LaTeX", source))
-    }) { Text("复制公式源码") }
+    }) { Text(stringResource(R.string.markdown_copy_formula)) }
   }
 }

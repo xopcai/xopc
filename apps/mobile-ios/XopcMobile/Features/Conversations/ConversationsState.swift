@@ -20,14 +20,29 @@ final class ConversationsState {
     private var generation = 0
     private var nextOffset = 0
 
+    var isAwaitingResults: Bool {
+        isLoading || normalizedSearch != activeSearch || scope != activeScope
+    }
+
     var visibleConversations: [ConversationSummary] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = normalizedSearch
         guard query == activeSearch, scope == activeScope else { return [] }
         let history = conversations.filter(isVisible)
         guard !query.isEmpty else { return history }
-        let titleMatches = history.filter { $0.displayName.localizedCaseInsensitiveContains(query) }
-        let otherMatches = history.filter { !$0.displayName.localizedCaseInsensitiveContains(query) }
+        var titleMatches: [ConversationSummary] = []
+        var otherMatches: [ConversationSummary] = []
+        for row in history {
+            if row.displayName.localizedCaseInsensitiveContains(query) {
+                titleMatches.append(row)
+            } else {
+                otherMatches.append(row)
+            }
+        }
         return titleMatches + otherMatches
+    }
+
+    private var normalizedSearch: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func isVisible(_ row: ConversationSummary) -> Bool {
@@ -39,7 +54,7 @@ final class ConversationsState {
     }
 
     func load(using gateway: any GatewayServing) async {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = normalizedSearch
         generation += 1
         let current = generation
         let requestedAt = Date.now
@@ -105,7 +120,7 @@ final class ConversationsState {
 
     func loadMore(using gateway: any GatewayServing) async {
         guard hasMore, !isLoading, !isLoadingMore, scope == activeScope,
-              activeSearch == searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+              activeSearch == normalizedSearch
         else { return }
         let current = generation
         isLoadingMore = true

@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.R
 import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -39,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -105,20 +107,22 @@ internal fun ChartMarkdownView(source: String, closed: Boolean, modifier: Modifi
         TextButton(onClick = {
           if (onCopy != null) onCopy(source) else context.getSystemService(ClipboardManager::class.java)
             .setPrimaryClip(ClipData.newPlainText("Chart JSON", source))
-        }) { Text("复制数据") }
-        TextButton(onClick = { expanded = !fullscreen }) { Text(if (fullscreen) "关闭" else "放大") }
+        }) { Text(stringResource(R.string.chart_copy_data)) }
+        TextButton(onClick = { expanded = !fullscreen }) {
+          Text(stringResource(if (fullscreen) R.string.chart_close else R.string.chart_expand))
+        }
         TextButton(enabled = rendered, onClick = {
           handle.shareRequested = true
           handle.view?.evaluateJavascript("window.xopcChart.exportImage()", null)
-        }) { Text("分享图片") }
-        TextButton(onClick = { showSource = !showSource }) { Text("源码") }
+        }) { Text(stringResource(R.string.chart_share_image)) }
+        TextButton(onClick = { showSource = !showSource }) { Text(stringResource(R.string.chart_source)) }
       }
-      if (!closed) Text("等待图表数据完成…")
-      else if (!allowed) Text("图表数据超过 100 KiB，请缩小数据范围。")
+      if (!closed) Text(stringResource(R.string.chart_waiting))
+      else if (!allowed) Text(stringResource(R.string.chart_too_large))
       else if (active) ChartWebContent(source, id, fullscreen, handle, height, onHeight = { height = it }, onRendered = { success ->
         rendered = success; error = !success
-      }) else Text("图表将在可见时加载；可点放大查看。", Modifier.height(height.dp))
-      if (error) Text("数据校验失败，可复制数据检查。")
+      }) else Text(stringResource(R.string.chart_deferred), Modifier.height(height.dp))
+      if (error) Text(stringResource(R.string.chart_invalid))
       if (showSource) Text(source.take(4096), style = MaterialTheme.typography.bodySmall)
     }
   }
@@ -126,7 +130,7 @@ internal fun ChartMarkdownView(source: String, closed: Boolean, modifier: Modifi
     val bounds = coordinates.boundsInWindow()
     visible = bounds.bottom > 0 && bounds.top < window.height && bounds.width > 0
   }) {
-    if (!expanded) content(false) else Text("图表已在预览中打开。", Modifier.padding(16.dp))
+    if (!expanded) content(false) else Text(stringResource(R.string.chart_opened_in_preview), Modifier.padding(16.dp))
   }
   if (expanded) Dialog(onDismissRequest = { expanded = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
     Card(Modifier.fillMaxWidth().padding(12.dp).verticalScroll(rememberScrollState())) { content(true) }
@@ -139,12 +143,13 @@ private fun ChartWebContent(source: String, id: String, expanded: Boolean, handl
   initialHeight: Float, onHeight: (Float) -> Unit, onRendered: (Boolean) -> Unit) {
   val dark = MaterialTheme.colorScheme.background.luminance() < .5f
   val latestRendered by rememberUpdatedState(onRendered)
+  val shareTitle by rememberUpdatedState(stringResource(R.string.chart_share_title))
   val density = LocalDensity.current
   var height by remember { mutableStateOf(initialHeight) }
   var failed by remember { mutableStateOf(false) }
   LaunchedEffect(source) { failed = false }
   if (failed) {
-    Text("图表加载失败，可重新打开预览或复制数据。")
+    Text(stringResource(R.string.chart_load_failed))
     return
   }
   AndroidView(modifier = Modifier.fillMaxWidth().height(height.dp).testTag("chart-webview"), factory = { context ->
@@ -187,7 +192,7 @@ private fun ChartWebContent(source: String, id: String, expanded: Boolean, handl
               val uri = FileProvider.getUriForFile(context, "${context.packageName}.camera-capture", file)
               val intent = Intent(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-              context.startActivity(Intent.createChooser(intent, "分享图表"))
+              context.startActivity(Intent.createChooser(intent, shareTitle))
             }.onFailure { latestRendered(false) }
           }
         }

@@ -47,61 +47,96 @@ internal fun messageNeedsPreview(role: String, text: String): Boolean {
   return false
 }
 
+private val messageProductKinds = setOf("session", "note", "task", "project", "automation", "file", "user_assertion", "progress")
+private val messageSettingsSections = setOf("", "language", "appearance", "notifications", "about")
+
+private fun messageQuery(uri: URI): Map<String, String> {
+  val raw = uri.rawQuery
+  if (raw.isNullOrEmpty()) return emptyMap()
+  return raw.split('&').filter(String::isNotEmpty).associate { part ->
+    val pieces = part.split('=', limit = 2)
+    URLDecoder.decode(pieces[0], "UTF-8") to URLDecoder.decode(pieces.getOrElse(1) { "" }, "UTF-8")
+  }
+}
+
+private fun messageTarget(kind: String, id: String): ConversationTarget? {
+  if (kind == "settings") {
+    if (id !in messageSettingsSections) return null
+  } else if (id.isBlank() || id in setOf(".", "..") || id.any { it.isISOControl() || it == '/' || it == '\\' }) {
+    return null
+  }
+  return ConversationTarget(kind, id, id, capabilities = listOf("open"))
+}
+
 /** Accept only bounded in-product routes emitted by the Gateway contract. */
-internal fun messageLinkTarget(raw: String): ConversationTarget? {
-  val value = raw.trim()
-  if (value.any { it.code < 0x20 } || '\\' in value || value.length > 4_096) return null
-  val path = when {
-    value.startsWith("xopc://workspace/file?") || value.startsWith("/xopc/workspace/file?") -> runCatching {
-      val query = URI(value).rawQuery.orEmpty().split('&').associate { part ->
-        val pieces = part.split('=', limit = 2)
-        URLDecoder.decode(pieces[0], "UTF-8") to URLDecoder.decode(pieces.getOrElse(1) { "" }, "UTF-8")
-      }
-      val relative = query["path"].orEmpty()
-      if (relative.isBlank() || relative.any { it.code < 0x20 } || '\\' in relative || relative.split('/').any { it == ".." }) return null
-      return ConversationTarget("workspace_file", relative, relative.substringAfterLast('/'), capabilities = listOf("open"))
-    }.getOrNull() ?: return null
-    value.startsWith("xopc-file:") -> return value.removePrefix("xopc-file:").takeIf(String::isNotBlank)?.let {
-      ConversationTarget("file", it, it, capabilities = listOf("open"))
+internal fun messageLinkTarget(raw: String): ConversationTarget? = runCatching {
+  val value = raw.trim().replace("&amp;", "&")
+  if (value.any { it.isISOControl() } || '\\' in value || value.length > 4_096) return null
+  val uri = URI(value.removePrefix("#"))
+  if (uri.userInfo != null || uri.port != -1) return null
+  val path = uri.path.orEmpty()
+  if (uri.scheme == "xopc") {
+    return when (uri.host) {
+      "workspace" -> if (path == "/file") workspaceMessageTarget(messageQuery(uri)["path"]) else null
+      "open" -> if (path.isEmpty() || path == "/") {
+        val query = messageQuery(uri)
+        val kind = query["kind"].orEmpty()
+        if (kind == "settings") {
+          messageTarget("settings", query["id"].orEmpty())
+        } else if (kind in messageProductKinds) {
+          val id = query["id"] ?: query["key"]?.takeIf { kind == "session" }
+          id?.let { messageTarget(kind, it) }
+        } else null
+      } else null
+      "settings" -> messageTarget("settings", path.removePrefix("/"))
+      "capabilities" -> if (path == "/mcp") mcpMessageTarget(messageQuery(uri)) else null
+      else -> null
     }
-    value.startsWith("xopc://open?") -> runCatching {
-      val query = URI(value).rawQuery.orEmpty().split('&').associate { part ->
-        val pieces = part.split('=', limit = 2)
-        URLDecoder.decode(pieces[0], "UTF-8") to URLDecoder.decode(pieces.getOrElse(1) { "" }, "UTF-8")
+  }
+  if (uri.scheme == "xopc-file") {
+    val rawId = value.removePrefix("xopc-file:")
+    if ('?' in rawId || '#' in rawId) return null
+    return messageTarget("file", uri.schemeSpecificPart.orEmpty())
+  }
+  if (uri.scheme != null || !value.removePrefix("#").startsWith("/") || uri.rawAuthority != null ||
+    value.removePrefix("#").startsWith("//")) return null
+  if (path == "/xopc/workspace/file") return workspaceMessageTarget(messageQuery(uri)["path"])
+  val segments = path.removePrefix("/").split('/')
+  val id = segments.getOrNull(1).orEmpty()
+  if (segments.size > 2) return null
+  when (segments.first()) {
+    "tasks" -> messageTarget("task", id)
+    "projects" -> messageTarget("project", id)
+    "notes" -> messageTarget("note", id)
+    "chat", "sessions" -> messageTarget("session", id)
+    "files" -> messageTarget("file", id)
+    "automations" -> {
+      val query = messageQuery(uri)
+      when {
+        id.isNotEmpty() -> messageTarget("automation", id)
+        "run" in query -> messageTarget("automation-run", query.getValue("run"))
+        else -> messageTarget("automation", query["automation"].orEmpty())
       }
-      val kind = query["kind"].orEmpty()
-      val id = query["id"].orEmpty()
-      if (kind.isBlank() || id.isBlank()) return null
-      return ConversationTarget(kind, id, id, capabilities = listOf("open"))
-    }.getOrNull() ?: return null
-    value.startsWith("#/") -> value.removePrefix("#")
-    value.startsWith("/") -> value
-    else -> return null
-  }
-  if (path.split('/').any { it == "." || it == ".." }) return null
-  val segments = path.substringBefore('?').trim('/').split('/').filter(String::isNotBlank)
-  if (segments.isEmpty()) return null
-  fun decoded(index: Int): String? = segments.getOrNull(index)?.let {
-    runCatching { URLDecoder.decode(it, "UTF-8") }.getOrNull()?.takeIf(String::isNotBlank)
-  }
-  val target = when (segments[0]) {
-    "tasks" -> decoded(1)?.let { ConversationTarget("task", it, it, capabilities = listOf("open")) }
-    "projects" -> decoded(1)?.let { ConversationTarget("project", it, it, capabilities = listOf("open")) }
-    "notes" -> decoded(1)?.let { ConversationTarget("note", it, it, capabilities = listOf("open")) }
-    "chat" -> decoded(1)?.let { ConversationTarget("session", it, it, capabilities = listOf("open")) }
-    "sessions" -> decoded(1)?.let { ConversationTarget("session", it, it, capabilities = listOf("open")) }
-    "files" -> decoded(1)?.let { ConversationTarget("file", it, it, capabilities = listOf("open")) }
-    "automations" -> decoded(1)?.let { ConversationTarget("automation", it, it, capabilities = listOf("open")) }
-      ?: runCatching { URI(value.removePrefix("#")).rawQuery?.split('&')?.firstNotNullOfOrNull { part ->
-      part.split('=', limit = 2).takeIf { it.firstOrNull() == "automation" }?.getOrNull(1)
-        ?.let { URLDecoder.decode(it, "UTF-8") }
-    }?.takeIf(String::isNotBlank)?.let { ConversationTarget("automation", it, it, capabilities = listOf("open")) } }.getOrNull()
-    "settings" -> segments.drop(1).joinToString("/").takeIf(String::isNotBlank)?.let {
-      ConversationTarget("settings", it, it, capabilities = listOf("open"))
     }
+    "settings" -> messageTarget("settings", id)
     else -> null
   }
-  return target
+}.getOrNull()
+
+private fun mcpMessageTarget(query: Map<String, String>): ConversationTarget? {
+  val name = query["id"]?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,64}")) } ?: return null
+  val address = query["url"]?.takeIf { it.length <= 2048 } ?: return null
+  val uri = URI(address)
+  if (uri.scheme != "https" || uri.host.isNullOrBlank() || uri.userInfo != null ||
+    uri.rawQuery != null || uri.rawFragment != null) return null
+  return ConversationTarget("mcp-setup", name, name, summary = address, capabilities = listOf("open"))
+}
+
+private fun workspaceMessageTarget(relative: String?): ConversationTarget? {
+  if (relative.isNullOrBlank() || relative.startsWith("/") || relative.endsWith("/") ||
+    relative.any { it.isISOControl() || it == '\\' } ||
+    relative.split('/').any { it.isEmpty() || it == "." || it == ".." }) return null
+  return ConversationTarget("workspace_file", relative, relative.substringAfterLast('/'), capabilities = listOf("open"))
 }
 
 internal fun externalMessageLink(raw: String): Boolean = runCatching {

@@ -185,7 +185,7 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
         } else if (task == null) {
           BrandLoadingPanel()
         }
-        if (task != null) TaskChatOverview(task, busy, onCommand)
+        if (task != null) TaskChatOverview(task, busy, onCommand, state.projects)
       }
       if (task != null) {
         HorizontalDivider()
@@ -224,7 +224,8 @@ internal fun TaskDetailsTip(onOpen: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun TaskChatOverview(task: ProgressTask, busy: Boolean, onCommand: (String) -> Unit) {
+private fun TaskChatOverview(task: ProgressTask, busy: Boolean, onCommand: (String) -> Unit,
+  projects: List<ai.xopc.mobile.gateway.ProgressProject> = emptyList()) {
   Text(taskPresentationLabel(task.displayStatus),
     style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
   Text(stringResource(R.string.progress_execution_state, taskExecutionLabel(task.operationalState)),
@@ -272,7 +273,10 @@ private fun TaskChatOverview(task: ProgressTask, busy: Boolean, onCommand: (Stri
   HorizontalDivider()
   TextButton(onClick = { properties = !properties }) { Text(stringResource(R.string.progress_details)) }
   if (properties) {
-    task.projectId?.let { Text(stringResource(R.string.progress_task_project, it)) }
+    task.projectId?.let { id ->
+      val projectName = projects.firstOrNull { it.id == id }?.name ?: id
+      Text(stringResource(R.string.progress_task_project, projectName))
+    }
     task.priority?.let { Text(it) }
     task.dueAt?.let { Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it))) }
     if (task.body.isNotBlank() && task.body != objective) MarkdownContent(task.body)
@@ -303,7 +307,7 @@ private fun TaskChatEditor(task: ProgressTask, state: ProgressUiState, onLoadPro
       ProgressTaskEditor(title, { title = it }, body, { body = it }, project, { project = it },
         priority, { priority = it }, due, { due = it }, state.projects, state.projectsLoading,
         state.projectsError, onLoadProjects, dirty, state.editBusy, state.editError,
-        { onSave(task.id, version, ProgressTaskEdit(title, body, project, priority, due)) })
+      ) { onSave(task.id, version, ProgressTaskEdit(title, body, project, priority, due)) }
     }
   }
   if (discard) AlertDialog(onDismissRequest = { discard = false },

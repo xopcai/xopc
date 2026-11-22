@@ -5,10 +5,28 @@ const PRODUCT_PAGES: Record<string, string> = {
   'file': 'files', 'settings': 'settings'
 };
 
+const SETTINGS_SECTIONS: string[] = ['', 'language', 'appearance', 'notifications', 'about'];
+
+function validRelativeSegments(value: string): boolean {
+  if (!value || value.startsWith('/') || value.endsWith('/') || /[\u0000-\u001f\u007f\\]/.test(value)) return false;
+  return !value.split('/').some((part: string): boolean => !part || part === '.' || part === '..');
+}
+
+function validSingleId(value: string): boolean {
+  return !!value && value !== '.' && value !== '..' && !/[\u0000-\u001f\u007f\\/]/.test(value);
+}
+
 export function internalMessageLink(raw: string): XopcMessageLink | undefined {
-  if (!raw || /[\u0000-\u001f\u007f\\]/.test(raw)) return undefined;
+  if (!raw || raw.length > 4096 || /[\u0000-\u001f\u007f\\]/.test(raw)) return undefined;
   try {
-    const target = raw.replace(/&amp;/g, '&');
+    const target = raw.trim().replace(/&amp;/g, '&');
+    if (/^xopc:\/\/[^/?#]*[@:]/.test(target)) return undefined;
+    if (target.startsWith('xopc-file:')) {
+      const encoded = target.slice('xopc-file:'.length);
+      if (!encoded || /[?#]/.test(encoded)) return undefined;
+      const itemId = decodeURIComponent(encoded);
+      return validSingleId(itemId) ? { kind: 'route', page: 'files', itemId, path: '' } : undefined;
+    }
     const base = target.split(/[?#]/)[0];
     const query: Record<string, string> = {};
     const question = target.indexOf('?');
@@ -20,7 +38,7 @@ export function internalMessageLink(raw: string): XopcMessageLink | undefined {
     }
     if (base === 'xopc://workspace/file' || base === '/xopc/workspace/file') {
       const path = (query['path'] || '').trim();
-      if (!path || /[\u0000-\u001f\u007f]/.test(path) || path.replace(/\\/g, '/').split('/').includes('..')) return undefined;
+      if (!validRelativeSegments(path)) return undefined;
       return { kind: 'file', path, page: '', itemId: '' };
     }
     if (base === 'xopc://capabilities/mcp') {
@@ -31,18 +49,38 @@ export function internalMessageLink(raw: string): XopcMessageLink | undefined {
     }
     if (base === 'xopc://open' || base === 'xopc://open/') {
       const kind = query['kind'];
+      if (kind === 'settings') {
+        const section = (query['id'] ?? '').trim();
+        return SETTINGS_SECTIONS.includes(section) ? { kind: 'route', page: 'settings', itemId: section, path: '' } : undefined;
+      }
       const page = Object.keys(PRODUCT_PAGES).includes(kind) ? PRODUCT_PAGES[kind] : '';
       const itemId = (query['id'] || (kind === 'session' ? query['key'] : '') || '').trim();
-      if (page && itemId && !/[\u0000-\u001f\u007f]/.test(itemId)) return { kind: 'route', page, itemId, path: '' };
+      if (page && validRelativeSegments(itemId)) return { kind: 'route', page, itemId, path: '' };
       return undefined;
     }
     const route = target.startsWith('xopc://settings') ? target.replace(/^xopc:\/\/settings(?=\/|$|\?)/, '/settings')
       : target.startsWith('#/') ? target.slice(1) : target;
+    if (!route.startsWith('/') || route.startsWith('//')) return undefined;
     const parts = route.split(/[?#]/)[0].split('/');
-    if (parts[0] === '' && ['chat', 'sessions', 'tasks', 'projects', 'notes', 'automations', 'files', 'settings'].includes(parts[1])) {
-      const itemId = decodeURIComponent(parts.slice(2).join('/'));
-      if (/[\u0000-\u001f\u007f]/.test(itemId) || itemId.split('/').includes('..')) return undefined;
-      return { kind: 'route', page: parts[1], itemId, path: '' };
+    const root = parts[1] || '';
+    if (parts[0] === '' && ['chat', 'sessions', 'tasks', 'projects', 'notes', 'automations', 'files', 'settings'].includes(root)) {
+      if (root === 'settings') {
+        if (parts.length > 3) return undefined;
+        const section = parts.length === 3 ? decodeURIComponent(parts[2]) : '';
+        return SETTINGS_SECTIONS.includes(section) ? { kind: 'route', page: 'settings', itemId: section, path: '' } : undefined;
+      }
+      if (root === 'automations' && (parts.length === 2 || (parts.length === 3 && !parts[2]))) {
+        if (query['run'] !== undefined) {
+          return validSingleId(query['run']) ? { kind: 'route', page: 'automation-run', itemId: query['run'], path: '' } : undefined;
+        }
+        if (query['automation'] !== undefined) {
+          return validSingleId(query['automation']) ? { kind: 'route', page: 'automations', itemId: query['automation'], path: '' } : undefined;
+        }
+      }
+      if (parts.length !== 3) return undefined;
+      const itemId = decodeURIComponent(parts[2]);
+      if (!validSingleId(itemId)) return undefined;
+      return { kind: 'route', page: root === 'sessions' ? 'chat' : root, itemId, path: '' };
     }
   } catch (_) {}
   return undefined;

@@ -70,10 +70,11 @@ class ProgressProjectFilterTest {
         {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { id ->
           opened = id
           state.value = state.value.copy(projectId = id, project = projects.first { it.id == id })
-        }, { _, _, _ -> }, {},
+        }, {}, {},
         { _, _, _ -> }, {})
     }
-    composeTestRule.onNodeWithTag("progress-projects").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-projects").performClick()
     composeTestRule.onNodeWithTag("progress-project-filter-all").assertIsSelected()
     composeTestRule.onNodeWithTag("progress-project-active-1").assertExists()
     composeTestRule.onNodeWithTag("progress-project-archived-1").assertExists()
@@ -118,10 +119,11 @@ class ProgressProjectFilterTest {
       ProgressScreen(state.value, PaddingValues(),
         {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { id ->
           state.value = state.value.copy(projectId = id, project = project)
-        }, { _, _, _ -> }, {}, { _, _, _ -> },
+        }, {}, {}, { _, _, _ -> },
         onOpenChat = { openedChat = it })
     }
-    composeTestRule.onNodeWithTag("progress-projects").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-projects").performClick()
     composeTestRule.onNodeWithTag("progress-project-project-1").performClick()
     composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
     composeTestRule.onNodeWithTag("progress-project-tab-sessions").performClick()
@@ -140,10 +142,11 @@ class ProgressProjectFilterTest {
       ProgressScreen(state.value, PaddingValues(),
         {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { id ->
           state.value = state.value.copy(projectId = id, project = project)
-        }, { _, _, _ -> }, {}, { _, _, _ -> }, {},
+        }, {}, {}, { _, _, _ -> }, {},
         onCreateProjectChat = { createdFor = it })
     }
-    composeTestRule.onNodeWithTag("progress-projects").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-projects").performClick()
     composeTestRule.onNodeWithTag("progress-project-project-1").performClick()
     composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
     composeTestRule.onNodeWithTag("progress-project-tab-sessions").performClick()
@@ -160,11 +163,14 @@ class ProgressProjectFilterTest {
       ProgressScreen(state.value, PaddingValues(),
         {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { id ->
           state.value = state.value.copy(projectId = id, project = project)
-        }, { _, _, _ -> }, {}, { _, _, _ -> }, {},
+        }, {}, {}, { _, _, _ -> }, {},
         onCreateProjectChat = { requests++ }, chatBusy = busy.value)
     }
-    composeTestRule.onNodeWithTag("progress-projects").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-projects").performClick()
     composeTestRule.onNodeWithTag("progress-project-project-1").performClick()
+    composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
+    composeTestRule.onNodeWithTag("progress-project-tab-sessions").performClick()
     composeTestRule.onNodeWithTag("progress-project-new-chat").performClick()
     composeTestRule.runOnIdle { busy.value = true }
     composeTestRule.onNodeWithTag("progress-project-new-chat").assertIsNotEnabled()

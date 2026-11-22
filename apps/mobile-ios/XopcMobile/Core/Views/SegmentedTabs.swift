@@ -47,6 +47,8 @@ struct HorizontalSwipeCapture: UIViewRepresentable {
     var leftOnly = false
     var rightOnly = false
     var reserveBackEdge = false
+    var reserveTrailingEdge = false
+    var respectsHorizontalScroll = false
     var prioritizeSelection = false
     var onDrag: (CGFloat) -> Void = { _ in }
     var onEnd: (CGFloat, CGFloat) -> Void
@@ -108,7 +110,29 @@ struct HorizontalSwipeCapture: UIViewRepresentable {
             guard let region, let window = region.window, region.bounds.contains(touch.location(in: region)) else {
                 return false
             }
-            return !capture.reserveBackEdge || touch.location(in: window).x >= 24
+            if capture.respectsHorizontalScroll {
+                var presented = window.rootViewController?.presentedViewController
+                while let controller = presented {
+                    if !controller.isBeingDismissed, let presentedView = controller.viewIfLoaded,
+                       !region.isDescendant(of: presentedView)
+                    {
+                        return false
+                    }
+                    presented = controller.presentedViewController
+                }
+                var target = touch.view
+                while let view = target, view !== window {
+                    if let scroll = view as? UIScrollView, scroll.isScrollEnabled,
+                       scroll.alwaysBounceHorizontal || scroll.contentSize.width > scroll.bounds.width + 1
+                    {
+                        return false
+                    }
+                    target = view.superview
+                }
+            }
+            let touchX = touch.location(in: window).x
+            return (!capture.reserveBackEdge || touchX >= 24)
+                && (!capture.reserveTrailingEdge || touchX <= window.bounds.width - 24)
         }
 
         func gestureRecognizerShouldBegin(_: UIGestureRecognizer) -> Bool {

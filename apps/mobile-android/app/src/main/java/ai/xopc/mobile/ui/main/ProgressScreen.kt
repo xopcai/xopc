@@ -25,7 +25,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -68,6 +70,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardActions
@@ -77,9 +80,11 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.UUID
 
+private val PROGRESS_DESTINATION_REGEX = Regex("^/(chat|tasks|automations)/([A-Za-z0-9_-]{1,128})$")
+
 /** Only known internal destinations may be opened from a Gateway-supplied home item. */
 internal fun progressDestination(href: String): Pair<String, String>? {
-  val match = Regex("^/(chat|tasks|automations)/([A-Za-z0-9_-]{1,128})$").matchEntire(href) ?: return null
+  val match = PROGRESS_DESTINATION_REGEX.matchEntire(href) ?: return null
   return match.groupValues[1] to match.groupValues[2]
 }
 
@@ -93,7 +98,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onCreateTaskWithChat: () -> Unit,
   onLoadProjects: () -> Unit,
   onOpenProject: (String) -> Unit,
-  onCreateTask: (String, String, String) -> Unit,
+  onCreateTask: (ProgressTaskEdit) -> Unit,
   onOpenTaskChat: (String) -> Unit,
   onSaveTask: (String, Int, ProgressTaskEdit) -> Unit,
   onOpenChat: (String) -> Unit,
@@ -118,6 +123,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   initialDeliveryKind: String? = null,
   initialDeliveryId: String? = null,
   onCloseDelivery: () -> Unit = {},
+  onOpenLibrary: (() -> Unit)? = null,
   ) {
   var pendingHomeAction by remember(state.gatewayId) { mutableStateOf<ProgressHomeAction?>(null) }
   val navigation = rememberNavigationPreferences()
@@ -202,7 +208,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var selectedAutomationId by rememberSaveable(state.gatewayId) { mutableStateOf(initialItemId.takeIf { initialPage == "automation" }) }
   var automationReturnPage by rememberSaveable(state.gatewayId) { mutableStateOf("automations") }
   var selectedRunId by rememberSaveable(state.gatewayId) {
-    mutableStateOf(initialDeliveryId.takeIf { initialDeliveryKind == "automation" })
+    mutableStateOf(initialDeliveryId.takeIf { initialDeliveryKind == "automation" }
+      ?: initialItemId.takeIf { initialPage == "automation-run" })
   }
   var automationEditName by rememberSaveable(state.gatewayId, selectedAutomationId) { mutableStateOf("") }
   var automationEditInstruction by rememberSaveable(state.gatewayId, selectedAutomationId) { mutableStateOf("") }
@@ -218,6 +225,9 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var createTitle by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var createBody by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var createProjectId by rememberSaveable(state.gatewayId) { mutableStateOf("") }
+  var createPriority by rememberSaveable(state.gatewayId) { mutableStateOf("normal") }
+  var createDueAt by rememberSaveable(state.gatewayId) { mutableStateOf<Long?>(null) }
+  var createSourceProjectId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var createStartedRevision by rememberSaveable(state.gatewayId) { mutableStateOf(0) }
   var discardCreateOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var requestedTaskId by remember(state.gatewayId) { mutableStateOf<String?>(null) }
@@ -245,7 +255,6 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       page = target
       when (target) {
         "overview" -> onRefreshHome()
-        "tasks" -> onRefreshTasks()
         "projects" -> onLoadProjects()
       }
     }
@@ -261,6 +270,9 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   LaunchedEffect(workPager) {
     snapshotFlow { workPager.settledPage }.collect { selectWorkPage(it) }
   }
+  LaunchedEffect(page, state.gatewayId) {
+    if (page == "tasks") onRefreshTasks()
+  }
   var automationListReturnPage by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   fun openAutomationsFromOverview() {
     automationListReturnPage = "overview"
@@ -273,7 +285,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     when (page) {
       "edit" -> if (editDirty) discardEditOpen = true else page = "detail"
       "create" -> if (createTitle.isNotBlank() || createBody.isNotBlank() ||
-        createProjectId != selectedProjectId) discardCreateOpen = true else page = "project"
+        createProjectId != createSourceProjectId.orEmpty() || createPriority != "normal" || createDueAt != null) discardCreateOpen = true
+        else page = if (createSourceProjectId == null) "tasks" else "project"
       "detail" -> when {
         detailReturnPage == "delivery" -> onCloseDelivery()
         initialPage == "detail" && selectedTaskId == initialItemId -> onExit?.invoke()
@@ -293,7 +306,11 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
           onExit()
         } else page = "overview"
       }
-      "automation-run" -> if (runReturnPage == "delivery") onCloseDelivery() else page = runReturnPage
+      "automation-run" -> when {
+        runReturnPage == "delivery" -> onCloseDelivery()
+        initialPage == "automation-run" && runReturnPage == "automation" -> onExit?.invoke()
+        else -> page = runReturnPage
+      }
       "automation" -> if (initialPage == "automation" && selectedAutomationId == initialItemId &&
         automationReturnPage == "automations") onExit?.invoke() else page = automationReturnPage
       "automation-edit" -> if (automationEditDirty) discardAutomationEditOpen = true else page = "automation"
@@ -340,8 +357,19 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   }
   LaunchedEffect(state.createSavedRevision) {
     if (page == "create" && state.createSavedRevision > createStartedRevision) {
-      selectedProjectId = createProjectId.trim()
-      page = "project"
+      if (createSourceProjectId != null) {
+        selectedProjectId = createProjectId.trim()
+        page = "project"
+      } else {
+        val createdId = state.createdTaskId
+        if (createdId == null) page = "tasks"
+        else {
+          selectedTaskId = createdId
+          detailReturnPage = "tasks"
+          page = "detail"
+          onOpenTask(createdId)
+        }
+      }
     }
   }
   LaunchedEffect(page, state.automations.editedRevision) {
@@ -363,10 +391,16 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     page = "project"
     onOpenProject(id)
   }
-  fun createProjectTask(projectId: String) {
+  fun createTask(projectId: String?) {
+    focusManager.clearFocus(force = true)
+    keyboardController?.hide()
     createTitle = ""
     createBody = ""
-    createProjectId = projectId
+    createSourceProjectId = projectId
+    createProjectId = projectId.orEmpty()
+    createPriority = "normal"
+    createDueAt = null
+    if (state.projects.isEmpty() && !state.projectsLoading) onLoadProjects()
     createStartedRevision = state.createSavedRevision
     page = "create"
   }
@@ -428,14 +462,14 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     when (target) {
       "projects" -> ProgressProjects(state, onLoadProjects, ::openProject, projectSearchOpen, page == target)
       "tasks" -> ProgressTaskList(state, taskFilter, { taskFilter = it }, onRefreshTasks,
-        onLoadMore, onSearchChange, onSubmitSearch, taskSearchOpen && page == target, ::closeTaskSearch) { task -> onOpenTaskChat(task.id) }
-      "overview" -> ProgressOverview(state, onRefreshHome, onOpenChat, { scrollToWorkPage("tasks") },
-        { scrollToWorkPage("projects") }, ::openAutomationsFromOverview,
+        onLoadMore, onSearchChange, onSubmitSearch, taskSearchOpen && page == target, ::closeTaskSearch,
+        onCreateTaskWithChat) { task -> onOpenTaskChat(task.id) }
+      "overview" -> ProgressOverview(state, onRefreshHome, onOpenChat, ::openAutomationsFromOverview,
         ::openAutomation, onOpenTaskChat,
         { action ->
           val taskId = action.reviewTaskId
           if (taskId != null) onOpenTaskChat(taskId) else pendingHomeAction = action
-        }, ::openRun)
+        }, ::openRun, onOpenLibrary)
     }
   }
   Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp)) {
@@ -473,8 +507,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
             Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.progress_search),
               modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
           }
-          IconButton(onClick = onCreateTaskWithChat, enabled = !state.creatingTaskChat,
-            modifier = Modifier.size(48.dp).testTag("progress-create-task-chat")) {
+          IconButton(onClick = { createTask(null) }, modifier = Modifier.size(48.dp).testTag("progress-create-task")) {
             Icon(painterResource(R.drawable.action_add), contentDescription = stringResource(R.string.progress_new_task),
               modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
           }
@@ -482,8 +515,11 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       }
       if (workPageIndex >= 0) {
         PageTitleMenu(workPages, page, "work-page-menu", Modifier.fillMaxWidth(0.44f), ::scrollToWorkPage)
-      } else if (page == "automations") {
-        Text(stringResource(R.string.progress_automations), style = MaterialTheme.typography.titleMedium)
+      } else if (page == "automations" || page == "automation") {
+        val automationName = state.automations.detail?.takeIf { page == "automation" && it.id == selectedAutomationId }?.name
+        Text(automationName ?: stringResource(R.string.progress_automations),
+          modifier = Modifier.fillMaxWidth(0.65f), textAlign = TextAlign.Center,
+          style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
       } else if (page == "project" && selectedProjectId != null) {
         PageTitleMenu(projectSections, projectSection, "progress-project-tabs", Modifier.fillMaxWidth(0.55f)) { target ->
           val index = projectSections.indexOfFirst { it.value == target }
@@ -498,15 +534,19 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       stringResource(R.string.progress_create_chat_error), color = MaterialTheme.colorScheme.error,
       modifier = Modifier.testTag("progress-create-task-error"))
     when (page) {
-      "create" -> ProgressTaskCreate(createTitle, { createTitle = it }, createBody, { createBody = it },
-        createProjectId, { createProjectId = it }, state.createBusy, state.createError) {
-        onCreateTask(createTitle, createBody, createProjectId)
+      "create" -> ProgressTaskEditor(createTitle, { createTitle = it }, createBody, { createBody = it },
+        createProjectId, { createProjectId = it }, createPriority, { createPriority = it }, createDueAt, { createDueAt = it },
+        state.projects, state.projectsLoading, state.projectsError, onLoadProjects, true, state.createBusy, state.createError,
+        creating = true, requiresProject = createSourceProjectId != null) {
+        onCreateTask(ProgressTaskEdit(createTitle, createBody, createProjectId, createPriority, createDueAt))
       }
       "overview", "tasks", "projects" -> workPageStates.SaveableStateProvider("workbench") {
         HorizontalPager(workPager, modifier = Modifier.fillMaxSize().testTag("work-page-pager"),
           beyondViewportPageCount = 1, flingBehavior = PagerDefaults.flingBehavior(workPager, snapPositionalThreshold = 0.33f),
           key = { workPages[it].value }) { index ->
-          WorkPageContent(workPages[index].value)
+          val accessibility = if (index == workPager.settledPage) Modifier
+            else Modifier.clearAndSetSemantics { hideFromAccessibility() }
+          Box(accessibility.fillMaxSize()) { WorkPageContent(workPages[index].value) }
         }
       }
       "project" -> when {
@@ -521,17 +561,36 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
           key = { projectSections[it].value }, userScrollEnabled = !projectMenuOpen,
           flingBehavior = PagerDefaults.flingBehavior(projectPager, snapPositionalThreshold = 0.33f),
         ) { index ->
-          ProgressProjectDetail(state.project, projectSections[index].value, state.projectTasks,
-            state.projectSessions, state.projectSessionsLoading, state.projectSessionsError,
-            state.projectNotes, state.projectNotesLoading, state.projectNotesError,
-            state.projectAutomations, state.projectAutomationsLoading, state.projectAutomationsError,
-            onCreate = { createProjectTask(state.project.id) }, onOpenTask = onOpenTaskChat, onOpenChat = onOpenProjectChat,
-            onOpenNote = onOpenNote, onOpenAutomation = ::openAutomation,
-            onSchedule = { prompt -> onArrangeAutomation(state.project.id, prompt) },
-            onCreateChat = { onCreateProjectChat(state.project.id) }, chatBusy = chatBusy,
-            onRetrySessions = { selectedProjectId?.let(onOpenProject) },
-            deliveries = state.deliveries.filter { it.projectId == state.project.id },
-            onOpenRun = ::openRun)
+          val accessibility = if (index == projectPager.settledPage) Modifier
+            else Modifier.clearAndSetSemantics { hideFromAccessibility() }
+          Box(accessibility.fillMaxSize()) {
+            ProgressProjectDetail(state.project, projectSections[index].value, state.projectTasks,
+              state.projectTasksLoading, state.projectTasksError, state.projectSessions, state.projectSessionsLoading, state.projectSessionsError,
+              state.projectNotes, state.projectNotesLoading, state.projectNotesError,
+              state.projectAutomations, state.projectAutomationsLoading, state.projectAutomationsError,
+              onCreate = { createTask(state.project.id) }, onOpenTask = onOpenTaskChat, onOpenChat = onOpenProjectChat,
+              onOpenNote = onOpenNote, onOpenAutomation = ::openAutomation,
+              onSchedule = { prompt -> onArrangeAutomation(state.project.id, prompt) },
+              onCreateChat = { onCreateProjectChat(state.project.id) }, chatBusy = chatBusy,
+              onRetryProject = { selectedProjectId?.let(onOpenProject) },
+              deliveries = state.deliveries.filter { it.projectId == state.project.id },
+              onOpenRun = ::openRun,
+              needsUser = state.needsUser.filter { it.projectId == state.project.id },
+              homeActionBusy = state.homeActionBusy,
+              onOpenAttention = { item ->
+                item.openAction?.href?.let(::progressDestination)?.let { (destPage, id) ->
+                  when (destPage) {
+                    "chat" -> onOpenChat(id)
+                    "tasks" -> onOpenTaskChat(id)
+                    "automations" -> openAutomation(id)
+                  }
+                }
+              },
+              onRequestAction = { action ->
+                val taskId = action.reviewTaskId
+                if (taskId != null) onOpenTaskChat(taskId) else pendingHomeAction = action
+              })
+          }
         }
       }
       "edit" -> ProgressTaskEditor(editTitle, { editTitle = it }, editBody, { editBody = it },
@@ -551,7 +610,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         selectedTask != null -> ProgressTaskDetail(selectedTask, state.commandBusy || state.detailLoading,
           state.commandError || state.detailError, state.taskChatBusy, state.taskChatError,
           onTaskCommand, onStartTask, onOpenTaskChat, state.agents, state.agentsLoading, state.agentsError,
-          { selectedTaskId?.let(onOpenTask) }) {
+          { selectedTaskId?.let(onOpenTask) }, projects = state.projects) {
           editTitle = selectedTask.title
           editBody = selectedTask.body
           editProject = selectedTask.projectId ?: ""
@@ -606,7 +665,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       onCreateProjectChat(activeProject.id)
     }, onTask = {
       projectMenuOpen = false
-      createProjectTask(activeProject.id)
+      createTask(activeProject.id)
     }, onNote = {
       projectMenuOpen = false
       onCreateProjectNote(activeProject.id)
@@ -654,7 +713,10 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     title = { Text(stringResource(R.string.progress_discard_title)) },
     text = { Text(stringResource(R.string.progress_discard_message)) },
     confirmButton = {
-      TextButton(onClick = { discardCreateOpen = false; page = "project" },
+      TextButton(onClick = {
+        discardCreateOpen = false
+        page = if (createSourceProjectId == null) "tasks" else "project"
+      },
         modifier = Modifier.testTag("progress-create-discard-confirm")) {
         Text(stringResource(R.string.progress_discard))
       }
@@ -681,7 +743,17 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
   onOpenProject: (String) -> Unit, searchOpen: Boolean, active: Boolean) {
   var search by rememberSaveable(state.gatewayId, searchOpen) { mutableStateOf("") }
   var filter by rememberSaveable(state.gatewayId) { mutableStateOf("all") }
-  val matching = state.projects.filter { it.name.contains(search.trim(), ignoreCase = true) }
+  val query = search.trim()
+  val matching = remember(state.projects, query) {
+    state.projects.sortedWith(
+      compareByDescending<ProgressProject> { it.pinnedAt != null }
+        .thenByDescending { it.pinnedAt ?: Long.MIN_VALUE }
+    ).filter { project ->
+      query.isEmpty() || project.name.contains(query, ignoreCase = true) ||
+        project.brief.contains(query, ignoreCase = true) ||
+        project.description.contains(query, ignoreCase = true)
+    }
+  }
   val shown = matching.filter { project -> when (filter) {
     "active" -> project.status != "archived"
     "archived" -> project.status == "archived"
@@ -730,15 +802,20 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
 
 @Composable
 private fun ProgressProjectDetail(project: ProgressProject, section: String, tasks: List<ProgressTask>,
-  sessions: List<ProgressProjectSession>, sessionsLoading: Boolean, sessionsError: Boolean,
+  tasksLoading: Boolean, tasksError: Boolean, sessions: List<ProgressProjectSession>,
+  sessionsLoading: Boolean, sessionsError: Boolean,
   notes: List<ai.xopc.mobile.gateway.NoteSummary>, notesLoading: Boolean, notesError: Boolean,
   automations: List<ai.xopc.mobile.gateway.AutomationSummary>,
   automationsLoading: Boolean, automationsError: Boolean,
   onCreate: () -> Unit, onOpenTask: (String) -> Unit, onOpenChat: (ProgressProjectSession) -> Unit,
   onOpenNote: (String) -> Unit, onOpenAutomation: (String) -> Unit,
   onSchedule: (String) -> Unit, onCreateChat: () -> Unit, chatBusy: Boolean,
-  onRetrySessions: () -> Unit,
-  deliveries: List<ai.xopc.mobile.gateway.ProgressDelivery>, onOpenRun: (String) -> Unit) {
+  onRetryProject: () -> Unit,
+  deliveries: List<ai.xopc.mobile.gateway.ProgressDelivery>, onOpenRun: (String) -> Unit,
+  needsUser: List<ProgressItem> = emptyList(), homeActionBusy: Boolean = false,
+  onOpenAttention: (ProgressItem) -> Unit = {},
+  onRequestAction: (ProgressHomeAction) -> Unit = {}) {
+  val overviewTasks = remember(tasks) { tasks.filter { it.phase != "closed" } }
   LazyColumn(modifier = Modifier.fillMaxSize().testTag("progress-project-detail"),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     item {
@@ -753,9 +830,15 @@ private fun ProgressProjectDetail(project: ProgressProject, section: String, tas
         }
       }
     }
-    if (section == "overview" && deliveries.isNotEmpty()) {
+    if (section == "overview" && needsUser.isNotEmpty()) {
+      item { ProgressSectionTitle(R.string.progress_action_required) }
+      items(needsUser, key = { "project-needs-${it.id}" }) { item ->
+        ProgressAttentionRow(item, homeActionBusy, { onOpenAttention(item) }, onRequestAction)
+      }
+    }
+    if ((section == "overview" || section == "notes") && deliveries.isNotEmpty()) {
       item { ProgressSectionTitle(R.string.library_recent_results) }
-      items(deliveries.take(5), key = { "project-delivery-${it.id}" }) { delivery ->
+      items(if (section == "overview") deliveries.take(5) else deliveries, key = { "project-delivery-${it.id}" }) { delivery ->
         Card(onClick = { if (delivery.kind == "task") onOpenTask(delivery.subjectId) else onOpenRun(delivery.subjectId) },
           modifier = Modifier.fillMaxWidth().testTag("project-delivery-${delivery.id}")) {
           Column(Modifier.padding(12.dp)) {
@@ -777,7 +860,7 @@ private fun ProgressProjectDetail(project: ProgressProject, section: String, tas
       }
       if (sessionsLoading) item { BrandLoadingPanel(modifier = Modifier.testTag("progress-project-sessions-loading")) }
       else if (sessionsError) item {
-        OutlinedButton(onClick = onRetrySessions, modifier = Modifier.testTag("progress-project-sessions-retry")) {
+        OutlinedButton(onClick = onRetryProject, modifier = Modifier.testTag("progress-project-sessions-retry")) {
           Text(stringResource(R.string.progress_project_sessions_error))
         }
       }
@@ -804,8 +887,16 @@ private fun ProgressProjectDetail(project: ProgressProject, section: String, tas
         }
       }
     }
-    if (tasks.isEmpty()) item { Text(stringResource(R.string.progress_project_no_tasks)) }
-    items(if (section == "overview") tasks.take(3) else tasks, key = { "task-${it.id}" }) { task ->
+    if (tasksLoading) item { BrandLoadingPanel(modifier = Modifier.testTag("progress-project-tasks-loading")) }
+    else if (tasksError) item {
+      OutlinedButton(onClick = onRetryProject, modifier = Modifier.testTag("progress-project-tasks-retry")) {
+        Text(stringResource(R.string.progress_load_failed))
+      }
+    }
+    else if ((if (section == "overview") overviewTasks else tasks).isEmpty()) item {
+      Text(stringResource(R.string.progress_project_no_tasks))
+    }
+    items(if (section == "overview") overviewTasks.take(3) else tasks, key = { "task-${it.id}" }) { task ->
       Card(onClick = { onOpenTask(task.id) },
         modifier = Modifier.fillMaxWidth().testTag("progress-project-task-${task.id}")) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -821,7 +912,7 @@ private fun ProgressProjectDetail(project: ProgressProject, section: String, tas
       item { ProgressSectionTitle(R.string.tab_notes) }
       if (notesLoading) item { BrandLoadingPanel(modifier = Modifier.testTag("progress-project-notes-loading")) }
       else if (notesError) item {
-        OutlinedButton(onClick = onRetrySessions, modifier = Modifier.testTag("progress-project-notes-retry")) {
+        OutlinedButton(onClick = onRetryProject, modifier = Modifier.testTag("progress-project-notes-retry")) {
           Text(stringResource(R.string.progress_project_notes_error))
         }
       }
@@ -843,7 +934,7 @@ private fun ProgressProjectDetail(project: ProgressProject, section: String, tas
         BrandLoadingPanel(modifier = Modifier.testTag("progress-project-automations-loading"))
       }
       else if (automationsError) item {
-        OutlinedButton(onClick = onRetrySessions,
+        OutlinedButton(onClick = onRetryProject,
           modifier = Modifier.testTag("progress-project-automations-retry")) {
           Text(stringResource(R.string.progress_project_automations_error))
         }
@@ -866,50 +957,30 @@ private fun ProgressProjectDetail(project: ProgressProject, section: String, tas
 }
 
 @Composable
-private fun ProgressTaskCreate(title: String, onTitleChange: (String) -> Unit,
-  body: String, onBodyChange: (String) -> Unit, projectId: String,
-  onProjectChange: (String) -> Unit, busy: Boolean, error: Boolean, onSave: () -> Unit) {
-  val valid = title.trim().isNotEmpty() && title.trim().length <= 500 && body.length <= 50_000 &&
-    projectId.trim().matches(Regex("[A-Za-z0-9_-]{1,128}"))
-  Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-    .testTag("progress-task-create"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    OutlinedTextField(value = title, onValueChange = onTitleChange,
-      modifier = Modifier.fillMaxWidth().testTag("progress-create-title"),
-      label = { Text(stringResource(R.string.progress_task_name)) }, singleLine = true, enabled = !busy)
-    OutlinedTextField(value = body, onValueChange = onBodyChange,
-      modifier = Modifier.fillMaxWidth().testTag("progress-create-body"),
-      label = { Text(stringResource(R.string.progress_description)) }, minLines = 6, enabled = !busy)
-    OutlinedTextField(value = projectId, onValueChange = onProjectChange,
-      modifier = Modifier.fillMaxWidth().testTag("progress-create-project"),
-      label = { Text(stringResource(R.string.progress_task_project_label)) }, singleLine = true, enabled = !busy)
-    if (error) Text(stringResource(R.string.progress_create_error), color = MaterialTheme.colorScheme.error,
-      modifier = Modifier.testTag("progress-create-error"))
-    Button(onClick = onSave, enabled = valid && !busy,
-      modifier = Modifier.fillMaxWidth().testTag("progress-create-save")) {
-      Text(stringResource(R.string.progress_save))
-    }
-    if (busy) BrandLoadingIndicator(modifier = Modifier.fillMaxWidth().testTag("progress-create-busy"))
-  }
-}
-
-@Composable
 private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterChange: (String) -> Unit,
   onRefresh: () -> Unit,
   onLoadMore: () -> Unit, onSearchChange: (String) -> Unit, onSubmitSearch: () -> Unit,
-  searchOpen: Boolean, onCloseSearch: () -> Unit, onOpenTask: (ProgressTask) -> Unit) {
-  val shown = state.tasks.filter { task -> when (filter) {
+  searchOpen: Boolean, onCloseSearch: () -> Unit, onCreateTaskWithChat: () -> Unit,
+  onOpenTask: (ProgressTask) -> Unit) {
+  val shown = remember(state.tasks, filter) { state.tasks.filter { task -> when (filter) {
     "open" -> task.phase != "closed"
     "attention" -> task.phase != "closed" && task.needsUserAttention
     "closed" -> task.phase == "closed"
     else -> true
-  } }
+  } } }
   Column(modifier = Modifier.fillMaxSize()) {
+    TextButton(onClick = onCreateTaskWithChat, enabled = !state.creatingTaskChat,
+      modifier = Modifier.align(Alignment.End).testTag("progress-create-task-chat")) {
+      Text(stringResource(R.string.progress_create_task_in_chat))
+    }
     if (searchOpen) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       BasicTextField(value = state.taskSearchText, onValueChange = onSearchChange,
         modifier = Modifier.weight(1f).heightIn(min = 44.dp)
           .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(24))
-          .padding(horizontal = 16.dp, vertical = 10.dp).testTag("progress-task-search"),
+          .padding(horizontal = 16.dp, vertical = 10.dp)
+          .then(if (searchOpen) searchInputFocus() else Modifier)
+          .testTag("progress-task-search"),
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
         singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSubmitSearch() }),
@@ -933,7 +1004,7 @@ private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterCha
         SegmentOption("open", stringResource(R.string.progress_filter_open), "progress-filter-open"),
         SegmentOption("attention", stringResource(R.string.personal_overview_attention), "progress-filter-attention"),
         SegmentOption("closed", stringResource(R.string.progress_filter_closed), "progress-filter-closed"),
-      ), filter, onFilterChange, swipeToSelect = true,
+      ), filter, onFilterChange, modifier = Modifier.testTag("progress-task-filter-strip"), swipeToSelect = true,
     )
     LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp),
     contentPadding = PaddingValues(bottom = 20.dp)) {
@@ -978,7 +1049,8 @@ internal fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError:
   onOpenTaskChat: (String) -> Unit, agents: List<ai.xopc.mobile.gateway.ConversationAgent>,
   agentsLoading: Boolean, agentsError: Boolean,
   onRefresh: () -> Unit, statusOnly: Boolean = false,
-  onStatusDismiss: () -> Unit = {}, onEdit: () -> Unit) {
+  onStatusDismiss: () -> Unit = {}, projects: List<ProgressProject> = emptyList(),
+  onEdit: () -> Unit) {
   var confirmAction by rememberSaveable(task.id) { mutableStateOf<String?>(null) }
   var statusOpen by rememberSaveable(task.id) { mutableStateOf(statusOnly) }
   var agentId by rememberSaveable(task.id) { mutableStateOf("") }
@@ -997,7 +1069,10 @@ internal fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError:
         TextButton(onClick = { statusOpen = true }, enabled = !busy) {
           Text(if (task.phase == "closed" && task.resolution == "cancelled") taskResolutionLabel("cancelled") else progressPhaseLabel(task.phase))
         }
-        task.projectId?.let { Text(stringResource(R.string.progress_task_project, it)) }
+        task.projectId?.let { id ->
+          val projectName = projects.firstOrNull { it.id == id }?.name ?: id
+          Text(stringResource(R.string.progress_task_project, projectName))
+        }
         task.presentationReason?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         task.signoffResultId?.let { resultId ->
           Button(onClick = { onCommand("signoff:$resultId") }, enabled = !busy,
@@ -1235,28 +1310,31 @@ internal fun ProgressTaskEditor(title: String, onTitleChange: (String) -> Unit,
   projectId: String, onProjectChange: (String) -> Unit,
   priority: String, onPriorityChange: (String) -> Unit, dueAt: Long?, onDueAtChange: (Long?) -> Unit,
   projects: List<ProgressProject>, projectsLoading: Boolean, projectsError: Boolean, onLoadProjects: () -> Unit,
-  dirty: Boolean, busy: Boolean, error: Boolean, onSave: () -> Unit) {
+  dirty: Boolean, busy: Boolean, error: Boolean, creating: Boolean = false, requiresProject: Boolean = false,
+  onSave: () -> Unit) {
+  val prefix = if (creating) "progress-create" else "progress-edit"
   val valid = title.trim().isNotEmpty() && title.trim().length <= 500 && body.length <= 50_000 &&
-    projectId.trim().length <= 512
-  Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).testTag("progress-task-editor"),
+    projectId.trim().length <= 512 && (!requiresProject || projectId.isNotBlank())
+  Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).testTag(if (creating) "progress-task-create" else "progress-task-editor"),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     OutlinedTextField(value = title, onValueChange = onTitleChange,
-      modifier = Modifier.fillMaxWidth().testTag("progress-edit-title"),
+      modifier = Modifier.fillMaxWidth().testTag("$prefix-title"),
       label = { Text(stringResource(R.string.progress_task_name)) }, singleLine = true,
       enabled = !busy)
     OutlinedTextField(value = body, onValueChange = onBodyChange,
-      modifier = Modifier.fillMaxWidth().testTag("progress-edit-body"),
+      modifier = Modifier.fillMaxWidth().testTag("$prefix-body"),
       label = { Text(stringResource(R.string.progress_description)) }, minLines = 6,
       enabled = !busy)
     TaskChoiceField(stringResource(R.string.progress_task_project_label),
       projects.firstOrNull { it.id == projectId }?.name ?: projectId.ifBlank { stringResource(R.string.progress_no_project) },
-      listOf("" to stringResource(R.string.progress_no_project)) + projects.map { it.id to it.name },
-      !busy, "progress-edit-project", onProjectChange)
+      (if (requiresProject) emptyList() else listOf("" to stringResource(R.string.progress_no_project))) +
+        projects.map { it.id to it.name },
+      !busy, "$prefix-project", onProjectChange)
     if (projectsLoading) BrandLoadingIndicator()
     if (projectsError) OutlinedButton(onClick = onLoadProjects, enabled = !busy) { Text(stringResource(R.string.progress_refresh)) }
     TaskChoiceField(stringResource(R.string.progress_priority_label), taskPriorityLabel(priority),
       listOf("low", "normal", "high", "critical").map { it to taskPriorityLabel(it) }, !busy,
-      "progress-edit-priority", onPriorityChange)
+      "$prefix-priority", onPriorityChange)
     val context = androidx.compose.ui.platform.LocalContext.current
     OutlinedButton(onClick = {
       val date = java.util.Calendar.getInstance().apply { timeInMillis = dueAt ?: System.currentTimeMillis() }
@@ -1266,20 +1344,20 @@ internal fun ProgressTaskEditor(title: String, onTitleChange: (String) -> Unit,
         }
         onDueAtChange(chosen.timeInMillis)
       }, date.get(java.util.Calendar.YEAR), date.get(java.util.Calendar.MONTH), date.get(java.util.Calendar.DAY_OF_MONTH)).show()
-    }, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("progress-edit-due-date")) {
+    }, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("$prefix-due-date")) {
       Text(dueAt?.let { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it)) }
         ?: stringResource(R.string.progress_no_due_date))
     }
     if (dueAt != null) TextButton(onClick = { onDueAtChange(null) }, enabled = !busy) {
       Text(stringResource(R.string.progress_clear_due_date))
     }
-    if (error) Text(stringResource(R.string.progress_edit_error), color = MaterialTheme.colorScheme.error,
-      modifier = Modifier.testTag("progress-edit-error"))
+    if (error) Text(stringResource(if (creating) R.string.progress_create_error else R.string.progress_edit_error), color = MaterialTheme.colorScheme.error,
+      modifier = Modifier.testTag("$prefix-error"))
     Button(onClick = onSave, enabled = valid && dirty && !busy,
-      modifier = Modifier.fillMaxWidth().testTag("progress-edit-save")) {
+      modifier = Modifier.fillMaxWidth().testTag("$prefix-save")) {
       Text(stringResource(R.string.progress_save))
     }
-    if (busy) BrandLoadingIndicator(modifier = Modifier.fillMaxWidth().testTag("progress-edit-busy"))
+    if (busy) BrandLoadingIndicator(modifier = Modifier.fillMaxWidth().testTag("$prefix-busy"))
   }
 }
 

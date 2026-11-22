@@ -18,7 +18,8 @@ describe('mobile home protocol', () => {
     expect(mobileRoute('/automations?run=a')).toEqual({ page: 'automation-run', itemId: 'a' });
     expect(mobileRoute('/automations?automation=a')).toEqual({ page: 'automations', itemId: 'a' });
     expect(mobileRoute('/chat/conversation')).toEqual({ page: 'chat', itemId: 'conversation' });
-    for (const path of ['https://external.example', '//external.example', '/unknown', '/chat/%zz', '/chat/a/b']) {
+    for (const path of ['https://external.example', '//external.example', '/unknown', '/chat/%zz', '/chat/a/b',
+      '/tasks/..', '/tasks/.', '/automations?run=../x', '/notes?item=a%2Fb', '/chat']) {
       expect(mobileRoute(path)).toBeUndefined();
     }
   });

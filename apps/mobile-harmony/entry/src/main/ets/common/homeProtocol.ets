@@ -2,23 +2,27 @@ import { XopcHomeAction, XopcHomeCommand, XopcHomeDecision, XopcHomeResponse, Xo
 
 export function mobileRoute(href: string): XopcMobileRoute | undefined {
   // Only known internal routes are allowed; never load server-provided external URLs.
-  if (!href.startsWith('/') || href.startsWith('//')) return undefined;
-  const parts = href.split('?');
+  if (!href.startsWith('/') || href.startsWith('//') || href.length > 4096 || /[\u0000-\u001f\u007f\\]/.test(href)) return undefined;
+  const parts = href.split('#')[0].split('?');
   const segments = parts[0].split('/').filter((part: string): boolean => part.length > 0);
-  if (segments.length > 2) return undefined;
+  if (segments.length === 0 || segments.length > 2) return undefined;
   const page = segments[0] ?? '';
   if (!['chat', 'tasks', 'projects', 'notes', 'files', 'automations', 'inbox', 'connectors'].includes(page)) return undefined;
   try {
     let itemId = segments.length === 2 ? decodeURIComponent(segments[1]) : '';
     let target = page === 'connectors' ? 'settings' : page;
     for (const pair of (parts[1] ?? '').split('&')) {
-      const entry = pair.split('=');
-      const key = entry[0]; const text = decodeURIComponent(entry[1] ?? '');
+      if (!pair) continue;
+      const equal = pair.indexOf('=');
+      const key = equal >= 0 ? decodeURIComponent(pair.slice(0, equal)) : decodeURIComponent(pair);
+      const text = equal >= 0 ? decodeURIComponent(pair.slice(equal + 1)) : '';
       if (page === 'notes' && key === 'status' && text === 'inbox') target = 'inbox';
       if ((page === 'notes' || page === 'inbox') && key === 'item') itemId = text;
       if (page === 'automations' && key === 'automation') itemId = text;
       if (page === 'automations' && key === 'run') { target = 'automation-run'; itemId = text; }
     }
+    if (itemId && (itemId === '.' || itemId === '..' || /[\u0000-\u001f\u007f\\/]/.test(itemId))) return undefined;
+    if ((target === 'chat' || target === 'automation-run') && !itemId) return undefined;
     return { page: target, itemId };
   } catch (_error) { return undefined; }
 }

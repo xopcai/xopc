@@ -29,7 +29,7 @@ import org.junit.Test
 class ProgressOverviewTest {
   @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
-  @Test fun largeTextStatisticsRemainVisibleBelowTheHeader() {
+  @Test fun largeTextAttentionRemainsVisibleBelowTheHeader() {
     val pending = List(7) { index -> ProgressItem("pending-$index", "审阅调研结果 $index", "调研已完成，确认后推进下一步。", null, null,
       ProgressAction("查看任务", "/tasks/task-$index")) }
     val configuration = Configuration(rule.activity.resources.configuration).apply { setLocale(Locale.SIMPLIFIED_CHINESE) }
@@ -42,22 +42,16 @@ class ProgressOverviewTest {
         XopcTheme {
           Surface(color = MaterialTheme.colorScheme.background) {
             ProgressScreen(ProgressUiState(needsUser = pending), PaddingValues(top = 24.dp),
-              {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
+              {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {})
           }
         }
       }
     }
     saveScreenshot("progress-large-text")
-    listOf("progress-pending-count" to ai.xopc.mobile.R.string.progress_action_required,
-      "progress-running-count" to ai.xopc.mobile.R.string.progress_ongoing).forEach { (tag, label) ->
-      val text = rule.onNode(hasText(context.getString(label)) and hasAnyAncestor(hasTestTag(tag)),
-        useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-      assertTrue("The statistic label must not be clipped at 200% font size", text.height >= 26 * rule.density.density)
-    }
-    rule.onNodeWithText("需要你处理的事，以及正在推进的工作。").assertDoesNotExist()
+    rule.onNodeWithTag("progress-pending-count").assertDoesNotExist()
     val header = rule.onNodeWithTag("progress-header").fetchSemanticsNode().boundsInRoot
-    val statistics = rule.onNodeWithTag("progress-pending-count").fetchSemanticsNode().boundsInRoot
-    assertTrue("The statistics need clear space below the fixed header", statistics.top > header.bottom)
+    val attention = rule.onNodeWithTag("progress-item-pending-0").fetchSemanticsNode().boundsInRoot
+    assertTrue("The attention item must appear below the fixed header", attention.top > header.bottom)
     rule.runOnIdle { fontScale.value = 1f }
     saveScreenshot("progress-overview")
   }
@@ -67,7 +61,7 @@ class ProgressOverviewTest {
       ProgressAction("Review", "/tasks/task-$index")) }
     val state = mutableStateOf(ProgressUiState(needsUser = pending))
     rule.setContent {
-      XopcTheme { ProgressOverview(state.value, {}, {}, {}, {}, {}, {}, {}, {}, {}) }
+      XopcTheme { ProgressOverview(state.value, {}, {}, {}, {}, {}, {}, {}) }
     }
     rule.onNodeWithTag("progress-overview-list").performScrollToNode(hasTestTag("progress-item-pending-20"))
     val before = rule.onNodeWithTag("progress-item-pending-20").fetchSemanticsNode().boundsInRoot.top
@@ -78,9 +72,8 @@ class ProgressOverviewTest {
     rule.runOnIdle { state.value = state.value.copy(homeLoading = false, homeError = true) }
     rule.onNodeWithTag("progress-item-pending-20").assertIsDisplayed()
     assertEquals(before, rule.onNodeWithTag("progress-item-pending-20").fetchSemanticsNode().boundsInRoot.top, 1f)
-    rule.onNodeWithTag("progress-overview-list").performTouchInput { swipeUp() }
-    rule.onNodeWithTag("progress-overview-list").performScrollToNode(hasTestTag("progress-tasks"))
-    rule.onNodeWithTag("progress-tasks").assertIsDisplayed()
+    rule.onNodeWithTag("progress-overview-list").performScrollToNode(hasTestTag("progress-retry"))
+    rule.onNodeWithTag("progress-retry").assertIsDisplayed()
   }
 
   private fun saveScreenshot(name: String) {
@@ -96,7 +89,7 @@ class ProgressOverviewTest {
     }
   }
 
-  @Test fun scheduledWorkIsSeparatedAndStatisticsJumpToRunningWork() {
+  @Test fun scheduledWorkIsSeparatedAndDoesNotDuplicateUpcomingAutomation() {
     val pending = ProgressItem("pending", "Review the result", "Ready for review", null, null,
       ProgressAction("Review", "/tasks/task-1"))
     val running = ProgressItem("running", "Research in progress", "Working", "Running", null,
@@ -108,12 +101,10 @@ class ProgressOverviewTest {
       XopcTheme {
         ProgressOverview(ProgressUiState(needsUser = listOf(pending), background = listOf(scheduled, running),
           automationMetrics = AutomationMetrics(1, 1, 0, 0, AutomationMetricsNext("fallback", "Duplicate upcoming", 2000))),
-          {}, {}, {}, {}, {}, { opened = it }, {}, {}, {})
+          {}, {}, {}, { opened = it }, {}, {}, {})
       }
     }
-    rule.onNode(hasText("1") and hasAnyAncestor(hasTestTag("progress-running-count")), useUnmergedTree = true).assertExists()
-    rule.onNodeWithTag("progress-running-count").performClick()
-    rule.onNodeWithTag("progress-item-running").assertIsDisplayed()
+    rule.onNodeWithTag("progress-overview-list").performScrollToNode(hasTestTag("progress-item-running"))
     val runningBounds = rule.onNodeWithTag("progress-item-running").fetchSemanticsNode().boundsInRoot
     rule.onNodeWithTag("progress-overview-list").performScrollToNode(hasTestTag("progress-item-scheduled"))
     val scheduledBounds = rule.onNodeWithTag("progress-item-scheduled").fetchSemanticsNode().boundsInRoot
@@ -121,31 +112,26 @@ class ProgressOverviewTest {
     rule.onNodeWithTag("progress-upcoming-fallback").assertDoesNotExist()
     rule.onNodeWithTag("progress-item-scheduled").performClick()
     assertEquals("auto-1", opened)
-    rule.onNodeWithTag("progress-overview-list").performScrollToIndex(0)
-    rule.onNodeWithTag("progress-pending-count").performClick()
-    rule.onNodeWithTag("progress-item-pending").assertIsDisplayed()
     rule.onNodeWithTag("progress-overview-list").performScrollToNode(hasTestTag("progress-automations"))
     rule.onNodeWithTag("progress-workflows").assertDoesNotExist()
     rule.onNodeWithTag("progress-automations").assertIsDisplayed()
   }
 
-  @Test fun shortcutsShareCompactRowsAndEmptyStatisticsAreDisabled() {
+  @Test fun deliveryAndUpcomingSectionsLinkToLibraryAndAutomations() {
     val clicked = mutableListOf<String>()
+    val delivery = ProgressDelivery("delivery", "task", "task-1", "Delivered work", "Ready")
+    val scheduled = ProgressItem("scheduled", "Scheduled brief", "Tomorrow", null, null,
+      ProgressAction("Open automation", "/automations/auto-1"), kind = "scheduled")
     rule.setContent {
       XopcTheme {
-        ProgressOverview(ProgressUiState(), {}, {}, { clicked += "tasks" }, { clicked += "projects" },
-          { clicked += "automations" }, {}, {}, {}, {})
+        ProgressOverview(ProgressUiState(deliveries = listOf(delivery), background = listOf(scheduled)),
+          {}, {}, { clicked += "automations" }, {}, {}, {}, {}, { clicked += "library" })
       }
     }
-    rule.onNodeWithTag("progress-pending-count").assertIsNotEnabled()
-    rule.onNodeWithTag("progress-running-count").assertIsNotEnabled()
-    rule.onNodeWithTag("progress-tasks").performClick()
-    rule.onNodeWithTag("progress-projects").performClick()
+    rule.onNodeWithTag("progress-open-library").performClick()
     rule.onNodeWithTag("progress-automations").performClick()
-    assertEquals(listOf("tasks", "projects", "automations"), clicked)
-    val tasks = rule.onNodeWithTag("progress-tasks").fetchSemanticsNode().boundsInRoot
-    val projects = rule.onNodeWithTag("progress-projects").fetchSemanticsNode().boundsInRoot
-    assertEquals(tasks.center.y, projects.center.y, 1f)
-    assertTrue(tasks.height <= 65 * rule.density.density)
+    assertEquals(listOf("library", "automations"), clicked)
+    rule.onNodeWithTag("progress-pending-count").assertDoesNotExist()
+    rule.onNodeWithTag("progress-running-count").assertDoesNotExist()
   }
 }

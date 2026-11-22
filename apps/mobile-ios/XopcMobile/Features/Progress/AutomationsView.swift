@@ -15,15 +15,16 @@ struct AutomationsView: View {
     @State private var editingAutomation: AutomationRecord?
     @State private var selectedAutomationID: String?
     @State private var workingID: String?
-    @State private var isLoading = false
+    @State private var isLoading = true
     @State private var error: String?
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
-        List {
+        let visible = visibleItems
+        return List {
             if isLoading, items.isEmpty {
                 ProgressListSkeleton()
-            } else if visibleItems.isEmpty {
+            } else if visible.isEmpty {
                 if searchText.isEmpty {
                     ContentUnavailableView("暂无自动化", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
                                            description: Text("已配置的自动化会显示在这里。"))
@@ -34,7 +35,7 @@ struct AutomationsView: View {
                         .listRowBackground(Color.clear)
                 }
             } else {
-                ForEach(visibleItems) { automation in
+                ForEach(visible) { automation in
                     ZStack(alignment: .topTrailing) {
                         Button {
                             selectedAutomationID = automation.id

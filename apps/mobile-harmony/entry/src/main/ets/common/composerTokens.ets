@@ -10,7 +10,10 @@ export function composerRange(text: string, cursor: number): XopcComposerRange |
     return { kind: 'mention', start: at.index, end, query: at[1] || '' };
   }
   const slash = before.match(/\/[^\s]*$/);
-  if (slash && slash.index !== undefined && !slash[0].startsWith('/skill:')) return { kind: 'slash', start: slash.index, end, query: slash[0].slice(1) };
+  if (slash && slash.index !== undefined && (slash.index === 0 || /\s/.test(before[slash.index - 1]))
+    && !slash[0].startsWith('/skill:')) {
+    return { kind: 'slash', start: slash.index, end, query: slash[0].slice(1) };
+  }
   return undefined;
 }
 export function workspaceMention(path: string): string {

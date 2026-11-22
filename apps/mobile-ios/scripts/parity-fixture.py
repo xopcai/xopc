@@ -32,6 +32,8 @@ def space_seed():
   'updatedAt':now,'revision':1,'currentVersion':space_version,'origin':space_origin,
   'versions':[space_version,older_space_version],'origins':[space_origin,older_space_origin]}
 space_item = space_seed()
+task_space_origin = dict(space_origin, kind='task', taskId='task-header', label='任务顶部栏检查')
+task_space_item = dict(space_seed(), origin=task_space_origin, origins=[task_space_origin])
 goals = [
  {'id':'fixture-ongoing','title':'跟进移动端验收','desiredOutcome':'完成手势回归','status':'active','isPrimary':True},
  {'id':'fixture-achieved','title':'整理发布记录','desiredOutcome':'归档本次发布','status':'achieved'}
@@ -56,6 +58,11 @@ messages = [{'id':f'history-{i}','role':'user','content':f'移动端回归检查
  {'id':'voice-1','role':'user','content':'','attachments':[{'id':'voice','type':'audio','name':'语音','mimeType':'audio/wav','uri':'media://outbound/voice.wav','durationSeconds':3}]},
  {'id':'ai-1','turnId':'turn-1','role':'assistant','content':'## 检查结果\n\n1. **消息布局**\n   - 收紧列表缩进，换行保留阅读宽度。\n2. **交互**\n   - 长按显示用户消息操作。\n\n所有改动均已记录。'}]
 messages[-1]['deliveries'] = [{'operation':'created','primary':{'kind':'task','id':'task-header','title':'任务顶部栏检查','capabilities':['open']}}]
+long_history_messages = [
+ {'id':f'older-{i}','role':'assistant' if i % 2 else 'user','content':
+  ('## 历史记录 ' if i % 2 else '历史记录 ') + str(i) + ('\n\n- **工作记录**：检查消息滚动和布局。' * (i % 7))}
+ for i in range(100)
+] + messages + [{'id':'latest-marker','role':'user','content':'长对话的最新消息'}]
 keyboard_messages = [{'id':'keyboard-user','role':'user','content':'Explain the result.'},
  {'id':'keyboard-answer','role':'assistant','content':'\n\n'.join(f'Paragraph {i}: a long answer spanning several screens.' for i in range(40))}]
 bubble_messages = [{'id':'bubble-user','role':'user','content':'请只回复 OK。'},
@@ -150,7 +157,15 @@ class Handler(BaseHTTPRequestHandler):
  def do_GET(self):
   global live_music_state, space_item, capability_skill_enabled, global_model_revision, device_file_allowed, sidebar_actions
   path=urlparse(self.path).path; query=parse_qs(urlparse(self.path).query)
+  workspace_parity = path.startswith('/workspace-parity/')
+  project_partial = path.startswith('/project-partial/')
+  settings_link = path.startswith('/settings-link/')
+  if workspace_parity: path = path.removeprefix('/workspace-parity')
+  if project_partial: path = path.removeprefix('/project-partial')
+  if settings_link: path = path.removeprefix('/settings-link')
   keyboard_fixture = path.startswith('/keyboard/')
+  long_history_fixture = path.startswith('/long-history/')
+  task_delivery_fixture = path.startswith('/task-delivery/')
   suggestion_fixture = path.startswith('/next-turn/')
   bubble_fixture = path.startswith('/bubble-width/')
   sidebar_fixture = path.startswith('/sidebar-pagination/')
@@ -163,6 +178,8 @@ class Handler(BaseHTTPRequestHandler):
   if device_capabilities: path = path.removeprefix('/device-capability-access')
   if device_connections: path = path.removeprefix('/device-connections')
   if keyboard_fixture: path = path.removeprefix('/keyboard')
+  if long_history_fixture: path = path.removeprefix('/long-history')
+  if task_delivery_fixture: path = path.removeprefix('/task-delivery')
   if suggestion_fixture: path = path.removeprefix('/next-turn')
   if bubble_fixture: path = path.removeprefix('/bubble-width')
   if sidebar_fixture: path = path.removeprefix('/sidebar-pagination')
@@ -176,7 +193,7 @@ class Handler(BaseHTTPRequestHandler):
    space_item=space_seed(); data={'ok':True}
   elif path=='/api/spaces/items' and self.command=='GET':
    view=query.get('view',['all'])[0]; kind=query.get('kind',[''])[0]; q=query.get('q',[''])[0]
-   item=space_item
+   item=task_space_item if task_delivery_fixture else space_item
    visible=item and (item['trashedAt'] is not None)==(view=='trash') and (view!='favorites' or item['favorite'])
    matches=visible and (not kind or item['kind']==kind) and (not q or q in item['title'] or q=='正文')
    data={'items':[dict(item,hit={'text':'正文中的搜索命中','locator':{'line':2}}) if q=='正文' else item] if matches else []}
@@ -192,7 +209,7 @@ class Handler(BaseHTTPRequestHandler):
    elif action.startswith('versions/') and action.endswith('/content') and self.command=='GET':
     payload=b'Library version one' if older_space_version['id'] in action else b'Library version two'
     self.send_response(200);self.send_header('Content-Type','text/plain');self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload);return
-   elif self.command=='GET' and not action: data=space_item
+   elif self.command=='GET' and not action: data=task_space_item if task_delivery_fixture else space_item
    else:
     mutation=json.loads(body)
     if mutation.pop('revision',None)!=space_item['revision']: status=409; data={'error':'Conflict'}
@@ -414,7 +431,12 @@ class Handler(BaseHTTPRequestHandler):
    data={'session':{'key':schedule_chat,'agentId':'main','messages':[]},'pagination':{'hasMore':False}}
   elif path.endswith('/history'):
    key=path.split('/')[3]
-   history = bubble_messages if bubble_fixture else keyboard_messages if keyboard_fixture else messages
+   history = messages
+   if bubble_fixture: history = bubble_messages
+   if keyboard_fixture: history = keyboard_messages
+   if long_history_fixture: history = long_history_messages
+   if settings_link: history = [{'id':'settings-link','role':'assistant','content':
+     '[打开语言设置](xopc://settings/language)\n\n[打开连接设置](xopc://capabilities/mcp?id=example&url=https%3A%2F%2Fexample.com%2Fmcp)'}]
    if key == personal and (music_fixture or live_music_fixture): history = history + [music_reply]
    data={'session':{'key':key,'transcriptId':f'transcript-{key}','agentId':'main','messages':history},'pagination':{'hasMore':False}}
   elif suggestion_fixture and path.endswith('/next-turn-suggestion'):
@@ -443,9 +465,15 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/api/home':
    data={'needsUser':[{'id':'attention','kind':'task','title':'需要验收','summary':'执行已完成，等待确认。','statusLabel':'待验收','recommendation':'查看结果后验收。','openAction':{'type':'open','label':'查看任务','href':'/tasks'},'primaryAction':{'type':'task_review','label':'查看结果并验收','taskId':'task-header'}}], 'background':[{'id':'running','kind':'task','title':'进行中的工作','summary':'正在处理。'},{'id':'scheduled','kind':'scheduled','title':'明日计划','summary':'明天上午执行。'}],'backgroundCount':2,
     'recentDeliveries':[{'id':'task:fixture-delivery','kind':'task','subjectId':'task-header','projectId':'fixture-project','title':'交付纪要','summary':'测试用成果摘要','completedAt':now,'read':False,'href':'/tasks/task-header'}]}
+  elif path=='/api/commands':
+   data=envelope({'commands':[{'id':'help','name':'help','description':'Help','acceptsArgs':False}]})
+  elif path=='/api/skills':
+   data=envelope({'catalog':[{'name':'meeting','description':'Meeting summary','enabled':True}]})
   elif path=='/api/projects': data={'ok':True,'items':[project],'total':1,'hasMore':False}
   elif path=='/api/projects/fixture-project': data={'ok':True,'project':project}
   elif path=='/api/projects/fixture-project/sessions': data={'ok':True,'sessions':[]}
+  elif project_partial and path=='/api/notes' and 'projectId' in query:
+   status=503; data={'error':'笔记暂时不可用'}
   elif path=='/api/automations/configuration-conversations' and self.command=='POST':
    scope=json.loads(body or b'{}')
    if scope not in ({}, {'projectId':'fixture-project'}, {'personalLocale':'zh'}, {'personalLocale':'en'}):
@@ -472,13 +500,34 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/api/automation-runs': data={'runs':[automation_run]}
   elif path=='/api/automation-runs/fixture-automation-run': data={'run':automation_run}
   elif path=='/api/automation-runs/fixture-automation-run/events': data={'events':[]}
-  elif path=='/api/tasks': data={'ok':True,'items':[{'task':task,'operationalState':'idle'}],'total':1,'hasMore':False}
-  elif path in ('/api/tasks/task-header','/api/tasks/task-child'):
-   selected_task = task if path.endswith('task-header') else dict(task,id='task-child',title='移动端子任务')
+  elif path=='/api/tasks' and workspace_parity and self.command=='POST':
+   mutation=json.loads(body)
+   if mutation.get('activation') != {'mode':'capture','phase':'backlog'} or not mutation.get('idempotencyKey'):
+    status=400; data={'ok':False,'error':'Expected idempotent task capture'}
+   else:
+    data={'ok':True,'task':dict(task,id='task-created',title=mutation['title'],phase='backlog',body=mutation.get('body',''))}
+  elif path=='/api/tasks':
+   entries=[task]
+   if workspace_parity:
+    entries += [dict(task,id=f'task-history-{i}',title=f'历史任务 {i}') for i in range(1,81)]
+   search=query.get('search',[''])[0]
+   entries=[item for item in entries if search in item['title'] or search in item.get('body','')]
+   offset=int(query.get('offset',[0])[0])
+   limit=int(query.get('limit',[100])[0])
+   data={'ok':True,'items':[{'task':item,'operationalState':'idle'} for item in entries[offset:offset+limit]],'total':len(entries)}
+  elif path in ('/api/tasks/task-header','/api/tasks/task-child','/api/tasks/task-created'):
+   if path.endswith('task-created'):
+    selected_task=dict(task,id='task-created',title='模拟器新增任务',phase='backlog')
+   else:
+    selected_task=task if path.endswith('task-header') else dict(task,id='task-child',title='移动端子任务')
    data={'ok':True,'task':selected_task,'operationalState':'idle','allowedCommands':['move','close'],'runs':[],'waits':[],'criterionReviews':[]}
-  elif path in ('/api/tasks/task-header/conversation','/api/tasks/task-child/conversation'):
+  elif path in ('/api/tasks/task-header/conversation','/api/tasks/task-child/conversation','/api/tasks/task-created/conversation'):
    data={'ok':True,'conversationId':child}
   elif path=='/api/automations/metrics': data={'nextRun':{'automationId':'auto','name':'不应重复显示的计划','runAtMs':now+100000}}
+  elif path=='/api/files/spaces':
+   data={'spaces':[{'id':file_fixture['spaceId'],'title':'测试文件空间','kind':'workspace','writable':True,'lastActivityAt':now}]}
+  elif path==f"/api/files/spaces/{file_fixture['spaceId']}/children":
+   data={'items':[file_fixture]}
   elif path in ('/api/files/recent','/api/files/search'): data={'items':[dict(file_fixture,revision='stale-revision')]}
   elif path=='/api/files/fixture-file': data={'resource':file_fixture}
   elif path=='/api/files/fixture-file/content':
@@ -494,7 +543,11 @@ class Handler(BaseHTTPRequestHandler):
     status=503; data={'error':{'message':'Retry the same version request'}}
    else:
     status=201; data={'version':{'id':key,'revision':file_fixture['revision']}}
-  elif path=='/api/notes': data={'items':[{'id':'note-1','title':'布局检查笔记','kind':'note','status':'active','createdAt':now,'updatedAt':now,'snippet':'用于模拟器验证。'}],'total':1,'hasMore':False}
+  elif path=='/api/notes':
+   note={'id':'note-1','title':'布局检查笔记','kind':'note','status':'active','createdAt':now,'updatedAt':now,'snippet':'用于模拟器验证。'}
+   search=query.get('search',[''])[0]
+   items=[note] if search in note['title'] or search in note['snippet'] else []
+   data={'items':items,'total':len(items),'hasMore':False}
   elif path=='/api/notes/note-1': data={'note':{'id':'note-1','title':'布局检查笔记','markdown':'## 格式示例\n\n- [x] 完成示例','kind':'note','status':'active','createdAt':now,'updatedAt':now}}
   elif path=='/api/user-model/mobile-summary': data={'profile':{'callName':'Tester','role':'工程师'},'settings':{'memoryEnabled':True,'showMemoryReferences':True,'sensitiveWritePolicy':'confirm'},'counts':{'total':0,'explicit':0,'learned':0,'review':0,'workMemory':len(work_memory)},'goals':goals,'recent':[]}
   elif path=='/api/user-model/assertions': data={'items':[]}

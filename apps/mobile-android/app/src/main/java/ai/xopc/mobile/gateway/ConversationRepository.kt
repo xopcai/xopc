@@ -529,9 +529,11 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
   }
 
   fun readMessageMedia(conversationId: String, media: ConversationMedia): ByteArray {
-    require(conversationId.matches(Regex("[0-9a-fA-F-]{36}"))) { "INVALID_CONVERSATION_ID" }
+    val validConversationId = conversationId.matches(Regex("[0-9a-fA-F-]{36}"))
+    require(validConversationId || conversationId.isEmpty()) { "INVALID_CONVERSATION_ID" }
     val uri = media.uri
     if (uri.startsWith("data:")) {
+      require(validConversationId) { "INVALID_CONVERSATION_ID" }
       val match = Regex("^data:([A-Za-z0-9.+/-]+);base64,([A-Za-z0-9+/=_-]+)$").matchEntire(uri)
         ?: throw IllegalArgumentException("INVALID_MEDIA")
       require(match.groupValues[1] == media.mimeType && match.groupValues[2].length <= 22_369_624) {
@@ -541,18 +543,28 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         require(it.size <= 16 * 1024 * 1024) { "INVALID_MEDIA" }
       }
     }
+    fun validResourceSegment(value: String): Boolean =
+      value.isNotEmpty() && value.length <= 256 && value != "." && value != ".." &&
+        value.none { it.code < 0x20 || it.code == 0x7f || it == '\\' }
     val path = when {
       uri.isBlank() && !media.workspaceRelativePath.isNullOrBlank() -> {
+        require(validConversationId) { "INVALID_CONVERSATION_ID" }
         val relative = requireNotNull(media.workspaceRelativePath)
-        require(relative.none { it.code < 0x20 || it == '\\' } && relative.split('/').none { it == ".." }) { "INVALID_MEDIA" }
+        val parts = relative.split('/')
+        require(!relative.startsWith('/') && !relative.endsWith('/') &&
+          relative.none { it.code < 0x20 || it.code == 0x7f || it == '\\' } &&
+          parts.isNotEmpty() && parts.all { it.isNotBlank() && it != "." && it != ".." }) { "INVALID_MEDIA" }
         val space = JSONObject(gateway.request("/api/files/contexts/session/$conversationId")).getJSONObject("space").getString("id")
         val body = JSONObject().put("spaceId", space).put("path", relative).toString()
-        val resource = JSONObject(gateway.request("/api/files/resolve", "POST", body)).getJSONObject("resource").getString("id")
+        val resource = JSONObject(gateway.request("/api/files/resolve", "POST", body)).getJSONObject("resource").getString("id").trim()
+        require(validResourceSegment(resource)) { "INVALID_MEDIA" }
         "/api/files/${encode(resource)}/content"
       }
       uri.startsWith("xopc-file:") -> {
-        val id = Uri.decode(uri.removePrefix("xopc-file:")).trim()
-        require(id.isNotBlank()) { "INVALID_MEDIA" }
+        val raw = uri.removePrefix("xopc-file:")
+        require(!raw.contains('?') && !raw.contains('#')) { "INVALID_MEDIA" }
+        val id = Uri.decode(raw).trim()
+        require(validResourceSegment(id)) { "INVALID_MEDIA" }
         "/api/files/${encode(id)}/content"
       }
       uri.startsWith("xopc-attachment://notes/") -> {
@@ -560,10 +572,14 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
           .matchEntire(uri) ?: throw IllegalArgumentException("INVALID_MEDIA")
         val noteId = Uri.decode(match.groupValues[1]).trim()
         val attachmentId = Uri.decode(match.groupValues[2]).trim()
-        require(noteId.isNotBlank() && attachmentId.isNotBlank()) { "INVALID_MEDIA" }
+        require(validResourceSegment(noteId) && !noteId.contains('/') &&
+          validResourceSegment(attachmentId) && !attachmentId.contains('/')) { "INVALID_MEDIA" }
         "/api/notes/${encode(noteId)}/media/${encode(attachmentId)}"
       }
-      uri.startsWith("media://") -> "/api/media/read?uri=${encode(uri)}&conversationId=${encode(conversationId)}"
+      uri.startsWith("media://") -> {
+        require(validConversationId) { "INVALID_CONVERSATION_ID" }
+        "/api/media/read?uri=${encode(uri)}&conversationId=${encode(conversationId)}"
+      }
       else -> throw IllegalArgumentException("INVALID_MEDIA")
     }
     return gateway.requestBytes(path)

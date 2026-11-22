@@ -1215,12 +1215,13 @@ final class ParityAcceptanceUITests: XCTestCase {
     func testFileTransferControlsWithoutWritingUserFiles() {
         openTab("设置")
         app.buttons["文件"].tap()
-        XCTAssertTrue(app.buttons["上传"].waitForExistence(timeout: 8))
+        openFileSpaceForUpload()
         XCTAssertFalse(app.buttons["刷新"].exists)
         app.buttons["上传"].tap()
         XCTAssertTrue(app.buttons["取消"].waitForExistence(timeout: 8))
         capture("32-file-upload-picker")
         app.buttons["取消"].tap()
+        navigateBack()
 
         app.swipeDown()
         let searchField = app.searchFields.firstMatch
@@ -1239,6 +1240,19 @@ final class ParityAcceptanceUITests: XCTestCase {
         app.buttons["关闭"].tap()
     }
 
+    private func openFileSpaceForUpload(_ id: String? = nil) {
+        let spaces = app.descendants(matching: .any)
+        let row: XCUIElement
+        if let id {
+            row = spaces["file-space-\(id)"].firstMatch
+        } else {
+            row = spaces.matching(NSPredicate(format: "identifier BEGINSWITH %@", "file-space-")).firstMatch
+        }
+        XCTAssertTrue(row.waitForExistence(timeout: 8))
+        row.tap()
+        XCTAssertTrue(app.buttons["上传"].waitForExistence(timeout: 8))
+    }
+
     func testFilePickerUploadRoundTrip() async throws {
         guard let token = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_TOKEN"] else {
             throw XCTSkip("Gateway token is required for upload cleanup")
@@ -1252,6 +1266,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         }
         openTab("设置")
         app.buttons["文件"].tap()
+        openFileSpaceForUpload(spaceID)
         app.buttons["上传"].tap()
         let fixture = app.cells.matching(NSPredicate(format: "label CONTAINS %@", "xopc-ios-picker-e2e-20261005")).firstMatch
         guard fixture.waitForExistence(timeout: 8) else {
@@ -1301,6 +1316,7 @@ final class ParityAcceptanceUITests: XCTestCase {
 
         openTab("设置")
         app.buttons["文件"].tap()
+        openFileSpaceForUpload(spaceID)
         app.buttons["上传"].tap()
         let fixture = app.cells.matching(NSPredicate(format: "label CONTAINS %@", "xopc-ios-picker-e2e-20261005")).firstMatch
         guard fixture.waitForExistence(timeout: 8) else {
@@ -1348,6 +1364,7 @@ final class ParityAcceptanceUITests: XCTestCase {
 
         openTab("设置")
         app.buttons["文件"].tap()
+        openFileSpaceForUpload(spaceID)
         app.buttons["上传"].tap()
         let fixture = app.cells.matching(NSPredicate(format: "label CONTAINS %@", "xopc-ios-over-limit-e2e-20261005")).firstMatch
         guard fixture.waitForExistence(timeout: 8) else {
@@ -1384,6 +1401,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
         openTab("设置")
         app.buttons["文件"].tap()
+        openFileSpaceForUpload(spaceID)
         app.buttons["上传"].tap()
         let fixture = app.cells.matching(NSPredicate(format: "label CONTAINS %@", "xopc-ios-retry-e2e-20261005")).firstMatch
         guard fixture.waitForExistence(timeout: 8) else {
@@ -1837,6 +1855,123 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
     }
 
+    func testGlobalTasksSearchAndCreate() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/workspace-parity"
+        app.launch()
+        tab("progress")
+        app.selectPageOption("work-page-tasks", from: "work-page-menu")
+        XCTAssertTrue(app.buttons["task-task-header"].waitForExistence(timeout: 8))
+        let search = app.textFields["tasks-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("80")
+        XCTAssertTrue(app.buttons["task-task-history-80"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["task-task-header"].exists)
+        let create = app.buttons["tasks-create"]
+        XCTAssertTrue(create.waitForExistence(timeout: 5))
+        create.tap()
+        XCTAssertTrue(app.navigationBars["新建任务"].waitForExistence(timeout: 5))
+        let title = app.textFields["任务标题"]
+        title.tap()
+        title.typeText("模拟器新增任务")
+        app.navigationBars["新建任务"].buttons["保存"].tap()
+        XCTAssertTrue(app.staticTexts["模拟器新增任务"].firstMatch.waitForExistence(timeout: 10))
+        capture("task-created-from-workbench")
+    }
+
+    func testProjectRemainsUsableWhenNotesFail() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/project-partial"
+        app.launch()
+        tab("projects")
+        let project = app.descendants(matching: .any)["project-fixture-project"].firstMatch
+        XCTAssertTrue(project.waitForExistence(timeout: 8))
+        project.tap()
+        XCTAssertTrue(app.navigationBars["项目详情"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["资料测试项目"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["project-add"].isHittable)
+        XCTAssertTrue(app.buttons["重试"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.alerts.firstMatch.exists)
+        capture("project-partial-retry")
+    }
+
+    func testFilesShowsRecentAndSpaceAndReturnsToRoot() {
+        tab("profile")
+        app.buttons["文件"].tap()
+        XCTAssertTrue(app.staticTexts["最近文件"].firstMatch.waitForExistence(timeout: 5))
+        let space = app.buttons["测试文件空间"].firstMatch
+        XCTAssertTrue(space.waitForExistence(timeout: 5))
+        space.tap()
+        XCTAssertTrue(app.buttons["上传"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["版本验收.txt"].firstMatch.waitForExistence(timeout: 5))
+        app.navigationBars.firstMatch.buttons.firstMatch.tap()
+        XCTAssertTrue(space.waitForExistence(timeout: 5))
+        capture("files-root-spaces-and-recent")
+    }
+
+    func testChatSettingsLinkOpensLanguageAndReturns() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/settings-link"
+        app.launch()
+        let link = app.links["打开语言设置"].firstMatch
+        XCTAssertTrue(link.waitForExistence(timeout: 8))
+        link.tap()
+        let settings = app.navigationBars["语言"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.buttons.firstMatch.tap()
+        XCTAssertTrue(link.waitForExistence(timeout: 8))
+        capture("settings-link-return")
+    }
+
+    func testChatMcpLinkPrefillsConnectionAndWaitsForConfirmation() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/settings-link"
+        app.launch()
+        let link = app.links["打开连接设置"].firstMatch
+        XCTAssertTrue(link.waitForExistence(timeout: 8))
+        link.tap()
+        let address = app.textFields["capability-field-url"]
+        XCTAssertTrue(address.waitForExistence(timeout: 5))
+        XCTAssertEqual(address.value as? String, "https://example.com/mcp")
+        XCTAssertTrue(app.buttons["capability-panel-create"].exists)
+        XCTAssertFalse(app.buttons["capability-panel-save"].exists)
+        app.buttons["capability-panel-close"].tap()
+        XCTAssertTrue(link.waitForExistence(timeout: 5))
+    }
+
+    func testInlineSkillKeepsTextBeforeSlash() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_TOKEN"] = "inline-skill-\(UUID().uuidString)"
+        app.launch()
+        openChat()
+        let composer = app.textFields["assistant-chat-composer"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap()
+        composer.typeText("Please /meet")
+        let skill = app.buttons["composer-palette-skill:meeting"]
+        XCTAssertTrue(skill.waitForExistence(timeout: 8))
+        skill.tap()
+        XCTAssertEqual(composer.value as? String, "Please /skill:meeting ")
+        capture("inline-skill-in-draft")
+    }
+
+    func testNotesSearchUpdatesResultsAndRestoresList() {
+        tab("notes")
+        let note = app.buttons["note-row-note-1"]
+        XCTAssertTrue(note.waitForExistence(timeout: 6))
+        app.buttons["notes-open-search"].tap()
+        let search = app.textFields["notes-search-field"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("no matching note")
+        XCTAssertTrue(app.staticTexts["没有匹配的笔记"].waitForExistence(timeout: 6))
+        XCTAssertFalse(note.exists)
+        app.buttons["notes-open-search-close"].tap()
+        XCTAssertTrue(note.waitForExistence(timeout: 6))
+        capture("notes-search-restored")
+    }
+
     func testGlobalNotesOpenRichDetailAndEditor() {
         tab("notes")
         XCTAssertTrue(app.navigationBars["笔记"].waitForExistence(timeout: 5))
@@ -2084,6 +2219,47 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(avatar.waitForExistence(timeout: 6))
     }
 
+    func testTappingChatDismissesKeyboardWithoutDiscardingDraft() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_TOKEN"] = "keyboard-dismiss-\(UUID().uuidString)"
+        app.launch()
+        openChat()
+        let composer = app.textFields["assistant-chat-composer"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap()
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+        composer.typeText("Keep this draft")
+
+        let conversationArea = app.scrollViews["chat-message-timeline"]
+        conversationArea.coordinate(withNormalizedOffset: CGVector(dx: 0.88, dy: 0.55)).tap()
+        XCTAssertTrue(keyboard.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(composer.value as? String, "Keep this draft")
+        capture("chat-tap-dismissed-keyboard")
+    }
+
+    func testLongTimelineScrollsAndReturnsToLatest() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/long-history"
+        app.launch()
+        openChat()
+        let timeline = app.scrollViews["chat-message-timeline"]
+        let latest = app.staticTexts["长对话的最新消息"]
+        XCTAssertTrue(latest.waitForExistence(timeout: 10))
+        XCTAssertTrue(latest.isHittable)
+        let jump = app.buttons["chat-jump-bottom"]
+        for _ in 0 ..< 4 where !jump.isHittable {
+            timeline.swipeDown()
+        }
+        XCTAssertTrue(jump.isHittable)
+        XCTAssertFalse(app.buttons["chat-sidebar-close"].isHittable)
+        XCTAssertFalse(latest.isHittable)
+        jump.tap()
+        XCTAssertTrue(jump.waitForNonExistence(timeout: 6))
+        XCTAssertTrue(latest.isHittable)
+        capture("long-timeline-latest")
+    }
+
     func testFirstSentMessageAppearsBelowTheHeader() {
         XCTAssertTrue(app.openHomeSidebar())
         app.buttons["chat-sidebar-new"].tap()
@@ -2141,7 +2317,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         attachment.tap()
         XCTAssertTrue(app.staticTexts["File version fixture"].waitForExistence(timeout: 6))
         XCTAssertFalse(app.buttons["file-save-version"].exists)
-        app.navigationBars["版本验收.txt"].buttons["关闭"].tap()
+        app.buttons["preview-close"].tap()
         app.buttons["personal-overview-close"].tap()
         XCTAssertTrue(app.buttons["chat-header-personal"].waitForExistence(timeout: 5))
     }
@@ -2485,6 +2661,10 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertFalse(personal.isHittable)
         XCTAssertTrue(app.buttons["chat-sidebar-new"].isHittable)
 
+        app.buttons["chat-sidebar-close"].tap()
+        XCTAssertTrue(app.openHomeSidebar())
+        XCTAssertTrue(older.isHittable)
+
         for _ in 0 ..< 8 where !search.isHittable || !personal.isHittable {
             list.swipeDown()
         }
@@ -2540,7 +2720,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         shortStart.press(forDuration: 0.25, thenDragTo: shortStart.withOffset(CGVector(dx: -25, dy: 0)),
                          withVelocity: .slow, thenHoldForDuration: 0.2)
         XCTAssertTrue(plugin.isHittable, "A short drag should return to the plugin category")
-        plugin.swipeUp()
+        app.scrollViews["capability-catalog-plugins"].swipeUp()
         XCTAssertFalse(plugin.isHittable, "The long filtered list should scroll past its first row")
         app.selectCapability("capability-category-channels")
         XCTAssertTrue(app.descendants(matching: .any)["capability-loading"].firstMatch.waitForExistence(timeout: 3))
@@ -2689,7 +2869,7 @@ final class MobileLayoutParityUITests: XCTestCase {
     // swiftlint:disable:next function_body_length
     func testCapabilityCatalogDefaultsToPluginsAndSearchStaysInItsCategory() {
         tab("capabilities")
-        let header = app.navigationBars["能力"]
+        let header = app.navigationBars.firstMatch
         let plugin = app.buttons["capability-row-meeting-plugin"]
         let close = app.buttons["capability-panel-close"]
         XCTAssertTrue(plugin.waitForExistence(timeout: 5))
@@ -3040,30 +3220,29 @@ final class MobileLayoutParityUITests: XCTestCase {
     }
 
     func testLibraryResultMatchesProgressAndProjectAndReturnsToResults() {
-        tab("notes")
-        let results = app.buttons["library-category-deliveries"]
-        XCTAssertTrue(results.waitForExistence(timeout: 10))
-        results.tap()
-        let result = app.descendants(matching: .any)["delivery-task:fixture-delivery"].firstMatch
-        XCTAssertTrue(result.waitForExistence(timeout: 10))
-        result.tap()
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/task-delivery"
+        app.launch()
+        tab("library")
+        let file = app.buttons["space-item-55555555-5555-4555-8555-555555555555"]
+        XCTAssertTrue(file.waitForExistence(timeout: 10))
+        file.tap()
+        let source = app.buttons["查看来源"]
+        XCTAssertTrue(source.waitForExistence(timeout: 10))
+        source.tap()
         XCTAssertTrue(app.staticTexts["任务顶部栏检查"].waitForExistence(timeout: 10))
         app.navigationBars["任务对话"].buttons.firstMatch.tap()
-        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        XCTAssertTrue(file.waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["布局检查笔记"].exists)
 
+        let result = app.descendants(matching: .any)["delivery-task:fixture-delivery"].firstMatch
         tab("progress")
         XCTAssertTrue(result.waitForExistence(timeout: 10))
         result.tap()
         XCTAssertTrue(app.staticTexts["任务顶部栏检查"].waitForExistence(timeout: 10))
         app.navigationBars["任务对话"].buttons.firstMatch.tap()
 
-        let projects = app.buttons["项目"].firstMatch
-        if !projects.isHittable {
-            app.swipeUp()
-        }
-        XCTAssertTrue(projects.waitForExistence(timeout: 5))
-        projects.tap()
+        app.selectPageOption("work-page-projects", from: "work-page-menu")
         let project = app.staticTexts["资料测试项目"]
         XCTAssertTrue(project.waitForExistence(timeout: 5))
         project.tap()
@@ -3411,12 +3590,10 @@ final class MobileLayoutParityUITests: XCTestCase {
     }
 
     private func revealJumpToLatest(_ jump: XCUIElement) {
-        app.swipeDown()
-        app.swipeDown()
-        XCTAssertFalse(jump.exists)
-        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.58))
-        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.47))
-        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+        let timeline = app.scrollViews["chat-message-timeline"]
+        for _ in 0 ..< 4 where !jump.isHittable {
+            timeline.swipeDown()
+        }
     }
 
     func testGlobalModelSettingsSearchAndPersist() {
@@ -3593,7 +3770,10 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertLessThan(app.staticTexts["需要你处理"].frame.minY, app.staticTexts["正在进行"].frame.minY)
         XCTAssertLessThan(app.staticTexts["正在进行"].frame.minY, app.staticTexts["接下来"].frame.minY)
         capture("progress-sections")
-        tab("library")
+        let library = app.buttons["progress-open-library"]
+        if !library.isHittable { app.swipeUp() }
+        XCTAssertTrue(library.isHittable)
+        library.tap()
         XCTAssertTrue(app.buttons["space-scope-menu"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["space-item-55555555-5555-4555-8555-555555555555"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["布局检查笔记"].exists)
@@ -3660,9 +3840,14 @@ final class MobileLayoutParityUITests: XCTestCase {
         pager.swipeLeft()
         let openTasks = app.buttons["tasks-filter-open"]
         XCTAssertTrue(openTasks.waitForExistence(timeout: 5))
-        openTasks.swipeLeft()
-        let closedTasks = app.buttons["tasks-filter-closed"]
-        XCTAssertTrue(closedTasks.isSelected)
+        XCTAssertTrue(app.buttons["tasks-filter-all"].isSelected)
+        let filters = app.descendants(matching: .any)["tasks-filter-tabs"].firstMatch
+        let start = filters.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+        let end = filters.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: end)
+        XCTAssertTrue(openTasks.isSelected)
+        app.buttons["tasks-filter-closed"].tap()
+        XCTAssertTrue(app.buttons["tasks-filter-closed"].isSelected)
         XCTAssertFalse(app.buttons["projects-open-search"].exists)
         openTasks.tap()
         app.selectPageOption("work-page-projects", from: "work-page-menu")
@@ -3745,7 +3930,7 @@ extension XCUIApplication {
             buttons["chat-sidebar-close"].tap()
             return
         }
-        let identifier = ["conversations": "search", "progress": "workbench"][destination] ?? destination
+        let identifier = ["conversations": "search", "progress": "workbench", "projects": "workbench"][destination] ?? destination
         let button = buttons["chat-sidebar-\(identifier)"]
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         button.tap()
@@ -3753,6 +3938,8 @@ extension XCUIApplication {
             let closeSearch = navigationBars.firstMatch.buttons["conversations-open-search-close"]
             XCTAssertTrue(closeSearch.waitForExistence(timeout: 5))
             closeSearch.tap()
+        } else if destination == "projects" {
+            selectPageOption("work-page-projects", from: "work-page-menu")
         }
     }
 }

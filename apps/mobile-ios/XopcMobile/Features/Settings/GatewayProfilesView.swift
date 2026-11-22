@@ -14,6 +14,7 @@ struct GatewayProfilesView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var probeStates: [String: GatewayProbeState] = [:]
+    @State private var probeRequests: [String: UUID] = [:]
     @State private var editing = false
     @State private var activationProfile: GatewayProfile?
     @State private var deleteProfile: GatewayProfile?
@@ -120,35 +121,46 @@ struct GatewayProfilesView: View {
                     dismiss()
                 }
             }
-            .task { await probeAll() }
-            .onChange(of: profiles.map(\.id)) { Task { await probeAll() } }
+            .task(id: profiles.map { "\($0.id)|\($0.baseURL.absoluteString)" }) { await probeAll() }
         }
     }
 
     @MainActor private func probeAll() async {
-        for profile in profiles {
-            probeStates[profile.id] = .checking
-        }
-        for profile in profiles {
-            _ = await probe(profile)
+        let entries = profiles
+        let activeIDs = Set(entries.map(\.id))
+        probeStates = probeStates.filter { activeIDs.contains($0.key) }
+        probeRequests = probeRequests.filter { activeIDs.contains($0.key) }
+        let checks = entries.map { profile in Task { await probe(profile) } }
+        await withTaskCancellationHandler {
+            for check in checks { _ = await check.value }
+        } onCancel: {
+            for check in checks { check.cancel() }
         }
     }
 
     @MainActor private func probe(_ profile: GatewayProfile) async -> Bool {
+        let request = UUID()
+        probeRequests[profile.id] = request
         probeStates[profile.id] = .checking
         let started = ContinuousClock.now
         do {
             let configuration = try await onRefresh(profile.id)
+            try Task.checkCancellation()
             let status: GatewayStatusResponse = try await GatewayClient(configuration: configuration).request(path: "/api/status")
+            try Task.checkCancellation()
             guard !status.status.isEmpty else { throw GatewayClientError.invalidResponse }
-            let version = status.version?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let elapsed = started.duration(to: .now)
-            probeStates[profile.id] = .reachable(
-                milliseconds: elapsed.milliseconds, checkedAt: .now, version: version?.isEmpty == false ? version : nil
-            )
+            if probeRequests[profile.id] == request {
+                let version = status.version?.trimmingCharacters(in: .whitespacesAndNewlines)
+                probeStates[profile.id] = .reachable(
+                    milliseconds: started.duration(to: .now).milliseconds, checkedAt: .now,
+                    version: version?.isEmpty == false ? version : nil
+                )
+            }
             return true
         } catch {
-            probeStates[profile.id] = .offline(error.localizedDescription, checkedAt: .now)
+            if !Task.isCancelled, probeRequests[profile.id] == request {
+                probeStates[profile.id] = .offline(error.localizedDescription, checkedAt: .now)
+            }
             return false
         }
     }
@@ -332,6 +344,7 @@ private struct ProbeLabel: View {
 }
 
 struct GatewayProfileEditor: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let onPair: (String, @escaping @MainActor (String) -> Void) async throws -> Void
     let canCancel: Bool
     let onManage: (() -> Void)?
@@ -408,6 +421,7 @@ struct GatewayProfileEditor: View {
                             showingScanner = true
                         } label: {
                             Label("扫描连接二维码", systemImage: "qrcode.viewfinder")
+                                .foregroundStyle(mobileTheme.onAction)
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)

@@ -37,9 +37,12 @@ class FileRepository(private val gateway: GatewaySession) {
     }
   }
 
-  fun resource(id: String): ManagedFile = parseFile(
-    JSONObject(gateway.request("/api/files/${encode(id)}")).getJSONObject("resource"),
-  )
+  fun resource(id: String): ManagedFile {
+    requireValidFileId(id)
+    return parseFile(
+      JSONObject(gateway.request("/api/files/${encodeSegment(id)}")).getJSONObject("resource"),
+    )
+  }
 
   fun resolveConversationFile(conversationId: String, media: ConversationMedia): ManagedFile? {
     if (media.uri.startsWith("xopc-file:")) {
@@ -47,7 +50,8 @@ class FileRepository(private val gateway: GatewaySession) {
     }
     media.fileId?.let { return resource(it) }
     val path = media.workspaceRelativePath?.takeIf(String::isNotBlank) ?: return null
-    val spaceId = JSONObject(gateway.request("/api/files/contexts/session/${encode(conversationId)}"))
+    requireValidFileId(conversationId)
+    val spaceId = JSONObject(gateway.request("/api/files/contexts/session/${encodeSegment(conversationId)}"))
       .getJSONObject("space").getString("id")
     val body = JSONObject().put("spaceId", spaceId).put("path", path)
     return parseFile(JSONObject(gateway.request("/api/files/resolve", "POST", body.toString()))
@@ -56,9 +60,10 @@ class FileRepository(private val gateway: GatewaySession) {
 
   fun saveVersion(file: ManagedFile, requestId: String) {
     require(file.canSaveVersion) { "FILE_VERSION_UNAVAILABLE" }
+    requireValidFileId(file.id)
     UUID.fromString(requestId)
     val body = JSONObject().put("id", requestId).put("revision", file.revision)
-    val result = JSONObject(gateway.request("/api/files/${encode(file.id)}/versions", "POST", body.toString()))
+    val result = JSONObject(gateway.request("/api/files/${encodeSegment(file.id)}/versions", "POST", body.toString()))
     require(result.getJSONObject("version").getString("id") == requestId) { "INVALID_FILE_VERSION" }
   }
 
@@ -72,10 +77,8 @@ class FileRepository(private val gateway: GatewaySession) {
   }
 
   fun content(id: String): ByteArray {
-    require(id.length in 1..512 && id.all { it.isLetterOrDigit() || it in "-_." }) {
-      "INVALID_FILE_ID"
-    }
-    return gateway.requestBytes("/api/files/${encode(id)}/content")
+    requireValidFileId(id)
+    return gateway.requestBytes("/api/files/${encodeSegment(id)}/content")
   }
 
   fun text(id: String): String {
@@ -83,6 +86,14 @@ class FileRepository(private val gateway: GatewaySession) {
     require(bytes.size <= 200_000) { "FILE_PREVIEW_TOO_LARGE" }
     return bytes.toString(Charsets.UTF_8)
   }
+
+  private fun requireValidFileId(id: String) {
+    require(id.length in 1..512 && id != "." && id != ".." && id.all { it.isLetterOrDigit() || it in "-_." }) {
+      "INVALID_FILE_ID"
+    }
+  }
+
+  private fun encodeSegment(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
   private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8")
 }

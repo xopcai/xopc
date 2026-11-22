@@ -44,7 +44,8 @@ export struct XopcChatSidebar {
     return this.sessions.items.filter((item: XopcSessionItem): boolean =>
       item.key !== this.personalAgent?.conversationId && item.status !== 'archived' && item.messageCount > 0)
       .sort((first: XopcSessionItem, second: XopcSessionItem): number =>
-        Number(second.status === 'pinned') - Number(first.status === 'pinned'));
+        Number(second.status === 'pinned') - Number(first.status === 'pinned')
+          || (Date.parse(second.updatedAt || '') || 0) - (Date.parse(first.updatedAt || '') || 0));
   }
 
   aboutToAppear(): void { void this.sessions.load(); }

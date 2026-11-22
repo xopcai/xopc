@@ -139,7 +139,7 @@ struct ConversationsView: View {
     }
 
     @ViewBuilder private func conversationList(_ page: ConversationHistoryMode) -> some View {
-        if state.isLoading, visibleConversations.isEmpty {
+        if state.isAwaitingResults, visibleConversations.isEmpty {
             ConversationLoadingSkeleton()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let errorMessage = state.errorMessage, state.conversations.isEmpty {
@@ -251,7 +251,8 @@ struct ConversationsView: View {
             let showUnassigned = query.isEmpty || unassigned.localizedCaseInsensitiveContains(query)
             if page == .projects ? (projectRows.isEmpty && !showUnassigned) : expertRows.isEmpty {
                 if query.isEmpty {
-                    ContentUnavailableView("暂无专家", systemImage: "person.2")
+                    ContentUnavailableView(page == .projects ? "暂无项目" : "暂无专家",
+                                           systemImage: page == .projects ? "folder" : "person.2")
                 } else {
                     ContentUnavailableView.search(text: query)
                 }
@@ -582,15 +583,17 @@ struct PageSearchField: View {
     @Binding var text: String
     @FocusState.Binding var focused: Bool
     let accessibilityID: String
+    var autoFocus: Bool
     var onSubmit: () -> Void
 
     init(_ prompt: LocalizedStringKey, text: Binding<String>, focused: FocusState<Bool>.Binding,
-         accessibilityID: String, onSubmit: @escaping () -> Void = {})
+         accessibilityID: String, autoFocus: Bool = true, onSubmit: @escaping () -> Void = {})
     {
         self.prompt = prompt
         _text = text
         _focused = focused
         self.accessibilityID = accessibilityID
+        self.autoFocus = autoFocus
         self.onSubmit = onSubmit
     }
 
@@ -617,7 +620,7 @@ struct PageSearchField: View {
         .padding(.horizontal, 16)
         .frame(minHeight: 48)
         .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
-        .task { focused = true }
+        .task { if autoFocus { focused = true } }
         .onDisappear { focused = false }
     }
 }

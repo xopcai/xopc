@@ -6,6 +6,8 @@ import ai.xopc.mobile.gateway.loadDeviceConnections
 import ai.xopc.mobile.gateway.setDeviceCapability
 import org.json.JSONObject
 
+import ai.xopc.mobile.gateway.ComposerPaletteItem
+import ai.xopc.mobile.gateway.composerPaletteAsync
 import ai.xopc.mobile.gateway.ProgressTaskEdit
 
 import ai.xopc.mobile.theme.LanguagePreference
@@ -115,7 +117,6 @@ data class ProgressUiState(
   val background: List<ProgressItem> = emptyList(),
   val deliveries: List<ProgressDelivery> = emptyList(),
   val tasks: List<ProgressTask> = emptyList(),
-  val recentClosedTasks: List<ProgressTask> = emptyList(),
   val taskTotal: Int = 0,
   val loading: Boolean = false,
   val homeLoading: Boolean = false,
@@ -147,6 +148,8 @@ data class ProgressUiState(
   val projectId: String? = null,
   val project: ProgressProject? = null,
   val projectTasks: List<ProgressTask> = emptyList(),
+  val projectTasksLoading: Boolean = false,
+  val projectTasksError: Boolean = false,
   val projectSessions: List<ProgressProjectSession> = emptyList(),
   val projectSessionsLoading: Boolean = false,
   val projectSessionsError: Boolean = false,
@@ -161,6 +164,7 @@ data class ProgressUiState(
   val createBusy: Boolean = false,
   val createError: Boolean = false,
   val createSavedRevision: Int = 0,
+  val createdTaskId: String? = null,
   val taskChatBusy: Boolean = false,
   val taskChatError: Boolean = false,
   val automationMetrics: AutomationMetrics? = null,
@@ -2184,10 +2188,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       try {
         val page = runInterruptible(Dispatchers.IO) { progressRepository.tasks(search = query) }
         if (revision == progressRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-          it.copy(progress = it.progress.copy(tasks = page.items, taskTotal = page.total,
-            recentClosedTasks = if (query.isBlank()) page.items.filter { task -> task.phase == "closed" }
-              .sortedByDescending { task -> task.closedAt ?: task.updatedAt }.take(2)
-            else it.progress.recentClosedTasks))
+          it.copy(progress = it.progress.copy(tasks = page.items, taskTotal = page.total))
         }
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) {
@@ -2327,19 +2328,24 @@ class GatewayViewModel internal constructor(application: Application, private va
     if (!id.matches(Regex("[A-Za-z0-9_-]{1,128}"))) return
     projectDetailJob?.cancel()
     val revision = ++projectDetailRevision
-    mutableState.update { it.copy(progress = it.progress.copy(projectId = id, project = null,
-      projectTasks = emptyList(), projectSessions = emptyList(), projectSessionsLoading = true,
-      projectSessionsError = false, projectNotes = emptyList(), projectNotesLoading = true,
-      projectNotesError = false, projectAutomations = emptyList(), projectAutomationsLoading = true,
-      projectAutomationsError = false, projectLoading = true, projectError = false)) }
+    mutableState.update { state ->
+      val progress = state.progress
+      val sameProject = progress.project?.id == id
+      state.copy(progress = progress.copy(projectId = id, project = progress.project.takeIf { sameProject },
+        projectTasks = if (sameProject) progress.projectTasks else emptyList(),
+        projectSessions = if (sameProject) progress.projectSessions else emptyList(),
+        projectNotes = if (sameProject) progress.projectNotes else emptyList(),
+        projectAutomations = if (sameProject) progress.projectAutomations else emptyList(),
+        projectTasksLoading = true, projectTasksError = false, projectSessionsLoading = true,
+        projectSessionsError = false, projectNotesLoading = true, projectNotesError = false,
+        projectAutomationsLoading = true, projectAutomationsError = false, projectLoading = !sameProject,
+        projectError = false))
+    }
     projectDetailJob = viewModelScope.launch {
       try {
-        val (project, tasks) = runInterruptible(Dispatchers.IO) {
-          progressRepository.project(id) to progressRepository.projectTasks(id)
-        }
+        val project = runInterruptible(Dispatchers.IO) { progressRepository.project(id) }
         if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-          it.copy(progress = it.progress.copy(project = project, projectTasks = tasks.items,
-            projectLoading = false))
+          it.copy(progress = it.progress.copy(project = project, projectLoading = false))
         }
         val local = runInterruptible(Dispatchers.IO) {
           conversations.projectDrafts(id).map { draft ->
@@ -2349,48 +2355,68 @@ class GatewayViewModel internal constructor(application: Application, private va
         if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
           it.copy(progress = it.progress.copy(projectSessions = local))
         }
-        val sessions = try { runInterruptible(Dispatchers.IO) {
-          local + progressRepository.projectSessions(id).filterNot { row -> local.any { it.id == row.id } }
-        } }
-        catch (error: CancellationException) { throw error }
-        catch (_: Exception) {
-          if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-            it.copy(progress = it.progress.copy(projectSessionsLoading = false, projectSessionsError = true))
+        kotlinx.coroutines.supervisorScope {
+          launch {
+            try {
+              val tasks = runInterruptible(Dispatchers.IO) { progressRepository.projectTasks(id) }
+              if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+                it.copy(progress = it.progress.copy(projectTasks = tasks.items, projectTasksLoading = false))
+              }
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) {
+              if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+                it.copy(progress = it.progress.copy(projectTasksLoading = false, projectTasksError = true))
+              }
+            }
           }
-          null
-        }
-        if (sessions != null && revision == projectDetailRevision &&
-          mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-          it.copy(progress = it.progress.copy(projectSessions = sessions, projectSessionsLoading = false))
-        }
-        try {
-          val notes = runInterruptible(Dispatchers.IO) { noteRepository.listProject(id).items }
-          if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-            it.copy(progress = it.progress.copy(projectNotes = notes, projectNotesLoading = false))
+          launch {
+            try {
+              val sessions = runInterruptible(Dispatchers.IO) {
+                local + progressRepository.projectSessions(id).filterNot { row -> local.any { it.id == row.id } }
+              }
+              if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+                it.copy(progress = it.progress.copy(projectSessions = sessions, projectSessionsLoading = false))
+              }
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) {
+              if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+                it.copy(progress = it.progress.copy(projectSessionsLoading = false, projectSessionsError = true))
+              }
+            }
           }
-        } catch (error: CancellationException) { throw error }
-        catch (_: Exception) {
-          if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-            it.copy(progress = it.progress.copy(projectNotesLoading = false, projectNotesError = true))
+          launch {
+            try {
+              val notes = runInterruptible(Dispatchers.IO) { noteRepository.listProject(id).items }
+              if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+                it.copy(progress = it.progress.copy(projectNotes = notes, projectNotesLoading = false))
+              }
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) {
+              if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+                it.copy(progress = it.progress.copy(projectNotesLoading = false, projectNotesError = true))
+              }
+            }
           }
-        }
-        try {
-          val automations = runInterruptible(Dispatchers.IO) { automationRepository.listProject(id) }
-          if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-            it.copy(progress = it.progress.copy(projectAutomations = automations,
-              projectAutomationsLoading = false))
-          }
-        } catch (error: CancellationException) { throw error }
-        catch (_: Exception) {
-          if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-            it.copy(progress = it.progress.copy(projectAutomationsLoading = false,
-              projectAutomationsError = true))
+          launch {
+            try {
+              val automations = runInterruptible(Dispatchers.IO) { automationRepository.listProject(id) }
+              if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+                it.copy(progress = it.progress.copy(projectAutomations = automations,
+                  projectAutomationsLoading = false))
+              }
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) {
+              if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+                it.copy(progress = it.progress.copy(projectAutomationsLoading = false,
+                  projectAutomationsError = true))
+              }
+            }
           }
         }
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) {
         if (revision == projectDetailRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-          it.copy(progress = it.progress.copy(projectLoading = false, projectSessionsLoading = false,
+          it.copy(progress = it.progress.copy(projectLoading = false, projectTasksLoading = false, projectSessionsLoading = false,
             projectNotesLoading = false, projectAutomationsLoading = false, projectError = true))
         }
       }
@@ -2407,11 +2433,13 @@ class GatewayViewModel internal constructor(application: Application, private va
     return project
   }
 
-  fun createProgressTask(title: String, body: String, projectId: String) {
+  fun createProgressTask(draft: ProgressTaskEdit) {
+    val (title, body, projectId, priority, dueAt) = draft
     val current = mutableState.value
     val gatewayId = current.profile?.gatewayId ?: return
-    if (current.progress.createBusy || current.progress.project == null || title.trim().isEmpty()) return
-    val signature = listOf(gatewayId, title.trim(), body, projectId).joinToString("\u0000")
+    if (current.progress.createBusy || title.trim().isEmpty()) return
+    val cleanProject = projectId.trim()
+    val signature = listOf(gatewayId, title.trim(), body, cleanProject, priority, dueAt?.toString().orEmpty()).joinToString("\u0000")
     if (signature != createTaskSignature) {
       createTaskSignature = signature
       createTaskKey = UUID.randomUUID().toString()
@@ -2420,14 +2448,16 @@ class GatewayViewModel internal constructor(application: Application, private va
     mutableState.update { it.copy(progress = it.progress.copy(createBusy = true, createError = false)) }
     viewModelScope.launch {
       try {
-        val created = runInterruptible(Dispatchers.IO) { progressRepository.createTask(title, body, projectId, key) }
+        val created = runInterruptible(Dispatchers.IO) {
+          session.withActiveGateway(gatewayId) { progressRepository.createTask(title, body, cleanProject, key, priority, dueAt) }
+        }
         if (mutableState.value.profile?.gatewayId == gatewayId) {
-          require(created.projectId == projectId) { "MISMATCHED_PROGRESS_TASK_CREATE" }
+          require(created.projectId.orEmpty() == cleanProject) { "MISMATCHED_PROGRESS_TASK_CREATE" }
           createTaskSignature = ""
           createTaskKey = ""
           mutableState.update { it.copy(progress = it.progress.copy(createBusy = false,
-            createSavedRevision = it.progress.createSavedRevision + 1)) }
-          openProgressProject(projectId)
+            createSavedRevision = it.progress.createSavedRevision + 1, createdTaskId = created.id)) }
+          if (current.progress.projectId == cleanProject && cleanProject.isNotEmpty()) openProgressProject(cleanProject)
           refreshProgressTasks()
         }
       } catch (error: CancellationException) { throw error }
@@ -2490,12 +2520,7 @@ class GatewayViewModel internal constructor(application: Application, private va
           val progress = state.progress
           val selected = if (progress.detailTaskId == task.id) updated else progress.detailTask
           state.copy(progress = progress.copy(detailTask = selected, commandBusy = false,
-            tasks = progress.tasks.map { if (it.id == updated.id) updated else it },
-            recentClosedTasks = if (progress.taskSearch.isBlank())
-              (progress.recentClosedTasks.filterNot { it.id == updated.id } +
-                listOfNotNull(updated.takeIf { it.phase == "closed" }))
-                .sortedByDescending { it.closedAt ?: it.updatedAt }.take(2)
-            else progress.recentClosedTasks))
+            tasks = progress.tasks.map { if (it.id == updated.id) updated else it }))
         }
         if (mutableState.value.profile?.gatewayId == gatewayId) refreshProgressHome()
       } catch (error: CancellationException) { throw error }
@@ -2525,8 +2550,7 @@ class GatewayViewModel internal constructor(application: Application, private va
         if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update { state ->
           val progress = state.progress
           state.copy(progress = progress.copy(editBusy = false, editSavedRevision = progress.editSavedRevision + 1,
-            tasks = progress.tasks.map { if (it.id == updated.id) updated else it },
-            recentClosedTasks = progress.recentClosedTasks.map { if (it.id == updated.id) updated else it }))
+            tasks = progress.tasks.map { if (it.id == updated.id) updated else it }))
         }
         if (mutableState.value.profile?.gatewayId == gatewayId &&
           mutableState.value.progress.detailTaskId == id) openProgressTask(id)
@@ -2704,14 +2728,15 @@ class GatewayViewModel internal constructor(application: Application, private va
         noteDraftLock.withLock { noteDraftStore.save(oldId, draft) }
       }
     }
-    val readers = listOf(searchJob, recentConversationsJob, historyJob, olderHistoryJob, executionJob, runStateJob, modelJob, agentJob,
-      contextJob, contextPanelJob, connectionWaitJob, clarificationJob, referenceJob, progressJob, progressHomeJob, progressMetricsJob,
-      progressMoreJob, progressDetailJob,
+    val readers = listOf(searchJob, recentConversationsJob, historyJob, desktopTargetJob, olderHistoryJob, executionJob, runStateJob, modelJob, agentJob,
+      contextJob, contextPanelJob, connectionWaitJob, clarificationJob, referenceJob, suggestionJob,
+      progressJob, progressHomeJob, progressMetricsJob, progressMoreJob, progressDetailJob, progressCommandJob, progressEditJob,
       projectsJob, projectDetailJob, automationJob, notesJob, sharesJob, noteDetailJob, noteHistoryJob,
-      noteSnapshotJob, personalJob, personalAgentJob, personalListJob, personalDetailJob)
+      noteSnapshotJob, noteRestoreJob, personalJob, personalAgentJob, personalListJob, personalDetailJob, deleteJob)
     clarificationAttempt = null
     readers.forEach { it?.cancel() }
     readers.forEach { it?.join() }
+    deleteJob = null
     foregroundRecoveryJob?.cancelAndJoin()
     foregroundRecoveryJob = null
     realtimeJob?.cancelAndJoin()
@@ -4225,10 +4250,15 @@ class GatewayViewModel internal constructor(application: Application, private va
     val response = runInterruptible(Dispatchers.IO) {
       ai.xopc.mobile.gateway.CapabilityRepository(session).panel(category, id, locale, command)
     }
-    if (category == "agents" && command?.optString("action") == "save" && mutableState.value.personal.agent?.agentId == id) {
+    if (category == "agents" && command != null && mutableState.value.personal.agent?.agentId == id) {
       loadPersonalAgent()
     }
     return response
+  }
+
+  internal suspend fun loadComposerPalette(locale: String): List<ComposerPaletteItem> {
+    val gatewayId = mutableState.value.profile?.gatewayId ?: return emptyList()
+    return session.composerPaletteAsync(gatewayId, locale)
   }
 
   suspend fun loadCapabilities(category: String, locale: String): ai.xopc.mobile.gateway.CapabilityPage {
@@ -4597,8 +4627,9 @@ class GatewayViewModel internal constructor(application: Application, private va
 
   fun scheduleDelete(id: String) {
     val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: return
     val item = current.conversations.firstOrNull { it.id == id && !it.isLocalDraft } ?: return
-    if (current.profile == null || current.pendingDeleteId != null || current.pinningConversationId != null ||
+    if (current.pendingDeleteId != null || current.pinningConversationId != null ||
       current.archivingConversationId != null || current.renamingConversation || current.sending ||
       (current.selectedConversationId == id &&
         (current.activeRunId != null || current.pendingInput != null))) return
@@ -4606,15 +4637,21 @@ class GatewayViewModel internal constructor(application: Application, private va
     deleteJob = viewModelScope.launch {
       try {
         delay(5_000)
+        if (mutableState.value.profile?.gatewayId != gatewayId) return@launch
         mutableState.update { it.copy(deleteCommitting = true) }
-        runInterruptible(Dispatchers.IO) { conversations.delete(id) }
+        runInterruptible(Dispatchers.IO) {
+          session.withActiveGateway(gatewayId) { conversations.delete(id) }
+        }
         try {
-          runInterruptible(Dispatchers.IO) { session.clearMainConversationId(id) }
+          runInterruptible(Dispatchers.IO) {
+            if (session.currentProfile()?.gatewayId == gatewayId) session.clearMainConversationId(id)
+          }
         } catch (error: CancellationException) {
           throw error
         } catch (error: Exception) {
           Log.w("XopcAndroid", "Deleted conversation selection cleanup failed: ${error.javaClass.simpleName}")
         }
+        if (mutableState.value.profile?.gatewayId != gatewayId) return@launch
         if (mutableState.value.selectedConversationId == id) {
           historyJob?.cancel()
           executionJob?.cancel()

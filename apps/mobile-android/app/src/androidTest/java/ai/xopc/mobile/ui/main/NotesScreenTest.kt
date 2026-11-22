@@ -113,6 +113,21 @@ class NotesScreenTest {
     assertEquals(1, more)
   }
 
+  @Test fun filesKeepRecentResultsWhenSpacesFail() {
+    val recent = ai.xopc.mobile.gateway.ManagedFile("recent", "space", "Recent.txt",
+      "Recent.txt", "file", "text/plain", 40)
+    composeTestRule.setContent {
+      NotesScreen(NotesUiState(gatewayId = "test"), androidx.compose.foundation.layout.PaddingValues(),
+        { _, _ -> }, {}, {}, onNoteFileSpaces = { error("Unavailable") },
+        onNoteFiles = { _, _, _ -> listOf(recent) }, onExit = {})
+    }
+    composeTestRule.onNodeWithTag("notes-open-files").performClick()
+    composeTestRule.onNodeWithTag("notes-files-retry").assertExists()
+    composeTestRule.onNodeWithTag("notes-file-recent").assertExists()
+    composeTestRule.onNodeWithTag("notes-back").performClick()
+    composeTestRule.onNodeWithTag("notes-open-files").assertExists()
+  }
+
   @Test fun detailLoadingRetryAndReadOnlyBody() {
     var retries = 0
     val detail = NoteDetail("note-1", "Idea", "# Idea\nBody", "inbox", "thought",

@@ -11,13 +11,16 @@ struct ProjectDetailView: View {
     @Environment(\.locale) private var locale
     @State private var project: ProjectRecord?
     @State private var sessions: [ConversationSummary] = []
+    @State private var attention: [HomeItem] = []
     @State private var deliveries: [HomeDelivery] = []
     @State private var tasks: [TaskListItem] = []
     @State private var notes: [NoteSummary] = []
     @State private var automations: [AutomationRecord] = []
     @AppStorage private var selection: ProjectSection
     @State private var isLoading = true
+    @State private var loadRevision = 0
     @State private var error: String?
+    @State private var projectLoadError: String?
     @State private var creationSheet: ProjectCreationSheet?
     @State private var managingProject = false
     @State private var setupPrompt: String?
@@ -45,8 +48,14 @@ struct ProjectDetailView: View {
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .accessibilityIdentifier("project-pager")
-            } else if let error {
-                ContentUnavailableView("无法读取项目", systemImage: "exclamationmark.triangle", description: Text(error))
+            } else if let projectLoadError {
+                ContentUnavailableView {
+                    Label("无法读取项目", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(projectLoadError)
+                } actions: {
+                    Button("重试") { Task { await load() } }
+                }
             } else {
                 ProgressView("正在读取项目…")
             }
@@ -56,10 +65,10 @@ struct ProjectDetailView: View {
                 SegmentOption(id: $0, title: $0.title, accessibilityID: "project-tab-\($0.rawValue)")
             }, selected: selection, identifier: "project-tabs") { selection = $0 }
         }
-        .task { await load() }
+        .task(id: configuration) { await load() }
         .sheet(item: $creationSheet, onDismiss: { Task { await load() } }) { sheet in
             switch sheet {
-            case .task: ProjectTaskEditorView(configuration: configuration, projectID: projectID)
+            case .task: TaskEditorView(configuration: configuration, initialProjectID: projectID)
             case .note: NoteEditorView(configuration: configuration, projectID: projectID)
             }
         }
@@ -97,18 +106,33 @@ struct ProjectDetailView: View {
                 Task { await load() }
             }
         }
-        .alert("项目内容未完整载入", isPresented: errorBinding) {
-            Button("重试") { Task { await load() } }
-            Button("取消", role: .cancel) {}
-        } message: { Text(error ?? "未知错误") }
+
     }
 
     private func projectPage(_ project: ProjectRecord, section: ProjectSection) -> some View {
         List {
+            if let error {
+                Section {
+                    Text(error).foregroundStyle(.secondary)
+                    Button("重试") { Task { await load() } }
+                }
+            }
             if section == .overview {
                 projectOverviewSection(project)
             }
-            if section == .overview, !deliveries.isEmpty {
+            if section == .overview, !attention.isEmpty {
+                Section("需要你处理") {
+                    ForEach(attention) { item in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.title).mobileTextStyle(.rowTitle).lineLimit(2)
+                            if !item.summary.isEmpty {
+                                Text(item.summary).mobileTextStyle(.caption).foregroundStyle(.secondary).lineLimit(2)
+                            }
+                        }
+                    }
+                }
+            }
+            if (section == .overview || section == .notes), !deliveries.isEmpty {
                 Section("近期成果") {
                     ForEach(deliveries.prefix(5)) { item in
                         HomeDeliveryLink(item: item, configuration: configuration,
@@ -208,11 +232,12 @@ struct ProjectDetailView: View {
     }
 
     private var projectTasks: some View {
-        Section {
-            if tasks.isEmpty {
+        let shown = selection == .overview ? Array(tasks.filter { $0.task.phase != "closed" }.prefix(3)) : tasks
+        return Section {
+            if shown.isEmpty {
                 Text("暂无任务").foregroundStyle(.secondary)
             } else {
-                ForEach(visible(tasks)) { item in
+                ForEach(shown) { item in
                     NavigationLink {
                         TaskConversationView(configuration: configuration, taskID: item.task.id)
                     } label: {
@@ -301,43 +326,94 @@ struct ProjectDetailView: View {
         selection == .overview ? Array(items.prefix(3)) : items
     }
 
-    private var errorBinding: Binding<Bool> {
-        Binding(get: { error != nil && project != nil }, set: {
-            if !$0 {
-                error = nil
-            }
-        })
-    }
-
     @MainActor private func load() async {
+        loadRevision += 1
+        let revision = loadRevision
         isLoading = true
-        defer { isLoading = false }
+        error = nil
+        projectLoadError = nil
+        defer { if revision == loadRevision { isLoading = false } }
         do {
             localChats = try ComposerDraftStore().readProjectDrafts(configuration, projectID: projectID)
         } catch { self.error = error.localizedDescription }
-        async let home = try? GatewayClient(configuration: configuration).fetchHome(locale: locale.identifier)
+
+        let client = GatewayClient(configuration: configuration)
+        let id = projectID
+        let language = locale.identifier
+        await withTaskGroup(of: ProjectLoadResult.self) { group in
+            group.addTask {
+                do { return .project(try await client.fetchProject(id: id)) }
+                catch { return .projectFailed(error.localizedDescription) }
+            }
+            group.addTask {
+                do { return .sessions(try await client.fetchProjectSessions(id: id)) }
+                catch { return .failed(error.localizedDescription) }
+            }
+            group.addTask {
+                do { return .tasks(try await client.fetchTasks(projectID: id).items) }
+                catch { return .failed(error.localizedDescription) }
+            }
+            group.addTask {
+                do { return .notes(try await client.fetchNotes(projectID: id).items) }
+                catch { return .failed(error.localizedDescription) }
+            }
+            group.addTask {
+                do { return .automations(try await client.fetchAutomations(projectID: id)) }
+                catch { return .failed(error.localizedDescription) }
+            }
+            group.addTask {
+                let home = try? await client.fetchHome(locale: language)
+                return .homeSnapshot(attention: home?.needsUser, deliveries: home?.recentDeliveries)
+            }
+            for await result in group {
+                guard !Task.isCancelled, revision == loadRevision else {
+                    group.cancelAll()
+                    return
+                }
+                apply(result)
+            }
+        }
+    }
+
+    private func apply(_ result: ProjectLoadResult) {
+        switch result {
+        case let .project(record): project = record
+        case let .projectFailed(message):
+            projectLoadError = message
+            if project != nil { error = message }
+        case let .sessions(rows):
+            sessions = rows
+            reconcileLocalDrafts(with: rows)
+        case let .tasks(rows): tasks = rows
+        case let .notes(rows): notes = rows
+        case let .automations(rows): automations = rows
+        case let .homeSnapshot(needsUser, rows):
+            if let needsUser { attention = needsUser.filter { $0.projectId == projectID } }
+            if let rows { deliveries = rows.filter { $0.projectId == projectID && $0.destination != nil } }
+        case let .failed(message):
+            error = error ?? message
+        }
+    }
+
+    private func reconcileLocalDrafts(with rows: [ConversationSummary]) {
+        let materialized = Set(rows.map(\.id))
+        let unsent = localChats.filter { !materialized.contains($0.id) }
+        guard unsent.count != localChats.count else { return }
         do {
-            async let projectRequest = GatewayClient(configuration: configuration).fetchProject(id: projectID)
-            async let sessionsRequest = GatewayClient(configuration: configuration).fetchProjectSessions(id: projectID)
-            async let tasksRequest = GatewayClient(configuration: configuration).fetchTasks(projectID: projectID)
-            async let notesRequest = GatewayClient(configuration: configuration).fetchNotes(projectID: projectID)
-            async let automationsRequest = GatewayClient(configuration: configuration).fetchAutomations(projectID: projectID)
-            let result = try await (projectRequest, sessionsRequest, tasksRequest, notesRequest, automationsRequest)
-            project = result.0
-            sessions = result.1
-            let materialized = Set(sessions.map(\.id))
-            if localChats.contains(where: { materialized.contains($0.id) }) {
-                localChats.removeAll { materialized.contains($0.id) }
-                try ComposerDraftStore().saveProjectDrafts(localChats, configuration, projectID: projectID)
-            }
-            tasks = result.2.items
-            notes = result.3.items
-            automations = result.4
-            error = nil
-            if let home = await home {
-                deliveries = (home.recentDeliveries ?? []).filter { $0.projectId == projectID && $0.destination != nil }
-            }
+            try ComposerDraftStore().saveProjectDrafts(unsent, configuration, projectID: projectID)
+            localChats = unsent
         } catch { self.error = error.localizedDescription }
+    }
+
+    private enum ProjectLoadResult: Sendable {
+        case project(ProjectRecord)
+        case projectFailed(String)
+        case sessions([ConversationSummary])
+        case tasks([TaskListItem])
+        case notes([NoteSummary])
+        case automations([AutomationRecord])
+        case homeSnapshot(attention: [HomeItem]?, deliveries: [HomeDelivery]?)
+        case failed(String)
     }
 }
 

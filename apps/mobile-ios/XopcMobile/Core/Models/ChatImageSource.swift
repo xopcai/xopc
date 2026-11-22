@@ -92,6 +92,7 @@ enum ChatImageSource: Equatable, Sendable {
 
     private static func encodedSegment(_ raw: String) -> String? {
         guard let decoded = raw.removingPercentEncoding, !decoded.isEmpty,
+              decoded != ".", decoded != "..", !decoded.contains("\\"),
               !decoded.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
         else { return nil }
         return decoded.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"))

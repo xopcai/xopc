@@ -24,13 +24,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import java.io.File
@@ -77,24 +81,22 @@ internal fun previewFileKind(name: String, mimeType: String): PreviewFileKind {
 internal fun FilePreviewContent(name: String, mimeType: String, bytes: ByteArray,
   modifier: Modifier = Modifier) {
   val context = LocalContext.current
+  var pendingExternalUrl by remember(name, mimeType) { mutableStateOf<String?>(null) }
   when (previewFileKind(name, mimeType)) {
     PreviewFileKind.MARKDOWN -> Column(modifier.verticalScroll(rememberScrollState())
       .testTag("file-preview-markdown")) {
       MarkdownContent(bytes.toString(Charsets.UTF_8).take(100_000), onOpenLink = { url ->
-        val uri = Uri.parse(url)
-        if (uri.scheme in listOf("http", "https")) runCatching {
-          context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-        }
+        if (externalMessageLink(url)) pendingExternalUrl = url
       }, onCopyCode = { code ->
         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
           .setPrimaryClip(ClipData.newPlainText("code", code))
       })
     }
     PreviewFileKind.HTML -> if (bytes.size <= 4 * 1024 * 1024) {
-      HtmlFilePreview(bytes.toString(Charsets.UTF_8), modifier)
+      HtmlFilePreview(bytes.toString(Charsets.UTF_8), modifier, enableScripts = true)
     } else Text(stringResource(R.string.notes_file_preview_unavailable), modifier = modifier)
     PreviewFileKind.SVG -> if (bytes.size <= 4 * 1024 * 1024) {
-      HtmlFilePreview(bytes.toString(Charsets.UTF_8), modifier)
+      HtmlFilePreview(bytes.toString(Charsets.UTF_8), modifier, enableScripts = false)
     } else Text(stringResource(R.string.notes_file_preview_unavailable), modifier = modifier)
     PreviewFileKind.PDF -> PdfFilePreview(bytes, modifier)
     PreviewFileKind.TEXT -> SelectionContainer {
@@ -106,28 +108,54 @@ internal fun FilePreviewContent(name: String, mimeType: String, bytes: ByteArray
     PreviewFileKind.BINARY -> Text(stringResource(R.string.notes_file_preview_unavailable),
       modifier = modifier)
   }
+  pendingExternalUrl?.let { url ->
+    val externalLinkFailure = stringResource(R.string.message_open_link_failed)
+    AlertDialog(onDismissRequest = { pendingExternalUrl = null },
+      title = { Text(stringResource(R.string.message_open_external_title)) },
+      text = { Text(url, maxLines = 4, overflow = TextOverflow.Ellipsis) },
+      confirmButton = { TextButton(onClick = {
+        pendingExternalUrl = null
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.onFailure {
+          android.widget.Toast.makeText(context, externalLinkFailure, android.widget.Toast.LENGTH_SHORT).show()
+        }
+      }) { Text(stringResource(R.string.message_open_external)) } },
+      dismissButton = { TextButton(onClick = { pendingExternalUrl = null }) {
+        Text(stringResource(R.string.progress_cancel))
+      } })
+  }
 }
 
-private fun safePreviewHtml(html: String): String {
-  val policy = "default-src 'none'; script-src 'unsafe-inline' blob:; connect-src 'none'; " +
+private val HTML_DOCTYPE_PREFIX = Regex("^\\s*<!doctype[^>]*>", RegexOption.IGNORE_CASE)
+private val HTML_OPEN_TAG = Regex("<html(\\s[^>]*)?>", RegexOption.IGNORE_CASE)
+private val HEAD_OPEN_TAG = Regex("<head(\\s[^>]*)?>", RegexOption.IGNORE_CASE)
+
+internal fun safePreviewHtml(html: String, enableScripts: Boolean = true): String {
+  val scriptSrc = if (enableScripts) "'unsafe-inline' blob:" else "'none'"
+  val policy = "default-src 'none'; script-src $scriptSrc; connect-src 'none'; " +
     "img-src data: blob:; media-src data: blob:; font-src data:; style-src 'unsafe-inline'; " +
     "object-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'"
   val meta = "<meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" " +
     "content=\"$policy\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
     "<style>html,body{min-height:100%;margin:0;padding:0}body{overflow-wrap:anywhere}" +
     "img,video,canvas,svg{max-width:100%;height:auto}</style>"
-  val head = Regex("<head(\\s[^>]*)?>", RegexOption.IGNORE_CASE)
-  val match = head.find(html)
-  return if (match != null) html.replaceRange(match.range, match.value + meta)
-    else "<!doctype html><html><head>$meta</head><body>$html</body></html>"
+  val bodyWithoutDoctype = HTML_DOCTYPE_PREFIX.replaceFirst(html, "")
+  val headMatch = HEAD_OPEN_TAG.find(bodyWithoutDoctype)
+  if (headMatch != null) {
+    val beforeHead = bodyWithoutDoctype.substring(0, headMatch.range.first)
+    val strippedPrefix = HTML_OPEN_TAG.replaceFirst(beforeHead, "").trim()
+    if (strippedPrefix.isEmpty()) {
+      return "<!doctype html>" + bodyWithoutDoctype.replaceRange(headMatch.range, headMatch.value + meta)
+    }
+  }
+  return "<!doctype html><html><head>$meta</head><body>$bodyWithoutDoctype</body></html>"
 }
 
 @Composable
-private fun HtmlFilePreview(html: String, modifier: Modifier) {
+private fun HtmlFilePreview(html: String, modifier: Modifier, enableScripts: Boolean = true) {
   val context = LocalContext.current
-  val webView = remember(context, html) {
+  val webView = remember(context, html, enableScripts) {
     WebView(context).apply {
-      settings.javaScriptEnabled = true
+      settings.javaScriptEnabled = enableScripts
       settings.domStorageEnabled = false
       settings.allowFileAccess = false
       settings.allowContentAccess = false
@@ -140,7 +168,7 @@ private fun HtmlFilePreview(html: String, modifier: Modifier) {
         @Deprecated("Compatibility with API 26 WebView callbacks")
         override fun shouldOverrideUrlLoading(view: WebView, url: String) = true
       }
-      loadDataWithBaseURL(null, safePreviewHtml(html), "text/html", "UTF-8", null)
+      loadDataWithBaseURL(null, safePreviewHtml(html, enableScripts), "text/html", "UTF-8", null)
     }
   }
   DisposableEffect(webView) { onDispose { webView.stopLoading(); webView.destroy() } }

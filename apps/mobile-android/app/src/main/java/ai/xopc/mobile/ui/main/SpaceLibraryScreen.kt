@@ -450,14 +450,14 @@ private fun SpaceVersionPreview(modifier: Modifier, id: String, version: Library
   when {
     source != null && !failed -> PreviewVideo(source, modifier, onError = { failed = true })
     data != null && bitmap -> {
-      val image = remember(data) {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
-        var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 2048) sample *= 2
-        BitmapFactory.decodeByteArray(data, 0, data.size, BitmapFactory.Options().apply { inSampleSize = sample })
+      val decoded by androidx.compose.runtime.produceState<Pair<Boolean, android.graphics.Bitmap?>>(false to null, data) {
+        value = true to kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+          decodeChatThumbnail(data, 2048)
+        }
       }
-      if (image != null) ZoomableMessageImage(image, name, version.id, true, modifier) {}
+      val image = decoded.second
+      if (!decoded.first) BrandLoadingIndicator(extent = 24.dp)
+      else if (image != null) ZoomableMessageImage(image, name, version.id, true, modifier) {}
       else Text(if (zh) "资料暂不可读" else "Content unavailable")
     }
     data != null -> FilePreviewContent(name, mime, data, modifier)

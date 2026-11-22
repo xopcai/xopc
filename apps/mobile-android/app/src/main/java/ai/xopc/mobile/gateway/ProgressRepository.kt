@@ -14,7 +14,8 @@ data class ProgressHomeAction(val type: String, val label: String, val approvalI
 data class ProgressItem(val id: String, val title: String, val summary: String,
   val statusLabel: String?, val recommendation: String?, val openAction: ProgressAction?,
   val reviewDetail: String? = null, val primaryAction: ProgressHomeAction? = null,
-  val secondaryActions: List<ProgressHomeAction> = emptyList(), val kind: String = "")
+  val secondaryActions: List<ProgressHomeAction> = emptyList(), val kind: String = "",
+  val projectId: String? = null)
 data class ProgressDelivery(val id: String, val kind: String, val subjectId: String, val title: String, val summary: String,
   val projectId: String? = null)
 data class ProgressHome(val needsUser: List<ProgressItem>, val background: List<ProgressItem>,
@@ -71,7 +72,10 @@ data class ProgressProjectSession(val id: String, val title: String, val message
 
 /** Read-only Progress data from the same authenticated Gateway session as Assistant. */
 class ProgressRepository(private val gateway: GatewaySession) {
-  fun home(language: String): ProgressHome = parseHome(gateway.request("/api/home?locale=$language"))
+  fun home(language: String): ProgressHome {
+    require(language.matches(LOCALE_ID)) { "INVALID_HOME_LOCALE" }
+    return parseHome(gateway.request("/api/home?locale=${URLEncoder.encode(language, "UTF-8")}"))
+  }
 
   fun act(action: ProgressHomeAction) {
     val body = JSONObject()
@@ -134,18 +138,21 @@ class ProgressRepository(private val gateway: GatewaySession) {
         val body = JSONObject().put("name", name).put("description", mutation.description)
         root = if (project == null) JSONObject(gateway.request("/api/projects", "POST", body.toString(),
           mapOf("Idempotency-Key" to mutation.key))) else {
+          require(project.id.matches(ENTITY_ID)) { "INVALID_PROJECT_ID" }
           if (project.version > 0) body.put("expectedVersion", project.version)
           JSONObject(gateway.request("/api/projects/${project.id}", "PATCH", body.toString()))
         }
         project?.id
       }
       is ProjectMutation.SetArchived -> {
+        require(mutation.project.id.matches(ENTITY_ID)) { "INVALID_PROJECT_ID" }
         val body = JSONObject().put("status", if (mutation.archived) "archived" else "active")
         if (mutation.project.version > 0) body.put("expectedVersion", mutation.project.version)
         root = JSONObject(gateway.request("/api/projects/${mutation.project.id}", "PATCH", body.toString()))
         mutation.project.id
       }
       is ProjectMutation.SetPinned -> {
+        require(mutation.project.id.matches(ENTITY_ID)) { "INVALID_PROJECT_ID" }
         val body = JSONObject()
         if (mutation.project.version > 0) body.put("expectedVersion", mutation.project.version)
         val action = if (mutation.pinned) "pin" else "unpin"
@@ -169,11 +176,13 @@ class ProgressRepository(private val gateway: GatewaySession) {
     return parseProjectSessions(gateway.request("/api/projects/$id/sessions?limit=100"))
   }
 
-  fun createTask(title: String, body: String, projectId: String, idempotencyKey: String): ProgressTask {
+  fun createTask(title: String, body: String, projectId: String, idempotencyKey: String,
+    priority: String = "normal", dueAt: Long? = null): ProgressTask {
     val cleanTitle = title.trim()
     val cleanProject = projectId.trim()
     require(cleanTitle.isNotEmpty() && cleanTitle.length <= 500 && body.length <= 50_000 &&
-      cleanProject.matches(Regex("[A-Za-z0-9_-]{1,128}")) &&
+      (cleanProject.isEmpty() || cleanProject.matches(Regex("[A-Za-z0-9_-]{1,128}"))) &&
+      priority in setOf("low", "normal", "high", "critical") &&
       idempotencyKey.matches(Regex("[A-Za-z0-9_-]{1,200}"))) { "INVALID_TASK_CREATE" }
     val contract = JSONObject().put("objective", body.trim().ifBlank { cleanTitle })
       .put("expectedOutputs", org.json.JSONArray()).put("acceptanceCriteria", org.json.JSONArray())
@@ -181,7 +190,11 @@ class ProgressRepository(private val gateway: GatewaySession) {
       .put("assumptions", org.json.JSONArray()).put("risks", org.json.JSONArray())
       .put("acceptancePolicy", "manual").put("outputDestinations", org.json.JSONArray())
     val request = JSONObject().put("idempotencyKey", idempotencyKey).put("title", cleanTitle)
-      .put("body", body).put("projectId", cleanProject).put("contract", contract)
+      .put("body", body).put("contract", contract).put("priority", priority)
+      .apply {
+        if (cleanProject.isNotEmpty()) put("projectId", cleanProject)
+        if (dueAt != null) put("dueAt", dueAt)
+      }
       .put("activation", JSONObject().put("mode", "capture").put("phase", "backlog"))
     return parseTaskCreate(gateway.request("/api/tasks", "POST", request.toString()))
   }
@@ -248,11 +261,12 @@ class ProgressRepository(private val gateway: GatewaySession) {
 
   fun updateTask(task: ProgressTask, title: String, body: String, projectId: String,
     priority: String = task.priority ?: "normal", dueAt: Long? = task.dueAt): ProgressTask {
-    require(task.id.matches(Regex("[A-Za-z0-9_-]{1,128}")) && task.version > 0) { "INVALID_TASK_ID" }
+    require(task.id.matches(ENTITY_ID) && task.version > 0) { "INVALID_TASK_ID" }
     val cleanTitle = title.trim()
     val cleanProject = projectId.trim()
     require(cleanTitle.isNotEmpty() && cleanTitle.length <= 500 && body.length <= 50_000 &&
-      cleanProject.length <= 512 && priority in setOf("low", "normal", "high", "critical") &&
+      (cleanProject.isEmpty() || cleanProject.matches(ENTITY_ID)) &&
+      priority in setOf("low", "normal", "high", "critical") &&
       (dueAt == null || dueAt >= 0)) { "INVALID_TASK_EDIT" }
     val patch = JSONObject().put("expectedVersion", task.version).put("title", cleanTitle)
       .put("body", body).put("projectId", if (cleanProject.isBlank()) JSONObject.NULL else cleanProject)
@@ -261,6 +275,8 @@ class ProgressRepository(private val gateway: GatewaySession) {
   }
 
   companion object {
+    private val ENTITY_ID = Regex("[A-Za-z0-9_-]{1,128}")
+    private val LOCALE_ID = Regex("[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{2,8})*")
     /** A command acknowledgement is partial; replace detail state only with the subsequent full read. */
     internal fun commandAndReloadTask(taskId: String, expectedVersion: Int, body: String,
       request: (String, String, String) -> String): ProgressTask {
@@ -381,7 +397,8 @@ class ProgressRepository(private val gateway: GatewaySession) {
           ProgressItem(id, title.take(160), summary.take(500),
             row.optString("statusLabel").takeIf(String::isNotBlank)?.take(80),
             row.optString("recommendation").takeIf(String::isNotBlank)?.take(500), action,
-            reviewDetail, primary, secondary, row.optString("kind").take(80))
+            reviewDetail, primary, secondary, row.optString("kind").take(80),
+            row.optString("projectId").takeIf(String::isNotBlank))
         }
       }
       val deliveryRows = root.optJSONArray("recentDeliveries")

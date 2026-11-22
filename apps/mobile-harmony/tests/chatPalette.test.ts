@@ -16,6 +16,8 @@ describe('composer token palette', () => {
     expect(composerRange('me@example', 10)).toBeUndefined();
     expect(composerRange('/skill:review', 13)).toBeUndefined();
     expect(composerRange('@file:readme', 12)).toBeUndefined();
+    expect(composerRange('https://example.com/meet', 24)).toBeUndefined();
+    expect(composerRange('src/agent/tools', 15)).toBeUndefined();
     expect(composerRange('hello /review', 13)).toMatchObject({ kind: 'slash', start: 6 });
     expect(workspaceMention('my notes/a.md')).toBe('@file:"my notes/a.md" ');
   });

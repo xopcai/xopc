@@ -2,7 +2,9 @@ import SwiftUI
 
 struct TaskEditorView: View {
     let configuration: GatewayConfiguration
-    let task: TaskRecord
+    let task: TaskRecord?
+    let initialProjectID: String?
+    let onCreated: (TaskRecord) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
@@ -16,29 +18,38 @@ struct TaskEditorView: View {
     @State private var isSaving = false
     @State private var error: String?
     @State private var confirmsDiscard = false
+    @State private var creation: ProjectTaskMutation?
 
-    private var isDirty: Bool {
-        title != task.title || bodyText != (task.body ?? "") || priority != (task.priority ?? "normal")
-            || projectID != (task.projectId ?? "") || hasDueDate != (task.dueAt != nil)
-            || (hasDueDate && Int64((dueDate.timeIntervalSince1970 * 1000).rounded()) != task.dueAt)
+    private var defaultProjectID: String {
+        task?.projectId ?? initialProjectID ?? ""
     }
 
-    init(configuration: GatewayConfiguration, task: TaskRecord) {
+    private var isDirty: Bool {
+        title != (task?.title ?? "") || bodyText != (task?.body ?? "") || priority != (task?.priority ?? "normal")
+            || projectID != defaultProjectID || hasDueDate != (task?.dueAt != nil)
+            || (hasDueDate && Int64((dueDate.timeIntervalSince1970 * 1000).rounded()) != task?.dueAt)
+    }
+
+    init(configuration: GatewayConfiguration, task: TaskRecord? = nil, initialProjectID: String? = nil,
+         onCreated: @escaping (TaskRecord) -> Void = { _ in })
+    {
         self.configuration = configuration
         self.task = task
-        _title = State(initialValue: task.title)
-        _bodyText = State(initialValue: task.body ?? "")
-        _projectID = State(initialValue: task.projectId ?? "")
-        _hasDueDate = State(initialValue: task.dueAt != nil)
-        _dueDate = State(initialValue: task.dueAt?.millisecondsDate ?? Date())
-        _priority = State(initialValue: task.priority ?? "normal")
+        self.initialProjectID = initialProjectID
+        self.onCreated = onCreated
+        _title = State(initialValue: task?.title ?? "")
+        _bodyText = State(initialValue: task?.body ?? "")
+        _projectID = State(initialValue: task?.projectId ?? initialProjectID ?? "")
+        _hasDueDate = State(initialValue: task?.dueAt != nil)
+        _dueDate = State(initialValue: task?.dueAt?.millisecondsDate ?? Date())
+        _priority = State(initialValue: task?.priority ?? "normal")
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("任务标题") {
-                    TextField("任务标题", text: $title)
+                    TextField(initialProjectID != nil && task == nil ? "描述需要完成的事项" : "任务标题", text: $title)
                 }
                 Section("说明") {
                     TextField("任务说明", text: $bodyText, axis: .vertical)
@@ -46,7 +57,9 @@ struct TaskEditorView: View {
                 }
                 Section("项目") {
                     Picker("项目", selection: $projectID) {
-                        Text("不关联项目").tag("")
+                        if initialProjectID == nil || task != nil {
+                            Text("不关联项目").tag("")
+                        }
                         if !projectID.isEmpty, !projects.contains(where: { $0.id == projectID }) {
                             Text(projectID).tag(projectID)
                         }
@@ -73,8 +86,8 @@ struct TaskEditorView: View {
                 }
             }
             .disabled(isSaving)
-            .task { await loadProjects() }
-            .navigationTitle("编辑任务")
+            .task(id: configuration) { await loadProjects() }
+            .navigationTitle(task != nil ? "编辑任务" : initialProjectID != nil ? "新建项目任务" : "新建任务")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") {
@@ -86,7 +99,8 @@ struct TaskEditorView: View {
                 }.disabled(isSaving) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") { Task { await save() } }
-                        .disabled(isSaving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(isSaving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || (initialProjectID != nil && task == nil && projectID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                 }
             }
             .overlay {
@@ -118,14 +132,29 @@ struct TaskEditorView: View {
         isSaving = true
         defer { isSaving = false }
         do {
-            _ = try await GatewayClient(configuration: configuration).updateTask(
-                task, mutation: TaskUpdateMutation(
-                    expectedVersion: task.version, title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                    body: bodyText.trimmingCharacters(in: .whitespacesAndNewlines), priority: priority,
-                    projectId: projectID.isEmpty ? nil : projectID,
-                    dueAt: hasDueDate ? Int64((dueDate.timeIntervalSince1970 * 1000).rounded()) : nil
+            let client = GatewayClient(configuration: configuration)
+            let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleanBody = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let project = projectID.isEmpty ? nil : projectID
+            let dueAt = hasDueDate ? Int64((dueDate.timeIntervalSince1970 * 1000).rounded()) : nil
+            if let task {
+                _ = try await client.updateTask(task, mutation: TaskUpdateMutation(
+                    expectedVersion: task.version, title: cleanTitle, body: cleanBody, priority: priority,
+                    projectId: project, dueAt: dueAt
+                ))
+            } else {
+                let previous = creation
+                let sameDraft = previous?.title == cleanTitle && previous?.body == cleanBody
+                    && previous?.projectId == project && previous?.priority == priority && previous?.dueAt == dueAt
+                let key = (sameDraft ? previous?.idempotencyKey : nil) ?? UUID().uuidString.lowercased()
+                let mutation = ProjectTaskMutation(
+                    idempotencyKey: key, title: cleanTitle, body: cleanBody, projectId: project, priority: priority, dueAt: dueAt,
+                    contract: .init(objective: cleanBody.isEmpty ? cleanTitle : cleanBody),
+                    activation: .init(mode: "capture", phase: "backlog")
                 )
-            )
+                creation = mutation
+                onCreated(try await client.createTask(mutation))
+            }
             dismiss()
         } catch {
             self.error = error.localizedDescription

@@ -11,6 +11,7 @@ struct ChatSidebarView: View {
     let recentLoading: Bool
     let recentError: Bool
     let attention: Int
+    let isPresented: Bool
     let onClose: () -> Void
     let onNavigate: (HomeDestination) -> Void
     let onPersonal: () -> Void
@@ -120,6 +121,12 @@ struct ChatSidebarView: View {
         .padding(.vertical, 8)
         .background(mobileTheme.panel.ignoresSafeArea(edges: .vertical))
         .accessibilityAction(.escape, dismiss)
+        .onChange(of: isPresented) {
+            if !isPresented && !busy {
+                selection = nil
+                mutationFailed = false
+            }
+        }
         .alert("重命名对话", isPresented: $renamePresented) {
             TextField("对话名称", text: $renameText)
                 .accessibilityIdentifier("chat-sidebar-rename-input")
@@ -267,7 +274,9 @@ extension ChatSidebarView {
             Color.clear.frame(height: 32)
                 .accessibilityHidden(true)
                 .id(recentNextOffset)
-                .onAppear(perform: onLoadMore)
+                .task(id: isPresented) {
+                    if isPresented { onLoadMore() }
+                }
         }
     }
 
@@ -328,5 +337,98 @@ extension ChatSidebarView {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct ChatSidebarPresentation<Sidebar: View>: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let isOpen: Bool
+    let canOpenBySwipe: Bool
+    let onSetOpen: (Bool) -> Void
+    @ViewBuilder let sidebar: () -> Sidebar
+
+    func body(content: Content) -> some View {
+        content
+            .accessibilityHidden(isOpen)
+            .overlay {
+                GeometryReader { geometry in
+                    let width = min(350, geometry.size.width * 0.84)
+                    ChatSidebarLayer(width: width, isOpen: isOpen, canOpenBySwipe: canOpenBySwipe,
+                                     animation: reduceMotion ? nil : .easeOut(duration: 0.22),
+                                     onSetOpen: onSetOpen, sidebar: sidebar())
+                }
+            }
+    }
+}
+
+private struct ChatSidebarLayer<Sidebar: View>: View {
+    let width: CGFloat
+    let isOpen: Bool
+    let canOpenBySwipe: Bool
+    let animation: Animation?
+    let onSetOpen: (Bool) -> Void
+    let sidebar: Sidebar
+
+    @State private var mounted = false
+    @State private var reveal: CGFloat = 0
+
+    var body: some View {
+        Color.clear
+            .allowsHitTesting(false)
+            .background {
+                if canOpenBySwipe {
+                    HorizontalSwipeCapture(rightOnly: true, reserveBackEdge: true, reserveTrailingEdge: true,
+                                           respectsHorizontalScroll: true, onDrag: { drag($0, opening: true) },
+                                           onEnd: { finish($0, velocity: $1, opening: true) })
+                }
+            }
+            .overlay {
+                Color.black.opacity(0.4 * reveal)
+                    .ignoresSafeArea()
+                    .onTapGesture { onSetOpen(false) }
+                    .allowsHitTesting(isOpen)
+                    .accessibilityHidden(true)
+            }
+            .overlay(alignment: .leading) {
+                if mounted {
+                    sidebar
+                        .frame(width: width)
+                        .background {
+                            if isOpen {
+                                HorizontalSwipeCapture(leftOnly: true,
+                                                       onDrag: { drag($0, opening: false) },
+                                                       onEnd: { finish($0, velocity: $1, opening: false) })
+                            }
+                        }
+                        .offset(x: (reveal - 1) * width)
+                        .allowsHitTesting(isOpen)
+                        .accessibilityHidden(!isOpen)
+                }
+            }
+            .onChange(of: isOpen, initial: true) {
+                if isOpen { mounted = true }
+                settle(open: isOpen)
+            }
+    }
+
+    private func drag(_ distance: CGFloat, opening: Bool) {
+        guard width > 0 else { return }
+        if opening { mounted = true }
+        let offset = opening ? distance : width + distance
+        reveal = min(1, max(0, offset / width))
+    }
+
+    private func finish(_ distance: CGFloat, velocity: CGFloat, opening: Bool) {
+        let travel = opening ? distance : -distance
+        let speed = opening ? velocity : -velocity
+        if travel >= min(width * 0.32, 96) || (travel >= 24 && speed >= 550) {
+            onSetOpen(opening)
+        } else {
+            settle(open: isOpen)
+        }
+    }
+
+    private func settle(open: Bool) {
+        withAnimation(animation) { reveal = open ? 1 : 0 }
     }
 }

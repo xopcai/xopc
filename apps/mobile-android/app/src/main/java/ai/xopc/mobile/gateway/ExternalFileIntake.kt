@@ -58,6 +58,18 @@ class ExternalFileIntake private constructor(context: Context) {
     uris.forEach { uri ->
       try {
         require(uri.scheme == "content") { "Only shared content URIs are supported" }
+        val authority = uri.authority.orEmpty()
+        val provider = app.packageManager.resolveContentProvider(authority, 0)
+        require(provider != null && provider.applicationInfo.uid != android.os.Process.myUid() &&
+          authority != "${app.packageName}.camera-capture") {
+          "Internal provider URIs cannot be shared externally"
+        }
+        app.contentResolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
+          val stat = android.system.Os.fstat(afd.parcelFileDescriptor.fileDescriptor)
+          require(stat.st_uid != android.os.Process.myUid() && !android.system.OsConstants.S_ISFIFO(stat.st_mode)) {
+            "Rejected unsafe file descriptor"
+          }
+        } ?: throw IllegalArgumentException("ATTACHMENT_UNAVAILABLE")
         attachments.import(STAGING_GATEWAY, id, uri)
       } catch (error: Exception) { errors += "${uri.lastPathSegment?.take(80) ?: "File"}: ${error.message}" }
     }

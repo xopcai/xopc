@@ -16,22 +16,25 @@ enum WorkPage: String, CaseIterable {
 struct WorkPagesView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
+    let onOpenLibrary: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var page: WorkPage
 
     init(configuration: GatewayConfiguration, initialPage: WorkPage = .progress,
-         onOpenConversation: @escaping (String, String, String) -> Void)
+         onOpenConversation: @escaping (String, String, String) -> Void, onOpenLibrary: @escaping () -> Void)
     {
         self.configuration = configuration
         self.onOpenConversation = onOpenConversation
+        self.onOpenLibrary = onOpenLibrary
         _page = State(initialValue: initialPage)
     }
 
     var body: some View {
         TabView(selection: $page) {
-            ProgressHubView(configuration: configuration, onOpenConversation: onOpenConversation, onSelectPage: selectPage)
+            ProgressHubView(configuration: configuration, onOpenConversation: onOpenConversation, onSelectPage: selectPage,
+                            onOpenLibrary: onOpenLibrary, isActive: page == .progress)
                 .tag(WorkPage.progress)
-            TasksView(configuration: configuration)
+            TasksView(configuration: configuration, isActive: page == .tasks)
                 .tag(WorkPage.tasks)
             ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation, isActive: page == .projects)
                 .tag(WorkPage.projects)
@@ -55,54 +58,71 @@ private struct ProgressHubView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
     let onSelectPage: (WorkPage) -> Void
+    let onOpenLibrary: () -> Void
+    let isActive: Bool
 
     @Environment(\.locale) private var locale
     @State private var home: HomeSnapshot?
-    @State private var tasks: [TaskListItem] = []
     @State private var nextAutomation: AutomationNextRun?
     @State private var isLoading = true
+    @State private var loadRevision = 0
     @State private var error: String?
     @State private var actionError: String?
     @State private var pendingAction: HomeAction?
     @State private var isPerformingAction = false
 
     var body: some View {
-        ScrollViewReader { scroller in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 0) {
-                        summaryButton(count: pendingCount, title: "待处理") {
-                            withAnimation { scroller.scrollTo("progress-section-needs-user", anchor: .top) }
+        let running = runningItems
+        let scheduled = scheduledItems
+        let delivered = deliveries
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                if isLoading, home == nil {
+                    ProgressListSkeleton()
+                }
+                if let error {
+                    Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+                    Button("重试") { Task { await load() } }.frame(minHeight: 44)
+                }
+                if let home, !home.needsUser.isEmpty {
+                    HStack {
+                        workSectionHeading("需要你处理")
+                        Spacer()
+                        Text("\(home.needsUser.count)")
+                            .mobileTextStyle(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(home.needsUser) { item in homeRow(item, showsActions: true) }
+                }
+                if !delivered.isEmpty {
+                    HStack {
+                        workSectionHeading("已交付")
+                        Spacer()
+                        Button("查看资料库", action: onOpenLibrary).frame(minHeight: 44)
+                            .accessibilityIdentifier("progress-open-library")
+                    }
+                    ForEach(delivered.prefix(5)) { item in
+                        HomeDeliveryLink(item: item, configuration: configuration, onOpenConversation: onOpenConversation,
+                                         progressCard: true)
+                    }
+                }
+                if !running.isEmpty {
+                    workSectionHeading("正在进行")
+                    ForEach(running.prefix(5)) { item in homeRow(item, showsActions: false) }
+                }
+                if !scheduled.isEmpty || nextAutomation != nil {
+                    HStack {
+                        workSectionHeading("接下来")
+                        Spacer()
+                        NavigationLink("查看自动化") {
+                            AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation)
                         }
-                        Divider().frame(height: 32)
-                        summaryButton(count: activeCount, title: "进行中") {
-                            withAnimation { scroller.scrollTo("progress-section-running", anchor: .top) }
-                        }
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("progress-open-automations")
                     }
-                    .padding(16).background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
-                    if isLoading, home == nil {
-                        ProgressListSkeleton()
-                    }
-                    if let home, !home.needsUser.isEmpty {
-                        Text("需要你处理").mobileTextStyle(.rowTitle).padding(.top, 12).id("progress-section-needs-user")
-                        ForEach(home.needsUser) { item in homeRow(item, showsActions: true) }
-                    }
-                    if !deliveries.isEmpty {
-                        Text("已交付").mobileTextStyle(.rowTitle).padding(.top, 12)
-                        ForEach(deliveries.prefix(5)) { item in
-                            HomeDeliveryLink(item: item, configuration: configuration, onOpenConversation: onOpenConversation,
-                                             progressCard: true)
-                        }
-                    }
-                    if !runningItems.isEmpty {
-                        Text("正在进行").mobileTextStyle(.rowTitle).padding(.top, 12).id("progress-section-running")
-                        ForEach(runningItems.prefix(5)) { item in homeRow(item, showsActions: false) }
-                    }
-                    if !scheduledItems.isEmpty {
-                        Text("接下来").mobileTextStyle(.rowTitle).padding(.top, 12)
-                        ForEach(scheduledItems.prefix(5)) { item in homeRow(item, showsActions: false) }
+                    if !scheduled.isEmpty {
+                        ForEach(scheduled.prefix(5)) { item in homeRow(item, showsActions: false) }
                     } else if let nextAutomation {
-                        Text("接下来").mobileTextStyle(.rowTitle).padding(.top, 12)
                         NavigationLink {
                             AutomationDetailView(configuration: configuration, automationID: nextAutomation.automationId,
                                                  onOpenConversation: onOpenConversation)
@@ -111,39 +131,19 @@ private struct ProgressHubView: View {
                                        subtitle: nextAutomation.runAtMs.millisecondsDate.formatted(date: .abbreviated, time: .shortened), symbol: "clock")
                         }.buttonStyle(.plain)
                     }
-                    if !recentClosed.isEmpty {
-                        Text("历史").mobileTextStyle(.rowTitle).padding(.top, 12)
-                        ForEach(recentClosed.prefix(2)) { item in
-                            NavigationLink {
-                                TaskConversationView(configuration: configuration, taskID: item.id)
-                            } label: {
-                                compactRow(title: item.task.title, subtitle: item.task.resolution ?? "", symbol: "checkmark.circle")
-                            }.buttonStyle(.plain)
-                        }
-                    }
-                    Text("常用工作").mobileTextStyle(.rowTitle).padding(.top, 12)
-                    HStack(spacing: 12) {
-                        Button {
-                            onSelectPage(.tasks)
-                        } label: { toolRow("任务", symbol: "checkmark.circle") }
-                        Button {
-                            onSelectPage(.projects)
-                        } label: { toolRow("项目", symbol: "folder") }
-                    }.buttonStyle(.plain)
-                    NavigationLink {
-                        AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation)
-                    } label: { toolRow("自动化", symbol: "clock") }.buttonStyle(.plain)
-                    if let error {
-                        Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
-                        Button("重试") { Task { await load() } }.frame(minHeight: 44)
-                    }
                 }
-                .padding(.horizontal, 20).padding(.vertical, 12)
+                if !isLoading, error == nil, home?.needsUser.isEmpty == true, delivered.isEmpty,
+                   running.isEmpty, scheduled.isEmpty, nextAutomation == nil
+                {
+                    ContentUnavailableView("暂无进展", systemImage: "checklist")
+                }
             }
+            .padding(.horizontal, 20).padding(.vertical, 12)
         }
         .refreshable { await load() }
-        .task(id: configuration) { await load() }
-        .onChange(of: locale.identifier) { Task { await load() } }
+        .task(id: isActive ? ProgressLoadScope(configuration: configuration, language: locale.identifier) : nil) {
+            if isActive { await load() }
+        }
         .confirmationDialog(pendingAction?.label
             ?? AppLocalization.string("确认操作", locale: locale), isPresented: Binding(
                 get: { pendingAction != nil },
@@ -173,14 +173,6 @@ private struct ProgressHubView: View {
         message: { Text(actionError ?? "未知错误") }
     }
 
-    private var pendingCount: Int {
-        home?.needsUser.count ?? 0
-    }
-
-    private var activeCount: Int {
-        runningItems.count
-    }
-
     private var runningItems: [HomeItem] {
         home?.background.filter { $0.kind != "scheduled" } ?? []
     }
@@ -193,49 +185,70 @@ private struct ProgressHubView: View {
         home?.recentDeliveries?.filter { $0.destination != nil } ?? []
     }
 
-    private var recentClosed: [TaskListItem] {
-        tasks.filter { $0.task.phase == "closed" }
-            .sorted { $0.task.updatedAt > $1.task.updatedAt }
+    private func workSectionHeading(_ title: LocalizedStringKey) -> some View {
+        Text(title).mobileTextStyle(.rowTitle).frame(minHeight: 44).accessibilityAddTraits(.isHeader)
+    }
+
+    private func workItemSubtitle(_ item: HomeItem) -> String {
+        [item.statusLabel, item.summary].compactMap { value in
+            guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+            return trimmed
+        }.joined(separator: " · ")
+    }
+
+    private func attentionSummary(_ summary: String) -> String {
+        if summary.contains("provider_setup_required") {
+            return AppLocalization.string("请先完成模型服务配置后再继续。", locale: locale)
+        }
+        if summary.contains("run was still active"), summary.contains("automatic recovery") {
+            return AppLocalization.string("执行已中断，已完成的操作会保留。", locale: locale)
+        }
+        return summary
     }
 
     @ViewBuilder
     private func homeRow(_ item: HomeItem, showsActions: Bool) -> some View {
         if !showsActions {
+            let subtitle = workItemSubtitle(item)
             if let route = item.openAction?.href.flatMap({ HomeOpenRoute(href: $0) }) {
                 if case let .chat(id) = route {
                     Button { onOpenConversation(id, item.title, "main") } label: {
-                        compactRow(title: item.title, subtitle: item.summary, symbol: "clock")
+                        compactRow(title: item.title, subtitle: subtitle, symbol: "clock")
                     }.buttonStyle(.plain)
                 } else if let page = route.workPage {
                     Button { onSelectPage(page) } label: {
-                        compactRow(title: item.title, subtitle: item.summary, symbol: "clock")
+                        compactRow(title: item.title, subtitle: subtitle, symbol: "clock")
                     }.buttonStyle(.plain)
                 } else {
                     NavigationLink { destination(for: route) } label: {
-                        compactRow(title: item.title, subtitle: item.summary, symbol: "clock")
+                        compactRow(title: item.title, subtitle: subtitle, symbol: "clock")
                     }.buttonStyle(.plain)
                 }
             } else {
-                compactRow(title: item.title, subtitle: item.summary, symbol: "clock")
+                compactRow(title: item.title, subtitle: subtitle, symbol: "clock", navigable: false)
             }
         } else {
+            let secondary = item.secondaryActions ?? []
+            let duplicateOpen = item.openAction?.href != nil && secondary.contains { $0.href == item.openAction?.href }
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Circle().fill(mobileTheme.onAttention).frame(width: 6, height: 6).accessibilityHidden(true)
                     Text("待处理").mobileTextStyle(.caption).foregroundStyle(mobileTheme.onAttention)
                 }
                 Text(item.title).mobileTextStyle(.rowTitle).fontWeight(.semibold).lineLimit(3)
-                Text(item.summary).mobileTextStyle(.footnote).foregroundStyle(.secondary).lineLimit(2)
-                if let recommendation = item.recommendation, !recommendation.isEmpty {
+                if !item.summary.isEmpty, item.summary != item.title {
+                    Text(attentionSummary(item.summary)).mobileTextStyle(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                }
+                if let recommendation = item.recommendation, !recommendation.isEmpty, !item.summary.contains("provider_setup_required") {
                     Text(recommendation).mobileTextStyle(.footnote).foregroundStyle(.secondary)
                 }
-                if let open = item.openAction {
+                if let open = item.openAction, !duplicateOpen {
                     actionControl(open)
                 }
                 if let primary = item.primaryAction, primary.type != "open" {
                     actionControl(primary)
                 }
-                ForEach(item.secondaryActions ?? []) { action in actionControl(action) }
+                ForEach(secondary) { action in actionControl(action) }
             }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                 .background(mobileTheme.attention, in: .rect(cornerRadius: mobileTheme.corner(16)))
                 .accessibilityIdentifier("progress-item-\(item.id)")
@@ -294,36 +307,18 @@ private struct ProgressHubView: View {
 }
 
 private extension ProgressHubView {
-    func summaryButton(count: Int, title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Text("\(count)").mobileTextStyle(.heading).fontWeight(.semibold)
-                Text(title).mobileTextStyle(.footnote)
-            }.frame(maxWidth: .infinity, minHeight: 52)
-        }.buttonStyle(.plain).disabled(home == nil)
-    }
-
-    func toolRow(_ title: LocalizedStringKey, symbol: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol).font(.system(size: 18)).frame(width: 34, height: 34)
-                .background(mobileTheme.action.opacity(0.10), in: .circle).accessibilityHidden(true)
-            Text(title).mobileTextStyle(.body).frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(.secondary)
-        }.padding(.horizontal, 14).frame(minHeight: 64)
-            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(14)))
-            .foregroundStyle(.primary)
-            .contentShape(.hoverEffect, .rect(cornerRadius: mobileTheme.corner(14)))
-            .hoverEffect(.highlight)
-    }
-
-    func compactRow(title: String, subtitle: String, symbol: String) -> some View {
+    func compactRow(title: String, subtitle: String, symbol: String, navigable: Bool = true) -> some View {
         HStack(spacing: 12) {
             Image(systemName: symbol).frame(width: 24).foregroundStyle(.tint).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).mobileTextStyle(.secondary).fontWeight(.medium).lineLimit(2)
-                Text(subtitle).mobileTextStyle(.caption).foregroundStyle(.secondary).lineLimit(2)
+                if !subtitle.isEmpty {
+                    Text(subtitle).mobileTextStyle(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
             }.frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(.secondary)
+            if navigable {
+                Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(.secondary)
+            }
         }.padding(14).frame(minHeight: 64)
             .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(14)))
             .foregroundStyle(.primary)
@@ -340,25 +335,32 @@ private extension ProgressHubView {
     }
 
     @MainActor func load() async {
+        loadRevision += 1
+        let revision = loadRevision
         isLoading = true
-        defer { isLoading = false }
+        defer { if revision == loadRevision { isLoading = false } }
         let client = GatewayClient(configuration: configuration)
         async let homeRequest = client.fetchHome(locale: locale.identifier)
-        async let taskRequest = client.fetchTasks()
         async let automationRequest = client.fetchAutomationMetrics()
         do {
-            home = try await homeRequest
+            let snapshot = try await homeRequest
+            guard !Task.isCancelled, revision == loadRevision else { return }
+            home = snapshot
             error = nil
         } catch is CancellationError {
+            return
         } catch {
+            guard !Task.isCancelled, revision == loadRevision else { return }
             self.error = error.localizedDescription
         }
-        if let taskPage = try? await taskRequest {
-            tasks = taskPage.items
-        }
-        if let metrics = try? await automationRequest {
-            nextAutomation = metrics.nextRun
-        }
+        let metrics = try? await automationRequest
+        guard !Task.isCancelled, revision == loadRevision else { return }
+        if let metrics { nextAutomation = metrics.nextRun }
+    }
+
+    private struct ProgressLoadScope: Hashable {
+        let configuration: GatewayConfiguration
+        let language: String
     }
 }
 
@@ -437,28 +439,52 @@ enum HomeOpenRoute: Equatable {
 
     // swiftlint:disable:next cyclomatic_complexity
     init?(href: String) {
-        guard href.hasPrefix("/"), !href.hasPrefix("//"),
-              let url = URLComponents(string: href), url.scheme == nil, url.host == nil
+        guard href.hasPrefix("/"), !href.hasPrefix("//"), href.utf8.count <= 4096,
+              !href.contains("\\"), href.rangeOfCharacter(from: .controlCharacters) == nil,
+              let url = URLComponents(string: href), url.scheme == nil, url.host == nil,
+              url.user == nil, url.password == nil, url.port == nil
         else { return nil }
-        let segments = url.path.split(separator: "/").map(String.init)
-        guard (1 ... 2).contains(segments.count) else { return nil }
-        let id = segments.count == 2 ? segments[1] : nil
+        let segments = url.path.split(separator: "/", omittingEmptySubsequences: false).dropFirst().map(String.init)
+        guard (1 ... 2).contains(segments.count), !segments[0].isEmpty else { return nil }
+        let rawID = segments.count == 2 ? segments[1] : nil
+        if let rawID, !rawID.isEmpty, !ChatMessageLink.validResourceID(rawID) { return nil }
+        let id = rawID?.isEmpty == true ? nil : rawID
         let query = (url.queryItems ?? []).reduce(into: [String: String]()) { result, item in
             if let value = item.value {
                 result[item.name] = value
             }
         }
+        func checkedID(_ candidate: String?) -> String? {
+            guard let candidate else { return nil }
+            return ChatMessageLink.validResourceID(candidate) ? candidate : nil
+        }
         switch segments[0] {
-        case "tasks": self = id.map(HomeOpenRoute.task) ?? .tasks
-        case "projects": self = id.map(HomeOpenRoute.project) ?? .projects
+        case "tasks":
+            if rawID != nil && id == nil { return nil }
+            self = id.map(HomeOpenRoute.task) ?? .tasks
+        case "projects":
+            if rawID != nil && id == nil { return nil }
+            self = id.map(HomeOpenRoute.project) ?? .projects
         case "automations":
-            if let run = query["run"], !run.isEmpty {
-                self = .automationRun(run)
+            if let run = query["run"] {
+                guard let validRun = checkedID(run) else { return nil }
+                self = .automationRun(validRun)
+            } else if let auto = query["automation"] {
+                guard let validAuto = checkedID(auto) else { return nil }
+                self = .automation(validAuto)
             } else {
-                self = (id ?? query["automation"]).map(HomeOpenRoute.automation) ?? .automations
+                if rawID != nil && id == nil { return nil }
+                self = id.map(HomeOpenRoute.automation) ?? .automations
             }
-        case "notes", "inbox": self = (id ?? query["item"]).map(HomeOpenRoute.note) ?? .notes
-        case "files" where id == nil: self = .files
+        case "notes", "inbox":
+            if let item = query["item"] {
+                guard let validItem = checkedID(item) else { return nil }
+                self = .note(validItem)
+            } else {
+                if rawID != nil && id == nil { return nil }
+                self = id.map(HomeOpenRoute.note) ?? .notes
+            }
+        case "files" where id == nil && rawID == nil: self = .files
         case "chat":
             guard let id else { return nil }
             self = .chat(id)
@@ -468,86 +494,144 @@ enum HomeOpenRoute: Equatable {
 }
 
 private struct TasksView: View {
+    @Environment(\.mobileTheme) private var theme
     let configuration: GatewayConfiguration
+    let isActive: Bool
 
     @State private var items: [TaskListItem] = []
-    @State private var filter = "open"
+    @State private var filter = "all"
     @State private var searchText = ""
+    @FocusState private var searchFocused: Bool
+    @State private var loadedSearch: String?
+    @State private var nextOffset: Int?
     @State private var isLoading = false
+    @State private var loadRevision = 0
     @State private var error: String?
+    @State private var creating = false
+    @State private var createdTaskID: String?
+    @State private var selectedTaskID: String?
+
+    private var query: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     var body: some View {
+        let visible = visibleItems
         List {
             SegmentedTabs(options: [
+                SegmentOption(id: "all", title: "全部", accessibilityID: "tasks-filter-all"),
                 SegmentOption(id: "open", title: "进行中", accessibilityID: "tasks-filter-open"),
                 SegmentOption(id: "attention", title: "需处理", accessibilityID: "tasks-filter-attention"),
-                SegmentOption(id: "closed", title: "已关闭", accessibilityID: "tasks-filter-closed"),
-                SegmentOption(id: "all", title: "全部", accessibilityID: "tasks-filter-all")
+                SegmentOption(id: "closed", title: "已关闭", accessibilityID: "tasks-filter-closed")
             ], selected: filter, label: "筛选", swipeToSelect: true) { filter = $0 }
                 .accessibilityIdentifier("tasks-filter-tabs")
                 .listRowBackground(Color.clear)
-            if isLoading, items.isEmpty {
+            if visible.isEmpty && (isLoading || loadedSearch != query) && error == nil {
                 ProgressListSkeleton()
-            } else if visibleItems.isEmpty {
-                ContentUnavailableView("暂无任务", systemImage: "checklist", description: Text("Gateway 中的任务会显示在这里。"))
+            } else if visible.isEmpty, nextOffset == nil, error == nil {
+                ContentUnavailableView(query.isEmpty ? "暂无任务" : "没有匹配的任务", systemImage: "checklist")
                     .listRowBackground(Color.clear)
-            } else {
-                ForEach(visibleItems) { item in
-                    NavigationLink {
-                        TaskConversationView(configuration: configuration, taskID: item.task.id)
-                    } label: {
-                        ProgressRow(
-                            title: item.task.title,
-                            subtitle: item.presentation?.reason ?? item.task.contract?.objective ?? item.task.body,
-                            state: taskPresentationLabel(item.displayStatus),
-                            date: item.task.updatedAt.millisecondsDate,
-                            symbol: "checklist"
-                        )
+            }
+            ForEach(visible) { item in
+                Button { selectedTaskID = item.id } label: {
+                    ProgressRow(
+                        title: item.task.title,
+                        subtitle: item.presentation?.reason ?? item.task.contract?.objective ?? item.task.body,
+                        state: taskPresentationLabel(item.displayStatus),
+                        date: item.task.updatedAt.millisecondsDate,
+                        symbol: "checklist"
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("task-\(item.id)")
+            }
+            if loadedSearch == query, let offset = nextOffset {
+                Button("加载更多") { Task { await load(search: query, offset: offset) } }
+                    .disabled(isLoading)
+                    .accessibilityIdentifier("tasks-load-more")
+                    .task(id: offset) {
+                        guard isActive, nextOffset == offset, !isLoading else { return }
+                        await load(search: query, offset: offset)
                     }
-                    .accessibilityIdentifier("task-\(item.task.id)")
+            }
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+                Button("重试") { Task { await load(search: query) } }
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            PageSearchField("搜索任务", text: $searchText, focused: $searchFocused, accessibilityID: "tasks-search", autoFocus: false)
+                .padding(.horizontal, 20).padding(.bottom, 8).background(theme.canvas)
+        }
+        .onChange(of: isActive) {
+            if !isActive { searchFocused = false }
+        }
+        .refreshable { await load(search: query) }
+        .task(id: isActive ? query : nil) {
+            guard isActive, loadedSearch != query else { return }
+            error = nil
+            if !query.isEmpty {
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            }
+            await load(search: query)
+        }
+        .toolbar {
+            if isActive {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("新建任务", systemImage: "plus") {
+                        searchFocused = false
+                        creating = true
+                    }
+                        .accessibilityIdentifier("tasks-create")
                 }
             }
         }
-        .searchable(text: $searchText, prompt: "搜索任务")
-        .refreshable { await load() }
-        .task { await load() }
-        .alert("无法读取任务", isPresented: errorBinding) {
-            Button("重试") { Task { await load() } }
-            Button("取消", role: .cancel) {}
-        } message: { Text(error ?? "未知错误") }
+        .sheet(isPresented: $creating, onDismiss: {
+            guard let taskID = createdTaskID else { return }
+            createdTaskID = nil
+            selectedTaskID = taskID
+            Task { await load(search: query) }
+        }) {
+            TaskEditorView(configuration: configuration) { createdTaskID = $0.id }
+        }
+        .navigationDestination(item: $selectedTaskID) { taskID in
+            TaskConversationView(configuration: configuration, taskID: taskID)
+        }
     }
 
     private var visibleItems: [TaskListItem] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard loadedSearch == query else { return [] }
         return items.filter { item in
-            let matchesFilter = switch filter {
+            switch filter {
             case "all": true
             case "closed": item.task.phase == "closed"
             case "attention": item.task.phase != "closed" && item.needsUserAttention
             default: item.task.phase != "closed"
             }
-            guard matchesFilter else { return false }
-            if query.isEmpty { return true }
-            return item.task.title.lowercased().contains(query)
-                || (item.task.contract?.objective?.lowercased().contains(query) ?? false)
-                || (item.task.body?.lowercased().contains(query) ?? false)
         }
     }
 
-    private var errorBinding: Binding<Bool> {
-        Binding(get: { error != nil }, set: {
-            if !$0 {
-                error = nil
-            }
-        })
-    }
-
-    @MainActor
-    private func load() async {
+    @MainActor private func load(search: String, offset: Int = 0) async {
+        guard search == query, offset == 0 || (!isLoading && nextOffset == offset) else { return }
+        loadRevision += 1
+        let revision = loadRevision
         isLoading = true
-        defer { isLoading = false }
-        do { items = try await GatewayClient(configuration: configuration).fetchTasks().items; error = nil }
-        catch is CancellationError {} catch { self.error = error.localizedDescription }
+        defer { if revision == loadRevision { isLoading = false } }
+        do {
+            let page = try await GatewayClient(configuration: configuration).fetchTasks(search: search, offset: offset, limit: 40)
+            guard !Task.isCancelled, revision == loadRevision, search == query else { return }
+            var seen = Set(offset == 0 ? [] : items.map(\.id))
+            let incoming = page.items.filter { seen.insert($0.id).inserted }
+            items = offset == 0 ? incoming : items + incoming
+            loadedSearch = search
+            let next = offset + page.items.count
+            nextOffset = !page.items.isEmpty && next < page.total ? next : nil
+            error = nil
+        } catch is CancellationError {
+        } catch {
+            guard !Task.isCancelled, revision == loadRevision, search == query else { return }
+            self.error = error.localizedDescription
+        }
     }
 }
 
@@ -563,12 +647,13 @@ struct ProjectsView: View {
     @State private var searchText = ""
     @State private var searchOpen = false
     @FocusState private var isSearchFocused: Bool
-    @State private var isLoading = false
+    @State private var isLoading = true
     @State private var error: String?
     @State private var creating = false
 
     var body: some View {
-        List {
+        let visible = visibleItems
+        return List {
             SegmentedTabs(options: [
                 SegmentOption(id: "active", title: "活跃", accessibilityID: "projects-filter-active"),
                 SegmentOption(id: "archived", title: "已归档", accessibilityID: "projects-filter-archived"),
@@ -578,11 +663,12 @@ struct ProjectsView: View {
                 .listRowBackground(Color.clear)
             if isLoading, items.isEmpty {
                 ProgressListSkeleton()
-            } else if visibleItems.isEmpty {
-                ContentUnavailableView("暂无项目", systemImage: "folder", description: Text("Gateway 中的项目会显示在这里。"))
+            } else if visible.isEmpty {
+                ContentUnavailableView(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? "暂无项目" : "没有匹配的项目", systemImage: "folder")
                     .listRowBackground(Color.clear)
             } else {
-                ForEach(visibleItems) { project in
+                ForEach(visible) { project in
                     NavigationLink {
                         ProjectDetailView(
                             configuration: configuration,
@@ -643,10 +729,12 @@ struct ProjectsView: View {
     }
 
     private var visibleItems: [ProjectRecord] {
-        items.filter { project in
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return items.filter { project in
             (filter == "all" || (filter == "archived") == (project.status == "archived")) &&
-                (searchText.isEmpty || project.name.localizedCaseInsensitiveContains(searchText)
-                    || project.description?.localizedCaseInsensitiveContains(searchText) == true)
+                (query.isEmpty || project.name.localizedCaseInsensitiveContains(query)
+                    || project.description?.localizedCaseInsensitiveContains(query) == true
+                    || project.brief?.localizedCaseInsensitiveContains(query) == true)
         }
         .sorted { lhs, rhs in
             if (lhs.pinnedAt != nil) != (rhs.pinnedAt != nil) {

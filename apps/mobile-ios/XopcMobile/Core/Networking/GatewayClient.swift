@@ -450,11 +450,20 @@ extension GatewayClient {
         JSONEncoder()
     }
 
+    func pathSegment(_ raw: String) throws -> String {
+        guard ChatMessageLink.validResourceID(raw) else { throw GatewayClientError.invalidURL }
+        return raw
+    }
+
     func makeURL(path: String, queryItems: [URLQueryItem]) throws -> URL {
-        guard var components = URLComponents(
-            url: configuration.baseURL.appending(path: path),
-            resolvingAgainstBaseURL: false
-        ) else {
+        guard path.hasPrefix("/"), !path.hasPrefix("//"), !path.contains("\\"),
+              path.rangeOfCharacter(from: .controlCharacters) == nil,
+              !path.split(separator: "/", omittingEmptySubsequences: false).dropFirst().contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }),
+              var components = URLComponents(
+                  url: configuration.baseURL.appending(path: path),
+                  resolvingAgainstBaseURL: false
+              )
+        else {
             throw GatewayClientError.invalidURL
         }
         components.queryItems = queryItems.isEmpty ? nil : queryItems

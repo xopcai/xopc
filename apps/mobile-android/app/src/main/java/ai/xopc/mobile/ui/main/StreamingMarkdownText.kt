@@ -7,7 +7,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
@@ -22,7 +26,6 @@ internal fun StreamingMarkdownText(content: AnnotatedString, streaming: Boolean,
   var revealStart by remember { mutableIntStateOf(content.length) }
   var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
   val motionAllowed = if (streaming) rememberMotionAllowed() else false
-  val background = MaterialTheme.colorScheme.surface
   val characters = if (streaming) remember { android.icu.text.BreakIterator.getCharacterInstance() } else null
   LaunchedEffect(content.text, streaming, motionAllowed) {
     val old = previous
@@ -40,11 +43,16 @@ internal fun StreamingMarkdownText(content: AnnotatedString, streaming: Boolean,
       alpha.snapTo(1f)
     }
   }
-  Text(content, modifier = modifier.drawWithContent {
-    drawContent()
-    val measured = layout
-    if (streaming && motionAllowed && alpha.value < 1f && measured != null && measured.layoutInput.text == content && revealStart < content.length) {
-      clipPath(measured.getPathForRange(revealStart, content.length)) { drawRect(background, alpha = 1f - alpha.value) }
-    }
-  }, style = style, fontWeight = fontWeight, onTextLayout = { layout = it })
+  val fading = streaming && motionAllowed && alpha.value < 1f
+  Text(content, modifier = modifier
+    .then(if (fading) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen } else Modifier)
+    .drawWithContent {
+      drawContent()
+      val measured = layout
+      if (fading && measured != null && measured.layoutInput.text == content && revealStart < content.length) {
+        clipPath(measured.getPathForRange(revealStart, content.length)) {
+          drawRect(Color.Black, alpha = 1f - alpha.value, blendMode = BlendMode.DstOut)
+        }
+      }
+    }, style = style, fontWeight = fontWeight, onTextLayout = { layout = it })
 }

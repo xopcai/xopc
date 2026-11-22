@@ -167,6 +167,7 @@ struct HomeDelivery: Decodable, Identifiable, Sendable {
 struct HomeItem: Decodable, Identifiable, Sendable {
     var kind: String?
     let id: String
+    let projectId: String?
     let title: String
     let summary: String
     let statusLabel: String?

@@ -128,13 +128,16 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
   val isUser = message.role == "user"
   val chat = LocalChatColors.current
   val bubbleColor = if (isUser) chat.user else chat.assistant
-  val messageImages = (message.media.filter { mediaPreviewKind(it) == "image" } +
-    message.outcome?.artifacts.orEmpty().filter { it.availability == "available" && it.uri != null &&
-      (it.kind == "image" || it.mimeType?.startsWith("image/") == true) }.map {
-      ConversationMedia(it.artifactId, it.title, "image", it.mimeType.orEmpty(), it.sizeBytes ?: 0,
-        it.uri!!, it.workspaceRelativePath)
-    }).distinctBy { it.uri }
-  val showPreview = !selectingText && previewEligible && messageNeedsPreview(message.role, message.text)
+  val messageImages = remember(message.media, message.outcome?.artifacts) {
+    (message.media.filter { mediaPreviewKind(it) == "image" } +
+      message.outcome?.artifacts.orEmpty().filter { it.availability == "available" && it.uri != null &&
+        (it.kind == "image" || it.mimeType?.startsWith("image/") == true) }.map {
+        ConversationMedia(it.artifactId, it.title, "image", it.mimeType.orEmpty(), it.sizeBytes ?: 0,
+          it.uri!!, it.workspaceRelativePath)
+      }).distinctBy { it.uri }
+  }
+  val needsPreview = remember(message.role, message.text) { messageNeedsPreview(message.role, message.text) }
+  val showPreview = !selectingText && previewEligible && needsPreview
   val voiceOnly = isUser && message.text.isBlank() && message.references.isEmpty() &&
     message.media.size == 1 && mediaPreviewKind(message.media.first()) == "audio"
   BoxWithConstraints(modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
@@ -148,8 +151,8 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
     val maxBubbleWidth = maxWidth * CHAT_MESSAGE_WIDTH
     val contentCount = message.media.size + message.references.size + message.targets.size +
       message.outcome?.artifacts.orEmpty().size
-    val wideAssistant = !isUser && (showPreview || contentCount > 0 || message.outcome?.status == "failed" ||
-      assistantWideText.containsMatchIn(message.text))
+    val hasWideSyntax = remember(isUser, message.text) { !isUser && assistantWideText.containsMatchIn(message.text) }
+    val wideAssistant = !isUser && (showPreview || contentCount > 0 || message.outcome?.status == "failed" || hasWideSyntax)
     val minimumWidth = if (isUser) when {
       voiceOnly -> 132.dp
       message.media.size == 1 && mediaPreviewKind(message.media.first()) == "audio" -> 180.dp
@@ -689,6 +692,7 @@ private fun BinaryMessagePreview(payload: ByteArray, media: ConversationMedia) {
         runCatching {
           val file = withContext(Dispatchers.IO) {
             val directory = File(context.cacheDir, "message-media").apply { mkdirs() }
+            directory.listFiles()?.sortedByDescending { it.lastModified() }?.drop(15)?.forEach { it.delete() }
             File.createTempFile("open-", mediaExtension(media.name), directory).apply { writeBytes(payload) }
           }
           val uri = FileProvider.getUriForFile(context, "${context.packageName}.camera-capture", file)

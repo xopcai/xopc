@@ -5,6 +5,26 @@ import UIKit
 @testable import XopcMobile
 
 struct ChatRenderingTests {
+    @Test func slashPaletteOnlyReplacesTheTokenAtTheCaret() {
+        var draft = "📝 先写 /meet 然后补充"
+        let caret = "📝 先写 /meet".utf16.count
+        let token = ComposerPaletteToken.atCaret(in: draft, utf16Offset: caret)
+        #expect(token?.query == "meet")
+        if let token {
+            draft.replaceSubrange(token.range, with: "/skill:meeting ")
+        }
+        #expect(draft == "📝 先写 /skill:meeting  然后补充")
+        #expect(ComposerPaletteToken.atCaret(in: "https://file", utf16Offset: nil) == nil)
+        #expect(ComposerPaletteToken.atCaret(in: "/skill:meeting", utf16Offset: nil) == nil)
+        #expect(ComposerPaletteToken.atCaret(in: "/", utf16Offset: nil)?.query == "")
+        let exact = ComposerPaletteItem(id: "command:help", title: "help", detail: "Show help", token: "/help", aliases: [])
+        let substring = ComposerPaletteItem(id: "skill:helper-bot", title: "My helper", detail: "Assists", token: "/skill:helper-bot ", aliases: [])
+        let skillPrefix = ComposerPaletteItem(id: "skill:meeting", title: "纪要", detail: "Meeting notes", token: "/skill:meeting ", aliases: ["meeting"])
+        #expect((exact.rank(for: "help") ?? 999) < (substring.rank(for: "help") ?? 999))
+        #expect(skillPrefix.rank(for: "skill") == nil)
+        #expect(skillPrefix.rank(for: "notes") == 100)
+    }
+
     @Test func historyUsesAnswerBlocksRatherThanFlattenedTextOrReasoning() throws {
         let messages = try JSONDecoder().decode([WireMessage].self, from: Data(#"""
         [{"id":"intermediate","role":"assistant","content":"working","rawContent":[
@@ -202,9 +222,34 @@ struct ChatRenderingTests {
         #expect(ChatMessageLink.resolve("#/projects/p") == .route(page: "projects", itemID: "p"))
         #expect(ChatMessageLink.resolve("/workflows/runs/r") == nil)
         #expect(ChatMessageLink.resolve("/automations?automation=a") == .route(page: "automations", itemID: "a"))
+        #expect(ChatMessageLink.resolve("#/automations?run=r") == .route(page: "automation-run", itemID: "r"))
+        #expect(ChatMessageLink.resolve("xopc://settings/language") == .route(page: "settings", itemID: "language"))
+        #expect(ChatMessageLink.resolve("#/settings/appearance") == .route(page: "settings", itemID: "appearance"))
+        #expect(ChatMessageLink.resolve("xopc://open?kind=settings&id=notifications") == .route(page: "settings", itemID: "notifications"))
+        #expect(ChatMessageLink.resolve("xopc://capabilities/mcp?id=example&url=https%3A%2F%2Fexample.com%2Fmcp")
+            == .mcpSetup(name: "example", serverURL: "https://example.com/mcp"))
+        #expect(ChatMessageLink.resolve("xopc://capabilities/mcp?id=example&url=http%3A%2F%2Fexample.com") == nil)
+        #expect(ChatMessageLink.resolve("xopc://capabilities/mcp?id=example&url=https%3A%2F%2Fuser%40example.com") == nil)
+        #expect(ChatMessageLink.resolve("/settings") == .route(page: "settings", itemID: ""))
+        #expect(ChatMessageLink.resolve("xopc://settings/%2E%2E") == nil)
+        #expect(ChatMessageLink.resolve("https://example.com/settings/language") == nil)
         #expect(ChatMessageLink.resolve("#/automations?automation=a") == .route(page: "automations", itemID: "a"))
         #expect(ChatMessageLink.resolve("xopc://workspace/file?path=docs%2F%E4%B8%AD%E6%96%87.md") == .workspaceFile(path: "docs/中文.md"))
         #expect(ChatMessageLink.resolve("xopc://workspace/file?path=../secrets") == nil)
+        #expect(ChatMessageLink.resolve("xopc://workspace/file?path=/etc/passwd") == nil)
+        #expect(ChatMessageLink.resolve("xopc://workspace/file?path=docs/./a.md") == nil)
+        #expect(ChatMessageLink.resolve("/notes/.") == nil)
+        #expect(ChatMessageLink.resolve("xopc-file:.") == nil)
+        #expect(ChatMessageLink.resolve("xopc-file:abc?query=1") == nil)
+        #expect(ChatMessageLink.resolve("xopc://user@open?kind=note&id=n") == nil)
+        #expect(ChatMessageLink.resolve("xopc://open?kind=settings") == .route(page: "settings", itemID: ""))
+        #expect(HomeOpenRoute(href: "/tasks/..") == nil)
+        #expect(HomeOpenRoute(href: "/tasks/.") == nil)
+        #expect(HomeOpenRoute(href: "/automations?run=../admin") == nil)
+        #expect(HomeOpenRoute(href: "/automations?run=run-1") == .automationRun("run-1"))
+        #expect(ChatImageSource.resolve("xopc-file:..", conversationID: nil) == nil)
+        #expect(ChatImageSource.resolve("xopc-file:.", conversationID: nil) == nil)
+        #expect(ChatImageSource.resolve("xopc-attachment://notes/n/..", conversationID: nil) == nil)
         #expect(ChatMessageLink.resolve("//example.com/notes/n") == nil)
         #expect(ChatMessageLink.resolve("https://example.com/notes/n") == nil)
         #expect(ChatMessageLink.resolve("https://example.com/workflows/runs/r") == nil)

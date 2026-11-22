@@ -1750,6 +1750,7 @@
     {"name": "task_pause", "value": "Pause task"},
     {"name": "task_resume", "value": "Resume task"},
     {"name": "task_stop_run", "value": "Stop active run"},
-    {"name": "task_stop_run_help", "value": "Request cancellation of the active run without closing the task."}
+    {"name": "task_stop_run_help", "value": "Request cancellation of the active run without closing the task."},
+    {"name": "chat_copy_formula", "value": "Copy LaTeX"}
   ]
 }

@@ -9,7 +9,13 @@ import SwiftUI
     func open(_ link: ChatMessageLink, appState: AppState) {
         lookup?.cancel()
         errorMessage = nil
-        guard case let .route(page, id) = link, page == "chat" else { destination = link; return }
+        guard case let .route(page, id) = link else { destination = link; return }
+        if page == "settings" {
+            destination = nil
+            appState.homePath.append(MobileSettingsSection(rawValue: id).map(HomeDestination.settingsSection) ?? .settings)
+            return
+        }
+        guard page == "chat" else { destination = link; return }
         let configuration = appState.gatewayConfiguration
         let source = appState.selectedConversation
         lookup = Task {
@@ -34,13 +40,23 @@ struct ChatMessageLinkDestination: View {
     let link: ChatMessageLink
     let appState: AppState
     let router: ChatMessageLinkRouter
+    let defaultAgentID: String
 
     var body: some View {
-        NavigationStack {
-            if case .route("tasks", _) = link {
-                content
-            } else {
-                content.toolbar { ToolbarItem(placement: .confirmationAction) { Button("关闭") { router.destination = nil } } }
+        if case let .mcpSetup(name, serverURL) = link {
+            LinkedMcpSetupView(configuration: appState.gatewayConfiguration, name: name, serverURL: serverURL,
+                               onClose: { router.destination = nil }, onUseInChat: { prompt in
+                                   router.destination = nil
+                                   appState.startCapabilityChat(agentId: defaultAgentID,
+                                                                prompt: prompt, agentSetupLanguage: nil)
+                               })
+        } else {
+            NavigationStack {
+                if case .route("tasks", _) = link {
+                    content
+                } else {
+                    content.toolbar { ToolbarItem(placement: .confirmationAction) { Button("关闭") { router.destination = nil } } }
+                }
             }
         }
     }
@@ -58,10 +74,13 @@ struct ChatMessageLinkDestination: View {
             case "tasks": TaskConversationView(configuration: appState.gatewayConfiguration, taskID: id, returnLabel: "返回会话")
             case "projects": ProjectDetailView(configuration: appState.gatewayConfiguration, projectID: id,
                                                onOpenConversation: openConversation)
+            case "automation-run": AutomationRunDetailView(configuration: appState.gatewayConfiguration, runID: id,
+                                                            initialRun: nil, onOpenConversation: openConversation)
             case "automations": AutomationDetailView(configuration: appState.gatewayConfiguration, automationID: id,
                                                      onOpenConversation: openConversation)
             default: ChatLinkedFileView(link: link, configuration: appState.gatewayConfiguration, conversationID: appState.selectedConversation?.id)
             }
+        case .mcpSetup: EmptyView()
         case .workspaceFile, .managedFile:
             ChatLinkedFileView(link: link, configuration: appState.gatewayConfiguration, conversationID: appState.selectedConversation?.id)
         }

@@ -38,6 +38,7 @@ struct AssistantView<Dock: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
+    @FocusState private var composerFocused: Bool
     @State var state = AssistantState()
     @State var draft = ""
     @State var composerDraftScope: String?
@@ -77,13 +78,12 @@ struct AssistantView<Dock: View>: View {
     @State private var personalHeaderHeight: CGFloat = 0
     @State private var ordinaryHeaderHeight: CGFloat = 0
     @State private var positionedTimeline = false
-    @State private var lastUserScrollTowardLatest = false
-    @State private var readingPositions: [String: ChatReadingAnchor] = [:]
+    @State private var readingHistory = ChatReadingHistory()
+    @State private var timelineScrollCommands = ChatTimelineScrollCommands()
     @State private var stickyMusicHeight: CGFloat = 0
     @State private var followingBottom = true
     @State private var bottomJumpID: UUID?
     @State private var userScrollingMessages = false
-    @State private var bottomScrollTask: Task<Void, Never>?
 
     @State private var desktopChatTarget: DesktopChatTarget?
     @State private var desktopTargetRetry = 0
@@ -173,6 +173,9 @@ struct AssistantView<Dock: View>: View {
                 .accessibilityHidden(!isActive)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
+                .contentShape(.rect)
+                .simultaneousGesture(TapGesture().onEnded { composerFocused = false },
+                                     including: composerFocused ? .all : .none)
                 .modifier(ChatScrollEdgeEffect())
                 .ignoresSafeArea(.container, edges: .top)
             VStack(spacing: 0) {
@@ -222,6 +225,15 @@ struct AssistantView<Dock: View>: View {
                 }
                 .padding(.top, 8)
                 .padding(.bottom, 6)
+                .background {
+                    LinearGradient(stops: [
+                        .init(color: mobileTheme.canvas, location: 0),
+                        .init(color: mobileTheme.canvas, location: 0.84),
+                        .init(color: mobileTheme.canvas.opacity(0), location: 1)
+                    ], startPoint: .top, endPoint: .bottom)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
             }
         }
     }
@@ -569,6 +581,7 @@ struct AssistantView<Dock: View>: View {
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: max(0, viewport.size.height - 24))
                 }
+                .accessibilityIdentifier("chat-message-timeline")
                 .contentMargins(.top, chatHeaderClearance, for: .scrollContent)
                 .contentMargins(.bottom, 24, for: .scrollContent)
             }
@@ -585,15 +598,19 @@ struct AssistantView<Dock: View>: View {
     }
 
     private func scheduleBottomScroll(_ scroller: ScrollViewProxy) {
-        guard isActive, followingBottom, !userScrollingMessages,
-              bottomJumpID == nil, bottomScrollTask == nil else { return }
-        bottomScrollTask = Task {
+        guard isActive, !sidebarOpen, followingBottom, !userScrollingMessages,
+              bottomJumpID == nil, readingHistory.bottomScrollTask == nil else { return }
+        readingHistory.bottomScrollTask = Task {
             do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
-            bottomScrollTask = nil
-            guard isActive, followingBottom, !userScrollingMessages, bottomJumpID == nil else { return }
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) { scroller.scrollTo("chat-bottom", anchor: .bottom) }
+            readingHistory.bottomScrollTask = nil
+            guard isActive, !sidebarOpen, followingBottom, !userScrollingMessages, bottomJumpID == nil else { return }
+            if #available(iOS 18, *) {
+                timelineScrollCommands.scrollToBottom()
+            } else {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { scroller.scrollTo("chat-bottom", anchor: .bottom) }
+            }
         }
     }
 
@@ -602,16 +619,17 @@ struct AssistantView<Dock: View>: View {
             let maximumMessageWidth = max(0, min(viewport.size.width, 720) - 24) * ChatAppearance.messageWidthRatio
             ScrollViewReader { scroller in
                 ScrollView {
-                    // Exact row heights keep long replies anchored during keyboard resize.
-                    timelineContent(cards: cards, maximumMessageWidth: maximumMessageWidth, viewportHeight: viewport.size.height, scroller: scroller)
+                    timelineContent(cards: cards, maximumMessageWidth: maximumMessageWidth,
+                                    viewportHeight: viewport.size.height, scroller: scroller)
                 }
-                .defaultScrollAnchor(.top)
+                .modifier(ChatTimelineAlignment(commands: timelineScrollCommands) { finishBottomJump($0, scroller: scroller) })
+                .accessibilityIdentifier("chat-message-timeline")
                 .contentMargins(.top, chatHeaderClearance, for: .scrollContent)
                 .contentMargins(.bottom, 24, for: .scrollContent)
                 .coordinateSpace(name: "chat-scroll")
                 .onDisappear {
                     bottomJumpID = nil
-                    bottomScrollTask?.cancel(); bottomScrollTask = nil
+                    readingHistory.bottomScrollTask?.cancel(); readingHistory.bottomScrollTask = nil
                 }
                 .onChange(of: state.isLoadingHistory, initial: true) {
                     restoreTimeline(scroller)
@@ -622,6 +640,14 @@ struct AssistantView<Dock: View>: View {
                 }
                 .onChange(of: chatHeaderClearance) { scheduleBottomScroll(scroller) }
                 .onChange(of: followingBottom) { scheduleBottomScroll(scroller) }
+                .onChange(of: sidebarOpen) {
+                    if sidebarOpen {
+                        readingHistory.bottomScrollTask?.cancel()
+                        readingHistory.bottomScrollTask = nil
+                    } else {
+                        scheduleBottomScroll(scroller)
+                    }
+                }
                 .onChange(of: viewport.size.height, initial: true) {
                     timelineHeight = viewport.size.height
                     restoreTimeline(scroller)
@@ -636,22 +662,22 @@ struct AssistantView<Dock: View>: View {
     private func timelineScrollInteraction() -> ChatScrollInteraction {
         ChatScrollInteraction(onStart: {
             if !userScrollingMessages {
-                lastUserScrollTowardLatest = false
+                readingHistory.towardLatest = false
             }
             bottomJumpID = nil
             userScrollingMessages = true
             followingBottom = false
-            bottomScrollTask?.cancel(); bottomScrollTask = nil
+            readingHistory.bottomScrollTask?.cancel(); readingHistory.bottomScrollTask = nil
         }, onEnd: {
             guard userScrollingMessages else { return }
-            followingBottom = lastUserScrollTowardLatest && isAtBottom
+            followingBottom = readingHistory.towardLatest && isAtBottom
             userScrollingMessages = false
             if followingBottom, let scope = timelineReadingScope {
-                readingPositions.removeValue(forKey: scope)
+                readingHistory.removeAnchor(for: scope)
             }
         }, onDirectionChange: { towardLatest in
             if userScrollingMessages {
-                lastUserScrollTowardLatest = towardLatest
+                readingHistory.towardLatest = towardLatest
             }
         })
     }
@@ -661,20 +687,22 @@ struct AssistantView<Dock: View>: View {
         if positionedTimeline, !followingBottom, !isAtBottom {
             Button {
                 guard bottomJumpID == nil else { return }
-                bottomScrollTask?.cancel(); bottomScrollTask = nil
+                readingHistory.bottomScrollTask?.cancel(); readingHistory.bottomScrollTask = nil
                 userScrollingMessages = false
                 followingBottom = true
                 if let scope = timelineReadingScope {
-                    readingPositions.removeValue(forKey: scope)
+                    readingHistory.removeAnchor(for: scope)
                 }
                 let jumpID = UUID()
                 bottomJumpID = jumpID
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
-                    scroller.scrollTo("chat-bottom", anchor: .bottom)
-                } completion: {
-                    guard bottomJumpID == jumpID else { return }
-                    bottomJumpID = nil
-                    scheduleBottomScroll(scroller)
+                if #available(iOS 18, *) {
+                    timelineScrollCommands.scrollToBottom(jumpID: jumpID)
+                } else {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
+                        scroller.scrollTo("chat-bottom", anchor: .bottom)
+                    } completion: {
+                        finishBottomJump(jumpID, scroller: scroller)
+                    }
                 }
             } label: {
                 Group {
@@ -696,49 +724,73 @@ struct AssistantView<Dock: View>: View {
         }
     }
 
+    private func finishBottomJump(_ id: UUID, scroller: ScrollViewProxy) {
+        guard bottomJumpID == id else { return }
+        bottomJumpID = nil
+        scheduleBottomScroll(scroller)
+    }
+
     private func timelineContent(cards: [String: [GeneratedMediaCard]], maximumMessageWidth: CGFloat,
                                  viewportHeight: CGFloat, scroller: ScrollViewProxy) -> some View
     {
-        VStack(spacing: 20) {
-            if showsConversationTitleInTimeline, let conversation {
-                Text(verbatim: conversation.title)
-                    .mobileTextStyle(.rowTitle)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 4)
-                    .accessibilityAddTraits(.isHeader)
+        Group {
+            if #available(iOS 18, *) {
+                LazyVStack(spacing: 20) {
+                    timelineRows(cards: cards, maximumMessageWidth: maximumMessageWidth,
+                                 viewportHeight: viewportHeight, scroller: scroller)
+                }
+            } else {
+                VStack(spacing: 20) {
+                    timelineRows(cards: cards, maximumMessageWidth: maximumMessageWidth,
+                                 viewportHeight: viewportHeight, scroller: scroller)
+                }
             }
-            if let errorMessage = state.errorMessage {
-                ErrorBanner(message: errorMessage)
-            }
-            personalConnectionCard
-            ForEach(state.messages.filter { $0.role != "assistant" || $0.answerConfirmed }, id: \.scrollID) { message in
-                timelineMessageRow(message, cards: cards, maximumMessageWidth: maximumMessageWidth,
-                                   viewportHeight: viewportHeight)
-            }
-            if let unanchored = cards[""] {
-                generatedMediaRows(unanchored, maximumWidth: maximumMessageWidth, viewportHeight: viewportHeight)
-            }
-            clarificationCard
-            if showsStagedProgress {
-                AssistantStagesView(progress: state.runProgress,
-                                    answerStarted: state.messages.contains {
-                                        $0.role == "assistant" && $0.turnId == state.runProgress.runID && $0.answerConfirmed && !$0.text.isEmpty
-                                    }, paused: state.clarification != nil)
-                    .id(state.runProgress.runID ?? "sending")
-            } else if isPersonalConversation, state.isRunActive, state.errorMessage == nil, state.clarification == nil,
-                      !state.messages.contains(where: { $0.role == "assistant" && $0.turnId == state.runID && $0.answerConfirmed && !$0.text.isEmpty })
-            {
-                AssistantActivityView()
-                    .id(state.runID ?? "sending")
-            }
-            timelineBottomMarker(scroller: scroller, viewportHeight: viewportHeight)
         }
         .coordinateSpace(name: "chat-timeline-content")
         .padding(.horizontal, 12)
         .padding(.vertical, 16)
         .frame(maxWidth: 720)
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder private func timelineRows(cards: [String: [GeneratedMediaCard]], maximumMessageWidth: CGFloat,
+                                           viewportHeight: CGFloat, scroller: ScrollViewProxy) -> some View
+    {
+        let layout = TimelineLayout(messageWidth: maximumMessageWidth, viewportHeight: viewportHeight,
+                                    headerClearance: chatHeaderClearance)
+        let readingScope = userScrollingMessages ? timelineReadingScope : nil
+        if showsConversationTitleInTimeline, let conversation {
+            Text(verbatim: conversation.title)
+                .mobileTextStyle(.rowTitle)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
+                .accessibilityAddTraits(.isHeader)
+        }
+        if let errorMessage = state.errorMessage {
+            ErrorBanner(message: errorMessage)
+        }
+        personalConnectionCard
+        ForEach(state.messages.filter { $0.role != "assistant" || $0.answerConfirmed }, id: \.scrollID) { message in
+            timelineMessageRow(message, media: cards[message.id] ?? [], layout: layout, readingScope: readingScope)
+        }
+        if let unanchored = cards[""] {
+            generatedMediaRows(unanchored, maximumWidth: maximumMessageWidth, viewportHeight: viewportHeight)
+        }
+        clarificationCard
+        if showsStagedProgress {
+            AssistantStagesView(progress: state.runProgress,
+                                answerStarted: state.messages.contains {
+                                    $0.role == "assistant" && $0.turnId == state.runProgress.runID && $0.answerConfirmed && !$0.text.isEmpty
+                                }, paused: state.clarification != nil)
+                .id(state.runProgress.runID ?? "sending")
+        } else if isPersonalConversation, state.isRunActive, state.errorMessage == nil, state.clarification == nil,
+                  !state.messages.contains(where: { $0.role == "assistant" && $0.turnId == state.runID && $0.answerConfirmed && !$0.text.isEmpty })
+        {
+            AssistantActivityView()
+                .id(state.runID ?? "sending")
+        }
+        timelineBottomMarker(scroller: scroller, viewportHeight: viewportHeight)
     }
 
     private func timelineBottomMarker(scroller: ScrollViewProxy, viewportHeight: CGFloat) -> some View {
@@ -749,17 +801,26 @@ struct AssistantView<Dock: View>: View {
             } action: { _ in
                 scheduleBottomScroll(scroller)
             }
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.frame(in: .named("chat-scroll")).maxY
-            } action: { bottom in
-                isAtBottom = bottom <= viewportHeight + 24
+            .onGeometryChange(for: Bool.self) { proxy in
+                proxy.frame(in: .named("chat-scroll")).maxY <= viewportHeight + 24
+            } action: { atBottom in
+                isAtBottom = atBottom
             }
+            .onDisappear { isAtBottom = false }
     }
 
-    private func timelineMessageRow(_ message: TimelineMessage, cards: [String: [GeneratedMediaCard]],
-                                    maximumMessageWidth: CGFloat, viewportHeight: CGFloat) -> some View
+    private struct TimelineLayout {
+        let messageWidth: CGFloat
+        let viewportHeight: CGFloat
+        let headerClearance: CGFloat
+    }
+
+    private func timelineMessageRow(_ message: TimelineMessage, media: [GeneratedMediaCard],
+                                    layout: TimelineLayout,
+                                    readingScope: String?) -> some View
     {
-        VStack(spacing: 20) {
+        let headerClearance = layout.headerClearance
+        return VStack(spacing: 20) {
             MessageBubble(
                 message: message,
                 configuration: configuration,
@@ -769,24 +830,27 @@ struct AssistantView<Dock: View>: View {
                 canReadAloud: realtimeVoiceCall.phase == .idle,
                 previewEligible: message.id != state.messages.last?.id,
                 onReuseUserText: { draft = $0 },
-                maximumWidth: maximumMessageWidth,
-                animateStreaming: followingBottom && !userScrollingMessages,
+                maximumWidth: layout.messageWidth,
+                animateStreaming: message.revealAnswer && followingBottom && !sidebarOpen && !userScrollingMessages,
                 onReading: {
                     followingBottom = false
-                    bottomScrollTask?.cancel(); bottomScrollTask = nil
+                    readingHistory.bottomScrollTask?.cancel(); readingHistory.bottomScrollTask = nil
                 }
             )
-            generatedMediaRows(cards[message.id] ?? [], maximumWidth: maximumMessageWidth,
-                               viewportHeight: viewportHeight)
+            generatedMediaRows(media, maximumWidth: layout.messageWidth,
+                               viewportHeight: layout.viewportHeight)
         }
         .id(message.scrollID)
         .onGeometryChange(for: CGRect?.self) { geometry in
+            guard readingScope != nil else { return nil }
             let frame = geometry.frame(in: .named("chat-scroll"))
-            return frame.minY <= chatHeaderClearance + 20 && frame.maxY > chatHeaderClearance ? frame : nil
+            return frame.minY <= headerClearance + 20 && frame.maxY > headerClearance ? frame : nil
         } action: { frame in
-            if let frame, userScrollingMessages, let scope = timelineReadingScope {
-                saveReadingAnchor(ChatReadingAnchor(id: message.scrollID,
-                                                    offset: frame.minY - chatHeaderClearance, rowHeight: frame.height), scope: scope)
+            if let frame, userScrollingMessages, let readingScope {
+                readingHistory.saveAnchor(
+                    ChatReadingAnchor(id: message.scrollID, offset: frame.minY - headerClearance, rowHeight: frame.height),
+                    for: readingScope
+                )
             }
         }
     }
@@ -794,6 +858,7 @@ struct AssistantView<Dock: View>: View {
     @ViewBuilder
     private func generatedMediaRows(_ cards: [GeneratedMediaCard], maximumWidth: CGFloat, viewportHeight: CGFloat) -> some View {
         if let id = conversation?.id, conversation?.isDraft == false, !cards.isEmpty {
+            let headerClearance = chatHeaderClearance
             VStack(spacing: 12) {
                 ForEach(cards) { card in
                     GeneratedMediaRow(card: card, canConfirm: generatedMedia.canConfirm && !state.isRunActive,
@@ -820,8 +885,7 @@ struct AssistantView<Dock: View>: View {
                                       .frame(maxWidth: maximumWidth)
                                       .onGeometryChange(for: Bool.self) { proxy in
                                           let frame = proxy.frame(in: .named("chat-scroll"))
-                                          let header = chatHeaderClearance
-                                          return frame.maxY > header && frame.minY < viewportHeight
+                                          return frame.maxY > headerClearance && frame.minY < viewportHeight
                                       } action: { visible in
                                           guard card.kind == .music else { return }
                                           if visible {
@@ -849,8 +913,8 @@ struct AssistantView<Dock: View>: View {
     private func playGeneratedMedia(_ card: GeneratedMediaCard, conversationID: String) {
         readAloud.stop()
         assistantAudio.stop()
-        bottomScrollTask?.cancel()
-        bottomScrollTask = nil
+        readingHistory.bottomScrollTask?.cancel()
+        readingHistory.bottomScrollTask = nil
         followingBottom = false
         if card.kind == .music {
             presentedGeneratedVideo = nil
@@ -878,11 +942,26 @@ struct AssistantView<Dock: View>: View {
         return "\(ComposerDraftStore.accountScope(configuration))|\(id)|\(transcript)"
     }
 
-    private func saveReadingAnchor(_ anchor: ChatReadingAnchor, scope: String) {
-        if readingPositions[scope] == nil, readingPositions.count >= 50, let key = readingPositions.keys.first {
-            readingPositions.removeValue(forKey: key)
+    // Scroll callbacks update this cache without invalidating the message hierarchy.
+    private final class ChatReadingHistory {
+        var towardLatest = false
+        var bottomScrollTask: Task<Void, Never>?
+        private var anchors: [String: ChatReadingAnchor] = [:]
+
+        func anchor(for scope: String) -> ChatReadingAnchor? {
+            anchors[scope]
         }
-        readingPositions[scope] = anchor
+
+        func removeAnchor(for scope: String) {
+            anchors.removeValue(forKey: scope)
+        }
+
+        func saveAnchor(_ anchor: ChatReadingAnchor, for scope: String) {
+            if anchors[scope] == nil, anchors.count >= 50, let key = anchors.keys.first {
+                anchors.removeValue(forKey: key)
+            }
+            anchors[scope] = anchor
+        }
     }
 
     private func restoreTimeline(_ scroller: ScrollViewProxy) {
@@ -890,7 +969,7 @@ struct AssistantView<Dock: View>: View {
               state.isCurrentConversation(id), !state.messages.isEmpty else { return }
         positionedTimeline = true
         let draftScope = "\(ComposerDraftStore.accountScope(configuration))|\(id)|"
-        if let scope = timelineReadingScope, let saved = readingPositions[scope] ?? readingPositions[draftScope],
+        if let scope = timelineReadingScope, let saved = readingHistory.anchor(for: scope) ?? readingHistory.anchor(for: draftScope),
            state.messages.contains(where: { $0.scrollID == saved.id })
         {
             followingBottom = false
@@ -906,7 +985,7 @@ struct AssistantView<Dock: View>: View {
         bottomJumpID = nil
         followingBottom = true
         if let scope = timelineReadingScope {
-            readingPositions.removeValue(forKey: scope)
+            readingHistory.removeAnchor(for: scope)
         }
     }
 
@@ -1099,7 +1178,8 @@ struct AssistantView<Dock: View>: View {
                 assistantAudio.stop()
                 presentedGeneratedVideo = nil
             },
-            onVoiceAttachment: { send(voice: $0) }
+            onVoiceAttachment: { send(voice: $0) },
+            isComposerFocused: $composerFocused
         )
     }
 

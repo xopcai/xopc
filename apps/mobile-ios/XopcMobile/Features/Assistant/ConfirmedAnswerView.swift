@@ -7,22 +7,38 @@ struct ConfirmedAnswerView: View {
     let animate: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var displayed = ""
+    @State private var completedMessageID: String?
 
     var body: some View {
-        MarkdownBodyView(parts: [], configuration: configuration, conversationID: conversationID,
-                         markdown: displayed, streaming: message.revealAnswer && animate)
-            .task(id: message.text) {
-                let source = message.text
-                guard message.revealAnswer, animate, !reduceMotion else { displayed = source; return }
-                let count = source.count
-                let step = max(12, (count + 31) / 32)
-                var end = 0
-                while end < count {
-                    guard !Task.isCancelled else { return }
-                    end = min(count, end + step)
-                    displayed = String(source.prefix(end))
-                    do { try await Task.sleep(for: .milliseconds(24)) } catch { return }
+        if message.revealAnswer, animate, !reduceMotion, completedMessageID != message.id {
+            MarkdownBodyView(parts: [], configuration: configuration, conversationID: conversationID,
+                             markdown: displayed.isEmpty ? String(message.text.prefix(12)) : displayed,
+                             streaming: displayed != message.text)
+                .task(id: message.text) {
+                    let source = message.text
+                    let count = source.count
+                    let step = max(12, (count + 31) / 32)
+                    var cursor = source.hasPrefix(displayed)
+                        ? (source.index(source.startIndex, offsetBy: displayed.count, limitedBy: source.endIndex) ?? source.endIndex)
+                        : source.startIndex
+                    while cursor < source.endIndex {
+                        guard !Task.isCancelled else { return }
+                        cursor = source.index(cursor, offsetBy: step, limitedBy: source.endIndex) ?? source.endIndex
+                        displayed = String(source[..<cursor])
+                        if cursor < source.endIndex {
+                            do { try await Task.sleep(for: .milliseconds(24)) } catch { return }
+                        }
+                    }
+                    completedMessageID = message.id
                 }
-            }
+        } else {
+            MarkdownBodyView(parts: message.markdownParts, configuration: configuration, conversationID: conversationID,
+                             markdown: message.markdownParts.isEmpty ? message.text : nil)
+                .onAppear {
+                    if message.revealAnswer {
+                        completedMessageID = message.id
+                    }
+                }
+        }
     }
 }

@@ -30,9 +30,17 @@ describe('message link routing', () => {
     expect(internalMessageLink('xopc://open?kind=session&amp;key=chat-1')).toMatchObject({ page: 'chat', itemId: 'chat-1' });
     expect(internalMessageLink('#/notes/note-1')).toMatchObject({ page: 'notes', itemId: 'note-1' });
     expect(internalMessageLink('xopc://settings/appearance')).toMatchObject({ page: 'settings', itemId: 'appearance' });
+    expect(internalMessageLink('#/settings')).toMatchObject({ page: 'settings', itemId: '' });
+    expect(internalMessageLink('xopc://open?kind=settings&id=notifications')).toMatchObject({ page: 'settings', itemId: 'notifications' });
+    expect(internalMessageLink('#/automations?run=run-1')).toMatchObject({ page: 'automation-run', itemId: 'run-1' });
+    expect(internalMessageLink('/automations?automation=auto-1')).toMatchObject({ page: 'automations', itemId: 'auto-1' });
+    expect(internalMessageLink('xopc-file:file-1')).toMatchObject({ page: 'files', itemId: 'file-1' });
   });
-  it.each(['xopc://open?kind=note', 'xopc://open?kind=constructor&id=x', 'xopc://workspace/file?path=../secret',
-    'xopc://workspace/file?path=%00x', 'xopc://workspace/file?path=%ZZ', 'javascript:alert(1)', '//evil.test', '/api/private'])('rejects %s', href => {
+  it.each(['xopc://open?kind=note', 'xopc://open?kind=constructor&id=x', 'xopc://open?kind=note&id=../../secret',
+    'xopc://open?kind=settings&id=unknown', 'xopc://settings/unknown', 'xopc://user@settings/language',
+    'xopc://workspace/file?path=../secret', 'xopc://workspace/file?path=/etc/passwd', 'xopc://workspace/file?path=docs/./a.md',
+    'xopc://workspace/file?path=%00x', 'xopc://workspace/file?path=%ZZ', '/notes/.', '/notes/', '/notes/a/b',
+    'xopc-file:..', 'xopc-file:a?b=1', 'javascript:alert(1)', '//evil.test', '/api/private'])('rejects %s', href => {
     expect(internalMessageLink(href)).toBeUndefined();
     expect(markdownSpans(`[invalid](${href})`).some(span => span.href)).toBe(false);
   });

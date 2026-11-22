@@ -23,7 +23,9 @@ struct MessageBubble: View {
     var onReading: () -> Void = {}
     @Environment(\.locale) private var locale
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var parentOpenURL
     @ScaledMetric(relativeTo: .body) private var previewHeight: CGFloat = 160
+    @ScaledMetric(relativeTo: .body) private var userPreviewHeight: CGFloat = 92
     @ScaledMetric(relativeTo: .body) private var previewFadeHeight: CGFloat = 48
     @ScaledMetric(relativeTo: .body) private var assistantTextSize = MobileTextStyle.body.size
     @State private var isActionsPresented = false
@@ -110,6 +112,18 @@ struct MessageBubble: View {
                 conversationID: conversationID,
                 assistantState: assistantState
             )
+            .environment(\.openURL, OpenURLAction { url in
+                if ChatMessageLink.resolve(url.absoluteString) != nil {
+                    isDetailPresented = false
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(250))
+                        parentOpenURL(url)
+                    }
+                    return .handled
+                }
+                parentOpenURL(url)
+                return .handled
+            })
         }
         .sheet(isPresented: $isExecutionPresented) {
             if let conversationID {
@@ -246,9 +260,10 @@ struct MessageBubble: View {
                     isDetailPresented = true
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        MarkdownBodyView(parts: Array(message.markdownParts.prefix(8)),
-                                         configuration: configuration, conversationID: conversationID)
-                            .frame(height: previewHeight, alignment: .top)
+                        MarkdownBodyView(parts: Array(message.markdownParts.prefix(message.role == "user" ? 4 : 8)),
+                                         configuration: configuration, conversationID: conversationID,
+                                         markdown: message.markdownParts.isEmpty ? message.text : nil)
+                            .frame(height: message.role == "user" ? userPreviewHeight : previewHeight, alignment: .top)
                             .clipped()
                             .mask {
                                 VStack(spacing: 0) {
@@ -286,7 +301,8 @@ struct MessageBubble: View {
     }
 
     private var showsPreview: Bool {
-        guard message.role == "assistant", previewEligible, !message.isPending else { return false }
+        guard (message.role == "assistant" || message.role == "user"), previewEligible, !message.isPending else { return false }
+        let lineLimit = message.role == "user" ? 4 : 8
         var lines = 0
         for rawLine in message.text.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
@@ -295,7 +311,7 @@ struct MessageBubble: View {
             }
             let units = line.reduce(0.0) { $0 + ($1.isASCII ? 0.55 : 1) }
             lines += max(1, Int(ceil(units / 15)))
-            if lines > 8 {
+            if lines > lineLimit {
                 return true
             }
         }
@@ -303,7 +319,8 @@ struct MessageBubble: View {
     }
 
     private var codeBlocks: String {
-        MarkdownBlock.parse(message.text).compactMap { block in
+        let blocks = message.markdownParts.isEmpty ? MarkdownBlock.parse(message.text) : message.markdownParts.map(\.block)
+        return blocks.compactMap { block in
             if case let .code(code) = block {
                 return code
             }

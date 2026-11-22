@@ -8,6 +8,7 @@ import ai.xopc.mobile.gateway.ConversationAgent
 import ai.xopc.mobile.gateway.GatewayHttpException
 import android.Manifest
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
@@ -16,6 +17,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.PersistableBundle
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -162,12 +164,13 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
   val category = categories[pager.settledPage]
   val scope = rememberCoroutineScope()
   val currentLoad by rememberUpdatedState(onLoad)
-  val pages = remember { mutableStateMapOf<CapabilityCategory, CapabilityPage>() }
-  val loading = remember { mutableStateMapOf<CapabilityCategory, Boolean>() }
-  val failures = remember { mutableStateMapOf<CapabilityCategory, Boolean>() }
-  val queries = remember { mutableStateMapOf<CapabilityCategory, String>() }
-  val lists = remember { categories.associateWith { LazyListState() } }
-  var detail by remember { mutableStateOf<CapabilityItem?>(null) }
+  val pages = remember(deviceScope) { mutableStateMapOf<CapabilityCategory, CapabilityPage>() }
+  val loading = remember(deviceScope) { mutableStateMapOf<CapabilityCategory, Boolean>() }
+  val failures = remember(deviceScope) { mutableStateMapOf<CapabilityCategory, Boolean>() }
+  val queries = remember(deviceScope) { mutableStateMapOf<CapabilityCategory, String>() }
+  val loadJobs = remember(deviceScope) { mutableMapOf<CapabilityCategory, kotlinx.coroutines.Job>() }
+  val lists = remember(deviceScope) { categories.associateWith { LazyListState() } }
+  var detail by remember(deviceScope) { mutableStateOf<CapabilityItem?>(null) }
   val keyboard = LocalSoftwareKeyboardController.current
   val focus = LocalFocusManager.current
   val searchFocus = remember { FocusRequester() }
@@ -178,15 +181,19 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
   val skills = category == CapabilityCategory.Skills
   val agents = category == CapabilityCategory.Agents
   val connections = category == CapabilityCategory.Connections
-  val zh = androidx.compose.ui.platform.LocalConfiguration.current.locales[0].language == "zh"
   val plugins = category == CapabilityCategory.Plugins
   val skillMarketTitle = stringResource(R.string.capability_skill_market)
+  val contactsToolPrompt = stringResource(R.string.device_tool_contacts_prompt)
+  val calendarToolPrompt = stringResource(R.string.device_tool_calendar_prompt)
+  val locationToolPrompt = stringResource(R.string.device_tool_location_prompt)
 
   fun load(requested: CapabilityCategory, refresh: Boolean = false) {
-    if (requested == CapabilityCategory.Devices || loading[requested] == true || (!refresh && (pages.containsKey(requested) || failures[requested] == true))) return
+    if (requested == CapabilityCategory.Devices) return
+    if (!refresh && (loading[requested] == true || pages.containsKey(requested) || failures[requested] == true)) return
+    loadJobs.remove(requested)?.cancel()
     loading[requested] = true
     failures.remove(requested)
-    scope.launch {
+    val job = scope.launch {
       try {
         pages[requested] = currentLoad(requested.key)
       } catch (error: CancellationException) {
@@ -194,9 +201,13 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
       } catch (_: Exception) {
         failures[requested] = true
       } finally {
-        loading.remove(requested)
+        if (loadJobs[requested] === coroutineContext[kotlinx.coroutines.Job]) {
+          loadJobs.remove(requested)
+          loading.remove(requested)
+        }
       }
     }
+    loadJobs[requested] = job
   }
 
   fun updateQuery(value: String) {
@@ -205,7 +216,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
     lists.getValue(category).requestScrollToItem(0)
   }
 
-  LaunchedEffect(pager) {
+  LaunchedEffect(pager, deviceScope) {
     var previous = pager.settledPage
     snapshotFlow { pager.settledPage }.collect { index ->
       if (index != previous) {
@@ -283,9 +294,9 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
           androidx.compose.runtime.key(deviceScope) {
             DeviceConnectionsScreen(onLoadDevices, onUseComputer, onShareDeviceFile, { tool ->
               val prompt = when (tool) {
-                "mobile.contacts.pick" -> if (zh) "请打开本机通讯录，让我选择一个联系人。" else "Let me select a contact from this phone."
-                "mobile.calendar.query_events" -> if (zh) "查看今天手机日历的日程。" else "Check today's events on this phone."
-                else -> if (zh) "获取我当前的位置。" else "Get my current location."
+                "mobile.contacts.pick" -> contactsToolPrompt
+                "mobile.calendar.query_events" -> calendarToolPrompt
+                else -> locationToolPrompt
               }
               onSetupChat(prompt, false)
             }, onPairDevice, setCapability = onSetDeviceCapability, active = category == CapabilityCategory.Devices)
@@ -323,11 +334,26 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
                   color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp, bottom = 2.dp, start = 4.dp))
               }
               items(rows, key = { it.id }) { row ->
+                val isAgent = kind == CapabilityCategory.Agents
+                val canOpenRow = !isAgent || row.group != "disabled"
                 CapabilityCard(row.name, row.description, modifier = Modifier.testTag("capability-row-${row.id}"),
-                  onClick = { if (pager.settledPage == index && !pager.isScrollInProgress) {
-                    focus.clearFocus(); keyboard?.hide(); detail = row
-                  } }, leading = { CapabilityItemIcon(row, kind, catalog?.origin, personal, agentAvatars) }) {
-                  if (kind == CapabilityCategory.Connections && (row.group == "available" || row.group == "attention")) {
+                  onClick = if (canOpenRow) ({
+                    if (pager.settledPage == index && !pager.isScrollInProgress) {
+                      focus.clearFocus(); keyboard?.hide()
+                      if (isAgent) onOpenAgent(row) else detail = row
+                    }
+                  }) else null, leading = { CapabilityItemIcon(row, kind, catalog?.origin, personal, agentAvatars) }) {
+                  if (isAgent) {
+                    val settingsLabel = "${stringResource(R.string.settings_title)} · ${row.name}"
+                    IconButton(onClick = {
+                      if (pager.settledPage == index && !pager.isScrollInProgress) {
+                        focus.clearFocus(); keyboard?.hide(); detail = row
+                      }
+                    }, modifier = Modifier.size(44.dp).testTag("capability-settings-${row.id}")) {
+                      ActionIcon(R.drawable.action_more_horizontal, color = colors.onSurfaceVariant,
+                        contentDescription = settingsLabel, size = 18.dp)
+                    }
+                  } else if (kind == CapabilityCategory.Connections && (row.group == "available" || row.group == "attention")) {
                     Text(stringResource(R.string.capability_connect), style = MaterialTheme.typography.labelLarge, color = colors.primary)
                   } else {
                     ActionIcon(R.drawable.action_chevron_right, color = colors.onSurfaceVariant, size = 14.dp)
@@ -482,6 +508,19 @@ internal fun ConversationMcpAction(conversationId: String, activeRun: Boolean,
   }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun LinkedMcpSetupSheet(name: String, serverUrl: String, origin: String?,
+  request: suspend (JSONObject?) -> JSONObject, onClose: () -> Unit, onUseInChat: (String) -> Unit) {
+  ModalBottomSheet(onDismissRequest = onClose, containerColor = MaterialTheme.colorScheme.surface,
+    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    CapabilitySettingsPanel(stringResource(R.string.capability_add_mcp), "", origin,
+      icon = { CapabilityLogo(null, origin, "", R.drawable.action_link, 44.dp) },
+      request = request, onChanged = {}, onChat = null, onClose = onClose, onUseInChat = onUseInChat,
+      isMcpSetup = true, initialFields = mapOf("id" to name, "url" to serverUrl))
+  }
+}
+
 private fun JSONObject.objects(key: String): List<JSONObject> = optJSONArray(key)?.let { array ->
   (0 until array.length()).map { array.getJSONObject(it) }
 }.orEmpty()
@@ -500,7 +539,8 @@ private fun safeHttpsUrl(raw: String?): String? = raw?.takeIf { value ->
 @Composable
 private fun CapabilitySettingsPanel(name: String, summary: String, origin: String?, icon: @Composable () -> Unit,
   request: suspend (JSONObject?) -> JSONObject, onChanged: () -> Unit, onChat: (() -> Unit)?, onClose: () -> Unit,
-  onUseInChat: ((String) -> Unit)? = null, isMcpSetup: Boolean = false, isConversation: Boolean = false) {
+  onUseInChat: ((String) -> Unit)? = null, isMcpSetup: Boolean = false, isConversation: Boolean = false,
+  initialFields: Map<String, String> = emptyMap()) {
   val scope = rememberCoroutineScope()
   val browser = LocalUriHandler.current
   val keyboard = LocalSoftwareKeyboardController.current
@@ -552,6 +592,7 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
         }
       })
       if (revision != requestRevision || polling && (busy || panel?.value("pollAction") != action || panel?.value("flow") != priorFlow)) return
+      val prefill = if (panel == null && action == null) initialFields else emptyMap()
       panel = result
       val resultActions = result.objects("actions")
       if (resultActions.any { it.optBoolean("dismiss") } && resultActions.none { it.value("id") == "add-another" }) {
@@ -561,6 +602,7 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
         val id = field.getString("id")
         id to ((if (polling) previous[id] else null)
           ?: (if (field.optBoolean("retain")) retainedValues[id] else null)
+          ?: prefill[id]
           ?: if (field.value("type") == "secret") "" else field.optString("value", ""))
       }
       errorMessage = null
@@ -866,7 +908,7 @@ private fun CapabilitySetupOptions(authorizationUrl: String?, userCode: String?,
         Text(userCode, style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace)
       }
       FilledTonalButton(onClick = {
-        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("", userCode))
+        copySensitiveClip(context, userCode)
       }, enabled = !busy, modifier = Modifier.heightIn(min = 44.dp)) {
         ActionIcon(R.drawable.message_copy, contentDescription = null, size = 16.dp)
         Spacer(Modifier.size(6.dp))
@@ -1010,7 +1052,7 @@ private fun CapabilityCopyableCard(block: JSONObject, busy: Boolean) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       Text(label, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = colors.onSurface)
       FilledTonalButton(onClick = {
-        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("", content))
+        copySensitiveClip(context, content)
         copied = true
       }, enabled = !busy, modifier = Modifier.heightIn(min = 38.dp).testTag("capability-panel-copy-block")) {
         ActionIcon(if (copied) R.drawable.action_check_circle else R.drawable.message_copy, contentDescription = null, size = 15.dp)
@@ -1026,6 +1068,17 @@ private fun CapabilityCopyableCard(block: JSONObject, busy: Boolean) {
       Text(note, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
     }
   }
+}
+
+private fun copySensitiveClip(context: Context, text: String) {
+  val clip = ClipData.newPlainText("", text)
+  val sensitiveExtra = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    ClipDescription.EXTRA_IS_SENSITIVE
+  } else {
+    "android.content.extra.IS_SENSITIVE"
+  }
+  clip.description.extras = PersistableBundle().apply { putBoolean(sensitiveExtra, true) }
+  context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(clip)
 }
 
 @Composable

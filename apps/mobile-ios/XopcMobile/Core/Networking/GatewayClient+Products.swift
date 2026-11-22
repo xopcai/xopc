@@ -221,11 +221,11 @@ extension GatewayClient {
         return response.conversationId
     }
 
-    func fetchTasks(projectID: String? = nil) async throws -> TaskPage {
-        var query = [URLQueryItem(name: "limit", value: "100")]
-        if let projectID {
-            query.append(URLQueryItem(name: "projectId", value: projectID))
-        }
+    func fetchTasks(projectID: String? = nil, search: String = "", offset: Int = 0, limit: Int = 100) async throws -> TaskPage {
+        var query = [URLQueryItem(name: "limit", value: String(limit))]
+        if let projectID { query.append(URLQueryItem(name: "projectId", value: projectID)) }
+        if !search.isEmpty { query.append(URLQueryItem(name: "search", value: search)) }
+        if offset > 0 { query.append(URLQueryItem(name: "offset", value: String(offset))) }
         return try await request(path: "/api/tasks", queryItems: query)
     }
 
@@ -234,12 +234,17 @@ extension GatewayClient {
     }
 
     func createProjectTask(projectID: String, objective: String) async throws {
-        let body = try encoder.encode(ProjectTaskMutation(
+        _ = try await createTask(ProjectTaskMutation(
             idempotencyKey: UUID().uuidString.lowercased(), title: objective, projectId: projectID,
             contract: .init(objective: objective), activation: .init(mode: "capture", phase: "backlog")
         ))
+    }
+
+    func createTask(_ mutation: ProjectTaskMutation) async throws -> TaskRecord {
+        let body = try encoder.encode(mutation)
         let result: ProjectTaskCreationEnvelope = try await request(path: "/api/tasks", method: "POST", body: body)
-        guard result.ok else { throw GatewayClientError.server("任务创建未完成") }
+        guard result.ok, let task = result.task else { throw GatewayClientError.server("任务创建未完成") }
+        return task
     }
 
     func commandTask(_ task: TaskRecord, command: String, phase: String? = nil,
@@ -417,10 +422,14 @@ extension GatewayClient {
         return response.items
     }
 
-    func searchFiles(query: String) async throws -> [FileResource] {
+    func searchFiles(query: String, spaceID: String? = nil) async throws -> [FileResource] {
+        var items = [URLQueryItem(name: "q", value: query), URLQueryItem(name: "limit", value: "100")]
+        if let spaceID, !spaceID.isEmpty {
+            items.append(URLQueryItem(name: "spaceId", value: spaceID))
+        }
         let response: FileResourcePage = try await request(
             path: "/api/files/search",
-            queryItems: [URLQueryItem(name: "q", value: query), URLQueryItem(name: "limit", value: "100")]
+            queryItems: items
         )
         return response.items
     }

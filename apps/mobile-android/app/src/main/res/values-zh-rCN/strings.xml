@@ -569,9 +569,13 @@
     <string name="progress_project_status_completed">已完成</string>
     <string name="progress_project_status_cancelled">已取消</string>
     <string name="progress_project_status_archived">已归档</string>
+    <string name="progress_view_library">查看资料库</string>
+    <string name="progress_view_automations">查看自动化</string>
+    <string name="progress_overview_empty">暂时没有需要处理的进展。</string>
     <string name="progress_loaded_count">已加载 %1$d 项任务</string>
     <string name="progress_new_task">新建任务</string>
     <string name="progress_create_task_prompt">在「项目名称」下创建任务：任务内容</string>
+    <string name="progress_create_task_in_chat">在对话中创建</string>
     <string name="progress_create_chat_error">无法准备任务创建对话，请重试。</string>
     <string name="progress_search_projects">搜索项目</string>
     <string name="progress_no_projects">未找到项目。</string>
@@ -609,7 +613,7 @@
     <string name="progress_command_error">任务操作未能确认，已重新读取最新状态。</string>
     <string name="progress_edit_task">编辑任务</string>
     <string name="progress_task_name">名称</string>
-    <string name="progress_task_project_label">项目 ID</string>
+    <string name="progress_task_project_label">项目</string>
     <string name="progress_save">保存</string>
     <string name="progress_edit_error">保存失败，请先核对任务的最新状态再重试。</string>
     <string name="progress_discard_title">放弃修改？</string>
@@ -1127,4 +1131,23 @@
     <string name="task_resume">继续任务</string>
     <string name="task_stop_run">停止当前执行</string>
     <string name="task_stop_run_help">将请求中止当前正在执行的运行，不会关闭任务。</string>
+    <string name="markdown_copy_formula">复制公式源码</string>
+    <string name="chart_copy_data">复制数据</string>
+    <string name="chart_close">关闭</string>
+    <string name="chart_expand">放大</string>
+    <string name="chart_share_image">分享图片</string>
+    <string name="chart_source">源码</string>
+    <string name="chart_waiting">等待图表数据完成…</string>
+    <string name="chart_too_large">图表数据超过 100 KiB，请缩小数据范围。</string>
+    <string name="chart_deferred">图表将在可见时加载；可点放大查看。</string>
+    <string name="chart_invalid">数据校验失败，可复制数据检查。</string>
+    <string name="chart_opened_in_preview">图表已在预览中打开。</string>
+    <string name="chart_load_failed">图表加载失败，可重新打开预览或复制数据。</string>
+    <string name="chart_share_title">分享图表</string>
+    <string name="device_tool_contacts_prompt">请打开本机通讯录，让我选择一个联系人。</string>
+    <string name="device_tool_calendar_prompt">查看今天手机日历的日程。</string>
+    <string name="device_tool_location_prompt">获取我当前的位置。</string>
+    <string name="progress_attention_provider_setup">需要先配置模型服务，助手才能继续。</string>
+    <string name="progress_attention_interrupted_run">上次执行未正常完成便中断，可以从这里继续。</string>
+    <string name="notes_search_files">搜索文件</string>
 </resources>

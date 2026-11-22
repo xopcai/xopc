@@ -242,9 +242,11 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
       val attention = connection.progress.needsUser.size.takeIf {
         connection.progress.gatewayId == connection.profile?.gatewayId
       } ?: 0
-      val recent = connection.recentConversations.orEmpty().filter {
-        it.id != personal?.conversationId && it.id != connection.pendingDeleteId && it.isRecentSidebarCandidate
-      }.sortedWith(compareByDescending<ConversationSummary> { it.status == "pinned" }.thenByDescending { it.updatedAt })
+      val recent = remember(connection.recentConversations, personal?.conversationId, connection.pendingDeleteId) {
+        connection.recentConversations.orEmpty().filter {
+          it.id != personal?.conversationId && it.id != connection.pendingDeleteId && it.isRecentSidebarCandidate
+        }.sortedWith(compareByDescending<ConversationSummary> { it.status == "pinned" }.thenByDescending { it.updatedAt })
+      }
       val shortcutsEnabled = !selecting && !operationBusy
       val nextOffset = connection.recentConversationsNextOffset
       val requestMore by rememberUpdatedState(onLoadMore)

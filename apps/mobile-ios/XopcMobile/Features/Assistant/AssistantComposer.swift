@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import ImageIO
 import QuickLook
 import SwiftUI
@@ -35,7 +36,7 @@ struct AssistantComposer: View {
     let onVoiceStart: () -> Void
     let onVoiceAttachment: (MessageAttachment) -> Void
 
-    @FocusState private var isComposerFocused: Bool
+    @FocusState.Binding var isComposerFocused: Bool
     @State private var previewAttachment: MessageAttachment?
     @State private var previewFileURL: URL?
     @State private var previewFileDirectory: URL?
@@ -43,14 +44,34 @@ struct AssistantComposer: View {
     @State private var palette: [ComposerPaletteItem] = []
     @State private var paletteError: String?
 
-    private var paletteQuery: String? {
-        guard draft.hasPrefix("/"), !draft.contains(where: \.isNewline) else { return nil }
-        return String(draft.dropFirst())
+    @State private var caretOffset: Int?
+    @State private var caretRequest: ComposerCaretRequest?
+    @State private var paletteSource: ComposerPaletteSource?
+    @State private var dismissedDraft: String?
+
+    private var paletteToken: ComposerPaletteToken? {
+        guard isComposerFocused, draft != dismissedDraft else { return nil }
+        return ComposerPaletteToken.atCaret(in: draft, utf16Offset: caretOffset)
+    }
+
+    private var activePaletteSource: ComposerPaletteSource? {
+        guard paletteToken != nil else { return nil }
+        return ComposerPaletteSource(configuration: configuration, language: locale.identifier)
     }
 
     private var paletteMatches: [ComposerPaletteItem] {
-        guard let paletteQuery else { return [] }
-        return Array(palette.filter { $0.matches(paletteQuery) }.prefix(8))
+        guard let token = paletteToken, paletteSource == activePaletteSource else { return [] }
+        let allowsCommands = token.range.lowerBound == draft.startIndex
+        return Array(
+            palette.compactMap { item -> (ComposerPaletteItem, Int)? in
+                guard allowsCommands || item.id.hasPrefix("skill:"),
+                      let score = item.rank(for: token.query) else { return nil }
+                return (item, score)
+            }
+            .sorted { $0.1 < $1.1 }
+            .prefix(12)
+            .map(\.0)
+        )
     }
 
     var body: some View {
@@ -65,7 +86,7 @@ struct AssistantComposer: View {
                 TransientComposerFeedback(message: attachmentError) { self.attachmentError = nil }
                     .accessibilityLabel(AppLocalization.resolve("附件错误：\(attachmentError)", locale: locale))
             }
-            if paletteQuery != nil, !isActionPanelExpanded {
+            if paletteToken != nil, !isActionPanelExpanded {
                 paletteSuggestions
             }
             controls
@@ -92,7 +113,10 @@ struct AssistantComposer: View {
             }
         }
         .onChange(of: voiceMode) { onInputFocusChanged(isComposerFocused || voiceMode) }
-        .task(id: configuration) { await loadPalette() }
+        .task(id: activePaletteSource) {
+            guard let source = activePaletteSource, paletteSource != source else { return }
+            await loadPalette(source)
+        }
         .sheet(item: $previewAttachment) { attachment in
             NavigationStack {
                 ComposerAttachmentImage(attachment: attachment, maxPointSize: 900)
@@ -137,9 +161,7 @@ struct AssistantComposer: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(paletteMatches) { item in
                         Button {
-                            draft = item.token
-                            isActionPanelExpanded = false
-                            isComposerFocused = true
+                            applyPaletteItem(item)
                         } label: {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(item.title).font(.subheadline.weight(.semibold))
@@ -160,14 +182,28 @@ struct AssistantComposer: View {
         }
     }
 
-    @MainActor private func loadPalette() async {
+    private func applyPaletteItem(_ item: ComposerPaletteItem) {
+        guard let token = paletteToken else { return }
+        let offset = draft[..<token.range.lowerBound].utf16.count + item.token.utf16.count
+        draft.replaceSubrange(token.range, with: item.token)
+        dismissedDraft = item.token.hasSuffix(" ") ? nil : draft
+        caretOffset = offset
+        caretRequest = ComposerCaretRequest(offset: offset)
+        isActionPanelExpanded = false
+        isComposerFocused = true
+    }
+
+    @MainActor private func loadPalette(_ source: ComposerPaletteSource) async {
+        paletteError = nil
         do {
-            palette = try await GatewayClient(configuration: configuration)
-                .fetchComposerPalette(language: locale.identifier)
-            paletteError = nil
+            let rows = try await GatewayClient(configuration: source.configuration)
+                .fetchComposerPalette(language: source.language)
+            guard !Task.isCancelled, activePaletteSource == source else { return }
+            palette = rows
+            paletteSource = source
         } catch is CancellationError {
         } catch {
-            paletteError = error.localizedDescription
+            if !Task.isCancelled, activePaletteSource == source { paletteError = error.localizedDescription }
         }
     }
 
@@ -243,9 +279,8 @@ struct AssistantComposer: View {
 
     private var messageField: some View {
         ZStack(alignment: .leading) {
-            TextField(placeholder, text: $draft, prompt: suggestion == nil ? nil : Text(""), axis: .vertical)
+            composerInput
                 .foregroundStyle(.primary)
-                .focused($isComposerFocused)
                 .lineLimit(1 ... 3)
                 .submitLabel(.send)
                 .onSubmit {
@@ -271,6 +306,17 @@ struct AssistantComposer: View {
                 .accessibilityIdentifier("assistant-next-turn-suggestion")
                 .padding(.trailing, 24)
             }
+        }
+    }
+
+    @ViewBuilder private var composerInput: some View {
+        let prompt: Text? = suggestion == nil ? nil : Text("")
+        if #available(iOS 18, *) {
+            ComposerCaretField(placeholder: placeholder, prompt: prompt, draft: $draft, caretOffset: $caretOffset,
+                               request: caretRequest, focused: $isComposerFocused)
+        } else {
+            TextField(placeholder, text: $draft, prompt: prompt, axis: .vertical)
+                .focused($isComposerFocused)
         }
     }
 
@@ -476,5 +522,52 @@ private struct ComposerAttachmentImage: View {
             image = thumbnail.map(UIImage.init(cgImage:))
             failed = thumbnail == nil
         }
+    }
+}
+
+private struct ComposerPaletteSource: Equatable {
+    let configuration: GatewayConfiguration
+    let language: String
+}
+
+private struct ComposerCaretRequest: Equatable {
+    let id = UUID()
+    let offset: Int
+}
+
+@available(iOS 18, *)
+private struct ComposerCaretField: View {
+    let placeholder: String
+    let prompt: Text?
+    @Binding var draft: String
+    @Binding var caretOffset: Int?
+    let request: ComposerCaretRequest?
+    @FocusState.Binding var focused: Bool
+    @State private var selection: TextSelection?
+
+    var body: some View {
+        TextField(placeholder, text: $draft, selection: $selection, prompt: prompt, axis: .vertical)
+            .focused($focused)
+            .onChange(of: draft) {
+                if draft.isEmpty { caretOffset = nil }
+            }
+            .onChange(of: selection) {
+                guard let selection, case let .selection(range) = selection.indices,
+                      range.isEmpty,
+                      range.upperBound <= draft.endIndex,
+                      range.upperBound.samePosition(in: draft.unicodeScalars) != nil
+                else {
+                    caretOffset = nil
+                    return
+                }
+                caretOffset = range.upperBound.utf16Offset(in: draft)
+            }
+            .onChange(of: request) {
+                guard let request else { return }
+                let clamped = min(max(0, request.offset), draft.utf16.count)
+                let utf16Index = draft.utf16.index(draft.utf16.startIndex, offsetBy: clamped)
+                let index = utf16Index.samePosition(in: draft) ?? draft.endIndex
+                selection = .init(insertionPoint: index)
+            }
     }
 }

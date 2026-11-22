@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct MarkdownBodyView: View {
     let parts: [MarkdownPart]
@@ -8,7 +9,9 @@ struct MarkdownBodyView: View {
     var streaming = false
     var highlightedPart: UUID?
     @Environment(\.chatTextSelectionEnabled) private var textSelectable
+    @Environment(\.openURL) private var parentOpenURL
     @State private var projectedParts: [MarkdownPart] = []
+    @State private var pendingExternalURL: URL?
 
     var body: some View {
         let allParts = markdown == nil || projectedParts.isEmpty ? parts : projectedParts
@@ -27,6 +30,29 @@ struct MarkdownBodyView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .chatTextSelection(textSelectable)
+        .environment(\.openURL, OpenURLAction { url in
+            if ChatMessageLink.resolve(url.absoluteString) != nil {
+                parentOpenURL(url)
+                return .handled
+            }
+            guard ChatMessageLink.externalURL(url) else { return .discarded }
+            pendingExternalURL = url
+            return .handled
+        })
+        .alert("打开外部链接？", isPresented: Binding(
+            get: { pendingExternalURL != nil },
+            set: { if !$0 { pendingExternalURL = nil } }
+        )) {
+            Button("取消", role: .cancel) { pendingExternalURL = nil }
+            Button("打开") {
+                if let url = pendingExternalURL {
+                    pendingExternalURL = nil
+                    UIApplication.shared.open(url)
+                }
+            }
+        } message: {
+            Text(verbatim: pendingExternalURL?.absoluteString ?? "")
+        }
         .task(id: markdown) {
             guard let markdown else { return }
             let previous = projectedParts

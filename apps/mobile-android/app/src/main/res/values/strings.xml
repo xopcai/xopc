@@ -569,9 +569,13 @@
     <string name="progress_project_status_completed">Completed</string>
     <string name="progress_project_status_cancelled">Cancelled</string>
     <string name="progress_project_status_archived">Archived</string>
+    <string name="progress_view_library">View library</string>
+    <string name="progress_view_automations">View automations</string>
+    <string name="progress_overview_empty">Nothing needs your attention right now.</string>
     <string name="progress_loaded_count">Loaded %1$d tasks</string>
     <string name="progress_new_task">New task</string>
     <string name="progress_create_task_prompt">Create a task in “Project name”: task details</string>
+    <string name="progress_create_task_in_chat">Create in chat</string>
     <string name="progress_create_chat_error">Could not prepare task creation chat. Try again.</string>
     <string name="progress_search_projects">Search projects</string>
     <string name="progress_no_projects">No projects found.</string>
@@ -609,7 +613,7 @@
     <string name="progress_command_error">Task action could not be confirmed. The latest task state has been reloaded.</string>
     <string name="progress_edit_task">Edit task</string>
     <string name="progress_task_name">Name</string>
-    <string name="progress_task_project_label">Project ID</string>
+    <string name="progress_task_project_label">Project</string>
     <string name="progress_save">Save</string>
     <string name="progress_edit_error">Could not save. Review the latest task state before retrying.</string>
     <string name="progress_discard_title">Discard changes?</string>
@@ -1127,4 +1131,23 @@
     <string name="task_resume">Resume task</string>
     <string name="task_stop_run">Stop active run</string>
     <string name="task_stop_run_help">Request cancellation of the active run without closing the task.</string>
+    <string name="markdown_copy_formula">Copy formula</string>
+    <string name="chart_copy_data">Copy data</string>
+    <string name="chart_close">Close</string>
+    <string name="chart_expand">Expand</string>
+    <string name="chart_share_image">Share image</string>
+    <string name="chart_source">Source</string>
+    <string name="chart_waiting">Waiting for chart data…</string>
+    <string name="chart_too_large">Chart data exceeds 100 KiB. Narrow the data range.</string>
+    <string name="chart_deferred">Chart loads when visible; tap Expand to view.</string>
+    <string name="chart_invalid">Data validation failed. Copy the data to inspect.</string>
+    <string name="chart_opened_in_preview">Chart is open in preview.</string>
+    <string name="chart_load_failed">Chart failed to load. Reopen preview or copy the data.</string>
+    <string name="chart_share_title">Share chart</string>
+    <string name="device_tool_contacts_prompt">Let me select a contact from this phone.</string>
+    <string name="device_tool_calendar_prompt">Check today\'s events on this phone.</string>
+    <string name="device_tool_location_prompt">Get my current location.</string>
+    <string name="progress_attention_provider_setup">Connect a model provider first so the assistant can continue.</string>
+    <string name="progress_attention_interrupted_run">The previous run was interrupted before finishing. You can continue from here.</string>
+    <string name="notes_search_files">Search files</string>
 </resources>

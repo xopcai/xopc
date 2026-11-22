@@ -236,7 +236,7 @@ export struct XopcMarkdownView {
         if (item.item.kind === 'math' && this.previewLineLimit <= 0) {
           XopcMathMarkdownView({ textSelectable: this.textSelectable, content: item.item.text, streaming: this.streaming, mathRenderingAllowed: this.mathAllowed,
             onOpenLink: (href: string): void => { this.openInternalLink(href); } })
-          Button('复制公式源码').onClick((): void => { this.copyCode(item.item.text); })
+          Button($r('app.string.chat_copy_formula')).onClick((): void => { this.copyCode(item.item.text); })
         } else if (this.previewLineLimit > 0) {
           XopcMarkdownInline({ textSelectable: this.textSelectable, allowMath: this.mathAllowed, content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0,
             muted: item.item.kind === 'quote', compactReading: this.compactReading, lineLimit: this.blockLines(item.index),

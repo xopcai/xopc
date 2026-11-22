@@ -94,32 +94,42 @@ class GatewaySession(
   @Volatile private var profile: GatewayProfile? = null
   @Volatile private var accessToken: String? = null
   @Volatile private var accessExpiresAt: Long = 0
+  private val scopedGatewayId = ThreadLocal<String?>()
 
-  @Synchronized
   fun request(path: String, method: String = "GET", body: String = "",
     headers: Map<String, String> = emptyMap(), expectedGatewayId: String? = null): String {
-    val current = profile ?: throw IllegalStateException("NOT_PAIRED")
-    check(expectedGatewayId == null || current.gatewayId == expectedGatewayId) { "GATEWAY_CHANGED" }
-    var token = token()
+    val requiredGatewayId = expectedGatewayId ?: scopedGatewayId.get()
+    val (current, routes, initialToken) = synchronized(this) {
+      val active = profile ?: throw IllegalStateException("NOT_PAIRED")
+      check(requiredGatewayId == null || active.gatewayId == requiredGatewayId) { "GATEWAY_CHANGED" }
+      Triple(active, active.routes.sortedBy { if (it.id == active.activeRouteId) 0 else 1 }, token())
+    }
+    var bearer = initialToken
     var last: Exception = IllegalStateException("NO_VERIFIED_ROUTE")
-    for (route in current.routes.sortedBy { if (it.id == current.activeRouteId) 0 else 1 }) {
+    for (route in routes) {
       try {
         verifyRoute(current, route)
         val result = try {
-          http.requestWithHeaders(route.url, path, method, body, token, headers)
+          http.requestWithHeaders(route.url, path, method, body, bearer, headers)
         } catch (error: GatewayHttpException) {
           if (error.status != 401) throw error
-          accessToken = null
-          token = token()
-          http.requestWithHeaders(route.url, path, method, body, token, headers)
+          bearer = synchronized(this) {
+            check(requiredGatewayId == null || profile?.gatewayId == requiredGatewayId) { "GATEWAY_CHANGED" }
+            if (accessToken == bearer) accessToken = null
+            token()
+          }
+          http.requestWithHeaders(route.url, path, method, body, bearer, headers)
         }
-        if (route.id != current.activeRouteId) {
-          val updated = current.copy(activeRouteId = route.id)
-          val catalog = readCatalog()
-          writeCatalog(catalog.copy(profiles = catalog.profiles.map {
-            if (it.gatewayId == updated.gatewayId) updated else it }))
-          store.write("profile", profileJson(updated).toString())
-          profile = updated
+        if (route.id != current.activeRouteId) synchronized(this) {
+          val active = profile
+          if (active != null && active.gatewayId == current.gatewayId && active.activeRouteId != route.id) {
+            val updated = active.copy(activeRouteId = route.id)
+            val catalog = readCatalog()
+            writeCatalog(catalog.copy(profiles = catalog.profiles.map {
+              if (it.gatewayId == updated.gatewayId) updated else it }))
+            store.write("profile", profileJson(updated).toString())
+            profile = updated
+          }
         }
         return result
       } catch (error: Exception) {
@@ -130,25 +140,28 @@ class GatewaySession(
     throw last
   }
 
-  @Synchronized
   fun requestBytes(path: String): ByteArray = readMedia { origin, bearer -> http.requestBytes(origin, path, bearer) }
 
-  @Synchronized
   internal fun mediaPlaybackUrl(path: String, expectedGatewayId: String? = null): String {
     val body = JSONObject().put("path", path).toString()
     val response = JSONObject(request("/api/media/playback-ticket", "POST", body, expectedGatewayId = expectedGatewayId))
     val playbackPath = response.getString("path")
     require(playbackPath.startsWith("$path?playbackTicket=") &&
       playbackPath.substringAfter("?playbackTicket=").matches(Regex("[A-Za-z0-9_-]{43}"))) { "INVALID_PLAYBACK_URL" }
-    val current = checkNotNull(profile)
-    val origin = current.routes.first { it.id == current.activeRouteId }.url
+    val origin = synchronized(this) {
+      val current = checkNotNull(profile)
+      val requiredGatewayId = expectedGatewayId ?: scopedGatewayId.get()
+      check(requiredGatewayId == null || current.gatewayId == requiredGatewayId) { "GATEWAY_CHANGED" }
+      current.routes.first { it.id == current.activeRouteId }.url
+    }
     return origin.trimEnd('/') + playbackPath
   }
 
   fun downloadGeneratedMedia(path: String, destination: java.io.File, expectedGatewayId: String? = null) {
     val (origin, bearer) = synchronized(this) {
       val current = profile ?: throw IllegalStateException("NOT_PAIRED")
-      check(expectedGatewayId == null || current.gatewayId == expectedGatewayId) { "GATEWAY_CHANGED" }
+      val requiredGatewayId = expectedGatewayId ?: scopedGatewayId.get()
+      check(requiredGatewayId == null || current.gatewayId == requiredGatewayId) { "GATEWAY_CHANGED" }
       val route = current.routes.firstOrNull { it.id == current.activeRouteId } ?: throw IllegalStateException("NO_VERIFIED_ROUTE")
       verifyRoute(current, route)
       route.url to token()
@@ -157,18 +170,26 @@ class GatewaySession(
   }
 
   private fun <T> readMedia(request: (String, String) -> T): T {
-    val current = profile ?: throw IllegalStateException("NOT_PAIRED")
-    var access = token()
+    val requiredGatewayId = scopedGatewayId.get()
+    val (current, routes, initialAccess) = synchronized(this) {
+      val active = profile ?: throw IllegalStateException("NOT_PAIRED")
+      check(requiredGatewayId == null || active.gatewayId == requiredGatewayId) { "GATEWAY_CHANGED" }
+      Triple(active, active.routes.sortedBy { if (it.id == active.activeRouteId) 0 else 1 }, token())
+    }
+    var access = initialAccess
     var last: Exception = IllegalStateException("NO_VERIFIED_ROUTE")
-    for (route in current.routes.sortedBy { if (it.id == current.activeRouteId) 0 else 1 }) {
+    for (route in routes) {
       try {
         verifyRoute(current, route)
         return try {
           request(route.url, access)
         } catch (error: GatewayHttpException) {
           if (error.status != 401) throw error
-          accessToken = null
-          access = token()
+          access = synchronized(this) {
+            check(requiredGatewayId == null || profile?.gatewayId == requiredGatewayId) { "GATEWAY_CHANGED" }
+            if (accessToken == access) accessToken = null
+            token()
+          }
           request(route.url, access)
         }
       } catch (error: Exception) {
@@ -268,10 +289,15 @@ class GatewaySession(
 
   fun currentProfile(): GatewayProfile? = profile
 
-  @Synchronized
   internal fun <T> withActiveGateway(gatewayId: String, request: () -> T): T {
-    check(profile?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
-    return request()
+    synchronized(this) { check(profile?.gatewayId == gatewayId) { "GATEWAY_CHANGED" } }
+    val previous = scopedGatewayId.get()
+    scopedGatewayId.set(gatewayId)
+    return try {
+      request()
+    } finally {
+      if (previous == null) scopedGatewayId.remove() else scopedGatewayId.set(previous)
+    }
   }
 
   @Synchronized
@@ -507,7 +533,8 @@ class GatewaySession(
 
   private fun verifyRoute(current: GatewayProfile, route: GatewayRoute) {
     val cacheKey = "${current.gatewayId}:${current.gatewayPublicKey}:${route.url}"
-    if ((verifiedRoutes[cacheKey] ?: 0) > System.currentTimeMillis()) return
+    val valid = synchronized(this) { (verifiedRoutes[cacheKey] ?: 0) > System.currentTimeMillis() }
+    if (valid) return
     val nonce = identity.nonce()
     val body = JSONObject().put("nonce", nonce).toString()
     val proof = verifiedJson(PairingProtocol.decodeBase64Url(current.gatewayPublicKey),
@@ -517,8 +544,10 @@ class GatewaySession(
     val expiry = proof.getLong("expiresAt")
     require(proof.getString("purpose") == "gateway-route-v1" && proof.getString("gatewayId") == current.gatewayId &&
       proof.getString("nonce") == nonce && expiry > serverTime && expiry <= serverTime + 60_000) { "GATEWAY_IDENTITY_MISMATCH" }
-    clockOffsetMs = serverTime - now
-    verifiedRoutes[cacheKey] = now + 30_000
+    synchronized(this) {
+      clockOffsetMs = serverTime - now
+      verifiedRoutes[cacheKey] = now + 30_000
+    }
   }
 
   private fun parseRoutes(value: JSONArray): List<GatewayRoute> {

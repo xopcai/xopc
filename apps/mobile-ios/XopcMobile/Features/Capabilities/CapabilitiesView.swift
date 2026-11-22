@@ -67,6 +67,10 @@ private enum CapabilityCategory: String, CaseIterable, Identifiable {
     }
 }
 
+private final class CapabilityScrollPositions {
+    var rows: [CapabilityCategory: String] = [:]
+}
+
 private struct CapabilityCatalogPage: Decodable {
     let items: [CapabilityCatalogItem]
     let incomplete: Bool?
@@ -103,7 +107,7 @@ struct CapabilitiesView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("navigation.capabilities") private var category = CapabilityCategory.plugins
     @State private var queries: [CapabilityCategory: String] = [:]
-    @State private var positions: [CapabilityCategory: String] = [:]
+    @State private var positions = CapabilityScrollPositions()
     @State private var pages: [CapabilityCategory: CapabilityCatalogPage] = [:]
     @State private var failures: Set<CapabilityCategory> = []
     @State private var requests: [CapabilityCategory: Task<Void, Never>] = [:]
@@ -230,9 +234,10 @@ struct CapabilitiesView: View {
                 .scrollTargetLayout()
                 .padding(.horizontal, 18)
             }
-            .scrollPosition(id: Binding(get: { positions[kind] }, set: { positions[kind] = $0 }))
+            .accessibilityIdentifier("capability-catalog-\(kind.id)")
+            .scrollPosition(id: Binding(get: { positions.rows[kind] }, set: { positions.rows[kind] = $0 }))
             .onChange(of: query) { _, _ in
-                positions[kind] = "capability-top"
+                positions.rows[kind] = "capability-top"
                 scroll.scrollTo("capability-top", anchor: .top)
             }
             .scrollDismissesKeyboard(.interactively)
@@ -628,6 +633,24 @@ struct ConversationMcpAction: View {
     }
 }
 
+struct LinkedMcpSetupView: View {
+    @Environment(\.locale) private var locale
+    let configuration: GatewayConfiguration
+    let name: String
+    let serverURL: String
+    let onClose: () -> Void
+    let onUseInChat: (String) -> Void
+
+    var body: some View {
+        CapabilitySettingsPanel(configuration: configuration, category: "connections", itemID: "mcp:setup",
+                                name: AppLocalization.string("capability_add_mcp", locale: locale), summary: "",
+                                onChanged: {}, onClose: onClose, onUseInChat: onUseInChat,
+                                initialFields: ["id": name, "url": serverURL]) {
+            CapabilityLogo(reference: nil, origin: configuration.baseURL, label: "", symbol: "link", extent: 44)
+        }
+    }
+}
+
 private struct CapabilityPanelCommand: Encodable {
     let action: String
     let values: [String: String]
@@ -645,6 +668,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     let onChanged: () -> Void
     let onClose: () -> Void
     let onUseInChat: (String) -> Void
+    var initialFields: [String: String] = [:]
     @ViewBuilder let icon: () -> Icon
 
     @Environment(\.mobileTheme) private var theme
@@ -1504,6 +1528,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                 return
             }
             let currentValues = values
+            let prefill = panel == nil && action == nil ? initialFields : [:]
             panel = result
             if result.actions?.contains(where: { $0.dismiss == true }) == true,
                result.actions?.contains(where: { $0.id == "add-another" }) != true
@@ -1513,6 +1538,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             values = Dictionary((result.fields ?? []).map { ($0.id,
                                                              (polling ? currentValues[$0.id] : nil)
                                                                  ?? (itemID == "mcp:setup" && $0.retain == true ? retainedValues[$0.id] : nil)
+                                                                 ?? prefill[$0.id]
                                                                  ?? ($0.type == "secret" ? "" : $0.value ?? "")) },
                                 uniquingKeysWith: { first, _ in first })
             errorMessage = nil

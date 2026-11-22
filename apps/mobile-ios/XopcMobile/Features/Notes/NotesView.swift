@@ -16,11 +16,17 @@ struct NotesView: View {
     @State private var error: String?
     @State private var presentedSheet: NotesSheet?
     @State private var notesLoadRevision = 0
+    @State private var loadedQuery: NotesSearch?
     @State private var pendingVoiceNote: PendingVoiceNote?
     @State private var pendingVoiceNoteLoadFailed = false
 
+    private var currentQuery: NotesSearch {
+        NotesSearch(query: search.trimmingCharacters(in: .whitespacesAndNewlines), status: status, configuration: configuration)
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
+        let matchingNotes = loadedQuery == currentQuery ? notes : []
+        return VStack(spacing: 0) {
             if searchOpen {
                 PageSearchField("搜索笔记", text: $search, focused: $isSearchFocused,
                                 accessibilityID: "notes-search-field")
@@ -47,14 +53,24 @@ struct NotesView: View {
                     }
                     .accessibilityHint("打开本地待上传录音")
                 }
-                statusPicker
-                if isLoading, notes.isEmpty {
+                HStack(spacing: 8) {
+                    statusPicker
+                    Button("语音笔记", systemImage: "mic") { presentedSheet = .voice }
+                        .labelStyle(.iconOnly)
+                        .frame(width: 44, height: 44)
+                        .background(mobileTheme.panel, in: .circle)
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("notes-create-voice")
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                if matchingNotes.isEmpty, isLoading || loadedQuery != currentQuery && error == nil {
                     loadingRows
-                } else if notes.isEmpty, error == nil {
+                } else if matchingNotes.isEmpty, error == nil {
                     ContentUnavailableView(emptyTitle, systemImage: "note.text")
                         .listRowBackground(Color.clear)
                 }
-                ForEach(notes) { note in
+                ForEach(matchingNotes) { note in
                     Button {
                         presentedSheet = .detail(note.id)
                     } label: {
@@ -65,7 +81,7 @@ struct NotesView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("note-row-\(note.id)")
                 }
-                if nextOffset != nil {
+                if loadedQuery == currentQuery, nextOffset != nil {
                     Button("加载更多") { Task { await loadMore() } }
                         .disabled(isLoading || isLoadingMore)
                         .accessibilityIdentifier("notes-load-more")
@@ -82,8 +98,6 @@ struct NotesView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 PageSearchButton("搜索笔记", isOpen: $searchOpen, query: $search,
                                  accessibilityID: "notes-open-search")
-                Button("语音笔记", systemImage: "waveform") { presentedSheet = .voice }
-                    .accessibilityIdentifier("notes-create-voice")
                 Button("新建笔记", systemImage: "plus") { presentedSheet = .create }
                     .accessibilityIdentifier("notes-create-text")
             }
@@ -114,8 +128,9 @@ struct NotesView: View {
             }
         }
         .task(id: configuration) { await refreshPendingVoiceNote() }
-        .task(id: NotesSearch(query: search, status: status, configuration: configuration)) {
-            if !search.isEmpty {
+        .task(id: currentQuery) {
+            error = nil
+            if !currentQuery.query.isEmpty {
                 do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
             }
             await load()
@@ -134,8 +149,6 @@ struct NotesView: View {
             SegmentOption(id: "archived", title: "已归档", accessibilityID: "library-status-archived")
         ], selected: status, label: "状态") { status = $0 }
             .accessibilityIdentifier("library-status-tabs")
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
     }
 
     private var emptyTitle: LocalizedStringResource {
@@ -180,13 +193,16 @@ struct NotesView: View {
     private func load() async {
         notesLoadRevision += 1
         let revision = notesLoadRevision
-        let query = search
-        let selectedStatus = status
+        let request = currentQuery
         let scope = ComposerDraftStore.accountScope(configuration)
         let requestedAt = Date.now
-        let unfiltered = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedStatus.isEmpty
-        if unfiltered, notes.isEmpty, let cached: [NoteSummary] = MobileListCache.shared.read(.notes, scope: scope) {
+        let unfiltered = request.query.isEmpty && request.status.isEmpty
+        if unfiltered, notes.isEmpty || loadedQuery != request,
+           let cached: [NoteSummary] = MobileListCache.shared.read(.notes, scope: scope)
+        {
+            loadedQuery = request
             notes = cached
+            nextOffset = nil
         }
         isLoading = true
         defer {
@@ -196,8 +212,9 @@ struct NotesView: View {
         }
         do {
             let page = try await GatewayClient(configuration: configuration)
-                .fetchNotes(search: query, status: selectedStatus)
-            guard revision == notesLoadRevision, !Task.isCancelled else { return }
+                .fetchNotes(search: request.query, status: request.status)
+            guard revision == notesLoadRevision, currentQuery == request, !Task.isCancelled else { return }
+            loadedQuery = request
             notes = page.items
             nextOffset = page.hasMore && !page.items.isEmpty ? page.items.count : nil
             if unfiltered {
@@ -206,29 +223,33 @@ struct NotesView: View {
             error = nil
         } catch is CancellationError {
         } catch {
-            guard revision == notesLoadRevision else { return }
+            guard revision == notesLoadRevision, currentQuery == request, !Task.isCancelled else { return }
+            if loadedQuery != request {
+                loadedQuery = request
+                notes = []
+                nextOffset = nil
+            }
             self.error = error.localizedDescription
         }
     }
 
     @MainActor
     private func loadMore() async {
-        guard let offset = nextOffset, !isLoading, !isLoadingMore else { return }
+        let request = currentQuery
+        guard loadedQuery == request, let offset = nextOffset, !isLoading, !isLoadingMore else { return }
         let revision = notesLoadRevision
-        let query = search
-        let selectedStatus = status
         isLoadingMore = true
         defer { isLoadingMore = false }
         do {
             let page = try await GatewayClient(configuration: configuration)
-                .fetchNotes(search: query, status: selectedStatus, offset: offset)
-            guard revision == notesLoadRevision, search == query, status == selectedStatus, !Task.isCancelled else { return }
+                .fetchNotes(search: request.query, status: request.status, offset: offset)
+            guard revision == notesLoadRevision, currentQuery == request, !Task.isCancelled else { return }
             let existing = Set(notes.map(\.id))
             notes.append(contentsOf: page.items.filter { !existing.contains($0.id) })
             nextOffset = page.hasMore && !page.items.isEmpty ? offset + page.items.count : nil
         } catch is CancellationError {
         } catch {
-            guard revision == notesLoadRevision, search == query, status == selectedStatus else { return }
+            guard revision == notesLoadRevision, currentQuery == request else { return }
             self.error = error.localizedDescription
         }
     }

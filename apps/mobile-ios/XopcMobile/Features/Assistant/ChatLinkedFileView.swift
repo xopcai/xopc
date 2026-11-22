@@ -28,6 +28,7 @@ struct ChatLinkedFileView: View {
             case let .managedFile(id): uri = "xopc-file:\(id)"; path = nil
             case let .workspaceFile(relative): uri = nil; path = relative
             case let .route(_, id): uri = "xopc-file:\(id)"; path = nil
+            case .mcpSetup: return
             }
             let attachment = HistoryAttachment(mediaID: uri, type: "file", name: path ?? "文件", mimeType: nil,
                                                size: nil, uri: uri, duration: nil, workspaceRelativePath: path, extractedText: nil)

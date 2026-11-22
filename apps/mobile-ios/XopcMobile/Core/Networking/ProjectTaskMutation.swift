@@ -3,7 +3,10 @@ import Foundation
 struct ProjectTaskMutation: Encodable {
     let idempotencyKey: String
     let title: String
-    let projectId: String
+    var body: String?
+    let projectId: String?
+    var priority: String?
+    var dueAt: Int64?
     let contract: Contract
     let dependencies: [String] = []
     let context: [String] = []
@@ -30,4 +33,5 @@ struct ProjectTaskMutation: Encodable {
 
 struct ProjectTaskCreationEnvelope: Decodable {
     let ok: Bool
+    let task: TaskRecord?
 }

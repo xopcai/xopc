@@ -47,7 +47,7 @@ struct AppSettingsView: View {
                 }
                 .accessibilityIdentifier("settings-models")
                 NavigationLink {
-                    NotificationSettingsView(configuration: configuration)
+                    SettingsSectionView(configuration: configuration, section: .notifications)
                 } label: {
                     Label("通知", systemImage: "bell")
                 }
@@ -67,19 +67,19 @@ struct AppSettingsView: View {
             }
             Section("偏好设置") {
                 NavigationLink {
-                    LanguageSettingsView()
+                    SettingsSectionView(configuration: configuration, section: .language)
                 } label: {
                     Label("语言", systemImage: "globe")
                 }
                 NavigationLink {
-                    AppearanceSettingsView()
+                    SettingsSectionView(configuration: configuration, section: .appearance)
                 } label: {
                     Label("外观", systemImage: "sun.max")
                 }
             }
             Section("关于") {
                 NavigationLink {
-                    AboutView()
+                    SettingsSectionView(configuration: configuration, section: .about)
                 } label: {
                     Label("关于 xopc", systemImage: "info.circle")
                 }
@@ -89,6 +89,20 @@ struct AppSettingsView: View {
         .listSectionSpacing(16)
         .navigationTitle(Text(verbatim: AppLocalization.string("设置", locale: locale)))
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct SettingsSectionView: View {
+    let configuration: GatewayConfiguration
+    let section: MobileSettingsSection
+
+    var body: some View {
+        switch section {
+        case .language: LanguageSettingsView()
+        case .appearance: AppearanceSettingsView()
+        case .notifications: NotificationSettingsView(configuration: configuration)
+        case .about: AboutView()
+        }
     }
 }
 
@@ -172,7 +186,7 @@ private struct ShareCenterView: View {
             if share.isActive {
                 Menu {
                     if let link = share.shareUrl, let url = URL(string: link),
-                       ["https", "http"].contains(url.scheme?.lowercased() ?? "")
+                       ChatMessageLink.externalURL(url)
                     {
                         Link("打开链接", destination: url)
                         ShareLink(item: url) { Label("分享链接", systemImage: "square.and.arrow.up") }
