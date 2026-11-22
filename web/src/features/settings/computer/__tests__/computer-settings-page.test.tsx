@@ -147,7 +147,7 @@ it('shows that app discovery is busy during an active control task', async () =>
   const container = await renderPanel();
   const add = [...container.querySelectorAll('button')].find(button => button.textContent === '添加应用')!;
   await act(async () => add.click());
-  expect(container.textContent).toContain('控制任务进行中，稍后刷新应用');
+  expect(container.textContent).toContain('控制任务进行中，请稍后刷新应用。');
   expect(container.textContent).not.toContain('没有找到应用');
 });
 
@@ -175,7 +175,7 @@ it('wires missing macOS permissions and keeps stop usable during a pending permi
   expect(requestScreen).toHaveBeenCalledOnce();
   await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="打开设置: 辅助功能"]')!.click());
   expect(requestAccessibility).toHaveBeenCalledOnce();
-  const stopButton = [...container.querySelectorAll('button')].find(button => button.textContent === '停止桌面操作')!;
+  const stopButton = [...container.querySelectorAll('button')].find(button => button.textContent === '停止桌面控制')!;
   expect(stopButton.disabled).toBe(false);
   await act(async () => stopButton.click());
   expect(stop).toHaveBeenCalledOnce();
@@ -186,7 +186,7 @@ it('does not offer native control actions on unsupported platforms', async () =>
   window.electronAPI = { platform: 'linux', computer: { status: vi.fn() }, system: {} } as any;
   const container = await renderPanel();
   expect(container.textContent).toContain('本机桌面控制目前支持 macOS 和 Windows x64');
-  expect(container.textContent).not.toContain('停止桌面操作');
+  expect(container.textContent).not.toContain('停止桌面控制');
   expect(window.electronAPI!.computer!.status).not.toHaveBeenCalled();
 });
 
@@ -197,7 +197,7 @@ it('offers Windows control without displaying macOS permission prompts', async (
     permissions: { accessibility: false, screenRecording: 'unknown' }, capabilities: { supported: true, delivery: 'background', textInput: false } }), stop },
     system: { requestAccessibility } } as any;
   const container = await renderPanel();
-  expect(container.textContent).toContain('停止桌面操作');
+  expect(container.textContent).toContain('停止桌面控制');
   const switchButton = container.querySelector('button[role="switch"]') as HTMLButtonElement;
   expect(switchButton.disabled).toBe(false);
   expect(container.textContent).not.toContain('打开设置');
@@ -218,7 +218,7 @@ it('refreshes the stopped session without requiring a resume action', async () =
   const stop = vi.fn(async () => { stopped = true; return { ok: true }; });
   window.electronAPI = { platform: 'darwin', computer: { status: async () => status(), stop } } as any;
   const container = await renderPanel();
-  await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '停止桌面操作')!.click());
+  await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '停止桌面控制')!.click());
   expect(stop).toHaveBeenCalledOnce();
   expect(container.textContent).toContain('桌面控制已停止');
   expect(container.textContent).not.toContain('桌面控制已暂停');
@@ -231,7 +231,7 @@ it('translates an existing stop notice when the app language changes', async () 
     stop: async () => ({ ok: true }),
   } } as any;
   const container = await renderPanel();
-  await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '停止桌面操作')!.click());
+  await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '停止桌面控制')!.click());
   expect(container.textContent).toContain('桌面控制已停止');
   await act(async () => root!.render(<MemoryRouter><ComputerSettingsPanel zh={false} /></MemoryRouter>));
   expect(container.textContent).toContain('Desktop control stopped.');
@@ -263,14 +263,14 @@ it('rejects invalid model references without writing defaults', async () => {
   const container = await renderPanel();
   await changeModel(container, 'not-a-provider-model');
   expect(updateGlobalDefaults).not.toHaveBeenCalled();
-  expect(container.textContent).toContain('此模型当前不可选择');
+  expect(container.textContent).toContain('此模型当前不可用');
 });
 
 it.each([
   ['COMPUTER_WINDOW_HIDDEN', '目标窗口已隐藏或最小化'],
   ['COMPUTER_WINDOW_OTHER_SPACE', '目标窗口位于其他桌面'],
   ['COMPUTER_CAPTURE_UNAVAILABLE', '暂时无法读取画面'],
-  ['COMPUTER_BACKGROUND_INPUT_UNSUPPORTED', '明确不支持当前后台输入方式'],
+  ['COMPUTER_BACKGROUND_INPUT_UNSUPPORTED', '不支持当前后台输入方式'],
   ['COMPUTER_DRIVER_CLICK_REFUSED', '原因尚不明确'],
 ])('explains %s without misreporting missing permissions', async (errorCode, message) => {
   window.electronAPI = { platform: 'darwin', computer: {
@@ -295,7 +295,7 @@ it('shows a cancellable preparation state without claiming that a task input has
   const container = await renderPanel();
   expect(container.textContent).toContain('等待窗口就绪');
   expect(container.textContent).toContain('最长等待 5 秒');
-  const button = [...container.querySelectorAll('button')].find(item => item.textContent === '停止桌面操作')!;
+  const button = [...container.querySelectorAll('button')].find(item => item.textContent === '停止桌面控制')!;
   expect(button.disabled).toBe(false);
   await act(async () => button.click());
   expect(stop).toHaveBeenCalledOnce();

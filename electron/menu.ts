@@ -70,6 +70,7 @@ export function buildAppMenuModel(
       items: [
         item('file.newChat', t.file.newChat, { accelerator: 'CmdOrCtrl+N' }),
         item('file.quickCapture', t.file.quickCapture),
+        item('file.screenshot', t.file.screenshot),
         separator(),
         item('file.search', t.file.search, { accelerator: 'CmdOrCtrl+K' }),
         item('file.gatewaySettings', t.file.gatewaySettings),
@@ -177,11 +178,15 @@ export function buildAppMenuModel(
 export function invokeAppMenuAction(
   mainWindow: BrowserWindow,
   id: string,
-  actions: { gatewaySettings?(): void } = {},
+  actions: { gatewaySettings?(): void; screenshot?(): void } = {},
 ): { ok: true } | { ok: false; error: 'UNKNOWN_MENU_ACTION' } {
   const wc = mainWindow.webContents;
 
   switch (id) {
+    case 'file.screenshot':
+      if (!actions.screenshot) return { ok: false, error: 'UNKNOWN_MENU_ACTION' };
+      actions.screenshot();
+      break;
     case 'file.gatewaySettings':
       if (!actions.gatewaySettings) return { ok: false, error: 'UNKNOWN_MENU_ACTION' };
       actions.gatewaySettings();
@@ -307,14 +312,19 @@ export function invokeAppMenuAction(
   return { ok: true };
 }
 
-export function buildAppMenu(mainWindow: BrowserWindow, t: ElectronMenuMessages, actions: { gatewaySettings?(): void } = {}): Menu {
+export function buildAppMenu(
+  mainWindow: BrowserWindow,
+  t: ElectronMenuMessages,
+  actions: { gatewaySettings?(): void; screenshot?(): void } = {},
+): Menu {
   const template: MenuItemConstructorOptions[] = buildAppMenuModel(t).map((group) => ({
     label: group.label,
     submenu: group.items.map((menuItem): MenuItemConstructorOptions => {
       if (menuItem.type === 'separator') return { type: 'separator' };
       if (menuItem.role) {
         const useNativeRoleLabel =
-          menuItem.id.startsWith('role.') || (menuItem.id === 'app.quit' && menuItem.role === 'quit');
+          menuItem.id.startsWith('role.') ||
+          (process.platform === 'darwin' && menuItem.id === 'app.quit' && menuItem.role === 'quit');
         return {
           role: menuItem.role,
           ...(useNativeRoleLabel ? {} : { label: menuItem.label }),

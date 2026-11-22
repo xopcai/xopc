@@ -278,8 +278,8 @@ struct UserUnderstandingView: View {
             Section("我们如何协作") { ForEach(rules) { Text($0.statement) } }
         }
         Section("记忆设置") {
-            LabeledContent("使用记忆") { Text(summary.settings.memoryEnabled ? "已开启" : "已关闭") }
-            LabeledContent("显示记忆引用") { Text(summary.settings.showMemoryReferences ? "已开启" : "已关闭") }
+            LabeledContent("使用记忆") { Text(summary.settings.memoryEnabled ? "已开启" : "toggle_off") }
+            LabeledContent("显示记忆引用") { Text(summary.settings.showMemoryReferences ? "已开启" : "toggle_off") }
             LabeledContent("保存敏感记忆") { Text(memoryWritePolicy(summary.settings.sensitiveWritePolicy)) }
         }
     }

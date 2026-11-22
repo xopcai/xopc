@@ -7,7 +7,7 @@ enum WorkPage: String, CaseIterable {
     var title: LocalizedStringResource {
         switch self {
         case .progress: "进展"
-        case .projects: "项目"
+        case .projects: "projects_tab"
         case .tasks: "任务"
         }
     }

@@ -26,6 +26,6 @@ describe('formatApiHttpError', () => {
   it('localizes generic upstream provider failures', () => {
     useLocaleStore.setState({ language: 'zh' });
     expect(formatApiHttpError(502, 'Bad Gateway', 'Provider request failed'))
-      .toBe('网关错误 (502)');
+      .toBe('网关错误（502）');
   });
 });

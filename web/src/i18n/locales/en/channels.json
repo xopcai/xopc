@@ -231,7 +231,7 @@
       "title": "Realtime voice",
       "description": "Stream microphone audio for live transcription and low-latency voice conversations.",
       "turnDetection": "Automatic turn detection",
-      "turnDetectionDescription": "Qwen detects speech pauses and sends each completed utterance automatically.",
+      "turnDetectionDescription": "Automatically detects speech pauses and sends each completed utterance.",
       "bargeIn": "Allow interruption",
       "bargeInDescription": "Speaking while the assistant replies stops the current response."
     },
@@ -475,7 +475,7 @@
     "corsAddDetectedOrigins": "Add detected origins",
     "corsOriginsWildcardWarning": "Wildcard \"*\" allows any website to call the API from a browser. Use only if you understand the risk.",
     "securitySection": "Network security",
-    "securitySectionHint": "OpenClaw-aligned guards for LAN and reverse-proxy deployments. Restart after saving.",
+    "securitySectionHint": "Security guards for LAN and reverse-proxy deployments. Restart after saving.",
     "securityStrict": "Strict security mode",
     "securityStrictHint": "When enabled, network-accessible binds require explicit failed-auth rate limiting configuration.",
     "dangerouslyAllowHostHeaderOriginFallback": "Allow Host-header origin fallback",
@@ -521,13 +521,13 @@
     "channelConnectDeferModeAuto": "Auto (plugin default)",
     "channelConnectDeferModeOff": "Off (start all channels before listen)",
     "channelConnectDeferModeExplicit": "Explicit list",
-    "channelConnectDeferModeHint": "Controls when outbound-heavy channels call `start()` relative to HTTP listen. Auto defers plugins that opt in (e.g. Telegram, Weixin, Feishu).",
-    "channelConnectDeferIds": "Defer channel ids",
-    "channelConnectDeferIdsHint": "Used when mode is Explicit. These plugin ids start after HTTP listen (max 24). Empty means defer none.",
-    "channelConnectDeferSkipIds": "Skip defer ids",
-    "channelConnectDeferSkipIdsHint": "Removed from the defer set after auto or explicit resolution (max 24). Example: keep Telegram on phase 1 but defer others.",
-    "channelIdListPlaceholder": "Channel id and press Enter (e.g. telegram)",
-    "channelIdListEmpty": "No ids configured."
+    "channelConnectDeferModeHint": "Controls when channels connect relative to HTTP startup. Auto defers plugins that support deferred startup (e.g., Telegram, Weixin, Feishu).",
+    "channelConnectDeferIds": "Defer channel IDs",
+    "channelConnectDeferIdsHint": "Used when mode is Explicit list. These channel plugin IDs start after HTTP startup (max 24). Leave empty to defer none.",
+    "channelConnectDeferSkipIds": "Skip defer IDs",
+    "channelConnectDeferSkipIdsHint": "Excluded from deferred startup after auto or explicit resolution (max 24). Example: start Telegram immediately while deferring others.",
+    "channelIdListPlaceholder": "Channel ID and press Enter (e.g. telegram)",
+    "channelIdListEmpty": "No IDs configured."
   },
   "webSearchSettings": {
     "title": "Web search",

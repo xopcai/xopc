@@ -21,7 +21,7 @@
     "paused": "已暂停",
     "last": "上次",
     "next": "下次",
-    "loading": "正在加载...",
+    "loading": "正在加载…",
     "selectRun": "选择一次运行查看结果。",
     "timeline": "技术记录",
     "details": {
@@ -64,7 +64,7 @@
       "actionCompletedFallback": "动作已完成",
       "actionFailed": "{kind} 动作失败",
       "actionFailedFallback": "动作失败",
-      "runCompleted": "自动化运行已{status}",
+      "runCompleted": "自动化运行：{status}",
       "runCompletedFallback": "自动化运行已完成"
     },
     "metrics": {
@@ -92,7 +92,7 @@
       "latestResult": "最近结果",
       "result": "结果",
       "runHistory": "运行历史",
-      "runHistoryDescription": "查看历史运行，并进入每次运行关联的会话或工作流。",
+      "runHistoryDescription": "查看历史运行，并进入每次结果对应的会话。",
       "allRuns": "运行记录",
       "backToAutomations": "返回自动化",
       "runCenterDescription": "跨自动化查看执行状态；选择一条记录进入结果与诊断。",
@@ -120,10 +120,10 @@
     },
     "draft": {
       "title": "用 AI 起草",
-      "subtitle": "描述你想要的结果。xopc 会先起草触发条件、执行动作和安全检查，确认前不会发布。",
-      "placeholder": "例如：当结果变成阻塞状态时，让智能体诊断原因并建议下一步。",
+      "subtitle": "描述你想要的任务。xopc 会先起草触发条件、执行动作和安全检查，确认前不会发布。",
+      "placeholder": "例如：当任务变成阻塞状态时，让智能体诊断原因并建议下一步。",
       "generate": "生成草案",
-      "generating": "生成中...",
+      "generating": "生成中…",
       "review": "发布前检查",
       "safety": "安全",
       "assumptions": "假设",
@@ -151,7 +151,7 @@
     "repair": {
       "title": "修复建议",
       "suggest": "生成修复建议",
-      "generating": "生成中...",
+      "generating": "生成中…",
       "risks": "风险",
       "approval": "我已检查这次修复，并确认应用。",
       "apply": "应用修复"
@@ -166,7 +166,7 @@
       "noteCreatedDescription": "创建新笔记后，让 xopc 自动分类并建议下一步行动。",
       "noteCreatedPrompt": "当创建新笔记时，运行智能体对笔记分类、识别有用的后续行动，并总结可能的任务。触发条件使用 notes 来源的 note.created 事件。保持安全：默认只输出简短建议，除非用户后续确认，否则不要自动改写笔记。",
       "taskBlockedTitle": "自动诊断阻塞",
-      "taskBlockedDescription": "当这个结果被阻塞时，让智能体诊断原因并给出下一步具体行动。",
+      "taskBlockedDescription": "当这个任务被阻塞时，让智能体诊断原因并给出下一步具体行动。",
       "taskBlockedPrompt": "当任务因阻塞需要关注时，运行智能体诊断原因并给出下一步具体行动。触发条件使用 tasks 来源的 task.attention_required.v2 事件，payloadMatch reason=blocked。参考任务标题：{{title}}。除非用户明确配置，否则不要自动修改任务。"
     },
     "explain": {
@@ -189,7 +189,7 @@
       "chat": "会话",
       "rerun": "重新运行",
       "pause": "暂停自动化",
-      "working": "处理中...",
+      "working": "处理中…",
       "rerunQueued": "已加入运行队列",
       "paused": "已暂停自动化",
       "repairApplied": "修复已应用",
@@ -197,7 +197,7 @@
       "applyAndRerun": "应用并重新运行",
       "actionFailed": "操作失败",
       "saveInsight": "保存洞察",
-      "savingInsight": "保存中...",
+      "savingInsight": "保存中…",
       "insightSaved": "洞察已保存",
       "savedInsight": "已保存",
       "insightEvidenceTitle": "自动化：{name}",
@@ -210,8 +210,8 @@
       "attentionCount": "{count} 条需处理",
       "recoveredCount": "{count} 条已恢复",
       "primaryRepair": "生成修复建议",
-      "primaryRepairing": "生成中...",
-      "historical": "历史异常",
+      "primaryRepairing": "生成中…",
+      "historical": "历史",
       "recovered": "已恢复",
       "thisAutomation": "这条自动化"
     },
@@ -232,10 +232,10 @@
         "formName": "Webhook 智能体任务"
       },
       "blockedTask": {
-        "name": "阻塞结果助手",
-        "description": "当结果变成阻塞状态时，让智能体诊断原因。",
-        "formName": "阻塞结果助手",
-        "instruction": "有一个结果变成阻塞状态。请诊断可能的阻塞原因，并建议下一步具体行动。"
+        "name": "阻塞任务助手",
+        "description": "当任务变成阻塞状态时，让智能体诊断原因。",
+        "formName": "阻塞任务助手",
+        "instruction": "有一个任务变成阻塞状态。请诊断可能的阻塞原因，并建议下一步具体行动。"
       },
       "noteCreated": {
         "name": "新笔记整理",
@@ -306,7 +306,7 @@
       "interval": "固定间隔",
       "customCron": "自定义 cron",
       "webhook": "Webhook",
-      "taskBlocked": "结果阻塞",
+      "taskBlocked": "任务阻塞",
       "noteCreated": "笔记创建",
       "sessionUpdated": "会话更新",
       "customEvent": "自定义产品事件",
@@ -314,7 +314,7 @@
       "onceAt": "在 {time} 运行一次",
       "manualWhen": "仅手动运行",
       "webhookWhen": "收到 Webhook 请求时运行",
-      "taskBlockedWhen": "当结果变为「阻塞」时运行",
+      "taskBlockedWhen": "当任务变为「阻塞」时运行",
       "noteCreatedWhen": "创建新笔记时运行",
       "sessionUpdatedWhen": "会话内容更新时运行"
     },
@@ -337,7 +337,7 @@
     },
     "form": {
       "advanced": "更多设置",
-      "advancedDescription": "通知、结果和运行限制",
+      "advancedDescription": "安全、结果投递与可靠性",
       "createFlowHint": "告诉我需要做什么，再安排运行时间。",
       "rulePreview": "当前规则",
       "triggerStepDescription": "选择自动化何时开始，包括定时、事件、Webhook 或手动运行。",
@@ -352,7 +352,7 @@
       "intervalEvery": "每隔",
       "commonIntervals": "常用间隔",
       "nextThreeRuns": "接下来三次",
-      "fixedIntervalHint": "固定间隔从创建时间开始计算；如需每天固定时刻运行，请选择“每天”。",
+      "fixedIntervalHint": "固定间隔从创建时间开始计算；如需每天固定时刻运行，请选择「每天」。",
       "intervalUnits": {
         "minute": "分钟",
         "hour": "小时",
@@ -364,7 +364,7 @@
       "onceAt": "运行时间",
       "eventType": "事件类型",
       "eventSource": "事件来源（可选）",
-      "eventPayloadMatch": "载荷匹配（JSON，可选）",
+      "eventPayloadMatch": "事件内容匹配（JSON，可选）",
       "invalidJsonObject": "请输入有效的 JSON 对象。",
       "action": "动作",
       "agent": "由谁执行",
@@ -377,7 +377,7 @@
       "modelHint": "这个模型仅用于当前自动化。",
       "instruction": "任务内容",
       "task": "任务",
-      "loadingTasks": "正在加载任务...",
+      "loadingTasks": "正在加载任务…",
       "noTasks": "暂无可执行任务",
       "taskClosed": "已完成",
       "taskContextHint": "每次执行都会带上任务定义、约束、验收条件以及任务绑定的上下文。",
@@ -396,10 +396,10 @@
       "resultWebhookSecretId": "出站密钥 ID",
       "reliability": "可靠性",
       "timeoutSeconds": "超时秒数",
-      "disableAfterFailures": "失败后停用次数",
+      "disableAfterFailures": "连续失败停用阈值",
       "effectivePolicy": "实际生效执行策略",
       "executionDeadline": "自动化总截止时间",
-      "downstreamTimeoutHint": "Agent turn、内置工具和 MCP 请求分别采用 Agent 与连接的实际策略；任何时候都以最早到期的截止时间为准。"
+      "downstreamTimeoutHint": "智能体单轮执行、内置工具和 MCP 请求分别采用智能体与连接的实际策略；任何时候都以最早到期的截止时间为准。"
     },
     "weekdays": {
       "monday": "周一",
@@ -438,19 +438,19 @@
         "name": "每日简报",
         "description": "汇总到期任务和项目阻塞事项。",
         "instruction": "汇总今天到期和逾期的任务、项目阻塞事项，按优先级列出今天需要关注的事情。只使用可访问的任务和项目数据，缺失数据请明确说明。",
-        "source": "站内任务和项目"
+        "source": "当前工作区的任务和项目"
       },
       "review": {
         "name": "每周复盘",
         "description": "整理本周成果和下周优先事项。",
         "instruction": "整理最近一周完成的任务、项目进展、未解决的问题，建议下周最重要的三件事。只使用可访问的任务和项目数据，缺失数据请明确说明。",
-        "source": "站内任务和项目"
+        "source": "当前工作区的任务和项目"
       },
       "followUp": {
         "name": "项目跟进",
         "description": "检查指定项目的延期和阻塞。",
         "instruction": "检查所选项目的任务进度，列出延期、阻塞和需要我决策的事项，并给出下一步建议。只使用该项目可访问的数据，缺失数据请明确说明。",
-        "source": "站内任务和项目"
+        "source": "当前工作区的任务和项目"
       }
     }
   }

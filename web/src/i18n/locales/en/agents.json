@@ -154,7 +154,7 @@
       "cardParamsSubtitle": "Opaque key/value for plugins. Must be a JSON object.",
       "paramsJson": "Params object",
       "paramsJsonDesc": "e.g. {\"myFlag\": true}. Clear to remove params from the config file.",
-      "paramsInvalidJson": "Params must be valid JSON object (e.g. empty or {}). Check syntax."
+      "paramsInvalidJson": "Params must be a valid JSON object (e.g. empty or {}). Check syntax."
     },
     "modelsOverrideTitle": "Global model defaults",
     "modelsOverrideHint": "Chat and fixed-intent models are inherited by every agent unless explicitly overridden.",
@@ -166,10 +166,10 @@
     "modelResolutionSessionSelectable": "The chat page can select a temporary session model."
   },
   "agentsSettings": {
-    "title": "Assistants and experts",
-    "subtitle": "Manage responsibilities, workspaces, and capabilities for your assistants and experts.",
-    "needToken": "Save a gateway token to manage assistants and experts.",
-    "loadError": "Could not load assistants and experts",
+    "title": "Agents",
+    "subtitle": "Manage responsibilities, workspaces, and capabilities for your agents.",
+    "needToken": "Save a gateway token to manage agents.",
+    "loadError": "Could not load agents",
     "saveError": "Request failed",
     "loading": "Loading…",
     "tuiDefaultAgentTitle": "TUI default agent",

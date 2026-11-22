@@ -17,7 +17,7 @@
     "savingChat": "正在保存…",
     "savedLabel": "已保存",
     "savedTitle": "已保存为正式对话",
-    "savedDescription": "这段侧边对话已持久化，可以独立继续。主任务不会被修改。",
+    "savedDescription": "这段侧边对话已保存，可以独立继续。主任务不会被修改。",
     "openSavedChat": "打开对话",
     "saveFailed": "保存对话失败，请重试。",
     "saveBusy": "回答完成后可保存",
@@ -61,7 +61,7 @@
     "replaceHint": "新建后将替换当前临时对话。",
     "freshContext": "已使用主任务的最新上下文。上一段临时对话不会自动带入。",
     "partialReading": "仅保留本页最近内容。",
-    "connectionLost": "连接暂时中断，正在重连。",
+    "connectionLost": "连接暂时中断，正在重连…",
     "draftTooLong": "消息过长，请缩短后发送。",
     "parentMissing": "主任务已不可用。",
     "errorCapacity": "暂时无法新建，请稍后重试。"

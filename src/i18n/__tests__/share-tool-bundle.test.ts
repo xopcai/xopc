@@ -73,7 +73,7 @@ describe('shareToolSuccessLines', () => {
   it('omits the reachability warning when public', () => {
     const lines = shareToolSuccessLines('zh', baseVars);
     expect(lines[1]).toBe('');
-    expect(lines.join(' ')).not.toContain('当前可达性');
+    expect(lines.join(' ')).not.toContain('当前访问范围');
   });
 
   it('includes the reachability warning when not public', () => {
@@ -83,7 +83,7 @@ describe('shareToolSuccessLines', () => {
       reachabilityHint: '仅本机可访问',
       isPublic: false,
     });
-    expect(lines[1]).toContain('当前可达性');
+    expect(lines[1]).toContain('当前访问范围');
     expect(lines[1]).toContain('仅本机可访问');
   });
 

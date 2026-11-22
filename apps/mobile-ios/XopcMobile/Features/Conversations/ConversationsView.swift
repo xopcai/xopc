@@ -8,7 +8,7 @@ private enum ConversationHistoryMode: String, CaseIterable {
     var title: LocalizedStringResource {
         switch self {
         case .recent: "最近"
-        case .projects: "项目"
+        case .projects: "projects_tab"
         case .experts: "专家"
         }
     }

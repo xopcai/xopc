@@ -17,7 +17,7 @@
     "savingChat": "Saving…",
     "savedLabel": "Saved",
     "savedTitle": "Saved as a chat",
-    "savedDescription": "This side chat is now persistent and can continue independently. The parent task was not changed.",
+    "savedDescription": "This side chat is now saved and can continue independently. The parent task was not changed.",
     "openSavedChat": "Open chat",
     "saveFailed": "Could not save this chat. Please try again.",
     "saveBusy": "Save after the response finishes",

@@ -68,7 +68,7 @@ describe('Usage billing presentation', () => {
     act(() => root.render(<MemoryRouter initialEntries={['/settings/usage?days=30&size=50&to=1791797274639&cursor=2:older']}><UsageSettingsPage /></MemoryRouter>));
     expect(element.textContent).toContain('用量摘要');
     expect(element.textContent).toContain('无法加载用量数据');
-    click(element, '返回首页');
+    click(element, '第一页');
     expect(data.keys.at(-1)?.[2]).toBeUndefined();
   });
   it('bounds distribution rows and disables next on the last history page', () => {

@@ -78,7 +78,7 @@ async function renderSidebar() {
 }
 
 function replyingRow() {
-  return container.querySelector('[title="在回复"]')?.closest('li');
+  return container.querySelector('[title="回复中"]')?.closest('li');
 }
 
 it('keeps the three dots on the replying expert when navigation selects another expert', async () => {
@@ -109,7 +109,7 @@ it('clears an expert only after all its chats stop replying and ignores setup an
   await act(async () => {
     for (const id of ['code-chat', 'another-chat', 'setup', 'delegated']) markChatRunRunning(id);
   });
-  expect(container.querySelectorAll('[title="在回复"]')).toHaveLength(1);
+  expect(container.querySelectorAll('[title="回复中"]')).toHaveLength(1);
 
   await act(async () => markChatRunFailed('code-chat', false));
   expect(replyingRow()?.textContent).toContain('编程专家');

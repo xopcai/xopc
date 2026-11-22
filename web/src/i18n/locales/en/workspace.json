@@ -1,13 +1,13 @@
 {
   "workspace": {
     "openInBrowser": "Open in browser",
-    "title": "Project Files",
-    "currentWorkspace": "Current Workspace",
-    "openFiles": "Project Files",
+    "title": "Project files",
+    "currentWorkspace": "Current workspace",
+    "openFiles": "Project files",
     "preview": "Preview",
     "download": "Download",
     "saveCopy": "Save a copy",
-    "copyPath": "Copy Path",
+    "copyPath": "Copy path",
     "copyWorkspacePath": "Copy workspace path",
     "copyFilePath": "Copy file path",
     "pathCopied": "Path copied",

@@ -16,6 +16,7 @@ export type ElectronMenuMessages = {
     label: string;
     newChat: string;
     quickCapture: string;
+    screenshot: string;
     search: string;
     gatewaySettings: string;
     settings: string;
@@ -75,6 +76,7 @@ export type ElectronMenuMessages = {
   tray: {
     stopComputer: string;
     newChat: string;
+    screenshot: string;
     showWindow: string;
     toggleDesktopPet: string;
     remoteAccess: string;
@@ -101,15 +103,16 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       detail: 'Quitting now will interrupt the running work. Work already completed will be kept.',
       cancel: 'Keep Waiting',
       quit: 'Quit and Interrupt',
-      closeDetail: 'This work can continue in the background. Quitting will interrupt it.',
+      closeDetail: 'Closing the window lets this work continue in the background. Quitting the app will interrupt it.',
       background: 'Continue in Background',
     },
     file: {
       label: 'File',
       newChat: 'New Chat',
       quickCapture: 'Quick Capture',
+      screenshot: 'Screenshot',
       search: 'Search',
-      gatewaySettings: 'Gateway…',
+      gatewaySettings: 'Gateway Settings…',
       settings: 'Settings…',
     },
     edit: {
@@ -165,8 +168,9 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       window: 'Window',
     },
     tray: {
-      stopComputer: 'Stop desktop control · Ctrl+Alt+Esc',
+      stopComputer: 'Stop Desktop Control · Ctrl+Alt+Esc',
       newChat: 'New Chat',
+      screenshot: 'Screenshot',
       showWindow: 'Show Window',
       toggleDesktopPet: 'Show / Hide Pet',
       remoteAccess: 'Remote Access…',
@@ -186,7 +190,7 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
     },
     quitConfirmation: {
       title: (count, taskTitle) => taskTitle
-        ? `“${taskTitle}”仍在运行`
+        ? `「${taskTitle}」仍在运行`
         : count === 1 ? '有 1 个任务仍在运行' : `有 ${count} 个任务仍在运行`,
       detail: '现在退出会中断正在执行的任务，已经完成的内容会保留。',
       cancel: '继续等待',
@@ -196,10 +200,11 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
     },
     file: {
       label: '文件',
-      newChat: '新建聊天',
+      newChat: '新建对话',
       quickCapture: '快速记录',
+      screenshot: '截图',
       search: '搜索',
-      gatewaySettings: 'Gateway 设置…',
+      gatewaySettings: '网关设置…',
       settings: '设置…',
     },
     edit: {
@@ -256,7 +261,8 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
     },
     tray: {
       stopComputer: '停止桌面操作 · Ctrl+Alt+Esc',
-      newChat: '新建聊天',
+      newChat: '新建对话',
+      screenshot: '截图',
       showWindow: '显示窗口',
       toggleDesktopPet: '显示 / 隐藏宠物',
       remoteAccess: '远程访问…',
@@ -267,7 +273,7 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       remoteAccessConnected: '远程访问：已连接 ✓',
       remoteAccessOff: '远程访问：关闭',
       remoteAccessReconnecting: '远程访问：正在重连…',
-      remoteAccessError: '远程访问：错误',
+      remoteAccessError: '远程访问：异常',
     },
   },
 };

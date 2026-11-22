@@ -5,7 +5,7 @@
     "agent": "Agent",
     "agent-browser": "Browser",
     "computer-use": "Computer use",
-    "phone-use": "Phone Use",
+    "phone-use": "Phone use",
     "agent-defaults": "Default settings",
     "connectors": "Connections",
     "channels": "Channels",
@@ -283,7 +283,7 @@
       "discardAll": "Discard all"
     },
     "tabs": {
-      "models": "My models",
+      "models": "Chat models",
       "image": "Image models",
       "voice": "Voice",
       "search": "Web search"
@@ -409,7 +409,7 @@
       "hideKey": "Hide key",
       "copy": "Copy",
       "copied": "Copied",
-      "maskedHelp": "Saved keys are hidden. Use the eye to load the key from the gateway store or models.json (not from environment variables).",
+      "maskedHelp": "Saved keys are hidden. Click the eye icon to load the key from the gateway store or models.json (not from environment variables).",
       "notInConfigFile": "No key stored in the gateway or models.json — this provider may be using an environment variable or OAuth.",
       "extensionKeyHint": "This plugin provider manages its own credentials. No gateway API key is required — configure optional keys in plugin settings or environment variables if needed.",
       "openExtensionSettings": "Open plugin settings",
@@ -573,7 +573,7 @@
           "description": "Connect Telegram or another channel so the same assistant can reply from the web console and messaging apps."
         },
         "automation": {
-          "title": "Automation procedure",
+          "title": "Automation workflow",
           "description": "Combine skills and cron jobs for recurring background work."
         }
       }
@@ -786,7 +786,7 @@
     "fixChatDraft": "/skill:hatch-pet I want to fix an xopc pet package that cannot load. Directory: {dir}. Load failure: {reason}. Diagnostics: {details}. Please inspect the package first, explain the smallest repair plan, then repair or regenerate the same pet package after I confirm.",
     "noIssueDetails": "No additional diagnostics",
     "petList": "Pets",
-    "petListDesc": "Choose a built-in pet or add your own manifest in the custom folder.",
+    "petListDesc": "Choose a built-in pet or add your own pet package in the custom folder.",
     "selected": "Selected",
     "select": "Select",
     "customBadge": "Custom",
@@ -844,7 +844,7 @@
       "denied": "Notifications are blocked. Allow them in your browser site settings.",
       "unsupported": "This browser or connection does not support system notifications.",
       "failed": "The test notification could not be shown.",
-      "limitation": "MVP: the xopc page must remain open and connected. Closed-page delivery requires a push service."
+      "limitation": "This page must stay open and connected to the local service to receive browser task notifications."
     },
     "toggles": {
       "openAtLogin": "Open at login",
@@ -1070,10 +1070,10 @@
     "themeDescription": "Light, dark, or follow your system setting.",
     "colorSchemeTitle": "Color scheme",
     "colorSchemeDescription": "Visual style of the interface.",
-    "colorSchemeDefault": "Calm Intelligence",
-    "colorSchemeLightGreen": "Light green",
+    "colorSchemeDefault": "Slate",
+    "colorSchemeLightGreen": "Emerald",
     "colorSchemeClay": "Clay",
-    "colorSchemePorcelain": "Warm Porcelain",
+    "colorSchemePorcelain": "Porcelain",
     "fontScaleTitle": "Text size",
     "fontScaleDescription": "Adjust text size in chat and reading areas.",
     "fontScaleCompact": "Small",
@@ -1540,7 +1540,7 @@
     "requiredPlaceholder": "Required",
     "optionalPlaceholder": "Optional",
     "connectingTitle": "Connecting and running a health check…",
-    "connectingHint": "XOPC saves the connection, materializes its runtime, then probes exposed tools, resources, and prompts.",
+    "connectingHint": "XOPC saves the connection, prepares its runtime, and checks available tools, resources, and prompts.",
     "runtimeLabel": "Runtime: {{runtime}}",
     "healthStatusPending": "Health pending",
     "healthStatusHealthy": "Healthy",
@@ -1557,7 +1557,7 @@
       "unknown_error": "Unknown error"
     },
     "promptArgumentCount": "{{count}} arguments",
-    "installedWithoutHealth": "Installed. Capabilities can be tested from Installed.",
+    "installedWithoutHealth": "Installed. Capabilities can be tested from My connections.",
     "customCapabilitySummary": "{{tools}} tools, {{resources}} resources, {{prompts}} prompts discovered.",
     "mcpServerRuntime": "MCP server: {{serverId}}",
     "test": "Test",
@@ -1584,8 +1584,8 @@
     "promptsRunTestHint": "Run Test to list prompts exposed by this MCP server.",
     "secretsConfigured": "Secrets configured: {{count}}",
     "runtimeServerLabel": "Runtime: {{runtime}} server {{serverId}}",
-    "mcpPolicyHint": "Tool calls run through MCP and follow the agent tool policy/approval gates.",
-    "connectorPolicyHint": "Tool calls follow the connection scope and curated allowlist gates.",
+    "mcpPolicyHint": "Tool calls run through MCP and follow the agent tool policy and approval rules.",
+    "connectorPolicyHint": "Tool calls follow the connection scope and curated allowlist rules.",
     "installedToolsDialogTitle": "{{name}} tools",
     "installedToolsDialogSubtitle": "{{serverId}} exposes {{count}} MCP tools.",
     "composioApiKeyStored": "Composio API key stored. Install a toolkit connection to manage OAuth accounts and tools.",

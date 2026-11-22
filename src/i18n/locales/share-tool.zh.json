@@ -1,7 +1,7 @@
 {
   "success": {
     "headline": "✅ 分享链接已生成（{{kind}}）：{{shareUrl}}",
-    "reachabilityWarning": "⚠️ 当前可达性：{{reachability}}。{{hint}}",
+    "reachabilityWarning": "⚠️ 当前访问范围：{{reachability}}。{{hint}}",
     "title": "标题：{{title}}",
     "expiresAt": "有效期至：{{expiresAt}}",
     "thumbnail": "缩略图：{{thumbnailUrl}}"

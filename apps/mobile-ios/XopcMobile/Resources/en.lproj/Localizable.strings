@@ -160,7 +160,6 @@
 "照片图库" = "Photo Library";
 "相机" = "Camera";
 "语音" = "Voice";
-"文件" = "Files";
 "添加引用" = "Add Reference";
 "引用" = "References";
 "引用来源" = "Sources";
@@ -186,7 +185,7 @@
 "助手需要补充信息" = "The Assistant Needs More Information";
 "由助手决定" = "Let Assistant Decide";
 "任务" = "Tasks";
-"项目" = "Projects";
+"项目" = "Project";
 "自动化" = "Automations";
 "进展类型" = "Progress Type";
 "暂无任务" = "No Tasks";
@@ -212,13 +211,12 @@
 "项目详情" = "Project Details";
 "项目内容未完整载入" = "Some Project Content Could Not Be Loaded";
 "项目分区" = "Project Section";
-"概览" = "Overview";
 "项目对话" = "Project Chats";
 "暂无项目对话" = "No Project Chats";
 "暂无项目说明" = "No project description";
 "状态" = "Status";
 "健康度" = "Health";
-"进行中" = "Active";
+"进行中" = "In progress";
 "已达成" = "Achieved";
 "目标" = "Goal";
 "任务详情" = "Task Details";
@@ -248,7 +246,6 @@
 "文字笔记" = "Text Note";
 "语音笔记" = "Voice Note";
 "搜索笔记" = "Search Notes";
-"全部" = "All";
 "收件箱" = "Inbox";
 "已处理" = "Processed";
 "已归档" = "Archived";
@@ -263,7 +260,7 @@
 "二级标题" = "Heading 2";
 "三级标题" = "Heading 3";
 "列表" = "List";
-"常用工作" = "Workspaces";
+"常用工作" = "Quick access";
 "筛选" = "Filter";
 "活跃" = "Active";
 "最近运行" = "Recent Runs";
@@ -272,7 +269,6 @@
 "自动化运行" = "Automation Run";
 "取消运行" = "Cancel Run";
 "重新运行" = "Rerun";
-"执行结果" = "Result";
 "打开会话" = "Open Chat";
 "返回自动化" = "Back to Automation";
 "时间线" = "Timeline";
@@ -280,7 +276,7 @@
 "取消此次运行？" = "Cancel this run?";
 "确认取消运行" = "Confirm Cancellation";
 "正在运行的操作会被停止。" = "The running action will be stopped.";
-"操作未完成" = "Action Could Not Be Completed";
+"操作未完成" = "Action Not Completed";
 "未能取消此次运行" = "Could not cancel this run";
 "开始时间" = "Started";
 "结束时间" = "Ended";
@@ -307,7 +303,6 @@
 "normal" = "Normal";
 "low" = "Low";
 "新建自动化" = "New Automation";
-"基本信息" = "Basics";
 "执行说明" = "Instructions";
 "定时规则" = "Schedule";
 "Cron 表达式" = "Cron Expression";
@@ -387,7 +382,6 @@
 "记忆总数" = "Total Memories";
 "显示记忆引用" = "Show Memory References";
 "敏感写入策略" = "Sensitive Write Policy";
-"最近理解" = "Recent Understanding";
 "关于 xopc" = "About xopc";
 "原生 iOS" = "Native iOS";
 "最低系统" = "Minimum OS";
@@ -426,7 +420,6 @@
 "已添加" = "Added";
 "应用" = "Apply";
 "当前环境不可用" = "The current environment is unavailable";
-"待确认" = "Needs Confirmation";
 "思考" = "Reasoning";
 "执行环境" = "Execution Environment";
 "无法停止执行" = "Unable to stop the run";
@@ -473,7 +466,6 @@
 "连接" = "Connection";
 "连接设置" = "Connection Settings";
 "选择助手" = "Choose Assistant";
-"逐渐学到" = "Learned";
 "部分信息不可用" = "Some information is unavailable";
 "重命名" = "Rename";
 "重命名对话" = "Rename Chat";
@@ -524,22 +516,21 @@
 "录音尚未写入本地存储，请重试" = "The recording has not been saved locally. Please retry.";
 "重试保存" = "Retry Saving";
 "正在检查未完成的录音…" = "Checking unfinished recordings…";
-"无法读取此前保存的录音，请保留应用数据。" = "Unable to read the saved recording. Keep the app data.";
+"无法读取此前保存的录音，请保留应用数据。" = "Unable to read the saved recording. Do not delete the app or its data.";
 "丢弃本地录音？" = "Discard local recording?";
 "丢弃录音" = "Discard Recording";
 "丢弃后这段尚未上传的录音无法恢复。" = "This recording cannot be recovered after it is discarded.";
 "录音尚未保存" = "Recording Not Saved";
 "请先重试保存。现在关闭将丢失这段录音。" = "Please retry saving first. Closing now will lose this recording.";
 "请先完成或丢弃此前保存的语音笔记。" = "Finish or discard the previously saved voice note first.";
-"本地录音文件无法读取，请勿删除应用数据，并联系支持。" = "The local recording cannot be read. Keep the app data and contact support.";
+"本地录音文件无法读取，请勿删除应用数据，并联系支持。" = "The local recording cannot be read. Do not delete the app or its data, and contact support.";
 "重命名 Gateway" = "Rename Gateway";
 "上次检查" = "Last Checked";
 "高延迟 · %lld ms" = "High Latency · %lld ms";
-"需要你处理" = "Needs Your Attention";
+"需要你处理" = "Needs attention";
 "最近完成" = "Recently Completed";
 "确认操作" = "Confirm Action";
 "此操作会更新 Gateway 中的工作状态。" = "This action will update the work status in Gateway.";
-"操作未完成" = "Action Not Completed";
 "此入口尚未在 iOS 支持。" = "This destination is not yet supported on iOS.";
 "不支持的进展操作" = "Unsupported progress action";
 "进展操作未完成" = "The progress action was not completed";
@@ -558,7 +549,7 @@
 "查看技能" = "View Skill";
 "查看工具说明" = "View Tool Manual";
 "查看笔记" = "Inspect Notes";
-"查看任务" = "Inspect Tasks";
+"查看任务" = "View task";
 "查看项目" = "Inspect Projects";
 "查看自动化" = "Inspect Automations";
 "查看工作" = "Inspect Work";
@@ -600,7 +591,6 @@
 "已激活" = "Activated";
 "过期优先级" = "Expired priorities";
 "过期观察" = "Expired observations";
-"已归档" = "Archived";
 "已修复索引" = "Repaired indexes";
 "上传" = "Upload";
 "下载" = "Download";
@@ -647,7 +637,6 @@
 "未保存的编辑内容和待上传附件会丢失；已保存的笔记仍保留。" = "Unsaved edits and pending attachments will be lost. The saved note will remain.";
 "附件无法添加" = "Could Not Add Attachment";
 "移除附件：%@" = "Remove attachment: %@";
-"单个附件不能超过 32 MiB" = "An attachment cannot exceed 32 MiB";
 "最多添加 %lld 个附件" = "Add up to %lld attachments";
 "照片" = "Photo";
 "确认" = "Confirm";
@@ -735,7 +724,6 @@
 "已静音" = "Muted";
 "正在说话" = "Speaking";
 "正在执行任务" = "Working";
-"正在思考" = "Thinking";
 "正在聆听" = "Listening";
 "通话已暂停 · 点击重试" = "Call paused · Tap to retry";
 "通话进行中" = "Call in progress";
@@ -769,7 +757,6 @@
 "会话设置" = "Session Settings";
 "执行环境与范围" = "Environment & Scope";
 "当前会话" = "Current Session";
-"项目" = "Project";
 "执行模式" = "Execution Mode";
 "工作目录" = "Working Directory";
 "不关联项目" = "No Project";
@@ -830,11 +817,11 @@
 "支持方式" = "Support style";
 "倾听" = "Listen";
 "梳理" = "Untangle";
-"建议" = "Solutions";
+"建议" = "Suggestions";
 "回答长度" = "Response length";
 "简短" = "Brief";
 "详细" = "Detailed";
-"主动程度" = "Suggestions";
+"主动程度" = "Proactiveness";
 "由我决定" = "My decision";
 "重要时提醒" = "When important";
 "开放建议" = "Open to ideas";
@@ -852,7 +839,7 @@
 
 "done" = "Completed";
 "duplicate" = "Duplicate";
-"wont_do" = "Won’t do";
+"wont_do" = "Won't do";
 "critical" = "Critical";
 "waiting" = "Waiting";
 "verifying" = "Verifying";
@@ -913,10 +900,10 @@
 "保留任务" = "Keep task";
 "关闭并刷新" = "Close and refresh";
 "调整阶段不会自动启动 Agent。" = "Changing phase does not start an Agent run.";
-"任务正在执行或等待条件满足，请先处理当前执行或等待事项。" = "A run or wait is active. Handle it before changing phase.";
+"任务正在执行或等待条件满足，请先处理当前执行或等待事项。" = "A run or waiting condition is active. Handle it before changing phase.";
 "选择 Agent 后开始执行，将创建一次任务运行。" = "Choose an Agent to begin execution. This will create a task run.";
 "结束此任务，不标记为完成。之后可以重新打开。" = "End this task without marking it complete. You can reopen it later.";
-"请先处理当前执行或等待事项，再完成任务。" = "Finish the current run or resolve waits before completing.";
+"请先处理当前执行或等待事项，再完成任务。" = "Finish the current run or resolve pending actions before completing.";
 "请先在桌面端补充验收标准并完成验收，再标记完成。" = "Add acceptance criteria and review them on the desktop before completing.";
 "所有验收标准通过后才能完成，请在桌面端核对验收。" = "All acceptance criteria must pass. Review them on the desktop before completing.";
 
@@ -930,7 +917,7 @@
 "此审批已过期" = "This approval has expired";
 "剩余时间：%d:%@" = "Time left: %d:%@";
 "查看参数详情" = "View parameters";
-"授权仅适用于本次操作，且只能执行一次。" = "Authorization applies to this operation once.";
+"授权仅适用于本次操作，且只能执行一次。" = "This approval applies to this operation only and can be used once.";
 "拒绝本次操作" = "Deny this operation";
 "批准本次操作" = "Approve this operation";
 "点击选项即可回答" = "Tap an option to answer immediately";
@@ -944,7 +931,6 @@
 "正在提交" = "Submitting";
 
 "已转入任务，可在进展中查看" = "Task created. View it in Progress.";
-"查看任务" = "View task";
 
 "选择文本" = "Select text";
 "全选" = "Select All";
@@ -977,7 +963,7 @@
 "恢复 AI 操作" = "Resume AI control";
 "接管手机" = "Take over phone";
 "当前设备仅可查看" = "This device can only view the phone";
-"继续任务" = "Continue task";
+"继续任务" = "Resume task";
 "任务进度已保留，请接管手机重新连接并完成所需操作。" = "Task progress is saved. Take over to reconnect and finish the required steps.";
 "暂停任务" = "Pause task";
 "停止任务" = "Stop task";
@@ -1063,7 +1049,7 @@
 
 "没有匹配的资料" = "No matching library items";
 "library_scope_label" = "Library views";
-"library_scope_all" = "All files";
+"library_scope_all" = "All items";
 "library_scope_favorites" = "Favorites";
 "library_scope_trash" = "Trash";
 "确认验收" = "Accept result";
@@ -1112,11 +1098,11 @@
 "每个工作日早上 9 点，汇总今天需要关注的事项。" = "At 9 AM every weekday, summarize what needs my attention today.";
 "每周五下午 5 点，给我一份本周进展周报。" = "Every Friday at 5 PM, send me a weekly progress report.";
 "每周一上午 10 点，检查最近失败的自动化并给出处理建议。" = "Every Monday at 10 AM, check recent failed automations and suggest next steps.";
-"每周五下午 5 点，汇总这个项目的进展和风险。" = "Every Friday at 5 PM, summarize this project’s progress and risks.";
+"每周五下午 5 点，汇总这个项目的进展和风险。" = "Every Friday at 5 PM, summarize this project's progress and risks.";
 "每个工作日早上 9 点，提醒我这个项目中快到期的任务。" = "At 9 AM every weekday, remind me about tasks due soon in this project.";
 "每周一上午 10 点，整理这个项目最近新增的资料。" = "Every Monday at 10 AM, organize the latest materials in this project.";
 "每天早上 8 点，提醒我查看待处理事项。" = "Every day at 8 AM, remind me to review things that need my attention.";
-"每个工作日晚上 6 点，帮我回顾今天的任务。" = "At 6 PM every weekday, help me review today’s tasks.";
+"每个工作日晚上 6 点，帮我回顾今天的任务。" = "At 6 PM every weekday, help me review today's tasks.";
 "每周日晚上 8 点，帮我准备下周计划。" = "Every Sunday at 8 PM, help me plan for next week.";
 "用对话创建定时任务" = "Create a schedule in chat";
 "告诉助理何时运行、要做什么。发送前可以编辑。" = "Tell the assistant what to do and when. You can edit the request before sending.";
@@ -1168,7 +1154,7 @@
 "capability_web_manage" = "Open administration";
 "capability_web_open_failed" = "Could not open administration";
 "capability_version_label" = "Version %1$@";
-"capability_channel_telegram" = "A Telegram bot account needs authorization.";
+"capability_channel_telegram" = "A Telegram bot account needs to be configured.";
 "capability_channel_weixin" = "A Weixin account needs to sign in.";
 "capability_channel_feishu" = "A Feishu or Lark app needs authorization.";
 "capability_channel_config" = "Required channel settings are missing.";
@@ -1176,7 +1162,7 @@
 "capability_plugins" = "Plugins";
 "capability_skills" = "Skills";
 "capability_connections" = "Connections";
-"capability_agents" = "Assistants & Experts";
+"capability_agents" = "Agents";
 "capability_channels" = "Messaging Channels";
 "capability_my_assistants" = "My Assistants";
 "capability_experts" = "Experts";
@@ -1248,7 +1234,7 @@
 "按任务选模型" = "Models by task";
 "未单独设置的任务使用默认对话模型。" = "Tasks without an override use the default chat model.";
 "其他用途" = "Other uses";
-"语音与更多媒体" = "Voice and more media";
+"语音与更多媒体" = "Voice & Media";
 "更换" = "Change";
 "未配置" = "Not configured";
 "未连接服务" = "No service connected";
@@ -1257,7 +1243,7 @@
 "上移" = "Move up";
 "搜索模型或服务商" = "Search models or providers";
 "确认更换" = "Confirm change";
-"连接支持此用途的模型服务后再试。" = "Connect a model service that supports this use.";
+"连接支持此用途的模型服务后再试。" = "Connect a model service that supports this feature.";
 "没有匹配的模型" = "No matching models";
 "无法读取模型设置。" = "Could not load model settings.";
 "无法保存模型设置，请重试。" = "Could not save model settings. Try again.";
@@ -1299,7 +1285,7 @@
 "暂无专家" = "No experts";
 "暂无对话" = "No conversations";
 
-"查看保存下来的工作事实、决定和经验。" = "Read the facts, decisions, and lessons saved from your work.";
+"查看保存下来的工作事实、决定和经验。" = "View facts, decisions, and lessons saved from your work.";
 "暂时无法读取工作记忆。" = "Could not load work memory.";
 "还没有工作记忆" = "No work memories yet";
 "保存后的工作记忆会显示在这里。" = "Saved work memories will appear here.";
@@ -1340,7 +1326,7 @@
 "填入建议：%@" = "Fill suggestion: %@";
 
 "device_connection_services" = "Services";
-"device_connection_devices" = "Device connections";
+"device_connection_devices" = "Devices";
 "device_connection_contact_prompt" = "Let me select a contact from this phone.";
 "device_connection_calendar_prompt" = "Check today's events on this phone.";
 "device_connection_location_prompt" = "Get my current location.";
@@ -1391,25 +1377,19 @@
 "待规划" = "Backlog";
 "等待开始" = "Ready";
 "排队中" = "Queued";
-"进行中" = "In progress";
 "验证中" = "Verifying";
 "等待条件" = "Waiting";
-"已暂停" = "Paused";
 "被阻塞" = "Blocked";
-"需要你处理" = "Needs attention";
 "等待验收" = "Ready for review";
 "执行失败" = "Failed";
 "已取消" = "Cancelled";
-"已完成" = "Completed";
 "已结束" = "Ended";
 "需处理" = "Attention";
 "搜索任务" = "Search tasks";
-"暂停任务" = "Pause task";
-"继续任务" = "Resume task";
 "停止当前执行" = "Stop active run";
 "停止当前执行？" = "Stop active run?";
 "将请求中止当前正在执行的运行，不会关闭任务。" = "Request cancellation of the active run without closing the task.";
-"任务仍在执行或等待处理，请先完成当前运行或等待项。" = "This task still has an active run or pending wait. Finish or resolve it first.";
+"任务仍在执行或等待处理，请先完成当前运行或等待项。" = "This task still has an active run or pending action. Finish or resolve it first.";
 "尚有未通过的验收项，请先完成逐项验收后再签收。" = "Some acceptance criteria are still unmet. Review them before signing off.";
 "当前任务结果尚未达到签收条件，请查看执行结果。" = "The current result is not ready for sign-off yet. Check the execution result.";
 "暂无进展" = "Nothing needs your attention right now.";
@@ -1417,7 +1397,6 @@
 "没有匹配的任务" = "No matching tasks";
 "新建任务" = "New task";
 "没有匹配的项目" = "No matching projects";
-"暂无项目" = "No projects";
 "最近文件" = "Recent files";
 "文件空间" = "File spaces";
 "打开连接设置" = "Open connection settings";
@@ -1425,5 +1404,7 @@
 "打开外部链接？" = "Open external link?";
 "打开" = "Open";
 "请先完成模型服务配置后再继续。" = "Finish configuring a model provider before continuing.";
-"模拟" = "Simulator";
-"模拟 · " = "Simulator · ";
+"模拟" = "Simulated";
+"模拟 · " = "Simulated · ";
+"toggle_off" = "Off";
+"projects_tab" = "Projects";

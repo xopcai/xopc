@@ -70,7 +70,7 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
           ? 'The app cannot safely migrate the local database because a required migration file is missing from this build.'
           : portInUse
             ? 'Another process is using the port xopc needs. Stop that process, choose another local port, or retry after the port is free.'
-            : 'xopc kept the desktop shell open so you can retry, update, or copy a clean diagnostic report.',
+            : 'xopc kept the recovery screen open so you can retry, update, or copy a redacted diagnostic report.',
       kindLabel: 'Reason',
       dbVersionLabel: 'Database version',
       appVersionLabel: 'App schema version',
@@ -95,18 +95,18 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
       devHint: 'Development build: rebuild the desktop and local service bundles, then retry.',
       advancedTitle: 'Advanced options',
       diagnosticTitle: 'Diagnostic details',
-      checking: 'Checking for updates...',
-      updateAvailable: 'Update {version} is available. Downloading...',
+      checking: 'Checking for updates…',
+      updateAvailable: 'Update {version} is available. Downloading…',
       downloading: 'Downloading update: {percent}%',
       downloaded: 'Update {version} is ready to install.',
       notAvailable: 'No packaged update is available from the configured feed.',
       updateError: 'Update check failed: {message}',
-      retrying: 'Retrying xopc startup...',
+      retrying: 'Retrying xopc startup…',
       retryFailed: 'xopc still could not start.',
       openDirFailed: 'Could not open the data folder.',
       copied: 'Redacted diagnostic report copied.',
       copyFailed: 'Could not collect diagnostics. Run `xopc support report` in a terminal.',
-      collectingDiagnostic: 'Collecting diagnostics...',
+      collectingDiagnostic: 'Collecting diagnostics…',
       noApi: 'Desktop recovery API is unavailable.',
     };
   }
@@ -119,7 +119,7 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
   const incompatible = failure.kind === 'gateway_protocol_incompatible';
   return {
     eyebrow: '启动恢复',
-    title: schemaTooOld ? '数据库需要更早版本的升级路径' : migrationFailed ? '数据库升级未能完成' : incompatible ? '桌面端与 Gateway 版本不兼容' : schemaTooNew
+    title: schemaTooOld ? '数据库需要更早版本的升级路径' : migrationFailed ? '数据库升级未能完成' : incompatible ? '桌面端与网关版本不兼容' : schemaTooNew
       ? '升级 xopc 后才能打开本地数据'
       : migrationGap
         ? '当前构建缺少数据库迁移'
@@ -131,24 +131,24 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
       : migrationFailed
       ? '数据库升级已回滚。请保留原数据库和升级前备份，复制诊断报告以便排查。'
       : incompatible
-      ? '正在运行的 Gateway 使用了不同的桌面协议。请将桌面端与 Gateway 更新至同一构建，重启 Gateway 后重试。xopc 没有结束现有服务。'
+      ? '正在运行的网关使用了不同的桌面协议。请将桌面端与网关更新至同一版本，重启网关后重试。xopc 没有结束现有服务。'
       : schemaTooNew
       ? '你的本地数据库由更新版本的 xopc 创建。为了避免损坏数据，当前应用已停止打开它。'
       : migrationGap
         ? '当前构建缺少必要的迁移文件，应用无法安全迁移本地数据库。'
         : portInUse
           ? '另一个进程正在使用 xopc 所需的端口。请结束该进程、选择其他本地端口，或在端口释放后重试。'
-          : 'xopc 保留了桌面恢复界面，你可以重试、更新，或复制干净的诊断信息。',
+          : 'xopc 已保留桌面恢复界面，你可以重试、更新，或复制脱敏后的诊断报告。',
     kindLabel: '原因',
     dbVersionLabel: '数据库版本',
-    appVersionLabel: '应用支持版本',
+    appVersionLabel: '应用所需数据库版本',
     minimumVersionLabel: '最低可升级版本',
     portLabel: '本地服务端口',
     dbPathLabel: '数据库路径',
     configPathLabel: '配置路径',
     updateGuidance: '请先安装最新版本的 xopc 再重试，新版本可能已经修复了此次启动问题。',
     databaseRecoveryGuide: '查看数据库恢复步骤',
-    safetyNote: schemaTooOld || migrationFailed ? '请勿删除 xopc.db、修改数据库版本号，或将其与 WAL/SHM 文件拆开。恢复前请备份整个数据目录。' : incompatible ? '无需删除数据、重置设备身份或更换模型 Key。正式安装时，可先停止独立运行的 Gateway，再重试，让 xopc 启动随应用附带的服务。' : schemaTooNew
+    safetyNote: schemaTooOld || migrationFailed ? '请勿删除 xopc.db、修改数据库版本号，或将其与 WAL/SHM 文件拆开。恢复前请备份整个数据目录。' : incompatible ? '无需删除数据、重置设备身份或更换模型密钥。正式安装时，可先停止独立运行的网关，再重试，让 xopc 启动随应用附带的服务。' : schemaTooNew
       ? '你的数据没有被降级或修改。升级 xopc 后重试即可继续打开。'
       : migrationGap
         ? '你的数据没有被修改。请安装包含缺失迁移的构建，然后重试。'
@@ -160,16 +160,16 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
     retry: '重新启动',
     openDataDir: '打开数据目录',
     copyDiagnostic: '收集并复制报告',
-    devHint: '开发构建：请重新构建桌面端和本地服务 bundle，然后重试。',
+    devHint: '开发构建：请重新构建桌面端和本地服务产物，然后重试。',
     advancedTitle: '高级选项',
     diagnosticTitle: '诊断详情',
-    checking: '正在检查更新...',
-    updateAvailable: '发现更新 {version}，正在下载...',
+    checking: '正在检查更新…',
+    updateAvailable: '发现更新 {version}，正在下载…',
     downloading: '正在下载更新：{percent}%',
     downloaded: '更新 {version} 已准备好安装。',
     notAvailable: '当前更新源没有可用的正式版更新。',
     updateError: '检查更新失败：{message}',
-    retrying: '正在重新启动 xopc...',
+    retrying: '正在重新启动 xopc…',
     retryFailed: 'xopc 仍然未能启动。',
     openDirFailed: '无法打开数据目录。',
     copied: '已复制脱敏后的诊断报告。',
@@ -498,11 +498,11 @@ export function getLoadingPageDataUrl(
         'opening-workspace': 'Opening your workspace…',
       }
     : {
-        'preparing-workspace': '正在准备工作空间…',
+        'preparing-workspace': '正在准备工作区…',
         'checking-core': '正在检查本地服务…',
         'starting-core': '正在启动本地智能服务…',
         'connecting-assistant': '正在连接你的助手…',
-        'opening-workspace': '正在打开工作空间…',
+        'opening-workspace': '正在打开工作区…',
       };
   const darkMediaQuery =
     themePreference === 'dark'
@@ -520,19 +520,19 @@ export function getLoadingPageDataUrl(
   <style>
     :root {
       --startup-progress: 8%;
-      --canvas: #f5f5f7;
-      --ink: #1d1d1f;
-      --muted: #6e6e73;
-      --faint: #86868b;
+      --canvas: #f7f8fa;
+      --ink: #111111;
+      --muted: #666666;
+      --faint: #87909d;
       --edge: rgba(60, 60, 67, 0.13);
       --track: rgba(60, 60, 67, 0.11);
-      --glass: rgba(255, 255, 255, 0.68);
-      --ai: #1d1d1f;
+      --glass: rgba(255, 255, 255, 0.72);
+      --ai: #111111;
       --ai-highlight: #57575c;
       --ai-shadow: #070708;
-      --human: #007aff;
-      --human-highlight: #66b5ff;
-      --human-shadow: #0062cc;
+      --human: #3a6bff;
+      --human-highlight: #6f91ff;
+      --human-shadow: #2f5ef6;
     }
     * { box-sizing: border-box; }
     body {
@@ -779,24 +779,24 @@ export function getLoadingPageDataUrl(
     }
     @media ${darkMediaQuery} {
       :root {
-        --canvas: #0c0c0e;
-        --ink: #f5f5f7;
-        --muted: #a1a1a6;
-        --faint: #727277;
+        --canvas: #14171c;
+        --ink: #f4f6f8;
+        --muted: #b8bec8;
+        --faint: #87909d;
         --edge: rgba(255, 255, 255, 0.11);
         --track: rgba(255, 255, 255, 0.1);
-        --glass: rgba(30, 30, 32, 0.68);
-        --ai: #f5f5f7;
+        --glass: rgba(27, 31, 38, 0.74);
+        --ai: #f4f6f8;
         --ai-highlight: #ffffff;
         --ai-shadow: #c9c9ce;
-        --human: #0a84ff;
-        --human-highlight: #67b7ff;
-        --human-shadow: #006edb;
+        --human: #3a6bff;
+        --human-highlight: #6f91ff;
+        --human-shadow: #2f5ef6;
       }
       body {
         background:
-          radial-gradient(circle at 50% 38%, rgba(10, 132, 255, 0.14), transparent 25rem),
-          linear-gradient(180deg, #17171a 0%, var(--canvas) 100%);
+          radial-gradient(circle at 50% 38%, rgba(58, 107, 255, 0.13), transparent 25rem),
+          linear-gradient(180deg, #161a21 0%, var(--canvas) 100%);
       }
       body::before {
         background:
@@ -926,7 +926,7 @@ export function getRendererCrashPageDataUrl(
   const external = options.openedExternal
     ? isEn
       ? 'The console was also opened in your default browser as a fallback.'
-      : '控制台已作为降级方案在默认浏览器中打开。'
+      : '已自动在默认浏览器中打开控制台。'
     : '';
   const escapedDetail = detail.replace(/[&<>"']/g, (ch) => {
     switch (ch) {

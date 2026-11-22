@@ -61,7 +61,7 @@
       "title": "Same network (LAN)",
       "subtitle": "Reach the gateway from phones or laptops on the same Wi‑Fi without exposing it to the internet.",
       "body": "Set the gateway bind address to your LAN IP (or 0.0.0.0) and connect using http://<host>:<port>. Keep firewall rules in mind.",
-      "link": "Open Gateway settings"
+      "link": "Open gateway settings"
     },
     "tailscale": {
       "title": "Tailscale Serve (recommended)",
@@ -97,15 +97,15 @@
       "subtitle": "Front the gateway with your own Caddy / nginx / Cloudflare Tunnel at a custom domain.",
       "urlLabel": "Public URL",
       "urlPlaceholder": "https://gateway.example.com",
-      "urlHint": "No trailing path. https required for public hostnames; http is only allowed for RFC1918 / .local.",
+      "urlHint": "No trailing path. https is required for public hostnames; http is only allowed for private LAN IPs or .local.",
       "probeButton": "Test",
       "probing": "Testing…",
       "autoDetectedTitle": "Detected from your current browser address",
-      "autoDetectedHint": "The QR below already uses this URL. Click \"Save as default\" to persist it so other machines see the same URL.",
+      "autoDetectedHint": "The QR code below already uses this URL. Click \"Save as default\" to save it so other machines and restarts use the same URL.",
       "saveAsDefault": "Save as default",
       "saving": "Saving…",
       "clear": "Clear configured URL",
-      "certWarning": "Mobile clients require a certificate trusted by the system root store (Let's Encrypt / Cloudflare / commercial CA). Self-signed certificates are not supported in v1.",
+      "certWarning": "Mobile clients require a certificate trusted by the system root store (Let's Encrypt / Cloudflare / commercial CA). Self-signed certificates are not supported.",
       "probeStatus": {
         "ok": "Reachable",
         "gatewayReady": "gateway ready",

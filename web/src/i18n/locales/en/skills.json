@@ -134,7 +134,7 @@
     "detailDisabledNotice": "This skill is installed but disabled by your settings, so agents cannot use it until you enable it.",
     "detailSummaryHeading": "Summary",
     "detailInstructionsHeading": "Instructions",
-    "detailNoInstructionsBody": "No instruction body after frontmatter.",
+    "detailNoInstructionsBody": "No detailed instructions provided.",
     "detailHomepageLabel": "Homepage",
     "detailPlatformsLabel": "Platforms",
     "detailRequiresLabel": "Requirements",

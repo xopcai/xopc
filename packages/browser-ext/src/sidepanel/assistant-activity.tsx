@@ -39,7 +39,9 @@ export function AssistantActivity({
   const running = blocks.some((block) => block.type === 'thinking' && block.streaming || block.type === 'tool' && block.status === 'running');
   const summary = running
     ? t('activityRunning')
-    : toolCount > 0 ? t('activitySteps', String(toolCount)) : t('activityThoughts');
+    : toolCount === 1
+      ? t('activityStepOne')
+      : toolCount > 0 ? t('activitySteps', String(toolCount)) : t('activityThoughts');
 
   return (
     <details className="assistant-activity" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>

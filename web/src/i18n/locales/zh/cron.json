@@ -49,7 +49,7 @@
       "customSchedule": "自定义计划",
       "cronExpr": "{{expr}}"
     },
-    "jobsHeading": "计划任务",
+    "jobsHeading": "定时任务",
     "addJob": "新建任务",
     "editJob": "编辑任务",
     "name": "名称 *",
@@ -75,7 +75,7 @@
     "nextRun": "下次执行",
     "status": "状态",
     "runHistoryTitle": "运行记录",
-    "runHistoryHint": "已完成的执行保存在 xopc.db（automation_runs 表）。点击刷新更新列表。",
+    "runHistoryHint": "已完成的执行记录保存在本地，点击刷新可更新列表。",
     "detailRunHistory": "最近执行",
     "detailWhatItDoes": "任务内容",
     "detailRunSettings": "运行配置",
@@ -112,16 +112,16 @@
     "channelLocal": "本地（不发出）",
     "deliveryTargetLocalChannel": "本地消息通道 — 内容仅保存在本机",
     "recipient": "接收方 *",
-    "recipientPlaceholder": "Telegram：填写数字形式的会话 ID，或从下方最近会话中选择",
+    "recipientPlaceholder": "Telegram：填写数字形式的会话 ID，或从下方最近对话中选择",
     "refreshList": "刷新",
-    "refreshRecipientHint": "从最近会话重新加载列表",
+    "refreshRecipientHint": "从最近对话重新加载列表",
     "selectRecipient": "— 请选择 —",
-    "noRecentChatsOption": "暂无最近会话",
+    "noRecentChatsOption": "暂无最近对话",
     "deliveryTarget": "投递目标",
     "scheduleHintPreset": "选择预设或输入自定义 cron 表达式",
     "schedulePicker": {
       "scheduleTimeLabel": "计划时间",
-      "modeNoRepeat": "不重复",
+      "modeNoRepeat": "不重复（按年指定日期）",
       "modeInterval": "间隔",
       "intervalKindMinutes": "分钟",
       "intervalKindHours": "小时",
@@ -153,13 +153,13 @@
     "modeDirectOption": "直接发送（发到消息通道）",
     "modeAgentOption": "AI 智能体（先由模型处理再发送）",
     "agentLocalOnly": "仅本地运行（保存对话，不发送到消息通道）",
-    "agentLocalOnlyHint": "在本机运行智能体。对话以 cron 类型会话保存到默认或所选智能体下（任务 id 包含在会话键中）；不向 Telegram/CLI 投递。",
-    "deliveryLocalOnly": "仅本地 — 对话以 cron 会话保存到该智能体目录",
+    "agentLocalOnlyHint": "在本机运行智能体，对话将作为定时任务记录保存在默认或所选智能体下，不向 Telegram 或 CLI 投递。",
+    "deliveryLocalOnly": "仅本地 — 对话作为定时任务记录保存在该智能体下",
     "agentProfile": "智能体",
     "agentProfileHint": "仅在「AI 智能体」模式下生效。选默认则使用网关配置的默认智能体。",
     "agentProfileDefault": "默认智能体",
     "workingDirectoryLabel": "工作目录",
-    "workingDirectoryHint": "可选。填写网关所在机器上的绝对路径；不填则使用该智能体的默认工作空间。",
+    "workingDirectoryHint": "可选。填写网关所在机器上的绝对路径；不填则使用该智能体的默认工作区。",
     "workingDirectoryReset": "使用智能体默认",
     "model": "模型",
     "save": "保存",
@@ -170,8 +170,8 @@
     "failedToUpdateJob": "保存任务失败",
     "failedToToggleJob": "切换任务状态失败",
     "actionFailed": "操作失败",
-    "enterManuallyOrSelect": "手动输入或从最近聊天中选择",
-    "noRecentChats": "未找到最近会话。请手动填写会话 ID（例如 Telegram 为 123456789）",
+    "enterManuallyOrSelect": "手动输入或从最近对话中选择",
+    "noRecentChats": "未找到最近对话。请手动填写会话 ID（例如 Telegram 为 123456789）",
     "refresh": "刷新",
     "close": "关闭",
     "cancel": "取消",
@@ -205,10 +205,10 @@
       "daysAgo": "{{count}} 天前"
     },
     "templateFilterAll": "全部",
-    "fromTemplate": "从模版创建",
-    "templatePickerHint": "按分类浏览模版，然后创建定时任务。",
-    "templateSearchPlaceholder": "搜索模版…",
-    "templatesEmptyHint": "没有匹配的模版。",
+    "fromTemplate": "从模板创建",
+    "templatePickerHint": "按分类浏览模板，然后创建定时任务。",
+    "templateSearchPlaceholder": "搜索模板…",
+    "templatesEmptyHint": "没有匹配的模板。",
     "templateCategories": {
       "daily": "每日",
       "monitoring": "监控",
@@ -232,7 +232,7 @@
         "prompt": "做**工作日日终小结**：\n- **已完成**：最多 5 条（推断请标注）。\n- **未闭环/搁置**：最多 4 条，语气中性。\n- **明日登录后第一件事**：仅一条，动作具体。\n- 尽量引用工作区内任务/日志；若无则说明缺口。\n- 不做价值评判。"
       },
       "inbox_triage": {
-        "title": "收件箱式梳理",
+        "title": "收件箱梳理",
         "description": "优先列出紧急待跟进项；若工作区无邮件内容则给可执行的梳理流程。",
         "prompt": "协助**收件箱/待处理**梳理（**不假设**能登录真实邮箱）：\n- 若工作区有导出邮件、`.eml`、或关于邮件的笔记：按**紧急跟进优先**列出条目及建议下一步。\n- 若无材料：给出**五步梳理流程**（文件夹/标签、先处理谁、如何处理老邮件等），并请我在下列 **VIP 发件人或域名**（**请编辑**）基础上下次粘贴若干主题行。\n- **不要声称已读取真实收件箱**。"
       },
@@ -257,14 +257,14 @@
         "prompt": "从工作区识别包管理文件（`package.json`、`go.mod`、`pyproject.toml` 等）。\n- 为每种生态给出**一条**文档中常见的审计/检查命令（若不存在则说明）。\n- 用文字说明**应关注什么**（大版本、被撤回包、EOL 运行时等），**不要编造扫描结果**。\n- **不要捏造 CVE**。"
       },
       "weekly_review": {
-        "title": "周报式回顾",
+        "title": "每周回顾",
         "description": "一周提交主题、未闭环与下周三块重点。",
-        "prompt": "写一份**周末/周五周报式回顾**：\n- **本周交付主题**（结合 git 与笔记，若 git 不可用则说明）。\n- **仍挂心的事**（≤6 条）。\n- **下周 3 个标题级重点**。\n- **一条**「该停做或该委派」的建议（仅在过载迹象明显时）。\n- 语气像给上级的短简报。"
+        "prompt": "写一份**周末/周五每周回顾**：\n- **本周交付主题**（结合 git 与笔记，若 git 不可用则说明）。\n- **仍挂心的事**（≤6 条）。\n- **下周 3 个核心重点**。\n- **一条**「该停做或该委派」的建议（仅在过载迹象明显时）。\n- 语气像给上级的短简报。"
       },
       "code_quality_report": {
         "title": "代码质量报告",
         "description": "从脚本与 CI 配置推断如何跑 lint/类型检查，并说明如何阅读输出——不虚构错误数量。",
-        "prompt": "在工作区查找 **lint / 类型检查 / 格式化** 相关脚本（`package.json`、Makefile、CI 配置等）。\n- 给出建议的**本地执行顺序**。\n- 说明**如何扫一眼输出**（错误类别、易 flaky 测试、类型债热点），**不要编造错误条数**。\n- 若项目无脚本，按识别出的语言给**最小**起步建议并注明局限。"
+        "prompt": "在工作区查找 **lint / 类型检查 / 格式化** 相关脚本（`package.json`、Makefile、CI 配置等）。\n- 给出建议的**本地执行顺序**。\n- 说明**如何扫一眼输出**（错误类别、不稳定的测试（flaky tests）、类型债热点），**不要编造错误条数**。\n- 若项目无脚本，按识别出的语言给**最小**起步建议并注明局限。"
       },
       "git_activity_summary": {
         "title": "Git 活动摘要",
@@ -279,7 +279,7 @@
       "stale_todo_or_issue_sweep": {
         "title": "陈旧待办清扫",
         "description": "扫描 TODO/FIXME 或简易 issue 列表，建议保留/关闭/拆分，不自动改文件。",
-        "prompt": "扫描工作区中的 **TODO/FIXME/HACK** 或 Markdown 里的简易任务表。\n- 列出最多 **10 条**「可能陈旧」的项（根据模糊措辞或文件很少再改动等启发式），每条给**建议动作**：关闭、拆分、排期。\n- **仅建议，不修改文件**。\n- 若扫描不完整，说明原因。"
+        "prompt": "扫描工作区中的 **TODO/FIXME/HACK** 或 Markdown 里的简易任务表。\n- 列出最多 **10 条**「可能陈旧」的项（根据模糊措辞或文件很少再改动等线索），每条给**建议动作**：关闭、拆分、排期。\n- **仅建议，不修改文件**。\n- 若扫描不完整，说明原因。"
       },
       "release_notes_or_changelog_draft": {
         "title": "发版说明草稿",

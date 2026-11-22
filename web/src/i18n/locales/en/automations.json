@@ -121,7 +121,7 @@
     "draft": {
       "title": "Draft with AI",
       "subtitle": "Describe the task. xopc drafts the trigger, action, and safety review before anything is published.",
-      "placeholder": "Example: When an task becomes blocked, ask the agent to diagnose why and suggest next steps.",
+      "placeholder": "Example: When a task becomes blocked, ask the agent to diagnose why and suggest next steps.",
       "generate": "Generate draft",
       "generating": "Generating...",
       "review": "Review before publishing",
@@ -233,9 +233,9 @@
       },
       "blockedTask": {
         "name": "Blocked task helper",
-        "description": "When an task becomes blocked, ask an agent to diagnose it.",
+        "description": "When a task becomes blocked, ask an agent to diagnose it.",
         "formName": "Blocked task helper",
-        "instruction": "An task became blocked. Diagnose the likely blocker and suggest the next concrete step."
+        "instruction": "A task became blocked. Diagnose the likely blocker and suggest the next concrete step."
       },
       "noteCreated": {
         "name": "New note organizer",
@@ -314,7 +314,7 @@
       "onceAt": "Runs once {time}",
       "manualWhen": "Runs manually only",
       "webhookWhen": "Runs when a webhook request arrives",
-      "taskBlockedWhen": "Runs when an task becomes blocked",
+      "taskBlockedWhen": "Runs when a task becomes blocked",
       "noteCreatedWhen": "Runs when a note is created",
       "sessionUpdatedWhen": "Runs when session content changes"
     },
@@ -360,7 +360,7 @@
         "week": "Weeks"
       },
       "expression": "Expression",
-      "secretId": "Secret id",
+      "secretId": "Secret ID",
       "onceAt": "Run at",
       "eventType": "Event type",
       "eventSource": "Event source (optional)",
@@ -393,13 +393,13 @@
       "notifyAll": "Every run",
       "notifyNone": "Off",
       "resultWebhookEndpoint": "Result webhook (optional)",
-      "resultWebhookSecretId": "Outbound secret id",
+      "resultWebhookSecretId": "Outbound secret ID",
       "reliability": "Reliability",
-      "timeoutSeconds": "Timeout seconds",
+      "timeoutSeconds": "Timeout (seconds)",
       "disableAfterFailures": "Disable after failures",
       "effectivePolicy": "Effective execution policy",
       "executionDeadline": "Automation deadline",
-      "downstreamTimeoutHint": "Agent turns, built-in tools, and MCP requests use their effective Agent and connector policies. The earliest deadline always wins."
+      "downstreamTimeoutHint": "Agent turns, built-in tools, and MCP requests use their effective agent and connector policies. The earliest deadline always wins."
     },
     "weekdays": {
       "monday": "Monday",

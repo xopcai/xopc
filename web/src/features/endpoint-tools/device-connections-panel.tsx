@@ -207,7 +207,7 @@ export function DeviceConnectionsPanel({ zh }: { zh: boolean }) {
     } catch (error) {
       const status = typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined;
       setChatError({ deviceId: device.id, message: status === 403
-        ? (zh ? '请在来源设备的「设备连接」中授权后重试。' : 'Authorize this capability on the source device and try again.')
+        ? (zh ? '请在来源设备的「设备」中授权后重试。' : 'Authorize this capability in Devices on the source device and try again.')
         : status === 409 ? (zh ? '此能力暂不可用，请打开设备上的 xopc 后重试。' : 'This capability is unavailable. Open xopc on the device and try again.')
         : (zh ? '暂时无法开启新对话，请重试。' : 'Unable to start a new chat. Try again.') });
       if (status === 403 || status === 409) void catalog.mutate().catch(() => {});
@@ -326,7 +326,7 @@ export function DeviceConnectionsPanel({ zh }: { zh: boolean }) {
           const unavailable = (capability?.requiresForeground ?? true) && device.availability !== 'foreground';
           return <DeviceCapabilityCard key={id} icon={Icon} name={title[locale]} description={description[locale]}
             action={!allowed ? <span className="text-xs text-fg-muted">
-              {zh ? '在手机的「设备连接」中授权' : 'Authorize in Device connections on your phone'}
+              {zh ? '在手机的「设备」中授权' : 'Authorize in Devices on your phone'}
             </span> : device.endpointId && chatButton(device, id, title[locale], unavailable,
               () => void startChat(device, id, prompt[locale], id, autoSend))} />;
         })}

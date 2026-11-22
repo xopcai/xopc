@@ -92,7 +92,7 @@ export function computerRecovery(code: string): string {
   if (code === 'COMPUTER_TARGET_REQUIRED') return 'Use device_use discover to find an accessible desktop, then device_use select with its exact targetRef. Continue in this conversation; opening it in another client is not required.';
   if (code === 'COMPUTER_TARGET_UNSUPPORTED') return 'The selected device does not provide desktop control. Explicitly select a device with Computer Use capability.';
   if (code === 'COMPUTER_TARGET_SCOPE_CHANGED') return 'This input is outside the active device execution context. Close the current control session before explicitly selecting the authorized target.';
-  if (code === 'COMPUTER_GATEWAY_CAPABILITY_REQUIRED') return 'Enable Operate application windows in Device connections on the source computer, then retry.';
+  if (code === 'COMPUTER_GATEWAY_CAPABILITY_REQUIRED') return 'Enable Operate application windows in Devices on the source computer, then retry.';
   if (code === 'COMPUTER_TARGET_OFFLINE') return 'The selected desktop execution context is unavailable or its connection changed. Do not switch devices or replay actions. Check device_use discover and reconcile any uncertain operation before explicitly selecting a new context.';
   if (code === 'COMPUTER_AGENT_MODEL_REQUIRED') return 'Direct UI programs require an active visual main-model turn. Select a visual model and open with planner:agent; do not change models inside an active desktop session.';
   if (code === 'COMPUTER_AGENT_MODEL_CHANGED' || code === 'COMPUTER_PLANNER_MISMATCH') return 'The requested UI planner does not match the active session. Close and confirm release before opening the requested mode with the current main model.';

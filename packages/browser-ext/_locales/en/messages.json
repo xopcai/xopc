@@ -63,7 +63,11 @@
   "copy": { "message": "Copy" },
   "responding": { "message": "Responding" },
   "activityRunning": { "message": "Working…" },
-  "activitySteps": { "message": "$1 tool steps" },
+  "activitySteps": {
+    "message": "$COUNT$ tool steps",
+    "placeholders": { "count": { "content": "$1" } }
+  },
+  "activityStepOne": { "message": "1 tool step" },
   "activityThoughts": { "message": "Thinking" },
   "thinking": { "message": "Thinking" },
   "thinkingRunning": { "message": "Thinking…" },
@@ -230,7 +234,10 @@
   "preview": {"message": "Preview"},
   "closePreview": {"message": "Close"},
   "processingAttachments": {"message": "Preparing attachments…"},
-  "errorPageLimit": {"message": "Attach up to $1 pages or selections"},
+  "errorPageLimit": {
+    "message": "Attach up to $COUNT$ pages or selections",
+    "placeholders": { "count": { "content": "$1" } }
+  },
   "errorPageContextSize": {"message": "The selected pages contain too much text. Attach a selection instead."},
   "searchModels": {"message": "Search models"},
   "noMatchingModels": {"message": "No matching models"},
@@ -250,16 +257,16 @@
   "interruptSend": {"message": "Stop and send now (Ctrl/⌘+Enter)"},
   "editQueuedMessage": {"message": "Edit"},
   "saveQueuedMessage": {"message": "Save"},
-  "voicePermissionHelp": { "message": "Microphone access needs permission. Open the authorization page, then return here and retry." },
+  "voicePermissionHelp": { "message": "Microphone permission is required. Open the authorization page, then return here to try again." },
   "voicePermissionOpen": { "message": "Authorize microphone" },
   "voicePermissionGranted": { "message": "Microphone authorized. Close this tab and return to chat." },
   "voicePermissionFailed": { "message": "Microphone access was denied. Allow microphone access in browser and system settings, then retry." },
-  "clarifyDeny": { "message": "Deny operation" },
+  "clarifyDeny": { "message": "Deny" },
   "clarifyApprove": { "message": "Approve once" },
   "clarifyCompose": { "message": "Select and add details" },
   "clarifyClear": { "message": "Clear selection" },
   "clarifyRecommended": { "message": "Recommended" },
-  "browserControlStopped": { "message": "You stopped Chrome control. Page operations stay paused until you choose to resume. Return to the original chat to retry the test." },
+  "browserControlStopped": { "message": "You stopped browser control. Page actions will stay paused until you resume." },
   "browserControlResume": { "message": "Resume browser control" },
-  "errorLocalHostBlockedHelp": { "message": "The local connection program could not start. Return to the original chat to check and repair installation, then retry. If your system shows a security prompt, review it yourself; do not disable system protection." }
+  "errorLocalHostBlockedHelp": { "message": "The local connection helper was blocked from starting. Check and repair the installation, then try again. If your system shows a security prompt, review it carefully before allowing it; do not disable system protection." }
 }

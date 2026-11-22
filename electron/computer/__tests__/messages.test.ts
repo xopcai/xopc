@@ -5,7 +5,7 @@ import { getElectronMenuMessages } from '../../i18n.js';
 describe('computer desktop copy', () => {
   it('keeps the emergency stop available in localized tray menus', () => {
     expect(getElectronMenuMessages('zh').tray.stopComputer).toBe('停止桌面操作 · Ctrl+Alt+Esc');
-    expect(getElectronMenuMessages('en').tray.stopComputer).toBe('Stop desktop control · Ctrl+Alt+Esc');
+    expect(getElectronMenuMessages('en').tray.stopComputer).toBe('Stop Desktop Control · Ctrl+Alt+Esc');
   });
 
   it('retains only device re-enrollment and generic endpoint copy', () => {
