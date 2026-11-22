@@ -44,6 +44,7 @@ vi.mock('@/features/side-chat/side-chat-column', () => ({
 }));
 vi.mock('@/features/chat/context/use-session-context', () => ({ useSessionContext: () => ({ mutate: vi.fn() }) }));
 vi.mock('@/features/shares/session-share-button', () => ({ SessionShareButton: () => null }));
+vi.mock('@/features/browser-preview/browser-preview-button', () => ({ BrowserPreviewButton: () => null }));
 vi.mock('@/features/voice/realtime/voice-call-provider', () => ({ VoiceCallProvider: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/features/voice/read-aloud-dock', () => ({ ReadAloudDockProvider: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/features/updater/use-update-reminder', () => ({ useUpdateReminder: () => null }));

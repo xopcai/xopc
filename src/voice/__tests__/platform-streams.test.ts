@@ -7,7 +7,7 @@ import { openPlatformStt, openPlatformTts, openPlatformTtsSession, PlatformVoice
 const servers: WebSocketServer[] = [];
 afterEach(async () => { for (const server of servers.splice(0)) { for (const socket of server.clients) socket.terminate(); await new Promise<void>(resolve => server.close(() => resolve())); } });
 async function server() {
-  const server = new WebSocketServer({ port: 0 }); servers.push(server); await once(server, 'listening');
+  const server = new WebSocketServer({ host: '127.0.0.1', port: 0 }); servers.push(server); await once(server, 'listening');
   return { server, url: `ws://127.0.0.1:${(server.address() as {port:number}).port}` };
 }
 describe('platform voice protocol', () => {
@@ -85,7 +85,7 @@ describe('platform voice protocol', () => {
     [401, 'Unauthorized', undefined, 'Sign in again'],
     [429, 'Too Many Requests', undefined, 'Try again later'],
   ])('preserves rejected STT handshake status %s and reports an actionable failure', async (status, body, code, hint) => {
-    const s = new WebSocketServer({ port: 0, verifyClient: (_info, callback) => callback(false, status, body) });
+    const s = new WebSocketServer({ host: '127.0.0.1', port: 0, verifyClient: (_info, callback) => callback(false, status, body) });
     servers.push(s);
     await once(s, 'listening');
     const events: StreamingSttEvent[] = [];
