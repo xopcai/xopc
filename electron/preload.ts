@@ -318,7 +318,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   understandingSources: {
     catalog: () => ipcRenderer.invoke('understanding-sources:catalog'),
-    collect: (sourceIds: string[], options?: { mode?: 'fast' | 'full'; excludeIds?: string[] }) =>
+    preview: (options?: { customNoteDirectories?: string[] }) =>
+      ipcRenderer.invoke('understanding-sources:preview', options),
+    collect: (sourceIds: string[], options?: { excludeIds?: string[]; customNoteDirectories?: string[] }) =>
       ipcRenderer.invoke('understanding-sources:collect', sourceIds, options),
   },
   startup: {

@@ -15,10 +15,12 @@ import {
   getUnderstandingSourceGrant,
   listUnderstandingSourceGrants,
   listUnderstandingSourceRuns,
+  resolveGrantSourceInstanceId,
   revokeUnderstandingSourceGrant,
   updateUnderstandingSourceGrantPolicies,
 } from '../../../user-context/sources/repository.js';
 import type { UnderstandingSourcePlatform } from '../../../user-context/sources/types.js';
+import type { DeepUnderstandingConfirmationInput } from '../../../work-discovery/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 function stringField(value: unknown, field: string): string {
@@ -27,10 +29,12 @@ function stringField(value: unknown, field: string): string {
   return typeof fieldValue === 'string' ? fieldValue.trim() : '';
 }
 
-function sourceInstanceId(grant: NonNullable<ReturnType<typeof getUnderstandingSourceGrant>>): string | undefined {
-  const accountId = typeof grant.config.accountId === 'string' ? grant.config.accountId : undefined;
-  const connectorId = typeof grant.config.connectorId === 'string' ? grant.config.connectorId : undefined;
-  return accountId && connectorId ? `composio:${connectorId}:${accountId}` : undefined;
+function stringArray(value: unknown, max = 32): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((item) => item.trim())
+    .slice(0, max);
 }
 
 function assertionIdsForSource(instanceId: string): string[] {
@@ -90,7 +94,7 @@ export function registerContextSourceRoutes(authenticated: Hono, deps: Authentic
   authenticated.delete('/api/context-sources/grants/:grantId', limited, (c) => {
     const current = getUnderstandingSourceGrant(c.req.param('grantId'));
     if (!current) return c.json({ error: 'Context source not found' }, 404);
-    const instanceId = sourceInstanceId(current);
+    const instanceId = resolveGrantSourceInstanceId(current);
     const affectedAssertions = instanceId ? assertionIdsForSource(instanceId).length : 0;
     const deleteRaw = c.req.query('deleteRaw') === 'true';
     const rawDeleted = deleteRaw && instanceId ? deleteKnowledgeSourceItems(instanceId) : 0;
@@ -136,33 +140,70 @@ export function registerContextSourceRoutes(authenticated: Hono, deps: Authentic
     }
   });
 
-  authenticated.post('/api/context-sources/bootstrap', limited, async (c) => {
+  authenticated.get('/api/context-sources/local-preview', async (c) => {
+    const rawDirs = c.req.query('customNoteDirectories');
+    const customNoteDirectories = rawDirs
+      ? rawDirs.split(',').map((dir) => dir.trim()).filter(Boolean).slice(0, 10)
+      : undefined;
+    const previews = await service.previewLocalUnderstandingSources(customNoteDirectories);
+    return c.json({ previews });
+  });
+
+  authenticated.post('/api/context-sources/understanding-runs', limited, async (c) => {
     const input = await c.req.json().catch(() => null);
-    const items = input && typeof input === 'object' && Array.isArray((input as Record<string, unknown>).items)
-      ? (input as { items: unknown[] }).items.slice(0, 1_200) : [];
-    const processingPolicy = stringField(input, 'processingPolicy');
-    if (!items.length || (processingPolicy !== 'local_only' && processingPolicy !== 'remote_allowed')) {
-      return c.json({ error: 'items and an explicit processingPolicy are required' }, 400);
+    if (!input || typeof input !== 'object') return c.json({ error: 'Invalid JSON body' }, 400);
+    const raw = input as Record<string, unknown>;
+    const processingPolicy = stringField(raw, 'processingPolicy');
+    if (processingPolicy !== 'local_only' && processingPolicy !== 'remote_allowed') {
+      return c.json({ error: 'An explicit processingPolicy is required' }, 400);
     }
-    const runId = stringField(input, 'workDiscoveryRunId') || undefined;
-    const locale = stringField(input, 'locale') || undefined;
-    const rawCheckpoints = input && typeof input === 'object'
-      && (input as Record<string, unknown>).sourceCheckpoints
-      && typeof (input as Record<string, unknown>).sourceCheckpoints === 'object'
-      && !Array.isArray((input as Record<string, unknown>).sourceCheckpoints)
-      ? (input as { sourceCheckpoints: Record<string, unknown> }).sourceCheckpoints
+    const selectedTier1Sources = stringArray(raw.selectedTier1Sources, 16);
+    const customNoteDirectories = stringArray(raw.customNoteDirectories, 10);
+    const excludeIds = stringArray(raw.excludeIds, 64);
+    const precollectedItems = Array.isArray(raw.precollectedItems) ? raw.precollectedItems.slice(0, 1_200) : [];
+    const locale = stringField(raw, 'locale') || undefined;
+    const sourceCheckpoints = raw.sourceCheckpoints && typeof raw.sourceCheckpoints === 'object' && !Array.isArray(raw.sourceCheckpoints)
+      ? raw.sourceCheckpoints as Record<string, unknown>
       : undefined;
     try {
-      const result = await service.importUnderstandingSources(
-        items,
+      const run = service.startDeepUnderstandingRun({
+        selectedTier1Sources,
+        customNoteDirectories,
+        excludeIds,
+        precollectedItems,
+        sourceCheckpoints,
         processingPolicy,
-        c.req.raw.signal,
-        runId,
-        rawCheckpoints,
-        undefined,
         locale,
+      });
+      return c.json({ run }, 202);
+    } catch (error) {
+      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+  });
+
+  authenticated.get('/api/context-sources/understanding-runs/latest', (c) => {
+    return c.json({ run: service.getLatestDeepUnderstandingRun() });
+  });
+
+  authenticated.get('/api/context-sources/understanding-runs/:runId', (c) => {
+    const run = service.getDeepUnderstandingRun(c.req.param('runId'));
+    return run ? c.json({ run }) : c.json({ error: 'Understanding run not found' }, 404);
+  });
+
+  authenticated.post('/api/context-sources/understanding-runs/:runId/cancel', (c) => {
+    const run = service.cancelDeepUnderstandingRun(c.req.param('runId'));
+    return run ? c.json({ run }) : c.json({ error: 'Understanding run not found' }, 404);
+  });
+
+  authenticated.post('/api/context-sources/understanding-runs/:runId/confirm', limited, async (c) => {
+    const input = await c.req.json().catch(() => null);
+    if (!input || typeof input !== 'object') return c.json({ error: 'Invalid JSON body' }, 400);
+    try {
+      const result = service.confirmDeepUnderstandingRun(
+        c.req.param('runId'),
+        input as DeepUnderstandingConfirmationInput,
       );
-      return c.json(result, 201);
+      return c.json(result);
     } catch (error) {
       return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
     }
@@ -170,7 +211,7 @@ export function registerContextSourceRoutes(authenticated: Hono, deps: Authentic
 
   authenticated.get('/api/context-sources/:grantId/raw-count', (c) => {
     const grant = getUnderstandingSourceGrant(c.req.param('grantId'));
-    const instanceId = grant ? sourceInstanceId(grant) : undefined;
+    const instanceId = grant ? resolveGrantSourceInstanceId(grant) : undefined;
     return grant ? c.json({ count: instanceId ? countKnowledgeSourceItems(instanceId) : 0 })
       : c.json({ error: 'Context source not found' }, 404);
   });

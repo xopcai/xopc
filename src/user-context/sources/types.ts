@@ -31,10 +31,15 @@ export interface UnderstandingConsentReceipt {
   revokedAt?: number;
 }
 
+export type UnderstandingSourceTier = 1 | 2 | 3;
+
 export interface UnderstandingSourceDefinition {
   id: string;
   category: UnderstandingSourceCategory;
   platform: UnderstandingSourcePlatform;
+  tier: UnderstandingSourceTier;
+  requiresOsPermission: boolean;
+  defaultOwnerAttribution: UnderstandingSourceItem['ownerAttribution'];
   displayName: string;
   description: string;
   availability: 'available' | 'unavailable';
@@ -43,6 +48,13 @@ export interface UnderstandingSourceDefinition {
   supportedAccessModes: UnderstandingSourceAccessMode[];
   recommended: boolean;
   sensitive: boolean;
+}
+
+export interface LocalSourcePreview {
+  sourceId: string;
+  detected: boolean;
+  itemCount: number;
+  summary?: string;
 }
 
 export interface UnderstandingSourceGrant {

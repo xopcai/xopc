@@ -1,4 +1,5 @@
 import type { KnowledgeItem } from '../knowledge-memory/index.js';
+import type { PersonalDomain } from '../user-model/domain.js';
 
 export type WorkDiscoveryOnboardingStatus =
   | 'not_started'
@@ -145,6 +146,8 @@ export interface WorkUnderstandingThreadCandidate {
   horizon: WorkUnderstandingThreadHorizon;
   confidence: 'high' | 'medium' | 'low';
   evidenceRefs: string[];
+  sourceIds?: string[];
+  recommendedFirstStep?: string;
 }
 
 export interface WorkUnderstandingThread {
@@ -159,6 +162,8 @@ export interface WorkUnderstandingThread {
   userStatus: WorkUnderstandingThreadUserStatus;
   projectIds: string[];
   evidenceIds: string[];
+  sourceIds?: string[];
+  recommendedFirstStep?: string;
   parentThreadId?: string;
   firstObservedAt: number;
   lastObservedAt: number;
@@ -229,12 +234,104 @@ export interface WorkDiscoveryProfileCandidate {
   id: string;
   assertionId?: string;
   category: 'role' | 'responsibility' | 'capability' | 'preference' | 'routine' | 'communication' | 'boundary' | 'relationship';
+  domain?: PersonalDomain;
   factKey: string;
   statement: string;
   confidence: 'high' | 'medium' | 'low';
   evidence: string[];
   evidenceRefs?: string[];
+  sourceIds?: string[];
+  independentSourceCount?: number;
   status: 'pending' | 'accepted' | 'edited' | 'rejected';
+}
+
+export type WritingStyleDimension =
+  | 'language'
+  | 'structure'
+  | 'tone'
+  | 'density'
+  | 'scenarios'
+  | 'vocabulary';
+
+export interface WritingStyleCandidate {
+  id: string;
+  assertionId?: string;
+  ruleId?: string;
+  dimension: WritingStyleDimension;
+  factKey: string;
+  statement: string;
+  confidence: 'high' | 'medium' | 'low';
+  evidence: string[];
+  evidenceRefs: string[];
+  sourceIds: string[];
+  status: 'pending' | 'accepted' | 'edited' | 'rejected';
+}
+
+export interface CalibrationQuestion {
+  id: string;
+  question: string;
+  options?: string[];
+  relatedTopicKey?: string;
+}
+
+export type DeepUnderstandingPhase =
+  | 'collecting'
+  | 'analyzing_writing'
+  | 'synthesizing'
+  | 'completed'
+  | 'failed'
+  | 'canceled';
+
+export interface DeepUnderstandingSourceProgress {
+  sourceId: string;
+  status: 'pending' | 'collecting' | 'completed' | 'partial' | 'denied' | 'failed';
+  itemCount: number;
+  error?: string;
+}
+
+export interface DeepUnderstandingResult {
+  aboutYou: WorkDiscoveryProfileCandidate[];
+  writingPreferences: WritingStyleCandidate[];
+  workThreads: WorkUnderstandingThread[];
+  calibrationQuestions: CalibrationQuestion[];
+  sampledCounts: Record<string, number>;
+  sourceStatuses: Array<{ sourceId: string; status: 'completed' | 'partial' | 'failed'; error?: string }>;
+}
+
+export interface DeepUnderstandingRun {
+  id: string;
+  status: 'running' | 'completed' | 'failed' | 'canceled';
+  phase: DeepUnderstandingPhase;
+  selectedSources: string[];
+  sourceStatuses: DeepUnderstandingSourceProgress[];
+  result?: DeepUnderstandingResult;
+  errorMessage?: string;
+  startedAt: number;
+  completedAt?: number;
+}
+
+export interface DeepUnderstandingConfirmationInput {
+  aboutYou?: Array<{
+    id: string;
+    assertionId?: string;
+    decision: 'accepted' | 'edited' | 'rejected';
+    statement?: string;
+  }>;
+  writingPreferences?: Array<{
+    id: string;
+    assertionId?: string;
+    dimension?: WritingStyleDimension;
+    decision: 'accepted' | 'edited' | 'rejected';
+    statement?: string;
+    sourceIds?: string[];
+  }>;
+  customWritingRules?: string[];
+  calibrationAnswers?: Array<{
+    question: string;
+    answer: string;
+  }>;
+  selectedThreadId?: string;
+  markOnboardingCompleted?: boolean;
 }
 
 export type WorkDiscoveryRecognitionDecision =

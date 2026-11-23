@@ -20,7 +20,7 @@ export const loadSharePreviewPage = () => import('@/pages/share-preview-page');
 export const loadLocalAppsPage = () => import('@/pages/local-apps-page');
 export const loadLocalAppWorkbenchPage = () => import('@/pages/local-app-workbench-page');
 export const loadProductOpenPage = () => import('@/pages/product-open-page');
-export const loadWorkDiscoveryPage = () => import('@/features/work-discovery/work-discovery-page');
+export const loadDeepUnderstandingOnboarding = () => import('@/features/onboarding/deep-understanding-onboarding');
 export const loadWorkDiscoveryOverlay = () => import('@/features/work-discovery/work-discovery-overlay');
 export const loadSetupStatusPanel = () => import('@/features/settings/setup-checklist/setup-status-panel');
 export const loadAppearanceSettingsPanel = () => import('@/features/settings/appearance-settings');
@@ -103,7 +103,7 @@ export function preloadRouteForPath(to: string) {
   if (path === '/local-apps') return preload(loadLocalAppsPage);
   if (path.startsWith('/local-apps/')) return preload(loadLocalAppWorkbenchPage);
   if (path === '/open') return preload(loadProductOpenPage);
-  if (path === '/onboarding/workspace') return preload(loadWorkDiscoveryPage);
+  if (path === '/onboarding/workspace') return preload(loadDeepUnderstandingOnboarding);
   if (path.startsWith('/share/')) return preload(loadSharePreviewPage);
 
   if (path === '/settings/sessions') return preload(loadSessionsPage);

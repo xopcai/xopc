@@ -487,7 +487,7 @@ export function listUserAssertionSources(assertionIds: string[]): Map<string, Us
     JOIN context_evidence e ON e.evidence_id = ae.evidence_id
     LEFT JOIN understanding_source_grants g
       ON e.source_ref LIKE ('understanding-source-grant:' || g.grant_id || ':%')
-      OR (e.source_type = 'connector' AND e.source_instance_id IS NOT NULL
+      OR (e.source_instance_id IS NOT NULL
         AND json_extract(g.config_json, '$.sourceInstanceId') = e.source_instance_id)
     LEFT JOIN work_discovery_runs w
       ON e.source_ref LIKE ('work-discovery:' || w.id || ':%')
@@ -548,7 +548,7 @@ export function listUserAssertionSources(assertionIds: string[]): Map<string, Us
           observedAt: row.observed_at,
         };
       } else {
-        if (hasSpecificUnderstandingSource && row.source_ref.startsWith('understanding-source:onboarding:')) continue;
+        if (hasSpecificUnderstandingSource) continue;
         source = { id: 'inference', kind: 'inference', observedAt: row.observed_at };
       }
       const existing = sources.get(source.id);

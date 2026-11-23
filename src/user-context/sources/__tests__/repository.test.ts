@@ -42,8 +42,8 @@ describe('understanding source repository', () => {
 
   it('owns grants, collection runs, and checkpoints in the unified model', () => {
     const grant = upsertUnderstandingSourceGrant({
-      sourceKey: 'local:linux-recent-documents',
-      adapterId: 'linux-recent-documents',
+      sourceKey: 'local:local-obsidian',
+      adapterId: 'local-obsidian',
       category: 'recent_documents',
       platform: 'linux',
       displayName: 'Recent documents',

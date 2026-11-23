@@ -1,53 +1,56 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('../api', () => ({
-  fetchWorkDiscoveryRun: vi.fn(),
-  importUnderstandingSources: vi.fn().mockRejectedValue(new Error('Analysis failed')),
-}));
-
-import type { ElectronAPI } from '@/types/electron';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { useUnderstandingActivityStore } from '../understanding-activity-store';
 
 describe('understanding activity store', () => {
   afterEach(() => {
-    delete window.electronAPI;
     useUnderstandingActivityStore.getState().finish();
-    vi.clearAllMocks();
   });
 
-  it('preserves completed source scans when downstream analysis fails', async () => {
-    window.electronAPI = {
-      understandingSources: {
-        catalog: vi.fn(),
-        collect: vi.fn().mockResolvedValue([{
-          sourceId: 'local-recent-files',
-          status: 'completed',
-          items: [{
-            id: 'item-1',
-            sourceId: 'local-recent-files',
-            type: 'document',
-            title: 'Project notes',
-            ownerAttribution: 'user',
-            sensitivity: 'personal',
-            evidenceRef: 'local-recent-files://item-1',
-          }],
-        }]),
-      },
-    } as unknown as ElectronAPI;
+  it('tracks deep understanding run progress, item counts, and partial failures', () => {
+    useUnderstandingActivityStore.getState().updateDeepRun({
+      id: 'deep-run-1',
+      status: 'running',
+      phase: 'analyzing_writing',
+      selectedSources: ['local-obsidian', 'apple-notes'],
+      sourceStatuses: [
+        { sourceId: 'local-obsidian', status: 'completed', itemCount: 24 },
+        { sourceId: 'apple-notes', status: 'collecting', itemCount: 0 },
+      ],
+      startedAt: 1_000,
+    });
 
-    await useUnderstandingActivityStore.getState().collectSources(
-      undefined,
-      ['local-recent-files'],
-      'remote_allowed',
-    );
+    expect(useUnderstandingActivityStore.getState()).toMatchObject({
+      status: 'running',
+      sources: { 'local-obsidian': 'completed', 'apple-notes': 'running' },
+      itemCounts: { 'local-obsidian': 24, 'apple-notes': 0 },
+    });
+
+    useUnderstandingActivityStore.getState().updateDeepRun({
+      id: 'deep-run-1',
+      status: 'completed',
+      phase: 'completed',
+      selectedSources: ['local-obsidian', 'apple-notes'],
+      sourceStatuses: [
+        { sourceId: 'local-obsidian', status: 'completed', itemCount: 24 },
+        { sourceId: 'apple-notes', status: 'denied', itemCount: 0 },
+      ],
+      startedAt: 1_000,
+      completedAt: 4_000,
+      result: {
+        aboutYou: [],
+        writingPreferences: [],
+        workThreads: [],
+        calibrationQuestions: [],
+        sampledCounts: { 'local-obsidian': 24 },
+        sourceStatuses: [{ sourceId: 'local-obsidian', status: 'completed' }],
+      },
+    });
 
     expect(useUnderstandingActivityStore.getState()).toMatchObject({
       status: 'partial',
-      sources: { 'local-recent-files': 'completed' },
-      itemCounts: { 'local-recent-files': 1 },
-      error: 'Analysis failed',
+      sources: { 'local-obsidian': 'completed', 'apple-notes': 'denied' },
     });
   });
 

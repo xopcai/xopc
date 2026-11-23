@@ -1,11 +1,10 @@
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 
-import { DesktopFocusOnboarding } from '@/features/onboarding/desktop-focus-onboarding';
+import { DeepUnderstandingOnboarding } from '@/features/onboarding/deep-understanding-onboarding';
 import { OnboardingCard } from '@/features/onboarding/onboarding-card';
 import { SidebarFooter } from '@/components/shell/sidebar-footer';
 import { UserModelPage } from '@/features/user-model/user-model-page';
-import { WorkDiscoveryPage } from '@/features/work-discovery/work-discovery-page';
 import { useLocaleStore } from '@/stores/locale-store';
 import type { ColorScheme } from '@/stores/theme-store';
 
@@ -106,60 +105,82 @@ window.fetch = async (input) => {
   if (url.includes('/api/imports/sources')) {
     return json({ ok: true, data: { sources: [{ id: 'claude-code', name: 'Claude Code', detected: true }] } });
   }
-  if (url.includes('/api/context-sources/bootstrap')) {
+  if (url.includes('/api/context-sources/local-preview')) {
     return json({
-      profileCandidates: [
-        {
-          id: 'cand-1',
-          assertionId: 'assert-1',
-          category: 'role',
-          factKey: 'role:product-eng',
-          statement: params.get('lang') === 'zh' ? '产品与工程负责人' : 'Product & engineering lead',
-          confidence: 'high',
-          evidence: ['Review-Notes.md'],
-          status: 'pending',
-        },
-        {
-          id: 'cand-2',
-          assertionId: 'assert-2',
-          category: 'preference',
-          factKey: 'pref:concise',
-          statement: params.get('lang') === 'zh' ? '偏好先给结论再展开' : 'Prefers crisp takeaways first',
-          confidence: 'medium',
-          evidence: ['Q4-Vendor-Quotes.xlsx'],
-          status: 'pending',
-        },
+      previews: [
+        { sourceId: 'local-ai-instructions', detected: true, itemCount: 2, summary: 'Claude · Codex' },
+        { sourceId: 'local-obsidian', detected: true, itemCount: 42, summary: 'MainVault' },
+        { sourceId: 'local-markdown-notes', detected: false, itemCount: 0 },
+        { sourceId: 'local-recent-files', detected: true, itemCount: 18 },
+        { sourceId: 'chromium-bookmarks', detected: true, itemCount: 26, summary: 'Chrome' },
       ],
-      workThreads: [
-        {
-          id: 'thread-1',
-          canonicalKey: 'source-thread:q4-quotes',
-          title: params.get('lang') === 'zh' ? '对比 Q4 供应商报价' : 'Compare Q4 vendor quotes',
-          summary: 'Reviewing Q4 pricing tables and delivery terms',
-          status: 'active',
-          horizon: 'current',
-          focusScore: 0.92,
-          confidence: 0.9,
-          userStatus: 'unreviewed',
-          projectIds: [],
-          evidenceIds: ['local-recent-files://rf-1'],
+    });
+  }
+  if (url.includes('/api/context-sources/understanding-runs')) {
+    return json({
+      run: {
+        id: 'visual-run-1',
+        status: 'completed',
+        phase: 'completed',
+        selectedSources: ['local-ai-instructions', 'local-obsidian', 'local-recent-files'],
+        sourceStatuses: [
+          { sourceId: 'local-ai-instructions', status: 'completed', itemCount: 2 },
+          { sourceId: 'local-obsidian', status: 'completed', itemCount: 28 },
+          { sourceId: 'local-recent-files', status: 'completed', itemCount: 14 },
+        ],
+        startedAt: Date.now() - 12_000,
+        completedAt: Date.now(),
+        result: {
+          aboutYou: [
+            {
+              id: 'cand-1',
+              assertionId: 'assert-1',
+              category: 'role',
+              domain: 'identity',
+              factKey: 'role:product-eng',
+              statement: params.get('lang') === 'zh' ? '产品与全栈系统负责人' : 'Product & full-stack systems lead',
+              confidence: 'high',
+              evidence: ['Obsidian & CLAUDE.md'],
+              sourceIds: ['local-obsidian', 'local-ai-instructions'],
+              independentSourceCount: 2,
+              status: 'pending',
+            },
+          ],
+          writingPreferences: [
+            {
+              id: 'w-1',
+              assertionId: 'assert-w1',
+              dimension: 'structure',
+              factKey: 'writing:structure',
+              statement: params.get('lang') === 'zh' ? '结论先行，偏好表格与层级清单' : 'Lead with conclusions, tables, and crisp bullet lists',
+              confidence: 'high',
+              evidence: ['CLAUDE.md'],
+              evidenceRefs: ['local-ai-instructions://r1'],
+              sourceIds: ['local-ai-instructions'],
+              status: 'pending',
+            },
+          ],
+          workThreads: [
+            {
+              id: 'thread-1',
+              canonicalKey: 'work-thread:q4-quotes',
+              title: params.get('lang') === 'zh' ? '推进桌面端深度认识体验' : 'Ship deep-understanding desktop onboarding',
+              summary: 'Unifying multi-source local understanding and style rules',
+              status: 'active',
+              horizon: 'current',
+              focusScore: 0.92,
+              confidence: 0.9,
+              userStatus: 'unreviewed',
+              projectIds: [],
+              evidenceIds: ['local-obsidian://n1'],
+              sourceIds: ['local-obsidian', 'local-recent-files'],
+            },
+          ],
+          calibrationQuestions: [],
+          sampledCounts: { 'local-obsidian': 28, 'local-recent-files': 14 },
+          sourceStatuses: [{ sourceId: 'local-obsidian', status: 'completed' }],
         },
-        {
-          id: 'thread-2',
-          canonicalKey: 'source-thread:product-review',
-          title: params.get('lang') === 'zh' ? '整理产品评审议程' : 'Prep product review agenda',
-          summary: 'Drafting review milestones and open questions',
-          status: 'active',
-          horizon: 'ongoing',
-          focusScore: 0.8,
-          confidence: 0.85,
-          userStatus: 'unreviewed',
-          projectIds: [],
-          evidenceIds: ['local-recent-files://rf-2'],
-        },
-      ],
-      knowledgeCandidates: [],
-      sourceStatuses: [{ sourceId: 'local-recent-files', status: 'completed' }],
+      },
     });
   }
   if (url.includes('/api/user-model/assertions') || url.includes('/api/user-model/priorities')) {
@@ -218,10 +239,8 @@ export function VisualFixture() {
     <div className="h-dvh w-dvw overflow-hidden" data-visual-stage={stage}>
       {stage === 'setup' ? (
         <OnboardingCard onComplete={() => {}} onDismiss={() => {}} />
-      ) : stage === 'desktop-focus' ? (
-        <DesktopFocusOnboarding onRequestClose={() => {}} onNavigateAway={() => {}} />
       ) : (
-        <WorkDiscoveryPage embedded onRequestClose={() => {}} onNavigateAway={() => {}} />
+        <DeepUnderstandingOnboarding onRequestClose={() => {}} onNavigateAway={() => {}} />
       )}
     </div>
   );

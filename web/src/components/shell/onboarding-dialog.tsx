@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { DesktopFocusOnboarding } from '@/features/onboarding/desktop-focus-onboarding';
+import { DeepUnderstandingOnboarding } from '@/features/onboarding/deep-understanding-onboarding';
 import { OnboardingCard } from '@/features/onboarding/onboarding-card';
 import {
   deriveOnboardingExperienceState,
@@ -13,7 +13,6 @@ import {
   fetchWorkDiscoveryOnboarding,
   type WorkDiscoveryOnboardingSnapshot,
 } from '@/features/work-discovery/api';
-import { WorkDiscoveryPage } from '@/features/work-discovery/work-discovery-page';
 import { useNeedsModelSetup } from '@/features/onboarding/use-needs-model-setup';
 import { CloudOnboardingCard, useCloudOnboarding } from '@/features/onboarding/cloud-onboarding';
 import { messages } from '@/i18n/messages';
@@ -146,17 +145,9 @@ export function OnboardingDialog() {
                 void cloudOnboarding.refresh().catch(closeExperience);
               }}
             />
-          ) : isElectron() ? (
-            <div className="xopc-onboarding-work-stage h-full overflow-hidden">
-              <DesktopFocusOnboarding
-                onRequestClose={leaveExperience}
-                onNavigateAway={closeExperience}
-              />
-            </div>
           ) : (
             <div className="xopc-onboarding-work-stage h-full overflow-hidden">
-              <WorkDiscoveryPage
-                embedded
+              <DeepUnderstandingOnboarding
                 onRequestClose={leaveExperience}
                 onNavigateAway={closeExperience}
               />

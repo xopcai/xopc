@@ -74,28 +74,6 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
     }
   });
 
-  authenticated.post('/api/work-discovery/quick-runs', limited, async (c) => {
-    if (!service.isEnabled()) return c.json({ ok: false, error: 'Work discovery is disabled' }, 404);
-    const body = await c.req.json().catch(() => null);
-    const idempotencyKey = stringField(body, 'idempotencyKey');
-    const processingPolicy = stringField(body, 'processingPolicy');
-    const locale = stringField(body, 'locale');
-    if (!idempotencyKey) return c.json({ ok: false, error: 'Missing idempotencyKey' }, 400);
-    if (processingPolicy !== 'local_only' && processingPolicy !== 'remote_allowed') {
-      return c.json({ ok: false, error: 'Explicit processingPolicy is required' }, 400);
-    }
-    try {
-      const run = await service.startQuickRun({
-        idempotencyKey,
-        processingPolicy,
-        ...(locale ? { locale } : {}),
-      });
-      return c.json({ ok: true, run }, 202);
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-  });
-
   authenticated.post('/api/work-discovery/runs', limited, async (c) => {
     if (!service.isEnabled()) return c.json({ ok: false, error: 'Work discovery is disabled' }, 404);
     const body = await c.req.json().catch(() => null);

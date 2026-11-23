@@ -22,7 +22,7 @@ describe('normalizeUnderstandingSourceItems', () => {
       ...Array.from({ length: 3 }, (_, index) => item('apple-mail', index)),
     ]);
 
-    expect(normalized).toHaveLength(150);
+    expect(normalized).toHaveLength(180);
     expect(normalized.filter((entry) => entry.sourceId === 'apple-mail')).toHaveLength(3);
     expect(normalized.slice(0, 6).map((entry) => entry.sourceId)).toEqual([
       'local-recent-files', 'apple-mail',

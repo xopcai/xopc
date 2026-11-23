@@ -17,18 +17,27 @@ import {
   type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
 import { afterSqliteCommit, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { createCollaborationRule, listCollaborationRules } from '../storage/sqlite/collaboration-rule-repository.js';
 import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
 import { writeKnowledgeItem } from '../knowledge-memory/index.js';
 import {
   createPriorityWindow,
   createUserGoal,
+  getAssertionSlot,
+  getUserAssertion,
   getUserProfileSnapshot,
   linkAssertionEvidence,
   reconcileAssertion,
+  setAssertionStatus,
+  type PersonalDomain,
   type UserAssertion,
   type UserModelScope,
 } from '../user-model/index.js';
-import { clusterActivityTopics } from '../user-context/sources/activity-clustering.js';
+import { getUnderstandingSourceDefinition } from '../user-context/sources/catalog.js';
+import {
+  collectTier1Sources,
+  previewTier1Sources,
+} from '../user-context/sources/collectors/index.js';
 import {
   createUnderstandingSourceRun,
   getUnderstandingSourceRun,
@@ -40,7 +49,12 @@ import {
 } from '../user-context/sources/repository.js';
 import { allowsRemoteSourceProcessing } from '../user-context/sources/processing-policy.js';
 import type { UnderstandingSourceCategory, UnderstandingSourceItem } from '../user-context/sources/types.js';
-import { isLocalUnderstandingSourceId } from '../user-context/sources/local-source-contract.js';
+import {
+  isLocalUnderstandingSourceId,
+  isTier1LocalSourceId,
+  localSourceInstanceId,
+  type Tier1LocalUnderstandingSourceId,
+} from '../user-context/sources/local-source-contract.js';
 import { createLogger } from '../utils/logger.js';
 
 import { analyzeUnderstandingSources, analyzeWorkContext, workDiscoveryResultMarkdown } from './analyzer.js';
@@ -83,6 +97,11 @@ import {
   WORK_DISCOVERY_SCAN_POLICY_VERSION,
 } from './probe.js';
 import type {
+  DeepUnderstandingConfirmationInput,
+  DeepUnderstandingPhase,
+  DeepUnderstandingResult,
+  DeepUnderstandingRun,
+  DeepUnderstandingSourceProgress,
   WorkDiscoveryErrorCode,
   WorkDiscoveryCandidate,
   WorkDiscoveryOnboardingState,
@@ -90,13 +109,15 @@ import type {
   WorkDiscoveryRecognitionDecision,
   WorkDiscoveryRun,
   WorkDiscoverySource,
+  WritingStyleCandidate,
 } from './types.js';
 
 const log = createLogger('WorkDiscovery');
-const MAX_UNDERSTANDING_ITEMS = 150;
+const MAX_UNDERSTANDING_ITEMS = 180;
 const MAX_UNDERSTANDING_INPUT_ITEMS = 1_200;
 const MAX_UNDERSTANDING_ITEM_CHARS = 12_000;
 const MAX_UNDERSTANDING_TOTAL_CHARS = 300_000;
+const PII_PATTERN = /(?:\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b|\b(?:sk|pk|ghp|gho|xoxb|xoxp|AKIA)[A-Za-z0-9_-]{12,}\b|\+?\d[\d\s()-]{9,}\d)/i;
 
 export type ModelProcessingPolicy = 'local_only' | 'remote_allowed';
 
@@ -201,40 +222,169 @@ export function normalizeUnderstandingSourceItems(rawItems: unknown[]): Understa
     return { ...item, ...(text ? { text } : { text: undefined }) };
   });
 }
+function defaultDomainForCategory(category: WorkDiscoveryProfileCandidate['category']): PersonalDomain {
+  switch (category) {
+    case 'role':
+    case 'responsibility':
+      return 'identity';
+    case 'capability':
+      return 'capabilities';
+    case 'preference':
+    case 'communication':
+    case 'boundary':
+      return 'preferences';
+    case 'routine':
+      return 'behavior';
+    case 'relationship':
+      return 'relationships';
+  }
+}
+
+function containsSensitivePii(value: string): boolean {
+  return PII_PATTERN.test(value);
+}
+
+type PersistedSourceEvidenceRef = {
+  sourceId: string;
+  grantId?: string;
+  sourceRunId?: string;
+  sourceInstanceId: string;
+};
+
 function persistUnderstandingCandidate(
   candidate: WorkDiscoveryProfileCandidate,
   scope: UserModelScope,
   sourceRef: string,
+  sourceEntries: PersistedSourceEvidenceRef[] = [],
 ): UserAssertion | undefined {
-  const evidence = createContextEvidence({
-    sourceType: 'runtime', sourceRef: `${sourceRef}:${candidate.id}`,
-    redactedExcerpt: candidate.evidence.join(' · ').slice(0, 600), trustLevel: 'trusted', observedAt: Date.now(),
-  });
-  return reconcileAssertion({
+  const observedAt = Date.now();
+  const excerpt = candidate.evidence.join(' · ').slice(0, 600);
+  const confidence = candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.58;
+  const primarySource = sourceEntries[0];
+  const primaryEvidence = primarySource
+    ? createContextEvidence({
+      sourceType: 'runtime',
+      sourceInstanceId: primarySource.sourceInstanceId,
+      sourceRef: primarySource.grantId
+        ? `understanding-source-grant:${primarySource.grantId}:${candidate.id}`
+        : `${primarySource.sourceId}:${candidate.id}`,
+      ...(primarySource.sourceRunId ? { sourceRunId: primarySource.sourceRunId } : {}),
+      redactedExcerpt: excerpt,
+      trustLevel: 'trusted',
+      observedAt,
+    })
+    : createContextEvidence({
+      sourceType: 'runtime',
+      sourceRef: `${sourceRef}:${candidate.id}`,
+      redactedExcerpt: excerpt,
+      trustLevel: 'trusted',
+      observedAt,
+    });
+  const assertion = reconcileAssertion({
     subject: { type: 'user', id: 'self' },
-    predicate: `${candidate.category}.work_discovery.${candidate.factKey}`,
+    predicate: `${candidate.category}.${candidate.factKey}`,
     cardinality: 'single',
     scope,
     kind: candidate.category === 'role' ? 'identity'
       : candidate.category === 'responsibility' || candidate.category === 'boundary' ? 'derived_insight'
         : candidate.category === 'communication' ? 'preference'
           : candidate.category,
+    domain: candidate.domain ?? defaultDomainForCategory(candidate.category),
     value: candidate.statement,
     normalizedValue: candidate.statement.toLocaleLowerCase(),
     statement: candidate.statement,
     authority: 'system_inferred',
-    confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.58,
-    inferredImportance: 0.55,
+    confidence,
+    inferredImportance: candidate.confidence === 'high' ? 0.7 : 0.55,
     consequence: candidate.category === 'boundary' ? 'critical' : 'low',
-    actionability: 0.5,
+    actionability: 0.55,
     volatility: candidate.category === 'routine' || candidate.category === 'communication' ? 'slow' : 'stable',
     sensitivity: candidate.category === 'relationship' ? 'personal' : 'normal',
     disclosurePolicy: 'referenceable',
-    observedAt: Date.now(),
+    observedAt,
     createdBy: 'runtime',
-    evidenceId: evidence.id,
-    evidenceConfidence: candidate.confidence === 'high' ? 0.9 : 0.7,
+    evidenceId: primaryEvidence.id,
+    evidenceConfidence: confidence,
   }).assertion;
+  if (!assertion) return undefined;
+  for (const extraSource of sourceEntries.slice(1)) {
+    const evidence = createContextEvidence({
+      sourceType: 'runtime',
+      sourceInstanceId: extraSource.sourceInstanceId,
+      sourceRef: extraSource.grantId
+        ? `understanding-source-grant:${extraSource.grantId}:${candidate.id}`
+        : `${extraSource.sourceId}:${candidate.id}`,
+      ...(extraSource.sourceRunId ? { sourceRunId: extraSource.sourceRunId } : {}),
+      redactedExcerpt: excerpt,
+      trustLevel: 'trusted',
+      observedAt,
+    });
+    linkAssertionEvidence(assertion.id, evidence.id, 'supports', confidence, observedAt);
+  }
+  return assertion;
+}
+
+function persistWritingStyleCandidate(
+  candidate: WritingStyleCandidate,
+  scope: UserModelScope,
+  sourceEntries: PersistedSourceEvidenceRef[],
+): UserAssertion | undefined {
+  const observedAt = Date.now();
+  const excerpt = candidate.evidence.join(' · ').slice(0, 600);
+  const confidence = candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.75 : 0.6;
+  const primarySource = sourceEntries[0];
+  const primaryEvidence = primarySource
+    ? createContextEvidence({
+      sourceType: 'runtime',
+      sourceInstanceId: primarySource.sourceInstanceId,
+      sourceRef: primarySource.grantId
+        ? `understanding-source-grant:${primarySource.grantId}:${candidate.id}`
+        : `${primarySource.sourceId}:${candidate.id}`,
+      ...(primarySource.sourceRunId ? { sourceRunId: primarySource.sourceRunId } : {}),
+      redactedExcerpt: excerpt,
+      trustLevel: 'trusted',
+      observedAt,
+    })
+    : undefined;
+  const assertion = reconcileAssertion({
+    subject: { type: 'user', id: 'self' },
+    predicate: `preference.writing.${candidate.dimension}`,
+    cardinality: 'single',
+    scope,
+    kind: 'preference',
+    domain: 'preferences',
+    value: candidate.statement,
+    normalizedValue: candidate.statement.toLocaleLowerCase(),
+    statement: candidate.statement,
+    authority: 'system_inferred',
+    confidence,
+    inferredImportance: 0.75,
+    consequence: 'low',
+    actionability: 0.8,
+    volatility: 'slow',
+    sensitivity: 'normal',
+    disclosurePolicy: 'referenceable',
+    applicability: { operation: ['response'] },
+    observedAt,
+    createdBy: 'runtime',
+    ...(primaryEvidence ? { evidenceId: primaryEvidence.id, evidenceConfidence: confidence } : {}),
+  }).assertion;
+  if (!assertion) return undefined;
+  for (const extraSource of sourceEntries.slice(1)) {
+    const evidence = createContextEvidence({
+      sourceType: 'runtime',
+      sourceInstanceId: extraSource.sourceInstanceId,
+      sourceRef: extraSource.grantId
+        ? `understanding-source-grant:${extraSource.grantId}:${candidate.id}`
+        : `${extraSource.sourceId}:${candidate.id}`,
+      ...(extraSource.sourceRunId ? { sourceRunId: extraSource.sourceRunId } : {}),
+      redactedExcerpt: excerpt,
+      trustLevel: 'trusted',
+      observedAt,
+    });
+    linkAssertionEvidence(assertion.id, evidence.id, 'supports', confidence, observedAt);
+  }
+  return assertion;
 }
 
 function persistWorkKnowledge(input: {
@@ -245,10 +395,12 @@ function persistWorkKnowledge(input: {
   confidence: number;
   scope: UserModelScope;
   evidenceRefs: string[];
+  sourceIds?: string[];
+  kind?: 'work_thread' | 'project_fact' | 'workspace_fact';
 }) {
   const now = Date.now();
   return writeKnowledgeItem({
-    kind: input.scope.type === 'project' ? 'project_fact' : 'workspace_fact',
+    kind: input.kind ?? 'work_thread',
     scope: input.scope,
     content: `${input.title}: ${input.summary}`,
     canonicalKey: input.canonicalKey,
@@ -256,7 +408,11 @@ function persistWorkKnowledge(input: {
     importance: input.horizon === 'current' ? 0.75 : input.horizon === 'ongoing' ? 0.55 : 0.4,
     reviewAt: now + (input.horizon === 'current' ? 7 : 30) * 86_400_000,
     originClass: 'system',
-    source: { evidenceRefs: input.evidenceRefs, horizon: input.horizon },
+    source: {
+      evidenceRefs: input.evidenceRefs,
+      ...(input.sourceIds?.length ? { sourceIds: input.sourceIds } : {}),
+      horizon: input.horizon,
+    },
   }).item;
 }
 
@@ -310,6 +466,8 @@ function hasLongVerbatimOverlap(value: string, sources: string[], minimumLength 
 
 export class WorkDiscoveryService {
   private readonly abortControllers = new Map<string, AbortController>();
+  private readonly deepUnderstandingRuns = new Map<string, DeepUnderstandingRun>();
+  private readonly deepUnderstandingAborts = new Map<string, AbortController>();
   private readonly backgroundRunProjects = new WeakMap<AbortController, string>();
   private readonly executions = new Set<Promise<void>>();
   private stopped = false;
@@ -361,6 +519,7 @@ export class WorkDiscoveryService {
   async stop(): Promise<void> {
     this.stopped = true;
     for (const controller of this.abortControllers.values()) controller.abort();
+    for (const controller of this.deepUnderstandingAborts.values()) controller.abort();
     await Promise.all(this.executions);
   }
 
@@ -524,6 +683,448 @@ export class WorkDiscoveryService {
     return revokeWorkDiscoveryDirectorySource(id);
   }
 
+  async previewLocalUnderstandingSources(customNoteDirectories?: string[]) {
+    return previewTier1Sources({
+      ...(customNoteDirectories?.length ? { customNoteDirectories } : {}),
+    });
+  }
+
+  getDeepUnderstandingRun(id: string): DeepUnderstandingRun | null {
+    return this.deepUnderstandingRuns.get(id) ?? null;
+  }
+
+  getLatestDeepUnderstandingRun(): DeepUnderstandingRun | null {
+    let latest: DeepUnderstandingRun | null = null;
+    for (const run of this.deepUnderstandingRuns.values()) {
+      if (!latest || run.startedAt > latest.startedAt) latest = run;
+    }
+    return latest;
+  }
+
+  cancelDeepUnderstandingRun(id: string): DeepUnderstandingRun | null {
+    const run = this.deepUnderstandingRuns.get(id);
+    if (!run) return null;
+    if (run.status !== 'running') return run;
+    this.deepUnderstandingAborts.get(id)?.abort();
+    const updated: DeepUnderstandingRun = {
+      ...run,
+      status: 'canceled',
+      phase: 'canceled',
+      errorMessage: 'Analysis canceled',
+      completedAt: Date.now(),
+    };
+    this.deepUnderstandingRuns.set(id, updated);
+    this.options.emit('understanding.canceled', { runId: id, run: updated });
+    return updated;
+  }
+
+  startDeepUnderstandingRun(input: {
+    selectedTier1Sources?: string[];
+    customNoteDirectories?: string[];
+    excludeIds?: string[];
+    precollectedItems?: unknown[];
+    sourceCheckpoints?: Record<string, unknown>;
+    processingPolicy: ModelProcessingPolicy;
+    locale?: string;
+  }): DeepUnderstandingRun {
+    if (this.stopped) throw new Error('Work understanding is stopping');
+    const tier1Ids = [...new Set((input.selectedTier1Sources ?? []).filter(isTier1LocalSourceId))];
+    const precollected = normalizeUnderstandingSourceItems(input.precollectedItems ?? []);
+    const precollectedSourceIds = [...new Set(precollected.map((item) => item.sourceId))];
+    const selectedSources = [...new Set([...tier1Ids, ...precollectedSourceIds])];
+    if (!selectedSources.length) {
+      throw new Error('Select at least one source to analyze.');
+    }
+    const target = this.getModelProcessingTarget();
+    if (target.remoteModel && input.processingPolicy !== 'remote_allowed') {
+      throw new Error('Remote model processing permission is required to analyze sources with the configured model.');
+    }
+
+    // Bound in-memory run history to the latest 20 runs.
+    if (this.deepUnderstandingRuns.size >= 20) {
+      const oldestKey = [...this.deepUnderstandingRuns.entries()]
+        .filter(([, entry]) => entry.status !== 'running')
+        .sort((a, b) => a[1].startedAt - b[1].startedAt)[0]?.[0];
+      if (oldestKey) this.deepUnderstandingRuns.delete(oldestKey);
+    }
+
+    const id = randomUUID();
+    const startedAt = Date.now();
+    const sourceStatuses: DeepUnderstandingSourceProgress[] = selectedSources.map((sourceId) => {
+      const preItems = precollected.filter((item) => item.sourceId === sourceId);
+      return preItems.length
+        ? { sourceId, status: 'completed', itemCount: preItems.length }
+        : { sourceId, status: 'collecting', itemCount: 0 };
+    });
+    const run: DeepUnderstandingRun = {
+      id,
+      status: 'running',
+      phase: 'collecting',
+      selectedSources,
+      sourceStatuses,
+      startedAt,
+    };
+    this.deepUnderstandingRuns.set(id, run);
+    const controller = new AbortController();
+    this.deepUnderstandingAborts.set(id, controller);
+    this.options.emit('understanding.progress', { runId: id, run });
+
+    const execute = async () => {
+      const setPhase = (phase: DeepUnderstandingPhase, patch?: Partial<DeepUnderstandingRun>) => {
+        const current = this.deepUnderstandingRuns.get(id);
+        if (!current || current.status !== 'running') return;
+        const next: DeepUnderstandingRun = { ...current, ...patch, phase };
+        this.deepUnderstandingRuns.set(id, next);
+        this.options.emit('understanding.progress', { runId: id, run: next });
+      };
+
+      try {
+        controller.signal.throwIfAborted();
+        // Collect Tier 1 sources directly in Gateway if not already supplied by caller.
+        const missingTier1 = tier1Ids.filter((sourceId) => !precollectedSourceIds.includes(sourceId));
+        const collectedTier1 = missingTier1.length
+          ? await collectTier1Sources(missingTier1 as Tier1LocalUnderstandingSourceId[], {
+            excludeIds: input.excludeIds,
+            customNoteDirectories: input.customNoteDirectories,
+          })
+          : [];
+        controller.signal.throwIfAborted();
+
+        const checkpoints: Record<string, unknown> = { ...(input.sourceCheckpoints ?? {}) };
+        const mergedItems: unknown[] = [...precollected];
+        const nextSourceStatuses = [...sourceStatuses];
+        for (const result of collectedTier1) {
+          const idx = nextSourceStatuses.findIndex((entry) => entry.sourceId === result.sourceId);
+          const entry: DeepUnderstandingSourceProgress = {
+            sourceId: result.sourceId,
+            status: result.status,
+            itemCount: result.items.length,
+            ...(result.error ? { error: result.error } : {}),
+          };
+          if (idx >= 0) nextSourceStatuses[idx] = entry;
+          else nextSourceStatuses.push(entry);
+          if (result.status === 'completed') {
+            mergedItems.push(...result.items);
+            if (result.checkpoint) checkpoints[result.sourceId] = result.checkpoint;
+          }
+        }
+        setPhase('analyzing_writing', { sourceStatuses: nextSourceStatuses });
+
+        if (!mergedItems.length) {
+          const emptyResult: DeepUnderstandingResult = {
+            aboutYou: [],
+            writingPreferences: [],
+            workThreads: [],
+            calibrationQuestions: [],
+            sampledCounts: Object.fromEntries(nextSourceStatuses.map((s) => [s.sourceId, s.itemCount])),
+            sourceStatuses: nextSourceStatuses.map((s) => ({
+              sourceId: s.sourceId,
+              status: s.status === 'failed' || s.status === 'denied' ? 'failed' : 'completed',
+              ...(s.error ? { error: s.error } : {}),
+            })),
+          };
+          const done: DeepUnderstandingRun = {
+            ...this.deepUnderstandingRuns.get(id)!,
+            status: 'completed',
+            phase: 'completed',
+            sourceStatuses: nextSourceStatuses,
+            result: emptyResult,
+            completedAt: Date.now(),
+          };
+          this.deepUnderstandingRuns.set(id, done);
+          this.options.emit('understanding.completed', { runId: id, run: done });
+          return;
+        }
+
+        const analyzed = await this.importUnderstandingSources(
+          mergedItems,
+          input.processingPolicy,
+          controller.signal,
+          undefined,
+          checkpoints,
+          undefined,
+          input.locale,
+          {
+            ignoreUnchangedSkip: true,
+            onPhase: (phase) => setPhase(phase),
+          },
+        );
+        controller.signal.throwIfAborted();
+
+        const sampledCounts: Record<string, number> = {};
+        for (const s of nextSourceStatuses) sampledCounts[s.sourceId] = s.itemCount;
+        const statusBySource = new Map(
+          analyzed.sourceStatuses.map((s) => [s.sourceId, s] as const),
+        );
+        const finalSourceStatuses: DeepUnderstandingSourceProgress[] = nextSourceStatuses.map((entry) => {
+          const analysisStatus = statusBySource.get(entry.sourceId);
+          return analysisStatus
+            ? {
+              ...entry,
+              status: analysisStatus.status,
+              ...(analysisStatus.error ? { error: analysisStatus.error } : {}),
+            }
+            : entry;
+        });
+
+        const result: DeepUnderstandingResult = {
+          aboutYou: analyzed.profileCandidates,
+          writingPreferences: analyzed.writingPreferences,
+          workThreads: analyzed.workThreads,
+          calibrationQuestions: analyzed.calibrationQuestions,
+          sampledCounts,
+          sourceStatuses: analyzed.sourceStatuses,
+        };
+        const completed: DeepUnderstandingRun = {
+          ...this.deepUnderstandingRuns.get(id)!,
+          status: 'completed',
+          phase: 'completed',
+          sourceStatuses: finalSourceStatuses,
+          result,
+          completedAt: Date.now(),
+        };
+        this.deepUnderstandingRuns.set(id, completed);
+        this.options.emit('understanding.completed', { runId: id, run: completed });
+      } catch (error) {
+        const canceled = controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError');
+        const current = this.deepUnderstandingRuns.get(id);
+        if (!current) return;
+        const failed: DeepUnderstandingRun = {
+          ...current,
+          status: canceled ? 'canceled' : 'failed',
+          phase: canceled ? 'canceled' : 'failed',
+          errorMessage: canceled ? 'Analysis canceled' : (error instanceof Error ? error.message : String(error)),
+          completedAt: Date.now(),
+        };
+        this.deepUnderstandingRuns.set(id, failed);
+        this.options.emit(canceled ? 'understanding.canceled' : 'understanding.failed', { runId: id, run: failed });
+      } finally {
+        this.deepUnderstandingAborts.delete(id);
+      }
+    };
+
+    this.trackExecution(new Promise<void>((resolve) => setImmediate(resolve)).then(execute));
+    return run;
+  }
+
+  confirmDeepUnderstandingRun(runId: string, input: DeepUnderstandingConfirmationInput) {
+    const run = this.deepUnderstandingRuns.get(runId);
+    const createdRuleIds: string[] = [];
+    const confirmedAssertionIds: string[] = [];
+
+    runSqliteWriteTransaction(() => {
+      const existingActiveRules = listCollaborationRules().filter((rule) => rule.status === 'active');
+      const existingRuleAssertionIds = new Set(
+        existingActiveRules.flatMap((rule) => (
+          typeof rule.conditions.derivedFromAssertionId === 'string' ? [rule.conditions.derivedFromAssertionId] : []
+        )),
+      );
+      const existingRuleStatements = new Set(
+        existingActiveRules.map((rule) => rule.statement.trim().toLocaleLowerCase()),
+      );
+      for (const item of input.aboutYou ?? []) {
+        if (!item.assertionId) continue;
+        if (item.decision === 'rejected') {
+          setAssertionStatus(item.assertionId, 'rejected', {
+            actor: 'user',
+            reason: 'Rejected during onboarding understanding calibration.',
+          });
+          continue;
+        }
+        if (item.decision === 'edited' && item.statement?.trim()) {
+          const existing = getUserAssertion(item.assertionId);
+          const slot = existing ? getAssertionSlot(existing.slotId) : undefined;
+          if (existing && slot) {
+            const edited = item.statement.trim().slice(0, 500);
+            const next = reconcileAssertion({
+              subject: slot.subject,
+              predicate: slot.predicate,
+              cardinality: slot.cardinality,
+              scope: slot.scope,
+              kind: existing.kind,
+              domain: existing.domain,
+              value: edited,
+              normalizedValue: edited.toLocaleLowerCase(),
+              statement: edited,
+              authority: 'user_explicit',
+              confidence: 1,
+              inferredImportance: existing.inferredImportance,
+              consequence: existing.consequence,
+              actionability: existing.actionability,
+              volatility: existing.volatility,
+              sensitivity: existing.sensitivity,
+              disclosurePolicy: existing.disclosurePolicy,
+              observedAt: Date.now(),
+              createdBy: 'user',
+              correctionOfAssertionId: existing.id,
+            }).assertion;
+            if (next) confirmedAssertionIds.push(next.id);
+            continue;
+          }
+        }
+        setAssertionStatus(item.assertionId, 'active', {
+          actor: 'user',
+          reason: 'Confirmed during onboarding understanding calibration.',
+        });
+        confirmedAssertionIds.push(item.assertionId);
+      }
+
+      for (const pref of input.writingPreferences ?? []) {
+        const statement = pref.statement?.trim().slice(0, 320);
+        if (pref.decision === 'rejected') {
+          if (pref.assertionId) {
+            setAssertionStatus(pref.assertionId, 'rejected', {
+              actor: 'user',
+              reason: 'Writing preference rejected during onboarding.',
+            });
+          }
+          continue;
+        }
+        let activeAssertionId = pref.assertionId;
+        let finalStatement = statement;
+        if (pref.assertionId) {
+          const existing = getUserAssertion(pref.assertionId);
+          if (existing && !finalStatement) finalStatement = existing.statement;
+          if (pref.decision === 'edited' && finalStatement && existing) {
+            const slot = getAssertionSlot(existing.slotId);
+            if (slot) {
+              const next = reconcileAssertion({
+                subject: slot.subject,
+                predicate: slot.predicate,
+                cardinality: slot.cardinality,
+                scope: slot.scope,
+                kind: 'preference',
+                domain: 'preferences',
+                value: finalStatement,
+                normalizedValue: finalStatement.toLocaleLowerCase(),
+                statement: finalStatement,
+                authority: 'user_explicit',
+                confidence: 1,
+                inferredImportance: 0.85,
+                consequence: 'low',
+                actionability: 0.9,
+                volatility: 'slow',
+                sensitivity: 'normal',
+                disclosurePolicy: 'referenceable',
+                applicability: { operation: ['response'] },
+                observedAt: Date.now(),
+                createdBy: 'user',
+                correctionOfAssertionId: existing.id,
+              }).assertion;
+              if (next) activeAssertionId = next.id;
+            }
+          } else {
+            setAssertionStatus(pref.assertionId, 'active', {
+              actor: 'user',
+              reason: 'Writing preference confirmed during onboarding.',
+            });
+          }
+        }
+        if (finalStatement) {
+          const normalized = finalStatement.toLocaleLowerCase();
+          const alreadyExists = (activeAssertionId && existingRuleAssertionIds.has(activeAssertionId))
+            || existingRuleStatements.has(normalized);
+          if (!alreadyExists) {
+            const primarySourceId = pref.sourceIds?.[0];
+            const rule = createCollaborationRule({
+              category: 'communication',
+              priority: 40,
+              scope: { type: 'global' },
+              statement: finalStatement,
+              conditions: {
+                ...(activeAssertionId ? { derivedFromAssertionId: activeAssertionId } : {}),
+                ...(pref.dimension ? { writingDimension: pref.dimension } : {}),
+                ...(primarySourceId ? { sourceInstanceId: localSourceInstanceId(primarySourceId) } : {}),
+                userEdited: pref.decision === 'edited',
+              },
+            });
+            if (activeAssertionId) existingRuleAssertionIds.add(activeAssertionId);
+            existingRuleStatements.add(normalized);
+            createdRuleIds.push(rule.id);
+          }
+        }
+      }
+
+      for (const rawRule of input.customWritingRules ?? []) {
+        const statement = rawRule.trim().slice(0, 320);
+        if (!statement) continue;
+        const normalized = statement.toLocaleLowerCase();
+        if (existingRuleStatements.has(normalized)) continue;
+        const rule = createCollaborationRule({
+          category: 'communication',
+          priority: 35,
+          scope: { type: 'global' },
+          statement,
+          conditions: { userEdited: true },
+        });
+        existingRuleStatements.add(normalized);
+        createdRuleIds.push(rule.id);
+      }
+
+      for (const answer of input.calibrationAnswers ?? []) {
+        const text = answer.answer.trim().slice(0, 500);
+        if (!text) continue;
+        const hash = createHash('sha256').update(answer.question).digest('hex').slice(0, 12);
+        const saved = reconcileAssertion({
+          subject: { type: 'user', id: 'self' },
+          predicate: `onboarding.calibration.${hash}`,
+          cardinality: 'single',
+          scope: { type: 'global' },
+          kind: 'preference',
+          domain: 'cognition',
+          value: text,
+          normalizedValue: text.toLocaleLowerCase(),
+          statement: text,
+          authority: 'user_explicit',
+          confidence: 1,
+          inferredImportance: 0.8,
+          consequence: 'low',
+          actionability: 0.8,
+          volatility: 'slow',
+          sensitivity: 'normal',
+          disclosurePolicy: 'referenceable',
+          observedAt: Date.now(),
+          createdBy: 'user',
+        }).assertion;
+        if (saved) confirmedAssertionIds.push(saved.id);
+      }
+
+      if (input.selectedThreadId && run?.result) {
+        const thread = run.result.workThreads.find((item) => item.id === input.selectedThreadId);
+        if (thread) {
+          const goal = createUserGoal({
+            title: thread.title.slice(0, 120),
+            desiredOutcome: thread.summary.slice(0, 600),
+            scope: { type: 'global' },
+            declaredImportance: 0.85,
+          });
+          const now = Date.now();
+          createPriorityWindow({
+            targetType: 'goal',
+            targetId: goal.id,
+            rank: 'primary',
+            urgency: 0.85,
+            scope: { type: 'global' },
+            validFrom: now,
+            validTo: now + 14 * 86_400_000,
+            reviewAt: now + 7 * 86_400_000,
+            declaredImportance: 0.85,
+          });
+        }
+      }
+
+      if (input.markOnboardingCompleted !== false) {
+        setWorkDiscoveryOnboardingState({ status: 'completed', activeRunId: null });
+      }
+    });
+
+    return {
+      ok: true,
+      confirmedAssertionIds,
+      createdRuleIds,
+    };
+  }
+
   async importUnderstandingSources(
     rawItems: unknown[],
     processingPolicy: ModelProcessingPolicy,
@@ -532,6 +1133,10 @@ export class WorkDiscoveryService {
     rawCheckpoints?: Record<string, unknown>,
     refresh?: { grantId: string },
     locale?: string,
+    options?: {
+      ignoreUnchangedSkip?: boolean;
+      onPhase?: (phase: 'analyzing_writing' | 'synthesizing') => void;
+    },
   ) {
     const items = normalizeUnderstandingSourceItems(rawItems);
     const assertRefreshAuthorized = () => {
@@ -568,26 +1173,20 @@ export class WorkDiscoveryService {
     const changedSourceIds = new Set<string>();
     for (const sourceId of new Set(items.map((item) => item.sourceId))) {
       const sourceItems = items.filter((item) => item.sourceId === sourceId);
-      const category: UnderstandingSourceCategory = sourceItems.some((item) => item.type === 'calendar_event') ? 'calendar'
-        : sourceItems.some((item) => item.type === 'task') ? 'tasks'
-          : sourceItems.some((item) => item.type === 'note') ? 'notes'
-            : sourceItems.some((item) => item.type === 'mail') ? 'mail'
-              : sourceItems.some((item) => item.type === 'message') ? 'messages'
-                : sourceItems.some((item) => item.type === 'code_activity') ? 'code_activity'
-                  : 'recent_documents';
-      const platform = sourceId.startsWith('apple-') ? 'darwin'
-        : sourceId.startsWith('windows-') ? 'win32'
-          : sourceId.startsWith('linux-') ? 'linux' : 'all';
+      const definition = getUnderstandingSourceDefinition(sourceId);
+      const category: UnderstandingSourceCategory = definition?.category ?? 'recent_documents';
+      const platform = definition?.platform ?? (sourceId.startsWith('apple-') ? 'darwin' : 'all');
+      const instanceId = localSourceInstanceId(sourceId);
       let grant = refresh ? getUnderstandingSourceGrant(refresh.grantId)! : upsertUnderstandingSourceGrant({
         sourceKey: `understanding-source:${sourceId}`,
         adapterId: sourceId,
         category,
         platform,
-        displayName: sourceId,
+        displayName: definition?.displayName ?? sourceId,
         accessMode: 'once',
         retentionPolicy: 'derived_only',
         processingPolicy: effectiveProcessingPolicy,
-        config: { readOnly: true },
+        config: { readOnly: true, sourceInstanceId: instanceId },
       });
       if (!refresh && grant.processingPolicy !== effectiveProcessingPolicy) {
         grant = updateUnderstandingSourceGrantPolicies(grant.id, {
@@ -597,7 +1196,8 @@ export class WorkDiscoveryService {
       sourceGrants.set(sourceId, grant);
       const checkpoint = checkpoints.get(sourceId);
       const previousFingerprint = typeof grant.checkpoint.fingerprint === 'string' ? grant.checkpoint.fingerprint : undefined;
-      const unchanged = !refresh && Boolean(checkpoint && previousFingerprint === checkpoint.fingerprint);
+      const unchanged = !refresh && !options?.ignoreUnchangedSkip
+        && Boolean(checkpoint && previousFingerprint === checkpoint.fingerprint);
       const kind = !previousFingerprint ? 'bootstrap' : unchanged ? 'fingerprint' : 'incremental';
       const sourceRun = createUnderstandingSourceRun({
         grantId: grant.id,
@@ -625,14 +1225,17 @@ export class WorkDiscoveryService {
     if (!changedSourceIds.size) {
       log.info({ runId, itemCount: items.length }, 'Understanding sources unchanged; analysis skipped');
       return {
-        profileCandidates: [], workThreads: [], knowledgeCandidates: [],
+        profileCandidates: [],
+        writingPreferences: [],
+        workThreads: [],
+        calibrationQuestions: [],
+        knowledgeCandidates: [],
         sourceStatuses: [...new Set(items.map((item) => item.sourceId))]
           .map((sourceId) => ({ sourceId, status: 'completed' as const })),
       };
     }
-    // Reuse every bounded item when any source changed so cross-source clusters remain coherent.
-    const analysisItems = items;
 
+    const analysisItems = items;
     const linkedRun = runId ? getWorkDiscoveryRun(runId) : null;
     let analysis: Awaited<ReturnType<typeof analyzeUnderstandingSources>>;
     try {
@@ -641,7 +1244,8 @@ export class WorkDiscoveryService {
       );
       analysis = modelProcessingAllowed
         ? await analyzeUnderstandingSources({
-          config: this.options.getConfig(), items: analysisItems,
+          config: this.options.getConfig(),
+          items: analysisItems,
           ...(linkedRun?.result ? { workContext: {
             projectSummary: linkedRun.result.projectSummary,
             currentState: linkedRun.result.currentState,
@@ -650,11 +1254,14 @@ export class WorkDiscoveryService {
           } } : {}),
           locale: locale || (runId ? this.runLocales.get(runId) : undefined) || getUserProfileSnapshot().locale,
           signal,
+          onPhase: options?.onPhase,
         })
         : {
           modelRef: 'local-only',
           profileCandidates: [],
+          writingPreferences: [],
           workThreadCandidates: [],
+          calibrationQuestions: [],
           sourceStatuses: [...changedSourceIds].map((sourceId) => ({ sourceId, status: 'completed' as const })),
         };
       assertRefreshAuthorized();
@@ -697,151 +1304,125 @@ export class WorkDiscoveryService {
       }
       throw error;
     }
-    return runSqliteWriteTransaction(() => {
-      const rawContents = analysisItems.flatMap((item) => item.text ? [item.text] : []);
-      const activityTopics = clusterActivityTopics(analysisItems);
-      const safeProfileCandidates = analysis.profileCandidates
-        .filter((candidate) => !hasLongVerbatimOverlap(candidate.statement, rawContents));
-      const safeWorkThreadCandidates = analysis.workThreadCandidates.filter((candidate) =>
-        !hasLongVerbatimOverlap(candidate.title, rawContents)
-        && !hasLongVerbatimOverlap(candidate.summary, rawContents));
-      const profileCandidates = safeProfileCandidates.flatMap((candidate) => {
-        const assertion = persistUnderstandingCandidate(candidate, { type: 'global' }, 'understanding-source:onboarding');
-        if (!assertion) return [];
-        const evidenceSourceIds = new Set((candidate.evidenceRefs ?? []).map((ref) => ref.split('://', 1)[0]).filter(Boolean));
-        for (const sourceId of evidenceSourceIds) {
-          const sourceRunId = sourceRuns.get(sourceId);
-          if (!sourceRunId) continue;
-          const sourceRun = getUnderstandingSourceRun(sourceRunId);
-          if (!sourceRun) continue;
-          const evidence = createContextEvidence({
-            sourceType: 'runtime',
-            sourceRef: `understanding-source-grant:${sourceRun.grantId}:${candidate.id}`,
-            redactedExcerpt: candidate.evidence.join(' · ').slice(0, 600),
-            trustLevel: 'trusted',
-            observedAt: Date.now(),
-          });
-          linkAssertionEvidence(assertion.id, evidence.id, 'supports', assertion.confidence);
-        }
+
+    const resolveSourceEntries = (refs: readonly string[] | undefined): PersistedSourceEvidenceRef[] => {
+      const sourceIds = [...new Set((refs ?? []).map((ref) => ref.split('://', 1)[0]).filter(Boolean))] as string[];
+      return sourceIds.map((sourceId) => {
+        const grant = sourceGrants.get(sourceId);
+        const sourceRunId = sourceRuns.get(sourceId);
         return {
-          ...candidate,
-          status: assertion.status === 'rejected' ? 'rejected' as const : 'pending' as const,
-          assertionId: assertion.id,
+          sourceId,
+          ...(grant ? { grantId: grant.id } : {}),
+          ...(sourceRunId ? { sourceRunId } : {}),
+          sourceInstanceId: localSourceInstanceId(sourceId),
         };
       });
-      const investigation = linkedRun ? getWorkUnderstandingInvestigationForRun(linkedRun.id) : null;
-      const contextEvidence = investigation
-        ? safeWorkThreadCandidates.map((candidate) => {
-          const topicHash = createHash('sha256').update(candidate.topicKey).digest('hex').slice(0, 16);
-          return appendWorkUnderstandingEvidence({
-            investigationId: investigation.id,
-            projectId: linkedRun!.projectId,
-            sourceType: 'understanding_source',
-            sourceRef: `understanding-source://thread/${topicHash}`,
-            observation: candidate.summary,
-            contentHash: createHash('sha256').update(JSON.stringify(candidate.evidenceRefs)).digest('hex'),
-            sensitivity: 'normal',
-          });
-        })
-        : [];
+    };
+
+    return runSqliteWriteTransaction(() => {
+      const privateRawContents = analysisItems
+        .filter((item) => item.sourceId !== 'local-ai-instructions' && item.text)
+        .map((item) => item.text!);
+
+      const safeProfileCandidates = analysis.profileCandidates.filter((candidate) => {
+        if (containsSensitivePii(candidate.statement)) return false;
+        const onlyAiInstructions = (candidate.sourceIds ?? []).length > 0
+          && (candidate.sourceIds ?? []).every((id) => id === 'local-ai-instructions');
+        return onlyAiInstructions || !hasLongVerbatimOverlap(candidate.statement, privateRawContents);
+      });
+
+      const safeWritingPreferences = analysis.writingPreferences.filter(
+        (pref) => !containsSensitivePii(pref.statement),
+      );
+
+      const safeWorkThreadCandidates = analysis.workThreadCandidates.filter((candidate) =>
+        !containsSensitivePii(candidate.title)
+        && !containsSensitivePii(candidate.summary)
+        && !hasLongVerbatimOverlap(candidate.title, privateRawContents)
+        && !hasLongVerbatimOverlap(candidate.summary, privateRawContents));
+
+      const profileCandidates = safeProfileCandidates.flatMap((candidate) => {
+        const entries = resolveSourceEntries(candidate.evidenceRefs);
+        const assertion = persistUnderstandingCandidate(
+          candidate,
+          { type: 'global' },
+          'understanding-source',
+          entries,
+        );
+        if (!assertion) return [];
+        return [{
+          ...candidate,
+          domain: assertion.domain,
+          independentSourceCount: assertion.independentSourceCount,
+          status: assertion.status === 'rejected' ? 'rejected' as const : 'pending' as const,
+          assertionId: assertion.id,
+        }];
+      });
+
+      const writingPreferences = safeWritingPreferences.flatMap((pref) => {
+        const entries = resolveSourceEntries(pref.evidenceRefs);
+        const assertion = persistWritingStyleCandidate(pref, { type: 'global' }, entries);
+        if (!assertion) return [];
+        return [{
+          ...pref,
+          status: assertion.status === 'rejected' ? 'rejected' as const : 'pending' as const,
+          assertionId: assertion.id,
+        }];
+      });
+
       const now = Date.now();
-      const standaloneThreads = !linkedRun
-        ? (safeWorkThreadCandidates.length
-          ? safeWorkThreadCandidates.map((candidate) => {
-            const hash = createHash('sha256').update(candidate.topicKey).digest('hex').slice(0, 16);
-            return {
-              id: `source-thread:${hash}`,
-              canonicalKey: `source-thread:${candidate.topicKey}`,
-              title: candidate.title,
-              summary: candidate.summary,
-              status: candidate.status,
-              horizon: candidate.horizon,
-              focusScore: candidate.horizon === 'current' ? 0.9 : candidate.horizon === 'ongoing' ? 0.72 : 0.55,
-              confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
-              userStatus: 'unreviewed' as const,
-              projectIds: [],
-              evidenceIds: candidate.evidenceRefs,
-              firstObservedAt: now,
-              lastObservedAt: now,
-              createdAt: now,
-              updatedAt: now,
-            };
-          })
-          : activityTopics.slice(0, 4).map((topic) => {
-            const hash = createHash('sha256').update(topic.canonicalKey).digest('hex').slice(0, 16);
-            return {
-              id: `activity-thread:${hash}`,
-              canonicalKey: topic.canonicalKey,
-              title: topic.title,
-              summary: topic.summary,
-              status: 'active' as const,
-              horizon: topic.horizon,
-              focusScore: topic.horizon === 'current' ? 0.85 : 0.65,
-              confidence: topic.confidence,
-              userStatus: 'unreviewed' as const,
-              projectIds: [],
-              evidenceIds: topic.evidenceRefs,
-              firstObservedAt: now,
-              lastObservedAt: now,
-              createdAt: now,
-              updatedAt: now,
-            };
-          }))
-        : [];
-      const workThreads = linkedRun && contextEvidence.length
-        ? persistWorkThreadsFromDiscovery({
-          projectId: linkedRun.projectId,
-          result: {
-            projectSummary: 'Connected source context',
-            currentState: 'Work streams inferred from sources the user explicitly connected.',
-            uncertainties: [],
-            suggestions: [],
-            workThreadCandidates: safeWorkThreadCandidates.map((candidate, index) => ({
-              ...candidate,
-              evidenceRefs: contextEvidence[index] ? [contextEvidence[index].sourceRef] : [],
-            })),
-          },
-          snapshot: {
-            root: { displayName: 'Connected Sources', projectKind: 'general', markerReasons: ['explicitly_connected_understanding_sources'] },
-            structure: { sampledPaths: [], metadataOnlyFiles: [], omittedPathCount: 0 },
-            documents: [],
-            limits: { policyVersion: WORK_DISCOVERY_SCAN_POLICY_VERSION, fileCount: 0, contentBytes: 0, truncated: false },
-          },
-          evidence: contextEvidence,
-        })
-        : standaloneThreads;
-      const activityEvidence = new Set(activityTopics.flatMap((topic) => topic.evidenceRefs));
-      const activityKnowledge = activityTopics.map((topic) => persistWorkKnowledge({
-        canonicalKey: topic.canonicalKey,
-        title: topic.title,
-        summary: topic.summary,
-        horizon: topic.horizon,
-        confidence: topic.confidence,
-        scope: { type: 'agent', id: agentId },
-        evidenceRefs: topic.evidenceRefs,
-      }));
-      const modelKnowledge = safeWorkThreadCandidates
-        .filter((candidate) => !candidate.evidenceRefs.some((ref) => activityEvidence.has(ref)))
+      const knowledgeCandidates = safeWorkThreadCandidates
         .map((candidate) => persistWorkKnowledge({
-        canonicalKey: `source-knowledge:${candidate.topicKey}`,
-        title: candidate.title,
-        summary: candidate.summary,
-        horizon: candidate.horizon,
-        confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
-        scope: { type: 'agent', id: agentId },
-        evidenceRefs: candidate.evidenceRefs,
-      }));
-      const knowledgeCandidates = [...activityKnowledge, ...modelKnowledge].filter((item) => item !== undefined);
+          canonicalKey: `work-thread:${candidate.topicKey}`,
+          title: candidate.title,
+          summary: candidate.summary,
+          horizon: candidate.horizon,
+          confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
+          scope: linkedRun ? { type: 'project', id: linkedRun.projectId } : { type: 'global' },
+          evidenceRefs: candidate.evidenceRefs,
+          sourceIds: candidate.sourceIds,
+          kind: 'work_thread',
+        }))
+        .filter((item) => item !== undefined);
+
+      const workThreads = safeWorkThreadCandidates.map((candidate, index) => {
+        const persisted = knowledgeCandidates[index];
+        return {
+          id: persisted?.id ?? `work-thread:${createHash('sha256').update(candidate.topicKey).digest('hex').slice(0, 16)}`,
+          canonicalKey: `work-thread:${candidate.topicKey}`,
+          title: candidate.title,
+          summary: candidate.summary,
+          status: candidate.status,
+          horizon: candidate.horizon,
+          focusScore: candidate.horizon === 'current' ? 0.9 : candidate.horizon === 'ongoing' ? 0.72 : 0.55,
+          confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
+          userStatus: 'unreviewed' as const,
+          projectIds: linkedRun ? [linkedRun.projectId] : [],
+          evidenceIds: candidate.evidenceRefs,
+          ...(candidate.sourceIds?.length ? { sourceIds: candidate.sourceIds } : {}),
+          ...(candidate.recommendedFirstStep ? { recommendedFirstStep: candidate.recommendedFirstStep } : {}),
+          firstObservedAt: now,
+          lastObservedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        };
+      });
+
       log.info({
         runId,
+        agentId,
         itemCount: items.length,
         candidateCount: profileCandidates.length,
-        knowledgeCount: knowledgeCandidates.length,
+        writingCount: writingPreferences.length,
+        threadCount: workThreads.length,
         incompleteSourceCount: analysis.sourceStatuses.filter((item) => item.status !== 'completed').length,
       }, 'Understanding sources analyzed');
+
       return {
         profileCandidates,
+        writingPreferences,
         workThreads,
+        calibrationQuestions: analysis.calibrationQuestions,
         knowledgeCandidates,
         sourceStatuses: analysis.sourceStatuses,
       };
@@ -866,24 +1447,6 @@ export class WorkDiscoveryService {
       rootPath: preview.canonicalRootPath,
       source: 'manual_selected_directory',
       idempotencyKey: input.idempotencyKey,
-    });
-  }
-
-  async startQuickRun(input: {
-    idempotencyKey: string;
-    processingPolicy: ModelProcessingPolicy;
-    locale?: string;
-  }): Promise<WorkDiscoveryRun> {
-    const candidates = await this.discoverCandidates();
-    const primary = candidates[0];
-    if (!primary) throw new Error('No accessible work projects were found');
-    await this.grantDirectorySource(primary.rootPath, input.processingPolicy);
-    return this.startRun({
-      rootPath: primary.rootPath,
-      source: 'onboarding_selected_directory',
-      idempotencyKey: input.idempotencyKey,
-      candidateContext: candidates,
-      ...(input.locale ? { locale: input.locale } : {}),
     });
   }
 

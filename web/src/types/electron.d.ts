@@ -581,9 +581,13 @@ export interface ElectronSystemSettingsAPI {
 export type ElectronUnderstandingSourceCategory = 'files' | 'recent_documents' | 'calendar' | 'tasks' | 'notes' | 'mail' | 'messages' | 'code_activity';
 export interface ElectronUnderstandingSourceDefinition {
   id: string; category: ElectronUnderstandingSourceCategory; platform: 'darwin' | 'win32' | 'linux' | 'all';
+  tier: 1 | 2 | 3; requiresOsPermission: boolean; defaultOwnerAttribution: 'user' | 'other' | 'shared' | 'unknown';
   displayName: string; description: string; availability: 'available' | 'unavailable';
   permission: 'not_requested' | 'granted' | 'denied' | 'unavailable'; defaultAccessMode: 'once' | 'continuous';
   supportedAccessModes: Array<'once' | 'continuous'>; recommended: boolean; sensitive: boolean;
+}
+export interface ElectronLocalSourcePreview {
+  sourceId: string; detected: boolean; itemCount: number; summary?: string;
 }
 export interface ElectronUnderstandingSourceItem {
   id: string; sourceId: string; type: 'document' | 'calendar_event' | 'task' | 'note' | 'mail' | 'message' | 'code_activity' | 'bookmark';
@@ -595,12 +599,13 @@ export interface ElectronUnderstandingSourceCollectionResult {
   checkpoint?: { fingerprint: string; collectedAt: number }; error?: string;
 }
 export interface ElectronUnderstandingSourceCollectOptions {
-  mode?: 'fast' | 'full';
   excludeIds?: string[];
+  customNoteDirectories?: string[];
 }
 
 export interface ElectronUnderstandingSourcesAPI {
   catalog(): Promise<ElectronUnderstandingSourceDefinition[]>;
+  preview?(options?: { customNoteDirectories?: string[] }): Promise<ElectronLocalSourcePreview[]>;
   collect(
     sourceIds: string[],
     options?: ElectronUnderstandingSourceCollectOptions,

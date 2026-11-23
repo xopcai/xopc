@@ -314,12 +314,35 @@ describe('work discovery analyzer', () => {
   });
 
   it('keeps successful sources when another source fails', async () => {
-    vi.mocked(completeWithResolvedCredentials)
-      .mockRejectedValueOnce(new Error('provider unavailable'))
-      .mockResolvedValueOnce({
+    vi.mocked(completeWithResolvedCredentials).mockImplementation(async (_model, context, _opts, _cred, meta) => {
+      const prompt = String(context.messages[0]?.content ?? '');
+      if (meta?.operation === 'work_discovery.synthesize') {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({
+            profileCandidates: [{
+              category: 'routine',
+              domain: 'behavior',
+              factKey: 'routine:calendar-planning',
+              statement: 'Plans work from calendar commitments.',
+              confidence: 'medium',
+              evidence: ['A current calendar commitment was found.'],
+              evidenceRefs: ['apple-calendar://calendar-1'],
+            }],
+            writingPreferences: [],
+            workThreads: [],
+            calibrationQuestions: [],
+          }) }],
+          stopReason: 'stop',
+        } as never;
+      }
+      if (prompt.includes('apple-notes://note-1')) {
+        throw new Error('provider unavailable');
+      }
+      return {
         content: [{ type: 'text', text: JSON.stringify({
           profileCandidates: [{
             category: 'routine',
+            domain: 'behavior',
             factKey: 'routine:calendar-planning',
             statement: 'Plans work from calendar commitments.',
             confidence: 'medium',
@@ -329,7 +352,8 @@ describe('work discovery analyzer', () => {
           workThreads: [],
         }) }],
         stopReason: 'stop',
-      } as never);
+      } as never;
+    });
     const items: UnderstandingSourceItem[] = [
       {
         id: 'note-1', sourceId: 'apple-notes', type: 'note', title: 'Project note',
@@ -364,7 +388,27 @@ describe('work discovery analyzer', () => {
     vi.mocked(completeWithResolvedCredentials)
       .mockResolvedValueOnce({ content: [{ type: 'text', text: '{"profileCandidates":[' }], stopReason: 'length' } as never)
       .mockResolvedValueOnce(resultFor('apple-notes://note-1', 'Advances the first project.') as never)
-      .mockResolvedValueOnce(resultFor('apple-notes://note-2', 'Advances the second project.') as never);
+      .mockResolvedValueOnce(resultFor('apple-notes://note-2', 'Advances the second project.') as never)
+      .mockResolvedValueOnce({
+        content: [{ type: 'text', text: JSON.stringify({
+          profileCandidates: [
+            {
+              category: 'responsibility', domain: 'identity', factKey: 'responsibility:first',
+              statement: 'Advances the first project.', confidence: 'medium',
+              evidence: ['Supported item.'], evidenceRefs: ['apple-notes://note-1'],
+            },
+            {
+              category: 'responsibility', domain: 'identity', factKey: 'responsibility:second',
+              statement: 'Advances the second project.', confidence: 'medium',
+              evidence: ['Supported item.'], evidenceRefs: ['apple-notes://note-2'],
+            },
+          ],
+          writingPreferences: [],
+          workThreads: [],
+          calibrationQuestions: [],
+        }) }],
+        stopReason: 'stop',
+      } as never);
     const items: UnderstandingSourceItem[] = [1, 2].map((index) => ({
       id: `note-${index}`,
       sourceId: 'apple-notes',
@@ -377,7 +421,7 @@ describe('work discovery analyzer', () => {
 
     const analysis = await analyzeUnderstandingSources({ config: {} as never, items });
 
-    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(3);
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(4);
     expect(analysis.profileCandidates).toHaveLength(2);
     expect(analysis.sourceStatuses).toEqual([{ sourceId: 'apple-notes', status: 'completed' }]);
   });

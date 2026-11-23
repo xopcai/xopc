@@ -179,8 +179,17 @@ export function buildExecutionContext(request: ExecutionContextRequest): Executi
   const asOf = request.asOf ?? Date.now();
   const includeUserModel = request.includeUserModel !== false;
   const feedbackScores = getExecutionContextFeedbackScores();
+  const rules = includeUserModel ? loadRules(request) : [];
+  const promotedAssertionIds = new Set(
+    rules.flatMap((rule) => (
+      typeof rule.conditions.derivedFromAssertionId === 'string' && rule.conditions.derivedFromAssertionId
+        ? [rule.conditions.derivedFromAssertionId]
+        : []
+    )),
+  );
   const assertionLimit = Math.max(1, Math.min(100, request.maxAssertions ?? 20));
   const rankedAssertions = includeUserModel ? listUserAssertions({ statuses: ['active', 'candidate'], limit: 1_000 })
+    .filter((item) => !promotedAssertionIds.has(item.id))
     .filter((item) => scopeVisible(getAssertionScope(item.slotId), request))
     .filter((item) => applicabilityVisible(item.applicability, request))
     .filter((item) => canUseAssertion(item, asOf, { use: 'answer', agentId: request.agentId }))
@@ -232,7 +241,7 @@ export function buildExecutionContext(request: ExecutionContextRequest): Executi
     traceId: randomUUID(),
     asOf,
     query: request.query,
-    rules: includeUserModel ? loadRules(request) : [],
+    rules,
     assertions,
     goals: includeUserModel ? loadGoals(request, asOf) : [],
     priorities: includeUserModel ? loadPriorities(request, asOf) : [],

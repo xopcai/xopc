@@ -34,13 +34,45 @@ export type WorkDiscoverySuggestion = {
 export type WorkDiscoveryProfileCandidate = {
   id: string;
   assertionId?: string;
-  category: 'role' | 'responsibility' | 'preference' | 'routine' | 'communication' | 'boundary' | 'relationship';
+  category: 'role' | 'responsibility' | 'capability' | 'preference' | 'routine' | 'communication' | 'boundary' | 'relationship';
+  domain?: string;
   factKey: string;
   statement: string;
   confidence: 'high' | 'medium' | 'low';
   evidence: string[];
   evidenceRefs?: string[];
+  sourceIds?: string[];
+  independentSourceCount?: number;
   status: 'pending' | 'accepted' | 'edited' | 'rejected';
+};
+
+export type WritingStyleDimension =
+  | 'language'
+  | 'structure'
+  | 'tone'
+  | 'density'
+  | 'scenarios'
+  | 'vocabulary';
+
+export type WritingStyleCandidate = {
+  id: string;
+  assertionId?: string;
+  ruleId?: string;
+  dimension: WritingStyleDimension;
+  factKey: string;
+  statement: string;
+  confidence: 'high' | 'medium' | 'low';
+  evidence: string[];
+  evidenceRefs: string[];
+  sourceIds: string[];
+  status: 'pending' | 'accepted' | 'edited' | 'rejected';
+};
+
+export type CalibrationQuestion = {
+  id: string;
+  question: string;
+  options?: string[];
+  relatedTopicKey?: string;
 };
 
 export type WorkUnderstandingThread = {
@@ -55,6 +87,75 @@ export type WorkUnderstandingThread = {
   userStatus: 'unreviewed' | 'confirmed' | 'corrected' | 'rejected';
   projectIds: string[];
   evidenceIds: string[];
+  sourceIds?: string[];
+  recommendedFirstStep?: string;
+};
+
+export type DeepUnderstandingPhase =
+  | 'collecting'
+  | 'analyzing_writing'
+  | 'synthesizing'
+  | 'completed'
+  | 'failed'
+  | 'canceled';
+
+export type DeepUnderstandingSourceProgress = {
+  sourceId: string;
+  status: 'pending' | 'collecting' | 'completed' | 'partial' | 'denied' | 'failed';
+  itemCount: number;
+  error?: string;
+};
+
+export type DeepUnderstandingResult = {
+  aboutYou: WorkDiscoveryProfileCandidate[];
+  writingPreferences: WritingStyleCandidate[];
+  workThreads: WorkUnderstandingThread[];
+  calibrationQuestions: CalibrationQuestion[];
+  sampledCounts: Record<string, number>;
+  sourceStatuses: Array<{ sourceId: string; status: 'completed' | 'partial' | 'failed'; error?: string }>;
+};
+
+export type DeepUnderstandingRun = {
+  id: string;
+  status: 'running' | 'completed' | 'failed' | 'canceled';
+  phase: DeepUnderstandingPhase;
+  selectedSources: string[];
+  sourceStatuses: DeepUnderstandingSourceProgress[];
+  result?: DeepUnderstandingResult;
+  errorMessage?: string;
+  startedAt: number;
+  completedAt?: number;
+};
+
+export type DeepUnderstandingConfirmationInput = {
+  aboutYou?: Array<{
+    id: string;
+    assertionId?: string;
+    decision: 'accepted' | 'edited' | 'rejected';
+    statement?: string;
+  }>;
+  writingPreferences?: Array<{
+    id: string;
+    assertionId?: string;
+    dimension?: WritingStyleDimension;
+    decision: 'accepted' | 'edited' | 'rejected';
+    statement?: string;
+    sourceIds?: string[];
+  }>;
+  customWritingRules?: string[];
+  calibrationAnswers?: Array<{
+    question: string;
+    answer: string;
+  }>;
+  selectedThreadId?: string;
+  markOnboardingCompleted?: boolean;
+};
+
+export type LocalSourcePreview = {
+  sourceId: string;
+  detected: boolean;
+  itemCount: number;
+  summary?: string;
 };
 
 export type WorkDiscoveryResult = {
@@ -223,46 +324,81 @@ export async function grantUnderstandingWorkFolder(
   return response.source;
 }
 
-export async function importUnderstandingSources(items: Array<{
-  id: string;
-  sourceId: string;
-  type: 'document' | 'calendar_event' | 'task' | 'note' | 'mail' | 'message' | 'code_activity' | 'bookmark';
-  title: string;
-  group?: string;
-  resourceUri?: string;
-  occurredAt?: number;
-  modifiedAt?: number;
-  startsAt?: number;
-  endsAt?: number;
-  text?: string;
-  ownerAttribution: 'user' | 'other' | 'shared' | 'unknown';
-  sensitivity: 'normal' | 'personal' | 'secret' | 'regulated';
-  evidenceRef: string;
-}>, workDiscoveryRunId: string | undefined,
-processingPolicy: WorkDiscoveryProcessingPolicy,
-sourceCheckpoints?: Record<string, { fingerprint: string; collectedAt: number }>,
-locale = currentUiLocale()): Promise<{
-  profileCandidates: WorkDiscoveryProfileCandidate[];
-  workThreads: WorkUnderstandingThread[];
-  knowledgeCandidates: Array<{ id: string; content: string; status: string }>;
-  sourceStatuses: Array<{ sourceId: string; status: 'completed' | 'partial' | 'failed'; error?: string }>;
-}> {
-  return fetchJson<{
-    profileCandidates: WorkDiscoveryProfileCandidate[];
-    workThreads: WorkUnderstandingThread[];
-    knowledgeCandidates: Array<{ id: string; content: string; status: string }>;
-    sourceStatuses: Array<{ sourceId: string; status: 'completed' | 'partial' | 'failed'; error?: string }>;
-  }>(
-    apiUrl('/api/context-sources/bootstrap'),
+export async function fetchLocalSourcePreviews(customNoteDirectories?: string[]): Promise<LocalSourcePreview[]> {
+  const query = customNoteDirectories?.length
+    ? `?customNoteDirectories=${encodeURIComponent(customNoteDirectories.join(','))}`
+    : '';
+  const response = await fetchJson<{ previews: LocalSourcePreview[] }>(
+    apiUrl(`/api/context-sources/local-preview${query}`),
+  );
+  return response.previews;
+}
+
+export async function startDeepUnderstandingRun(input: {
+  selectedTier1Sources?: string[];
+  customNoteDirectories?: string[];
+  excludeIds?: string[];
+  precollectedItems?: Array<{
+    id: string;
+    sourceId: string;
+    type: 'document' | 'calendar_event' | 'task' | 'note' | 'mail' | 'message' | 'code_activity' | 'bookmark';
+    title: string;
+    group?: string;
+    resourceUri?: string;
+    occurredAt?: number;
+    modifiedAt?: number;
+    startsAt?: number;
+    endsAt?: number;
+    text?: string;
+    ownerAttribution: 'user' | 'other' | 'shared' | 'unknown';
+    sensitivity: 'normal' | 'personal' | 'secret' | 'regulated';
+    evidenceRef: string;
+  }>;
+  sourceCheckpoints?: Record<string, { fingerprint: string; collectedAt: number }>;
+  processingPolicy: WorkDiscoveryProcessingPolicy;
+  locale?: string;
+}): Promise<DeepUnderstandingRun> {
+  const response = await fetchJson<{ run: DeepUnderstandingRun }>(apiUrl('/api/context-sources/understanding-runs'), {
+    method: 'POST',
+    body: JSON.stringify({
+      ...input,
+      locale: input.locale ?? currentUiLocale(),
+    }),
+  });
+  return response.run;
+}
+
+export async function fetchDeepUnderstandingRun(runId: string): Promise<DeepUnderstandingRun> {
+  const response = await fetchJson<{ run: DeepUnderstandingRun }>(
+    apiUrl(`/api/context-sources/understanding-runs/${encodeURIComponent(runId)}`),
+  );
+  return response.run;
+}
+
+export async function fetchLatestDeepUnderstandingRun(): Promise<DeepUnderstandingRun | null> {
+  const response = await fetchJson<{ run: DeepUnderstandingRun | null }>(
+    apiUrl('/api/context-sources/understanding-runs/latest'),
+  );
+  return response.run;
+}
+
+export async function cancelDeepUnderstandingRun(runId: string): Promise<DeepUnderstandingRun> {
+  const response = await fetchJson<{ run: DeepUnderstandingRun }>(
+    apiUrl(`/api/context-sources/understanding-runs/${encodeURIComponent(runId)}/cancel`),
+    { method: 'POST' },
+  );
+  return response.run;
+}
+
+export async function confirmDeepUnderstandingRun(
+  runId: string,
+  input: DeepUnderstandingConfirmationInput,
+): Promise<{ ok: boolean; confirmedAssertionIds: string[]; createdRuleIds: string[] }> {
+  return fetchJson<{ ok: boolean; confirmedAssertionIds: string[]; createdRuleIds: string[] }>(
+    apiUrl(`/api/context-sources/understanding-runs/${encodeURIComponent(runId)}/confirm`),
     {
       method: 'POST',
-      body: JSON.stringify({
-        items,
-        processingPolicy,
-        locale,
-        ...(workDiscoveryRunId ? { workDiscoveryRunId } : {}),
-        ...(sourceCheckpoints ? { sourceCheckpoints } : {}),
-      }),
+      body: JSON.stringify(input),
     },
   );
 }
@@ -276,17 +412,6 @@ export async function startWorkDiscoveryRun(rootPath: string, locale = currentUi
       idempotencyKey: crypto.randomUUID(),
       locale,
     }),
-  });
-  return response.run;
-}
-
-export async function startQuickWorkDiscoveryRun(
-  processingPolicy: WorkDiscoveryProcessingPolicy,
-  locale = currentUiLocale(),
-): Promise<WorkDiscoveryRun> {
-  const response = await fetchJson<{ run: WorkDiscoveryRun }>(apiUrl('/api/work-discovery/quick-runs'), {
-    method: 'POST',
-    body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), processingPolicy, locale }),
   });
   return response.run;
 }
@@ -319,13 +444,13 @@ export async function submitWorkDiscoveryRecognitionFeedback(
     `/api/work-discovery/runs/${encodeURIComponent(runId)}/recognition-feedback`,
   ), {
     method: 'POST',
-    body: JSON.stringify({ decision, correctedIntent }),
+    body: JSON.stringify({ decision, ...(correctedIntent ? { correctedIntent } : {}) }),
   });
   return response.run;
 }
 
 export async function selectWorkDiscoverySuggestion(runId: string, suggestionId: string): Promise<void> {
-  await fetchJson(apiUrl(
-    `/api/work-discovery/runs/${encodeURIComponent(runId)}/suggestions/${encodeURIComponent(suggestionId)}/select`,
-  ), { method: 'POST' });
+  await fetchJson(apiUrl(`/api/work-discovery/runs/${encodeURIComponent(runId)}/suggestions/${encodeURIComponent(suggestionId)}/select`), {
+    method: 'POST',
+  });
 }

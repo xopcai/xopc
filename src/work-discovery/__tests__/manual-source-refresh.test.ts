@@ -26,8 +26,14 @@ describe('manual source reanalysis', () => {
     service = new WorkDiscoveryService({ projects: new ProjectService(), sessions: {} as never,
       getConfig: () => ConfigSchema.parse({}), emit: vi.fn() });
     vi.spyOn(service, 'getModelProcessingTarget').mockReturnValue({ provider: 'local', remoteModel: false });
-    vi.mocked(analyzeUnderstandingSources).mockResolvedValue({ modelRef: 'test', profileCandidates: [], workThreadCandidates: [],
-      sourceStatuses: [{ sourceId: 'apple-notes', status: 'completed' }] });
+    vi.mocked(analyzeUnderstandingSources).mockResolvedValue({
+      modelRef: 'test',
+      profileCandidates: [],
+      writingPreferences: [],
+      workThreadCandidates: [],
+      calibrationQuestions: [],
+      sourceStatuses: [{ sourceId: 'apple-notes', status: 'completed' }],
+    });
   });
   afterEach(async () => { await service.stop(); closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
 

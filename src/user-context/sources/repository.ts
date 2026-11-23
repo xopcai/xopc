@@ -155,18 +155,23 @@ export function updateUnderstandingSourceGrantPolicies(id: string, patch: {
   return getUnderstandingSourceGrant(id);
 }
 
+export function resolveGrantSourceInstanceId(
+  grant: Pick<UnderstandingSourceGrant, 'adapterId' | 'config'>,
+): string | undefined {
+  if (typeof grant.config.sourceInstanceId === 'string' && grant.config.sourceInstanceId.trim()) {
+    return grant.config.sourceInstanceId.trim();
+  }
+  const connectorId = typeof grant.config.connectorId === 'string' ? grant.config.connectorId.trim() : undefined;
+  const accountId = typeof grant.config.accountId === 'string' ? grant.config.accountId.trim() : undefined;
+  if (connectorId && accountId) return `composio:${connectorId}:${accountId}`;
+  return grant.adapterId ? `local:${grant.adapterId}` : undefined;
+}
+
 export function revokeUnderstandingSourceGrant(id: string, nowMs = Date.now()): UnderstandingSourceGrant | null {
   notifyUserContextChange({ kind: 'policy' });
   const current = getUnderstandingSourceGrant(id);
   if (!current) return null;
-  const configuredInstance = typeof current.config.sourceInstanceId === 'string'
-    ? current.config.sourceInstanceId
-    : undefined;
-  const connectorId = typeof current.config.connectorId === 'string' ? current.config.connectorId : undefined;
-  const accountId = typeof current.config.accountId === 'string' ? current.config.accountId : undefined;
-  const sourceInstanceId = configuredInstance ?? (connectorId && accountId
-    ? `composio:${connectorId}:${accountId}`
-    : undefined);
+  const sourceInstanceId = resolveGrantSourceInstanceId(current);
   runSqliteWriteTransaction((db) => {
     db.prepare("UPDATE understanding_source_grants SET status = 'revoked', updated_at = ? WHERE grant_id = ?")
       .run(nowMs, id);
@@ -182,6 +187,11 @@ export function revokeUnderstandingSourceGrant(id: string, nowMs = Date.now()): 
         .run(sourceInstanceId);
       db.prepare('UPDATE context_evidence SET redacted_excerpt = NULL WHERE source_instance_id = ?')
         .run(sourceInstanceId);
+      db.prepare(`UPDATE collaboration_rules SET status = 'disabled', updated_at = ?
+        WHERE status = 'active'
+          AND json_extract(conditions_json, '$.sourceInstanceId') = ?
+          AND COALESCE(json_extract(conditions_json, '$.userEdited'), 0) != 1`)
+        .run(nowMs, sourceInstanceId);
       for (const { assertion_id: assertionId } of affected) {
         db.prepare(`UPDATE user_assertions SET
           support_count = (SELECT COUNT(*) FROM user_assertion_evidence WHERE assertion_id = ? AND relation = 'supports'),
@@ -200,12 +210,7 @@ export function revokeUnderstandingSourceGrant(id: string, nowMs = Date.now()): 
           FROM user_assertion_evidence ae
           JOIN context_evidence evidence ON evidence.evidence_id = ae.evidence_id
           JOIN understanding_source_grants grant_record ON grant_record.status = 'active'
-            AND evidence.source_instance_id = COALESCE(
-              json_extract(grant_record.config_json, '$.sourceInstanceId'),
-              CASE WHEN json_extract(grant_record.config_json, '$.connectorId') IS NOT NULL
-                AND json_extract(grant_record.config_json, '$.accountId') IS NOT NULL
-                THEN 'composio:' || json_extract(grant_record.config_json, '$.connectorId')
-                  || ':' || json_extract(grant_record.config_json, '$.accountId') END)
+            AND evidence.source_instance_id = json_extract(grant_record.config_json, '$.sourceInstanceId')
           JOIN understanding_consent_receipts receipt
             ON receipt.grant_id = grant_record.grant_id AND receipt.revoked_at IS NULL
           JOIN user_assertions assertion_record ON assertion_record.assertion_id = ae.assertion_id

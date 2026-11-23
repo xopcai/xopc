@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
+import { DeepUnderstandingOnboarding } from '@/features/onboarding/deep-understanding-onboarding';
 import { useUnderstandingActivityStore } from './understanding-activity-store';
-import { WorkDiscoveryPage } from './work-discovery-page';
 
 const EXIT_DURATION_MS = 180;
 
@@ -74,7 +74,7 @@ export function WorkDiscoveryOverlay({
               </Button>
             </header>
             <div className="min-h-0 flex-1 overflow-hidden">
-              <WorkDiscoveryPage embedded onRequestClose={requestClose} />
+              <DeepUnderstandingOnboarding embedded onRequestClose={requestClose} />
             </div>
           </section>
         </Dialog.Content>

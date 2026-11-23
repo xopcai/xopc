@@ -1,121 +1,122 @@
 import { execFile } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { basename, join } from 'node:path';
 
 import type { IpcMain } from 'electron';
 
-import type {
-  UnderstandingSourceCollectionResult,
-  UnderstandingSourceDefinition,
-  UnderstandingSourceItem,
-} from '../../src/user-context/sources/types.js';
+import { listLocalUnderstandingSourceDefinitions } from '../../src/user-context/sources/catalog.js';
+import {
+  collectTier1Source,
+  fingerprintUnderstandingItems,
+  previewTier1Sources,
+} from '../../src/user-context/sources/collectors/index.js';
 import {
   isLocalUnderstandingSourceId,
+  isTier1LocalSourceId,
+  isTier2LocalSourceId,
   type LocalUnderstandingSourceId,
+  type Tier2LocalUnderstandingSourceId,
 } from '../../src/user-context/sources/local-source-contract.js';
-import { collectRecentFileItems } from '../understanding-sources/recent-files.js';
-import { collectChromiumBookmarkItems } from '../understanding-sources/chromium-bookmarks.js';
+import type {
+  UnderstandingSourceCollectionResult,
+  UnderstandingSourceItem,
+  UnderstandingSourcePlatform,
+} from '../../src/user-context/sources/types.js';
 import { assertTrustedRenderer } from './trusted-renderer.js';
 
-const SOURCE_LIMIT = 50;
-const ITEM_CHARS = 12_000;
-const TOTAL_CHARS = 300_000;
-type LocalSourceId = LocalUnderstandingSourceId;
+const APPLE_NOTES_LIMIT = 60;
+const APPLE_MAIL_SENT_LIMIT = 35;
+const APPLE_MAIL_INBOX_LIMIT = 25;
+const APPLE_DEFAULT_LIMIT = 50;
+const ITEM_CHARS = 8_000;
+const TOTAL_CHARS = 180_000;
+const JXA_TIMEOUT_MS = 20_000;
 
-function localCatalog(platform = process.platform): UnderstandingSourceDefinition[] {
-  const common = [
-    definition('local-recent-files', 'recent_documents', 'Recent files', 'all', true, true),
-    definition('chromium-bookmarks', 'recent_documents', 'Recent bookmarks', 'all', true, true),
-  ];
-  if (platform === 'darwin') return [...common,
-    definition('apple-notes', 'notes', 'Apple Notes', 'darwin', true, false),
-    definition('apple-mail', 'mail', 'Apple Mail', 'darwin', true, false),
-    definition('apple-calendar', 'calendar', 'Apple Calendar', 'darwin', true, true),
-    definition('apple-reminders', 'tasks', 'Apple Reminders', 'darwin', true, true),
-  ];
-  if (platform === 'win32') return [...common,
-    definition('windows-recent-documents', 'recent_documents', 'Recent documents', 'win32', false, true),
-  ];
-  if (platform === 'linux') return [...common,
-    definition('linux-recent-documents', 'recent_documents', 'Recent documents', 'linux', false, true),
-  ];
-  return common;
-}
-
-function definition(
-  id: string,
-  category: UnderstandingSourceDefinition['category'],
-  displayName: string,
-  platform: UnderstandingSourceDefinition['platform'],
-  sensitive: boolean,
-  recommended: boolean,
-): UnderstandingSourceDefinition {
-  return {
-    id, category, platform, displayName,
-    description: category === 'recent_documents'
-      ? 'Read-only bounded text for recently used readable documents'
-      : `Read-only ${displayName} context selected by the user`,
-    availability: 'available', permission: sensitive ? 'not_requested' : 'granted',
-    defaultAccessMode: 'once', supportedAccessModes: ['once'], recommended, sensitive,
-  };
-}
+export { fingerprintUnderstandingItems };
 
 const JXA_HELPERS = `
 const safe = (read, fallback) => { try { return read(); } catch (_) { return fallback; } };
 const time = (value) => { const n = value ? new Date(value).getTime() : NaN; return Number.isFinite(n) ? n : undefined; };
 `;
 
-function appleScript(source: LocalSourceId): string {
+function appleScript(source: Tier2LocalUnderstandingSourceId): string {
   if (source === 'apple-notes') return `${JXA_HELPERS}
 const app = Application('Notes');
-const rows = safe(() => app.notes(), []).map((note) => {
-  const locked = safe(() => note.passwordProtected(), false) === true;
+const ids = safe(() => app.notes.id(), []);
+const modDates = safe(() => app.notes.modificationDate(), []);
+const lockedFlags = safe(() => app.notes.passwordProtected(), []);
+const indexed = [];
+for (let i = 0; i < ids.length; i++) {
+  if (lockedFlags[i] === true || !ids[i]) continue;
+  indexed.push({ index: i, id: String(ids[i]), modifiedAt: time(modDates[i]) || 0 });
+}
+indexed.sort((a, b) => b.modifiedAt - a.modifiedAt);
+const top = indexed.slice(0, ${APPLE_NOTES_LIMIT});
+const allNotes = app.notes;
+const rows = [];
+for (const entry of top) {
+  const note = allNotes[entry.index];
+  const text = String(safe(() => note.plaintext(), '')).trim();
+  if (!text) continue;
   const container = safe(() => note.container(), null);
-  return { id: String(safe(() => note.id(), '')), title: String(safe(() => note.name(), 'Untitled')),
-    group: container ? String(safe(() => container.name(), '')) : '', text: locked ? '' : String(safe(() => note.plaintext(), '')),
-    occurredAt: time(safe(() => note.creationDate(), null)), modifiedAt: time(safe(() => note.modificationDate(), null)) };
-}).filter((row) => row.id && row.text).sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0)).slice(0, ${SOURCE_LIMIT});
+  rows.push({
+    id: entry.id,
+    title: String(safe(() => note.name(), 'Untitled')),
+    group: container ? String(safe(() => container.name(), '')) : '',
+    text,
+    occurredAt: time(safe(() => note.creationDate(), null)),
+    modifiedAt: entry.modifiedAt || undefined,
+    ownerAttribution: 'user',
+  });
+}
 JSON.stringify(rows);`;
+
   if (source === 'apple-mail') return `${JXA_HELPERS}
 const app = Application('Mail');
-const min = Date.now() - 30 * 86400000;
-const rows = safe(() => app.accounts(), []).flatMap((account) => {
+const min = Date.now() - 45 * 86400000;
+const sentRows = [];
+const inboxRows = [];
+for (const account of safe(() => app.accounts(), [])) {
   const accountName = String(safe(() => account.name(), 'Mail'));
   const boxes = [
-    { box: safe(() => account.inbox(), null), name: 'Inbox', ownerAttribution: 'other', dateKey: 'dateReceived' },
-    { box: safe(() => account.sentMailbox(), null), name: 'Sent', ownerAttribution: 'user', dateKey: 'dateSent' },
+    { box: safe(() => account.sentMailbox(), null), name: 'Sent', ownerAttribution: 'user', dateKey: 'dateSent', limit: ${APPLE_MAIL_SENT_LIMIT}, bucket: sentRows },
+    { box: safe(() => account.inbox(), null), name: 'Inbox', ownerAttribution: 'other', dateKey: 'dateReceived', limit: ${APPLE_MAIL_INBOX_LIMIT}, bucket: inboxRows },
   ];
-  return boxes.flatMap((entry) => {
-    if (!entry.box) return [];
+  for (const entry of boxes) {
+    if (!entry.box || entry.bucket.length >= entry.limit) continue;
     const messages = safe(() => entry.box.messages.whose({ [entry.dateKey]: { _greaterThan: new Date(min) } })(), []);
-    return messages.slice(0, ${SOURCE_LIMIT}).map((message) => ({
-      id: String(safe(() => message.messageId(), safe(() => message.id(), ''))),
-      title: String(safe(() => message.subject(), 'Untitled message')),
-      group: accountName + ' · ' + entry.name,
-      text: String(safe(() => message.content(), '')),
-      occurredAt: time(safe(() => entry.dateKey === 'dateSent' ? message.dateSent() : message.dateReceived(), null)),
-      ownerAttribution: entry.ownerAttribution,
-    }));
-  });
-}).filter((row) => row.id && row.occurredAt && row.occurredAt >= min)
-  .sort((a, b) => b.occurredAt - a.occurredAt).slice(0, ${SOURCE_LIMIT});
-JSON.stringify(rows);`;
+    for (const message of messages.slice(0, entry.limit)) {
+      const occurredAt = time(safe(() => entry.dateKey === 'dateSent' ? message.dateSent() : message.dateReceived(), null));
+      const id = String(safe(() => message.messageId(), safe(() => message.id(), '')));
+      if (!id || !occurredAt || occurredAt < min) continue;
+      entry.bucket.push({
+        id,
+        title: String(safe(() => message.subject(), 'Untitled message')),
+        group: accountName + ' · ' + entry.name,
+        text: String(safe(() => message.content(), '')),
+        occurredAt,
+        ownerAttribution: entry.ownerAttribution,
+      });
+    }
+  }
+}
+sentRows.sort((a, b) => b.occurredAt - a.occurredAt);
+inboxRows.sort((a, b) => b.occurredAt - a.occurredAt);
+JSON.stringify([...sentRows.slice(0, ${APPLE_MAIL_SENT_LIMIT}), ...inboxRows.slice(0, ${APPLE_MAIL_INBOX_LIMIT})]);`;
+
   if (source === 'apple-calendar') return `${JXA_HELPERS}
 const app = Application('Calendar');
-const now = Date.now(); const min = now - 30 * 86400000; const max = now + 90 * 86400000;
+const now = Date.now(); const min = now - 30 * 86400000; const max = now + 30 * 86400000;
 const rows = safe(() => app.calendars(), []).flatMap((calendar) => safe(() => calendar.events(), []).map((event) => ({
   id: String(safe(() => event.uid(), safe(() => event.id(), ''))), title: String(safe(() => event.summary(), 'Untitled event')),
   group: String(safe(() => calendar.name(), '')), text: String(safe(() => event.description(), '')),
   startsAt: time(safe(() => event.startDate(), null)), endsAt: time(safe(() => event.endDate(), null)),
   modifiedAt: time(safe(() => event.stampDate(), null))
 }))).filter((row) => row.id && row.startsAt && row.startsAt >= min && row.startsAt <= max)
-  .sort((a, b) => Math.abs(a.startsAt - now) - Math.abs(b.startsAt - now)).slice(0, ${SOURCE_LIMIT});
+  .sort((a, b) => Math.abs(a.startsAt - now) - Math.abs(b.startsAt - now)).slice(0, ${APPLE_DEFAULT_LIMIT});
 JSON.stringify(rows);`;
+
   return `${JXA_HELPERS}
 const app = Application('Reminders');
-const now = Date.now(); const min = now - 90 * 86400000;
+const now = Date.now(); const min = now - 60 * 86400000;
 const rows = safe(() => app.lists(), []).flatMap((list) => safe(() => list.reminders(), []).map((reminder) => ({
   id: String(safe(() => reminder.id(), '')), title: String(safe(() => reminder.name(), 'Untitled reminder')),
   group: String(safe(() => list.name(), '')), text: String(safe(() => reminder.body(), '')),
@@ -123,26 +124,30 @@ const rows = safe(() => app.lists(), []).flatMap((list) => safe(() => list.remin
   startsAt: time(safe(() => reminder.dueDate(), null)), completedAt: time(safe(() => reminder.completionDate(), null)),
   completed: safe(() => reminder.completed(), false) === true
 }))).filter((row) => row.id && (!row.completed || (row.completedAt || 0) >= min))
-  .sort((a, b) => (b.modifiedAt || b.occurredAt || 0) - (a.modifiedAt || a.occurredAt || 0)).slice(0, ${SOURCE_LIMIT});
+  .sort((a, b) => (b.modifiedAt || b.occurredAt || 0) - (a.modifiedAt || a.occurredAt || 0)).slice(0, ${APPLE_DEFAULT_LIMIT});
 JSON.stringify(rows);`;
 }
 
-function execText(command: string, args: string[], timeout = 25_000): Promise<string> {
+function execText(command: string, args: string[], timeout = JXA_TIMEOUT_MS): Promise<string> {
   return new Promise((resolve, reject) => execFile(command, args, {
-    timeout, maxBuffer: 4 * 1024 * 1024, encoding: 'utf8',
-  }, (error, stdout) => error ? reject(error) : resolve(stdout)));
+    timeout, maxBuffer: 6 * 1024 * 1024, encoding: 'utf8',
+  }, (error, stdout) => (error ? reject(error) : resolve(stdout))));
 }
 
-function itemType(sourceId: LocalSourceId): UnderstandingSourceItem['type'] {
+function appleItemType(sourceId: Tier2LocalUnderstandingSourceId): UnderstandingSourceItem['type'] {
   if (sourceId === 'apple-mail') return 'mail';
   if (sourceId === 'apple-calendar') return 'calendar_event';
   if (sourceId === 'apple-reminders') return 'task';
-  if (sourceId === 'apple-notes') return 'note';
-  return 'document';
+  return 'note';
 }
 
-function normalize(sourceId: LocalSourceId, raw: unknown): UnderstandingSourceItem[] {
+function normalizeAppleItems(sourceId: Tier2LocalUnderstandingSourceId, raw: unknown): UnderstandingSourceItem[] {
   if (!Array.isArray(raw)) return [];
+  const limit = sourceId === 'apple-notes'
+    ? APPLE_NOTES_LIMIT
+    : sourceId === 'apple-mail'
+      ? APPLE_MAIL_SENT_LIMIT + APPLE_MAIL_INBOX_LIMIT
+      : APPLE_DEFAULT_LIMIT;
   let remaining = TOTAL_CHARS;
   return raw.flatMap((value) => {
     if (!value || typeof value !== 'object' || remaining <= 0) return [];
@@ -152,117 +157,36 @@ function normalize(sourceId: LocalSourceId, raw: unknown): UnderstandingSourceIt
     if (!id || !title) return [];
     const text = typeof row.text === 'string' ? row.text.trim().slice(0, Math.min(ITEM_CHARS, remaining)) : '';
     remaining -= text.length;
-    const number = (key: string) => typeof row[key] === 'number' && Number.isFinite(row[key]) ? row[key] as number : undefined;
+    const num = (key: string) => (typeof row[key] === 'number' && Number.isFinite(row[key]) ? row[key] as number : undefined);
     return [{
-      id, sourceId, type: itemType(sourceId), title, ...(text ? { text } : {}),
+      id,
+      sourceId,
+      type: appleItemType(sourceId),
+      title,
+      ...(text ? { text } : {}),
       ...(typeof row.group === 'string' && row.group.trim() ? { group: row.group.trim().slice(0, 200) } : {}),
-      ...(number('occurredAt') ? { occurredAt: number('occurredAt') } : {}),
-      ...(number('modifiedAt') ? { modifiedAt: number('modifiedAt') } : {}),
-      ...(number('startsAt') ? { startsAt: number('startsAt') } : {}),
-      ...(number('endsAt') ? { endsAt: number('endsAt') } : {}),
+      ...(num('occurredAt') ? { occurredAt: num('occurredAt') } : {}),
+      ...(num('modifiedAt') ? { modifiedAt: num('modifiedAt') } : {}),
+      ...(num('startsAt') ? { startsAt: num('startsAt') } : {}),
+      ...(num('endsAt') ? { endsAt: num('endsAt') } : {}),
       ownerAttribution: row.ownerAttribution === 'user' || row.ownerAttribution === 'other'
         ? row.ownerAttribution
         : sourceId === 'apple-calendar' ? 'unknown' : 'user',
-      sensitivity: sourceId.includes('recent-documents') ? 'normal' : 'personal',
+      sensitivity: 'personal',
       evidenceRef: `${sourceId}://${encodeURIComponent(id)}`,
     } satisfies UnderstandingSourceItem];
-  }).slice(0, SOURCE_LIMIT);
+  }).slice(0, limit);
 }
 
-async function collectApple(sourceId: LocalSourceId): Promise<UnderstandingSourceItem[]> {
-  const output = await execText('/usr/bin/osascript', ['-l', 'JavaScript', '-e', appleScript(sourceId)]);
-  return normalize(sourceId, JSON.parse(output) as unknown);
-}
-
-async function collectWindowsRecent(): Promise<UnderstandingSourceItem[]> {
-  const script = `
-$shell = New-Object -ComObject WScript.Shell
-$folder = Join-Path $env:APPDATA 'Microsoft\\Windows\\Recent'
-$items = Get-ChildItem -LiteralPath $folder -Filter *.lnk -File -ErrorAction SilentlyContinue |
-  Sort-Object LastWriteTimeUtc -Descending | Select-Object -First ${SOURCE_LIMIT} | ForEach-Object {
-    $shortcut = $shell.CreateShortcut($_.FullName)
-    [PSCustomObject]@{ id = $_.FullName; title = [IO.Path]::GetFileNameWithoutExtension($_.Name); target = $shortcut.TargetPath; modifiedAt = ([DateTimeOffset]$_.LastWriteTimeUtc).ToUnixTimeMilliseconds() }
-  }
-$items | ConvertTo-Json -Compress
-`;
-  const output = await execText('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script]);
-  const raw = output.trim() ? JSON.parse(output) as unknown : [];
-  const rows = Array.isArray(raw) ? raw : raw ? [raw] : [];
-  return normalize('windows-recent-documents', rows.map((value) => {
-    const row = value as Record<string, unknown>;
-    return { id: row.id, title: row.title, modifiedAt: row.modifiedAt, group: row.target };
-  }));
-}
-
-function decodeXml(value: string): string {
-  return value.replaceAll('&amp;', '&').replaceAll('&quot;', '"').replaceAll('&apos;', "'")
-    .replaceAll('&lt;', '<').replaceAll('&gt;', '>');
-}
-
-async function collectLinuxRecent(): Promise<UnderstandingSourceItem[]> {
-  const path = join(homedir(), '.local', 'share', 'recently-used.xbel');
-  const xml = await readFile(path, 'utf8').catch(() => '');
-  const rows: Array<Record<string, unknown>> = [];
-  for (const match of xml.matchAll(/<bookmark\s+([^>]*)>/g)) {
-    const attributes = match[1] ?? '';
-    const hrefValue = /\bhref="([^"]+)"/.exec(attributes)?.[1];
-    if (!hrefValue) continue;
-    const modified = /\bmodified="([^"]+)"/.exec(attributes)?.[1];
-    const href = decodeXml(hrefValue);
-    let filePath = href;
-    try { if (href.startsWith('file://')) filePath = decodeURIComponent(new URL(href).pathname); } catch { /* keep URI */ }
-    const info = filePath.startsWith('/') ? await stat(filePath).catch(() => null) : null;
-    rows.push({
-      id: href, title: basename(filePath) || href, group: filePath,
-      modifiedAt: modified ? Date.parse(modified) : info?.mtimeMs,
-    });
-    if (rows.length >= SOURCE_LIMIT) break;
-  }
-  return normalize('linux-recent-documents', rows);
-}
-
-export interface UnderstandingCollectOptions {
-  mode: 'fast' | 'full';
-  excludeIds: string[];
-}
-
-export function normalizeUnderstandingCollectOptions(value: unknown): UnderstandingCollectOptions {
-  if (!value || typeof value !== 'object') return { mode: 'full', excludeIds: [] };
-  const raw = value as Record<string, unknown>;
-  const mode = raw.mode === 'fast' ? 'fast' : 'full';
-  const excludeIds = Array.isArray(raw.excludeIds)
-    ? [...new Set(raw.excludeIds
-      .filter((entry): entry is string => typeof entry === 'string')
-      .map((entry) => entry.trim().toLowerCase())
-      .filter((entry) => /^[a-f0-9]{12,64}$/.test(entry)))]
-      .slice(0, 64)
-    : [];
-  return { mode, excludeIds };
-}
-
-async function collectSource(
-  sourceId: LocalSourceId,
-  options: UnderstandingCollectOptions,
-): Promise<UnderstandingSourceCollectionResult> {
+async function collectAppleSource(sourceId: Tier2LocalUnderstandingSourceId): Promise<UnderstandingSourceCollectionResult> {
   try {
-    let items: UnderstandingSourceItem[];
-    if (sourceId === 'local-recent-files') {
-      items = await collectRecentFileItems({
-        mode: options.mode,
-        excludeIds: options.excludeIds,
-      });
-    }
-    else if (sourceId === 'chromium-bookmarks') items = await collectChromiumBookmarkItems();
-    else if (sourceId.startsWith('apple-')) items = await collectApple(sourceId);
-    else if (sourceId === 'windows-recent-documents') items = await collectWindowsRecent();
-    else items = await collectLinuxRecent();
+    const output = await execText('/usr/bin/osascript', ['-l', 'JavaScript', '-e', appleScript(sourceId)]);
+    const items = normalizeAppleItems(sourceId, JSON.parse(output) as unknown);
     return {
       sourceId,
       status: 'completed',
       items,
-      ...(options.mode === 'full'
-        ? { checkpoint: { fingerprint: fingerprintUnderstandingItems(items), collectedAt: Date.now() } }
-        : {}),
+      checkpoint: { fingerprint: fingerprintUnderstandingItems(items), collectedAt: Date.now() },
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -272,24 +196,37 @@ async function collectSource(
   }
 }
 
-export function fingerprintUnderstandingItems(items: UnderstandingSourceItem[]): string {
-  const stable = items.map((item) => ({
-    id: item.id,
-    title: item.title,
-    group: item.group ?? '',
-    resourceUri: item.resourceUri ?? '',
-    occurredAt: item.occurredAt ?? 0,
-    modifiedAt: item.modifiedAt ?? 0,
-    startsAt: item.startsAt ?? 0,
-    endsAt: item.endsAt ?? 0,
-  })).sort((left, right) => left.id.localeCompare(right.id));
-  return createHash('sha256').update(JSON.stringify(stable)).digest('hex');
+export interface UnderstandingCollectOptions {
+  excludeIds: string[];
+  customNoteDirectories: string[];
 }
 
-export function normalizeUnderstandingSourceIds(value: unknown, platform = process.platform): LocalSourceId[] {
+export function normalizeUnderstandingCollectOptions(value: unknown): UnderstandingCollectOptions {
+  if (!value || typeof value !== 'object') return { excludeIds: [], customNoteDirectories: [] };
+  const raw = value as Record<string, unknown>;
+  const excludeIds = Array.isArray(raw.excludeIds)
+    ? [...new Set(raw.excludeIds
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => /^[a-f0-9]{12,64}$/.test(entry)))]
+      .slice(0, 64)
+    : [];
+  const customNoteDirectories = Array.isArray(raw.customNoteDirectories)
+    ? [...new Set(raw.customNoteDirectories
+      .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+      .map((entry) => entry.trim().slice(0, 500)))]
+      .slice(0, 10)
+    : [];
+  return { excludeIds, customNoteDirectories };
+}
+
+export function normalizeUnderstandingSourceIds(
+  value: unknown,
+  platform: Exclude<UnderstandingSourcePlatform, 'all'> = process.platform as Exclude<UnderstandingSourcePlatform, 'all'>,
+): LocalUnderstandingSourceId[] {
   if (!Array.isArray(value)) return [];
-  const available = new Set(localCatalog(platform).map((source) => source.id));
-  return [...new Set(value.filter((source): source is LocalSourceId => (
+  const available = new Set(listLocalUnderstandingSourceDefinitions(platform).map((source) => source.id));
+  return [...new Set(value.filter((source): source is LocalUnderstandingSourceId => (
     typeof source === 'string' && isLocalUnderstandingSourceId(source) && available.has(source)
   )))];
 }
@@ -297,11 +234,35 @@ export function normalizeUnderstandingSourceIds(value: unknown, platform = proce
 export function registerUnderstandingSourcesIpc(ipcMain: IpcMain): void {
   ipcMain.handle('understanding-sources:catalog', (event) => {
     assertTrustedRenderer(event);
-    return localCatalog();
+    return listLocalUnderstandingSourceDefinitions();
   });
+
+  ipcMain.handle('understanding-sources:preview', async (event, rawOptions?: unknown) => {
+    assertTrustedRenderer(event);
+    const options = normalizeUnderstandingCollectOptions(rawOptions);
+    return previewTier1Sources({ customNoteDirectories: options.customNoteDirectories });
+  });
+
   ipcMain.handle('understanding-sources:collect', async (event, requestedSources: unknown, rawOptions?: unknown) => {
     assertTrustedRenderer(event);
     const options = normalizeUnderstandingCollectOptions(rawOptions);
-    return Promise.all(normalizeUnderstandingSourceIds(requestedSources).map((sourceId) => collectSource(sourceId, options)));
+    const sourceIds = normalizeUnderstandingSourceIds(requestedSources);
+    const tier1Ids = sourceIds.filter(isTier1LocalSourceId);
+    const tier2Ids = sourceIds.filter(isTier2LocalSourceId);
+
+    // Tier 1 runs concurrently (zero OS prompts). Tier 2 runs serially so macOS permission dialogs never stack.
+    const tier1Results = await Promise.all(
+      tier1Ids.map((sourceId) => collectTier1Source(sourceId, {
+        excludeIds: options.excludeIds,
+        customNoteDirectories: options.customNoteDirectories,
+      })),
+    );
+    const tier2Results: UnderstandingSourceCollectionResult[] = [];
+    for (const sourceId of tier2Ids) {
+      tier2Results.push(await collectAppleSource(sourceId));
+    }
+
+    const byId = new Map([...tier1Results, ...tier2Results].map((result) => [result.sourceId, result]));
+    return sourceIds.map((id) => byId.get(id)!);
   });
 }

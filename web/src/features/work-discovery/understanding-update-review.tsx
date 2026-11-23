@@ -112,14 +112,15 @@ const copy = {
 } as const;
 
 const BUILT_IN_SOURCE_NAMES: Record<string, { en: string; zh: string }> = {
-  'local-recent-files': { en: 'Recent files', zh: '最近文件' },
-  'chromium-bookmarks': { en: 'Recent bookmarks', zh: '最近书签' },
+  'local-ai-instructions': { en: 'AI instructions & rules', zh: 'AI 工具规则' },
+  'local-obsidian': { en: 'Obsidian vaults', zh: 'Obsidian 知识库' },
+  'local-markdown-notes': { en: 'Local Markdown notes', zh: '本地笔记目录' },
+  'local-recent-files': { en: 'Recent documents', zh: '近期文档' },
+  'chromium-bookmarks': { en: 'Browser bookmarks', zh: '浏览器书签' },
   'apple-notes': { en: 'Apple Notes', zh: 'Apple 备忘录' },
   'apple-mail': { en: 'Apple Mail', zh: 'Apple 邮件' },
   'apple-calendar': { en: 'Apple Calendar', zh: 'Apple 日历' },
   'apple-reminders': { en: 'Apple Reminders', zh: 'Apple 提醒事项' },
-  'windows-recent-documents': { en: 'Recent documents', zh: '最近文档' },
-  'linux-recent-documents': { en: 'Recent documents', zh: '最近文档' },
 };
 
 const SOURCE_ICONS: Record<SourceKind, LucideIcon> = {

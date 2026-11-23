@@ -27,9 +27,9 @@ vi.mock('@/features/onboarding/use-needs-model-setup', () => ({
   }),
 }));
 
-vi.mock('@/features/onboarding/desktop-focus-onboarding', () => ({
-  DesktopFocusOnboarding: ({ onRequestClose }: { onRequestClose: () => void }) => (
-    <button data-testid="desktop-work-understanding-stage" onClick={onRequestClose}>Work understanding</button>
+vi.mock('@/features/onboarding/deep-understanding-onboarding', () => ({
+  DeepUnderstandingOnboarding: ({ onRequestClose }: { onRequestClose: () => void }) => (
+    <button data-testid="work-understanding-stage" onClick={onRequestClose}>Work understanding</button>
   ),
 }));
 
@@ -50,10 +50,6 @@ vi.mock('@/features/onboarding/cloud-onboarding', () => ({
     dismiss: vi.fn(),
   }),
   CloudOnboardingCard: ({ context }: { context: string }) => <div data-testid="cloud-onboarding-stage" data-context={context}>Connect XOPC Cloud</div>,
-}));
-
-vi.mock('@/features/work-discovery/work-discovery-page', () => ({
-  WorkDiscoveryPage: ({ onRequestClose }: { onRequestClose: () => void }) => <button data-testid="work-understanding-stage" onClick={onRequestClose}>Work understanding</button>,
 }));
 
 vi.mock('@/stores/gateway-store', () => ({
@@ -116,10 +112,10 @@ describe('OnboardingDialog', () => {
     mocks.refreshModels.mockImplementation(async () => { mocks.needsSetup = false; });
     await act(async () => root.render(<MemoryRouter initialEntries={['/tasks']}><OnboardingDialog /><LocationProbe /></MemoryRouter>));
     await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="model-setup-stage"]')!.click());
-    expect(document.querySelector('[data-testid="desktop-work-understanding-stage"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="work-understanding-stage"]')).not.toBeNull();
     expect(document.querySelector('[data-testid="cloud-onboarding-stage"]')).toBeNull();
     expect(document.querySelector('[data-testid="route"]')?.textContent).toBe('/tasks');
-    await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="desktop-work-understanding-stage"]')!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="work-understanding-stage"]')!.click());
     expect(document.querySelector('[data-testid="route"]')?.textContent).toBe('/chat');
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });

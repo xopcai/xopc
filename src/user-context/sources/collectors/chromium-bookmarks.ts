@@ -3,10 +3,10 @@ import { readFile, readdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 
-import type { UnderstandingSourceItem } from '../../src/user-context/sources/types.js';
+import type { LocalSourcePreview, UnderstandingSourceItem } from '../types.js';
 
 const SOURCE_ID = 'chromium-bookmarks';
-const MAX_ITEMS = 300;
+const MAX_ITEMS = 120;
 const MAX_AGE_MS = 90 * 86_400_000;
 const CHROMIUM_EPOCH_OFFSET_MS = 11_644_473_600_000;
 const SENSITIVE_TOPIC = /(?:bank|banking|wallet|crypto|patient|hospital|medical|therapy|adult|porn|博彩|银行|钱包|医疗|医院|心理|成人)/i;
@@ -35,6 +35,7 @@ function browserRoots(home: string, platform: NodeJS.Platform, env: NodeJS.Proce
     const support = join(home, 'Library', 'Application Support');
     return [
       { name: 'Chrome', path: join(support, 'Google', 'Chrome') },
+      { name: 'Arc', path: join(support, 'Arc', 'User Data') },
       { name: 'Edge', path: join(support, 'Microsoft Edge') },
       { name: 'Brave', path: join(support, 'BraveSoftware', 'Brave-Browser') },
       { name: 'Chromium', path: join(support, 'Chromium') },
@@ -101,7 +102,7 @@ function collectNodes(
   context: { browser: string; profile: string; folders: string[]; nowMs: number; depth: number },
   output: UnderstandingSourceItem[],
 ): void {
-  if (output.length >= MAX_ITEMS) return;
+  if (output.length >= MAX_ITEMS * 2) return;
   if (node.type === 'url' && typeof node.url === 'string') {
     const title = safeTitle(node.name);
     const resourceUri = sanitizeBookmarkUrl(node.url);
@@ -160,4 +161,17 @@ export async function collectChromiumBookmarkItems(
     }
   }
   return output.sort((left, right) => (right.occurredAt ?? 0) - (left.occurredAt ?? 0)).slice(0, MAX_ITEMS);
+}
+
+export async function previewChromiumBookmarks(
+  options: ChromiumBookmarkCollectionOptions = {},
+): Promise<LocalSourcePreview> {
+  const items = await collectChromiumBookmarkItems(options);
+  const browsers = [...new Set(items.map((item) => item.group?.split('/')[0]).filter(Boolean))];
+  return {
+    sourceId: SOURCE_ID,
+    detected: items.length > 0,
+    itemCount: items.length,
+    ...(browsers.length ? { summary: browsers.slice(0, 2).join(' · ') } : {}),
+  };
 }
