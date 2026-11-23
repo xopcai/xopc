@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -47,10 +48,15 @@ function grant() {
   const invocationId = randomUUID();
   return { invocationId, ...uploads.createGrant(invocationId, endpointId, Date.now(), 'computer-frame', endpointId) };
 }
+function frameUploadHeaders(g: ReturnType<typeof grant>) {
+  return {
+    Authorization: `Bearer ${token}`, 'Content-Type': 'image/png',
+    'x-endpoint-id': endpointId, 'x-endpoint-upload-token': g.token,
+  };
+}
 async function post(g: ReturnType<typeof grant>, bytes: BodyInit, extra: Record<string, string> = {}) {
   return fetch(base + g.path + '?name=observation.png', { method: 'POST', headers: {
-    Authorization: `Bearer ${token}`, 'Content-Type': 'image/png',
-    'x-endpoint-id': endpointId, 'x-endpoint-upload-token': g.token, ...extra,
+    ...frameUploadHeaders(g), ...extra,
   }, body: bytes, duplex: 'half' } as RequestInit);
 }
 it('uploads a real >1MB screenshot through auth, body limits, image validation and the desktop client', async () => {
@@ -95,15 +101,35 @@ it('requires Gateway authentication and the correct endpoint-bound upload grant'
   expect(await (await post(g, probe)).json()).toMatchObject({ error: { code: 'INVALID_UPLOAD_GRANT' } });
 });
 it('enforces 5MB for both declared-length and chunked frame uploads', async () => {
-  const oversized = Buffer.alloc(COMPUTER_FRAME_MAX_BYTES + 1);
-  const stream = new ReadableStream({ start(controller) { controller.enqueue(oversized); controller.close(); } });
-  for (const body of [oversized, stream]) {
-    const g = grant();
-    const res = await post(g, body);
-    expect(res.status).toBe(413);
-    expect(await res.json()).toMatchObject({ error: { code: 'UPLOAD_TOO_LARGE' } });
-    uploads.abort(g.invocationId);
-  }
+  const g = grant();
+  const oversizedLength = COMPUTER_FRAME_MAX_BYTES + 1;
+  // A declared oversize must be rejected from headers alone, before any bytes are sent.
+  const declaredResponse = await new Promise<{ status?: number; body: string }>((resolve, reject) => {
+    const req = request(`${base}${g.path}?name=observation.png`, {
+      method: 'POST',
+      headers: { ...frameUploadHeaders(g), 'Content-Length': String(oversizedLength), Connection: 'close' },
+    }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk: string) => { body += chunk; });
+      res.once('error', reject);
+      res.once('end', () => resolve({ status: res.statusCode, body }));
+    });
+    req.once('error', reject);
+    req.end();
+  });
+  expect(declaredResponse.status).toBe(413);
+  expect(JSON.parse(declaredResponse.body)).toMatchObject({ error: { code: 'UPLOAD_TOO_LARGE' } });
+  uploads.abort(g.invocationId);
+
+  const chunkedGrant = grant();
+  const stream = new ReadableStream({
+    start(controller) { controller.enqueue(Buffer.alloc(oversizedLength)); controller.close(); },
+  });
+  const chunkedResponse = await post(chunkedGrant, stream, { Connection: 'close' });
+  expect(chunkedResponse.status).toBe(413);
+  expect(await chunkedResponse.json()).toMatchObject({ error: { code: 'UPLOAD_TOO_LARGE' } });
+  uploads.abort(chunkedGrant.invocationId);
 });
 it('rejects corrupt and MIME-mismatched screenshots without exposing decoder errors', async () => {
   for (const [bytes, mime] of [[Buffer.from('not an image: private content'), 'image/png'], [png, 'image/jpeg']] as const) {
