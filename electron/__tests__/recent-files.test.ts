@@ -39,4 +39,39 @@ describe('recent file understanding source', () => {
     })]);
     expect(JSON.stringify(items[0])).not.toContain(home);
   });
+
+  it('supports fast onboarding mode budgets and excludes user-dismissed file ids', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'xopc-recent-files-fast-'));
+    paths.push(home);
+    await mkdir(join(home, 'Desktop'), { recursive: true });
+    await mkdir(join(home, 'Documents'), { recursive: true });
+    await mkdir(join(home, 'Downloads'), { recursive: true });
+
+    const longBody = 'a'.repeat(4_000);
+    for (let i = 0; i < 20; i += 1) {
+      await writeFile(join(home, 'Desktop', `doc-${String(i).padStart(2, '0')}.md`), `# Doc ${i}\n${longBody}`);
+    }
+
+    const full = await collectRecentFileItems({
+      homeDirectory: home,
+      platform: 'darwin',
+      environment: {},
+      nowMs: Date.now(),
+      mode: 'fast',
+    });
+    expect(full).toHaveLength(16);
+    expect(full[0]?.text?.length).toBeLessThanOrEqual(2_400);
+    expect(full.reduce((sum, entry) => sum + (entry.text?.length ?? 0), 0)).toBeLessThanOrEqual(24_000);
+
+    const excludedPrefix = full[0]!.id.slice(0, 16);
+    const filtered = await collectRecentFileItems({
+      homeDirectory: home,
+      platform: 'darwin',
+      environment: {},
+      nowMs: Date.now(),
+      mode: 'fast',
+      excludeIds: [excludedPrefix],
+    });
+    expect(filtered.some((entry) => entry.id === full[0]!.id)).toBe(false);
+  });
 });

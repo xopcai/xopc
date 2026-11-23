@@ -414,20 +414,7 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
       return;
     }
     setPageHeader({
-      startExtra: (
-        <button
-          type="button"
-          onClick={toggleRail}
-          aria-label={zh ? '切换分类侧栏' : 'Toggle navigation rail'}
-          aria-pressed={railOpen}
-          className={cn(
-            'hidden size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg lg:inline-flex',
-            APP_CHROME_NO_DRAG_CLASS,
-          )}
-        >
-          <PanelLeft className="size-4" aria-hidden />
-        </button>
-      ),
+      startExtra: null,
       main: <h1 className="truncate text-base font-semibold text-fg">{n.title}</h1>,
       end: (
         <div className={cn('flex min-w-0 items-center gap-2', APP_CHROME_NO_DRAG_CLASS)}>
@@ -456,12 +443,9 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
     creatingBlank,
     h.blankNote,
     n.title,
-    railOpen,
     selectedNoteId,
     setPageHeader,
-    toggleRail,
     token,
-    zh,
   ]);
 
   useEffect(() => {
@@ -617,16 +601,16 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
             <span className="text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
               {zh ? '视图' : 'Views'}
             </span>
-            {selectedNoteId ? (
-              <button
-                type="button"
-                onClick={toggleRail}
-                aria-label={zh ? '收起分类侧栏' : 'Collapse navigation rail'}
-                className="inline-flex size-6 items-center justify-center rounded-md text-fg-subtle hover:bg-surface-hover hover:text-fg"
-              >
-                <PanelLeft className="size-3.5" aria-hidden />
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={toggleRail}
+              title={zh ? '收起分类侧栏' : 'Collapse navigation rail'}
+              aria-label={zh ? '收起分类侧栏' : 'Collapse navigation rail'}
+              aria-expanded={true}
+              className="inline-flex size-6 items-center justify-center rounded-md text-fg-subtle hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <PanelLeft className="size-3.5" aria-hidden />
+            </button>
           </div>
 
           <div className="flex flex-col gap-0.5">
@@ -796,8 +780,10 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
               <button
                 type="button"
                 onClick={toggleRail}
+                title={zh ? '展开分类侧栏' : 'Expand navigation rail'}
                 aria-label={zh ? '展开分类侧栏' : 'Expand navigation rail'}
-                className="hidden size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg lg:inline-flex"
+                aria-expanded={false}
+                className="hidden size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:inline-flex"
               >
                 <PanelLeft className="size-4" aria-hidden />
               </button>
@@ -1060,8 +1046,16 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
                             ? Bookmark
                             : FileText;
                       const displayTitle = noteHomeTitle(note, n.titlePlaceholder, h.voiceNote);
+                      const isVoiceEntry = note.kind === 'voice' || Boolean(note.voiceAttachmentId);
                       const preview =
-                        noteHomePreview(note) || (note.coverAttachmentId ? n.imageNote : n.noText);
+                        noteHomePreview(note) ||
+                        (note.coverAttachmentId
+                          ? n.imageNote
+                          : isVoiceEntry
+                            ? zh
+                              ? '音频记录'
+                              : 'Audio recording'
+                            : n.noText);
                       const durationLabel =
                         note.voiceDurationSec && note.voiceDurationSec > 0
                           ? `${Math.floor(note.voiceDurationSec / 60)}:${String(

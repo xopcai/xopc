@@ -594,9 +594,17 @@ export interface ElectronUnderstandingSourceCollectionResult {
   sourceId: string; status: 'completed' | 'denied' | 'failed'; items: ElectronUnderstandingSourceItem[];
   checkpoint?: { fingerprint: string; collectedAt: number }; error?: string;
 }
+export interface ElectronUnderstandingSourceCollectOptions {
+  mode?: 'fast' | 'full';
+  excludeIds?: string[];
+}
+
 export interface ElectronUnderstandingSourcesAPI {
   catalog(): Promise<ElectronUnderstandingSourceDefinition[]>;
-  collect(sourceIds: string[]): Promise<ElectronUnderstandingSourceCollectionResult[]>;
+  collect(
+    sourceIds: string[],
+    options?: ElectronUnderstandingSourceCollectOptions,
+  ): Promise<ElectronUnderstandingSourceCollectionResult[]>;
 }
 
 export interface ElectronAPI {

@@ -9,11 +9,14 @@ import type { UnderstandingSourceItem } from '../../src/user-context/sources/typ
 
 const SOURCE_ID = 'local-recent-files';
 const MAX_ITEMS = 200;
+const FAST_MAX_ITEMS = 16;
 const MAX_ENTRIES_PER_DIRECTORY = 250;
 const MAX_DEPTH = 2;
 const MAX_CONTENT_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_ITEM_TEXT_CHARS = 12_000;
+const FAST_MAX_ITEM_TEXT_CHARS = 2_400;
 const MAX_TOTAL_TEXT_CHARS = 120_000;
+const FAST_MAX_TOTAL_TEXT_CHARS = 24_000;
 const DAY_MS = 86_400_000;
 
 const DOCUMENT_EXTENSIONS = new Set([
@@ -30,6 +33,8 @@ export interface RecentFilesCollectionOptions {
   platform?: NodeJS.Platform;
   environment?: NodeJS.ProcessEnv;
   nowMs?: number;
+  mode?: 'fast' | 'full';
+  excludeIds?: string[];
 }
 
 function windowDays(rootName: string): number {
@@ -56,6 +61,16 @@ export async function collectRecentFileItems(
   const platform = options.platform ?? process.platform;
   const environment = options.environment ?? process.env;
   const nowMs = options.nowMs ?? Date.now();
+  const fast = options.mode === 'fast';
+  const maxItems = fast ? FAST_MAX_ITEMS : MAX_ITEMS;
+  const maxItemTextChars = fast ? FAST_MAX_ITEM_TEXT_CHARS : MAX_ITEM_TEXT_CHARS;
+  const maxTotalTextChars = fast ? FAST_MAX_TOTAL_TEXT_CHARS : MAX_TOTAL_TEXT_CHARS;
+  const excludedPrefixes = (options.excludeIds ?? [])
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length >= 12);
+  const isExcluded = (id: string): boolean => (
+    excludedPrefixes.length > 0 && excludedPrefixes.some((prefix) => id.startsWith(prefix) || prefix.startsWith(id))
+  );
   const roots = await resolvePersonalWorkRoots(homeDirectory, platform, environment);
   const collected: Array<{ item: UnderstandingSourceItem; modifiedAt: number; path: string; size: number }> = [];
 
@@ -74,6 +89,7 @@ export async function collectRecentFileItems(
       const info = await stat(path).catch(() => null);
       if (!info?.isFile() || nowMs - info.mtimeMs > windowDays(basename(root)) * DAY_MS) continue;
       const id = itemId(path);
+      if (isExcluded(id)) continue;
       collected.push({
         modifiedAt: info.mtimeMs,
         path,
@@ -96,8 +112,8 @@ export async function collectRecentFileItems(
   await Promise.all(roots.map((root) => visit(root, root, 0)));
   const recent = collected
     .sort((left, right) => right.modifiedAt - left.modifiedAt || left.item.title.localeCompare(right.item.title))
-    .slice(0, MAX_ITEMS);
-  let remaining = MAX_TOTAL_TEXT_CHARS;
+    .slice(0, maxItems);
+  let remaining = maxTotalTextChars;
   const items: UnderstandingSourceItem[] = [];
   for (const candidate of recent) {
     let text = '';
@@ -105,7 +121,7 @@ export async function collectRecentFileItems(
       const buffer = await readFile(candidate.path).catch(() => null);
       if (buffer) {
         const extracted = extractDocumentText({ buffer, fileName: candidate.item.title });
-        if (extracted.ok) text = extracted.text.slice(0, Math.min(MAX_ITEM_TEXT_CHARS, remaining)).trim();
+        if (extracted.ok) text = extracted.text.slice(0, Math.min(maxItemTextChars, remaining)).trim();
       }
     }
     remaining -= text.length;

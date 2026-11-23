@@ -318,7 +318,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   understandingSources: {
     catalog: () => ipcRenderer.invoke('understanding-sources:catalog'),
-    collect: (sourceIds: string[]) => ipcRenderer.invoke('understanding-sources:collect', sourceIds),
+    collect: (sourceIds: string[], options?: { mode?: 'fast' | 'full'; excludeIds?: string[] }) =>
+      ipcRenderer.invoke('understanding-sources:collect', sourceIds, options),
   },
   startup: {
     onProgress: (callback: (detail: StartupProgressDetail) => void) => {

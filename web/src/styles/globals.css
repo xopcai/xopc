@@ -960,6 +960,31 @@ html.dark {
   animation: xopc-clue-card-in 280ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
+.xopc-signal-chip {
+  animation: xopc-signal-chip-in 260ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-trait-chip {
+  animation: xopc-trait-chip-in 300ms cubic-bezier(.2, 1.18, .36, 1) both;
+}
+
+.xopc-thread-card {
+  animation: xopc-thread-card-in 340ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-convergence-ring {
+  animation: xopc-convergence-breathe 2.6s ease-in-out infinite;
+}
+
+.xopc-convergence-node {
+  animation: xopc-convergence-node-pulse 2.4s ease-in-out infinite;
+}
+
+.xopc-stream-path {
+  stroke-dasharray: 6 10;
+  animation: xopc-stream-dash 1.35s linear infinite;
+}
+
 @keyframes xopc-focus-stage-in {
   from { opacity: 0; transform: translateY(10px) scale(0.99); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -968,6 +993,39 @@ html.dark {
 @keyframes xopc-clue-card-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes xopc-signal-chip-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes xopc-trait-chip-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes xopc-thread-card-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes xopc-convergence-breathe {
+  0%, 100% { opacity: 0.35; transform: scale(0.94); }
+  50% { opacity: 0.78; transform: scale(1.06); }
+}
+
+@keyframes xopc-convergence-node-pulse {
+  0%, 100% { border-color: var(--color-edge); transform: translateY(0); }
+  50% {
+    border-color: color-mix(in oklab, var(--color-accent) 45%, var(--color-edge));
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes xopc-stream-dash {
+  from { stroke-dashoffset: 32; }
+  to { stroke-dashoffset: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -987,6 +1045,12 @@ html.dark {
   .xopc-work-discovery-stage,
   .xopc-focus-stage,
   .xopc-clue-card,
+  .xopc-signal-chip,
+  .xopc-trait-chip,
+  .xopc-thread-card,
+  .xopc-convergence-ring,
+  .xopc-convergence-node,
+  .xopc-stream-path,
   .xopc-discovery-logo,
   .xopc-understanding-step,
   .xopc-understanding-center,

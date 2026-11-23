@@ -1,6 +1,8 @@
+import { isElectron } from '@/lib/electron-env';
+
 export type DiscussionAudioCaptureMode = 'microphone' | 'meeting_mix';
 
-const PREFERRED_AUDIO_MODE_KEY = 'xopc.discussions.preferredAudioMode';
+const LEGACY_PREFERRED_AUDIO_MODE_KEY = 'xopc.discussions.preferredAudioMode';
 
 export interface AcquiredDiscussionAudio {
   stream: MediaStream;
@@ -17,20 +19,13 @@ export function isSystemAudioMixSupported(): boolean {
   );
 }
 
-export function readPreferredDiscussionAudioMode(): DiscussionAudioCaptureMode {
-  if (!isSystemAudioMixSupported()) return 'microphone';
+/**
+ * Purge any previously persisted `meeting_mix` auto-start preference so starting a
+ * recording in Chrome/Web never unexpectedly triggers OS Screen Recording prompts.
+ */
+export function clearLegacyPreferredAudioMode(): void {
   try {
-    return globalThis.localStorage?.getItem(PREFERRED_AUDIO_MODE_KEY) === 'meeting_mix'
-      ? 'meeting_mix'
-      : 'microphone';
-  } catch {
-    return 'microphone';
-  }
-}
-
-export function writePreferredDiscussionAudioMode(mode: DiscussionAudioCaptureMode): void {
-  try {
-    globalThis.localStorage?.setItem(PREFERRED_AUDIO_MODE_KEY, mode);
+    globalThis.localStorage?.removeItem(LEGACY_PREFERRED_AUDIO_MODE_KEY);
   } catch {
     /* ignore unavailable storage */
   }
@@ -41,12 +36,21 @@ export function writePreferredDiscussionAudioMode(mode: DiscussionAudioCaptureMo
  * of OS/browser system audio + microphone ('meeting_mix') for online meetings
  * (Zoom, Feishu, Tencent Meeting, Teams, browser calls).
  *
- * Any display video tracks returned by `getDisplayMedia` are stopped immediately
- * so zero screen pixels are ever recorded or retained.
+ * Important browser rules:
+ * 1. `getDisplayMedia` MUST be called synchronously on the first tick of the user gesture
+ *    before awaiting `getUserMedia`, otherwise browsers may drop transient activation.
+ * 2. In standard browsers (Chrome on macOS), passing `video: { displaySurface: 'browser' }`
+ *    pre-selects the "Chrome Tab" surface first so Chromium does not immediately enumerate
+ *    macOS Windows/Screens (which triggers repeated macOS Screen Recording TCC prompts
+ *    when Google Chrome has not been granted OS screen-capture permission).
+ * 3. Any display video tracks returned by `getDisplayMedia` are stopped immediately
+ *    so zero screen pixels are ever recorded or retained.
  */
 export async function acquireDiscussionAudioStream(
   mode: DiscussionAudioCaptureMode = 'microphone',
 ): Promise<AcquiredDiscussionAudio> {
+  clearLegacyPreferredAudioMode();
+
   if (mode === 'microphone') {
     const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     return {
@@ -62,26 +66,29 @@ export async function acquireDiscussionAudioStream(
     throw new Error('System audio capture is not supported in this browser or environment.');
   }
 
-  const micStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    },
-  });
-
   let displayStream: MediaStream | null = null;
+  let micStream: MediaStream | null = null;
   let audioContext: AudioContext | null = null;
 
   try {
-    displayStream = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
+    const desktopApp = isElectron();
+    const displayOptions: DisplayMediaStreamOptions & Record<string, unknown> = {
+      video: desktopApp ? true : { displaySurface: 'browser' },
       audio: {
         echoCancellation: false,
         noiseSuppression: false,
         autoGainControl: false,
-      } as MediaTrackConstraints,
-    });
+      },
+      ...(desktopApp
+        ? {}
+        : {
+            systemAudio: 'include',
+            selfBrowserSurface: 'exclude',
+            surfaceSwitching: 'include',
+          }),
+    };
+
+    displayStream = await navigator.mediaDevices.getDisplayMedia(displayOptions);
 
     // Privacy-first: discard video tracks immediately; we only want loopback/tab audio.
     displayStream.getVideoTracks().forEach((track) => track.stop());
@@ -89,11 +96,18 @@ export async function acquireDiscussionAudioStream(
     const systemAudioTracks = displayStream.getAudioTracks();
     if (systemAudioTracks.length === 0) {
       displayStream.getTracks().forEach((t) => t.stop());
-      micStream.getTracks().forEach((t) => t.stop());
       throw new Error(
-        'No system or tab audio track was shared. Enable "Share system/tab audio" or grant Screen & System Audio Recording permission.',
+        'No system or tab audio track was shared. Enable "Share tab/system audio" when selecting a source.',
       );
     }
+
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
 
     audioContext = new AudioContext();
     if (audioContext.state === 'suspended') {
@@ -127,7 +141,7 @@ export async function acquireDiscussionAudioStream(
     const cleanup = () => {
       if (cleanedUp) return;
       cleanedUp = true;
-      micStream.getTracks().forEach((t) => t.stop());
+      micStream?.getTracks().forEach((t) => t.stop());
       displayStream?.getTracks().forEach((t) => t.stop());
       destination.stream.getTracks().forEach((t) => t.stop());
       if (audioContext && audioContext.state !== 'closed') {
@@ -149,7 +163,7 @@ export async function acquireDiscussionAudioStream(
       cleanup,
     };
   } catch (err) {
-    micStream.getTracks().forEach((t) => t.stop());
+    micStream?.getTracks().forEach((t) => t.stop());
     displayStream?.getTracks().forEach((t) => t.stop());
     if (audioContext && audioContext.state !== 'closed') {
       void audioContext.close().catch(() => undefined);

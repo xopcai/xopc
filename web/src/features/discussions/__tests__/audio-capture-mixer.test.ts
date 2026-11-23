@@ -122,21 +122,46 @@ describe('acquireDiscussionAudioStream', () => {
     expect(audioContextClosed).toBe(true);
   });
 
-  it('throws a clear error and releases mic if display capture has no audio track', async () => {
-    const micTrack = createMockTrack('audio');
+  it('calls getDisplayMedia synchronously first with browser-tab preference and skips mic if no audio track is shared', async () => {
+    const getUserMedia = vi.fn();
     const sysVideoOnly = createMockTrack('video');
+    const getDisplayMedia = vi.fn(async () => createMockStream([sysVideoOnly]));
 
     globalThis.AudioContext = class {} as unknown as typeof AudioContext;
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: {
-        getUserMedia: vi.fn(async () => createMockStream([micTrack])),
-        getDisplayMedia: vi.fn(async () => createMockStream([sysVideoOnly])),
+        getUserMedia,
+        getDisplayMedia,
       },
     });
 
-    await expect(acquireDiscussionAudioStream('meeting_mix')).rejects.toThrow(/No system or tab audio/);
-    expect(micTrack.stopped).toBe(true);
+    const pending = acquireDiscussionAudioStream('meeting_mix');
+    // Must fire synchronously on the first tick to preserve browser transient user activation
+    expect(getDisplayMedia).toHaveBeenCalledTimes(1);
+    expect(getDisplayMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        video: { displaySurface: 'browser' },
+        systemAudio: 'include',
+      }),
+    );
+    await expect(pending).rejects.toThrow(/No system or tab audio/);
+    expect(getUserMedia).not.toHaveBeenCalled();
     expect(sysVideoOnly.stopped).toBe(true);
+  });
+
+  it('clears legacy persisted meeting_mix preference from localStorage so Chrome never auto-prompts Screen Recording', async () => {
+    localStorage.setItem('xopc.discussions.preferredAudioMode', 'meeting_mix');
+    const micTrack = createMockTrack('audio');
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn(async () => createMockStream([micTrack])),
+      },
+    });
+
+    const acquired = await acquireDiscussionAudioStream('microphone');
+    expect(localStorage.getItem('xopc.discussions.preferredAudioMode')).toBeNull();
+    acquired.cleanup();
   });
 });

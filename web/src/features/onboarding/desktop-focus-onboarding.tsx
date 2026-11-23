@@ -3,16 +3,25 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
-  Clock3,
+  Compass,
   CornerDownLeft,
+  FileSpreadsheet,
   FileText,
   FolderGit2,
   FolderOpen,
   GitBranch,
+  ListChecks,
   LoaderCircle,
+  MessageSquare,
   Paperclip,
+  Plus,
+  Presentation,
+  Search,
+  ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Upload,
+  User,
   Wand2,
   X,
 } from 'lucide-react';
@@ -43,7 +52,23 @@ import {
   prefetchDesktopOnboardingContext,
   recordCurrentFocusPriority,
 } from '@/features/onboarding/desktop-onboarding-bootstrap';
+import {
+  buildFallbackStarters,
+  buildLocalSignals,
+  buildThreadCardsFromFolderRun,
+  buildThreadCardsFromLocalUnderstanding,
+  collectRevealEvidence,
+  compactPath,
+  normalizeTraitChips,
+  type LocalSignalItem,
+  type ThreadCard,
+  type TraitChip,
+} from '@/features/onboarding/desktop-understanding-helpers';
 import { OnboardingLanguageSwitch } from '@/features/onboarding/onboarding-language-switch';
+import {
+  addCollaborationPreference,
+  setAssertionStatus,
+} from '@/features/user-model/user-model-api';
 import { useRealtimeVoice } from '@/features/voice/realtime/use-realtime-voice';
 import {
   cancelWorkDiscoveryRun,
@@ -51,16 +76,18 @@ import {
   fetchWorkDiscoveryOnboarding,
   fetchWorkDiscoveryRun,
   grantUnderstandingWorkFolder,
+  importUnderstandingSources,
   retryWorkDiscoveryRun,
   selectWorkDiscoverySuggestion,
   startWorkDiscoveryRun,
   submitWorkDiscoveryRecognitionFeedback,
   type WorkDiscoveryCandidate,
   type WorkDiscoveryProcessingTarget,
+  type WorkDiscoveryProfileCandidate,
   type WorkDiscoveryRecentFile,
   type WorkDiscoveryRun,
   type WorkDiscoveryStage,
-  type WorkDiscoverySuggestion,
+  type WorkUnderstandingThread,
 } from '@/features/work-discovery/api';
 import { useUnderstandingActivityStore } from '@/features/work-discovery/understanding-activity-store';
 import {
@@ -74,155 +101,45 @@ import { useLocaleStore } from '@/stores/locale-store';
 import type { ElectronUnderstandingSourceDefinition } from '@/types/electron';
 
 type FocusStage = 'focus' | 'analyzing' | 'reveal' | 'error';
+type AnalysisMode = 'local_files' | 'folder';
 
-type QuickClue =
-  | {
-    id: string;
-    kind: 'project';
-    title: string;
-    subtitle: string;
-    badge?: string;
-    candidate: WorkDiscoveryCandidate;
+type LocalUnderstandingSnapshot = {
+  profileCandidates: WorkDiscoveryProfileCandidate[];
+  workThreads: WorkUnderstandingThread[];
+  sampledDocs: Array<{ title: string; group?: string }>;
+};
+
+const FOLDER_STAGES: WorkDiscoveryStage[] = ['folder_structure', 'recent_progress', 'next_steps'];
+
+function FileKindIcon({ extension, className }: { extension: string; className?: string }) {
+  if (extension === '.xlsx' || extension === '.xls' || extension === '.csv' || extension === '.numbers') {
+    return <FileSpreadsheet className={cn('text-emerald-600 dark:text-emerald-400', className)} aria-hidden />;
   }
-  | {
-    id: string;
-    kind: 'recent_files';
-    title: string;
-    subtitle: string;
-    badge?: string;
-    files: WorkDiscoveryRecentFile[];
+  if (extension === '.ppt' || extension === '.pptx' || extension === '.key') {
+    return <Presentation className={cn('text-amber-600 dark:text-amber-400', className)} aria-hidden />;
   }
-  | {
-    id: string;
-    kind: 'starter';
-    title: string;
-    subtitle: string;
-    badge?: string;
-    prompt: string;
-    priorityTitle: string;
-  };
-
-const STAGES: WorkDiscoveryStage[] = ['folder_structure', 'recent_progress', 'next_steps'];
-
-function compactPath(value: string): string {
-  const parts = value.replaceAll('\\', '/').split('/').filter(Boolean);
-  return parts.slice(-2).join('/') || value;
+  return <FileText className={cn('text-accent-fg', className)} aria-hidden />;
 }
 
-function localizeRootLabel(label: string, zh: boolean): string {
-  if (!zh) return label;
-  const lower = label.toLowerCase();
-  if (lower === 'desktop') return '桌面';
-  if (lower === 'documents') return '文稿';
-  if (lower === 'downloads') return '下载';
-  return label;
+function TraitIcon({ category }: { category: TraitChip['category'] }) {
+  switch (category) {
+    case 'role':
+    case 'responsibility':
+      return <User className="size-3 shrink-0 text-accent-fg" aria-hidden />;
+    case 'preference':
+    case 'boundary':
+      return <SlidersHorizontal className="size-3 shrink-0 text-accent-fg" aria-hidden />;
+    case 'communication':
+      return <MessageSquare className="size-3 shrink-0 text-accent-fg" aria-hidden />;
+    default:
+      return <Compass className="size-3 shrink-0 text-accent-fg" aria-hidden />;
+  }
 }
 
-function buildQuickClues(
-  candidates: WorkDiscoveryCandidate[],
-  recentFiles: WorkDiscoveryRecentFile[],
-  zh: boolean,
-): QuickClue[] {
-  const clues: QuickClue[] = [];
-
-  for (const candidate of candidates.slice(0, 2)) {
-    const parts: string[] = [];
-    if (candidate.branch) parts.push(candidate.branch);
-    if (candidate.changedFileCount > 0) {
-      parts.push(zh ? `${candidate.changedFileCount} 处近期改动` : `${candidate.changedFileCount} recent changes`);
-    } else if (candidate.source === 'ai_tool_project') {
-      parts.push(zh ? '来自 Claude Code / Codex' : 'From Claude Code / Codex');
-    } else if (candidate.projectKind === 'coding') {
-      parts.push(zh ? '软件项目' : 'Code project');
-    } else {
-      parts.push(compactPath(candidate.rootPath));
-    }
-
-    clues.push({
-      id: `project:${candidate.id}`,
-      kind: 'project',
-      title: candidate.displayName,
-      subtitle: parts.join(' · '),
-      badge: candidate.source === 'ai_tool_project'
-        ? (zh ? '最近使用' : 'Recent')
-        : candidate.changedFileCount > 0
-          ? (zh ? '进行中' : 'Active')
-          : undefined,
-      candidate,
-    });
-  }
-
-  if (recentFiles.length > 0 && clues.length < 3) {
-    const topFiles = recentFiles.slice(0, 3);
-    const rootLabels = [...new Set(topFiles.map((file) => localizeRootLabel(file.rootLabel, zh)))];
-    const filePreview = topFiles.slice(0, 2).map((file) => file.name).join(' · ');
-    const firstFile = topFiles[0];
-    if (firstFile) {
-      clues.push({
-        id: `recent-files:${firstFile.id}`,
-        kind: 'recent_files',
-        title: zh ? '整理最近更新的文档' : 'Organize recently updated documents',
-        subtitle: filePreview,
-        badge: rootLabels[0],
-        files: topFiles,
-      });
-    }
-  }
-
-  const starters: Array<{ id: string; title: string; subtitle: string; prompt: string; priorityTitle: string }> = zh
-    ? [
-      {
-        id: 'starter:priorities',
-        title: '理清今天最重要的 3 件事',
-        subtitle: '快速梳理目标、优先级与第一步行动',
-        prompt: '帮我理清今天最重要的 3 件事。先问我 2 个最关键的问题，或者直接给我一份按影响力和紧迫度排序的行动清单框架。',
-        priorityTitle: '理清今天最重要的 3 件事',
-      },
-      {
-        id: 'starter:meeting',
-        title: '准备下一场重要会议或汇报',
-        subtitle: '生成议程提纲、核心观点与待确认问题',
-        prompt: '我准备一场重要会议或汇报，请先给我一版精炼的议程与核心结论框架，并告诉我补充哪 2 个信息后可以直接写成完整材料。',
-        priorityTitle: '准备重要会议或汇报',
-      },
-      {
-        id: 'starter:research',
-        title: '快速调研一个主题并输出简报',
-        subtitle: '自动收集关键信息，整理结论与参考来源',
-        prompt: '我想快速调研一个新主题并输出一份一页纸简报。请告诉我我只需提供什么关键词或目标，你就能立刻开始调研并整理结论。',
-        priorityTitle: '快速调研并输出简报',
-      },
-    ]
-    : [
-      {
-        id: 'starter:priorities',
-        title: 'Clarify my top 3 priorities today',
-        subtitle: 'Sort goals by impact and lock in the first step',
-        prompt: 'Help me clarify my top 3 priorities today. Ask at most 2 sharp questions or draft an impact-ordered action plan I can refine right away.',
-        priorityTitle: 'Clarify top 3 priorities today',
-      },
-      {
-        id: 'starter:meeting',
-        title: 'Prepare for an upcoming meeting',
-        subtitle: 'Build a crisp agenda, key talking points, and open questions',
-        prompt: 'Help me prepare for an important upcoming meeting. Draft a concise agenda and key decision checklist, then ask for the 2 details you need to tailor it.',
-        priorityTitle: 'Prepare for upcoming meeting',
-      },
-      {
-        id: 'starter:research',
-        title: 'Research a topic and write a brief',
-        subtitle: 'Gather key facts into an executive one-pager',
-        prompt: 'I want to quickly research a topic and get a structured one-page brief. Ask for the topic and goal so you can start right away.',
-        priorityTitle: 'Research a topic and write a brief',
-      },
-    ];
-
-  for (const starter of starters) {
-    if (clues.length >= 3) break;
-    clues.push({ ...starter, kind: 'starter' });
-  }
-
-  return clues;
+function StarterIcon({ icon }: { icon: 'priorities' | 'meeting' | 'research' }) {
+  if (icon === 'meeting') return <CalendarDays className="size-3.5" aria-hidden />;
+  if (icon === 'research') return <Search className="size-3.5" aria-hidden />;
+  return <ListChecks className="size-3.5" aria-hidden />;
 }
 
 export function DesktopFocusOnboarding({
@@ -240,9 +157,12 @@ export function DesktopFocusOnboarding({
   const navigate = useNavigate();
 
   const [stage, setStage] = useState<FocusStage>('focus');
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('local_files');
   const [loadingClues, setLoadingClues] = useState(true);
   const [candidates, setCandidates] = useState<WorkDiscoveryCandidate[]>([]);
   const [recentFiles, setRecentFiles] = useState<WorkDiscoveryRecentFile[]>([]);
+  const [excludedProjectIds, setExcludedProjectIds] = useState<Set<string>>(() => new Set());
+  const [excludedFileIds, setExcludedFileIds] = useState<Set<string>>(() => new Set());
   const [processingTarget, setProcessingTarget] = useState<WorkDiscoveryProcessingTarget | null>(null);
   const [importSources, setImportSources] = useState<DetectedImportSource[]>([]);
   const [importState, setImportState] = useState<'idle' | 'importing' | 'done'>('idle');
@@ -262,15 +182,21 @@ export function DesktopFocusOnboarding({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Active analysis & reveal state
   const [run, setRun] = useState<WorkDiscoveryRun | null>(null);
+  const [localSnapshot, setLocalSnapshot] = useState<LocalUnderstandingSnapshot | null>(null);
+  const [localStepIndex, setLocalStepIndex] = useState<0 | 1 | 2>(0);
+  const [emergingLabels, setEmergingLabels] = useState<string[]>([]);
+  const [rejectedTraitIds, setRejectedTraitIds] = useState<Set<string>>(() => new Set());
+  const [customTraits, setCustomTraits] = useState<TraitChip[]>([]);
+  const [addingTrait, setAddingTrait] = useState(false);
+  const [newTraitText, setNewTraitText] = useState('');
   const [evidenceOpen, setEvidenceOpen] = useState(false);
-  const [alternativesOpen, setAlternativesOpen] = useState(false);
-  const [adjustOpen, setAdjustOpen] = useState(false);
-  const [adjustText, setAdjustText] = useState('');
   const [dragActive, setDragActive] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const dragDepthRef = useRef(0);
+  const analysisAbortRef = useRef<AbortController | null>(null);
 
   const attachmentsApi = useComposerAttachments({
     chat: allMessages.chat,
@@ -285,7 +211,11 @@ export function DesktopFocusOnboarding({
     },
   });
 
-  // Read available local source metadata (zero OS permission prompts) for just-in-time contextual offers.
+  useEffect(() => () => {
+    analysisAbortRef.current?.abort();
+  }, []);
+
+  // Zero-prompt catalog read for just-in-time contextual sources (Apple Calendar/Mail/Notes/Reminders).
   useEffect(() => {
     let cancelled = false;
     void window.electronAPI?.understandingSources?.catalog()
@@ -304,12 +234,13 @@ export function DesktopFocusOnboarding({
   const applyRun = useCallback((next: WorkDiscoveryRun) => {
     useUnderstandingActivityStore.getState().updateDirectoryRun(next);
     setRun(next);
+    setAnalysisMode('folder');
     if (next.status === 'completed') setStage('reveal');
     else if (next.status === 'failed' || next.status === 'canceled') setStage('error');
     else setStage('analyzing');
   }, []);
 
-  // Load any already-running discovery or prewarmed local clues immediately.
+  // Load any active run or prewarmed local metadata immediately (zero OS prompts).
   useEffect(() => {
     let cancelled = false;
 
@@ -353,7 +284,7 @@ export function DesktopFocusOnboarding({
 
   // Poll / listen to gateway realtime events while analyzing a folder.
   useEffect(() => {
-    if (!run || stage !== 'analyzing') return;
+    if (!run || stage !== 'analyzing' || analysisMode !== 'folder') return;
     let cancelled = false;
     const refresh = async () => {
       try {
@@ -375,12 +306,21 @@ export function DesktopFocusOnboarding({
       window.clearInterval(timer);
       for (const name of events) window.removeEventListener(name, onEvent);
     };
-  }, [applyRun, run, stage]);
+  }, [analysisMode, applyRun, run, stage]);
 
-  const clues = useMemo(
-    () => buildQuickClues(candidates, recentFiles, zh),
-    [candidates, recentFiles, zh],
+  const visibleCandidates = useMemo(
+    () => candidates.filter((item) => !excludedProjectIds.has(item.id)),
+    [candidates, excludedProjectIds],
   );
+  const visibleRecentFiles = useMemo(
+    () => recentFiles.filter((item) => !excludedFileIds.has(item.id)),
+    [recentFiles, excludedFileIds],
+  );
+  const localSignals = useMemo(
+    () => buildLocalSignals(candidates, recentFiles, excludedProjectIds, excludedFileIds, zh),
+    [candidates, excludedFileIds, excludedProjectIds, recentFiles, zh],
+  );
+  const fallbackStarters = useMemo(() => buildFallbackStarters(zh), [zh]);
 
   const openConversation = useCallback((conversationId: string, draft?: string, autoSend = true) => {
     markDesktopHabitAnchorPending();
@@ -392,9 +332,24 @@ export function DesktopFocusOnboarding({
     navigate(`/chat/${encodeURIComponent(conversationId)}${query ? `?${query}` : ''}`);
   }, [navigate, onNavigateAway]);
 
+  const openNewChat = useCallback((prompt: string, handoffId?: string) => {
+    markDesktopHabitAnchorPending();
+    const href = newChatAutoSendHref(prompt, handoffId);
+    if (href) {
+      onNavigateAway();
+      navigate(href);
+    } else {
+      onRequestClose();
+    }
+  }, [navigate, onNavigateAway, onRequestClose]);
+
   const launchFolderAnalysis = useCallback(async (rootPath: string) => {
     setBusy(true);
     setError(null);
+    setLocalSnapshot(null);
+    setRejectedTraitIds(new Set());
+    setCustomTraits([]);
+    setEmergingLabels([]);
     try {
       const policy = processingTarget?.remoteModel === false ? 'local_only' : 'remote_allowed';
       await grantUnderstandingWorkFolder(rootPath, policy);
@@ -407,6 +362,110 @@ export function DesktopFocusOnboarding({
     }
   }, [applyRun, processingTarget?.remoteModel]);
 
+  const launchQuickLocalUnderstanding = useCallback(async () => {
+    if (busy) return;
+    const collect = window.electronAPI?.understandingSources?.collect;
+    const hasDocsToRead = visibleRecentFiles.length > 0 && Boolean(collect);
+
+    // If there are no local documents (or running outside Electron), smoothly analyze the top project instead.
+    if (!hasDocsToRead) {
+      if (visibleCandidates[0]) {
+        void recordCurrentFocusPriority(visibleCandidates[0].displayName);
+        await launchFolderAnalysis(visibleCandidates[0].rootPath);
+        return;
+      }
+      if (visibleRecentFiles.length > 0) {
+        const list = visibleRecentFiles.slice(0, 4).map((f) => `- ${f.name}（${f.directory}）`).join('\n');
+        const prompt = zh
+          ? `我最近更新了这些本地文档，请只读梳理它们的核心脉络，告诉我最值得先推进的一步：\n${list}`
+          : `I recently updated these local documents. Read them (read-only), synthesize what connects them, and suggest the best next step:\n${list}`;
+        await dismissWorkDiscoveryOnboarding().catch(() => {});
+        openNewChat(prompt);
+      }
+      return;
+    }
+
+    analysisAbortRef.current?.abort();
+    const controller = new AbortController();
+    analysisAbortRef.current = controller;
+
+    setBusy(true);
+    setError(null);
+    setRun(null);
+    setLocalSnapshot(null);
+    setRejectedTraitIds(new Set());
+    setCustomTraits([]);
+    setAnalysisMode('local_files');
+    setLocalStepIndex(0);
+    setEmergingLabels([]);
+    setStage('analyzing');
+
+    try {
+      const excludeIds = [...excludedFileIds];
+      const results = await collect!(['local-recent-files'], {
+        mode: 'fast',
+        ...(excludeIds.length ? { excludeIds } : {}),
+      });
+      if (controller.signal.aborted) return;
+
+      const items = results.flatMap((result) => (result.status === 'completed' ? result.items : []));
+      if (items.length === 0) {
+        if (visibleCandidates[0]) {
+          await launchFolderAnalysis(visibleCandidates[0].rootPath);
+          return;
+        }
+        setError(zh ? '这些文件暂无法提取文字，你可以直接说一件事开始。' : 'Could not extract readable text from those files — just type a line to start.');
+        setStage('focus');
+        return;
+      }
+
+      setLocalStepIndex(1);
+      setEmergingLabels([
+        zh ? `${items.length} 份近期文档` : `${items.length} recent docs`,
+        ...(visibleCandidates[0] ? [visibleCandidates[0].displayName] : []),
+      ]);
+
+      const policy = processingTarget?.remoteModel === false ? 'local_only' : 'remote_allowed';
+      const understanding = await importUnderstandingSources(
+        items,
+        undefined,
+        policy,
+        undefined,
+        zh ? 'zh-CN' : 'en-US',
+      );
+      if (controller.signal.aborted) return;
+
+      setLocalStepIndex(2);
+      const previewLabels = [
+        ...understanding.workThreads.slice(0, 2).map((t) => t.title),
+        ...understanding.profileCandidates.slice(0, 2).map((p) => p.statement),
+      ].slice(0, 3);
+      if (previewLabels.length) setEmergingLabels(previewLabels);
+
+      setLocalSnapshot({
+        profileCandidates: understanding.profileCandidates,
+        workThreads: understanding.workThreads,
+        sampledDocs: items.slice(0, 6).map((item) => ({ title: item.title, group: item.group })),
+      });
+      setStage('reveal');
+    } catch (cause) {
+      if (controller.signal.aborted) return;
+      setError(cause instanceof Error ? cause.message : String(cause));
+      setStage('focus');
+    } finally {
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  }, [
+    busy,
+    excludedFileIds,
+    launchFolderAnalysis,
+    openNewChat,
+    processingTarget?.remoteModel,
+    visibleCandidates,
+    visibleRecentFiles,
+    zh,
+  ]);
+
   const picker = useDirectoryPicker({
     onPicked: (path) => {
       setAttachedFolder(path);
@@ -415,6 +474,7 @@ export function DesktopFocusOnboarding({
   });
 
   const skip = useCallback(async () => {
+    analysisAbortRef.current?.abort();
     setBusy(true);
     try {
       await dismissWorkDiscoveryOnboarding();
@@ -445,14 +505,12 @@ export function DesktopFocusOnboarding({
         ? `${basePrompt}\n\n${attachedContext.snippet}`
         : basePrompt;
 
-      void recordCurrentFocusPriority(priorityLabel ?? trimmed ?? compactPath(attachedFolder ?? ''));
+      void recordCurrentFocusPriority(priorityLabel ?? (trimmed || compactPath(attachedFolder ?? '')));
 
-      // If user attached a local folder AND typed a concrete goal, grant + open the project chat immediately with autoSend!
       if (attachedFolder) {
         const policy = processingTarget?.remoteModel === false ? 'local_only' : 'remote_allowed';
         await grantUnderstandingWorkFolder(attachedFolder, policy);
         const started = await startWorkDiscoveryRun(attachedFolder);
-        // If they didn't type a specific instruction, show the silky live analysis -> value reveal.
         if (!trimmed && wireAttachments.length === 0) {
           applyRun(started);
           return;
@@ -464,39 +522,41 @@ export function DesktopFocusOnboarding({
       }
 
       await dismissWorkDiscoveryOnboarding().catch(() => {});
-      markDesktopHabitAnchorPending();
       const handoffId = wireAttachments.length > 0 ? createComposerPayloadHandoff(wireAttachments) : undefined;
-      const href = newChatAutoSendHref(finalPrompt, handoffId);
-      if (href) {
-        onNavigateAway();
-        navigate(href);
-      } else {
-        onRequestClose();
-      }
+      openNewChat(finalPrompt, handoffId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
     }
-  }, [applyRun, attachedContext?.snippet, attachedFolder, attachmentsApi, navigate, onNavigateAway, onRequestClose, openConversation, processingTarget?.remoteModel, zh]);
+  }, [
+    applyRun,
+    attachedContext?.snippet,
+    attachedFolder,
+    attachmentsApi,
+    openConversation,
+    openNewChat,
+    processingTarget?.remoteModel,
+    zh,
+  ]);
 
-  const handleClueClick = useCallback((clue: QuickClue) => {
+  const handleSignalClick = useCallback((signal: LocalSignalItem) => {
     if (busy) return;
-    if (clue.kind === 'project') {
-      void recordCurrentFocusPriority(clue.candidate.displayName);
-      void launchFolderAnalysis(clue.candidate.rootPath);
+    if (signal.kind === 'project') {
+      void recordCurrentFocusPriority(signal.candidate.displayName);
+      void launchFolderAnalysis(signal.candidate.rootPath);
       return;
     }
-    if (clue.kind === 'recent_files') {
-      const list = clue.files.map((file) => `- ${file.name}（${file.directory}）`).join('\n');
-      const prompt = zh
-        ? `我最近更新了这些本地文档，请帮我只读梳理它们的核心脉络、整理出待跟进清单和最值得马上做的下一步：\n${list}`
-        : `I recently updated these local documents. Please read them (read-only), synthesize what connects them, and draft a crisp follow-up checklist with the best next step:\n${list}`;
-      void launchFreeform(prompt, zh ? `整理近期文档：${clue.files[0]?.name ?? ''}` : `Review recent docs: ${clue.files[0]?.name ?? ''}`);
-      return;
+    void launchQuickLocalUnderstanding();
+  }, [busy, launchFolderAnalysis, launchQuickLocalUnderstanding]);
+
+  const handleExcludeSignal = useCallback((signal: LocalSignalItem) => {
+    if (signal.kind === 'project') {
+      setExcludedProjectIds((prev) => new Set(prev).add(signal.id));
+    } else {
+      setExcludedFileIds((prev) => new Set(prev).add(signal.id));
     }
-    void launchFreeform(clue.prompt, clue.priorityTitle);
-  }, [busy, launchFolderAnalysis, launchFreeform, zh]);
+  }, []);
 
   const handleImportAiTools = useCallback(async () => {
     if (importState !== 'idle' || importSources.length === 0) return;
@@ -506,31 +566,49 @@ export function DesktopFocusOnboarding({
     setImportState('done');
   }, [importSources, importState]);
 
-  // Keyboard shortcuts: 1/2/3 to pick a clue when composer is empty, Escape to blur.
-  useEffect(() => {
-    if (stage !== 'focus') return;
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (busy || event.metaKey || event.ctrlKey || event.altKey) return;
-      const active = document.activeElement;
-      const inInput = active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement;
-      if (inInput && goalText.trim().length > 0) return;
-      if (event.key === '1' || event.key === '2' || event.key === '3') {
-        const index = Number(event.key) - 1;
-        const target = clues[index];
-        if (target && !inInput) {
-          event.preventDefault();
-          handleClueClick(target);
-        }
+  const handleCollectContextualSource = useCallback(async () => {
+    if (!contextualOffer || collectingContext) return;
+    const collect = window.electronAPI?.understandingSources?.collect;
+    if (!collect) return;
+    setCollectingContext(true);
+    setContextNotice(null);
+    try {
+      const results = await collect([contextualOffer.sourceId]);
+      const result = results[0];
+      if (!result || result.status === 'denied') {
+        setContextNotice(zh ? `未授权 ${contextualOffer.label}，可直接开始。` : `${contextualOffer.label} declined — ready to start.`);
+        return;
       }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [busy, clues, goalText, handleClueClick, stage]);
+      if (result.status !== 'completed' || result.items.length === 0) {
+        setContextNotice(zh ? `${contextualOffer.label} 暂无近期记录。` : `No recent items in ${contextualOffer.label}.`);
+        return;
+      }
+      const snippet = formatContextualSourceSnippet(contextualOffer.label, result.items, language);
+      setAttachedContext({
+        sourceId: contextualOffer.sourceId,
+        label: contextualOffer.label,
+        count: Math.min(result.items.length, 6),
+        snippet,
+      });
+    } catch {
+      setContextNotice(zh ? `读取 ${contextualOffer.label} 失败，不影响开始。` : `Could not read ${contextualOffer.label}.`);
+    } finally {
+      setCollectingContext(false);
+    }
+  }, [collectingContext, contextualOffer, language, zh]);
 
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       void launchFreeform(goalText);
+    }
+  };
+
+  const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedFiles = collectClipboardFiles(event.clipboardData);
+    if (pastedFiles.length > 0) {
+      event.preventDefault();
+      void attachmentsApi.processFiles(pastedFiles);
     }
   };
 
@@ -544,45 +622,6 @@ export function DesktopFocusOnboarding({
     event.preventDefault();
     dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
     if (dragDepthRef.current === 0) setDragActive(false);
-  };
-
-  const handleCollectContextualSource = useCallback(async () => {
-    if (!contextualOffer || collectingContext) return;
-    const collect = window.electronAPI?.understandingSources?.collect;
-    if (!collect) return;
-    setCollectingContext(true);
-    setContextNotice(null);
-    try {
-      const results = await collect([contextualOffer.sourceId]);
-      const result = results[0];
-      if (!result || result.status === 'denied') {
-        setContextNotice(zh ? `未授权 ${contextualOffer.label}，你可以直接开始对话。` : `${contextualOffer.label} access was declined. You can still start right away.`);
-        return;
-      }
-      if (result.status !== 'completed' || result.items.length === 0) {
-        setContextNotice(zh ? `未在 ${contextualOffer.label} 中发现近期记录，可以直接开始。` : `No recent items found in ${contextualOffer.label}. Ready to start.`);
-        return;
-      }
-      const snippet = formatContextualSourceSnippet(contextualOffer.label, result.items, language);
-      setAttachedContext({
-        sourceId: contextualOffer.sourceId,
-        label: contextualOffer.label,
-        count: Math.min(result.items.length, 6),
-        snippet,
-      });
-    } catch {
-      setContextNotice(zh ? `读取 ${contextualOffer.label} 失败，不影响直接开始。` : `Could not read ${contextualOffer.label}. You can still start right away.`);
-    } finally {
-      setCollectingContext(false);
-    }
-  }, [collectingContext, contextualOffer, language, zh]);
-
-  const handleComposerPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const pastedFiles = collectClipboardFiles(event.clipboardData);
-    if (pastedFiles.length > 0) {
-      event.preventDefault();
-      void attachmentsApi.processFiles(pastedFiles);
-    }
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -618,82 +657,145 @@ export function DesktopFocusOnboarding({
       regularFiles.push(...Array.from(event.dataTransfer.files));
     }
 
-    if (droppedFolderPath) {
-      setAttachedFolder(droppedFolderPath);
-    }
-    if (regularFiles.length > 0) {
-      void attachmentsApi.processFiles(regularFiles);
-    }
-    if (droppedFolderPath || regularFiles.length > 0) {
-      textareaRef.current?.focus();
-    }
+    if (droppedFolderPath) setAttachedFolder(droppedFolderPath);
+    if (regularFiles.length > 0) void attachmentsApi.processFiles(regularFiles);
+    if (droppedFolderPath || regularFiles.length > 0) textareaRef.current?.focus();
   };
 
-  const primarySuggestion: WorkDiscoverySuggestion | undefined = useMemo(() => {
-    if (!run?.result) return undefined;
-    return run.result.suggestions.find((item) => item.id === run.result?.primarySuggestionId)
-      ?? run.result.suggestions[0];
-  }, [run]);
+  // Convergence visual signals during Act 2
+  const convergenceSignals = useMemo<UnderstandingSignal[]>(() => {
+    if (analysisMode === 'folder' && run) {
+      const fileSignals: UnderstandingSignal[] = (run.snapshot?.files ?? []).slice(0, 3).map((file) => ({
+        id: `file:${file.relativePath}`,
+        label: compactPath(file.relativePath),
+        kind: file.source === 'git_change' ? 'recent' : 'file',
+        meta: file.source === 'git_change'
+          ? copy.sourceSignals.changedFile
+          : file.source === 'document'
+            ? copy.sourceSignals.contextFile
+            : copy.sourceSignals.structureFile,
+        detail: file.relativePath,
+      }));
+      const folderSignal: UnderstandingSignal = {
+        id: 'folder',
+        label: compactPath(run.rootPath),
+        kind: 'folder',
+        meta: run.snapshot?.branch ? `Git · ${run.snapshot.branch}` : copy.sourceSignals.scanningFiles,
+        detail: run.rootPath,
+      };
+      return [folderSignal, ...fileSignals];
+    }
 
-  const alternativeSuggestions = useMemo(
-    () => (run?.result?.suggestions ?? []).filter((item) => item.id !== primarySuggestion?.id),
-    [primarySuggestion?.id, run?.result?.suggestions],
+    return localSignals.slice(0, 5).map((item): UnderstandingSignal => (
+      item.kind === 'project'
+        ? { id: item.id, label: item.label, kind: 'folder', meta: item.meta }
+        : { id: item.id, label: item.label, kind: 'recent', meta: item.meta }
+    ));
+  }, [analysisMode, copy.sourceSignals, localSignals, run]);
+
+  const folderEmergingLabels = useMemo(() => {
+    if (analysisMode !== 'folder' || !run) return [];
+    const labels: string[] = [];
+    if (run.snapshot?.branch) labels.push(`Git · ${run.snapshot.branch}`);
+    if (run.snapshot?.sampledPathCount) {
+      labels.push(zh ? `${run.snapshot.sampledPathCount} 份文件` : `${run.snapshot.sampledPathCount} files`);
+    }
+    return labels;
+  }, [analysisMode, run, zh]);
+
+  // Unified Act 3 traits & thread cards
+  const rawProfileCandidates = useMemo(
+    () => (localSnapshot?.profileCandidates ?? run?.result?.profileCandidates ?? []),
+    [localSnapshot?.profileCandidates, run?.result?.profileCandidates],
+  );
+  const traits = useMemo(
+    () => [
+      ...normalizeTraitChips(rawProfileCandidates, rejectedTraitIds),
+      ...customTraits.filter((item) => !rejectedTraitIds.has(item.id)),
+    ],
+    [customTraits, rawProfileCandidates, rejectedTraitIds],
+  );
+  const threadCards = useMemo<ThreadCard[]>(() => {
+    if (localSnapshot) {
+      return buildThreadCardsFromLocalUnderstanding(
+        localSnapshot.workThreads,
+        visibleCandidates,
+        localSnapshot.sampledDocs.length,
+        zh,
+      );
+    }
+    if (run) {
+      return buildThreadCardsFromFolderRun(run, copy.estimatedMinutes, zh);
+    }
+    return [];
+  }, [copy.estimatedMinutes, localSnapshot, run, visibleCandidates, zh]);
+
+  const revealEvidence = useMemo(
+    () => collectRevealEvidence(run, localSnapshot?.sampledDocs ?? []),
+    [localSnapshot?.sampledDocs, run],
   );
 
-  const runningSignals = useMemo<UnderstandingSignal[]>(() => {
-    const fileSignals: UnderstandingSignal[] = (run?.snapshot?.files ?? []).slice(0, 3).map((file) => ({
-      id: `file:${file.relativePath}`,
-      label: compactPath(file.relativePath),
-      kind: file.source === 'git_change' ? 'recent' : 'file',
-      meta: file.source === 'git_change'
-        ? copy.sourceSignals.changedFile
-        : file.source === 'document'
-          ? copy.sourceSignals.contextFile
-          : copy.sourceSignals.structureFile,
-      detail: file.relativePath,
-    }));
-    const folderSignal: UnderstandingSignal = {
-      id: 'folder',
-      label: run?.rootPath ? compactPath(run.rootPath) : copy.sourceSignals.workFolder,
-      kind: 'folder',
-      meta: run?.snapshot?.branch ? `Git · ${run.snapshot.branch}` : copy.sourceSignals.scanningFiles,
-      detail: run?.rootPath,
-    };
-    return [folderSignal, ...fileSignals];
-  }, [copy.sourceSignals, run?.rootPath, run?.snapshot]);
+  const handleRemoveTrait = useCallback((chip: TraitChip) => {
+    setRejectedTraitIds((prev) => new Set(prev).add(chip.id));
+    if (chip.assertionId) {
+      void setAssertionStatus(chip.assertionId, 'rejected').catch(() => {});
+    }
+  }, []);
 
-  const startSuggestion = async (suggestion: WorkDiscoverySuggestion, discussOnly = false) => {
-    if (!run || busy) return;
+  const handleAddCustomTrait = useCallback(async () => {
+    const trimmed = newTraitText.trim();
+    if (!trimmed) {
+      setAddingTrait(false);
+      return;
+    }
+    const id = `custom:${Date.now()}`;
+    setCustomTraits((prev) => [...prev, { id, category: 'custom', label: trimmed }]);
+    setNewTraitText('');
+    setAddingTrait(false);
+    void addCollaborationPreference(trimmed).catch(() => {});
+  }, [newTraitText]);
+
+  const handleStartThreadCard = useCallback(async (card: ThreadCard, discussOnly = false) => {
+    if (busy) return;
     setBusy(true);
     try {
-      await Promise.allSettled([
-        submitWorkDiscoveryRecognitionFeedback(run.id, 'confirmed'),
-        selectWorkDiscoverySuggestion(run.id, suggestion.id),
-        recordCurrentFocusPriority(suggestion.title),
-      ]);
       const prompt = discussOnly
-        ? `${zh ? '先帮我评估这个方向，不要修改文件：' : 'First assess this direction without changing files:'}\n\n${suggestion.actionPrompt}`
-        : suggestion.actionPrompt;
-      openConversation(run.conversationId, prompt, true);
-    } finally {
-      setBusy(false);
-    }
-  };
+        ? `${zh ? '先帮我评估这个方向，不要修改文件：' : 'First assess this direction without changing files:'}\n\n${card.actionPrompt}`
+        : card.actionPrompt;
 
-  const submitAdjustment = async () => {
-    const trimmed = adjustText.trim();
-    if (!run || !trimmed || busy) return;
-    setBusy(true);
-    try {
+      if (card.suggestion && run) {
+        await Promise.allSettled([
+          submitWorkDiscoveryRecognitionFeedback(run.id, 'confirmed'),
+          selectWorkDiscoverySuggestion(run.id, card.suggestion.id),
+          recordCurrentFocusPriority(card.priorityTitle),
+        ]);
+        openConversation(run.conversationId, prompt, true);
+        return;
+      }
+
+      if (card.conversationId) {
+        await Promise.allSettled([
+          recordCurrentFocusPriority(card.priorityTitle),
+          dismissWorkDiscoveryOnboarding(),
+        ]);
+        openConversation(card.conversationId, prompt, true);
+        return;
+      }
+
+      if (card.kind === 'project' && card.rootPath) {
+        const policy = processingTarget?.remoteModel === false ? 'local_only' : 'remote_allowed';
+        await grantUnderstandingWorkFolder(card.rootPath, policy).catch(() => {});
+      }
+
       await Promise.allSettled([
-        submitWorkDiscoveryRecognitionFeedback(run.id, 'corrected', trimmed),
-        recordCurrentFocusPriority(trimmed),
+        recordCurrentFocusPriority(card.priorityTitle),
+        dismissWorkDiscoveryOnboarding(),
       ]);
-      openConversation(run.conversationId, trimmed, true);
+      openNewChat(prompt);
     } finally {
       setBusy(false);
     }
-  };
+  }, [busy, openConversation, openNewChat, processingTarget?.remoteModel, run, zh]);
 
   const loopiMood = error || stage === 'error'
     ? 'care'
@@ -707,6 +809,15 @@ export function DesktopFocusOnboarding({
 
   const hasSubmitPayload = Boolean(goalText.trim() || attachedFolder || attachmentsApi.attachments.length > 0);
   const importNames = importSources.map((item) => item.name).join(' / ');
+  const activeStepIndex = analysisMode === 'folder' && run
+    ? Math.max(0, FOLDER_STAGES.indexOf(run.stage ?? 'folder_structure'))
+    : localStepIndex;
+
+  const progressLabels = analysisMode === 'folder'
+    ? FOLDER_STAGES.map((item) => copy.stages[item])
+    : zh
+      ? ['读取近期文档', '提炼关注脉络', '准备起点']
+      : ['Reading recent docs', 'Distilling themes', 'Preparing starts'];
 
   return (
     <div
@@ -742,7 +853,7 @@ export function DesktopFocusOnboarding({
         </div>
       </header>
 
-      {/* Drag-and-drop ambient feedback */}
+      {/* Drag-and-drop overlay */}
       {dragActive && stage === 'focus' ? (
         <div className="pointer-events-none absolute inset-4 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent bg-surface-overlay/85 backdrop-blur-md">
           <div className="flex flex-col items-center gap-2 text-center">
@@ -750,7 +861,7 @@ export function DesktopFocusOnboarding({
               <Upload className="size-5" aria-hidden />
             </span>
             <p className="text-sm font-medium text-fg">
-              {zh ? '松开即可附加文件或文件夹作为上下文' : 'Drop files or a folder to attach as context'}
+              {zh ? '松开即可附加' : 'Drop to attach'}
             </p>
           </div>
         </div>
@@ -761,38 +872,115 @@ export function DesktopFocusOnboarding({
           key={stage}
           className={cn(
             'xopc-focus-stage w-full transition-[max-width] duration-300',
-            stage === 'reveal' ? 'max-w-[46rem]' : 'max-w-[42rem]',
+            stage === 'reveal' ? 'max-w-[44rem]' : 'max-w-[40rem]',
           )}
         >
-          {/* Shared-element Loopi anchor */}
-          <div className="mb-5 flex justify-center">
-            <Loopi
-              className={cn(
-                'transition-[width,height] duration-300 motion-reduce:transition-none',
-                stage === 'reveal' ? 'size-14' : 'size-20',
-              )}
-              interactive={stage === 'focus'}
-              language={language}
-              mood={loopiMood}
-            />
-          </div>
+          {/* Shared Loopi anchor (hidden in analyzing since Convergence renders Loopi as its hub) */}
+          {stage !== 'analyzing' ? (
+            <div className="mb-4 flex justify-center">
+              <Loopi
+                className={cn(
+                  'transition-[width,height] duration-300 motion-reduce:transition-none',
+                  stage === 'reveal' ? 'size-14' : 'size-20',
+                )}
+                interactive={stage === 'focus'}
+                language={language}
+                mood={loopiMood}
+              />
+            </div>
+          ) : null}
 
-          {/* ACT 2: FOCUS CANVAS */}
+          {/* ACT 1: PERCEPTION & ACTION CANVAS */}
           {stage === 'focus' ? (
             <div>
-              <div className="text-center">
-                <h1 className="text-[1.75rem] font-semibold leading-tight tracking-[-0.03em] text-fg sm:text-[2.125rem]">
-                  {zh ? '你现在手头最重要的一件事是什么？' : 'What matters most on your plate right now?'}
-                </h1>
-                <p className="mx-auto mt-2.5 max-w-[34rem] text-sm leading-6 text-fg-muted">
-                  {zh
-                    ? '直接说一句、拖入文件，或点选下方刚注意到的线索。我会备好环境并立刻交付第一份结果。'
-                    : 'Type a line, drop files, or pick something I noticed below. I’ll set things up and deliver your first result right away.'}
-                </p>
-              </div>
+              <h1 className="text-center text-[1.75rem] font-semibold leading-tight tracking-[-0.03em] text-fg sm:text-[2.125rem]">
+                {localSignals.length > 0
+                  ? (zh ? '先认识你的工作，或直接说一件事' : 'Let me learn your workspace, or jump in')
+                  : (zh ? '现在最想先推进什么？' : 'What would you like to tackle first?')}
+              </h1>
+
+              {/* Zero-prompt Local Signals Strip -> One-click fast local understanding */}
+              {loadingClues ? (
+                <div className="mt-6 rounded-2xl border border-edge bg-surface-panel/80 p-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <Skeleton className="h-4 w-32 rounded-full" />
+                    <Skeleton className="h-8 w-28 rounded-xl" />
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Skeleton className="h-8 w-28 rounded-xl" />
+                    <Skeleton className="h-8 w-36 rounded-xl" />
+                    <Skeleton className="h-8 w-32 rounded-xl" />
+                  </div>
+                </div>
+              ) : localSignals.length > 0 ? (
+                <section
+                  aria-label={zh ? '本机线索' : 'Local signals'}
+                  className="xopc-clue-card mt-6 rounded-2xl border border-edge bg-surface-panel/90 p-3.5 shadow-surface"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="size-1.5 rounded-full bg-accent" aria-hidden />
+                      <span className="text-xs font-medium text-fg">
+                        {zh ? `发现 ${localSignals.length} 处本机线索` : `${localSignals.length} signals on this Mac`}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-surface-inset px-2 py-0.5 text-[10px] font-medium text-fg-muted">
+                        <ShieldCheck className="size-3 text-accent-fg" aria-hidden />
+                        {zh ? '只读' : 'Read-only'}
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={busy}
+                      className="h-8 gap-1.5 rounded-xl px-3.5 text-xs font-medium"
+                      onClick={() => void launchQuickLocalUnderstanding()}
+                    >
+                      <Sparkles className="size-3.5" aria-hidden />
+                      {zh ? '快速认识我' : 'Get to know me'}
+                      <ArrowRight className="size-3.5 opacity-80" aria-hidden />
+                    </Button>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {localSignals.map((signal, index) => (
+                      <div
+                        key={signal.id}
+                        style={{ animationDelay: `${index * 40}ms` }}
+                        className="xopc-signal-chip group inline-flex max-w-full items-center rounded-xl border border-edge-subtle bg-surface-base/85 text-xs transition-[border-color,background-color] hover:border-edge-strong hover:bg-surface-hover/50"
+                      >
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => handleSignalClick(signal)}
+                          className="inline-flex min-w-0 items-center gap-1.5 py-1.5 pl-2.5 pr-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        >
+                          {signal.kind === 'project' ? (
+                            <FolderGit2 className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+                          ) : (
+                            <FileKindIcon extension={signal.extension} className="size-3.5 shrink-0" />
+                          )}
+                          <span className="max-w-[11rem] truncate font-medium text-fg">{signal.label}</span>
+                          {signal.meta ? (
+                            <span className="shrink-0 text-[10px] text-fg-subtle">{signal.meta}</span>
+                          ) : null}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          aria-label={zh ? `排除 ${signal.label}` : `Exclude ${signal.label}`}
+                          onClick={() => handleExcludeSignal(signal)}
+                          className="mr-1 flex size-5 shrink-0 items-center justify-center rounded-md text-fg-subtle opacity-60 transition-opacity hover:bg-surface-hover hover:text-fg group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        >
+                          <X className="size-3" aria-hidden />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
 
               {/* Hero Focus Composer */}
-              <div className="xopc-focus-composer mt-7 rounded-2xl border border-edge bg-surface-panel p-3 shadow-surface transition-[border-color,box-shadow] duration-200 focus-within:border-accent focus-within:ring-4 focus-within:ring-accent/10">
+              <div className="xopc-focus-composer mt-4 rounded-2xl border border-edge bg-surface-panel p-3 shadow-surface transition-[border-color,box-shadow] duration-200 focus-within:border-accent focus-within:ring-4 focus-within:ring-accent/10">
                 {voice.voiceActive ? (
                   <ComposerVoiceInputBar
                     phase={voice.phase}
@@ -826,9 +1014,9 @@ export function DesktopFocusOnboarding({
                     onKeyDown={handleComposerKeyDown}
                     onPaste={handleComposerPaste}
                     placeholder={zh
-                      ? '例如：准备下周产品评审、整理这几份报价单、或排查某个项目的问题…'
-                      : 'e.g., Prep Friday’s product review, summarize these quotes, or debug a feature…'}
-                    className="max-h-36 min-h-[3.5rem] w-full resize-none bg-transparent px-2 py-1 text-[15px] leading-6 text-fg outline-none placeholder:text-fg-subtle"
+                      ? '直接说一句、或拖入文件开始…'
+                      : 'Type a line, or drop files to start…'}
+                    className="max-h-36 min-h-[3.25rem] w-full resize-none bg-transparent px-2 py-1 text-[15px] leading-6 text-fg outline-none placeholder:text-fg-subtle"
                   />
                 ) : null}
 
@@ -897,7 +1085,7 @@ export function DesktopFocusOnboarding({
                       className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     >
                       <FolderOpen className="size-3.5" aria-hidden />
-                      {zh ? '附加目录' : 'Attach folder'}
+                      {zh ? '目录' : 'Folder'}
                     </button>
                     <button
                       type="button"
@@ -906,7 +1094,7 @@ export function DesktopFocusOnboarding({
                       className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     >
                       <Paperclip className="size-3.5" aria-hidden />
-                      {zh ? '上传文件' : 'Attach file'}
+                      {zh ? '文件' : 'File'}
                     </button>
                     {!voice.voiceActive ? (
                       <ComposerVoiceInputButton
@@ -941,17 +1129,12 @@ export function DesktopFocusOnboarding({
                 </div>
               </div>
 
-              {/* Just-in-time contextual local source micro-setup (only shown when relevant to user's typed intent) */}
+              {/* Just-in-time contextual local source chip (only when relevant to typed intent) */}
               {contextualOffer && attachedContext?.sourceId !== contextualOffer.sourceId ? (
-                <div className="xopc-clue-card mt-2.5 flex items-center justify-between gap-3 rounded-xl border border-accent/25 bg-accent-soft/35 px-3.5 py-2.5">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-surface-panel text-accent-fg">
-                      <CalendarDays className="size-3.5" aria-hidden />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-medium text-fg">{contextualOffer.label}</p>
-                      <p className="truncate text-[11px] text-fg-muted">{contextualOffer.reason}</p>
-                    </div>
+                <div className="xopc-clue-card mt-2.5 flex items-center justify-between gap-3 rounded-xl border border-accent/25 bg-accent-soft/35 px-3.5 py-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <CalendarDays className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+                    <span className="truncate text-xs font-medium text-fg">{contextualOffer.label}</span>
                   </div>
                   <Button
                     type="button"
@@ -967,102 +1150,55 @@ export function DesktopFocusOnboarding({
               ) : null}
 
               {contextNotice ? <p className="mt-2 text-center text-xs text-fg-muted">{contextNotice}</p> : null}
-
               {error ? <p className="mt-3 text-center text-xs text-danger" role="alert">{error}</p> : null}
 
-              {/* Curated local clues or concrete starters */}
-              <section className="mt-7" aria-label={zh ? '快速起点' : 'Quick starting points'}>
-                <div className="mb-2.5 flex items-center justify-between px-1">
-                  <p className="text-xs font-medium text-fg-muted">
-                    {candidates.length > 0 || recentFiles.length > 0
-                      ? (zh ? '刚注意到的手头线索' : 'Noticed on this Mac')
-                      : (zh ? '或从这里快速开始' : 'Or start with one of these')}
-                  </p>
-                  {candidates.length > 0 || recentFiles.length > 0 ? (
-                    <span className="text-[11px] text-fg-subtle">
-                      {zh ? '仅本地元数据 · 点击后才会只读分析' : 'Local metadata only · read-only on click'}
-                    </span>
-                  ) : null}
+              {/* Clean fallback starter pills when no local files/projects exist */}
+              {!loadingClues && localSignals.length === 0 ? (
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  {fallbackStarters.map((starter, index) => (
+                    <button
+                      key={starter.id}
+                      type="button"
+                      disabled={busy}
+                      style={{ animationDelay: `${index * 45}ms` }}
+                      onClick={() => void launchFreeform(starter.prompt, starter.priorityTitle)}
+                      className="xopc-signal-chip group inline-flex items-center gap-2 rounded-xl border border-edge bg-surface-panel px-3.5 py-2 text-xs font-medium text-fg transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5 hover:border-edge-strong hover:bg-surface-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:hover:translate-y-0"
+                    >
+                      <span className="text-accent-fg">
+                        <StarterIcon icon={starter.icon} />
+                      </span>
+                      <span>{starter.title}</span>
+                    </button>
+                  ))}
                 </div>
+              ) : null}
 
-                {loadingClues ? (
-                  <div className="grid gap-2.5 sm:grid-cols-3">
-                    {Array.from({ length: 3 }).map((_, index) => (
-                      <Skeleton key={index} className="h-[5.75rem] rounded-xl" />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="grid gap-2.5 sm:grid-cols-3">
-                    {clues.map((clue, index) => (
-                      <button
-                        key={clue.id}
-                        type="button"
-                        disabled={busy}
-                        onClick={() => handleClueClick(clue)}
-                        style={{ animationDelay: `${index * 45}ms` }}
-                        className="xopc-clue-card group flex min-h-[5.75rem] flex-col justify-between rounded-xl border border-edge bg-surface-panel p-3.5 text-left transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5 hover:border-edge-strong hover:bg-surface-hover/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:hover:translate-y-0"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-surface-inset text-fg-muted transition-colors group-hover:bg-accent-soft group-hover:text-accent-fg">
-                            {clue.kind === 'project'
-                              ? <FolderGit2 className="size-3.5" aria-hidden />
-                              : clue.kind === 'recent_files'
-                                ? <FileText className="size-3.5" aria-hidden />
-                                : <Sparkles className="size-3.5" aria-hidden />}
-                          </span>
-                          {clue.badge ? (
-                            <span className="rounded-full bg-surface-inset px-2 py-0.5 text-[10px] font-medium text-fg-muted">
-                              {clue.badge}
-                            </span>
-                          ) : (
-                            <ArrowRight className="size-3.5 text-fg-subtle opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100" aria-hidden />
-                          )}
-                        </div>
-                        <div className="mt-2.5 min-w-0">
-                          <p className="truncate text-[13px] font-medium text-fg">{clue.title}</p>
-                          <p className="mt-0.5 truncate text-[11px] leading-4 text-fg-muted">{clue.subtitle}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              {/* Subtle one-click Claude Code / Codex inheritance pill */}
+              {/* Compact one-line AI tool inheritance pill */}
               {importSources.length > 0 ? (
-                <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-panel/80 px-3.5 py-2.5">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-fg">
-                      <Wand2 className="size-3.5" aria-hidden />
+                <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-panel/75 px-3.5 py-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Wand2 className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+                    <span className="truncate text-xs font-medium text-fg">
+                      {importState === 'done'
+                        ? (zh ? `已带入 ${importedCount} 项 ${importNames} 配置` : `Imported ${importedCount} items from ${importNames}`)
+                        : (zh ? `${importNames} · Skills 与规则` : `${importNames} · Skills & rules`)}
                     </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-medium text-fg">
-                        {zh ? `检测到本机 ${importNames} 配置` : `${importNames} detected on this device`}
-                      </p>
-                      <p className="truncate text-[11px] text-fg-muted">
-                        {importState === 'done'
-                          ? (zh ? `已顺手带入 ${importedCount} 项可用 Skills 与规则` : `Imported ${importedCount} ready skills and rules`)
-                          : (zh ? '一键带入兼容的 Skills、规则与项目清单，仅导入安全项' : 'Bring over compatible skills, rules, and project roots safely')}
-                      </p>
-                    </div>
                   </div>
                   {importState === 'done' ? (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                      <Check className="size-3.5" aria-hidden />
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                      <Check className="size-3" aria-hidden />
                       {zh ? '已带入' : 'Imported'}
                     </span>
                   ) : (
                     <Button
                       type="button"
                       variant="secondary"
-                      className="h-8 shrink-0 px-3 text-xs"
+                      className="h-7 shrink-0 rounded-lg px-2.5 text-xs"
                       disabled={importState === 'importing'}
                       onClick={() => void handleImportAiTools()}
                     >
-                      {importState === 'importing' ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden /> : null}
-                      {importState === 'importing'
-                        ? (zh ? '带入中…' : 'Importing…')
-                        : (zh ? '一键带入' : 'Import')}
+                      {importState === 'importing' ? <LoaderCircle className="size-3 animate-spin" aria-hidden /> : null}
+                      {importState === 'importing' ? (zh ? '带入中…' : 'Importing…') : (zh ? '一键带入' : 'Import')}
                     </Button>
                   )}
                 </div>
@@ -1070,245 +1206,273 @@ export function DesktopFocusOnboarding({
             </div>
           ) : null}
 
-          {/* ACT 3A: LIVE READING (for selected folder) */}
-          {stage === 'analyzing' && run ? (
+          {/* ACT 2: LIVE ANIMATED CONVERGENCE */}
+          {stage === 'analyzing' ? (
             <section className="text-center" aria-live="polite">
-              <h1 className="text-2xl font-semibold tracking-[-0.03em] text-fg">
-                {zh ? `正在了解 ${compactPath(run.rootPath)}` : `Understanding ${compactPath(run.rootPath)}`}
+              <h1 className="text-xl font-semibold tracking-[-0.03em] text-fg sm:text-2xl">
+                {analysisMode === 'folder' && run
+                  ? (zh ? `正在了解 ${compactPath(run.rootPath)}` : `Understanding ${compactPath(run.rootPath)}`)
+                  : (zh ? '正在从你的文件快速认识你' : 'Getting to know your work')}
               </h1>
-              <p className="mt-2 text-sm text-fg-muted">
-                {zh ? '只读查看关键结构与最近变动，完成后直接给你可推进的下一步。' : 'Reading structure and recent changes (read-only) to prepare your first concrete action.'}
-              </p>
 
               <UnderstandingSourceConvergence
-                signals={runningSignals}
+                signals={convergenceSignals}
                 ariaLabel={copy.sourceSignals.ariaLabel}
                 centerLabel={copy.sourceSignals.centerLabel}
+                emergingLabels={analysisMode === 'folder' ? folderEmergingLabels : emergingLabels}
               />
 
-              <div className="mx-auto mt-6 grid max-w-[34rem] grid-cols-3 gap-2">
-                {STAGES.map((item, index) => {
-                  const activeIndex = Math.max(0, STAGES.indexOf(run.stage ?? 'folder_structure'));
-                  const complete = index < activeIndex;
-                  const active = index === activeIndex;
+              {/* Compact 3-segment progress rail */}
+              <div className="mx-auto mt-5 grid max-w-[30rem] grid-cols-3 gap-2">
+                {progressLabels.map((label, index) => {
+                  const complete = index < activeStepIndex;
+                  const active = index === activeStepIndex;
                   return (
-                    <div key={item} className="min-w-0 text-left">
-                      <span className={cn('block h-1 rounded-full transition-colors', active || complete ? 'bg-accent' : 'bg-surface-hover')} />
-                      <span className={cn('mt-2 block text-[11px] leading-4', active ? 'font-medium text-fg' : 'text-fg-muted')}>
-                        {copy.stages[item]}
+                    <div key={label} className="min-w-0 text-left">
+                      <span className={cn('block h-1 rounded-full transition-colors duration-300', active || complete ? 'bg-accent' : 'bg-surface-hover')} />
+                      <span className={cn('mt-1.5 block truncate text-[11px]', active ? 'font-medium text-fg' : 'text-fg-muted')}>
+                        {label}
                       </span>
                     </div>
                   );
                 })}
               </div>
 
-              <div className="mx-auto mt-7 flex max-w-md flex-col gap-2.5 sm:flex-row sm:justify-center">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-10 px-4 text-sm"
-                  onClick={() => openConversation(run.conversationId)}
-                >
-                  {zh ? '不等了，直接带着目录开聊' : 'Open conversation right away'}
-                </Button>
+              <div className="mt-6 flex items-center justify-center gap-3">
+                {analysisMode === 'folder' && run ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-9 rounded-xl px-4 text-xs"
+                    onClick={() => openConversation(run.conversationId)}
+                  >
+                    {zh ? '直接开聊' : 'Open chat now'}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-10 px-4 text-sm text-fg-muted"
+                  className="h-9 rounded-xl px-3.5 text-xs text-fg-muted"
                   onClick={async () => {
-                    await cancelWorkDiscoveryRun(run.id).catch(() => {});
+                    analysisAbortRef.current?.abort();
+                    if (run) await cancelWorkDiscoveryRun(run.id).catch(() => {});
                     setRun(null);
+                    setBusy(false);
                     setStage('focus');
                   }}
                 >
-                  {zh ? '换一件事' : 'Pick something else'}
+                  {zh ? '返回' : 'Back'}
                 </Button>
               </div>
             </section>
           ) : null}
 
-          {/* ACT 3B: UNIFIED SINGLE-CARD VALUE REVEAL */}
-          {stage === 'reveal' && run?.result ? (
+          {/* ACT 3: INTERACTIVE UNDERSTANDING & LAUNCH CANVAS */}
+          {stage === 'reveal' ? (
             <section aria-live="polite">
               <div className="text-center">
-                <p className="text-xs font-medium tracking-wide text-accent-fg">
-                  {compactPath(run.rootPath)}
-                </p>
-                <h1 className="mt-1.5 text-2xl font-semibold tracking-[-0.03em] text-fg sm:text-[1.75rem]">
-                  {zh ? '已经了解清楚，可以从这里直接开始' : 'Here’s where things stand — ready to jump in'}
+                {run?.rootPath ? (
+                  <p className="text-xs font-medium text-accent-fg">{compactPath(run.rootPath)}</p>
+                ) : null}
+                <h1 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-fg sm:text-[1.75rem]">
+                  {localSnapshot
+                    ? (zh ? '我大致了解你最近的重心了' : 'Here’s what I picked up')
+                    : (zh ? '选一条，直接开始' : 'Pick a thread to jump in')}
                 </h1>
               </div>
 
-              {/* Unified Understanding + Primary Action Card */}
-              <div className="mt-6 overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-surface">
-                {/* Compact understanding strip */}
-                <div className="border-b border-edge-subtle bg-surface-inset/45 px-5 py-4 sm:px-6">
-                  <p className="text-sm leading-6 text-fg">{run.result.projectSummary}</p>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-4">
+              {/* Interactive "About you" trait chips (direct remove / add) */}
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-1.5">
+                {traits.map((chip, index) => (
+                  <span
+                    key={chip.id}
+                    style={{ animationDelay: `${index * 45}ms` }}
+                    className="xopc-trait-chip inline-flex max-w-full items-center gap-1.5 rounded-full border border-edge bg-surface-panel py-1 pl-2.5 pr-1.5 text-xs font-medium text-fg shadow-surface"
+                  >
+                    <TraitIcon category={chip.category} />
+                    <span className="max-w-[16rem] truncate">{chip.label}</span>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 text-xs font-medium text-fg-muted hover:text-fg"
-                      onClick={() => setEvidenceOpen((open) => !open)}
+                      aria-label={zh ? `移除标签 ${chip.label}` : `Remove ${chip.label}`}
+                      onClick={() => handleRemoveTrait(chip)}
+                      className="flex size-4 shrink-0 items-center justify-center rounded-full text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     >
-                      {zh ? '查看依据' : 'View evidence'}
-                      <ChevronDown className={cn('size-3.5 transition-transform', evidenceOpen && 'rotate-180')} />
+                      <X className="size-2.5" aria-hidden />
                     </button>
+                  </span>
+                ))}
+
+                {addingTrait ? (
+                  <form
+                    className="inline-flex items-center gap-1 rounded-full border border-accent bg-surface-panel py-0.5 pl-3 pr-1.5 shadow-surface"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleAddCustomTrait();
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      value={newTraitText}
+                      onChange={(event) => setNewTraitText(event.target.value)}
+                      onBlur={() => void handleAddCustomTrait()}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') {
+                          setNewTraitText('');
+                          setAddingTrait(false);
+                        }
+                      }}
+                      placeholder={zh ? '补充一句偏好或角色…' : 'Add a quick note…'}
+                      className="w-36 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
+                    />
                     <button
-                      type="button"
-                      className="text-xs font-medium text-fg-muted hover:text-fg"
-                      onClick={() => setAdjustOpen((open) => !open)}
+                      type="submit"
+                      aria-label={zh ? '保存补充' : 'Save note'}
+                      onMouseDown={(event) => event.preventDefault()}
+                      className="flex size-5 items-center justify-center rounded-full bg-accent text-on-accent"
                     >
-                      {zh ? '方向有偏差？微调一句' : 'Adjust focus'}
+                      <Check className="size-3" aria-hidden />
                     </button>
-                  </div>
-
-                  {evidenceOpen ? (
-                    <div className="mt-3 space-y-2 border-t border-edge-subtle pt-3 text-xs leading-5 text-fg-muted">
-                      {run.result.currentState ? <p>{run.result.currentState}</p> : null}
-                      {primarySuggestion?.evidence.slice(0, 3).map((item, idx) => (
-                        <div key={`${idx}-${item.path ?? item.observation}`} className="flex gap-2">
-                          <GitBranch className="mt-0.5 size-3.5 shrink-0 text-accent-fg" aria-hidden />
-                          <span>
-                            {item.path ? <><code className="font-mono text-fg">{item.path}</code>: </> : null}
-                            {item.observation}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {adjustOpen ? (
-                    <div className="mt-3 flex gap-2 border-t border-edge-subtle pt-3">
-                      <input
-                        autoFocus
-                        value={adjustText}
-                        onChange={(event) => setAdjustText(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' && adjustText.trim()) {
-                            event.preventDefault();
-                            void submitAdjustment();
-                          }
-                        }}
-                        placeholder={zh ? '告诉我你现在真正想推进什么…' : 'Tell me what you actually want to move forward…'}
-                        className="h-9 flex-1 rounded-lg border border-edge bg-surface-base px-3 text-xs text-fg outline-none focus:border-accent"
-                      />
-                      <Button
-                        type="button"
-                        variant="primary"
-                        className="h-9 px-3 text-xs"
-                        disabled={busy || !adjustText.trim()}
-                        onClick={() => void submitAdjustment()}
-                      >
-                        {zh ? '按此开始' : 'Start with this'}
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
-
-                {/* Primary concrete next action */}
-                {primarySuggestion ? (
-                  <div className="p-5 sm:p-6">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-                      <span className="rounded-full bg-accent-soft px-2.5 py-0.5 font-medium text-accent-fg">
-                        {zh ? '推荐第一步' : 'Recommended first step'}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Clock3 className="size-3.5" aria-hidden />
-                        {copy.estimatedMinutes.replace('{{count}}', String(primarySuggestion.estimatedMinutes))}
-                      </span>
-                    </div>
-                    <h2 className="mt-3 text-lg font-semibold text-fg">{primarySuggestion.title}</h2>
-                    <p className="mt-1.5 text-sm leading-6 text-fg-muted">{primarySuggestion.rationale}</p>
-
-                    <div className="mt-5 flex flex-wrap items-center gap-2.5">
-                      <Button
-                        type="button"
-                        variant="primary"
-                        className="h-10 gap-1.5 rounded-xl px-5 text-sm"
-                        disabled={busy}
-                        onClick={() => void startSuggestion(primarySuggestion, false)}
-                      >
-                        {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
-                        {zh ? '马上开始这件事' : 'Start this now'}
-                        {!busy ? <ArrowRight className="size-4" aria-hidden /> : null}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-10 rounded-xl px-4 text-sm"
-                        disabled={busy}
-                        onClick={() => void startSuggestion(primarySuggestion, true)}
-                      >
-                        {zh ? '先只评估，不动文件' : 'Assess first, read-only'}
-                      </Button>
-                    </div>
-                  </div>
+                  </form>
                 ) : (
-                  <div className="p-5 sm:p-6">
-                    <Button
-                      type="button"
-                      variant="primary"
-                      className="h-10 rounded-xl px-5 text-sm"
-                      onClick={() => openConversation(run.conversationId)}
-                    >
-                      {zh ? '进入项目对话' : 'Open project conversation'}
-                    </Button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAddingTrait(true)}
+                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-edge-strong px-2.5 py-1 text-xs font-medium text-fg-muted transition-colors hover:border-accent hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <Plus className="size-3" aria-hidden />
+                    {zh ? '补充' : 'Add'}
+                  </button>
                 )}
               </div>
 
-              {/* Optional alternative directions */}
-              {alternativeSuggestions.length > 0 ? (
-                <div className="mt-4">
+              {/* Concise visual thread / action cards */}
+              <div className="mt-6 space-y-2.5">
+                {threadCards.map((card, index) => (
+                  <div
+                    key={card.id}
+                    style={{ animationDelay: `${80 + index * 60}ms` }}
+                    className={cn(
+                      'xopc-thread-card group flex items-center justify-between gap-4 rounded-2xl border p-4 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5',
+                      card.primary
+                        ? 'border-accent/40 bg-surface-panel shadow-surface hover:border-accent'
+                        : 'border-edge bg-surface-panel/90 hover:border-edge-strong',
+                    )}
+                  >
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handleStartThreadCard(card, false)}
+                      className="flex min-w-0 flex-1 items-center gap-3.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      <span className={cn(
+                        'flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors',
+                        card.primary ? 'bg-accent-soft text-accent-fg' : 'bg-surface-inset text-fg-muted group-hover:bg-accent-soft group-hover:text-accent-fg',
+                      )}>
+                        {card.kind === 'project' ? (
+                          <FolderGit2 className="size-4" aria-hidden />
+                        ) : (
+                          <Sparkles className="size-4" aria-hidden />
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="truncate text-[15px] font-semibold text-fg">{card.title}</span>
+                          {card.badge ? (
+                            <span className={cn(
+                              'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                              card.primary ? 'bg-accent-soft text-accent-fg' : 'bg-surface-inset text-fg-muted',
+                            )}>
+                              {card.badge}
+                            </span>
+                          ) : null}
+                        </span>
+                        {card.meta ? (
+                          <span className="mt-0.5 block truncate text-xs text-fg-muted">{card.meta}</span>
+                        ) : null}
+                      </span>
+                    </button>
+
+                    <div className="flex shrink-0 items-center gap-2">
+                      {card.primary && card.suggestion ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          disabled={busy}
+                          className="hidden h-8 rounded-lg px-2.5 text-xs text-fg-muted sm:inline-flex"
+                          onClick={() => void handleStartThreadCard(card, true)}
+                        >
+                          {zh ? '先只评估' : 'Assess only'}
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant={card.primary ? 'primary' : 'secondary'}
+                        disabled={busy}
+                        className="h-9 gap-1.5 rounded-xl px-3.5 text-xs font-medium"
+                        onClick={() => void handleStartThreadCard(card, false)}
+                      >
+                        {busy && card.primary ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden /> : null}
+                        {card.primary ? (zh ? '开始' : 'Start') : (zh ? '推进' : 'Go')}
+                        <ArrowRight className="size-3.5" aria-hidden />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Quiet footer: optional evidence disclosure + direct chat + back */}
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-5 text-xs text-fg-muted">
+                {revealEvidence.length > 0 ? (
                   <button
                     type="button"
-                    className="mx-auto flex items-center gap-1.5 py-1.5 text-xs font-medium text-fg-muted hover:text-fg"
-                    onClick={() => setAlternativesOpen((open) => !open)}
+                    className="inline-flex items-center gap-1 hover:text-fg"
+                    onClick={() => setEvidenceOpen((open) => !open)}
                   >
-                    {zh ? `查看其他 ${alternativeSuggestions.length} 个方向` : `See ${alternativeSuggestions.length} other directions`}
-                    <ChevronDown className={cn('size-3.5 transition-transform', alternativesOpen && 'rotate-180')} />
+                    {zh ? '依据' : 'Sources'}
+                    <ChevronDown className={cn('size-3.5 transition-transform', evidenceOpen && 'rotate-180')} />
                   </button>
-                  {alternativesOpen ? (
-                    <div className="mt-2 divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-panel">
-                      {alternativeSuggestions.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void startSuggestion(item, false)}
-                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover/60"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-fg">{item.title}</p>
-                            <p className="mt-0.5 line-clamp-1 text-xs text-fg-muted">{item.rationale}</p>
-                          </div>
-                          <ArrowRight className="size-4 shrink-0 text-fg-subtle" aria-hidden />
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <div className="mt-5 flex justify-center gap-5 text-xs text-fg-muted">
+                ) : null}
                 <button
                   type="button"
                   className="hover:text-fg hover:underline"
                   onClick={() => {
                     setRun(null);
+                    setLocalSnapshot(null);
                     setStage('focus');
                   }}
                 >
-                  {zh ? '换一件更重要的事' : 'Pick something else'}
+                  {zh ? '换一件事' : 'Pick something else'}
                 </button>
                 <button
                   type="button"
                   className="hover:text-fg hover:underline"
-                  onClick={() => openConversation(run.conversationId)}
+                  onClick={async () => {
+                    if (run) {
+                      openConversation(run.conversationId);
+                    } else {
+                      await dismissWorkDiscoveryOnboarding().catch(() => {});
+                      onRequestClose();
+                    }
+                  }}
                 >
-                  {zh ? '直接进入对话' : 'Open blank conversation'}
+                  {zh ? '直接对话' : 'Open chat'}
                 </button>
               </div>
+
+              {evidenceOpen && revealEvidence.length > 0 ? (
+                <div className="xopc-clue-card mt-3 space-y-1.5 rounded-xl border border-edge-subtle bg-surface-panel/80 px-4 py-3 text-xs text-fg-muted">
+                  {revealEvidence.map((item, idx) => (
+                    <div key={`${idx}-${item.path ?? item.observation}`} className="flex items-center gap-2">
+                      <GitBranch className="size-3 shrink-0 text-accent-fg" aria-hidden />
+                      <span className="truncate">
+                        {item.path ? <code className="font-mono text-fg">{item.path}</code> : null}
+                        {item.path && item.observation ? ' · ' : null}
+                        {item.observation}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </section>
           ) : null}
 
@@ -1321,7 +1485,7 @@ export function DesktopFocusOnboarding({
                 <Button
                   type="button"
                   variant="primary"
-                  className="h-10 px-4 text-sm"
+                  className="h-10 rounded-xl px-4 text-sm"
                   onClick={() => void retryWorkDiscoveryRun(run.id).then(applyRun)}
                 >
                   {copy.retry}
@@ -1329,15 +1493,15 @@ export function DesktopFocusOnboarding({
                 <Button
                   type="button"
                   variant="secondary"
-                  className="h-10 px-4 text-sm"
+                  className="h-10 rounded-xl px-4 text-sm"
                   onClick={() => openConversation(run.conversationId)}
                 >
-                  {zh ? '直接带着目录对话' : 'Open conversation anyway'}
+                  {zh ? '直接对话' : 'Open chat'}
                 </Button>
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-10 px-4 text-sm"
+                  className="h-10 rounded-xl px-4 text-sm"
                   onClick={() => {
                     setRun(null);
                     setStage('focus');

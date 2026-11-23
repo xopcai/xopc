@@ -74,6 +74,8 @@ export default defineConfig({
             'electron/__tests__/quit-confirmation.test.ts',
             'electron/__tests__/installer-quit.test.ts',
             'electron/__tests__/uninstall-paths.test.ts',
+            'electron/__tests__/recent-files.test.ts',
+            'electron/__tests__/understanding-sources-ipc.test.ts',
           ],
           setupFiles: [setupFile],
           maxWorkers: 2,

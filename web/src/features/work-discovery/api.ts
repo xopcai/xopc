@@ -240,7 +240,8 @@ export async function importUnderstandingSources(items: Array<{
   evidenceRef: string;
 }>, workDiscoveryRunId: string | undefined,
 processingPolicy: WorkDiscoveryProcessingPolicy,
-sourceCheckpoints?: Record<string, { fingerprint: string; collectedAt: number }>): Promise<{
+sourceCheckpoints?: Record<string, { fingerprint: string; collectedAt: number }>,
+locale = currentUiLocale()): Promise<{
   profileCandidates: WorkDiscoveryProfileCandidate[];
   workThreads: WorkUnderstandingThread[];
   knowledgeCandidates: Array<{ id: string; content: string; status: string }>;
@@ -258,8 +259,9 @@ sourceCheckpoints?: Record<string, { fingerprint: string; collectedAt: number }>
       body: JSON.stringify({
         items,
         processingPolicy,
+        locale,
         ...(workDiscoveryRunId ? { workDiscoveryRunId } : {}),
-        sourceCheckpoints,
+        ...(sourceCheckpoints ? { sourceCheckpoints } : {}),
       }),
     },
   );

@@ -221,10 +221,37 @@ async function collectLinuxRecent(): Promise<UnderstandingSourceItem[]> {
   return normalize('linux-recent-documents', rows);
 }
 
-async function collectSource(sourceId: LocalSourceId): Promise<UnderstandingSourceCollectionResult> {
+export interface UnderstandingCollectOptions {
+  mode: 'fast' | 'full';
+  excludeIds: string[];
+}
+
+export function normalizeUnderstandingCollectOptions(value: unknown): UnderstandingCollectOptions {
+  if (!value || typeof value !== 'object') return { mode: 'full', excludeIds: [] };
+  const raw = value as Record<string, unknown>;
+  const mode = raw.mode === 'fast' ? 'fast' : 'full';
+  const excludeIds = Array.isArray(raw.excludeIds)
+    ? [...new Set(raw.excludeIds
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => /^[a-f0-9]{12,64}$/.test(entry)))]
+      .slice(0, 64)
+    : [];
+  return { mode, excludeIds };
+}
+
+async function collectSource(
+  sourceId: LocalSourceId,
+  options: UnderstandingCollectOptions,
+): Promise<UnderstandingSourceCollectionResult> {
   try {
     let items: UnderstandingSourceItem[];
-    if (sourceId === 'local-recent-files') items = await collectRecentFileItems();
+    if (sourceId === 'local-recent-files') {
+      items = await collectRecentFileItems({
+        mode: options.mode,
+        excludeIds: options.excludeIds,
+      });
+    }
     else if (sourceId === 'chromium-bookmarks') items = await collectChromiumBookmarkItems();
     else if (sourceId.startsWith('apple-')) items = await collectApple(sourceId);
     else if (sourceId === 'windows-recent-documents') items = await collectWindowsRecent();
@@ -233,7 +260,9 @@ async function collectSource(sourceId: LocalSourceId): Promise<UnderstandingSour
       sourceId,
       status: 'completed',
       items,
-      checkpoint: { fingerprint: fingerprintUnderstandingItems(items), collectedAt: Date.now() },
+      ...(options.mode === 'full'
+        ? { checkpoint: { fingerprint: fingerprintUnderstandingItems(items), collectedAt: Date.now() } }
+        : {}),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -270,8 +299,9 @@ export function registerUnderstandingSourcesIpc(ipcMain: IpcMain): void {
     assertTrustedRenderer(event);
     return localCatalog();
   });
-  ipcMain.handle('understanding-sources:collect', async (event, requestedSources: unknown) => {
+  ipcMain.handle('understanding-sources:collect', async (event, requestedSources: unknown, rawOptions?: unknown) => {
     assertTrustedRenderer(event);
-    return Promise.all(normalizeUnderstandingSourceIds(requestedSources).map(collectSource));
+    const options = normalizeUnderstandingCollectOptions(rawOptions);
+    return Promise.all(normalizeUnderstandingSourceIds(requestedSources).map((sourceId) => collectSource(sourceId, options)));
   });
 }

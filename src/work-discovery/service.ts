@@ -531,6 +531,7 @@ export class WorkDiscoveryService {
     runId?: string,
     rawCheckpoints?: Record<string, unknown>,
     refresh?: { grantId: string },
+    locale?: string,
   ) {
     const items = normalizeUnderstandingSourceItems(rawItems);
     const assertRefreshAuthorized = () => {
@@ -647,7 +648,7 @@ export class WorkDiscoveryService {
             uncertainties: linkedRun.result.uncertainties,
             workThreads: linkedRun.result.workThreads,
           } } : {}),
-          locale: (runId ? this.runLocales.get(runId) : undefined) ?? getUserProfileSnapshot().locale,
+          locale: locale || (runId ? this.runLocales.get(runId) : undefined) || getUserProfileSnapshot().locale,
           signal,
         })
         : {
@@ -743,6 +744,50 @@ export class WorkDiscoveryService {
           });
         })
         : [];
+      const now = Date.now();
+      const standaloneThreads = !linkedRun
+        ? (safeWorkThreadCandidates.length
+          ? safeWorkThreadCandidates.map((candidate) => {
+            const hash = createHash('sha256').update(candidate.topicKey).digest('hex').slice(0, 16);
+            return {
+              id: `source-thread:${hash}`,
+              canonicalKey: `source-thread:${candidate.topicKey}`,
+              title: candidate.title,
+              summary: candidate.summary,
+              status: candidate.status,
+              horizon: candidate.horizon,
+              focusScore: candidate.horizon === 'current' ? 0.9 : candidate.horizon === 'ongoing' ? 0.72 : 0.55,
+              confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
+              userStatus: 'unreviewed' as const,
+              projectIds: [],
+              evidenceIds: candidate.evidenceRefs,
+              firstObservedAt: now,
+              lastObservedAt: now,
+              createdAt: now,
+              updatedAt: now,
+            };
+          })
+          : activityTopics.slice(0, 4).map((topic) => {
+            const hash = createHash('sha256').update(topic.canonicalKey).digest('hex').slice(0, 16);
+            return {
+              id: `activity-thread:${hash}`,
+              canonicalKey: topic.canonicalKey,
+              title: topic.title,
+              summary: topic.summary,
+              status: 'active' as const,
+              horizon: topic.horizon,
+              focusScore: topic.horizon === 'current' ? 0.85 : 0.65,
+              confidence: topic.confidence,
+              userStatus: 'unreviewed' as const,
+              projectIds: [],
+              evidenceIds: topic.evidenceRefs,
+              firstObservedAt: now,
+              lastObservedAt: now,
+              createdAt: now,
+              updatedAt: now,
+            };
+          }))
+        : [];
       const workThreads = linkedRun && contextEvidence.length
         ? persistWorkThreadsFromDiscovery({
           projectId: linkedRun.projectId,
@@ -764,7 +809,7 @@ export class WorkDiscoveryService {
           },
           evidence: contextEvidence,
         })
-        : [];
+        : standaloneThreads;
       const activityEvidence = new Set(activityTopics.flatMap((topic) => topic.evidenceRefs));
       const activityKnowledge = activityTopics.map((topic) => persistWorkKnowledge({
         canonicalKey: topic.canonicalKey,

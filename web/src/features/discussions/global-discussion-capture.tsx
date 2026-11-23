@@ -2,7 +2,7 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { RecordingOutcomeCard, recordingOutcomeInput } from './recording-outcome-card';
 import { LiveTranscriptView } from './live-transcript-view';
-import { Bookmark, FileText, Mic, Pause, Play, Square, Unlink, Volume2, X } from 'lucide-react';
+import { Bookmark, FileText, Mic, MonitorSpeaker, Pause, Play, Square, Unlink, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -32,9 +32,10 @@ import {
 import { forgetDiscussionConsent, readDiscussionConsent, rememberDiscussionConsent } from './discussion-consent-cache';
 import { OPEN_DISCUSSION_CAPTURE_EVENT } from './discussion-events';
 import {
+  acquireDiscussionAudioStream,
+  clearLegacyPreferredAudioMode,
   isSystemAudioMixSupported,
-  readPreferredDiscussionAudioMode,
-  writePreferredDiscussionAudioMode,
+  type AcquiredDiscussionAudio,
   type DiscussionAudioCaptureMode,
 } from './audio-capture-mixer';
 import { drainDiscussionSegmentUploadQueue } from './discussion-segment-upload-queue';
@@ -65,7 +66,13 @@ export function GlobalDiscussionCaptureHost() {
   const [annotationSyncFailed, setAnnotationSyncFailed] = useState(false);
   const [outcomeBusy, setOutcomeBusy] = useState(false);
   const [switchingAudioMode, setSwitchingAudioMode] = useState(false);
+  const [audioSourceHint, setAudioSourceHint] = useState<string | null>(null);
+  const [captureTab, setCaptureTab] = useState<'transcript' | 'notes' | null>('transcript');
   const [showRecoveries, setShowRecoveries] = useState(false);
+
+  useEffect(() => {
+    clearLegacyPreferredAudioMode();
+  }, []);
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).notes.discussionCapture;
   const recorder = useDiscussionRecorder();
@@ -193,28 +200,18 @@ export function GlobalDiscussionCaptureHost() {
     liveOutlineDirtyRef.current = false;
     setVisible(true);
     setOperationError(null);
+    setAudioSourceHint(null);
     setTranscript(null);
     setDetail(null);
     setUploadProgress(0);
     setLocalReleased(false); setAnnotationSyncFailed(false); setLocallyFinalized(null); setSyncStage('pending');
-    const effectiveMode = audioMode ?? readPreferredDiscussionAudioMode();
-    if (audioMode) writePreferredDiscussionAudioMode(audioMode);
-    let draft = await recorder.start({
+    const draft = await recorder.start({
       ...(projectId ? { projectId } : {}),
-      ...(effectiveMode !== 'microphone' ? { audioMode: effectiveMode } : {}),
+      ...(audioMode && audioMode !== 'microphone' ? { audioMode } : {}),
       consentPolicyVersion: policyVersion,
       gatewayUrl,
       onLiveSegment: uploadLiveSegment,
     });
-    if (!draft && !audioMode && effectiveMode === 'meeting_mix') {
-      writePreferredDiscussionAudioMode('microphone');
-      draft = await recorder.start({
-        ...(projectId ? { projectId } : {}),
-        consentPolicyVersion: policyVersion,
-        gatewayUrl,
-        onLiveSegment: uploadLiveSegment,
-      });
-    }
     if (!draft) return;
     recordingSessionRef.current = true;
     const creation = createDiscussion({
@@ -423,14 +420,43 @@ export function GlobalDiscussionCaptureHost() {
     }
   };
 
-  const toggleAudioMode = async () => {
-    if (switchingAudioMode || finishing || recovering) return;
+  const selectAudioMode = async (nextMode: DiscussionAudioCaptureMode) => {
     const currentMode = recorder.audioMode ?? 'microphone';
-    const nextMode: DiscussionAudioCaptureMode = currentMode === 'meeting_mix' ? 'microphone' : 'meeting_mix';
-    writePreferredDiscussionAudioMode(nextMode);
+    if (switchingAudioMode || finishing || recovering || nextMode === currentMode) return;
     if (!['recording', 'waiting_for_audio', 'paused'].includes(recorder.phase)) return;
     setSwitchingAudioMode(true);
     setOperationError(null);
+    setAudioSourceHint(null);
+
+    // Pre-acquire the display/tab audio stream FIRST within the synchronous user click
+    // before stopping the active microphone session. If the user cancels the browser picker
+    // or macOS denies screen/audio permission, the live microphone recording stays 100% intact.
+    let preAcquired: AcquiredDiscussionAudio | undefined;
+    if (nextMode === 'meeting_mix') {
+      try {
+        preAcquired = await acquireDiscussionAudioStream('meeting_mix');
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : String(caught);
+        const cancelledOrDenied =
+          (caught instanceof DOMException && (caught.name === 'NotAllowedError' || caught.name === 'AbortError')) ||
+          /Permission denied|cancelled|canceled/i.test(message);
+        const missingAudioTrack = /No system or tab audio/i.test(message);
+        if (cancelledOrDenied || missingAudioTrack) {
+          setAudioSourceHint(
+            missingAudioTrack
+              ? (language === 'zh' ? '未检测到共享音频，请勾选「同时分享标签页音频」。已继续仅麦克风录音。' : 'No shared audio track selected. Kept microphone recording.')
+              : isElectron()
+                ? (language === 'zh' ? '需在系统设置 → 录屏与系统录音中授权后，才能同时录电脑声音。' : 'Grant Screen & System Audio permission in System Settings to include computer audio.')
+                : (language === 'zh' ? '已保持仅麦克风录音（浏览器可分享含声音的标签页；录整机声音请用桌面端或在系统设置中授权浏览器）。' : 'Kept microphone recording. Share a browser tab with audio, or grant OS permission.'),
+          );
+        } else {
+          setOperationError(message);
+        }
+        setSwitchingAudioMode(false);
+        return;
+      }
+    }
+
     const wasSession = recordingSessionRef.current;
     recordingSessionRef.current = false;
     try {
@@ -442,10 +468,11 @@ export function GlobalDiscussionCaptureHost() {
         consentPolicyVersion: baseDraft?.consentPolicyVersion ?? 1,
         gatewayUrl,
         audioMode: nextMode,
+        ...(preAcquired ? { acquiredAudio: preAcquired } : {}),
         onLiveSegment: uploadLiveSegment,
       });
       if (!resumed) {
-        writePreferredDiscussionAudioMode(currentMode);
+        preAcquired?.cleanup();
         const fallback = await recorder.start({
           ...(baseDraft ? { continuation: baseDraft } : {}),
           ...(detail?.discussion.projectId ? { projectId: detail.discussion.projectId } : {}),
@@ -466,6 +493,7 @@ export function GlobalDiscussionCaptureHost() {
       }
       recordingSessionRef.current = wasSession;
     } catch (error) {
+      preAcquired?.cleanup();
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
     } finally {
       setSwitchingAudioMode(false);
@@ -688,102 +716,238 @@ export function GlobalDiscussionCaptureHost() {
   }
   const inferredProject = detail?.discussion.projectId && detail.discussion.projectInferenceSource !== 'context';
   const zh = language === 'zh';
-  const captureLabel = status.capture === 'recording' ? (zh ? '录音中' : 'Recording') : copy.status[status.capture];
   const title = detail?.note.title && !/^Discussion [·•]/.test(detail.note.title) ? detail.note.title : (zh ? '录音笔记' : 'Voice note');
+  const dotColor = status.capture === 'recording' ? 'bg-danger animate-pulse' : recorder.phase === 'paused' ? 'bg-warning' : 'bg-accent';
   const controls = (small: boolean) => <>
-    {recorder.phase === 'recording' ? <Button className={small ? 'size-10 shrink-0 px-0 shadow-none' : 'min-w-0 whitespace-nowrap shadow-none'} title={zh ? '标重点' : 'Highlight'} aria-label={zh ? '标重点' : 'Highlight'} onClick={() => void recorder.mark()}><Bookmark className="size-4 shrink-0" aria-hidden />{!small ? (zh ? '标重点' : 'Highlight') : null}</Button> : null}
-    {recorder.phase === 'recording' || recorder.phase === 'waiting_for_audio' ? <Button className={small ? 'size-10 shrink-0 px-0 shadow-none' : 'min-w-0 whitespace-nowrap shadow-none'} aria-label={copy.pause} title={copy.pause} onClick={recorder.pause}><Pause className="size-4 shrink-0" aria-hidden />{!small ? copy.pause : null}</Button> : null}
-    {recorder.phase === 'paused' ? <Button className={small ? 'size-10 shrink-0 px-0 shadow-none' : 'min-w-0 whitespace-nowrap shadow-none'} aria-label={copy.resume} title={copy.resume} onClick={recorder.resume}><Play className="size-4 shrink-0" aria-hidden />{!small ? copy.resume : null}</Button> : null}
-    {['recording','waiting_for_audio','paused'].includes(recorder.phase) ? <Button variant="primary" className={small ? 'size-10 shrink-0 px-0' : 'min-w-0 whitespace-nowrap'} aria-label={copy.stop} title={copy.stop} disabled={finishing} onClick={() => void finish()}><Square className="size-4 shrink-0" aria-hidden />{!small ? copy.stop : null}</Button> : null}
+    {recorder.phase === 'recording' ? <Button className={small ? 'size-8 shrink-0 rounded-full px-0 shadow-none' : 'h-9 min-w-0 rounded-xl whitespace-nowrap shadow-none'} title={zh ? '标重点' : 'Highlight'} aria-label={zh ? '标重点' : 'Highlight'} onClick={() => void recorder.mark()}><Bookmark className="size-3.5 shrink-0" aria-hidden />{!small ? (zh ? '标重点' : 'Highlight') : null}</Button> : null}
+    {recorder.phase === 'recording' || recorder.phase === 'waiting_for_audio' ? <Button className={small ? 'size-8 shrink-0 rounded-full px-0 shadow-none' : 'h-9 min-w-0 rounded-xl whitespace-nowrap shadow-none'} aria-label={copy.pause} title={copy.pause} onClick={recorder.pause}><Pause className="size-3.5 shrink-0" aria-hidden />{!small ? copy.pause : null}</Button> : null}
+    {recorder.phase === 'paused' ? <Button className={small ? 'size-8 shrink-0 rounded-full px-0 shadow-none' : 'h-9 min-w-0 rounded-xl whitespace-nowrap shadow-none'} aria-label={copy.resume} title={copy.resume} onClick={recorder.resume}><Play className="size-3.5 shrink-0" aria-hidden />{!small ? copy.resume : null}</Button> : null}
+    {['recording','waiting_for_audio','paused'].includes(recorder.phase) ? <Button variant="primary" className={small ? 'size-8 shrink-0 rounded-full px-0' : 'h-9 min-w-0 rounded-xl whitespace-nowrap'} aria-label={copy.stop} title={copy.stop} disabled={finishing} onClick={() => void finish()}><Square className="size-3.5 shrink-0" aria-hidden />{!small ? copy.stop : null}</Button> : null}
   </>;
   const warning = operationError ?? recorder.error ?? recorder.markerError ?? (online && status.sync === 'failed' ? captureSyncError : null);
   const warningLabel = status.capture === 'interrupted' ? (zh ? '录音已中断，请展开查看已保存内容。' : 'Recording interrupted. Review the saved content.')
     : recorder.markerError ? (zh ? '重点未能保存，请稍后重试。' : 'Highlight could not be saved. Try again.')
     : status.sync === 'failed' ? (zh ? '暂时无法同步，请稍后重试。' : 'Sync is unavailable. Please try again later.')
     : (zh ? '操作未完成，请查看详情。' : 'Could not complete this action. View details.');
+  const waveWeights = [0.28, 0.5, 0.78, 1, 0.62, 0.9, 0.84, 0.56, 0.95, 0.68, 0.44, 0.26];
+  const level = status.capture === 'recording' ? (recorder.inputLevel ?? 0.08) : 0;
+  const activeMode = recorder.audioMode ?? 'microphone';
+
   return <RecordingFloatingPanel compact={compact} onCompactChange={setCompact} language={language}
-    title={compact ? <span className="font-mono">{formatDuration(recorder.elapsedMs)}</span> : <span className="flex items-center gap-2"><span className={`size-2 shrink-0 rounded-full ${status.capture === 'recording' ? 'bg-danger' : 'bg-accent'}`} aria-hidden />{captureLabel}</span>}
-    subtitle={compact ? captureLabel : title} compactActions={controls(true)}>
+    title={compact
+      ? <span className="inline-flex items-center gap-2 font-mono text-sm font-semibold"><span className={`size-2 shrink-0 rounded-full ${dotColor}`} aria-hidden />{formatDuration(recorder.elapsedMs)}</span>
+      : <span className="inline-flex items-center gap-2 truncate text-xs font-medium text-fg"><span className={`size-2 shrink-0 rounded-full ${dotColor}`} aria-hidden /><span className="truncate">{title}</span></span>}
+    compactActions={<div className="flex items-center gap-1">{controls(true)}</div>}>
     {compact ? <>
       <RecordingStatusPanel status={status} language={language} compact />
       {status.capture === 'interrupted' || warning ? <p role="alert" className="px-3 pb-2 text-xs text-danger">{warningLabel}</p> : null}
-      {recorder.markerMessage ? <p role="status" className="px-3 pb-2 text-xs text-accent-fg">{zh ? '已标记重点' : 'Highlight saved'}</p> : null}
+      {recorder.markerMessage ? <p role="status" className="px-3 pb-2 text-xs text-accent-fg">{zh ? '已标重点' : 'Highlighted'}</p> : null}
     </> : <>
-      <div className="space-y-3 px-4 py-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <p className="font-mono text-[2.5rem] leading-none tabular-nums tracking-tight text-fg">{formatDuration(recorder.elapsedMs)}</p>
-            {isSystemAudioMixSupported() && ['recording', 'waiting_for_audio', 'paused'].includes(recorder.phase) ? (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={recorder.audioMode === 'meeting_mix'}
-                disabled={switchingAudioMode || finishing}
-                onClick={() => void toggleAudioMode()}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${
-                  recorder.audioMode === 'meeting_mix'
-                    ? 'border-accent/40 bg-accent-soft text-accent-fg'
-                    : 'border-edge bg-surface-inset text-fg-muted hover:bg-surface-hover hover:text-fg'
-                }`}
-              >
-                <Volume2 className="size-3 shrink-0" aria-hidden />
-                <span>
-                  {recorder.audioMode === 'meeting_mix'
-                    ? (zh ? '同时录电脑声音：开' : 'Computer audio: On')
-                    : (zh ? '同时录电脑声音：关' : 'Computer audio: Off')}
-                </span>
-              </button>
-            ) : recorder.audioMode === 'meeting_mix' ? (
-              <span className="inline-flex items-center rounded-md bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg">
-                {zh ? '系统声 + 麦克风混录中' : 'System audio + Mic'}
+      <div className="space-y-3 px-4 pb-3 pt-3.5">
+        {/* Hero Timer + Live Waveform */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-baseline gap-2">
+            <p className="font-mono text-[2.125rem] font-semibold leading-none tracking-tight tabular-nums text-fg">
+              {formatDuration(recorder.elapsedMs)}
+            </p>
+            {recorder.phase === 'paused' ? (
+              <span className="rounded-md bg-surface-inset px-1.5 py-0.5 text-[11px] font-medium text-fg-muted">
+                {zh ? '已暂停' : 'Paused'}
               </span>
             ) : null}
           </div>
-          {status.capture === 'recording' ? <div className="flex items-center gap-2 text-xs text-fg-muted">
-            {recorder.inputLevel != null ? <div role="meter" aria-label={copy.status.level} aria-valuemin={0} aria-valuemax={1} aria-valuenow={recorder.inputLevel} className="flex h-6 items-center gap-0.5">{[0,1,2,3,4].map(index => <span key={index} className={`w-1 rounded-full ${recorder.inputLevel! > index * .12 ? 'bg-accent' : 'bg-surface-active'}`} style={{ height: 6 + Math.min(1,recorder.inputLevel! * 3) * (index % 2 ? 10 : 18) }} />)}</div> : null}
-            <span>{recorder.inputLevel == null ? copy.status.levelUnknown : (zh ? '声音输入' : 'Sound input')}</span>
-          </div> : null}
-        </div>
-        <RecordingStatusPanel status={status} language={language} />
-        {status.sync === 'offline' ? <p role="status" className="rounded-lg bg-surface-inset px-3 py-2 text-xs leading-5 text-fg-muted">{zh ? '离线录音，联网后自动同步。' : 'Recording offline. Sync resumes when connected.'}</p> : null}
-        {status.ai === 'textDelayed' ? <p className="text-xs leading-5 text-fg-muted">{copy.status.textDelayed}</p> : null}
-        <details className="group rounded-xl bg-surface-inset px-3 py-2.5">
-          <summary className="cursor-pointer text-xs font-medium text-fg-muted outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '边听边记 · 提纲要点（结束自动融合纪要）' : 'Jot outline · Auto-fuse into summary'}</summary>
-          <textarea
-            rows={3}
-            value={liveOutline}
-            onChange={(event) => {
-              liveOutlineDirtyRef.current = true;
-              setLiveOutline(event.target.value);
-            }}
-            placeholder={zh ? '- 记录你关注的问题、关键数字或决议草稿…' : '- Jot key takeaways, numbers, or open questions…'}
-            aria-label={zh ? '边听边记提纲' : 'Live meeting outline'}
-            className="mt-2 w-full resize-none rounded-lg border border-edge bg-surface-panel p-2 text-xs leading-5 text-fg outline-none focus:border-accent"
-          />
-        </details>
-        <details className="group rounded-xl bg-surface-inset px-3 py-2.5">
-          <summary className="cursor-pointer text-xs font-medium text-fg-muted outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '查看实时文字' : 'Live transcript'}</summary>
-          <LiveTranscriptView text={transcript?.text ?? ''} placeholder={recorder.liveTranscriptionAvailable ? (zh ? '说话后，文字会陆续显示。' : 'Text will appear as you speak.') : copy.liveUnavailable} zh={zh} />
-        </details>
-        {inferredProject ? <div className="flex items-center justify-between gap-3 text-xs text-fg-muted"><span>{copy.projectLinked}</span><button type="button" className="inline-flex min-h-8 shrink-0 items-center gap-1 text-accent-fg" onClick={() => void unlinkProject()}><Unlink className="size-3" aria-hidden />{copy.undo}</button></div> : null}
-        {finishing && uploadProgress > 0 ? <div role="progressbar" aria-label={zh ? '备份录音' : 'Recording backup'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(uploadProgress)} className="h-1.5 overflow-hidden rounded-full bg-surface-hover"><div className="h-full bg-accent motion-safe:transition-[width]" style={{ width: `${uploadProgress}%` }} /></div> : null}
-        {recorder.markerMessage ? <p role="status" className="text-xs text-accent-fg">{zh ? '已标记重点，可稍后回听。' : 'Highlight saved for review.'}</p> : null}
-        {warning ? <div role="alert"><details className="text-sm leading-5 text-danger"><summary className="cursor-pointer">{warningLabel}</summary><p className="mt-2 break-words text-xs text-fg-muted">{warning}</p></details></div> : null}
-      </div>
-      <footer className="space-y-2 border-t border-edge-subtle px-4 py-3">
-        <div className="grid grid-flow-col auto-cols-fr gap-2">{controls(false)}</div>
-        {(recorder.phase === 'error' || recorder.phase === 'stopped') && recorder.draft && !finishing ? <div className="flex flex-wrap gap-2">
-          <Button disabled={recovering || finishing || activeRecording} onClick={() => void recoverDraft(recorder.draft!)}>{copy.recover}</Button>
-          <Button disabled={recovering || finishing || activeRecording || recorder.draft.sealRequested} onClick={() => void continueDraft(recorder.draft!)}>{zh ? '继续录制' : 'Continue recording'}</Button>
-          <Button disabled={recovering || finishing || activeRecording} onClick={() => void exportDraft(recorder.draft!)}>{zh ? '导出原音包' : 'Export originals'}</Button>
-        </div> : null}
-        <div className="flex items-center justify-between gap-2 text-xs text-fg-muted">
-          <span className="whitespace-nowrap">{copy.maxDuration}</span>
-          <div className="flex items-center gap-2">
-            {detail ? <button type="button" className="inline-flex min-h-9 items-center gap-1 whitespace-nowrap text-accent-fg" onClick={openNote}><FileText className="size-3.5" aria-hidden />{copy.openNote}</button> : null}
-            {!active && (!finishing || status.localComplete) ? <button type="button" className="min-h-9 rounded px-2 hover:bg-surface-hover" aria-label={copy.close} onClick={() => setVisible(false)}>{copy.close}</button> : null}
+          <div
+            role="meter"
+            aria-label={copy.status.level}
+            aria-valuemin={0}
+            aria-valuemax={1}
+            aria-valuenow={recorder.inputLevel ?? 0}
+            className="flex h-7 items-center gap-[3px]"
+          >
+            {waveWeights.map((weight, index) => {
+              const barHeight = Math.round(4 + Math.min(1, level * 3.2) * weight * 20);
+              const lit = status.capture === 'recording' && level * 3.2 * weight > 0.16;
+              return (
+                <span
+                  key={index}
+                  className={`w-[3px] rounded-full transition-[height,background-color] duration-150 ${
+                    lit ? 'bg-accent' : 'bg-surface-active'
+                  }`}
+                  style={{ height: barHeight }}
+                />
+              );
+            })}
           </div>
         </div>
+
+        {/* Obvious 2-Segment Audio Source Control (Mic Only vs System + Mic) */}
+        {isSystemAudioMixSupported() && ['recording', 'waiting_for_audio', 'paused'].includes(recorder.phase) ? (
+          <div
+            role="radiogroup"
+            aria-label={zh ? '录音音源' : 'Audio source'}
+            className="grid grid-cols-2 gap-1 rounded-xl bg-surface-inset p-1"
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={activeMode === 'microphone'}
+              disabled={switchingAudioMode || finishing}
+              onClick={() => void selectAudioMode('microphone')}
+              className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${
+                activeMode === 'microphone'
+                  ? 'bg-surface-panel font-medium text-fg shadow-xs'
+                  : 'text-fg-muted hover:text-fg'
+              }`}
+            >
+              <Mic className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">{zh ? '仅麦克风' : 'Mic only'}</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={activeMode === 'meeting_mix'}
+              disabled={switchingAudioMode || finishing}
+              title={!isElectron() ? (zh ? '在浏览器中选择在线会议标签页并勾选分享音频' : 'Share a browser tab with audio') : undefined}
+              onClick={() => void selectAudioMode('meeting_mix')}
+              className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${
+                activeMode === 'meeting_mix'
+                  ? 'bg-surface-panel font-medium text-accent-fg shadow-xs'
+                  : 'text-fg-muted hover:text-fg'
+              }`}
+            >
+              <MonitorSpeaker className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">
+                {isElectron()
+                  ? (zh ? '电脑声 + 麦克风' : 'System + Mic')
+                  : (zh ? '共享标签页音频' : 'Tab audio + Mic')}
+              </span>
+            </button>
+          </div>
+        ) : null}
+
+        {audioSourceHint ? (
+          <div className="flex items-start justify-between gap-2 rounded-lg bg-surface-inset px-2.5 py-1.5 text-[11px] leading-4 text-fg-muted">
+            <span>{audioSourceHint}</span>
+            <button
+              type="button"
+              aria-label={copy.close}
+              onClick={() => setAudioSourceHint(null)}
+              className="shrink-0 rounded p-0.5 text-fg-subtle hover:text-fg"
+            >
+              <X className="size-3" aria-hidden />
+            </button>
+          </div>
+        ) : null}
+
+        <RecordingStatusPanel status={status} language={language} />
+
+        {/* Clean Interactive Workspace Switcher (Live Text vs Jot Notes) */}
+        <div className="rounded-xl border border-edge-subtle bg-surface-inset/65 p-2.5">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="inline-flex items-center gap-1 rounded-lg bg-surface-inset p-0.5">
+              <button
+                type="button"
+                aria-pressed={captureTab === 'transcript'}
+                onClick={() => setCaptureTab(prev => prev === 'transcript' ? null : 'transcript')}
+                className={`rounded-md px-2.5 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                  captureTab === 'transcript'
+                    ? 'bg-surface-panel font-medium text-fg shadow-2xs'
+                    : 'text-fg-muted hover:text-fg'
+                }`}
+              >
+                {zh ? '实时文字' : 'Transcript'}
+              </button>
+              <button
+                type="button"
+                aria-pressed={captureTab === 'notes'}
+                onClick={() => setCaptureTab(prev => prev === 'notes' ? null : 'notes')}
+                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                  captureTab === 'notes'
+                    ? 'bg-surface-panel font-medium text-fg shadow-2xs'
+                    : 'text-fg-muted hover:text-fg'
+                }`}
+              >
+                <span>{zh ? '随手记' : 'Notes'}</span>
+                {liveOutline.trim() ? <span className="size-1.5 rounded-full bg-accent" aria-hidden /> : null}
+              </button>
+            </div>
+            {detail ? (
+              <button
+                type="button"
+                onClick={openNote}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-accent-fg hover:bg-surface-hover"
+              >
+                <FileText className="size-3" aria-hidden />
+                <span>{copy.openNote}</span>
+              </button>
+            ) : null}
+          </div>
+
+          {captureTab === 'transcript' ? (
+            <LiveTranscriptView
+              text={transcript?.text ?? ''}
+              placeholder={recorder.liveTranscriptionAvailable ? copy.waitingTranscript : copy.liveUnavailable}
+              zh={zh}
+            />
+          ) : captureTab === 'notes' ? (
+            <textarea
+              rows={3}
+              value={liveOutline}
+              onChange={(event) => {
+                liveOutlineDirtyRef.current = true;
+                setLiveOutline(event.target.value);
+              }}
+              placeholder={zh ? '记下重点结论或待办，结束后自动融合…' : 'Jot key points — auto-fused when finished…'}
+              aria-label={zh ? '随手记' : 'Quick notes'}
+              className="w-full resize-none rounded-lg border border-edge bg-surface-panel p-2 text-xs leading-5 text-fg outline-none focus:border-accent"
+            />
+          ) : null}
+        </div>
+
+        {inferredProject ? (
+          <div className="flex items-center justify-between gap-2 text-xs text-fg-muted">
+            <span className="truncate">{copy.projectLinked}</span>
+            <button type="button" className="inline-flex shrink-0 items-center gap-1 text-accent-fg hover:underline" onClick={() => void unlinkProject()}>
+              <Unlink className="size-3" aria-hidden />
+              {copy.undo}
+            </button>
+          </div>
+        ) : null}
+        {finishing && uploadProgress > 0 ? (
+          <div role="progressbar" aria-label={zh ? '备份录音' : 'Recording backup'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(uploadProgress)} className="h-1.5 overflow-hidden rounded-full bg-surface-hover">
+            <div className="h-full bg-accent motion-safe:transition-[width]" style={{ width: `${uploadProgress}%` }} />
+          </div>
+        ) : null}
+        {recorder.markerMessage ? <p role="status" className="text-xs text-accent-fg">{zh ? '✓ 已标记重点' : '✓ Highlight saved'}</p> : null}
+        {warning ? (
+          <div role="alert">
+            <details className="text-xs leading-5 text-danger">
+              <summary className="cursor-pointer">{warningLabel}</summary>
+              <p className="mt-1 break-words text-fg-muted">{warning}</p>
+            </details>
+          </div>
+        ) : null}
+      </div>
+
+      <footer className="space-y-2 border-t border-edge-subtle px-4 py-2.5">
+        <div className="grid grid-flow-col auto-cols-fr gap-2">{controls(false)}</div>
+        {(recorder.phase === 'error' || recorder.phase === 'stopped') && recorder.draft && !finishing ? (
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={recovering || finishing || activeRecording} onClick={() => void recoverDraft(recorder.draft!)}>{copy.recover}</Button>
+            <Button disabled={recovering || finishing || activeRecording || recorder.draft.sealRequested} onClick={() => void continueDraft(recorder.draft!)}>{zh ? '继续录制' : 'Continue recording'}</Button>
+            <Button disabled={recovering || finishing || activeRecording} onClick={() => void exportDraft(recorder.draft!)}>{zh ? '导出原音包' : 'Export originals'}</Button>
+          </div>
+        ) : null}
+        {recorder.elapsedMs >= 105 * 60_000 || (!active && (!finishing || status.localComplete)) ? (
+          <div className="flex items-center justify-between gap-2 text-[11px] text-fg-muted">
+            <span>{recorder.elapsedMs >= 105 * 60_000 ? copy.maxDuration : ''}</span>
+            {!active && (!finishing || status.localComplete) ? (
+              <button type="button" className="rounded px-2 py-1 hover:bg-surface-hover" aria-label={copy.close} onClick={() => setVisible(false)}>
+                {copy.close}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </footer>
     </>}
   </RecordingFloatingPanel>;

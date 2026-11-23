@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { fingerprintUnderstandingItems, normalizeUnderstandingSourceIds } from '../ipc/understanding-sources-ipc.js';
+import {
+  fingerprintUnderstandingItems,
+  normalizeUnderstandingCollectOptions,
+  normalizeUnderstandingSourceIds,
+} from '../ipc/understanding-sources-ipc.js';
 
 describe('understanding source selection', () => {
   it('requires an explicit source list', () => {
@@ -28,5 +32,16 @@ describe('understanding source selection', () => {
     expect(fingerprintUnderstandingItems([first, second])).toBe(fingerprintUnderstandingItems([second, first]));
     expect(fingerprintUnderstandingItems([{ ...first, modifiedAt: 11 }, second]))
       .not.toBe(fingerprintUnderstandingItems([first, second]));
+  });
+
+  it('normalizes optional fast mode and safe hex exclude ids', () => {
+    expect(normalizeUnderstandingCollectOptions(undefined)).toEqual({ mode: 'full', excludeIds: [] });
+    expect(normalizeUnderstandingCollectOptions({
+      mode: 'fast',
+      excludeIds: ['ABCDEF1234567890', 'abcdef1234567890', 'not-hex', 'short'],
+    })).toEqual({
+      mode: 'fast',
+      excludeIds: ['abcdef1234567890'],
+    });
   });
 });

@@ -106,8 +106,108 @@ window.fetch = async (input) => {
   if (url.includes('/api/imports/sources')) {
     return json({ ok: true, data: { sources: [{ id: 'claude-code', name: 'Claude Code', detected: true }] } });
   }
+  if (url.includes('/api/context-sources/bootstrap')) {
+    return json({
+      profileCandidates: [
+        {
+          id: 'cand-1',
+          assertionId: 'assert-1',
+          category: 'role',
+          factKey: 'role:product-eng',
+          statement: params.get('lang') === 'zh' ? '产品与工程负责人' : 'Product & engineering lead',
+          confidence: 'high',
+          evidence: ['Review-Notes.md'],
+          status: 'pending',
+        },
+        {
+          id: 'cand-2',
+          assertionId: 'assert-2',
+          category: 'preference',
+          factKey: 'pref:concise',
+          statement: params.get('lang') === 'zh' ? '偏好先给结论再展开' : 'Prefers crisp takeaways first',
+          confidence: 'medium',
+          evidence: ['Q4-Vendor-Quotes.xlsx'],
+          status: 'pending',
+        },
+      ],
+      workThreads: [
+        {
+          id: 'thread-1',
+          canonicalKey: 'source-thread:q4-quotes',
+          title: params.get('lang') === 'zh' ? '对比 Q4 供应商报价' : 'Compare Q4 vendor quotes',
+          summary: 'Reviewing Q4 pricing tables and delivery terms',
+          status: 'active',
+          horizon: 'current',
+          focusScore: 0.92,
+          confidence: 0.9,
+          userStatus: 'unreviewed',
+          projectIds: [],
+          evidenceIds: ['local-recent-files://rf-1'],
+        },
+        {
+          id: 'thread-2',
+          canonicalKey: 'source-thread:product-review',
+          title: params.get('lang') === 'zh' ? '整理产品评审议程' : 'Prep product review agenda',
+          summary: 'Drafting review milestones and open questions',
+          status: 'active',
+          horizon: 'ongoing',
+          focusScore: 0.8,
+          confidence: 0.85,
+          userStatus: 'unreviewed',
+          projectIds: [],
+          evidenceIds: ['local-recent-files://rf-2'],
+        },
+      ],
+      knowledgeCandidates: [],
+      sourceStatuses: [{ sourceId: 'local-recent-files', status: 'completed' }],
+    });
+  }
+  if (url.includes('/api/user-model/assertions') || url.includes('/api/user-model/priorities')) {
+    return json({ ok: true });
+  }
   throw new Error(`Unexpected visual fixture request: ${url}`);
 };
+
+if (stage === 'desktop-focus' && !window.electronAPI) {
+  window.electronAPI = {
+    understandingSources: {
+      catalog: async () => [],
+      collect: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1_100));
+        return [
+          {
+            sourceId: 'local-recent-files',
+            status: 'completed',
+            items: [
+              {
+                id: 'rf-1',
+                sourceId: 'local-recent-files',
+                type: 'document',
+                title: 'Q4-Vendor-Quotes.xlsx',
+                group: 'Desktop',
+                text: 'Q4 vendor quote comparison',
+                ownerAttribution: 'user',
+                sensitivity: 'personal',
+                evidenceRef: 'local-recent-files://rf-1',
+              },
+              {
+                id: 'rf-2',
+                sourceId: 'local-recent-files',
+                type: 'document',
+                title: 'Review-Notes.md',
+                group: 'Documents',
+                text: 'Product review notes',
+                ownerAttribution: 'user',
+                sensitivity: 'personal',
+                evidenceRef: 'local-recent-files://rf-2',
+              },
+            ],
+          },
+        ];
+      },
+    },
+  } as never;
+}
 
 export function VisualFixture() {
   if (stage === 'profile') return <div className="flex h-dvh bg-surface-base text-fg">

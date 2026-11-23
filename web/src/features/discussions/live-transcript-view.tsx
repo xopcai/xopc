@@ -11,20 +11,26 @@ export function LiveTranscriptView({ text, placeholder, zh }: { text: string; pl
     if (following && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight;
   }, [displayed, following]);
   function pause() { setSnapshot(displayed); setFollowing(false); }
-  return <div className="mt-2">
+  return <div className="relative">
     <div ref={viewport} tabIndex={0} aria-label={zh ? '实时文字' : 'Live transcript'}
-      className="h-32 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="h-20 overflow-y-auto whitespace-pre-wrap text-xs leading-5 text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent"
       onScroll={event => {
         const node = event.currentTarget;
         if (following && node.scrollHeight - node.scrollTop - node.clientHeight > 24) pause();
       }}
       onPointerDown={pause} onKeyDown={event => { if (event.key !== 'Tab') pause(); }}>
-      {displayed || placeholder}
+      {displayed ? displayed : <span className="text-fg-muted">{placeholder}</span>}
     </div>
-    <div className="flex h-9 items-center justify-end text-xs text-fg-muted">
-      {following ? <span>{zh ? '跟随最新文字' : 'Following live text'}</span> : <button type="button"
-        className="min-h-9 rounded-lg px-2 text-accent-fg hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"
-        onClick={() => setFollowing(true)}>{pending ? (zh ? '有新文字 · 回到最新' : 'New text · Back to latest') : (zh ? '回到最新' : 'Back to latest')}</button>}
-    </div>
+    {!following ? (
+      <div className="mt-1 flex justify-end">
+        <button
+          type="button"
+          className="inline-flex h-6 items-center rounded-full border border-edge bg-surface-panel px-2.5 text-[11px] font-medium text-accent-fg shadow-xs hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"
+          onClick={() => setFollowing(true)}
+        >
+          {pending ? (zh ? '有新文字 · 回到最新' : 'New text · Latest') : (zh ? '回到最新' : 'Latest')}
+        </button>
+      </div>
+    ) : null}
   </div>;
 }

@@ -144,8 +144,24 @@ export function registerContextSourceRoutes(authenticated: Hono, deps: Authentic
     if (!items.length || (processingPolicy !== 'local_only' && processingPolicy !== 'remote_allowed')) {
       return c.json({ error: 'items and an explicit processingPolicy are required' }, 400);
     }
+    const runId = stringField(input, 'workDiscoveryRunId') || undefined;
+    const locale = stringField(input, 'locale') || undefined;
+    const rawCheckpoints = input && typeof input === 'object'
+      && (input as Record<string, unknown>).sourceCheckpoints
+      && typeof (input as Record<string, unknown>).sourceCheckpoints === 'object'
+      && !Array.isArray((input as Record<string, unknown>).sourceCheckpoints)
+      ? (input as { sourceCheckpoints: Record<string, unknown> }).sourceCheckpoints
+      : undefined;
     try {
-      const result = await service.importUnderstandingSources(items, processingPolicy, c.req.raw.signal);
+      const result = await service.importUnderstandingSources(
+        items,
+        processingPolicy,
+        c.req.raw.signal,
+        runId,
+        rawCheckpoints,
+        undefined,
+        locale,
+      );
       return c.json(result, 201);
     } catch (error) {
       return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);

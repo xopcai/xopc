@@ -25,11 +25,11 @@ export function RecordingFloatingPanel({ compact, onCompactChange, title, subtit
     try { sessionStorage.setItem(STORAGE_KEY,JSON.stringify(next)); } catch { /* Position is optional UI state. */ }
   }
   return <aside ref={root} aria-label={zh ? '录音浮窗' : 'Recording window'} data-recording-window={compact ? 'compact' : 'expanded'}
-    className="fixed z-[125] flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay text-fg shadow-elevated"
-    style={{ ...layout.style, width: compact ? 340 : 400, cursor: moving ? 'grabbing' : undefined }}>
-    <header className={`flex shrink-0 items-center gap-1 ${compact ? 'p-2' : 'border-b border-edge-subtle px-3 py-2'}`}>
+    className="fixed z-[125] flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay/95 text-fg shadow-elevated backdrop-blur-md"
+    style={{ ...layout.style, width: compact ? 308 : 356, cursor: moving ? 'grabbing' : undefined }}>
+    <header className={`flex shrink-0 items-center gap-1.5 ${compact ? 'px-2.5 py-2' : 'border-b border-edge-subtle px-3 py-2'}`}>
       <button type="button" aria-label={zh ? '移动录音窗' : 'Move recording window'} title={zh ? '拖动移动，也可使用方向键或点击选择位置' : 'Drag, use arrow keys, or click to choose a position'}
-        aria-expanded={menu} className="flex size-10 shrink-0 touch-none items-center justify-center rounded-lg text-fg-muted outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
+        aria-expanded={menu} className="flex size-8 shrink-0 touch-none items-center justify-center rounded-lg text-fg-subtle outline-none hover:bg-surface-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
         onPointerDown={event => {
           if (event.button !== 0 || !event.isPrimary) return;
           const rect = root.current?.getBoundingClientRect(); if (!rect) return;
@@ -54,10 +54,10 @@ export function RecordingFloatingPanel({ compact, onCompactChange, title, subtit
           if (event.key === 'Escape') setMenu(false);
           if (event.key === 'Home') { event.preventDefault(); move({ x: layout.area.right, y: layout.area.bottom }); }
         }}><GripVertical className="size-4" aria-hidden /></button>
-      <div className="min-w-0 flex-1"><div className={`${compact ? 'text-lg' : 'text-sm'} font-medium tabular-nums`}>{title}</div>{subtitle ? <div className="truncate text-xs text-fg-muted">{subtitle}</div> : null}</div>
+      <div className="min-w-0 flex-1"><div className={`${compact ? 'text-base' : 'text-xs'} font-medium tabular-nums`}>{title}</div>{subtitle ? <div className="truncate text-[11px] text-fg-muted">{subtitle}</div> : null}</div>
       {compact ? compactActions : null}
       <button type="button" aria-label={compact ? (zh ? '展开录音窗' : 'Expand recording window') : (zh ? '缩小录音窗' : 'Minimize recording window')} aria-expanded={!compact}
-        className="flex size-10 shrink-0 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         onClick={() => { onCompactChange(!compact); setMenu(false); }}>{compact ? <Maximize2 className="size-4" aria-hidden /> : <Minimize2 className="size-4" aria-hidden />}</button>
     </header>
     {menu ? <div className="grid shrink-0 grid-cols-2 gap-1 border-b border-edge-subtle p-2" aria-label={zh ? '选择浮窗位置' : 'Choose window position'}>
