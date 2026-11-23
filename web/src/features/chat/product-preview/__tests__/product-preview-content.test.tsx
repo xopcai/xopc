@@ -52,6 +52,24 @@ describe('chat product previews', () => {
     expect(dialog.textContent).toContain('Save');
     expect(dialog.textContent).not.toContain('Open full page');
   });
+
+  it('opens a Personal Agent scheduled task in the personal schedule modal', async () => {
+    useLocaleStore.setState({ language: 'zh' });
+    mocks.getAutomation.mockResolvedValue({ automation: { id: 'p-sched-1', name: 'AI 新闻早报', enabled: true,
+      action: { kind: 'personal_task', agentId: 'personal', conversationId: 'conv-1', instruction: '整理今天最重要的 AI 新闻', locale: 'zh' },
+      management: { owner: 'personal-agent', editable: ['enabled', 'trigger'], runnable: true, deletable: true },
+      trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: '0 9 * * *', tz: 'Asia/Shanghai' } },
+      conversationMode: 'new_session', delivery: { notificationPolicy: 'attention', destinations: [] }, state: {}, createdAtMs: 1, updatedAtMs: 1 } });
+    await render('/automations?automation=p-sched-1', true);
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain('编辑定时任务');
+    expect(dialog.querySelector('input')?.value).toBe('AI 新闻早报');
+    expect(dialog.querySelector('textarea')?.value).toBe('整理今天最重要的 AI 新闻');
+    expect(dialog.textContent).toContain('暂停');
+    expect(dialog.textContent).toContain('立即运行');
+    expect(dialog.textContent).toContain('保存');
+    expect(dialog.textContent).not.toContain('打开独立页面');
+  });
   it('shows project brief and recent progress without management controls', async () => {
     await render('/projects/p1');
     expect(container.textContent).toContain('Build a calendar');

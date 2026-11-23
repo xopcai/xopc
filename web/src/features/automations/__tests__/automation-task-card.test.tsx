@@ -68,6 +68,17 @@ describe('scheduled task card and shared editor', () => {
       expectedRevision: task.updatedAtMs,
     }));
   });
+  it('opens an embedded chat card directly into the modal route without expanding inline', async () => {
+    await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter initialEntries={['/personal']}><AutomationTaskCard automationId="weekly" language="zh" embedded /><Location /></MemoryRouter></SWRConfig>));
+    expect(container.querySelector('details')).toBeNull();
+    const link = container.querySelector<HTMLAnchorElement>('a[data-product-delivery="automation"]');
+    expect(link).not.toBeNull();
+    expect(link?.textContent).toContain('Current saved task');
+    expect(link?.textContent).toContain('10:00');
+    await act(async () => link!.click());
+    expect(container.querySelector('output')?.textContent).toBe('/personal?preview=%2Fautomations%3Fautomation%3Dweekly');
+  });
+
   it('reads the saved schedule and resumes the canonical configuration conversation', async () => {
     await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><AutomationTaskCard automationId="weekly" language="zh" /><Location /></MemoryRouter></SWRConfig>));
     expect(container.textContent).toContain('Current saved task');

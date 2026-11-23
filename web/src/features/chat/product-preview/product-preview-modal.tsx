@@ -8,7 +8,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { withReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
 import { automationApi } from '@/features/automations/automation-api';
-import { AutomationEditDialog } from '@/features/automations/automation-task-card';
+import { AutomationEditDialog, refreshAutomationViews } from '@/features/automations/automation-task-card';
+import { PersonalScheduleDialog, refreshPersonalSchedules, type PersonalSchedule } from '@/features/personal-agent/personal-schedules';
 import { Button } from '@/components/ui/button';
 
 import type { ProductPreviewTarget } from './product-preview-route';
@@ -33,7 +34,22 @@ function AutomationTaskDetailsDialog({ target, backgroundPath, onClose }: { targ
   const language = useLocaleStore(state => state.language);
   const { data, error, mutate } = useSWR(['automation-card', target.id], () => automationApi.get(target.id), { revalidateOnFocus: false, shouldRetryOnError: false });
   if (data?.automation) {
-    if (data.automation.action.kind === 'agent' && !data.automation.management) return <AutomationEditDialog automation={data.automation} language={language} onClose={onClose} />;
+    if (data.automation.action.kind === 'personal_task') {
+      return <PersonalScheduleDialog
+        key={data.automation.id}
+        zh={language === 'zh'}
+        schedule={data.automation as PersonalSchedule}
+        onClose={onClose}
+        onSaved={() => {
+          void refreshAutomationViews();
+          void refreshPersonalSchedules();
+          onClose();
+        }}
+      />;
+    }
+    if (data.automation.action.kind === 'agent' && !data.automation.management) {
+      return <AutomationEditDialog key={data.automation.id} automation={data.automation} language={language} onClose={onClose} />;
+    }
     return <ReadOnlyProductPreviewModal target={target} backgroundPath={backgroundPath} onClose={onClose} />;
   }
   const zh = language === 'zh';

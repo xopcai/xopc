@@ -65,7 +65,9 @@ function ProductDetailsPreview({ target }: { target: ProductPreviewTarget }) {
 
   if (data.kind === 'automation') {
     const automation = data.value;
-    const instruction = automation.action.kind === 'agent' ? automation.action.instruction : undefined;
+    const instruction = automation.action.kind === 'agent' || automation.action.kind === 'personal_task'
+      ? automation.action.instruction
+      : undefined;
     return <div className="space-y-6"><div className={sectionClass}><h2 className={headingClass}>{automation.name}</h2><p className={metaClass}>{isCompletedOneTimeTask(automation) ? (zh ? '已完成' : 'Completed') : automation.enabled ? (zh ? '已启用' : 'Enabled') : (zh ? '已暂停' : 'Paused')} · {automationTriggerLabel(automation.trigger, labels.automations, labels.cron, language)}</p>{markdown(automation.description)}{markdown(instruction)}
       {automation.state.nextRunAtMs && <p className={metaClass}>{zh ? '下次运行' : 'Next run'} · {new Date(automation.state.nextRunAtMs).toLocaleString(zh ? 'zh-CN' : 'en-US')}</p>}
       {automation.state.lastError && <p role="alert" className="text-sm text-danger">{automation.state.lastError}</p>}</div>

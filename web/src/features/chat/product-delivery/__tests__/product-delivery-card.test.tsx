@@ -218,7 +218,7 @@ describe('AssistantResultTail product deliveries', () => {
     );
   });
 
-  it('presents the current saved automation with edit and continue actions', async () => {
+  it('opens the saved automation directly in the preview modal without expanding inline', async () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 2,
       operation: 'started',
@@ -235,19 +235,47 @@ describe('AssistantResultTail product deliveries', () => {
     await act(async () => {
       root.render(
         <MemoryRouter initialEntries={['/chat/session-1']}>
+          <LocationProbe />
           {renderDelivery(delivery)}
         </MemoryRouter>,
       );
     });
 
-    expect(container.textContent).toContain('Memory daily reconciliation');
-    expect(container.textContent).toContain('已启用');
-    expect(container.textContent).toContain('继续');
+    expect(container.querySelector('details')).toBeNull();
+    const link = container.querySelector<HTMLAnchorElement>('a[data-product-delivery="automation"]');
+    expect(link).not.toBeNull();
+    expect(link?.textContent).toContain('Memory daily reconciliation');
     expect(container.textContent).not.toContain('继续在对话中处理');
     expect(container.textContent).not.toContain('已就绪');
     expect(container.textContent).not.toContain('enabled');
-    expect(container.querySelectorAll('button')).toHaveLength(2);
+    expect(container.querySelectorAll('button')).toHaveLength(0);
     expect(container.querySelector('[data-turn-tail]')).not.toBeNull();
+
+    await act(async () => link!.click());
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
+      '/chat/session-1?preview=%2Fautomations%3Fautomation%3Dautomation-1',
+    );
+  });
+
+  it('opens a scheduled task in the modal over the Personal AI conversation', async () => {
+    const delivery: ProductDeliveryEnvelope = {
+      version: 2,
+      operation: 'created',
+      primary: { kind: 'automation', id: 'automation-1', title: 'AI 新闻早报', capabilities: ['open'] },
+    };
+    await act(async () => root.render(<MemoryRouter initialEntries={['/personal']}>
+      <LocationProbe />
+      {renderDelivery(delivery)}
+    </MemoryRouter>));
+
+    expect(container.querySelector('details')).toBeNull();
+    const link = container.querySelector<HTMLAnchorElement>('a[data-product-delivery="automation"]');
+    expect(link).not.toBeNull();
+    await act(async () => link!.click());
+
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
+      '/personal?preview=%2Fautomations%3Fautomation%3Dautomation-1',
+    );
   });
 
   it('presents a delegated task as one clear entry without raw runtime state or a second action', () => {

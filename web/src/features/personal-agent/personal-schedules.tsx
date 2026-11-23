@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { CalendarClock, Plus, X } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
-import useSWR from 'swr';
+import useSWR, { mutate as revalidate } from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { DateTimePicker } from '@/components/ui/date-time-picker';
@@ -11,6 +11,7 @@ import { TimePicker } from '@/components/ui/time-picker';
 import type { Automation, AutomationSchedule } from '@/features/automations/automation-api';
 import { automationNextRunLabel, automationTriggerLabel, isCompletedOneTimeTask } from '@/features/automations/automation-display';
 import { buildInput, formFromAutomation, initialForm, type FormState } from '@/features/automations/automation-form';
+import { refreshAutomationViews } from '@/features/automations/automation-task-card';
 import { messages } from '@/i18n/messages';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -19,8 +20,12 @@ import { formatPersonalScheduleTime } from './personal-task-time';
 
 const path = '/api/personal-agent/schedules';
 const fieldClass = 'w-full rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg focus-visible:outline-2 focus-visible:outline-accent';
-type PersonalSchedule = Automation & { action: Extract<Automation['action'], { kind: 'personal_task' }> };
+export type PersonalSchedule = Automation & { action: Extract<Automation['action'], { kind: 'personal_task' }> };
 type ScheduleInput = { name: string; instruction: string; locale: 'zh' | 'en'; schedule: AutomationSchedule };
+
+export async function refreshPersonalSchedules() {
+  await revalidate(key => Array.isArray(key) && key[0] === path);
+}
 
 function scheduleRequest<T>(suffix = '', method?: string, input?: object) {
   return fetchJson<{ payload: T }>(apiUrl(path + suffix), { method, body: input ? JSON.stringify(input) : undefined });
@@ -71,11 +76,11 @@ export function PersonalSchedules({ scope, visible, zh }: { scope: string; visib
     </ul> : null}
     {editor ? <PersonalScheduleDialog key={editor === 'new' ? 'new' : editor.id}
       zh={zh} schedule={editor === 'new' ? undefined : editor} onClose={() => setEditor(null)}
-      onSaved={() => { void mutate(); setEditor(null); }} /> : null}
+      onSaved={() => { void mutate(); void refreshAutomationViews(); setEditor(null); }} /> : null}
   </section>;
 }
 
-function PersonalScheduleDialog({ zh, schedule, onClose, onSaved }: {
+export function PersonalScheduleDialog({ zh, schedule, onClose, onSaved }: {
   zh: boolean; schedule?: PersonalSchedule; onClose: () => void; onSaved: () => void;
 }) {
   const language = zh ? 'zh' : 'en';
