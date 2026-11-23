@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { buildCapabilityPlansForConfig } from '../capabilities/readiness/from-config.js';
+import { inspectWeixinChannelState } from '../channels/weixin/outbound-targets.js';
 import type { Config } from '../config/schema.js';
 import { getPersonalAgent } from '../personal-agent/repository.js';
 import { getConfiguredProviders } from '../providers/index.js';
@@ -244,18 +245,21 @@ export async function inspectSelfConfig(
 
       case 'channels': {
         const telegram = summarizeChannel(config.channels?.telegram);
-        const weixin = summarizeChannel(config.channels?.weixin);
+        const weixin = inspectWeixinChannelState(config);
         const configured = telegram.enabled || weixin.enabled;
         const blockers: string[] = [];
         if (telegram.enabled && !telegram.hasCredential && !process.env.TELEGRAM_BOT_TOKEN) {
           blockers.push('Telegram is enabled without a bot token.');
+        }
+        if (weixin.enabled && !weixin.hasCredential) {
+          blockers.push('Weixin is enabled without a logged-in account.');
         }
         return {
           domain: 'channels',
           configured,
           ready: configured && blockers.length === 0,
           blockers,
-          summary: `Telegram: ${telegram.enabled ? 'enabled' : 'disabled'}; Weixin: ${weixin.enabled ? 'enabled' : 'disabled'}.`,
+          summary: `Telegram: ${telegram.enabled ? 'enabled' : 'disabled'}; Weixin: ${weixin.enabled ? `enabled (${weixin.deliverableRecipientCount} deliverable recipient(s))` : 'disabled'}.`,
           details: { telegram, weixin },
           settingsSection: 'channels',
           setupScene: 'channels',

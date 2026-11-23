@@ -10,6 +10,14 @@ export {
   resolveWeixinAccountIdFromSessions,
 } from './delivery-to.js';
 export type { NormalizedWeixinCronDelivery } from './delivery-to.js';
+export {
+  inspectWeixinChannelState,
+  listDeliverableWeixinTargets,
+} from './outbound-targets.js';
+export type {
+  DeliverableWeixinTarget,
+  WeixinChannelReadiness,
+} from './outbound-targets.js';
 export { runWeixinQrLoginCli } from './cli/qr-login.js';
 export type { WeixinQrLoginCliOptions } from './cli/qr-login.js';
 export {

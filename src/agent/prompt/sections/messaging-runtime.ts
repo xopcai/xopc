@@ -10,14 +10,14 @@ export function buildMessagingSection(params: {
   }
   const channelList = params.channels.join(', ');
   const messageToolLine = params.hasSendMessage
-    ? `- Use \`send_message\` for proactive sends + channel actions; provide \`channel\` and \`chat_id\` together for a cross-channel destination`
+    ? `- Use \`send_message\` for proactive sends + channel actions; provide \`channel\` (and \`chat_id\` when targeting a specific peer, or omit \`chat_id\` in an authorized owner conversation to use the channel's single default recipient)`
     : '- Outbound messaging tools are not available in this session';
 
   return [
     '## Messaging',
     `- Reply in current session → automatically routes to the source channel (${channelList})`,
     messageToolLine,
-    ...(params.hasSendMessage ? [`- After delivering your reply with \`send_message\`, respond only ${NO_REPLY} to avoid duplicates.`] : []),
+    ...(params.hasSendMessage ? [`- After delivering your reply to the current conversation with \`send_message\`, respond only ${NO_REPLY} to avoid duplicates. For a cross-channel send, confirm the outcome in the current conversation.`] : []),
   ].join('\n');
 }
 

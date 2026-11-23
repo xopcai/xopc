@@ -123,6 +123,7 @@ import type { NotesService } from '../../notes/index.js';
 import type { ProjectService } from '../../projects/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
 import { createLogger } from '../../utils/logger.js';
+import { resolveDefaultCrossChannelTarget } from '../../channels/outbound-targets.js';
 import { skillEnvironmentId } from '../skills/installer.js';
 import { getConversationRouting } from '../../routing/session-key.js';
 import type { SkillManager } from '../skills/skill-manager.js';
@@ -177,6 +178,7 @@ export interface ToolFactoryDeps {
   /** Gateway: enables the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
   canConfigureEndpoint?: (endpointId: string) => boolean;
+  deliverOutbound?: (msg: import('../../infra/bus/index.js').OutboundMessage) => Promise<void>;
   getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
   getMcpSetupService?: () => import('../mcp/conversation-setup.js').McpConversationSetup | undefined;
@@ -725,7 +727,17 @@ export class AgentToolsFactory {
       createWebExtractTool({ getConfig: () => this.deps.getConfig?.() }),
       // Note: TTS is NOT handled by send_message tool anymore
       // TTS is applied at the ChannelManager dispatch layer
-      createMessageTool(bus, deliveryContext),
+      createMessageTool(bus, deliveryContext, {
+        canResolveDefaultTarget: productToolDeps.canConfigureFromConversation,
+        resolveDefaultTarget: ({ channel, accountId }) =>
+          resolveDefaultCrossChannelTarget({
+            channel,
+            accountId,
+            config: this.deps.getConfig?.(),
+            sessionStore: this.deps.getSessionStore?.(),
+          }),
+        deliverOutbound: this.deps.deliverOutbound,
+      }),
       ...(mergeTtsConfigFromAppConfig(cfg?.messages?.tts).enabled
         ? [
             createTextToSpeechTool({

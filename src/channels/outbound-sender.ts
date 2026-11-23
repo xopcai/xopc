@@ -196,7 +196,10 @@ export class ChannelOutboundSender {
         );
       }
 
-      if (options?.requireDelivery && !result?.success) throw new Error('Channel delivery did not succeed.');
+      if (options?.requireDelivery && !result?.success) {
+        const detail = result?.error?.trim();
+        throw new Error(detail ? `Channel delivery did not succeed: ${detail}` : 'Channel delivery did not succeed.');
+      }
       if (!result) {
         if (queueId) this.persistStore!.ack(queueId);
         return;

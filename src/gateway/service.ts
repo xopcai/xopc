@@ -881,6 +881,7 @@ export class GatewayService {
         runningChannels: new Set(this.getRunningChannelIds()) }),
       getPhoneSetupService: () => this.phoneSetup,
       canConfigureEndpoint: endpointId => this.realtime.canConfigureEndpoint(endpointId),
+      deliverOutbound: (msg) => this.channelManager.send(msg, { skipPersist: true, requireDelivery: true }),
       emitBrowserEvent: (type, payload) => {
         if (type === 'browser.managed.live') {
           const { conversationId, source, runtime } = payload as {

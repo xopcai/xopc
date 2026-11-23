@@ -299,6 +299,7 @@ export class AgentService {
       getCapabilityChannelState: config.getCapabilityChannelState,
       getPhoneSetupService: config.getPhoneSetupService,
       canConfigureEndpoint: config.canConfigureEndpoint,
+      deliverOutbound: config.deliverOutbound,
       emitBrowserEvent: config.emitBrowserEvent,
       getNotesService: config.getNotesService,
       getProjectService: config.getProjectService,

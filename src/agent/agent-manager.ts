@@ -198,6 +198,7 @@ export interface AgentManagerConfig {
   /** Gateway: exposes AutomationService for the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
   canConfigureEndpoint?: (endpointId: string) => boolean;
+  deliverOutbound?: (msg: import('../infra/bus/index.js').OutboundMessage) => Promise<void>;
   getPhoneSetupService?: () => import('../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../browser/setup/service.js').BrowserSetupService | undefined;
   getMcpSetupService?: () => import('./mcp/conversation-setup.js').McpConversationSetup | undefined;
@@ -511,6 +512,7 @@ export class AgentManager implements AgentInstanceGateway {
       getCapabilityChannelState: this.config.getCapabilityChannelState,
       getPhoneSetupService: this.config.getPhoneSetupService,
       canConfigureEndpoint: this.config.canConfigureEndpoint,
+      deliverOutbound: this.config.deliverOutbound,
       emitBrowserEvent: this.config.emitBrowserEvent,
       getNotesService: this.config.getNotesService,
       getProjectService: this.config.getProjectService,

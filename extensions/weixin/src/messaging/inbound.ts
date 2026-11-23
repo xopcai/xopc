@@ -298,6 +298,47 @@ export function tryHydrateAnyAccountContextTokenFromDisk(
   return { accountId, token: hit.token, sendTo: hit.sendTo };
 }
 
+/**
+ * List peers that have a cached context_token (in memory or on disk) for an account.
+ * Returns only non-secret peer identifiers; never returns token values.
+ */
+export function listContextTokenPeersForAccount(
+  accountId: string,
+): Array<{ peerKey: string; sendTo?: string }> {
+  const norm = normalizeWeixinAccountId(accountId);
+  const prefix = `${norm}:`;
+  const byPeer = new Map<string, { peerKey: string; sendTo?: string }>();
+
+  for (const [k, entry] of contextTokenStore) {
+    if (!k.startsWith(prefix) || !entry?.token?.trim()) continue;
+    const peerKey = normalizeIlinkUserIdForContext(k.slice(prefix.length));
+    if (!peerKey) continue;
+    const sendTo = entry.sendTo?.trim() || undefined;
+    byPeer.set(peerKey, { peerKey, ...(sendTo ? { sendTo } : {}) });
+  }
+
+  const filePath = canonicalContextTokenFilePath(accountId);
+  try {
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const tokens = JSON.parse(raw) as Record<string, unknown>;
+      for (const [jsonKey, val] of Object.entries(tokens)) {
+        const entry = parsePersistedPeerVal(val);
+        if (!entry?.token) continue;
+        const peerKey = normalizeIlinkUserIdForContext(jsonKey);
+        if (!peerKey) continue;
+        const existing = byPeer.get(peerKey);
+        const sendTo = existing?.sendTo || entry.sendTo?.trim() || undefined;
+        byPeer.set(peerKey, { peerKey, ...(sendTo ? { sendTo } : {}) });
+      }
+    }
+  } catch (err) {
+    logger.debug(`listContextTokenPeersForAccount: failed to read ${filePath}: ${String(err)}`);
+  }
+
+  return [...byPeer.values()];
+}
+
 // ---------------------------------------------------------------------------
 // Message ID generation
 // ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../config/schema.js';
+import type { OutboundMessage } from '../infra/bus/index.js';
 import type { SessionStore } from '../session/store.js';
 import type { AutomationService } from '../automations/index.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
@@ -32,6 +33,8 @@ export interface AgentServiceConfig {
   };
   getAutomationService?: () => AutomationService | undefined;
   canConfigureEndpoint?: (endpointId: string) => boolean;
+  /** Gateway: direct verified outbound delivery for proactive cross-channel sends. */
+  deliverOutbound?: (msg: OutboundMessage) => Promise<void>;
   getPhoneSetupService?: () => import('../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../browser/setup/service.js').BrowserSetupService | undefined;
   getMcpSetupService?: () => import('./mcp/conversation-setup.js').McpConversationSetup | undefined;

@@ -53,4 +53,80 @@ describe('send_message tool', () => {
     expect(publishOutbound).not.toHaveBeenCalled();
     expect(result.content[0]?.text).toContain('channel and chat_id');
   });
+
+  it('auto-resolves the default Weixin recipient and verifies delivery in an authorized owner conversation', async () => {
+    const publishOutbound = vi.fn().mockResolvedValue(undefined);
+    const deliverOutbound = vi.fn().mockResolvedValue(undefined);
+    const resolveDefaultTarget = vi.fn().mockResolvedValue({
+      ok: true,
+      channel: 'weixin',
+      chatId: 'alice@im.wechat',
+      accountId: 'bot-1',
+    });
+    const tool = createMessageTool(
+      { publishOutbound } as never,
+      () => ({ channel: 'webchat', chatId: 'chat-1' }),
+      {
+        canResolveDefaultTarget: () => true,
+        resolveDefaultTarget,
+        deliverOutbound,
+      },
+    );
+
+    const result = await tool.execute('call-1', { content: '你好', channel: 'weixin' });
+
+    expect(resolveDefaultTarget).toHaveBeenCalledWith({ channel: 'weixin', accountId: undefined });
+    expect(deliverOutbound).toHaveBeenCalledWith(expect.objectContaining({
+      channel: 'weixin',
+      chat_id: 'alice@im.wechat',
+      content: '你好',
+      metadata: { accountId: 'bot-1' },
+    }));
+    expect(publishOutbound).not.toHaveBeenCalled();
+    expect(result.content[0]?.text).toContain('Message sent to weixin (alice@im.wechat)');
+  });
+
+  it('refuses default recipient lookup outside an authorized owner conversation', async () => {
+    const publishOutbound = vi.fn().mockResolvedValue(undefined);
+    const resolveDefaultTarget = vi.fn();
+    const tool = createMessageTool(
+      { publishOutbound } as never,
+      () => ({ channel: 'telegram', chatId: 'tg-peer' }),
+      {
+        canResolveDefaultTarget: () => false,
+        resolveDefaultTarget,
+      },
+    );
+
+    const result = await tool.execute('call-1', { content: 'hi', channel: 'weixin' });
+
+    expect(resolveDefaultTarget).not.toHaveBeenCalled();
+    expect(publishOutbound).not.toHaveBeenCalled();
+    expect(result.content[0]?.text).toContain('authorized owner conversation');
+  });
+
+  it('surfaces real external channel delivery errors instead of reporting success', async () => {
+    const publishOutbound = vi.fn().mockResolvedValue(undefined);
+    const deliverOutbound = vi.fn().mockRejectedValue(
+      new Error('Channel delivery did not succeed: weixin: missing context_token for this user'),
+    );
+    const tool = createMessageTool(
+      { publishOutbound } as never,
+      () => ({ channel: 'webchat', chatId: 'chat-1' }),
+      {
+        deliverOutbound,
+      },
+    );
+
+    const result = await tool.execute('call-1', {
+      content: 'hi',
+      channel: 'weixin',
+      chat_id: 'alice@im.wechat',
+    });
+
+    expect(deliverOutbound).toHaveBeenCalledTimes(1);
+    expect(publishOutbound).not.toHaveBeenCalled();
+    expect(result.content[0]?.text).toContain('Send error:');
+    expect(result.content[0]?.text).toContain('missing context_token');
+  });
 });

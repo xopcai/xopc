@@ -11,8 +11,14 @@ export {
   normalizeWeixinCronDeliveryTo,
   normalizeWeixinCronDeliveryToResolved,
   resolveWeixinAccountIdFromSessions,
+  inspectWeixinChannelState,
+  listDeliverableWeixinTargets,
 } from '../../../extensions/weixin/src/index.js';
-export type { NormalizedWeixinCronDelivery } from '../../../extensions/weixin/src/index.js';
+export type {
+  NormalizedWeixinCronDelivery,
+  DeliverableWeixinTarget,
+  WeixinChannelReadiness,
+} from '../../../extensions/weixin/src/index.js';
 export type {
   WeixinQrLoginCliOptions,
   WeixinGatewayQrLoginStartOptions,
