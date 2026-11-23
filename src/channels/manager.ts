@@ -45,6 +45,7 @@ export class ChannelManager {
   private readonly heartbeat: ChannelHeartbeatScheduler;
   private readonly outbound: ChannelOutboundSender;
   private sessionModelHooks?: ChannelPluginSessionModelHooks;
+  private statusChangeListener?: () => void;
 
   constructor(config: Config, private readonly bus: MessageBus) {
     this.config = config;
@@ -62,8 +63,15 @@ export class ChannelManager {
       registry: this.registry,
       getConfig: () => this.config,
       getSessionModelHooks: () => this.sessionModelHooks,
-      onPluginStarted: (plugin) => this.heartbeat.schedule(plugin),
-      onPluginStopped: (pluginId) => this.heartbeat.clear(pluginId),
+      onPluginStarted: (plugin) => {
+        this.heartbeat.schedule(plugin);
+        this.statusChangeListener?.();
+      },
+      onPluginStopped: (pluginId) => {
+        this.heartbeat.clear(pluginId);
+        this.statusChangeListener?.();
+      },
+      onStatusChanged: () => this.statusChangeListener?.(),
     });
 
     this.outbound = new ChannelOutboundSender({
@@ -81,6 +89,10 @@ export class ChannelManager {
   /** Call before `initialize()` so plugins can persist per-session model overrides. */
   setSessionModelHooks(hooks: ChannelPluginSessionModelHooks | undefined): void {
     this.sessionModelHooks = hooks;
+  }
+
+  setStatusChangeListener(listener: (() => void) | undefined): void {
+    this.statusChangeListener = listener;
   }
 
   enableOutboundPersistence(agentId: string): void {
@@ -105,6 +117,11 @@ export class ChannelManager {
   /** Channel IDs whose runtime reports connected (e.g. Telegram polling active). */
   getRunningChannels(): string[] {
     return this.registry.runningChannelIds(this.config, (id) => this.lifecycle.isInitialized(id));
+  }
+
+  /** Channel IDs whose runtime is actively connecting. */
+  getConnectingChannels(): string[] {
+    return this.registry.connectingChannelIds(this.config, (id) => this.lifecycle.isInitialized(id));
   }
 
   // ── Lifecycle pass-throughs ────────────────────────────────────────────

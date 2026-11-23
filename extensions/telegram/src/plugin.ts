@@ -174,6 +174,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   private sessionModelHooks?: ChannelPluginSessionModelHooks;
   private inboundCoalescer = createTelegramInboundCoalescer();
   private execApprovalUnregister: (() => void) | null = null;
+  private notifyStatusChanged?: () => void;
 
   readonly actions = {
     handleAction: handleTelegramChannelAction,
@@ -195,6 +196,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     this.bus = options.bus;
     this.cfg = options.config;
     this.sessionModelHooks = options.sessionModel;
+    this.notifyStatusChanged = options.host?.notifyStatusChanged;
 
     this.accountManager = new TelegramAccountManager();
     this.loadAccounts();
@@ -405,9 +407,19 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     }
   }
 
-  channelIsRunning(cfg: Config): boolean {
+  channelIsRunning(_cfg: Config): boolean {
     return this.accountManager.getAllAccounts().some(
       (a) => a.enabled !== false && !!a.botToken && this.accountManager.isRunning(a.accountId),
+    );
+  }
+
+  channelIsConnecting(_cfg: Config): boolean {
+    return this.accountManager.getAllAccounts().some(
+      (a) =>
+        a.enabled !== false &&
+        !!a.botToken &&
+        (this.accountManager.isStarting(a.accountId) ||
+          (this.accountManager.hasPollingSession(a.accountId) && !this.accountManager.isRunning(a.accountId))),
     );
   }
 
@@ -507,7 +519,11 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         botToken: resolved.token,
         bot,
         stallThresholdMs: account.pollingStallThresholdMs,
-        onPoll: () => this.accountManager.updateStatus({ accountId: account.accountId, running: true, mode: 'polling' }),
+        onPoll: () => {
+          const wasRunning = this.accountManager.isRunning(account.accountId);
+          this.accountManager.updateStatus({ accountId: account.accountId, running: true, mode: 'polling' });
+          if (!wasRunning) this.notifyStatusChanged?.();
+        },
         onExit: (err) => {
           void this.accountManager.stopRunner(account.accountId).then(() => {
             this.accountManager.updateStatus({
@@ -516,10 +532,12 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
               mode: 'stopped',
               lastError: err instanceof Error ? err.message : 'Telegram polling stopped',
             });
+            this.notifyStatusChanged?.();
           });
         },
       });
       this.accountManager.registerPollingSession(account.accountId, session);
+      this.notifyStatusChanged?.();
 
       log.info({ accountId: account.accountId, username: me.username }, 'Telegram account started');
     } catch (err) {
@@ -542,6 +560,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       });
     } finally {
       this.accountManager.markStartComplete(account.accountId);
+      this.notifyStatusChanged?.();
     }
   }
 

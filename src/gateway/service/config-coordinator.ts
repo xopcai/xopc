@@ -261,6 +261,10 @@ export class GatewayConfigCoordinator {
     log.debug('Models config reloaded');
   }
 
+  isChannelReloadInFlight(): boolean {
+    return this.channelReloadPending || this.channelReloadFlushPromise !== null;
+  }
+
   /**
    * Coalesces rapid saves so Telegram/Weixin do not stop/start repeatedly.
    * The persist path schedules the channel apply; the same coalescer absorbs

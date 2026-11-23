@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import type { FeishuConfig } from '../schema/config-schema.js';
-import { cancelChannelConnectionProbe, getChannelConnectionProbe, startChannelConnectionProbe } from '@xopcai/xopc/channels/connection-probe.js';
+import { cancelChannelConnectionProbe, getChannelConnectionProbe } from '@xopcai/xopc/channels/connection-probe.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type {
   ChannelRuntimeActionAdapter,
@@ -86,17 +86,36 @@ function isZh(locale: string | undefined): boolean {
   return locale?.toLowerCase().startsWith('zh') === true;
 }
 
-function setupVerification(result: AppRegistrationResult, accountId: string, zh: boolean, info: Awaited<ReturnType<typeof probeFeishuBot>>) {
+function setupVerification(
+  mode: 'qr' | 'manual',
+  zh: boolean,
+  info: Awaited<ReturnType<typeof probeFeishuBot>>,
+) {
+  const hint = !info.ok ? {
+    setupHint: zh
+      ? '若找不到机器人，请在开放平台检查机器人能力、长连接事件订阅、发布和管理员审批。'
+      : 'If the bot is unavailable, check bot access, long-connection subscriptions, publication and administrator approval.',
+  } : {};
+  const bot = info.ok && info.name ? { botName: info.name } : {};
+  if (mode === 'qr') {
+    return {
+      type: 'poll' as const,
+      phase: 'done' as const,
+      ok: true,
+      configChanged: true,
+      ...bot,
+      ...hint,
+      message: zh ? '飞书已连接，现在可以直接私聊机器人对话。' : 'Feishu connected. Send a direct message to the bot to start chatting.',
+    };
+  }
   return {
-    ...startChannelConnectionProbe({
-      channel: 'feishu', accountId, identity: result.appId, ownerId: result.openId?.trim(), zh, configChanged: true,
-    }),
-    ...(info.ok && info.name ? { botName: info.name } : {}),
-    ...(!info.ok ? {
-      setupHint: zh
-        ? '若找不到机器人，请在开放平台检查机器人能力、长连接事件订阅、发布和管理员审批。'
-        : 'If the bot is unavailable, check bot access, long-connection subscriptions, publication and administrator approval.',
-    } : {}),
+    type: 'ok' as const,
+    configChanged: true,
+    ...bot,
+    ...hint,
+    message: zh
+      ? '飞书凭据已保存并启用通道，私聊机器人即可开始对话。'
+      : 'Feishu credentials saved and channel enabled. Send the bot a DM to start chatting.',
   };
 }
 
@@ -232,7 +251,7 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
         },
         onConfigSaved: () => {
           cancelSetup(id);
-          return setupVerification(result, accountId, zh, info);
+          return setupVerification('qr', zh, info);
         },
       };
     }
@@ -243,7 +262,7 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
       if (!appId || !appSecret) return { ok: false, message: zh ? '请填写 App ID 和 App Secret。' : 'Enter the App ID and App Secret.' };
       const result = { appId, appSecret, domain };
       const info = await probeFeishuBot(result).catch(() => ({ ok: false as const }));
-      return { ok: true, nextConfig: buildFeishuConfig(cfg, result, accountId), onConfigSaved: () => setupVerification(result, accountId, zh, info) };
+      return { ok: true, nextConfig: buildFeishuConfig(cfg, result, accountId), onConfigSaved: () => setupVerification('manual', zh, info) };
     }
 
     return { ok: false, message: zh ? '不支持的飞书操作。' : 'Unsupported Feishu action.' };

@@ -56,6 +56,7 @@ import { ChannelManager } from '../channels/manager.js';
 import {
   buildChannelCatalogForConfig,
   buildChannelCatalogFromSnapshot,
+  getChannelSetupStatus,
 } from '../channels/catalog/channel-catalog-service.js';
 import { setPairingBroadcastSink } from '../channels/pairing/pairing-events.js';
 import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
@@ -236,6 +237,7 @@ export class GatewayService {
   private sessionIndex: SessionIndex;
   private running = false;
   private stopping = false;
+  private channelsStatusTimer: ReturnType<typeof setTimeout> | null = null;
   private startTime = Date.now();
   private workspacePath: string;
   private readonly configCoordinator: GatewayConfigCoordinator;
@@ -576,6 +578,7 @@ export class GatewayService {
 
     // Initialize channel manager
     this.channelManager = new ChannelManager(this.config, this.bus);
+    this.channelManager.setStatusChangeListener(() => this.scheduleChannelsStatusBroadcast());
 
     // Initialize extension loader (manifest snapshot only — code load in start()).
     this.workspacePath = getWorkspacePath(this.config) || './workspace';
@@ -1567,6 +1570,11 @@ export class GatewayService {
       this.stopRealtimeLogBridge?.();
       this.stopRealtimeLogBridge = null;
       setPairingBroadcastSink(null);
+      if (this.channelsStatusTimer) {
+        clearTimeout(this.channelsStatusTimer);
+        this.channelsStatusTimer = null;
+      }
+      this.channelManager.setStatusChangeListener(undefined);
       throw err;
     }
   }
@@ -1586,6 +1594,7 @@ export class GatewayService {
       if (type === 'channels.pairing.revoked' && payload.channel === 'weixin') this.mcpSetup.revokeWeixinRequests(payload.accountId, payload.senderId);
       this.emit(type, payload);
     });
+    this.channelManager.setStatusChangeListener(() => this.scheduleChannelsStatusBroadcast());
 
     log.debug('Starting gateway service...');
     const homeCapabilities = new HomeCapabilityPreflightService({
@@ -2049,6 +2058,11 @@ export class GatewayService {
     await stopPersonalResultPreparations();
 
     setPairingBroadcastSink(null);
+    if (this.channelsStatusTimer) {
+      clearTimeout(this.channelsStatusTimer);
+      this.channelsStatusTimer = null;
+    }
+    this.channelManager.setStatusChangeListener(undefined);
     this.stopRealtimeLogBridge?.();
     this.stopRealtimeLogBridge = null;
 
@@ -2224,6 +2238,16 @@ export class GatewayService {
     }
   }
 
+  private scheduleChannelsStatusBroadcast(): void {
+    if (!this.running || this.stopping || this.channelsStatusTimer) return;
+    this.channelsStatusTimer = setTimeout(() => {
+      this.channelsStatusTimer = null;
+      if (!this.running || this.stopping) return;
+      this.emit('channels.status', { channels: this.getChannelsStatus() });
+    }, 50);
+    this.channelsStatusTimer.unref?.();
+  }
+
   /**
    * Get channel statuses
    */
@@ -2231,18 +2255,30 @@ export class GatewayService {
     name: string;
     enabled: boolean;
     connected: boolean;
+    connecting?: boolean;
   }> {
     const runningChannels = new Set(this.channelManager.getRunningChannels());
+    const connectingChannels = new Set(this.channelManager.getConnectingChannels());
+    const reloadInFlight = this.configCoordinator.isChannelReloadInFlight();
     const channels = this.config.channels as Record<string, { enabled?: boolean } | undefined> | undefined;
     const catalog = this.extensionMetadataSnapshot
       ? buildChannelCatalogFromSnapshot(this.extensionMetadataSnapshot)
       : buildChannelCatalogForConfig(this.config);
 
-    return catalog.entries.map((entry) => ({
-      name: entry.id,
-      enabled: channels?.[entry.id]?.enabled === true,
-      connected: runningChannels.has(entry.id),
-    }));
+    return catalog.entries.map((entry) => {
+      const enabled = channels?.[entry.id]?.enabled === true;
+      const connected = runningChannels.has(entry.id);
+      const connecting = !connected && enabled && (
+        connectingChannels.has(entry.id) ||
+        (reloadInFlight && getChannelSetupStatus(this.config, entry.id, entry).ready)
+      );
+      return {
+        name: entry.id,
+        enabled,
+        connected,
+        ...(connecting ? { connecting: true } : {}),
+      };
+    });
   }
 
   getRunningChannelIds(): string[] {
@@ -2256,6 +2292,7 @@ export class GatewayService {
   async restartChannel(channelId: string): Promise<void> {
     await this.channelManager.stopChannel(channelId);
     await this.channelManager.startChannel(channelId);
+    this.scheduleChannelsStatusBroadcast();
   }
 
   /**

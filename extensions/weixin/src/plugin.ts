@@ -21,7 +21,7 @@ import type {
 } from '@xopcai/xopc/channels/plugin-types.js';
 import { evaluateAccess, resolveDmPolicy } from '@xopcai/xopc/channels/security.js';
 import { createStandardPairingAdapter } from '@xopcai/xopc/channels/pairing/pairing-store-adapter.js';
-import { cancelChannelConnectionProbe, getChannelConnectionProbe, startChannelConnectionProbe } from '@xopcai/xopc/channels/connection-probe.js';
+import { cancelChannelConnectionProbe, getChannelConnectionProbe } from '@xopcai/xopc/channels/connection-probe.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import { restoreContextTokens } from './messaging/inbound.js';
@@ -191,16 +191,20 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
               credentials.cleanup();
               cancelWeixinGatewayQrLogin(conversationId);
               this.setupSessions.delete(key);
-              const verification = startChannelConnectionProbe({
-                channel: this.id, accountId: credentials.accountId, ownerId: credentials.ownerId, zh, configChanged: true,
-              });
               // The token may have changed without an account configuration change.
               if (this.abortControllers.has(credentials.accountId)) {
                 this.cfg = nextConfig;
                 await this.stop(credentials.accountId);
                 await this.start({ accountId: credentials.accountId });
               }
-              return verification;
+              return {
+                type: 'poll' as const,
+                phase: 'done' as const,
+                ok: true,
+                configChanged: true,
+                accountId: credentials.accountId,
+                message: zh ? '微信已连接，现在可以直接在微信中发消息对话。' : 'WeChat connected. You can start chatting right away.',
+              };
             },
           };
         }
@@ -235,6 +239,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   private monitorTasks = new Map<string, Promise<void>>();
   private setupSessions = new Map<string, { id: string; section: NonNullable<Config['channels']>['weixin']; expiresAt: number }>();
   private monitorStates = new Map<string, WeixinMonitorState>();
+  private notifyStatusChanged?: () => void;
 
   config = {
     listAccountIds: (cfg: Config) => listWeixinAccountIds(cfg),
@@ -296,6 +301,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   async init(options: ChannelPluginInitOptions): Promise<void> {
     this.bus = options.bus;
     this.cfg = options.config;
+    this.notifyStatusChanged = options.host?.notifyStatusChanged;
 
 
     log.debug('Weixin plugin initialized');
@@ -318,13 +324,19 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
 
       const ac = new AbortController();
       this.abortControllers.set(accountId, ac);
+      this.notifyStatusChanged?.();
 
       const task = monitorWeixinProvider({
         account,
         config: this.cfg,
         bus: this.bus,
         abortSignal: ac.signal,
-        onState: state => { if (!ac.signal.aborted) this.monitorStates.set(accountId, state); },
+        onState: state => {
+          if (ac.signal.aborted) return;
+          const prev = this.monitorStates.get(accountId);
+          this.monitorStates.set(accountId, state);
+          if (prev !== state) this.notifyStatusChanged?.();
+        },
       }).catch((err) => {
         if ((err as { name?: string; message?: string } | undefined)?.name === 'AbortError') {
           log.debug({ accountId }, 'Weixin monitor stopped');
@@ -336,6 +348,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
         this.abortControllers.delete(accountId);
         this.monitorStates.delete(accountId);
         this.monitorTasks.delete(accountId);
+        this.notifyStatusChanged?.();
       });
       this.monitorTasks.set(accountId, task);
 
@@ -362,6 +375,13 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
     return listWeixinAccountIds(cfg).some((id) => {
       const a = resolveWeixinAccount(cfg, id);
       return a.configured && a.enabled !== false && this.monitorStates.get(id) === 'polling';
+    });
+  }
+
+  channelIsConnecting(cfg: Config): boolean {
+    return listWeixinAccountIds(cfg).some((id) => {
+      const a = resolveWeixinAccount(cfg, id);
+      return a.configured && a.enabled !== false && this.abortControllers.has(id) && this.monitorStates.get(id) !== 'polling';
     });
   }
 

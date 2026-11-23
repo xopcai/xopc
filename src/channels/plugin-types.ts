@@ -96,6 +96,7 @@ export interface ChannelPluginInitOptions {
     resolveRoute: typeof resolveRoute;
     issuePairingChallenge: typeof issuePairingChallenge;
     registerPairingChannelResolver: typeof registerPairingChannelResolver;
+    notifyStatusChanged?: () => void;
     warn: (message: string) => void;
   };
 }
@@ -153,6 +154,8 @@ export interface ChannelPlugin<ResolvedAccount = any> {
   stop(accountId?: string): Promise<void>;
 
   channelIsRunning?(cfg: Config): boolean;
+
+  channelIsConnecting?(cfg: Config): boolean;
 
   onConfigUpdated?(cfg: Config): void | Promise<void>;
 

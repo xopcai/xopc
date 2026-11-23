@@ -52,6 +52,7 @@ export interface ChannelLifecycleSupervisorOptions {
   /** Hooks for sub-classes / external observers: heartbeat scheduling, etc. */
   onPluginStarted?: (plugin: ChannelPlugin) => void;
   onPluginStopped?: (pluginId: string) => void;
+  onStatusChanged?: () => void;
   /** Optional session-model hooks forwarded into `plugin.init()`. */
   getSessionModelHooks?: () => ChannelPluginSessionModelHooks | undefined;
 }
@@ -288,12 +289,26 @@ export class ChannelLifecycleSupervisor {
 
   /** Forward a config snapshot to every initialised plugin's `onConfigUpdated` hook. */
   async forwardConfigUpdate(cfg: Config): Promise<void> {
-    for (const id of this.initializedPluginIds) {
-      const plugin = this.opts.registry.get(id);
-      if (plugin?.onConfigUpdated) {
+    for (const [id, plugin] of this.opts.registry.entries()) {
+      const channelConfig = asChannelConfig(cfg.channels?.[id]);
+      const shouldRun = this.shouldRunChannelPlugin(plugin, channelConfig);
+      if (shouldRun) {
+        this.manuallyStopped.delete(id);
+        if (!this.initializedPluginIds.has(id)) {
+          await this.initializePlugin(plugin, channelConfig ?? {});
+        }
+      }
+      if (!this.initializedPluginIds.has(id)) continue;
+      if (plugin.onConfigUpdated) {
         await Promise.resolve(plugin.onConfigUpdated(cfg));
       }
+      if (shouldRun) {
+        this.opts.onPluginStarted?.(plugin);
+      } else {
+        this.opts.onPluginStopped?.(id);
+      }
     }
+    this.opts.onStatusChanged?.();
   }
 
   // ── Internals ───────────────────────────────────────────────────────────
@@ -324,6 +339,7 @@ export class ChannelLifecycleSupervisor {
         sessionModel: this.opts.getSessionModelHooks?.(),
         host: {
           resolveRoute, issuePairingChallenge, registerPairingChannelResolver,
+          notifyStatusChanged: () => this.opts.onStatusChanged?.(),
           warn: (message) => log.warn({ channel: plugin.id }, message),
         },
       };

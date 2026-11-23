@@ -57,6 +57,7 @@ export function createEnterpriseChannel(options: {
   let host: NonNullable<ChannelPluginInitOptions['host']>;
   let runtime: { controller: AbortController; transport: EnterpriseTransport; task: Promise<void> } | undefined;
   let online = false;
+  let connecting = false;
 
   const section = (config: Config) => record(config.channels?.[id]);
   const credentialsFor = (config: Config) => ({
@@ -69,10 +70,13 @@ export function createEnterpriseChannel(options: {
     `${accountId}-${createHash('sha256').update(credentials.identity ?? credentials.id).digest('hex').slice(0, 24)}`;
   const stop = async () => {
     const previous = runtime;
+    const wasActive = Boolean(previous || online || connecting);
     runtime = undefined;
     online = false;
+    connecting = false;
     previous?.controller.abort();
     await previous?.task;
+    if (wasActive) host?.notifyStatusChanged?.();
   };
 
   const plugin: ChannelPlugin = {
@@ -178,17 +182,37 @@ export function createEnterpriseChannel(options: {
       });
       // A channel with a secret credential ID first verifies the stored bot identity.
       if (!options.credentialIdIsSecret) restoreInbox();
+      connecting = true;
+      host.notifyStatusChanged?.();
       const task = transport.run(controller.signal, (socket) => {
         if (runtime?.controller === controller) {
           if (socket) restoreInbox();
-          online = Boolean(socket);
+          const nextOnline = Boolean(socket);
+          const changed = online !== nextOnline || (nextOnline && connecting);
+          online = nextOnline;
+          if (nextOnline) connecting = false;
+          if (changed) host.notifyStatusChanged?.();
         }
-      }, (message) => host.warn(message ?? 'Channel connection failed; retrying'))
-        .catch(() => host.warn('Channel transport stopped unexpectedly'));
+      }, (message) => {
+        if (runtime?.controller === controller && connecting) {
+          connecting = false;
+          host.notifyStatusChanged?.();
+        }
+        host.warn(message ?? 'Channel connection failed; retrying');
+      })
+        .catch(() => {
+          if (runtime?.controller === controller) {
+            online = false;
+            connecting = false;
+            host.notifyStatusChanged?.();
+          }
+          host.warn('Channel transport stopped unexpectedly');
+        });
       runtime = { controller, transport, task };
     },
     stop,
     channelIsRunning: () => online,
+    channelIsConnecting: () => Boolean(runtime) && !online && connecting,
     async onConfigUpdated(config) {
       const changed = section(cfg).enabled !== section(config).enabled ||
         !isDeepStrictEqual(credentialsFor(cfg), credentialsFor(config));

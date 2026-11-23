@@ -36,4 +36,10 @@ describe('resolveChannelRuntime', () => {
     expect(resolveChannelRuntime({ ...readyEntry, runtime: 'loaded' }, undefined, false)).toBe('checking');
     expect(resolveChannelRuntime(readyEntry, undefined, false)).toBe('checking');
   });
+
+  it('treats actively connecting channels as checking instead of stopped', () => {
+    expect(
+      resolveChannelRuntime(readyEntry, { name: 'telegram', enabled: true, connected: false, connecting: true }, true),
+    ).toBe('checking');
+  });
 });

@@ -63,4 +63,15 @@ export class ChannelPluginRegistry {
     }
     return out;
   }
+
+  /** Plugin ids whose runtime is actively establishing a connection. */
+  connectingChannelIds(cfg: Config, isInitialized: (id: string) => boolean): string[] {
+    const out: string[] = [];
+    for (const [id, plugin] of this.plugins) {
+      if (!isInitialized(id)) continue;
+      if (!plugin.channelIsConnecting) continue;
+      if (plugin.channelIsConnecting(cfg)) out.push(id);
+    }
+    return out;
+  }
 }

@@ -5,6 +5,7 @@ export interface ChannelStatus {
   name: string;
   enabled: boolean;
   connected: boolean;
+  connecting?: boolean;
 }
 
 export interface SessionChatId {

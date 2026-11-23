@@ -128,6 +128,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   private monitorTasks = new Map<string, Promise<void>>();
   private transportStates = new Map<string, 'connecting' | 'online' | 'error'>();
   private inboundPipeline?: ReturnType<typeof createFeishuInboundPipeline>;
+  private notifyStatusChanged?: () => void;
 
   config = {
     listAccountIds: (cfg: Config) => listFeishuAccountIds(cfg),
@@ -308,6 +309,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   async init(options: ChannelPluginInitOptions): Promise<void> {
     this.bus = options.bus;
     this.cfg = options.config;
+    this.notifyStatusChanged = options.host?.notifyStatusChanged;
     const defaultDebounce = this.defaults.queue?.debounceMs ?? 350;
     this.inboundPipeline = createFeishuInboundPipeline({
       bus: this.bus,
@@ -335,6 +337,8 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
 
       const ac = new AbortController();
       this.abortControllers.set(accountId, ac);
+      this.transportStates.set(accountId, 'connecting');
+      this.notifyStatusChanged?.();
 
       const defaultDebounce = this.defaults.queue?.debounceMs ?? 350;
       const enqueueInbound = (work: FeishuInboundWork) => {
@@ -351,7 +355,12 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         enqueueInbound,
         inboundDebounceDefaultMs: defaultDebounce,
         abortSignal: ac.signal,
-        onState: (state: 'connecting' | 'online' | 'error') => { if (!ac.signal.aborted) this.transportStates.set(accountId, state); },
+        onState: (state: 'connecting' | 'online' | 'error') => {
+          if (ac.signal.aborted) return;
+          const prev = this.transportStates.get(accountId);
+          this.transportStates.set(accountId, state);
+          if (prev !== state) this.notifyStatusChanged?.();
+        },
         security: {
           checkAccess: (ctx: ChannelSecurityContext) => this.security.checkAccess?.(ctx, account, this.cfg),
         },
@@ -365,12 +374,14 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         const task = runner.run().catch((err) => {
           if (ac.signal.aborted) return;
           this.transportStates.set(accountId, 'error');
+          this.notifyStatusChanged?.();
           log.error({ err, accountId }, 'Feishu monitor exited with error');
         }).finally(() => {
           if (this.abortControllers.get(accountId) !== ac) return;
           this.abortControllers.delete(accountId);
           this.monitorTasks.delete(accountId);
           if (ac.signal.aborted) this.transportStates.delete(accountId);
+          this.notifyStatusChanged?.();
         });
         this.monitorTasks.set(accountId, task);
         log.info({ accountId, mode: account.connectionMode }, 'Feishu monitor started');
@@ -407,6 +418,14 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
     return ids.some((id) => {
       const a = resolveFeishuAccount(cfg, id);
       return a.enabled !== false && a.configured && this.transportStates.get(id) === 'online';
+    });
+  }
+
+  channelIsConnecting(cfg: Config): boolean {
+    const ids = listFeishuAccountIds(cfg);
+    return ids.some((id) => {
+      const a = resolveFeishuAccount(cfg, id);
+      return a.enabled !== false && a.configured && this.transportStates.get(id) === 'connecting';
     });
   }
 

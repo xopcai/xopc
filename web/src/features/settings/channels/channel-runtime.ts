@@ -34,5 +34,7 @@ export function resolveChannelRuntime(
   if (!setup.ready) return 'needs_setup';
   if (!setup.enabled) return 'disabled';
   if (!statusLoaded) return 'checking';
-  return status?.connected === true ? 'running' : 'stopped';
+  if (status?.connected === true) return 'running';
+  if (status?.connecting === true) return 'checking';
+  return 'stopped';
 }

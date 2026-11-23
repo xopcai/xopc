@@ -12,11 +12,12 @@ import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
 
 import { SelectField } from './select-field';
+import { ChannelPairingApprovalsList } from './channel-access-panel';
 import { choosePrimaryChannelAction } from './channel-primary-action';
 import type { ChannelCatalogEntry } from './use-channel-catalog';
 
 export type ChannelActionPayload =
-  | { type?: 'ok'; message?: string; configChanged?: boolean; setupLink?: { url: string; label: string }; [key: string]: unknown }
+  | { type?: 'ok'; message?: string; botName?: string; setupHint?: string; configChanged?: boolean; setupLink?: { url: string; label: string }; [key: string]: unknown }
   | {
       type: 'qr';
       conversationId: string;
@@ -26,8 +27,10 @@ export type ChannelActionPayload =
       statusAction?: string;
       cancelAction?: string;
       verificationCode?: string;
+      deviceVerification?: { url: string; userCode?: string };
       botName?: string;
       setupHint?: string;
+      configChanged?: boolean;
       pollIntervalMs?: number;
       expiresInSec?: number;
       message?: string;
@@ -134,6 +137,7 @@ export function ChannelSetupCard({
   locale,
   messages: ch,
   onChanged,
+  onPairingChanged,
   onStarted,
   compact = false,
   quick = false,
@@ -142,6 +146,7 @@ export function ChannelSetupCard({
   locale: string;
   messages: ChannelsSettingsMessages;
   onChanged: () => Promise<void> | void;
+  onPairingChanged?: () => void;
   onStarted?: () => void;
   compact?: boolean;
   quick?: boolean;
@@ -305,8 +310,16 @@ export function ChannelSetupCard({
   const message = payloadMessage(state.payload);
   const qrImage = qrContent ? state.generatedQr : payloadQrImage(state.payload);
   const verificationCode = state.payload?.type === 'qr' ? state.payload.verificationCode : undefined;
-  const botName = state.payload?.type === 'qr' ? state.payload.botName : undefined;
-  const setupHint = state.payload?.type === 'qr' ? state.payload.setupHint : undefined;
+  const deviceUserCode = state.payload?.type === 'qr' ? state.payload.deviceVerification?.userCode : undefined;
+  const botName = (state.payload?.type === 'qr' || state.payload?.type === 'ok' || state.payload?.type === 'poll')
+    && typeof state.payload.botName === 'string'
+    ? state.payload.botName
+    : undefined;
+  const setupHint = (state.payload?.type === 'qr' || state.payload?.type === 'ok' || state.payload?.type === 'poll')
+    && typeof state.payload.setupHint === 'string'
+    ? state.payload.setupHint
+    : undefined;
+  const channelAlreadyLive = state.payload?.type === 'qr' && state.payload.configChanged === true;
   const confirmAction = state.payload?.type === 'poll' ? state.payload.confirmAction : undefined;
   const pinAction = state.payload && 'pinAction' in state.payload && typeof state.payload.pinAction === 'string'
     ? state.payload.pinAction
@@ -420,6 +433,12 @@ export function ChannelSetupCard({
           <Skeleton className={primary?.[1].result === 'qr' ? 'size-52 rounded-lg' : 'h-24 w-full rounded-lg'} />
         </div>
       ) : null}
+      {channelAlreadyLive ? (
+        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/12 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+          <CheckCircle2 className="size-3.5" aria-hidden />
+          <span>{ch.channelLiveBadge}</span>
+        </div>
+      ) : null}
       {message && !(quick && (formPayload?.setupTemplate || (qrStageActive && primary?.[1].result === 'qr' && state.poll?.actionId !== 'setup.verify.status'))) && (!isTerminalPoll(state.payload) || confirmAction) ? <p className="mt-3 text-sm text-fg-muted">{message}</p> : null}
       {setupLink ? (
         <a className="mt-2 inline-flex items-center gap-1 text-sm text-accent hover:underline"
@@ -430,7 +449,12 @@ export function ChannelSetupCard({
         </a>
       ) : null}
       {botName ? <p className="mt-2 text-sm font-medium text-fg">{botName}</p> : null}
-      {verificationCode ? <code className="mt-2 block select-all break-all rounded-md bg-surface-base p-2 text-sm">{verificationCode}</code> : null}
+      {deviceUserCode ? (
+        <p className="mt-2 text-xs text-fg-muted">
+          {ch.deviceCodeLabel}: <code className="rounded bg-surface-inset px-1.5 py-0.5 font-mono text-fg">{deviceUserCode}</code>
+        </p>
+      ) : null}
+      {verificationCode ? <code className="mt-2 block select-all break-all rounded-md bg-surface-inset p-2 text-sm">{verificationCode}</code> : null}
       {setupHint ? <p className="mt-2 text-sm text-fg-muted">{setupHint}</p> : null}
       {pinAction && state.poll ? (
         <form className="mt-3 flex items-end gap-2" onSubmit={event => {
@@ -570,7 +594,26 @@ export function ChannelSetupCard({
         </Button>
       ) : null}
       {quick && setupComplete ? (
-        <p role="status" className="text-sm text-fg-muted">{ch.setupSaved} {ch.testMessageHint}</p>
+        <div className="space-y-3">
+          <div role="status" className="flex items-start gap-2 rounded-xl bg-surface-inset p-3 text-sm text-fg">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+            <p className="text-fg-muted">{ch.setupSaved} {ch.testMessageHint}</p>
+          </div>
+          {entry.capabilities?.pairing !== false ? (
+            <ChannelPairingApprovalsList
+              channelId={entry.id}
+              ch={ch}
+              onPairingChanged={onPairingChanged}
+            />
+          ) : null}
+        </div>
+      ) : null}
+      {quick && terminalSuccess && entry.capabilities?.pairing !== false ? (
+        <ChannelPairingApprovalsList
+          channelId={entry.id}
+          ch={ch}
+          onPairingChanged={onPairingChanged}
+        />
       ) : null}
 
       {diagnostics ? (
