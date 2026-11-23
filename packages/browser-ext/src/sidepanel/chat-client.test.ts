@@ -404,3 +404,140 @@ describe('structured clarification handling', () => {
     expect(JSON.parse(posts[0][1].body).answer).toBeUndefined();
   });
 });
+
+describe('transcriptId hydration and recovery', () => {
+  it('preserves transcriptId across reloadMessages when the session is absent from the session list', async () => {
+    const client = readyClient();
+    internals(client).update({ sessions: [], transcriptId: 'transcript-live' });
+    gatewayFetch
+      .mockResolvedValueOnce(response({ payload: { messages: [{ id: 'm1', role: 'assistant', content: 'hi' }] } }))
+      .mockImplementationOnce(async (_path, init) => {
+        const command = JSON.parse(String(init.body));
+        expect(command.expectedTranscriptId).toBe('transcript-live');
+        return response({ payload: {
+          receipt: { conversationId: 'chat:one', clientMessageId: command.clientMessageId, transcriptId: 'transcript-live' },
+          session: { transcriptId: 'transcript-live' }, inputState: { inputs: [] },
+          agentConfig: { model: 'test/one', thinkingLevel: 'off', fixedModel: true, activityDetail: 'on', configVersion: 1 },
+        } });
+      })
+      .mockResolvedValueOnce(response({ payload: { inputs: [] } }));
+
+    await internals(client).reloadMessages();
+    expect(internals(client).snapshot.transcriptId).toBe('transcript-live');
+    await expect(client.send('next turn')).resolves.toBe('sent');
+  });
+
+  it('captures transcriptId returned by /messages payload', async () => {
+    const client = readyClient();
+    internals(client).update({ sessions: [], transcriptId: undefined });
+    gatewayFetch.mockResolvedValueOnce(response({
+      payload: { messages: [{ id: 'm1', role: 'assistant', content: 'hello' }], transcriptId: 'tx-from-messages' },
+    }));
+
+    await internals(client).reloadMessages();
+    expect(internals(client).snapshot.transcriptId).toBe('tx-from-messages');
+  });
+
+  it('hydrates missing expectedTranscriptId and configVersion from agent-config before sending', async () => {
+    const client = readyClient();
+    internals(client).update({ sessions: [], transcriptId: undefined, modelConfig: undefined });
+    gatewayFetch
+      .mockResolvedValueOnce(response({
+        payload: {
+          model: 'test/one',
+          thinkingLevel: 'off',
+          fixedModel: true,
+          configVersion: 4,
+          transcriptId: 'hydrated-tx',
+        },
+      }))
+      .mockImplementationOnce(async (_path, init) => {
+        const command = JSON.parse(String(init.body));
+        expect(command.expectedTranscriptId).toBe('hydrated-tx');
+        expect(command.configVersion).toBe(4);
+        return response({ payload: {
+          receipt: { conversationId: 'chat:one', clientMessageId: command.clientMessageId, transcriptId: 'hydrated-tx' },
+          session: { transcriptId: 'hydrated-tx' }, inputState: { inputs: [] },
+          agentConfig: { model: 'test/one', thinkingLevel: 'off', fixedModel: true, activityDetail: 'on', configVersion: 4 },
+        } });
+      })
+      .mockResolvedValueOnce(response({ payload: { inputs: [] } }));
+
+    await expect(client.send('hydrated send')).resolves.toBe('sent');
+    expect(gatewayFetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/sessions/chat%3Aone/agent-config',
+      {},
+      expect.objectContaining({ gatewayId: 'gateway', deviceId: 'device' }),
+    );
+  });
+
+  it('falls back to /api/sessions/resolve when agent-config omits transcriptId and throws a friendly error if still missing', async () => {
+    const client = readyClient();
+    internals(client).update({ sessions: [], transcriptId: undefined, modelConfig: undefined });
+    gatewayFetch
+      .mockResolvedValueOnce(response({
+        payload: { model: 'test/one', thinkingLevel: 'off', fixedModel: true, configVersion: 2 },
+      }))
+      .mockResolvedValueOnce(response({ ok: false, error: 'Session not found' }, 404));
+
+    await expect(client.send('missing identity')).rejects.toThrow('errorSessionSyncRequired');
+  });
+
+  it('refreshes modelConfig automatically after a 409 CONFIG_CHANGED rejection', async () => {
+    const client = readyClient();
+    gatewayFetch
+      .mockResolvedValueOnce(response({ error: { code: 'CONFIG_CHANGED', message: 'Model configuration changed' } }, 409))
+      .mockResolvedValueOnce(response({
+        payload: { model: 'test/two', thinkingLevel: 'high', fixedModel: true, configVersion: 9, transcriptId: 'transcript' },
+      }));
+
+    await expect(client.send('stale config')).rejects.toThrow('Model configuration changed');
+    await vi.waitFor(() => expect(internals(client).snapshot.modelConfig?.configVersion).toBe(9));
+    expect(internals(client).snapshot.modelConfig?.model).toBe('test/two');
+  });
+
+  it('retries once with a refreshed endpoint claim on 401 INVALID_ENDPOINT', async () => {
+    const client = readyClient();
+    const sendMessage = vi.fn().mockResolvedValue({ claim: { endpointId: 'browser:one', token: 'fresh-token' } });
+    vi.stubGlobal('chrome', {
+      ...(globalThis as unknown as { chrome: Record<string, unknown> }).chrome,
+      runtime: { sendMessage },
+    });
+    gatewayFetch
+      .mockResolvedValueOnce(response({ error: { code: 'INVALID_ENDPOINT', message: 'Endpoint connection is not active' } }, 401))
+      .mockImplementationOnce(acceptedInput)
+      .mockResolvedValueOnce(response({ payload: { inputs: [] } }));
+
+    await expect(client.send('after reconnect')).resolves.toBe('sent');
+    const posts = gatewayFetch.mock.calls.filter(([url]) => String(url).endsWith('/inputs'));
+    expect(posts).toHaveLength(2);
+    expect(JSON.parse(String(posts[1][1].body)).origin).toEqual({
+      type: 'endpoint',
+      endpointId: 'browser:one',
+      token: 'fresh-token',
+    });
+  });
+
+  it('supports session rename, pin, reset, and delete operations', async () => {
+    const client = readyClient();
+    gatewayFetch
+      .mockResolvedValueOnce(response({ ok: true }))
+      .mockResolvedValueOnce(response({ items: [{ key: 'chat:one', name: 'Renamed', status: 'pinned', updatedAt: '2026-11-23T00:00:00Z' }] }));
+    await client.renameSession('chat:one', 'Renamed');
+    expect(gatewayFetch).toHaveBeenNthCalledWith(1, '/api/sessions/chat%3Aone/rename', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ name: 'Renamed' }),
+    }));
+    expect(internals(client).snapshot.sessions[0]).toMatchObject({ title: 'Renamed', pinned: true });
+
+    gatewayFetch.mockReset();
+    gatewayFetch
+      .mockResolvedValueOnce(response({ ok: true, transcriptId: 'tx-reset' }))
+      .mockResolvedValueOnce(response({ payload: { model: 'test/one', thinkingLevel: 'off', fixedModel: true, configVersion: 2, transcriptId: 'tx-reset' } }))
+      .mockResolvedValueOnce(response({ items: [] }));
+    await client.resetSession('chat:one');
+    expect(internals(client).snapshot.transcriptId).toBe('tx-reset');
+    expect(internals(client).snapshot.messages).toEqual([]);
+  });
+});

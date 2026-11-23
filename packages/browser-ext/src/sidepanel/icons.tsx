@@ -4,7 +4,7 @@ type IconProps = SVGProps<SVGSVGElement>;
 
 function IconBase({ children, ...props }: IconProps) {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" {...props}>
       {children}
     </svg>
   );
@@ -12,6 +12,10 @@ function IconBase({ children, ...props }: IconProps) {
 
 export function ChevronDownIcon(props: IconProps) {
   return <IconBase {...props}><path d="m7 10 5 5 5-5" /></IconBase>;
+}
+
+export function ChevronRightIcon(props: IconProps) {
+  return <IconBase {...props}><path d="m10 7 5 5-5 5" /></IconBase>;
 }
 
 export function ArrowDownIcon(props: IconProps) {
@@ -59,7 +63,7 @@ export function SendIcon(props: IconProps) {
 }
 
 export function StopIcon(props: IconProps) {
-  return <IconBase {...props}><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none" /></IconBase>;
+  return <IconBase {...props}><rect x="7" y="7" width="10" height="10" rx="1.8" fill="currentColor" stroke="none" /></IconBase>;
 }
 
 export function CopyIcon(props: IconProps) {
@@ -96,4 +100,36 @@ export function GlobeIcon(props: IconProps) {
 
 export function MicrophoneIcon(props: IconProps) {
   return <IconBase {...props}><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" /></IconBase>;
+}
+
+export function PinIcon(props: IconProps) {
+  return <IconBase {...props}><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16h14v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1Z" /></IconBase>;
+}
+
+export function EditIcon(props: IconProps) {
+  return <IconBase {...props}><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></IconBase>;
+}
+
+export function TrashIcon(props: IconProps) {
+  return <IconBase {...props}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" /></IconBase>;
+}
+
+export function ExternalLinkIcon(props: IconProps) {
+  return <IconBase {...props}><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></IconBase>;
+}
+
+export function RefreshIcon(props: IconProps) {
+  return <IconBase {...props}><path d="M3 12a9 9 0 0 1 15.36-6.36L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.36 6.36L3 16M3 21v-5h5" /></IconBase>;
+}
+
+export function RotateCcwIcon(props: IconProps) {
+  return <IconBase {...props}><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5" /></IconBase>;
+}
+
+export function BotIcon(props: IconProps) {
+  return <IconBase {...props}><path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="2" /><path d="M2 14h2M20 14h2M15 13v2M9 13v2" /></IconBase>;
+}
+
+export function TranslateIcon(props: IconProps) {
+  return <IconBase {...props}><path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" /></IconBase>;
 }

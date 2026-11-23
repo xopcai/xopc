@@ -230,4 +230,52 @@ describe('browser composer interactions', () => {
     expect(container.querySelector('.attachment-chip')?.textContent).toContain('page.png');
   });
 
+  it('shows a next-turn suggestion pill that fills the composer when clicked', async () => {
+    await act(async () => emit({
+      messages: [{ id: 'a1', role: 'assistant', blocks: [{ type: 'text', text: 'Summary ready.' }] }],
+      nextTurnSuggestion: {
+        id: 's1',
+        prompt: 'Turn this into bullet points',
+        conversationId: 'a',
+        transcriptId: 'tx',
+        expiresAt: Date.now() + 60_000,
+        impressionId: 'imp-1',
+      },
+    }));
+
+    const chip = container.querySelector<HTMLButtonElement>('.suggestion-chip')!;
+    expect(chip.textContent).toContain('Turn this into bullet points');
+    await act(async () => chip.click());
+    expect(container.querySelector('textarea')!.value).toBe('Turn this into bullet points');
+  });
+
+  it('expands tool input and output previews in assistant activity', async () => {
+    await act(async () => emit({
+      modelConfig: { model: 'test/model', thinkingLevel: 'high', activityDetail: 'on', fixedModel: false },
+      messages: [{
+        id: 'assistant-2',
+        role: 'assistant',
+        blocks: [
+          {
+            type: 'tool',
+            toolCallId: 'call-2',
+            name: 'web_search',
+            status: 'done',
+            input: { query: 'xopc extension' },
+            result: 'Found 3 results',
+            startedAt: 1000,
+            completedAt: 1450,
+          },
+          { type: 'text', text: 'Here are the findings.' },
+        ],
+      }],
+    }));
+
+    expect(container.querySelector('.tool-detail-panel')).toBeNull();
+    const toggle = container.querySelector<HTMLButtonElement>('.tool-row-toggle')!;
+    await act(async () => toggle.click());
+    expect(container.querySelector('.tool-detail-panel')?.textContent).toContain('xopc extension');
+    expect(container.querySelector('.tool-detail-panel')?.textContent).toContain('Found 3 results');
+  });
+
 });

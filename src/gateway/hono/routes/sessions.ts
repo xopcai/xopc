@@ -461,7 +461,10 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const messages = messagesToClientHistory(result.session.messages, { limit });
     return c.json({
       ok: true,
-      payload: { messages },
+      payload: {
+        messages,
+        ...(result.session.transcriptId ? { transcriptId: result.session.transcriptId } : {}),
+      },
       pagination: result.pagination,
     });
   });

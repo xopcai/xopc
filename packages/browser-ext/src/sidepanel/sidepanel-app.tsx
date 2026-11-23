@@ -18,8 +18,9 @@ import {
 import { ChatPanel } from './chat-panel';
 import {
   CheckIcon,
+  ExternalLinkIcon,
   GlobeIcon,
-  PageIcon,
+  RefreshIcon,
   SettingsIcon,
   SparkleIcon,
   SunIcon,
@@ -31,6 +32,14 @@ import {
 
 async function reconnectBrowserBridge(): Promise<void> {
   await chrome.runtime.sendMessage({ type: 'browser/reconnect' }).catch(() => undefined);
+}
+
+function openExternalUrl(url: string): void {
+  if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+    void chrome.tabs.create({ url }).catch(() => undefined);
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
 }
 
 function pairingErrorMessage(cause: unknown): string {
@@ -47,7 +56,9 @@ function pairingErrorMessage(cause: unknown): string {
   if (message.startsWith('PAIRING_ROUTE_PERMISSION_REQUIRED:')) {
     return t('errorNextRoutePermission');
   }
-  if (/Failed to start native messaging host|Access to the specified native messaging host is forbidden/i.test(message)) return t('errorLocalHostBlockedHelp');
+  if (/Failed to start native messaging host|Access to the specified native messaging host is forbidden/i.test(message)) {
+    return t('errorLocalHostBlockedHelp');
+  }
   return message;
 }
 
@@ -58,10 +69,20 @@ interface SidePanelAppProps {
 
 export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps) {
   const [controlPaused, setControlPaused] = useState(false);
-  const [preview, setPreview] = useState<{ origin: string; sharing: boolean; viewers?: Array<{ requestId: string; viewer: string; active: boolean }> }>();
+  const [preview, setPreview] = useState<{
+    origin: string;
+    sharing: boolean;
+    viewers?: Array<{ requestId: string; viewer: string; active: boolean }>;
+  }>();
   useEffect(() => {
-    const refresh = () => { void chrome.runtime.sendMessage({ type: 'browser/get-status' }).then(status => { setControlPaused(status?.controlPaused === true); setPreview(status?.preview); }).catch(() => {}); };
-    refresh(); const timer = setInterval(refresh, 1500);
+    const refresh = () => {
+      void chrome.runtime.sendMessage({ type: 'browser/get-status' }).then(status => {
+        setControlPaused(status?.controlPaused === true);
+        setPreview(status?.preview);
+      }).catch(() => {});
+    };
+    refresh();
+    const timer = setInterval(refresh, 1500);
     return () => clearInterval(timer);
   }, []);
   const [profile, setProfile] = useState<BrowserGatewayProfile>();
@@ -179,6 +200,7 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
   }
 
   async function disconnect() {
+    setSettingsOpen(false);
     await revokeAndForgetProfile();
     setProfile(undefined);
     setLocalInvitation('');
@@ -217,11 +239,16 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
   return (
     <main className="shell">
       <header className="header">
-        <div className="brand"><span className="brand-mark"><SparkleIcon /></span><span>xopc</span></div>
-        {state !== 'online' ? <div className="status">
-          <span className={`status-dot ${error ? 'error' : ''}`} />
-          {state === 'pairing' ? t('statusPairing') : state === 'loading' ? t('statusStarting') : t('statusSetupRequired')}
-        </div> : null}
+        <div className="brand">
+          <span className="brand-mark"><SparkleIcon /></span>
+          <span className="brand-name">xopc</span>
+        </div>
+        {state !== 'online' ? (
+          <div className="status">
+            <span className={`status-dot ${error ? 'error' : ''}`} />
+            {state === 'pairing' ? t('statusPairing') : state === 'loading' ? t('statusStarting') : t('statusSetupRequired')}
+          </div>
+        ) : null}
         <div className="header-actions">
           <button
             ref={settingsTrigger}
@@ -236,6 +263,36 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
           {settingsOpen ? (
             <div ref={settingsMenu} className="settings-menu">
               <div className="settings-menu-title">{t('settings')}</div>
+              {state === 'online' && profile ? (
+                <div className="settings-gateway-card">
+                  <div className="settings-gateway-info">
+                    <strong>{profile.gatewayName || 'xopc Gateway'}</strong>
+                    <small>{profile.gatewayUrl}</small>
+                  </div>
+                  <div className="settings-gateway-actions">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsOpen(false);
+                        openExternalUrl(profile.gatewayUrl);
+                      }}
+                    >
+                      <ExternalLinkIcon />
+                      <span>{t('openWebConsole')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsOpen(false);
+                        void reconnectBrowserBridge();
+                      }}
+                    >
+                      <RefreshIcon />
+                      <span>{t('reconnect')}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <div className="settings-group">
                 <div className="settings-label"><SunIcon />{t('appearance')}</div>
                 <div className="settings-options">
@@ -267,73 +324,110 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
           ) : null}
         </div>
       </header>
-      {preview ? <section className="card" aria-label={locale === 'zh-CN' ? '浏览器共享' : 'Browser sharing'}>
-        <p>{preview.origin}</p>
-        {preview.viewers?.length ? (
-          <p className="muted">
-            {preview.sharing
-              ? (locale === 'zh-CN'
-                ? `正在观看 (${preview.viewers.length})：${preview.viewers.map(item => item.viewer).join('、')}`
-                : `Viewing (${preview.viewers.length}): ${preview.viewers.map(item => item.viewer).join(', ')}`)
-              : (locale === 'zh-CN'
-                ? `请求观看：${preview.viewers.map(item => item.viewer).join('、')}`
-                : `Requested by: ${preview.viewers.map(item => item.viewer).join(', ')}`)}
-          </p>
-        ) : null}
-        {!preview.sharing ? <p>{locale === 'zh-CN' ? '在任务标签上点一下工具栏的 xopc 图标即可共享。' : 'Click the xopc toolbar icon once on the task tab to share it.'}</p> : null}
-        <div className="actions">
-          <button onClick={() => { void chrome.runtime.sendMessage({ type: 'browser/preview-stop' }); }}>
-            {preview.sharing ? (locale === 'zh-CN' ? '停止共享' : 'Stop sharing') : (locale === 'zh-CN' ? '取消' : 'Cancel')}
-          </button>
-          {preview.sharing && preview.viewers && preview.viewers.length > 1 ? preview.viewers.map(item => (
-            <button key={item.requestId} onClick={() => { void chrome.runtime.sendMessage({ type: 'browser/preview-stop', requestId: item.requestId }); }}>
-              {locale === 'zh-CN' ? `断开 ${item.viewer}` : `Disconnect ${item.viewer}`}
-            </button>
-          )) : null}
-        </div>
-      </section> : null}
-      {controlPaused && <section className="card" role="alert"><p>{t('browserControlStopped')}</p><button className="primary" onClick={() => { void chrome.runtime.sendMessage({ type: 'browser/resume-control' }).then(result => { if (result?.ok) setControlPaused(false); }); }}>{t('browserControlResume')}</button></section>}
-      {state !== 'online' ? <section className="center">
-        {state === 'loading' ? <div className="muted">{t('loading')}</div> : null}
-        {(state === 'unpaired' || state === 'pairing') ? (
-          <div className="card">
-            <h1>{t('connectToXopc')}</h1>
-            {localInvitation ? (
-              <>
-                <p className="muted">{t('localGatewayFound')}</p>
-                <button className="primary local-connect" onClick={() => void connect(localInvitation)} disabled={state === 'pairing'}>
-                  {state === 'pairing' ? t('connecting') : t('retryLocalConnection')}
-                </button>
-                <div className="pairing-divider">{t('pairingLinkDivider')}</div>
-              </>
-            ) : (
-              <>
-                <p className="muted">{t('connectGatewayHelp')}</p>
-                <button className="primary local-connect" onClick={() => void connectLocalGateway()} disabled={state === 'pairing'}>
-                  {state === 'pairing' ? t('connecting') : t('connectLocalGateway')}
-                </button>
-                <div className="pairing-divider">{t('pairingLinkDivider')}</div>
-              </>
-            )}
-            <label className="field">
-              {t('pairingLink')}
-              <textarea rows={4} value={invitation} onChange={(event) => setInvitation(event.target.value)} disabled={state === 'pairing'} />
-            </label>
-            {confirmationCode ? (
-              <><p className="muted">{t('confirmGatewayCode')}</p><div className="approval-code">{confirmationCode}</div></>
+      {preview ? (
+        <section className="notice-banner" aria-label={locale === 'zh-CN' ? '浏览器共享' : 'Browser sharing'}>
+          <div className="notice-banner-body">
+            <strong>{preview.origin}</strong>
+            {preview.viewers?.length ? (
+              <p className="muted">
+                {preview.sharing
+                  ? (locale === 'zh-CN'
+                    ? `正在观看 (${preview.viewers.length})：${preview.viewers.map(item => item.viewer).join('、')}`
+                    : `Viewing (${preview.viewers.length}): ${preview.viewers.map(item => item.viewer).join(', ')}`)
+                  : (locale === 'zh-CN'
+                    ? `请求观看：${preview.viewers.map(item => item.viewer).join('、')}`
+                    : `Requested by: ${preview.viewers.map(item => item.viewer).join(', ')}`)}
+              </p>
             ) : null}
-            {error ? <div className="error-text">{error}</div> : null}
-            <div className="actions">
-              <button className="primary" onClick={() => void connect(invitation, nextOrigin)} disabled={!invitation.trim() || state === 'pairing'}>
-                {state === 'pairing'
-                  ? t('waitingForApproval')
-                  : nextOrigin ? t('allowGatewayAndContinue', new URL(nextOrigin).host) : t('connect')}
-              </button>
-              {invitation ? <button onClick={() => void cancelPairing()} disabled={state === 'pairing'}>{t('cancelPairing')}</button> : null}
-            </div>
+            {!preview.sharing ? (
+              <p className="muted">
+                {locale === 'zh-CN' ? '在任务标签上点一下工具栏的 xopc 图标即可共享。' : 'Click the xopc toolbar icon once on the task tab to share it.'}
+              </p>
+            ) : null}
           </div>
-        ) : null}
-      </section> : <><ChatPanel key={JSON.stringify([profile!.gatewayId, profile!.gatewayUrl, profile!.deviceId])} gatewayId={profile!.gatewayId} deviceId={profile!.deviceId} /></>}
+          <div className="notice-banner-actions">
+            <button className="secondary" onClick={() => { void chrome.runtime.sendMessage({ type: 'browser/preview-stop' }); }}>
+              {preview.sharing ? (locale === 'zh-CN' ? '停止共享' : 'Stop sharing') : (locale === 'zh-CN' ? '取消' : 'Cancel')}
+            </button>
+            {preview.sharing && preview.viewers && preview.viewers.length > 1 ? preview.viewers.map(item => (
+              <button key={item.requestId} className="secondary" onClick={() => { void chrome.runtime.sendMessage({ type: 'browser/preview-stop', requestId: item.requestId }); }}>
+                {locale === 'zh-CN' ? `断开 ${item.viewer}` : `Disconnect ${item.viewer}`}
+              </button>
+            )) : null}
+          </div>
+        </section>
+      ) : null}
+      {controlPaused ? (
+        <section className="notice-banner warning" role="alert">
+          <div className="notice-banner-body">
+            <p>{t('browserControlStopped')}</p>
+          </div>
+          <div className="notice-banner-actions">
+            <button
+              className="primary"
+              onClick={() => {
+                void chrome.runtime.sendMessage({ type: 'browser/resume-control' }).then(result => {
+                  if (result?.ok) setControlPaused(false);
+                });
+              }}
+            >
+              {t('browserControlResume')}
+            </button>
+          </div>
+        </section>
+      ) : null}
+      {state !== 'online' ? (
+        <section className="center">
+          {state === 'loading' ? <div className="muted">{t('loading')}</div> : null}
+          {(state === 'unpaired' || state === 'pairing') ? (
+            <div className="card">
+              <h1>{t('connectToXopc')}</h1>
+              {localInvitation ? (
+                <>
+                  <p className="muted">{t('localGatewayFound')}</p>
+                  <button className="primary local-connect" onClick={() => void connect(localInvitation)} disabled={state === 'pairing'}>
+                    {state === 'pairing' ? t('connecting') : t('retryLocalConnection')}
+                  </button>
+                  <div className="pairing-divider">{t('pairingLinkDivider')}</div>
+                </>
+              ) : (
+                <>
+                  <p className="muted">{t('connectGatewayHelp')}</p>
+                  <button className="primary local-connect" onClick={() => void connectLocalGateway()} disabled={state === 'pairing'}>
+                    {state === 'pairing' ? t('connecting') : t('connectLocalGateway')}
+                  </button>
+                  <div className="pairing-divider">{t('pairingLinkDivider')}</div>
+                </>
+              )}
+              <label className="field">
+                {t('pairingLink')}
+                <textarea rows={4} value={invitation} onChange={(event) => setInvitation(event.target.value)} disabled={state === 'pairing'} />
+              </label>
+              {confirmationCode ? (
+                <>
+                  <p className="muted">{t('confirmGatewayCode')}</p>
+                  <div className="approval-code">{confirmationCode}</div>
+                </>
+              ) : null}
+              {error ? <div className="error-text">{error}</div> : null}
+              <div className="actions">
+                <button className="primary" onClick={() => void connect(invitation, nextOrigin)} disabled={!invitation.trim() || state === 'pairing'}>
+                  {state === 'pairing'
+                    ? t('waitingForApproval')
+                    : nextOrigin ? t('allowGatewayAndContinue', new URL(nextOrigin).host) : t('connect')}
+                </button>
+                {invitation ? <button className="secondary" onClick={() => void cancelPairing()} disabled={state === 'pairing'}>{t('cancelPairing')}</button> : null}
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : (
+        <ChatPanel
+          key={JSON.stringify([profile!.gatewayId, profile!.gatewayUrl, profile!.deviceId])}
+          gatewayId={profile!.gatewayId}
+          deviceId={profile!.deviceId}
+        />
+      )}
     </main>
   );
 }

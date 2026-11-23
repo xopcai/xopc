@@ -48,9 +48,10 @@ function messageWithSubstitutions(entry: LocaleMessage, substitutions?: string |
 
 export function t(key: string, substitutions?: string | string[]): string {
   const entry = activeCatalog?.[key];
-  return entry
-    ? messageWithSubstitutions(entry, substitutions)
-    : chrome.i18n.getMessage(key, substitutions) || key;
+  if (entry) return messageWithSubstitutions(entry, substitutions);
+  return typeof chrome !== 'undefined' && chrome.i18n?.getMessage
+    ? chrome.i18n.getMessage(key, substitutions) || key
+    : key;
 }
 
 export function extensionLocale(): string {
