@@ -3,7 +3,7 @@ import { extname } from 'node:path';
 import { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';
 import { createEnterpriseChannel, type EnterpriseMedia, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
 import type { EnterpriseCredentials, EnterpriseRegistration } from '@xopcai/xopc/channels/enterprise/setup.js';
-import { postJson, record, runChannelSocket, string } from '@xopcai/xopc/channels/enterprise/socket.js';
+import { ChannelConnectionRejectedError, postJson, ProviderHttpError, record, runChannelSocket, string, type OnSocketFailure } from '@xopcai/xopc/channels/enterprise/socket.js';
 
 const registrationBase = 'https://oapi.dingtalk.com/app/registration';
 const oapi = 'https://oapi.dingtalk.com';
@@ -49,7 +49,12 @@ async function streamEndpoint(credentials: EnterpriseCredentials, signal?: Abort
     clientSecret: credentials.secret,
     ua: 'xopc',
     subscriptions: [{ type: 'CALLBACK', topic }],
-  }, signal));
+  }, signal).catch((error) => {
+    if (error instanceof ProviderHttpError && error.status === 400) {
+      throw new ChannelConnectionRejectedError('connection_rejected', 'DingTalk rejected the Stream connection request (HTTP 400)');
+    }
+    throw error;
+  }));
   const endpoint = new URL(string(result.endpoint));
   const ticket = string(result.ticket);
   if (endpoint.protocol !== 'wss:' || !ticket) throw new Error('Invalid DingTalk Stream endpoint');
@@ -125,7 +130,7 @@ function transport(credentials: EnterpriseCredentials, receive: (message: Enterp
   };
 
   return {
-    run(signal: AbortSignal, online: Parameters<typeof runChannelSocket>[2], onFailure: () => void) {
+    run(signal: AbortSignal, online: Parameters<typeof runChannelSocket>[2], onFailure: OnSocketFailure) {
       return runChannelSocket(signal, async () => ({
         endpoint: await streamEndpoint(credentials, signal),
         async receive(frame, socket) {

@@ -104,6 +104,79 @@ const flows = [
   ...cases.filter((entry) => entry.qr && entry.fields.length).map((entry) => ({ ...entry, manual: false })),
 ];
 
+it('opens the credentials form for the affected Feishu account when the provider rejects it', async () => {
+  const entry: ChannelCatalogEntry = {
+    id: 'feishu', label: 'Feishu', extensionId: 'feishu', source: 'bundled', order: 0,
+    configPath: 'channels.feishu', configured: true, enabled: true,
+    actions: {
+      'setup.start': { label: 'Create app', result: 'qr' },
+      'setup.manual': { label: 'Manual setup', result: 'form' },
+    },
+  };
+  vi.mocked(fetchJson).mockImplementation(async (url) => {
+    switch (new URL(url instanceof Request ? url.url : url).pathname) {
+      case '/api/channels/catalog': return { payload: { channels: [entry] } };
+      case '/api/channels/status': return { payload: { channels: [{
+        name: entry.id, enabled: true, connected: false, connectionIssue: 'credentials_rejected', connectionIssueAccountId: 'team',
+      }] } };
+      default: return { payload: {} };
+    }
+  });
+  vi.mocked(apiFetch).mockResolvedValue(Response.json({ payload: {
+    type: 'form', submitAction: 'setup.manual', schema: { type: 'object', properties: { appId: { type: 'string' } } },
+  } }));
+
+  await openPanel();
+  expect(container.textContent).toContain(ch.connectionCredentialsRejected);
+  await act(async () => button(container, `Feishu · ${ch.reviewConnection}`).click());
+  expect(dialog().textContent).toContain(ch.connectionCredentialsRejectedHint);
+  await act(async () => button(dialog(), ch.updateCredentials).click());
+  expect(vi.mocked(apiFetch)).toHaveBeenCalledWith(
+    expect.stringContaining('/api/channels/feishu/actions/setup.manual'),
+    expect.objectContaining({ body: JSON.stringify({ accountId: 'team' }) }),
+  );
+});
+
+it('shows the expired WeChat login and opens the QR flow from either entry point', async () => {
+  const entry: ChannelCatalogEntry = {
+    id: 'weixin', label: 'WeChat', extensionId: 'weixin', source: 'bundled', order: 0,
+    configPath: 'channels.weixin', configured: true, enabled: true,
+    actions: { 'login.start': { label: 'Log in', result: 'qr' } },
+  };
+  const connecting = { name: entry.id, enabled: true, connected: false, connecting: true };
+  vi.mocked(fetchJson).mockImplementation(async (url) => {
+    switch (new URL(url instanceof Request ? url.url : url).pathname) {
+      case '/api/channels/catalog': return { payload: { channels: [entry] } };
+      case '/api/channels/status': return { payload: { channels: [connecting] } };
+      default: return { payload: {} };
+    }
+  });
+  const login = vi.fn(() => Response.json({ payload: { type: 'qr', qrPayload: 'https://example.com/scan' } }));
+  vi.mocked(apiFetch).mockImplementation(async (url) => {
+    const path = new URL(url instanceof Request ? url.url : url).pathname;
+    return path === '/api/channels/weixin/actions/login.start' ? login() : Response.json({ payload: {} });
+  });
+
+  await openPanel();
+  expect(container.textContent).toContain(ch.connectionChecking);
+  await act(async () => window.dispatchEvent(new CustomEvent('channels-status', {
+    detail: { channels: [{ ...connecting, connecting: false, reconnectRequired: true }] },
+  })));
+  expect(container.textContent).toContain(ch.connectionExpired);
+  expect(container.textContent).toContain(ch.scanToReconnect);
+  await act(async () => button(container, `WeChat · ${ch.scanToReconnect}`).click());
+  expect(login).toHaveBeenCalledTimes(1);
+  expect(dialog().querySelector('img[alt="WeChat setup QR"]')?.getAttribute('src')).toBe('data:image/png;base64,fixture');
+  await act(async () => button(dialog(), ch.close).click());
+
+  await act(async () => button(container, ch.channelSettingsLabel.replace('{{channel}}', 'WeChat')).click());
+  expect(dialog().textContent).toContain(ch.connectionExpiredHint);
+  expect(login).toHaveBeenCalledTimes(1);
+  await act(async () => button(dialog(), ch.scanToReconnect).click());
+  expect(login).toHaveBeenCalledTimes(2);
+  expect(dialog().querySelector('img[alt="WeChat setup QR"]')?.getAttribute('src')).toBe('data:image/png;base64,fixture');
+});
+
 it.each(flows)('$id completes quick setup (manual: $manual), then stops and resumes with saved credentials', async ({ id, start, qr, fields, manual }) => {
   let configured = false;
   let enabled = false;

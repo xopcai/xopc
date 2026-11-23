@@ -105,6 +105,10 @@ function channelSetupStatus(entry: ChannelCatalogEntry): ChannelSetupStatus {
 
 function runtimeStatusLabel(runtime: ChannelRuntimeState, ch: ReturnType<typeof messages>['channelsSettings']): string {
   if (runtime === 'running') return ch.connectionRunning;
+  if (runtime === 'reconnect_required') return ch.connectionExpired;
+  if (runtime === 'credentials_rejected') return ch.connectionCredentialsRejected;
+  if (runtime === 'connection_rejected') return ch.connectionRejected;
+  if (runtime === 'retrying') return ch.connectionRetrying;
   if (runtime === 'stopped') return ch.connectionStopped;
   if (runtime === 'checking') return ch.connectionChecking;
   if (runtime === 'disabled') return ch.connectionDisabled;
@@ -113,6 +117,10 @@ function runtimeStatusLabel(runtime: ChannelRuntimeState, ch: ReturnType<typeof 
 
 function runtimeStatusHint(runtime: ChannelRuntimeState, ch: ReturnType<typeof messages>['channelsSettings']): string {
   if (runtime === 'running') return ch.connectionRunningHint;
+  if (runtime === 'reconnect_required') return ch.connectionExpiredHint;
+  if (runtime === 'credentials_rejected') return ch.connectionCredentialsRejectedHint;
+  if (runtime === 'connection_rejected') return ch.connectionRejectedHint;
+  if (runtime === 'retrying') return ch.connectionRetryingHint;
   if (runtime === 'stopped') return ch.connectionStoppedHint;
   if (runtime === 'disabled') return ch.connectionDisabledHint;
   if (runtime === 'needs_setup') return ch.connectionNeedsSetupHint;
@@ -121,9 +129,15 @@ function runtimeStatusHint(runtime: ChannelRuntimeState, ch: ReturnType<typeof m
 
 function runtimeStatusClass(runtime: ChannelRuntimeState): string {
   if (runtime === 'running') return 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300';
-  if (runtime === 'stopped') return 'bg-red-500/10 text-red-700 dark:text-red-300';
-  if (runtime === 'checking') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
+  if (runtime === 'stopped' || runtime === 'reconnect_required' || requiresConnectionReview(runtime)) {
+    return 'bg-red-500/10 text-red-700 dark:text-red-300';
+  }
+  if (runtime === 'checking' || runtime === 'retrying') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
   return 'bg-surface-hover text-fg-muted';
+}
+
+function requiresConnectionReview(runtime: ChannelRuntimeState): boolean {
+  return runtime === 'credentials_rejected' || runtime === 'connection_rejected';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -320,7 +334,13 @@ function ChannelHubCard({
   const descriptionId = useId();
   const description = entry.description?.trim();
   const action = choosePrimaryChannelAction(entry);
-  const label = pendingPairings > 0 ? ch.hubPairingButton
+  const reconnectRequired = runtime === 'reconnect_required';
+  const reviewRequired = requiresConnectionReview(runtime);
+  const recoveryLabel = reconnectRequired ? ch.scanToReconnect : reviewRequired ? ch.reviewConnection : undefined;
+  const showPairings = pendingPairings > 0 && !recoveryLabel && runtime !== 'retrying';
+  const label = reconnectRequired ? ch.scanToReconnect
+    : reviewRequired || runtime === 'retrying' ? ch.reviewConnection
+    : showPairings ? ch.hubPairingButton
     : runtime === 'disabled' ? ch.enableChannel
     : runtime === 'stopped' ? ch.restartChannel
     : runtime === 'running' ? ch.testMessage
@@ -329,11 +349,11 @@ function ChannelHubCard({
   const pending = busy || restarting || runtime === 'checking';
   const status = restarting ? ch.restartingChannel
     : busy ? ch.enablingChannel
-    : pendingPairings > 0 ? ch.pairingPendingBadge.replace('{{count}}', String(pendingPairings))
+    : showPairings ? ch.pairingPendingBadge.replace('{{count}}', String(pendingPairings))
     : runtime === 'needs_setup' ? ch.pendingSetup
     : runtime === 'running' ? ch.connected
     : runtimeStatusLabel(runtime, ch);
-  const badgeClass = pendingPairings > 0 && !pending
+  const badgeClass = showPairings && !pending
     ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300'
     : runtimeStatusClass(pending ? 'checking' : runtime);
   const settingsLabel = ch.channelSettingsLabel.replace('{{channel}}', entry.label);
@@ -347,10 +367,10 @@ function ChannelHubCard({
         type="button"
         className="absolute inset-0 cursor-pointer rounded-[inherit] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent disabled:cursor-default"
         aria-label={`${entry.label} · ${label}`}
-        aria-describedby={description ? `${statusId} ${descriptionId}` : statusId}
+        aria-describedby={description && !recoveryLabel ? `${statusId} ${descriptionId}` : statusId}
         title={pending ? undefined : label}
         onClick={
-          pendingPairings > 0
+          showPairings || reviewRequired || runtime === 'retrying'
             ? onSettings
             : runtime === 'disabled'
               ? onToggle
@@ -373,7 +393,11 @@ function ChannelHubCard({
           <span className="truncate">{status}</span>
         </span>
       </div>
-      {description ? <p id={descriptionId} className="col-start-2 row-start-2 truncate text-xs text-fg-muted">{description}</p> : null}
+      {recoveryLabel ? (
+        <span aria-hidden className="pointer-events-none col-start-2 row-start-2 text-xs font-medium text-accent">{recoveryLabel}</span>
+      ) : description ? (
+        <p id={descriptionId} className="col-start-2 row-start-2 truncate text-xs text-fg-muted">{description}</p>
+      ) : null}
       <Button type="button" variant="ghost" className="relative col-start-3 row-start-2 size-11 justify-self-end p-0"
         aria-label={settingsLabel} title={settingsLabel} onClick={onSettings}
       >
@@ -712,9 +736,13 @@ export function ChannelsSettingsPanel({
   const extensionModal = activeEntry?.ui?.modal;
   const showSchemaConfig = extensionModal?.placement !== 'replace-config';
   const activeRuntime = activeEntry ? runtimeFor(activeEntry) : 'checking';
+  const activeReconnectRequired = activeRuntime === 'reconnect_required';
+  const credentialsRejected = activeRuntime === 'credentials_rejected';
+  const issueAccountId = activeEntry ? runtimeByChannel.get(activeEntry.id)?.connectionIssueAccountId : undefined;
+  const canRestart = activeRuntime === 'stopped' || activeRuntime === 'connection_rejected';
   const activeSetup = activeEntry ? channelSetupStatus(activeEntry) : null;
   const showSetupCard = activeEntry && activeSetup
-    ? !activeSetup.ready || showConnectionOptions
+    ? !activeSetup.ready || activeReconnectRequired || credentialsRejected || showConnectionOptions
     : false;
   const quickAccessView = quickEntry ? readChannelAccessView(quickEntry, {}) : null;
 
@@ -862,7 +890,7 @@ export function ChannelsSettingsPanel({
                       </span>
                     </div>
                     <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
-                      <span className="min-w-0 truncate">{runtimeStatusHint(activeRuntime, ch)}</span>
+                      <span className="min-w-0">{runtimeStatusHint(activeRuntime, ch)}</span>
                       {activeEntry.docsPath ? (
                         <a
                           href={channelDocsUrl(language, activeEntry.docsPath)}
@@ -890,20 +918,20 @@ export function ChannelsSettingsPanel({
                 </div>
               </div>
 
-              {activeSetup.ready && extensionModal?.placement !== 'replace-config' ? (
+              {activeSetup.ready && !activeReconnectRequired && !credentialsRejected && extensionModal?.placement !== 'replace-config' ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-edge-subtle pt-3">
                   <div className="flex items-center gap-1.5 text-xs text-fg-muted">
                     {activeRuntime === 'running' ? (
                       <CircleCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden />
-                    ) : activeRuntime === 'stopped' ? (
+                    ) : canRestart ? (
                       <CircleAlert className="size-3.5 text-red-600 dark:text-red-400" aria-hidden />
                     ) : (
-                      <Loader2 className={cn('size-3.5', activeRuntime === 'checking' && 'animate-spin text-amber-600 dark:text-amber-400')} aria-hidden />
+                      <Loader2 className={cn('size-3.5', (activeRuntime === 'checking' || activeRuntime === 'retrying') && 'animate-spin text-amber-600 dark:text-amber-400')} aria-hidden />
                     )}
                     <span>{activeEntry.description}</span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    {activeRuntime === 'stopped' ? (
+                    {canRestart ? (
                       <Button
                         type="button"
                         variant="primary"
@@ -939,6 +967,9 @@ export function ChannelsSettingsPanel({
                     locale={language}
                     messages={ch}
                     compact
+                    primaryActionLabel={activeReconnectRequired ? ch.scanToReconnect : credentialsRejected ? ch.updateCredentials : undefined}
+                    preferManual={credentialsRejected}
+                    accountId={credentialsRejected ? issueAccountId : undefined}
                     onStarted={() => setShowConnectionOptions(true)}
                     onChanged={onAdvancedSetupChanged}
                     onPairingChanged={() => void mutatePairingSummary()}

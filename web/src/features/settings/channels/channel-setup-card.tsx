@@ -141,6 +141,9 @@ export function ChannelSetupCard({
   onStarted,
   compact = false,
   quick = false,
+  primaryActionLabel,
+  preferManual = false,
+  accountId: setupAccountId,
 }: {
   entry: ChannelCatalogEntry;
   locale: string;
@@ -150,12 +153,18 @@ export function ChannelSetupCard({
   onStarted?: () => void;
   compact?: boolean;
   quick?: boolean;
+  primaryActionLabel?: string;
+  preferManual?: boolean;
+  accountId?: string;
 }) {
   const zh = locale.toLowerCase().startsWith('zh');
   const [domain, setDomain] = useState<'feishu' | 'lark'>('feishu');
   const [pin, setPin] = useState('');
   const [copiedTemplate, setCopiedTemplate] = useState(false);
-  const primary = useMemo(() => choosePrimaryChannelAction(entry), [entry]);
+  const primary = useMemo(() => {
+    const manual = entry.actions?.['setup.manual'];
+    return preferManual && manual ? ['setup.manual', manual] as const : choosePrimaryChannelAction(entry);
+  }, [entry, preferManual]);
   const schemaLabels = useMemo(() => ({
     defaultBooleanLabel: ch.schemaBooleanDefault,
     unsupportedArrayType: ch.schemaUnsupportedArrayType,
@@ -209,7 +218,7 @@ export function ChannelSetupCard({
         await cancelPoll(oldPoll).catch(() => {});
       }
       setCopiedTemplate(false);
-      const payload = await runChannelAction({ channelId: entry.id, actionId, locale, input, accountId });
+      const payload = await runChannelAction({ channelId: entry.id, actionId, locale, input, accountId: accountId ?? setupAccountId });
       const nextPoll = pollTarget(payload);
       if (!mounted.current) {
         if (quick) void cancelPoll(nextPoll).catch(() => {});
@@ -228,12 +237,12 @@ export function ChannelSetupCard({
     } catch (err) {
       if (mounted.current) setState((prev) => ({ ...prev, busy: false, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, [cancelPoll, entry.id, locale, onChanged, quick]);
+  }, [cancelPoll, entry.id, locale, onChanged, quick, setupAccountId]);
 
   const startPrimary = (platform = domain, replace = false) => {
     if (!primary) return;
     onStarted?.();
-    void runAction(primary[0], entry.id === 'feishu' ? { domain: platform } : undefined, undefined, replace);
+    void runAction(primary[0], entry.id === 'feishu' && !preferManual ? { domain: platform } : undefined, undefined, replace);
   };
 
   const primaryId = primary?.[0];
@@ -305,7 +314,7 @@ export function ChannelSetupCard({
     };
   }, [cancelPoll, entry.id, locale, onChanged, quick, state.busy, state.poll]);
 
-  const primaryLabel = primary?.[1].label ?? (entry.configured ? ch.reconnect : ch.connect);
+  const primaryLabel = primaryActionLabel ?? primary?.[1].label ?? (entry.configured ? ch.reconnect : ch.connect);
   const doctorLabel = entry.actions?.['doctor.run']?.label ?? ch.diagnose;
   const message = payloadMessage(state.payload);
   const qrImage = qrContent ? state.generatedQr : payloadQrImage(state.payload);
@@ -373,7 +382,7 @@ export function ChannelSetupCard({
           </div>
         ) : null}
         <div className="flex flex-wrap items-end gap-2">
-          {entry.id === 'feishu' && (quick
+          {entry.id === 'feishu' && !preferManual && (quick
             ? !formPayload && !setupComplete && !terminalSuccess && (!state.poll || state.poll.actionId === 'setup.status')
             : !state.poll) ? (
             <SelectField

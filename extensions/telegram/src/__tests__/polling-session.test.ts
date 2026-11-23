@@ -56,4 +56,19 @@ describe('Telegram polling', () => {
     expect(getUpdates).toHaveBeenCalledTimes(1);
     expect(deleteWebhook).not.toHaveBeenCalled();
   });
+
+  it('preserves the provider error when the bot token is rejected', async () => {
+    const onExit = vi.fn();
+    const denied = new GrammyError('getUpdates failed', { ok: false, error_code: 401, description: 'Unauthorized' }, 'getUpdates', {});
+    const getUpdates = vi.fn().mockRejectedValue(denied);
+    const session = startTelegramPollingSession({
+      accountId, botToken, bot: { api: { getUpdates } } as unknown as Bot, onExit,
+    });
+    try {
+      await vi.waitFor(() => expect(onExit).toHaveBeenCalledWith(expect.objectContaining({ cause: denied })));
+      expect(getUpdates).toHaveBeenCalledTimes(1);
+    } finally {
+      await session.stop();
+    }
+  });
 });

@@ -15,6 +15,8 @@ import { getFeishuBindingByMessageId } from '../../state/message-bindings.js';
 
 const log = createLogger('FeishuSocketMode');
 
+export type FeishuTransportState = 'connecting' | 'online' | 'error' | 'retrying' | 'credentials_rejected' | 'connection_rejected';
+
 export interface FeishuSocketModeMonitorDeps {
   account: ResolvedFeishuAccount;
   config: Config;
@@ -22,7 +24,7 @@ export interface FeishuSocketModeMonitorDeps {
   /** Used when `account.inboundDebounceMs` is unset. */
   inboundDebounceDefaultMs: number;
   abortSignal: AbortSignal;
-  onState?: (state: 'connecting' | 'online' | 'error') => void;
+  onState?: (state: FeishuTransportState) => void;
   security: {
     checkAccess: (ctx: ChannelSecurityContext) => { allowed: boolean; reason?: string } | undefined;
   };
@@ -190,20 +192,28 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
 
   async function run(): Promise<void> {
     let attempt = 0;
+    deps.onState?.('connecting');
     ingress.start();
     try {
       while (!abortSignal.aborted) {
-        deps.onState?.('connecting');
+        let connected = false;
+        let failed = false;
         let onError!: (err: unknown) => void;
-        const failure = new Promise<unknown>(resolve => { onError = resolve; });
+        const failure = new Promise<unknown>(resolve => {
+          onError = (error) => {
+            failed = true;
+            resolve(error);
+          };
+        });
         const online = () => {
+          connected = true;
           attempt = 0;
           if (!abortSignal.aborted) deps.onState?.('online');
         };
         const { wsClient, dispatcher, api } = createFeishuClient(account, {
           onReady: online,
           onReconnected: online,
-          onReconnecting: () => { if (!abortSignal.aborted) deps.onState?.('connecting'); },
+          onReconnecting: () => { if (!abortSignal.aborted) deps.onState?.('retrying'); },
           onError,
         });
 
@@ -219,10 +229,19 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
         abortSignal.addEventListener('abort', onAbort, { once: true });
         try {
           if (abortSignal.aborted) return;
-          void Promise.resolve(wsClient.start({ eventDispatcher: dispatcher })).catch(onError);
+          void Promise.resolve(wsClient.start({ eventDispatcher: dispatcher })).then(() => {
+            if (!connected && !failed && !abortSignal.aborted) deps.onState?.('retrying');
+          }, onError);
           const err = await failure;
           if (!abortSignal.aborted) {
-            deps.onState?.('error');
+            // The SDK wraps terminal endpoint codes in an Error message.
+            const code = err instanceof Error ? /^pullConnectConfig failed: code=(\d+),/.exec(err.message)?.[1] : undefined;
+            if (code === '514' || code === '403' || code === '1000040350') {
+              log.warn({ accountId: account.accountId, code }, 'Feishu rejected the socket connection');
+              deps.onState?.(code === '514' ? 'credentials_rejected' : 'connection_rejected');
+              return;
+            }
+            deps.onState?.('retrying');
             log.warn({ accountId: account.accountId, errorType: err instanceof Error ? err.name : typeof err }, 'Feishu socket disconnected');
           }
         } finally {

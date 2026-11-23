@@ -1,5 +1,6 @@
 /** Detect Telegram Bot API 401 Unauthorized (invalid/revoked token). */
 export function isTelegramUnauthorizedTokenError(err: unknown): boolean {
+  if (err && typeof err === 'object' && 'error_code' in err && err.error_code === 401) return true;
   const text = extractErrorText(err);
   if (!text) return false;
   if (/401/.test(text) && /unauthorized/i.test(text)) return true;

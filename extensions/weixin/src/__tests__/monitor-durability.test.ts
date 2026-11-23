@@ -6,6 +6,7 @@ import { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import { closeXopcDatabase, openXopcDatabase } from '@xopcai/xopc/storage/sqlite/connection.js';
 
 import type { WeixinMessage } from '../api/types.js';
+import { clearSessionPause, isSessionPaused, SESSION_EXPIRED_ERRCODE } from '../api/session-guard.js';
 import { monitorWeixinProvider } from '../monitor/monitor.js';
 
 const { getUpdates, processWeixinInboundMessage } = vi.hoisted(() => ({
@@ -24,6 +25,29 @@ describe('Weixin monitor durability', () => {
     openXopcDatabase({ path: ':memory:' });
   });
   afterEach(() => { closeXopcDatabase(); });
+
+  it('reports expired credentials as requiring a new login', async () => {
+    const account = {
+      accountId: 'expired', baseUrl: 'https://fixture.invalid', cdnBaseUrl: 'https://fixture.invalid',
+      configured: true, enabled: true, dmPolicy: 'pairing' as const, allowFrom: [], token: 'fixture',
+    };
+    const controller = new AbortController();
+    getUpdates.mockResolvedValue({ errcode: SESSION_EXPIRED_ERRCODE });
+    const onState = vi.fn((state: string) => {
+      if (state === 'reconnect-required') controller.abort();
+    });
+    try {
+      await monitorWeixinProvider({
+        account, config: {} as Config, bus: new MessageBus(), abortSignal: controller.signal, onState,
+      });
+      expect(onState.mock.calls).toEqual([['connecting'], ['reconnect-required']]);
+      expect(isSessionPaused(account.accountId)).toBe(true);
+      clearSessionPause(account.accountId);
+      expect(isSessionPaused(account.accountId)).toBe(false);
+    } finally {
+      clearSessionPause(account.accountId);
+    }
+  });
 
   it('commits the whole page and continues after a message fails', async () => {
     const account = {

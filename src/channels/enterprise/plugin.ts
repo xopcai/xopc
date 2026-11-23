@@ -5,6 +5,7 @@ import type WebSocket from 'ws';
 
 import type { Config } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
+import type { ChannelConnectionIssue } from '../channel-domain.js';
 import { resolveStandardPairingPath, resolveStandardAllowFromPath } from '../pairing/paths.js';
 import { readAllowFromIdsSync } from '../pairing/allow-from-file.js';
 import type { ChannelOutboundContext, ChannelPlugin, ChannelPluginInitOptions, DmPolicy, GroupPolicy } from '../plugin-types.js';
@@ -12,7 +13,7 @@ import { evaluateAccess } from '../security.js';
 import { redactEnterpriseChannelSecret } from './config-surface.js';
 import { loadEnterpriseMedia, type EnterpriseMedia } from './media.js';
 import { createEnterpriseSetup, type ChannelSetupLink, type EnterpriseCredentials, type EnterpriseRegistration } from './setup.js';
-import { record, string } from './socket.js';
+import { record, string, type OnSocketFailure } from './socket.js';
 
 export type { EnterpriseMedia, EnterpriseMediaKind } from './media.js';
 
@@ -30,7 +31,7 @@ export type EnterpriseMessage = {
 };
 
 export type EnterpriseTransport = {
-  run: (signal: AbortSignal, online: (socket?: WebSocket) => void, onFailure: (message?: string) => void) => Promise<void>;
+  run: (signal: AbortSignal, online: (socket?: WebSocket) => void, onFailure: OnSocketFailure) => Promise<void>;
   send: (target: string, group: boolean, text: string, replyId?: string) => Promise<string>;
   sendMedia?: (target: string, group: boolean, media: EnterpriseMedia, caption?: string, replyId?: string) => Promise<string>;
 };
@@ -58,6 +59,7 @@ export function createEnterpriseChannel(options: {
   let runtime: { controller: AbortController; transport: EnterpriseTransport; task: Promise<void> } | undefined;
   let online = false;
   let connecting = false;
+  let connectionIssue: ChannelConnectionIssue | undefined;
 
   const section = (config: Config) => record(config.channels?.[id]);
   const credentialsFor = (config: Config) => ({
@@ -70,10 +72,11 @@ export function createEnterpriseChannel(options: {
     `${accountId}-${createHash('sha256').update(credentials.identity ?? credentials.id).digest('hex').slice(0, 24)}`;
   const stop = async () => {
     const previous = runtime;
-    const wasActive = Boolean(previous || online || connecting);
+    const wasActive = Boolean(previous || online || connecting || connectionIssue);
     runtime = undefined;
     online = false;
     connecting = false;
+    connectionIssue = undefined;
     previous?.controller.abort();
     await previous?.task;
     if (wasActive) host?.notifyStatusChanged?.();
@@ -190,20 +193,32 @@ export function createEnterpriseChannel(options: {
           const nextOnline = Boolean(socket);
           const changed = online !== nextOnline || (nextOnline && connecting);
           online = nextOnline;
-          if (nextOnline) connecting = false;
+          if (nextOnline) {
+            connecting = false;
+            connectionIssue = undefined;
+          }
           if (changed) host.notifyStatusChanged?.();
         }
-      }, (message) => {
-        if (runtime?.controller === controller && connecting) {
+      }, (message, issue) => {
+        if (runtime?.controller === controller && (!online || issue)) {
           connecting = false;
+          connectionIssue = issue ?? 'retrying';
           host.notifyStatusChanged?.();
         }
         host.warn(message ?? 'Channel connection failed; retrying');
       })
+        .then(() => {
+          if (runtime?.controller !== controller) return;
+          online = false;
+          connecting = false;
+          if (connectionIssue === 'retrying') connectionIssue = undefined;
+          host.notifyStatusChanged?.();
+        })
         .catch(() => {
           if (runtime?.controller === controller) {
             online = false;
             connecting = false;
+            connectionIssue = undefined;
             host.notifyStatusChanged?.();
           }
           host.warn('Channel transport stopped unexpectedly');
@@ -213,6 +228,7 @@ export function createEnterpriseChannel(options: {
     stop,
     channelIsRunning: () => online,
     channelIsConnecting: () => Boolean(runtime) && !online && connecting,
+    channelConnectionProblem: () => connectionIssue ? { issue: connectionIssue } : undefined,
     async onConfigUpdated(config) {
       const changed = section(cfg).enabled !== section(config).enabled ||
         !isDeepStrictEqual(credentialsFor(cfg), credentialsFor(config));

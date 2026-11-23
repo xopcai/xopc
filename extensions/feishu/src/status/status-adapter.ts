@@ -1,9 +1,10 @@
 import type { ChannelStatusAdapter } from '@xopcai/xopc/channels/plugin-types.js';
 
 import { probeFeishuBot } from '../transport/client/bot-info.js';
+import type { FeishuTransportState } from '../transport/socket-mode/monitor.js';
 import type { ResolvedFeishuAccount } from '../state/accounts.js';
 
-export function createFeishuStatusAdapter(getState: (accountId: string) => 'online' | 'connecting' | 'error' | undefined = () => undefined): ChannelStatusAdapter<ResolvedFeishuAccount> {
+export function createFeishuStatusAdapter(getState: (accountId: string) => FeishuTransportState | undefined = () => undefined): ChannelStatusAdapter<ResolvedFeishuAccount> {
   return {
     defaultRuntime: {
       accountId: 'default',
@@ -22,7 +23,9 @@ export function createFeishuStatusAdapter(getState: (accountId: string) => 'onli
       if (!enabled) return 'disabled';
       if (!configured) return 'error';
       const state = getState(account.accountId);
-      return state === 'online' || state === 'error' ? state : 'offline';
+      if (state === 'online') return 'online';
+      if (state === 'error' || state === 'credentials_rejected' || state === 'connection_rejected') return 'error';
+      return 'offline';
     },
     probeAccount: async ({ account, timeoutMs, cfg }) => {
       const info = await probeFeishuBot(account, AbortSignal.timeout(Math.max(1000, Math.min(timeoutMs ?? 10_000, 30_000))))

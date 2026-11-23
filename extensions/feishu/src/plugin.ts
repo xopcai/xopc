@@ -10,6 +10,7 @@ import { isDeepStrictEqual } from 'node:util';
 import './pairing-config-resolver.js';
 
 import type { Config } from '@xopcai/xopc/config/schema.js';
+import type { ChannelConnectionProblem } from '@xopcai/xopc/channels/channel-domain.js';
 import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import type {
   ChannelCapabilities,
@@ -39,6 +40,7 @@ import { FeishuConfigSchema, type FeishuConfig } from './schema/config-schema.js
 import { listFeishuAccountIds, resolveFeishuAccount, type ResolvedFeishuAccount } from './state/accounts.js';
 import { createFeishuOutboundAdapter } from './outbound/outbound-adapter.js';
 import { createFeishuStatusAdapter } from './status/status-adapter.js';
+import type { FeishuTransportState } from './transport/socket-mode/monitor.js';
 import { createFeishuDoctorAdapter } from './status/doctor.js';
 import { feishuConfigSurface } from './ui/config-surface.js';
 import { createFeishuStreamingAdapter } from './streaming/streaming-adapter.js';
@@ -126,7 +128,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   private cfg!: Config;
   private abortControllers = new Map<string, AbortController>();
   private monitorTasks = new Map<string, Promise<void>>();
-  private transportStates = new Map<string, 'connecting' | 'online' | 'error'>();
+  private transportStates = new Map<string, FeishuTransportState>();
   private inboundPipeline?: ReturnType<typeof createFeishuInboundPipeline>;
   private notifyStatusChanged?: () => void;
 
@@ -427,6 +429,18 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
       const a = resolveFeishuAccount(cfg, id);
       return a.enabled !== false && a.configured && this.transportStates.get(id) === 'connecting';
     });
+  }
+
+  channelConnectionProblem(cfg: Config): ChannelConnectionProblem | undefined {
+    const problems = listFeishuAccountIds(cfg).flatMap((accountId) => {
+      const account = resolveFeishuAccount(cfg, accountId);
+      const issue = this.transportStates.get(accountId);
+      if (!account.enabled || !account.configured) return [];
+      return issue === 'credentials_rejected' || issue === 'connection_rejected' || issue === 'retrying'
+        ? [{ issue, accountId }]
+        : [];
+    });
+    return problems.find(({ issue }) => issue !== 'retrying') ?? problems[0];
   }
 
   async onConfigUpdated(cfg: Config): Promise<void> {

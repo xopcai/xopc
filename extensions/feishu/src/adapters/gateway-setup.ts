@@ -16,6 +16,7 @@ import {
 } from '../auth/app-registration.js';
 import { probeFeishuBot } from '../transport/client/bot-info.js';
 import { ensureFeishuLarkSdk } from '../transport/client/lark-sdk.js';
+import { resolveFeishuAccount } from '../state/accounts.js';
 
 type SetupSession = {
   accountId: string;
@@ -44,7 +45,7 @@ function normalizeDomain(input: unknown): FeishuDomain {
   return input === 'lark' ? 'lark' : 'feishu';
 }
 
-export function buildFeishuConfig(config: Config, result: AppRegistrationResult, accountId = 'default'): Config {
+export function buildFeishuConfig(config: Config, result: Omit<AppRegistrationResult, 'domain'> & { domain: string }, accountId = 'default'): Config {
   const existing = config.channels?.feishu as FeishuConfig | undefined;
   const account = Object.hasOwn(existing?.accounts ?? {}, accountId) ? existing?.accounts?.[accountId] : undefined;
   const ownerOpenId = result.openId?.trim();
@@ -119,7 +120,7 @@ function setupVerification(
   };
 }
 
-function manualSetupForm(domain: ReturnType<typeof normalizeDomain>, message?: string) {
+function manualSetupForm(domain: string, message?: string) {
   return {
     type: 'form' as const,
     submitAction: 'setup.manual',
@@ -129,7 +130,7 @@ function manualSetupForm(domain: ReturnType<typeof normalizeDomain>, message?: s
       properties: {
         appId: { type: 'string', title: 'App ID' },
         appSecret: { type: 'string', title: 'App Secret', format: 'password' },
-        domain: { type: 'string', enum: ['feishu', 'lark'], default: domain },
+        domain: { type: 'string', enum: [...new Set(['feishu', 'lark', domain])], default: domain },
       },
       required: ['appId', 'appSecret'],
     },
@@ -144,6 +145,8 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
     const id = typeof raw.conversationId === 'string' ? raw.conversationId : '';
     const accountId = requestedAccountId || 'default';
     const domain = normalizeDomain(raw.domain);
+    const savedDomain = requestedAccountId ? resolveFeishuAccount(cfg, accountId).domain : undefined;
+    const manualDomain = savedDomain && (raw.domain === undefined || raw.domain === savedDomain) ? savedDomain : domain;
     if (actionId === 'setup.verify.status') {
       return { ok: true, payload: getChannelConnectionProbe('feishu', accountId, id, zh) };
     }
@@ -157,7 +160,7 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
     }
 
     if (actionId === 'setup.manual' && raw.appId === undefined && raw.appSecret === undefined) {
-      return { ok: true, payload: manualSetupForm(domain) };
+      return { ok: true, payload: manualSetupForm(manualDomain) };
     }
 
     if (actionId === 'setup.start' || actionId === 'setup.manual') {
@@ -260,7 +263,7 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
       const appId = typeof raw.appId === 'string' ? raw.appId.trim() : '';
       const appSecret = typeof raw.appSecret === 'string' ? raw.appSecret.trim() : '';
       if (!appId || !appSecret) return { ok: false, message: zh ? '请填写 App ID 和 App Secret。' : 'Enter the App ID and App Secret.' };
-      const result = { appId, appSecret, domain };
+      const result = { appId, appSecret, domain: manualDomain };
       const info = await probeFeishuBot(result).catch(() => ({ ok: false as const }));
       return { ok: true, nextConfig: buildFeishuConfig(cfg, result, accountId), onConfigSaved: () => setupVerification('manual', zh, info) };
     }

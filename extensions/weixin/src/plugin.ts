@@ -31,6 +31,7 @@ import type {
   ChannelCronDeliveryAdapter,
   ChannelRuntimeActionAdapter,
 } from '@xopcai/xopc/channels/plugins/types.adapters.js';
+import { clearSessionPause } from './api/session-guard.js';
 import {
   listWeixinAccountIds,
   resolveWeixinAccount,
@@ -186,6 +187,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
             beforeConfigSaved: () => {
               if (this.setupSessions.get(key) !== session) throw new Error('Weixin setup session is no longer active');
               credentials.persist();
+              clearSessionPause(credentials.accountId);
             },
             onConfigSaved: async () => {
               credentials.cleanup();
@@ -381,7 +383,14 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   channelIsConnecting(cfg: Config): boolean {
     return listWeixinAccountIds(cfg).some((id) => {
       const a = resolveWeixinAccount(cfg, id);
-      return a.configured && a.enabled !== false && this.abortControllers.has(id) && this.monitorStates.get(id) !== 'polling';
+      return a.configured && a.enabled !== false && this.abortControllers.has(id) && this.monitorStates.get(id) === 'connecting';
+    });
+  }
+
+  channelRequiresReconnect(cfg: Config): boolean {
+    return listWeixinAccountIds(cfg).some((id) => {
+      const a = resolveWeixinAccount(cfg, id);
+      return a.configured && a.enabled !== false && this.monitorStates.get(id) === 'reconnect-required';
     });
   }
 

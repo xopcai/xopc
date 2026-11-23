@@ -26,7 +26,7 @@ export async function runDiscordGateway(options: {
   token: string;
   signal: AbortSignal;
   online: Parameters<typeof runChannelSocket>[2];
-  onFailure: (message?: string) => void;
+  onFailure: NonNullable<Parameters<typeof runChannelSocket>[3]>;
   authenticate: (signal: AbortSignal) => Promise<{ botId: string; gateway: unknown }>;
   receive: (message: Record<string, unknown>, botId: string) => Promise<void>;
 }) {
@@ -68,7 +68,10 @@ export async function runDiscordGateway(options: {
         socket.once('close', (code) => {
           clearTimeout(heartbeatTimer);
           if (terminalCloseCodes.has(code)) {
-            onFailure(`Discord Gateway rejected this connection (${code}). Check the bot configuration.`);
+            onFailure(
+              `Discord Gateway rejected this connection (${code}). Check the bot configuration.`,
+              code === 4004 ? 'credentials_rejected' : 'connection_rejected',
+            );
             terminal.abort();
           }
           if (freshSessionCloseCodes.has(code) || (!ready && resuming && ++resumeFailures >= 3)) {

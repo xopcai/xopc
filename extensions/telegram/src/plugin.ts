@@ -7,7 +7,7 @@
 
 import { isDeepStrictEqual } from 'node:util';
 
-import { Bot, type Context } from 'grammy';
+import { Bot, GrammyError, type Context } from 'grammy';
 
 import './pairing-config-resolver.js';
 
@@ -423,6 +423,14 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     );
   }
 
+  channelConnectionProblem(_cfg: Config) {
+    const problems = this.accountManager.getAllAccounts().flatMap(({ accountId, enabled, botToken }) => {
+      const issue = this.accountManager.getStatus(accountId)?.connectionIssue;
+      return enabled !== false && botToken && issue ? [{ issue, accountId }] : [];
+    });
+    return problems.find(({ issue }) => issue !== 'retrying') ?? problems[0];
+  }
+
   async start(options?: ChannelPluginStartOptions): Promise<void> {
     const section = this.cfg.channels?.telegram as { enabled?: boolean } | undefined;
     if (!section || section.enabled !== true) {
@@ -524,13 +532,21 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
           this.accountManager.updateStatus({ accountId: account.accountId, running: true, mode: 'polling' });
           if (!wasRunning) this.notifyStatusChanged?.();
         },
+        onRetry: () => {
+          this.accountManager.updateStatus({
+            accountId: account.accountId, running: false, mode: 'polling', connectionIssue: 'retrying',
+          });
+          this.notifyStatusChanged?.();
+        },
         onExit: (err) => {
+          const rejection = err instanceof Error && err.cause instanceof GrammyError ? err.cause : undefined;
           void this.accountManager.stopRunner(account.accountId).then(() => {
             this.accountManager.updateStatus({
               accountId: account.accountId,
               running: false,
               mode: 'stopped',
               lastError: err instanceof Error ? err.message : 'Telegram polling stopped',
+              connectionIssue: rejection ? (isTelegramUnauthorizedTokenError(rejection) ? 'credentials_rejected' : 'connection_rejected') : undefined,
             });
             this.notifyStatusChanged?.();
           });
@@ -542,12 +558,13 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       log.info({ accountId: account.accountId, username: me.username }, 'Telegram account started');
     } catch (err) {
       const em = formatTelegramStartupError(err);
-      const level = isTelegramUnauthorizedTokenError(err) ? 'error' : 'warn';
+      const unauthorized = isTelegramUnauthorizedTokenError(err);
+      const level = unauthorized ? 'error' : 'warn';
       log[level](
         {
           accountId: account.accountId,
           apiRootConfigured: !!account.apiRoot,
-          unauthorized: isTelegramUnauthorizedTokenError(err),
+          unauthorized,
           errorMessage: em,
         },
         `Telegram account not started: ${em}`,
@@ -557,6 +574,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         running: false,
         mode: 'stopped',
         lastError: em.slice(0, 400),
+        connectionIssue: unauthorized ? 'credentials_rejected' : undefined,
       });
     } finally {
       this.accountManager.markStartComplete(account.accountId);

@@ -7,6 +7,10 @@ export const SESSION_EXPIRED_ERRCODE = -14;
 
 const pauseUntilMap = new Map<string, number>();
 
+export function clearSessionPause(accountId: string): void {
+  pauseUntilMap.delete(accountId);
+}
+
 /** Pause all inbound/outbound API calls for `accountId` for one hour. */
 export function pauseSession(accountId: string): void {
   const until = Date.now() + SESSION_PAUSE_DURATION_MS;

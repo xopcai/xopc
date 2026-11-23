@@ -78,6 +78,7 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
   let tickets = 0;
   let allowRegistration = true;
   let registrationPending = true;
+  let rejectConnection = false;
 
   server.on('connection', (socket) => {
     connections.push(socket);
@@ -90,7 +91,8 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
         } else if (frame.cmd === 'aibot_upload_media_finish') {
           socket.send(JSON.stringify({ headers: frame.headers, errcode: 0, body: { media_id: `wecom-media-${frames.length}` } }));
         } else {
-          socket.send(JSON.stringify({ headers: frame.headers, errcode: 0 }));
+          const errcode = rejectConnection && frame.cmd === 'aibot_subscribe' ? 40001 : 0;
+          socket.send(JSON.stringify({ headers: frame.headers, errcode }));
         }
       }
     });
@@ -125,6 +127,7 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
         return Response.json({ data: { status: registrationPending ? 'pending' : 'success', bot_info: { botid: 'bot', secret: 'fixture-secret' } } });
       case '/v1.0/gateway/connections/open':
         expect(body).toMatchObject({ clientId: 'bot', clientSecret: 'fixture-secret', subscriptions: [{ type: 'CALLBACK', topic: dingTopic }] });
+        if (rejectConnection) return Response.json({ code: 'invalidParameter' }, { status: 400 });
         return Response.json({ endpoint: 'wss://fixture.dingtalk.com', ticket: `ticket-${++tickets}` });
       case '/v1.0/oauth2/accessToken':
         return Response.json({ accessToken: 'fixture-token', expireIn: 7200 });
@@ -262,8 +265,10 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
 
     const connectionCount = connections.length;
     connections.at(-1)!.terminate();
+    await expect.poll(() => plugin.channelConnectionProblem?.(cfg)).toEqual({ issue: 'retrying' });
     await expect.poll(() => connections.length, { timeout: 5000 }).toBe(connectionCount + 1);
     await expect.poll(() => plugin.channelIsRunning?.(cfg)).toBe(true);
+    expect(plugin.channelConnectionProblem?.(cfg)).toBeUndefined();
     emit('after-reconnect');
     await expect.poll(() => admitted.length).toBe(3);
     expect(admitted.at(-1)).toMatchObject({ content: 'after-reconnect' });
@@ -287,6 +292,13 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
     if (channel === 'wecom') {
       expect(frames.at(-1)).toMatchObject({ cmd: 'aibot_respond_msg', headers: { req_id: 'reply-after-restart' } });
     }
+    rejectConnection = true;
+    await plugin.stop();
+    await plugin.start();
+    await expect.poll(() => plugin.channelConnectionProblem?.(cfg)).toEqual({
+      issue: channel === 'wecom' ? 'credentials_rejected' : 'connection_rejected',
+    });
+    expect(plugin.channelIsConnecting?.(cfg)).toBe(false);
   } finally {
     await plugin.stop();
     bus.shutdown();

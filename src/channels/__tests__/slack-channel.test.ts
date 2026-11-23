@@ -59,6 +59,7 @@ it('connects Slack, confirms durable events, replies in the original thread and 
   const sends: Array<Record<string, unknown>> = [];
   const uploads: Array<{ filename: string; length: string; bytes?: number; complete?: Record<string, unknown> }> = [];
   let tickets = 0;
+  let revoked = false;
   let cfg: Config = ConfigSchema.parse({});
   let manager: ChannelManager | undefined;
   let bus: MessageBus;
@@ -84,7 +85,7 @@ it('connects Slack, confirms durable events, replies in the original thread and 
     const authorization = new Headers(init?.headers).get('authorization');
     switch (url.pathname) {
       case '/api/auth.test':
-        return authorization === `Bearer ${botToken}`
+        return !revoked && authorization === `Bearer ${botToken}`
           ? Response.json({ ok: true, team_id: workspace, user_id: botUser, bot_id: 'BBOT' })
           : Response.json({ ok: false, error: 'invalid_auth' });
       case '/api/apps.connections.open':
@@ -268,6 +269,11 @@ it('connects Slack, confirms durable events, replies in the original thread and 
         initial_comment: 'Here is the chart',
       },
     });
+    revoked = true;
+    const plugin = manager!.getPlugin('slack')!;
+    await plugin.stop();
+    await plugin.start();
+    await expect.poll(() => plugin.channelConnectionProblem?.(cfg)).toEqual({ issue: 'credentials_rejected' });
   } finally {
     await manager?.stop();
     bus?.shutdown();

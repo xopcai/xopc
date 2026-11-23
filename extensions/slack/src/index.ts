@@ -2,13 +2,14 @@ import type WebSocket from 'ws';
 
 import { createEnterpriseChannel, type EnterpriseMedia, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
 import type { EnterpriseCredentials } from '@xopcai/xopc/channels/enterprise/setup.js';
-import { fetchJson, postJson, record, runChannelSocket, string } from '@xopcai/xopc/channels/enterprise/socket.js';
+import { ChannelConnectionRejectedError, fetchJson, postJson, record, runChannelSocket, string, type OnSocketFailure } from '@xopcai/xopc/channels/enterprise/socket.js';
 import { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';
 
 import { slackAppManifest } from './manifest.js';
 
 const slackId = /^[A-Z][A-Z0-9]+$/;
 const timestamp = /^\d+\.\d+$/;
+const rejectedTokenCodes = new Set(['invalid_auth', 'not_authed', 'token_revoked', 'token_expired']);
 
 type BotIdentity = { teamId: string; userId: string; botId: string };
 
@@ -16,7 +17,12 @@ async function slackCall(method: string, token: string, body: object, signal?: A
   const result = record(await postJson(`https://slack.com/api/${method}`, body, signal, { authorization: `Bearer ${token}` }));
   if (result.ok !== true) {
     const code = string(result.error);
-    throw new Error(`Slack ${method} failed (${/^[a-z_]+$/.test(code) ? code : 'invalid_response'})`);
+    const message = `Slack ${method} failed (${/^[a-z_]+$/.test(code) ? code : 'invalid_response'})`;
+    if (rejectedTokenCodes.has(code)) throw new ChannelConnectionRejectedError('credentials_rejected', message);
+    if (code === 'missing_scope' || code === 'not_allowed_token_type') {
+      throw new ChannelConnectionRejectedError('connection_rejected', message);
+    }
+    throw new Error(message);
   }
   return result;
 }
@@ -39,7 +45,7 @@ async function slackFormCall(method: string, token: string, params: Record<strin
 }
 
 async function authenticateBot(token: string, signal?: AbortSignal): Promise<BotIdentity> {
-  if (!/^(?:xoxe\.)?xoxb-\S+$/.test(token)) throw new Error('A Slack Bot Token is required');
+  if (!/^(?:xoxe\.)?xoxb-\S+$/.test(token)) throw new ChannelConnectionRejectedError('credentials_rejected', 'A Slack Bot Token is required');
   const response = await slackCall('auth.test', token, {}, signal);
   const teamId = string(response.team_id);
   const userId = string(response.user_id);
@@ -49,7 +55,7 @@ async function authenticateBot(token: string, signal?: AbortSignal): Promise<Bot
 }
 
 async function openSocket(token: string, signal?: AbortSignal): Promise<string> {
-  if (!/^(?:xoxe\.)?xapp-\S+$/.test(token)) throw new Error('A Slack App Token is required');
+  if (!/^(?:xoxe\.)?xapp-\S+$/.test(token)) throw new ChannelConnectionRejectedError('credentials_rejected', 'A Slack App Token is required');
   const result = await slackCall('apps.connections.open', token, {}, signal);
   const url = new URL(string(result.url));
   if (url.protocol !== 'wss:' || !url.hostname.endsWith('.slack.com') || url.username || url.password) {
@@ -150,11 +156,11 @@ function slackTransport(credentials: EnterpriseCredentials, receive: (message: E
   return {
     send,
     sendMedia,
-    run(signal: AbortSignal, online: Parameters<typeof runChannelSocket>[2], onFailure: (message?: string) => void) {
+    run(signal: AbortSignal, online: Parameters<typeof runChannelSocket>[2], onFailure: OnSocketFailure) {
       return runChannelSocket(signal, async () => {
         const identity = bot ??= await authenticateBot(credentials.id, signal);
         if (credentials.identity && credentials.identity !== identityKey(identity)) {
-          throw new Error('Slack workspace or bot changed; reconfigure the channel');
+          throw new ChannelConnectionRejectedError('connection_rejected', 'Slack workspace or bot changed; reconfigure the channel');
         }
         const endpoint = await openSocket(credentials.secret, signal);
         let appId = '';

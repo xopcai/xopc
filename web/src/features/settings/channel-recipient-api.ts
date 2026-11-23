@@ -6,6 +6,9 @@ export interface ChannelStatus {
   enabled: boolean;
   connected: boolean;
   connecting?: boolean;
+  reconnectRequired?: boolean;
+  connectionIssue?: 'credentials_rejected' | 'connection_rejected' | 'retrying';
+  connectionIssueAccountId?: string;
 }
 
 export interface SessionChatId {

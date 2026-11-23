@@ -7,6 +7,8 @@ export type ChannelRuntimeState =
   | 'disabled'
   | 'checking'
   | 'running'
+  | 'reconnect_required'
+  | NonNullable<ChannelStatus['connectionIssue']>
   | 'stopped';
 
 function setupStatus(entry: ChannelCatalogEntry): ChannelSetupStatus {
@@ -35,6 +37,8 @@ export function resolveChannelRuntime(
   if (!setup.enabled) return 'disabled';
   if (!statusLoaded) return 'checking';
   if (status?.connected === true) return 'running';
+  if (status?.reconnectRequired === true) return 'reconnect_required';
+  if (status?.connectionIssue) return status.connectionIssue;
   if (status?.connecting === true) return 'checking';
   return 'stopped';
 }

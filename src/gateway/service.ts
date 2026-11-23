@@ -53,6 +53,7 @@ import { AgentService } from '../agent/service.js';
 import { getEmbeddedExecutionSession } from '../agent/embedded/execution-context.js';
 import { bootstrapApplicationStateSync } from '../bootstrap/application-state.js';
 import { ChannelManager } from '../channels/manager.js';
+import type { ChannelConnectionIssue } from '../channels/channel-domain.js';
 import {
   buildChannelCatalogForConfig,
   buildChannelCatalogFromSnapshot,
@@ -2260,6 +2261,9 @@ export class GatewayService {
     enabled: boolean;
     connected: boolean;
     connecting?: boolean;
+    reconnectRequired?: boolean;
+    connectionIssue?: ChannelConnectionIssue;
+    connectionIssueAccountId?: string;
   }> {
     const runningChannels = new Set(this.channelManager.getRunningChannels());
     const connectingChannels = new Set(this.channelManager.getConnectingChannels());
@@ -2272,7 +2276,10 @@ export class GatewayService {
     return catalog.entries.map((entry) => {
       const enabled = channels?.[entry.id]?.enabled === true;
       const connected = runningChannels.has(entry.id);
-      const connecting = !connected && enabled && (
+      const plugin = !connected && enabled ? this.channelManager.getPlugin(entry.id) : undefined;
+      const reconnectRequired = plugin?.channelRequiresReconnect?.(this.config);
+      const connectionProblem = plugin?.channelConnectionProblem?.(this.config);
+      const connecting = !connected && enabled && !reconnectRequired && !connectionProblem && (
         connectingChannels.has(entry.id) ||
         (reloadInFlight && getChannelSetupStatus(this.config, entry.id, entry).ready)
       );
@@ -2280,6 +2287,9 @@ export class GatewayService {
         name: entry.id,
         enabled,
         connected,
+        ...(reconnectRequired ? { reconnectRequired: true } : {}),
+        ...(connectionProblem ? { connectionIssue: connectionProblem.issue } : {}),
+        ...(connectionProblem?.accountId ? { connectionIssueAccountId: connectionProblem.accountId } : {}),
         ...(connecting ? { connecting: true } : {}),
       };
     });

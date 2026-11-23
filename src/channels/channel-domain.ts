@@ -92,12 +92,20 @@ export interface ChannelStreamHandle {
   skipFinalOutbound?: () => boolean;
 }
 
+export type ChannelConnectionIssue = 'credentials_rejected' | 'connection_rejected' | 'retrying';
+
+export interface ChannelConnectionProblem {
+  issue: ChannelConnectionIssue;
+  accountId?: string;
+}
+
 export interface ChannelStatus {
   accountId: string;
   running: boolean;
   lastStartAt?: number;
   lastStopAt?: number;
   lastError?: string;
+  connectionIssue?: ChannelConnectionIssue;
   mode: 'polling' | 'webhook' | 'stopped';
 }
 

@@ -26,6 +26,7 @@ export interface TelegramPollingSessionOptions {
   bot: Bot;
   stallThresholdMs?: number;
   onPoll?: () => void;
+  onRetry?: () => void;
   onExit?: (err: unknown) => void;
 }
 
@@ -99,15 +100,18 @@ async function poll(options: TelegramPollingSessionOptions, signal: AbortSignal)
     } catch (err) {
       if (signal.aborted) return;
       if (err instanceof GrammyError && err.error_code === 409) {
-        throw new Error('Telegram Bot is already being polled or has a webhook configured');
+        throw new Error('Telegram Bot is already being polled or has a webhook configured', { cause: err });
       }
       if (err instanceof GrammyError && err.error_code >= 400 && err.error_code < 500 && err.error_code !== 429) {
-        throw new Error(`Telegram rejected polling (HTTP ${err.error_code})`);
+        throw new Error(`Telegram rejected polling (HTTP ${err.error_code})`, { cause: err });
       }
       failures += 1;
       const retryAfter = err instanceof GrammyError ? err.parameters.retry_after ?? 0 : 0;
       const retryMs = Math.max(retryAfter * 1000, Math.min(30_000, 1000 * 2 ** Math.min(5, failures - 1)));
-      if (failures === 1) log.warn({ accountId, retryMs }, 'Telegram polling failed; retrying');
+      if (failures === 1) {
+        options.onRetry?.();
+        log.warn({ accountId, retryMs }, 'Telegram polling failed; retrying');
+      }
       await delay(retryMs, undefined, { signal });
     } finally {
       timeout.dispose();

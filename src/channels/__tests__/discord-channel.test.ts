@@ -266,6 +266,10 @@ it('configures Discord and preserves direct, mention and thread delivery across 
       },
       file: { name: 'preview.png', bytes: 9 },
     });
+    connections.at(-1)!.close(4014);
+    await expect.poll(() => manager?.getPlugin('discord')?.channelConnectionProblem?.(cfg))
+      .toEqual({ issue: 'connection_rejected' });
+    await expect.poll(() => manager?.getRunningChannels()).not.toContain('discord');
   } finally {
     await manager?.stop();
     bus?.shutdown();

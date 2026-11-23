@@ -50,6 +50,7 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
   const configManager = new WeixinConfigManager({ baseUrl, token, routeTag }, msg => logger.debug(msg));
   let timeoutMs = longPollTimeoutMs ?? DEFAULT_LONG_POLL_TIMEOUT_MS;
   let consecutiveFailures = 0;
+  let reconnectRequired = false;
 
   opts.onState?.('connecting');
   while (!abortSignal?.aborted) {
@@ -101,6 +102,7 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
       if (abortSignal?.aborted) return;
 
       if (response.ret === SESSION_EXPIRED_ERRCODE || response.errcode === SESSION_EXPIRED_ERRCODE) {
+        reconnectRequired = true;
         opts.onState?.('reconnect-required');
         pauseSession(accountId);
         await delay(getRemainingPauseMs(accountId), undefined, { signal: abortSignal });
@@ -116,14 +118,17 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
         journal.accept(messages.map(payload => ({ id: inboundId(payload), payload })), next);
         cursor = next;
       }
-      if (!response.timedOut) opts.onState?.('polling');
+      if (!response.timedOut) {
+        reconnectRequired = false;
+        opts.onState?.('polling');
+      }
       consecutiveFailures = 0;
       if (response.longpolling_timeout_ms && response.longpolling_timeout_ms > 0) {
         timeoutMs = Math.min(response.longpolling_timeout_ms, MAX_LONG_POLL_TIMEOUT_MS);
       }
     } catch (err) {
       if (abortSignal?.aborted) return;
-      opts.onState?.('connecting');
+      if (!reconnectRequired) opts.onState?.('connecting');
       consecutiveFailures += 1;
       const retryMs = Math.min(30_000, 2000 * 2 ** Math.min(4, consecutiveFailures - 1));
       if (consecutiveFailures === 1) {

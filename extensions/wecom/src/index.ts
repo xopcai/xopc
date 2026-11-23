@@ -5,7 +5,7 @@ import type WebSocket from 'ws';
 import { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';
 import { createEnterpriseChannel, type EnterpriseMedia, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
 import type { EnterpriseCredentials, EnterpriseRegistration } from '@xopcai/xopc/channels/enterprise/setup.js';
-import { fetchJson, record, runChannelSocket, string } from '@xopcai/xopc/channels/enterprise/socket.js';
+import { ChannelConnectionRejectedError, fetchJson, record, runChannelSocket, string, type OnSocketFailure } from '@xopcai/xopc/channels/enterprise/socket.js';
 
 const qrOrigin = 'https://work.weixin.qq.com/ai/qc';
 const endpoint = 'wss://openws.work.weixin.qq.com';
@@ -122,7 +122,14 @@ function connection(credentials: EnterpriseCredentials, receive?: (message: Ente
   return {
     endpoint,
     async authenticate(socket: WebSocket) {
-      await command(socket, 'aibot_subscribe', { bot_id: credentials.id, secret: credentials.secret });
+      try {
+        await command(socket, 'aibot_subscribe', { bot_id: credentials.id, secret: credentials.secret });
+      } catch (error) {
+        if (error instanceof WeComCommandError && error.code === 40001) {
+          throw new ChannelConnectionRejectedError('credentials_rejected', error.message);
+        }
+        throw error;
+      }
       authenticated = socket;
       socket.once('close', () => { if (authenticated === socket) authenticated = undefined; });
     },
@@ -196,7 +203,7 @@ function transport(credentials: EnterpriseCredentials, receive: (message: Enterp
   const replaced = new AbortController();
   const protocol = connection(credentials, receive, () => replaced.abort());
   return {
-    run(signal: AbortSignal, online: Parameters<typeof runChannelSocket>[2], onFailure: () => void) {
+    run(signal: AbortSignal, online: Parameters<typeof runChannelSocket>[2], onFailure: OnSocketFailure) {
       return runChannelSocket(AbortSignal.any([signal, replaced.signal]), async () => protocol, (current) => {
         socket = current;
         online(current);

@@ -3,6 +3,21 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import WebSocket from 'ws';
 
+import type { ChannelConnectionIssue } from '../channel-domain.js';
+
+export class ChannelConnectionRejectedError extends Error {
+  constructor(readonly issue: Exclude<ChannelConnectionIssue, 'retrying'>, message: string) {
+    super(message);
+  }
+}
+
+export type OnSocketFailure = (message?: string, issue?: ChannelConnectionIssue) => void;
+
+export class ProviderHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`Provider HTTP request failed (${status})`);
+  }
+}
 
 export async function postJson(url: URL | string, body: object, signal?: AbortSignal, headers?: Record<string, string>) {
   return fetchJson(url, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', ...headers }, signal });
@@ -15,7 +30,12 @@ export async function fetchJson(url: URL | string, init: RequestInit = {}) {
     redirect: 'error',
     signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
   });
-  if (!response.ok) throw new Error(`Provider HTTP request failed (${response.status})`);
+  if (!response.ok) {
+    const error = new ProviderHttpError(response.status);
+    if (response.status === 401) throw new ChannelConnectionRejectedError('credentials_rejected', error.message);
+    if (response.status === 403) throw new ChannelConnectionRejectedError('connection_rejected', error.message);
+    throw error;
+  }
   return response.json();
 }
 
@@ -30,12 +50,13 @@ export async function runChannelSocket(
   signal: AbortSignal,
   connect: () => Promise<SocketConnection>,
   setOnline: (socket?: WebSocket) => void,
-  onFailure?: () => void,
+  onFailure?: OnSocketFailure,
 ) {
   let failures = 0;
   while (!signal.aborted) {
     let socket: WebSocket | undefined;
     let heartbeat: NodeJS.Timeout | undefined;
+    let connected = false;
     const startedAt = Date.now();
     const abort = () => socket?.terminate();
     try {
@@ -74,6 +95,7 @@ export async function runChannelSocket(
       await connection.authenticate?.(ws);
       signal.throwIfAborted();
       if (ws.readyState !== WebSocket.OPEN) throw new Error('Socket closed during authentication');
+      connected = true;
       setOnline(ws);
       let alive = true;
       ws.on('pong', () => { alive = true; });
@@ -90,8 +112,11 @@ export async function runChannelSocket(
         ws.ping();
       }, 30_000);
       await closed;
-    } catch {
-      if (!signal.aborted && failures === 0) onFailure?.();
+    } catch (error) {
+      if (!signal.aborted && error instanceof ChannelConnectionRejectedError) {
+        onFailure?.(error.message, error.issue);
+        return;
+      }
     } finally {
       clearInterval(heartbeat);
       signal.removeEventListener('abort', abort);
@@ -100,6 +125,7 @@ export async function runChannelSocket(
     }
     if (signal.aborted) return;
     if (Date.now() - startedAt > 60_000) failures = 0;
+    if (connected || failures === 0) onFailure?.();
     const backoff = Math.min(30_000, 1000 * 2 ** Math.min(failures++, 5));
     await delay(backoff + Math.random() * 250, undefined, { signal }).catch(() => undefined);
   }

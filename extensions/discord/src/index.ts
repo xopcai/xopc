@@ -3,7 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { createEnterpriseChannel, type EnterpriseMedia, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
 import type { ChannelSetupLink, EnterpriseCredentials } from '@xopcai/xopc/channels/enterprise/setup.js';
-import { fetchJson, record, string } from '@xopcai/xopc/channels/enterprise/socket.js';
+import { ChannelConnectionRejectedError, fetchJson, record, string } from '@xopcai/xopc/channels/enterprise/socket.js';
 import { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';
 import { chunkText } from '@xopcai/xopc/markdown/chunk.js';
 
@@ -18,7 +18,7 @@ async function verifyBot(credentials: EnterpriseCredentials, signal?: AbortSigna
   const id = string(user.id);
   if (user.bot !== true || !snowflake.test(id) ||
       (credentials.identity && credentials.identity.split(':')[0] !== id)) {
-    throw new Error('Discord did not confirm the configured bot identity');
+    throw new ChannelConnectionRejectedError('connection_rejected', 'Discord did not confirm the configured bot identity');
   }
   return id;
 }
@@ -149,7 +149,7 @@ function discordTransport(credentials: EnterpriseCredentials, receive: (message:
         return { headers: { authorization: `Bot ${credentials.id}` }, body: form };
       }, 30_000);
     },
-    run(abort: AbortSignal, online: Parameters<typeof runDiscordGateway>[0]['online'], onFailure: (message?: string) => void) {
+    run(abort: AbortSignal, online: Parameters<typeof runDiscordGateway>[0]['online'], onFailure: Parameters<typeof runDiscordGateway>[0]['onFailure']) {
       signal = abort;
       return runDiscordGateway({
         token: credentials.id, signal: abort, online, onFailure,
