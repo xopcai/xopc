@@ -761,7 +761,15 @@
             },
             "payload": {
               "type": "object",
-              "properties": {},
+              "properties": {
+                "availability": {
+                  "type": "string",
+                  "enum": [
+                    "foreground",
+                    "background"
+                  ]
+                }
+              },
               "additionalProperties": false
             }
           },
@@ -2211,6 +2219,7 @@
                           "enum": [
                             "ENDPOINT_OFFLINE",
                             "ENDPOINT_NOT_FOREGROUND",
+                            "DEVICE_LOCKED",
                             "ENDPOINT_DISCONNECTED",
                             "TOOL_NOT_FOUND",
                             "TOOL_REVISION_MISMATCH",
@@ -3820,6 +3829,7 @@
                               "enum": [
                                 "ENDPOINT_OFFLINE",
                                 "ENDPOINT_NOT_FOREGROUND",
+                                "DEVICE_LOCKED",
                                 "ENDPOINT_DISCONNECTED",
                                 "TOOL_NOT_FOUND",
                                 "TOOL_REVISION_MISMATCH",
@@ -4302,6 +4312,11 @@
                 "heartbeatTimeoutMs": {
                   "type": "number",
                   "const": 45000
+                },
+                "backgroundHeartbeatTimeoutMs": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
                 },
                 "negotiatedCapabilities": {
                   "maxItems": 64,
