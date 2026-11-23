@@ -91,6 +91,8 @@ struct AssistantView<Dock: View>: View {
     @State private var reselectingDesktop = false
     @State private var phone = PhoneWorkspaceModel()
     @State private var showingPhone = false
+    @State private var backgroundPauseTask: Task<Void, Never>?
+    @State private var conversationSuspendedInBackground = false
 
     var body: some View {
         PhoneConversationPages(showingPhone: showingPhone, canPage: phone.summary?.available == true && phone.live?.ownControl != true,
@@ -276,8 +278,22 @@ struct AssistantView<Dock: View>: View {
     private var chatSelectionLifecycle: some View {
         chatObservation
             .onChange(of: scenePhase) {
-                if scenePhase != .active {
-                    state.pauseConversation()
+                backgroundPauseTask?.cancel()
+                backgroundPauseTask = nil
+                if scenePhase == .background {
+                    if state.runID != nil {
+                        backgroundPauseTask = Task {
+                            do { try await Task.sleep(for: .seconds(25)) } catch { return }
+                            guard !Task.isCancelled, scenePhase == .background else { return }
+                            conversationSuspendedInBackground = true
+                            state.pauseConversation()
+                        }
+                    } else {
+                        conversationSuspendedInBackground = true
+                        state.pauseConversation()
+                    }
+                } else if scenePhase == .active {
+                    conversationSuspendedInBackground = false
                 }
             }
             .onChange(of: isActive) {
@@ -327,6 +343,9 @@ struct AssistantView<Dock: View>: View {
     }
 
     private func chatDidDisappear() {
+        backgroundPauseTask?.cancel()
+        backgroundPauseTask = nil
+        conversationSuspendedInBackground = false
         isActionPanelExpanded = false
         onActionPanelVisibilityChanged(false)
         attachmentError = nil
@@ -356,15 +375,15 @@ struct AssistantView<Dock: View>: View {
                 conversationID: conversation?.id,
                 transcriptID: conversation?.transcriptId,
                 isDraft: conversation?.isDraft,
-                isForeground: scenePhase == .active && isActive
+                isForeground: !conversationSuspendedInBackground && isActive
             )) {
-                guard scenePhase == .active, isActive else { state.pauseConversation(); return }
+                guard !conversationSuspendedInBackground, isActive else { state.pauseConversation(); return }
                 await loadChat()
             }
             .task(id: TaskResultObservationKey(configuration: configuration, conversationID: conversation?.id,
-                                               isActive: isActive && scenePhase == .active))
+                                               isActive: isActive && !conversationSuspendedInBackground))
             {
-                guard isActive, scenePhase == .active, let conversation, !conversation.isDraft else { return }
+                guard isActive, !conversationSuspendedInBackground, let conversation, !conversation.isDraft else { return }
                 await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
             }
     }
@@ -899,7 +918,7 @@ struct AssistantView<Dock: View>: View {
                                           }
                                       }
                                       .onDisappear { visibleMusicCardIDs.remove(card.id) }
-                                      .frame(maxWidth: .infinity, alignment: card.kind == .music ? .leading : .trailing)
+                                      .frame(maxWidth: .infinity, alignment: .leading)
                                       .id("generated-media-\(card.id)")
                 }
             }

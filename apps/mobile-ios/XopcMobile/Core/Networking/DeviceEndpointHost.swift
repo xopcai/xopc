@@ -14,9 +14,18 @@ actor DeviceEndpointHost {
     private var invocations: [String: Task<Void, Never>] = [:]
     private var reader: Task<Void, Never>?
     private var heartbeat: Task<Void, Never>?
+    private var probeTask: Task<Void, Never>?
     private var environmentTask: Task<Void, Never>?
     private var appProviderAccepted = false
     private var appProviderSequence = 0
+    private var lastReceivedAt = Date()
+    private var lastPingSentAt = Date()
+    private var lastProviderReportAt = Date.distantPast
+    private var lastReportedForeground: Bool?
+    private var foregroundTimeoutSeconds: TimeInterval = 45
+    private var backgroundTimeoutSeconds: TimeInterval = 45
+    private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+    private var cachedBootstrap: (compatibility: DeviceCompatibility, multiQuestion: Bool, principalId: String, key: P256.Signing.PrivateKey)?
     private let instance = UUID().uuidString.lowercased()
     init(client: GatewayClient) {
         self.client = client
@@ -38,8 +47,75 @@ actor DeviceEndpointHost {
 
     func stop() {
         retired = true
+        cachedBootstrap = nil
         connection?.cancel()
         closeSocket()
+        Task { await endBackgroundLease() }
+    }
+
+    func onAppLifecycleChanged(active: Bool, background: Bool) async {
+        if background {
+            probeTask?.cancel(); probeTask = nil
+            if let socket {
+                try? await send("endpoint.availability_changed", ["availability": "background"])
+                try? await publishAppProviderState(socket, force: true, foregroundOverride: false)
+                await beginBackgroundLease()
+            }
+            return
+        }
+        if active {
+            await endBackgroundLease()
+            guard let socket else { return }
+            let probeSentAt = Date()
+            lastPingSentAt = probeSentAt
+            do {
+                try await send("endpoint.availability_changed", ["availability": "foreground"])
+                try await publishAppProviderState(socket, force: true, foregroundOverride: true)
+                try await send("realtime.ping", ["availability": "foreground"])
+            } catch {
+                if self.socket === socket {
+                    closeSocket()
+                }
+                return
+            }
+            probeTask?.cancel()
+            probeTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(2500))
+                guard !Task.isCancelled else { return }
+                await self?.verifyProbeResponse(socket: socket, sentAt: probeSentAt)
+            }
+        }
+    }
+
+    private func verifyProbeResponse(socket: URLSessionWebSocketTask, sentAt: Date) {
+        guard self.socket === socket, lastReceivedAt < sentAt else { return }
+        closeSocket()
+    }
+
+    private func beginBackgroundLease() async {
+        guard backgroundTaskID == .invalid else { return }
+        let taskID = await MainActor.run {
+            UIApplication.shared.beginBackgroundTask(withName: "ai.xopc.realtime-keepalive") { [weak self] in
+                Task { await self?.handleBackgroundLeaseExpired() }
+            }
+        }
+        backgroundTaskID = taskID
+    }
+
+    private func handleBackgroundLeaseExpired() async {
+        if socket != nil {
+            closeSocket()
+        }
+        await endBackgroundLease()
+    }
+
+    private func endBackgroundLease() async {
+        let current = backgroundTaskID
+        guard current != .invalid else { return }
+        backgroundTaskID = .invalid
+        await MainActor.run {
+            UIApplication.shared.endBackgroundTask(current)
+        }
     }
 
     private func closeSocket() {
@@ -48,10 +124,13 @@ actor DeviceEndpointHost {
         runSubscriptions.finishAll(throwing: retired ? CancellationError() : DeviceRunStreamError.disconnected)
         appProviderAccepted = false
         appProviderSequence = 0
+        lastReportedForeground = nil
+        lastProviderReportAt = .distantPast
         for task in invocations.values {
             task.cancel()
         }; invocations.removeAll()
         reader?.cancel(); heartbeat?.cancel()
+        probeTask?.cancel(); probeTask = nil
         environmentTask?.cancel(); environmentTask = nil
         socket?.cancel(with: .normalClosure, reason: nil)
         socket = nil
@@ -59,27 +138,40 @@ actor DeviceEndpointHost {
 
     // swiftlint:disable:next function_body_length
     private func connect() async throws -> DeviceEndpointOrigin {
-        let compatibility: GatewayEnvelope<DeviceCompatibility> = try await client.request(path: "/api/endpoint-tools/compatibility")
-        let clarificationVersions = compatibility.payload?.clarificationVersions
-        async let multiQuestion = client.supportsMultiQuestion(clarificationVersions)
-        let key = try Self.signingKey()
-        let fallback = "ios-" + SHA256.hash(data: key.publicKey.derRepresentation).prefix(16).map { String(format: "%02x", $0) }.joined()
-        let principalId = compatibility.payload?.deviceId ?? fallback
-        let endpointId = "ios:\(principalId):\(instance)"
-        try await registerPrincipal(principalId, key: key)
+        let bootstrap: (compatibility: DeviceCompatibility, multiQuestion: Bool, principalId: String, key: P256.Signing.PrivateKey)
+        if let cached = cachedBootstrap {
+            bootstrap = cached
+        } else {
+            let compatibility: GatewayEnvelope<DeviceCompatibility> = try await client.request(path: "/api/endpoint-tools/compatibility")
+            let compatPayload = compatibility.payload ?? DeviceCompatibility(
+                deviceId: nil, turnDeviceContextV1: nil, clarificationVersions: nil, deviceLocationTasksV1: nil,
+                mobilePersonalToolsV1: nil, mobileExtendedPersonalToolsV1: nil, deviceStateToolsV1: nil, endpointEnvironmentV1: nil
+            )
+            let multiQuestion = await client.supportsMultiQuestion(compatPayload.clarificationVersions)
+            let key = try Self.signingKey()
+            let fallback = "ios-" + SHA256.hash(data: key.publicKey.derRepresentation).prefix(16).map { String(format: "%02x", $0) }.joined()
+            let principalId = compatPayload.deviceId ?? fallback
+            try await registerPrincipal(principalId, key: key)
+            bootstrap = (compatPayload, multiQuestion, principalId, key)
+            cachedBootstrap = bootstrap
+        }
+        let endpointId = "ios:\(bootstrap.principalId):\(instance)"
         let ticket: GatewayEnvelope<RealtimeTicket> = try await client.request(path: "/api/realtime/tickets", method: "POST",
                                                                                body: client.encoder.encode(RealtimeTicketCommand(clientId: endpointId, clientKind: "mobile", protocolVersion: 2)))
         guard let ticket = ticket.payload, ticket.realtime.minVersion <= 2, ticket.realtime.maxVersion >= 2,
               ticket.realtime.capabilities.contains("endpoint.tools.v3")
         else {
+            cachedBootstrap = nil
             throw GatewayClientError.invalidResponse
         }
-        let catalogJson = compatibility.payload?.catalogJson ?? "[]"
+        let catalogJson = bootstrap.compatibility.catalogJson
         let tools = try JSONSerialization.jsonObject(with: Data(catalogJson.utf8))
-        var endpoint: [String: Any] = ["principalId": principalId, "endpointId": endpointId, "connectionInstanceId": UUID().uuidString.lowercased(),
-                                       "displayName": "xopc iOS", "kind": "mobile", "platform": "ios", "appVersion": "1", "availability": "foreground",
+        let isForeground = await MainActor.run { UIApplication.shared.applicationState != .background }
+        var endpoint: [String: Any] = ["principalId": bootstrap.principalId, "endpointId": endpointId, "connectionInstanceId": UUID().uuidString.lowercased(),
+                                       "displayName": "xopc iOS", "kind": "mobile", "platform": "ios", "appVersion": "1",
+                                       "availability": isForeground ? "foreground" : "background",
                                        "nonce": UUID().uuidString.lowercased(), "signedAt": Self.now(), "tools": tools]
-        endpoint["signature"] = try key.signature(for: Self.json(endpoint)).rawRepresentation.base64URL()
+        endpoint["signature"] = try bootstrap.key.signature(for: Self.json(endpoint)).rawRepresentation.base64URL()
         let url = try client.configuration.realtimeWebSocketURL()
         var request = URLRequest(url: url)
         try await request.setValue(GatewayPairingService.shared.connectionProof(url: url, ticket: ticket.ticket),
@@ -95,7 +187,7 @@ actor DeviceEndpointHost {
                 "clientKind": "mobile",
                 "subscriptions": [],
                 "endpoint": endpoint,
-                "capabilities": ["endpoint.tools.v3", "mobile.mcp-setup-card.v1"]
+                "capabilities": ["endpoint.tools.v3", "mobile.mcp-setup-card.v1", "realtime.background-keepalive.v1", "endpoint.background-tools.v1"]
             ])
             let timeout = Task {
                 try? await Task.sleep(for: .seconds(10))
@@ -108,19 +200,29 @@ actor DeviceEndpointHost {
             guard ready["kind"] as? String == "realtime.ready", let payload = ready["payload"] as? [String: Any],
                   let endpoint = payload["endpoint"] as? [String: Any], endpoint["endpointId"] as? String == endpointId,
                   let token = endpoint["turnToken"] as? String, token.count >= 32 else { throw GatewayClientError.invalidResponse }
-            let multiQuestionSupported = await multiQuestion
+            if let fgMs = payload["heartbeatTimeoutMs"] as? Double, fgMs > 0 {
+                foregroundTimeoutSeconds = fgMs / 1000.0
+            }
+            if let bgMs = payload["backgroundHeartbeatTimeoutMs"] as? Double, bgMs > 0 {
+                backgroundTimeoutSeconds = bgMs / 1000.0
+            } else {
+                backgroundTimeoutSeconds = foregroundTimeoutSeconds
+            }
+            let multiQuestionSupported = bootstrap.multiQuestion
             guard self.socket === socket else { throw GatewayClientError.invalidResponse }
             let claim = DeviceEndpointOrigin(endpointId: endpointId, token: token,
-                                             supportsDeviceContext: compatibility.payload?.turnDeviceContextV1 == true,
+                                             supportsDeviceContext: bootstrap.compatibility.turnDeviceContextV1 == true,
                                              supportsMultiQuestion: multiQuestionSupported)
             if let catalog = try JSONSerialization.jsonObject(with: Data(DeviceToolCatalog.appProviderJson.utf8)) as? [String: Any] {
                 try await send("provider.catalog.replace", catalog)
             }
             guard self.socket === socket else { throw GatewayClientError.transport }
             self.claim = claim
-            pairedDeviceID = compatibility.payload?.deviceId
+            pairedDeviceID = bootstrap.compatibility.deviceId
+            lastReceivedAt = Date()
+            lastPingSentAt = Date()
             startLoops(socket)
-            if compatibility.payload?.endpointEnvironmentV1 == true {
+            if bootstrap.compatibility.endpointEnvironmentV1 == true {
                 environmentTask = Task { await publishEnvironment(claim) }
             }
             return claim
@@ -148,8 +250,18 @@ actor DeviceEndpointHost {
                     try await Task.sleep(for: .seconds(5))
                     try Task.checkCancellation()
                     guard self.socket === socket else { break }
-                    try await send("realtime.ping", [:])
-                    try await publishAppProviderState(socket)
+                    let foreground = await MainActor.run { UIApplication.shared.applicationState != .background }
+                    let activeTimeout = foreground ? foregroundTimeoutSeconds : backgroundTimeoutSeconds
+                    if Date().timeIntervalSince(lastReceivedAt) > activeTimeout {
+                        closeSocket()
+                        break
+                    }
+                    let pingInterval: TimeInterval = foreground ? 15 : 25
+                    if Date().timeIntervalSince(lastPingSentAt) >= pingInterval {
+                        lastPingSentAt = Date()
+                        try await send("realtime.ping", ["availability": foreground ? "foreground" : "background"])
+                    }
+                    try await publishAppProviderState(socket, force: false, foregroundOverride: foreground)
                 } catch {
                     if self.socket === socket, !Task.isCancelled {
                         closeSocket()
@@ -160,10 +272,18 @@ actor DeviceEndpointHost {
         }
     }
 
-    private func publishAppProviderState(_ socket: URLSessionWebSocketTask) async throws {
+    private func publishAppProviderState(_ socket: URLSessionWebSocketTask, force: Bool = false, foregroundOverride: Bool? = nil) async throws {
         guard appProviderAccepted else { return }
-        let foreground = await MainActor.run { UIApplication.shared.applicationState == .active }
+        let foreground: Bool = if let foregroundOverride {
+            foregroundOverride
+        } else {
+            await MainActor.run { UIApplication.shared.applicationState != .background }
+        }
+        let now = Date()
+        if !force, foreground == lastReportedForeground, now.timeIntervalSince(lastProviderReportAt) < 15 { return }
         guard self.socket === socket, appProviderAccepted else { return }
+        lastReportedForeground = foreground
+        lastProviderReportAt = now
         try await send("endpoint.availability_changed", ["availability": foreground ? "foreground" : "background"])
         guard self.socket === socket, appProviderAccepted else { return }
         appProviderSequence += 1
@@ -230,6 +350,7 @@ actor DeviceEndpointHost {
             while !Task.isCancelled {
                 let (frame, data) = try await receive(socket)
                 guard self.socket === socket else { return }
+                lastReceivedAt = Date()
                 if let topic = try runSubscriptions.receive(frame, data: data) {
                     try await send("realtime.unsubscribe", ["topics": [topic]])
                 }
@@ -254,6 +375,32 @@ actor DeviceEndpointHost {
         let cursor = runSubscriptions.add(topic, id: id, after: sequence, continuation: continuation)
         do {
             try await send("realtime.subscribe", ["subscriptions": [["topic": topic, "afterSeq": cursor, "view": "compact"]]])
+            return stream
+        } catch {
+            if Task.isCancelled || retired {
+                continuation.finish()
+                throw CancellationError()
+            }
+            if self.socket === socket {
+                closeSocket()
+            }
+            throw DeviceRunStreamError.disconnected
+        }
+    }
+
+    func subscribeToTaskResults(conversationID: String) async throws -> AsyncThrowingStream<RunStreamEvent, Error> {
+        _ = try await origin()
+        try Task.checkCancellation()
+        guard let socket else { throw DeviceRunStreamError.disconnected }
+        let topic = "sessions"
+        let (stream, continuation) = AsyncThrowingStream<RunStreamEvent, Error>.makeStream()
+        let id = UUID()
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.removeRunSubscription(topic, id: id) }
+        }
+        _ = runSubscriptions.add(topic, id: id, after: 0, conversationID: conversationID, continuation: continuation)
+        do {
+            try await send("realtime.subscribe", ["subscriptions": [["topic": topic, "afterSeq": 0, "view": "compact"]]])
             return stream
         } catch {
             if Task.isCancelled || retired {

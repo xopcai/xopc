@@ -146,13 +146,19 @@ struct AppRootView: View {
             }
         }
         .onChange(of: scenePhase) {
+            Task {
+                await DeviceEndpointPool.shared.notifyAppLifecycle(
+                    active: scenePhase == .active,
+                    background: scenePhase == .background
+                )
+            }
             if scenePhase == .active {
                 Task {
                     await appState.refreshGatewayOnForeground()
                     await push.restore(appState.gatewayConfiguration)
                 }
                 Task { await realtimeVoiceCall.resumeAfterInterruption() }
-            } else {
+            } else if scenePhase == .background {
                 music.checkpoint()
             }
         }

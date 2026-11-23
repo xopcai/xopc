@@ -146,8 +146,9 @@ export class EndpointToolPolicy {
   evaluate(
     descriptor: EndpointToolDescriptor,
     availability: EndpointAvailability,
+    options?: { allowBackground?: boolean },
   ): EndpointToolPolicyDecision {
-    if (descriptor.requiresForeground && availability !== 'foreground') {
+    if (descriptor.requiresForeground && availability !== 'foreground' && !options?.allowBackground) {
       throw new EndpointToolPolicyError('Endpoint is not in the foreground');
     }
     return { confirmationRequired: descriptor.confirmation === 'always' };

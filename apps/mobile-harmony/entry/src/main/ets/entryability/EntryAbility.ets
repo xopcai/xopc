@@ -1,6 +1,7 @@
-import { attachDevicePersonalTools, cancelAllDevicePersonalTools, hasActivePersonalPicker } from '../service/devicePersonalTools';
+import { attachDevicePersonalTools, cancelAllDevicePersonalTools, cancelForegroundDevicePersonalTools, hasActivePersonalPicker } from '../service/devicePersonalTools';
 import { attachDeviceLocation, cancelAllDeviceLocations, hasActiveDeviceLocationPermissionRequest } from '../service/deviceLocation';
 import { Configuration, UIAbility, Want } from '@kit.AbilityKit';
+import { backgroundTaskManager } from '@kit.BackgroundTasksKit';
 import { KeyboardAvoidMode, window } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -23,6 +24,18 @@ import { MUSIC_OPEN_URI } from '../model/musicPlayback';
 
 export default class EntryAbility extends UIAbility {
   private mainWindow?: window.Window;
+  private suspendDelayId: number = -1;
+  private suspendFallbackTimer: number = -1;
+  private cancelSuspendDelay(): void {
+    clearTimeout(this.suspendFallbackTimer);
+    this.suspendFallbackTimer = -1;
+    if (this.suspendDelayId >= 0) {
+      const id = this.suspendDelayId;
+      this.suspendDelayId = -1;
+      try { backgroundTaskManager.cancelSuspendDelay(id); }
+      catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Cancel suspend delay failed'); }
+    }
+  }
   private onAvoidArea = (data: window.AvoidAreaOptions): void => {
     if (data.type === window.AvoidAreaType.TYPE_SYSTEM) layoutState.systemTopInsetPx = data.area.topRect.height;
   };
@@ -60,21 +73,55 @@ export default class EntryAbility extends UIAbility {
   }
   onNewWant(want: Want): void { this.receiveWant(want); }
   onConfigurationUpdate(configuration: Configuration): void { appSettings.syncSystemColorMode(configuration.colorMode); }
-  onForeground(): void { gatewaySession.setForeground(true); layoutState.foreground = true; generatedMusicPlayback.onForeground(); voiceCall.onForeground(); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); notificationNavigation.flush(); }
+  onForeground(): void {
+    this.cancelSuspendDelay();
+    gatewaySession.setForeground(true);
+    layoutState.foreground = true;
+    generatedMusicPlayback.onForeground();
+    voiceCall.onForeground();
+    if (gatewaySession.currentProfile()) realtimeClient.onAppForegroundChanged(true);
+    pushNotifications.restore();
+    notificationNavigation.flush();
+  }
   onBackground(): void {
     generatedMusicPlayback.checkpoint();
     const locationPermission: boolean = hasActiveDeviceLocationPermissionRequest();
     const personalInteraction: boolean = hasActivePersonalPicker();
     if (!locationPermission) cancelAllDeviceLocations();
-    if (!personalInteraction) cancelAllDevicePersonalTools();
+    if (!personalInteraction) cancelForegroundDevicePersonalTools();
     layoutState.foreground = false;
     gatewaySession.setForeground(false);
     voiceCall.onBackground();
-    if (!personalInteraction && !locationPermission) realtimeClient.stop();
+    realtimeClient.onAppForegroundChanged(false);
+    this.cancelSuspendDelay();
+    if (!personalInteraction && !locationPermission && gatewaySession.currentProfile()) {
+      try {
+        const info: backgroundTaskManager.DelaySuspendInfo = backgroundTaskManager.requestSuspendDelay(
+          'xopc_realtime_keepalive',
+          (): void => {
+            this.cancelSuspendDelay();
+            if (!layoutState.foreground && !hasActivePersonalPicker() && !hasActiveDeviceLocationPermissionRequest()) {
+              realtimeClient.suspendForBackground();
+            }
+          }
+        );
+        this.suspendDelayId = info.requestId;
+        hilog.info(0x0000, 'XopcApp', 'Requested suspend delay: id=%{public}d remainingMs=%{public}d', info.requestId, info.actualDelayTime);
+      } catch (_error) {
+        hilog.warn(0x0000, 'XopcApp', 'Suspend delay unavailable, falling back to grace timer');
+        this.suspendFallbackTimer = setTimeout((): void => {
+          this.suspendFallbackTimer = -1;
+          if (!layoutState.foreground && !hasActivePersonalPicker() && !hasActiveDeviceLocationPermissionRequest()) {
+            realtimeClient.suspendForBackground();
+          }
+        }, 20000);
+      }
+    }
     voiceCapture.cancel();
     chatReadAloud.leaveForeground();
   }
   onDestroy(): void {
+    this.cancelSuspendDelay();
     void generatedMusicPlayback.shutdown();
     voiceCall.end(); realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.stop();
   }

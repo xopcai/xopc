@@ -77,4 +77,30 @@ describe('realtime protocol', () => {
   it('enforces the frame size before parsing JSON', () => {
     expect(() => parseClientRealtimeJsonFrame(`"${'x'.repeat(256 * 1024)}"`)).toThrow(/exceeds/);
   });
+
+  it('supports optional availability on ping and backgroundHeartbeatTimeoutMs on ready', () => {
+    const ping = parseClientRealtimeMessage({
+      protocolVersion: REALTIME_PROTOCOL_VERSION,
+      messageId: crypto.randomUUID(),
+      kind: 'realtime.ping',
+      sentAt: Date.now(),
+      payload: { availability: 'background' },
+    });
+    expect(ping.kind === 'realtime.ping' ? ping.payload.availability : undefined).toBe('background');
+
+    const ready = parseServerRealtimeMessage({
+      protocolVersion: REALTIME_PROTOCOL_VERSION,
+      messageId: crypto.randomUUID(),
+      kind: 'realtime.ready',
+      sentAt: Date.now(),
+      payload: {
+        connectionId: crypto.randomUUID(),
+        heartbeatIntervalMs: 15_000,
+        heartbeatTimeoutMs: 45_000,
+        backgroundHeartbeatTimeoutMs: 120_000,
+        negotiatedCapabilities: ['realtime.background-keepalive.v1'],
+      },
+    });
+    expect(ready.kind === 'realtime.ready' ? ready.payload.backgroundHeartbeatTimeoutMs : undefined).toBe(120_000);
+  });
 });

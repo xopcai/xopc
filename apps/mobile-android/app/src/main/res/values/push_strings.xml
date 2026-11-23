@@ -16,4 +16,7 @@
     <string name="push_cloud_unavailable">XOPC Cloud push is temporarily unavailable.</string>
     <string name="push_gateway_unreachable">Could not reach your Gateway. Check that it is online.</string>
     <string name="push_token_unavailable">Could not get a push token from Firebase.</string>
+    <string name="keepalive_channel_name">Active assistant connection</string>
+    <string name="keepalive_notification_title">xopc is running in the background</string>
+    <string name="keepalive_notification_text">Keeping your assistant connection active</string>
 </resources>

@@ -7,7 +7,10 @@ import type { Socket } from 'node:net';
 import { compactRunEvent } from './compact-run-event.js';
 
 import {
+  BACKGROUND_KEEPALIVE_CAPABILITY,
+  BACKGROUND_TOOLS_CAPABILITY,
   BROWSER_PREVIEW_CAPABILITY,
+  REALTIME_BACKGROUND_HEARTBEAT_TIMEOUT_MS,
   REALTIME_CAPABILITIES,
   REALTIME_HEARTBEAT_INTERVAL_MS,
   REALTIME_HEARTBEAT_TIMEOUT_MS,
@@ -174,6 +177,8 @@ export class RealtimeRuntime {
     const subscriptions = new Map<string, RealtimeSubscriptionHandle>();
     let authenticated = false;
     let lastSeenAt = Date.now();
+    let backgroundKeepaliveNegotiated = false;
+    let connectionAvailability: 'foreground' | 'background' = 'foreground';
     let connectionId: string | undefined;
     let endpointId: string | undefined;
     let principalId: string | undefined;
@@ -220,7 +225,11 @@ export class RealtimeRuntime {
     const helloTimer = setTimeout(() => socket.close(4401, 'Realtime hello timeout'), REALTIME_HELLO_TIMEOUT_MS);
     const heartbeatTimer = setInterval(() => guardConnection('heartbeat', () => {
       if (!executionActive() || principalId && !this.isPrincipalActive(principalId)) { socket.terminate(); return; }
-      if (Date.now() - lastSeenAt > REALTIME_HEARTBEAT_TIMEOUT_MS) {
+      const availability = (endpointId && this.endpointTools?.registry.get(endpointId)?.availability) ?? connectionAvailability;
+      const heartbeatTimeoutMs = backgroundKeepaliveNegotiated && availability === 'background'
+        ? REALTIME_BACKGROUND_HEARTBEAT_TIMEOUT_MS
+        : REALTIME_HEARTBEAT_TIMEOUT_MS;
+      if (Date.now() - lastSeenAt > heartbeatTimeoutMs) {
         socket.close(4408, 'Realtime heartbeat timeout');
       }
     }), REALTIME_HEARTBEAT_INTERVAL_MS);
@@ -383,6 +392,8 @@ export class RealtimeRuntime {
               claim.clientKind === 'mobile' && Boolean(device && device.id === message.payload.endpoint.principalId)
                 && hasGatewayScope(claim.scopes, 'sessions.write')
                 && message.payload.capabilities.includes(MOBILE_MCP_SETUP_CARD_CAPABILITY),
+              claim.clientKind === 'mobile'
+                && message.payload.capabilities.includes(BACKGROUND_TOOLS_CAPABILITY),
             );
             endpointId = message.payload.endpoint.endpointId;
             this.setupAuthorities.delete(endpointId);
@@ -405,10 +416,13 @@ export class RealtimeRuntime {
           ? [...new Set(message.payload.capabilities.filter(capability =>
             (REALTIME_CAPABILITIES as readonly string[]).includes(capability)))]
           : undefined;
+        backgroundKeepaliveNegotiated = Boolean(negotiatedCapabilities?.includes(BACKGROUND_KEEPALIVE_CAPABILITY));
+        connectionAvailability = message.payload.endpoint?.availability ?? 'foreground';
         writer.enqueue(scopedFrame(serverMessage('realtime.ready', {
           connectionId,
           heartbeatIntervalMs: REALTIME_HEARTBEAT_INTERVAL_MS,
           heartbeatTimeoutMs: REALTIME_HEARTBEAT_TIMEOUT_MS,
+          ...(backgroundKeepaliveNegotiated ? { backgroundHeartbeatTimeoutMs: REALTIME_BACKGROUND_HEARTBEAT_TIMEOUT_MS } : {}),
           ...(message.payload.capabilities ? { negotiatedCapabilities } : {}),
           ...(endpointReady ? { endpoint: endpointReady } : {}),
         })), 'critical');
@@ -457,7 +471,14 @@ export class RealtimeRuntime {
       } else if (!executionActive()) {
         socket.close(4401, 'Desktop execution authorization expired');
       } else if (message.kind === 'realtime.ping') {
-        if (endpointId && connectionId) this.endpointTools?.touch(endpointId, connectionId);
+        if (message.payload.availability) {
+          connectionAvailability = message.payload.availability;
+          if (endpointId && connectionId) {
+            this.endpointTools?.registry.heartbeat(endpointId, connectionId, message.payload.availability);
+          }
+        } else if (endpointId && connectionId) {
+          this.endpointTools?.touch(endpointId, connectionId);
+        }
         writer.enqueue(serverMessage('realtime.pong', {}), 'critical');
       } else if (message.kind === 'browser.preview') {
         if (Date.now() - previewWindowAt >= 1000) { previewWindowAt = Date.now(); previewMessages = 0; }

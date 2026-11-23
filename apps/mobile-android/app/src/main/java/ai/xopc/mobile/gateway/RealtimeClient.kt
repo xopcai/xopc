@@ -1,7 +1,9 @@
 package ai.xopc.mobile.gateway
 
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,15 +54,62 @@ internal class RealtimeClient(
   private val gateway: GatewaySession,
   private val deviceTools: DeviceTools? = null,
   private val identity: DeviceIdentity = DeviceIdentity("xopc.gateway.endpoint.p256.v1"),
-  private val http: OkHttpClient = OkHttpClient.Builder().followRedirects(false).build(),
+  private val http: OkHttpClient = OkHttpClient.Builder().followRedirects(false).pingInterval(25, TimeUnit.SECONDS).build(),
 ) {
+  private data class BootstrapCache(
+    val key: String,
+    val supportsPersonalTools: Boolean,
+    val supportsExtendedTools: Boolean,
+    val supportsLocationTools: Boolean,
+    val supportsDeviceTools: Boolean,
+    val supportsDeviceContext: Boolean,
+    val supportsClarificationV2: Boolean,
+    val supportsEnvironment: Boolean,
+  )
+
   private val conversationHistoryEvents = setOf("session.task-result", "session.agent-reaction", "session.agent-reaction.preference")
   @Volatile private var claim: TurnClaim? = null
+  @Volatile private var appForeground = true
+  @Volatile private var pendingProbe: CompletableDeferred<Boolean>? = null
+  @Volatile private var bootstrapCache: BootstrapCache? = null
   private var watchedRunTopic: String? = null
   private var watchedRunSeq = 0L
   private var readySocket: WebSocket? = null
   private var browserPreviewSupported = false
   val browserPreviewMessages = MutableSharedFlow<JSONObject>(extraBufferCapacity = 64)
+
+  fun clearBootstrapCache() {
+    bootstrapCache = null
+  }
+
+  @Synchronized fun notifyBackground() {
+    appForeground = false
+    pendingProbe?.complete(false)
+    pendingProbe = null
+    readySocket?.send(endpointFrame("endpoint.availability_changed", JSONObject().put("availability", "background")))
+  }
+
+  suspend fun probeOrReconnect(timeoutMs: Long = 1_500L): Boolean {
+    appForeground = true
+    val deferred = CompletableDeferred<Boolean>()
+    val socket = synchronized(this) {
+      val current = readySocket ?: return false
+      pendingProbe?.complete(false)
+      pendingProbe = deferred
+      current
+    }
+    val sent = runCatching {
+      socket.send(endpointFrame("endpoint.availability_changed", JSONObject().put("availability", "foreground")))
+      socket.send(frame("realtime.ping", JSONObject().put("availability", "foreground")))
+    }.getOrDefault(false)
+    if (!sent) {
+      synchronized(this) { if (pendingProbe === deferred) pendingProbe = null }
+      return false
+    }
+    val alive = withTimeoutOrNull(timeoutMs) { deferred.await() } == true
+    synchronized(this) { if (pendingProbe === deferred) pendingProbe = null }
+    return alive
+  }
 
   @Synchronized fun sendBrowserPreview(payload: JSONObject): Boolean =
     browserPreviewSupported && readySocket?.send(frame("browser.preview", payload)) == true
@@ -112,23 +161,34 @@ internal class RealtimeClient(
     val profile = gateway.currentProfile() ?: throw IllegalStateException("NOT_PAIRED")
     val clientId = "android:${profile.deviceId}"
     val displayName = "xopc Android"
-    val registration = JSONObject().put("principalId", profile.deviceId).put("displayName", displayName)
-      .put("kind", "mobile").put("platform", "android").put("publicKey", identity.publicKeyDer())
-    val compatibility = runInterruptible(Dispatchers.IO) { JSONObject(gateway.request("/api/endpoint-tools/compatibility")) }
-    val supportsPersonalTools = compatibility.optJSONObject("payload")?.optBoolean("mobilePersonalToolsV1") == true
-    val supportsExtendedTools = compatibility.optJSONObject("payload")?.optBoolean("mobileExtendedPersonalToolsV1") == true
-    val supportsLocationTools = compatibility.optJSONObject("payload")?.optBoolean("deviceLocationTasksV1") == true
-    val supportsDeviceTools = compatibility.optJSONObject("payload")?.optBoolean("deviceStateToolsV1") == true
-    val supportsDeviceContext = compatibility.optJSONObject("payload")?.optBoolean("turnDeviceContextV1") == true
-    val supportsClarificationV2 = runInterruptible(Dispatchers.IO) {
-      runCatching { JSONObject(gateway.request("/api/health")).optJSONArray("clarificationVersions")?.let { versions ->
-        (0 until versions.length()).any { versions.optInt(it) == 2 }
-      } == true }.getOrDefault(false)
+    val origin = runInterruptible(Dispatchers.IO) { gateway.activeVerifiedOrigin() }
+    val cacheKey = "${profile.gatewayId}:${profile.deviceId}:$origin"
+    val bootstrap = bootstrapCache?.takeIf { it.key == cacheKey } ?: run {
+      val registration = JSONObject().put("principalId", profile.deviceId).put("displayName", displayName)
+        .put("kind", "mobile").put("platform", "android").put("publicKey", identity.publicKeyDer())
+      val compatibility = runInterruptible(Dispatchers.IO) { JSONObject(gateway.request("/api/endpoint-tools/compatibility")) }
+      val compatPayload = compatibility.optJSONObject("payload")
+      val supportsClarificationV2 = runInterruptible(Dispatchers.IO) {
+        runCatching { JSONObject(gateway.request("/api/health")).optJSONArray("clarificationVersions")?.let { versions ->
+          (0 until versions.length()).any { versions.optInt(it) == 2 }
+        } == true }.getOrDefault(false)
+      }
+      runInterruptible(Dispatchers.IO) {
+        val registered = JSONObject(gateway.request("/api/endpoint-tools/principals", "POST", registration.toString()))
+        require(registered.optBoolean("ok")) { "ENDPOINT_REGISTRATION_FAILED" }
+      }
+      BootstrapCache(
+        key = cacheKey,
+        supportsPersonalTools = compatPayload?.optBoolean("mobilePersonalToolsV1") == true,
+        supportsExtendedTools = compatPayload?.optBoolean("mobileExtendedPersonalToolsV1") == true,
+        supportsLocationTools = compatPayload?.optBoolean("deviceLocationTasksV1") == true,
+        supportsDeviceTools = compatPayload?.optBoolean("deviceStateToolsV1") == true,
+        supportsDeviceContext = compatPayload?.optBoolean("turnDeviceContextV1") == true,
+        supportsClarificationV2 = supportsClarificationV2,
+        supportsEnvironment = compatPayload?.optBoolean("endpointEnvironmentV1") == true,
+      ).also { bootstrapCache = it }
     }
-    val supportsEnvironment = compatibility.optJSONObject("payload")?.optBoolean("endpointEnvironmentV1") == true
     val ticketResponse = runInterruptible(Dispatchers.IO) {
-      val registered = JSONObject(gateway.request("/api/endpoint-tools/principals", "POST", registration.toString()))
-      require(registered.optBoolean("ok")) { "ENDPOINT_REGISTRATION_FAILED" }
       JSONObject(gateway.request("/api/realtime/tickets", "POST", JSONObject()
         .put("clientId", clientId).put("clientKind", "mobile").put("protocolVersion", 2).toString()))
     }
@@ -137,25 +197,39 @@ internal class RealtimeClient(
       ticketPayload.getJSONObject("realtime").getInt("maxVersion") >= 2) { "INVALID_REALTIME_TICKET" }
     val ticketCapabilities = ticketPayload.getJSONObject("realtime").optJSONArray("capabilities") ?: JSONArray()
     require((0 until ticketCapabilities.length()).any { ticketCapabilities.optString(it) == "endpoint.tools.v3" }) { "GATEWAY_UPDATE_REQUIRED" }
-    val endpoint = runInterruptible(Dispatchers.IO) { endpointHello(profile.deviceId, clientId, displayName, supportsDeviceTools, supportsLocationTools, supportsPersonalTools, supportsExtendedTools) }
-    val origin = runInterruptible(Dispatchers.IO) { gateway.activeVerifiedOrigin() }
+    val endpoint = runInterruptible(Dispatchers.IO) {
+      endpointHello(profile.deviceId, clientId, displayName, bootstrap.supportsDeviceTools, bootstrap.supportsLocationTools, bootstrap.supportsPersonalTools, bootstrap.supportsExtendedTools)
+    }
     val events = Channel<String>(Channel.BUFFERED)
     val listener = object : WebSocketListener() {
       override fun onOpen(webSocket: WebSocket, response: Response) {
         val hello = JSONObject().put("ticket", ticketPayload.getString("ticket"))
           .put("clientId", clientId).put("clientKind", "mobile")
-          .put("capabilities", JSONArray().put("endpoint.tools.v3").put("mobile.mcp-setup-card.v1").put("browser.preview.v1"))
+          .put("capabilities", JSONArray()
+            .put("endpoint.tools.v3")
+            .put("mobile.mcp-setup-card.v1")
+            .put("browser.preview.v1")
+            .put("realtime.background-keepalive.v1")
+            .put("endpoint.background-tools.v1"))
           .put("subscriptions", JSONArray().put(JSONObject().put("topic", "gateway"))
             .put(JSONObject().put("topic", "sessions"))).put("endpoint", endpoint)
         webSocket.send(frame("realtime.hello", hello))
       }
 
       override fun onMessage(webSocket: WebSocket, text: String) {
+        pendingProbe?.complete(true)
         if (text.length > 4 * 1024 * 1024 || events.trySend(text).isFailure) webSocket.close(1009, "Frame too large")
       }
 
-      override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { events.close() }
-      override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { events.close() }
+      override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+        if (code == 4401 || code == 4403 || code == 4409) bootstrapCache = null
+        pendingProbe?.complete(false)
+        events.close()
+      }
+      override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+        pendingProbe?.complete(false)
+        events.close()
+      }
     }
     val connectionProof = runInterruptible(Dispatchers.IO) { DeviceRequestProof.connection(origin, "/api/realtime/v1/ws", ticketPayload.getString("ticket")) }
     val socket = http.newWebSocket(Request.Builder()
@@ -167,18 +241,21 @@ internal class RealtimeClient(
         ?: throw IllegalStateException("REALTIME_HELLO_TIMEOUT")
       val ready = JSONObject(first)
       require(ready.getInt("protocolVersion") == 2 && ready.getString("kind") == "realtime.ready") { "INVALID_REALTIME_READY" }
-      val endpointReady = ready.getJSONObject("payload").getJSONObject("endpoint")
+      val readyPayload = ready.getJSONObject("payload")
+      val foregroundTimeoutMs = readyPayload.optLong("heartbeatTimeoutMs", 45_000L).takeIf { it > 0 } ?: 45_000L
+      val backgroundTimeoutMs = readyPayload.optLong("backgroundHeartbeatTimeoutMs", foregroundTimeoutMs).takeIf { it > 0 } ?: foregroundTimeoutMs
+      val endpointReady = readyPayload.getJSONObject("endpoint")
       require(endpointReady.getString("endpointId") == clientId && endpointReady.getString("turnToken").length >= 32) {
         "MISSING_ENDPOINT_CLAIM"
       }
-      claim = TurnClaim(clientId, endpointReady.getString("turnToken"), supportsDeviceContext, supportsClarificationV2)
-      if (supportsEnvironment) {
+      claim = TurnClaim(clientId, endpointReady.getString("turnToken"), bootstrap.supportsDeviceContext, bootstrap.supportsClarificationV2)
+      if (bootstrap.supportsEnvironment) {
         val contextClaim = claim!!
         environmentJob = CoroutineScope(currentCoroutineContext()).launch { publishEnvironment(contextClaim) }
       }
       synchronized(this) {
         readySocket = socket
-        val negotiated = ready.getJSONObject("payload").optJSONArray("negotiatedCapabilities") ?: JSONArray()
+        val negotiated = readyPayload.optJSONArray("negotiatedCapabilities") ?: JSONArray()
         browserPreviewSupported = (0 until negotiated.length()).any { negotiated.optString(it) == "browser.preview.v1" }
         watchedRunTopic?.let { subscribe(socket, it, watchedRunSeq) }
       }
@@ -191,7 +268,7 @@ internal class RealtimeClient(
       suspend fun publishProviderState() {
         if (!providerAccepted) return
         val now = System.currentTimeMillis()
-        val foreground = withContext(Dispatchers.Main.immediate) { DeviceLocation.isForeground() }
+        val foreground = appForeground && withContext(Dispatchers.Main.immediate) { DeviceLocation.isForeground() }
         if (foreground == lastForeground && now - providerLastReport < 15_000) return
         providerLastReport = now
         lastForeground = foreground
@@ -201,12 +278,20 @@ internal class RealtimeClient(
           .put("reason", if (foreground) "ready" else "needs_foreground")))
       }
       var lastReceived = System.currentTimeMillis()
+      var lastPingSent = lastReceived
       while (currentCoroutineContext().isActive) {
         publishProviderState()
         val received = withTimeoutOrNull(5_000) { events.receiveCatching() }
         if (received == null) {
-          if (System.currentTimeMillis() - lastReceived > 45_000) break
-          socket.send(frame("realtime.ping", JSONObject()))
+          val now = System.currentTimeMillis()
+          val foreground = appForeground && withContext(Dispatchers.Main.immediate) { DeviceLocation.isForeground() }
+          val activeTimeout = if (foreground) foregroundTimeoutMs else backgroundTimeoutMs
+          if (now - lastReceived > activeTimeout) break
+          val pingInterval = if (foreground) 15_000L else 25_000L
+          if (now - lastPingSent >= pingInterval) {
+            lastPingSent = now
+            socket.send(frame("realtime.ping", JSONObject().put("availability", if (foreground) "foreground" else "background")))
+          }
           continue
         }
         val raw = received.getOrNull() ?: break
@@ -315,7 +400,7 @@ internal class RealtimeClient(
   }
 
   private fun endpointHello(principalId: String, endpointId: String, displayName: String, supportsDeviceTools: Boolean, supportsLocationTools: Boolean, supportsPersonalTools: Boolean, supportsExtendedTools: Boolean): JSONObject {
-    val unsigned = JSONObject().put("appVersion", "1.0").put("availability", "foreground")
+    val unsigned = JSONObject().put("appVersion", "1.0").put("availability", if (appForeground) "foreground" else "background")
       .put("connectionInstanceId", UUID.randomUUID().toString()).put("displayName", displayName)
       .put("endpointId", endpointId).put("kind", "mobile").put("nonce", UUID.randomUUID().toString())
       .put("platform", "android").put("principalId", principalId).put("signedAt", System.currentTimeMillis())

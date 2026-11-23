@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ContentUris
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -34,7 +35,15 @@ import kotlin.coroutines.resumeWithException
 
 /** One foreground picker at a time. Late Activity results never belong to a subsequent call. */
 internal object DevicePersonalTools {
+  private val backgroundReadableTools = setOf(
+    "mobile.calendar.query_events",
+    "mobile.calendar.query_free_busy",
+    "mobile.contacts.find_by_name",
+    "mobile.media.list_recent",
+    "mobile.media.read_image",
+  )
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+  @Volatile private var appContext: Context? = null
   private var owner: ComponentActivity? = null
   private var picker: ActivityResultLauncher<Intent>? = null
   private var permissions: ActivityResultLauncher<Array<String>>? = null
@@ -42,20 +51,26 @@ internal object DevicePersonalTools {
   private var permission: CompletableDeferred<Unit>? = null
   private var resumed = CompletableDeferred<Unit>()
   private var job: Job? = null
+  private var activeToolBackgroundCapable = false
   private var preparingCapability = false
   private var invocationId: String? = null
   private var cameraFile: File? = null
   private var cameraUri: Uri? = null
   private val http = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build()
 
+  fun init(context: Context) {
+    appContext = context.applicationContext
+  }
+
   fun attach(activity: ComponentActivity, launcher: ActivityResultLauncher<Intent>, permissionLauncher: ActivityResultLauncher<Array<String>>) {
+    appContext = activity.applicationContext
     owner = activity; picker = launcher; permissions = permissionLauncher
     resumed.complete(Unit)
   }
   fun detach(activity: ComponentActivity) {
     if (owner !== activity) return
     owner = null; resumed = CompletableDeferred()
-    if (selection == null && permission == null) job?.cancel()
+    if (!activeToolBackgroundCapable && selection == null && permission == null) job?.cancel()
   }
   fun result(code: Int, intent: Intent?) {
     selection?.complete(if (code == Activity.RESULT_OK) cameraUri ?: intent?.data else null)
@@ -116,13 +131,16 @@ internal object DevicePersonalTools {
       (photo && (args.length() != (if (organize) 2 else 1) || args.opt("id") !is String || args.optString("id").toLongOrNull()?.let { it > 0 } != true)) ||
       (organize && (args.opt("album") !is String || album.isEmpty() || album.length > 100 || album.startsWith(".") || album.any { it == '/' || it == '\\' || it.isISOControl() })) ||
       (!calendar && !contact && !search && !photo && args.length() != 0)) { fail("INVALID_ARGUMENTS"); return }
-    if (owner == null) { fail("ENDPOINT_NOT_FOREGROUND"); return }
+    val allowBackground = name in backgroundReadableTools
+    if (!allowBackground && owner == null) { fail("ENDPOINT_NOT_FOREGROUND"); return }
+    if (allowBackground && owner == null && appContext == null) { fail("ENDPOINT_NOT_FOREGROUND"); return }
     if (preparingCapability || job?.isActive == true || selection != null || permission != null) { fail("TOOL_BUSY"); return }
     val remaining = request.optLong("deadlineAt") - System.currentTimeMillis()
     if (remaining <= 0) { fail("TOOL_TIMEOUT"); return }
     val sourceProfile = gateway.currentProfile()
     if (sourceProfile == null) { fail("ENDPOINT_DISCONNECTED"); return }
     invocationId = id
+    activeToolBackgroundCapable = allowBackground
     send("tool.received", JSONObject().put("invocationId", id))
     job = scope.launch {
       try {
@@ -138,23 +156,25 @@ internal object DevicePersonalTools {
           if (gateway.currentProfile() != sourceProfile) throw SecurityException()
           val content = when {
             create -> createEvent(start, end, title)
-            search -> findContacts(query)
-            name == "mobile.media.list_recent" -> listPhotos()
+            search -> findContacts(query, allowBackground)
+            name == "mobile.media.list_recent" -> listPhotos(allowBackground)
             organize && Build.VERSION.SDK_INT >= 29 -> addPhotoToAlbum(args.getString("id").toLong(), album)
-            calendar -> readCalendar(start, end, name.endsWith("free_busy"))
+            calendar -> readCalendar(start, end, name.endsWith("free_busy"), allowBackground)
             contact -> readContact(args.getString("field"))
-            else -> uploadSelection(name, request, gateway, sourceProfile)
+            else -> uploadSelection(name, request, gateway, sourceProfile, allowBackground)
           }
           ensureActive()
-          resumed.await()
-          if (owner == null) throw IllegalStateException("ENDPOINT_NOT_FOREGROUND")
+          if (!allowBackground) {
+            resumed.await()
+            if (owner == null) throw IllegalStateException("ENDPOINT_NOT_FOREGROUND")
+          }
           if (gateway.currentProfile()?.gatewayId != sourceProfile.gatewayId || gateway.currentProfile()?.gatewayPublicKey != sourceProfile.gatewayPublicKey) throw SecurityException()
           send("tool.result", JSONObject().put("invocationId", id).put("content", JSONArray().put(content)))
         }
       } catch (_: TimeoutCancellationException) { fail("TOOL_TIMEOUT") }
       catch (_: CancellationException) { send("tool.cancelled", JSONObject().put("invocationId", id)) }
-      catch (error: Exception) { fail(error.message?.takeIf { it in listOf("USER_DENIED", "RESULT_TOO_LARGE", "ENDPOINT_NOT_FOREGROUND", "INVALID_ARGUMENTS") } ?: "PERMISSION_DENIED") }
-      finally { cameraFile?.delete(); cameraFile = null; cameraUri = null; invocationId = null }
+      catch (error: Exception) { fail(error.message?.takeIf { it in listOf("USER_DENIED", "RESULT_TOO_LARGE", "ENDPOINT_NOT_FOREGROUND", "DEVICE_LOCKED", "INVALID_ARGUMENTS") } ?: "PERMISSION_DENIED") }
+      finally { activeToolBackgroundCapable = false; cameraFile?.delete(); cameraFile = null; cameraUri = null; invocationId = null }
     }
   }
 
@@ -167,11 +187,15 @@ internal object DevicePersonalTools {
     continuation.invokeOnCancellation { scope.launch { dialog.dismiss() } }
     dialog.show()
   }
-  private suspend fun allow(permissionName: String) {
-    val activity = owner ?: throw IllegalStateException("ENDPOINT_NOT_FOREGROUND")
-    if (ContextCompat.checkSelfPermission(activity, permissionName) != PackageManager.PERMISSION_GRANTED) {
+  private fun activeContext(allowBackground: Boolean): Context =
+    (if (allowBackground) owner ?: appContext else owner) ?: throw IllegalStateException("ENDPOINT_NOT_FOREGROUND")
+
+  private suspend fun allow(permissionName: String, allowBackground: Boolean = false) {
+    val context = activeContext(allowBackground)
+    if (ContextCompat.checkSelfPermission(context, permissionName) != PackageManager.PERMISSION_GRANTED) {
+      if (owner == null) throw IllegalStateException("ENDPOINT_NOT_FOREGROUND")
       requestPermissions(arrayOf(permissionName))
-      if (ContextCompat.checkSelfPermission(activity, permissionName) != PackageManager.PERMISSION_GRANTED) throw SecurityException()
+      if (ContextCompat.checkSelfPermission(activeContext(allowBackground), permissionName) != PackageManager.PERMISSION_GRANTED) throw SecurityException()
     }
   }
   private suspend fun requestPermissions(names: Array<String>) {
@@ -182,18 +206,21 @@ internal object DevicePersonalTools {
     resumed.await()
     currentCoroutineContext().ensureActive()
   }
-  private suspend fun allowPhotoAccess() {
-    val activity = owner ?: throw IllegalStateException("ENDPOINT_NOT_FOREGROUND")
+  private suspend fun allowPhotoAccess(allowBackground: Boolean = false) {
+    val context = activeContext(allowBackground)
     val full = if (android.os.Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
     val limited = Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
-    fun granted(): Boolean = ContextCompat.checkSelfPermission(activity, full) == PackageManager.PERMISSION_GRANTED ||
-      (android.os.Build.VERSION.SDK_INT >= 34 && ContextCompat.checkSelfPermission(activity, limited) == PackageManager.PERMISSION_GRANTED)
-    if (!granted()) requestPermissions(if (android.os.Build.VERSION.SDK_INT >= 34) arrayOf(full, limited) else arrayOf(full))
-    if (!granted()) throw SecurityException()
+    fun granted(ctx: Context): Boolean = ContextCompat.checkSelfPermission(ctx, full) == PackageManager.PERMISSION_GRANTED ||
+      (android.os.Build.VERSION.SDK_INT >= 34 && ContextCompat.checkSelfPermission(ctx, limited) == PackageManager.PERMISSION_GRANTED)
+    if (!granted(context)) {
+      if (owner == null) throw IllegalStateException("ENDPOINT_NOT_FOREGROUND")
+      requestPermissions(if (android.os.Build.VERSION.SDK_INT >= 34) arrayOf(full, limited) else arrayOf(full))
+    }
+    if (!granted(activeContext(allowBackground))) throw SecurityException()
   }
-  private suspend fun listPhotos(): JSONObject {
-    allowPhotoAccess()
-    val resolver = owner!!.contentResolver
+  private suspend fun listPhotos(allowBackground: Boolean): JSONObject {
+    allowPhotoAccess(allowBackground)
+    val resolver = activeContext(allowBackground).contentResolver
     val photos = withContext(Dispatchers.IO) {
       val results = JSONArray()
       val images = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
@@ -273,9 +300,9 @@ internal object DevicePersonalTools {
     } ?: throw SecurityException()
     return JSONObject().put("type", "json").put("value", value)
   }
-  private suspend fun findContacts(query: String): JSONObject {
-    allow(Manifest.permission.READ_CONTACTS)
-    val resolver = owner!!.contentResolver
+  private suspend fun findContacts(query: String, allowBackground: Boolean): JSONObject {
+    allow(Manifest.permission.READ_CONTACTS, allowBackground)
+    val resolver = activeContext(allowBackground).contentResolver
     val matches = withContext(Dispatchers.IO) {
       val contacts = ContactsContract.Contacts.CONTENT_FILTER_URI.buildUpon().appendPath(query).build()
       val data = ContactsContract.Data.CONTENT_URI
@@ -331,9 +358,9 @@ internal object DevicePersonalTools {
     return JSONObject().put("type", "json").put("value", JSONObject().put("id", id))
   }
 
-  private suspend fun readCalendar(start: Long, end: Long, busyOnly: Boolean): JSONObject {
-    allow(Manifest.permission.READ_CALENDAR)
-    val resolver = owner!!.contentResolver
+  private suspend fun readCalendar(start: Long, end: Long, busyOnly: Boolean, allowBackground: Boolean): JSONObject {
+    allow(Manifest.permission.READ_CALENDAR, allowBackground)
+    val resolver = activeContext(allowBackground).contentResolver
     val value = withContext(Dispatchers.IO) {
       val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().appendPath(start.toString()).appendPath(end.toString()).build()
       val fields = mutableListOf(CalendarContract.Instances.BEGIN, CalendarContract.Instances.END, CalendarContract.Events.ALL_DAY, CalendarContract.Events.AVAILABILITY)
@@ -354,25 +381,28 @@ internal object DevicePersonalTools {
     }
     return JSONObject().put("type", "json").put("value", value)
   }
-  private suspend fun uploadSelection(name: String, request: JSONObject, gateway: GatewaySession, sourceProfile: GatewayProfile): JSONObject {
-    val activity = owner!!
+  private suspend fun uploadSelection(name: String, request: JSONObject, gateway: GatewaySession, sourceProfile: GatewayProfile, allowBackground: Boolean): JSONObject {
+    val context = activeContext(allowBackground)
     val uri = if (name == "mobile.media.read_image") {
-      allowPhotoAccess()
+      allowPhotoAccess(allowBackground)
       val id = request.getJSONObject("arguments").getString("id").toLong()
       ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
-    } else pick(when (name) {
-      "mobile.media.pick" -> if (android.os.Build.VERSION.SDK_INT >= 33) Intent("android.provider.action.PICK_IMAGES").setType("image/*") else Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
-      "mobile.camera.capture" -> {
-        allow(Manifest.permission.CAMERA)
-        val directory = File(activity.cacheDir, "camera-capture").apply { mkdirs() }
-        cameraFile = File.createTempFile("agent-", ".jpg", directory)
-        cameraUri = FileProvider.getUriForFile(activity, "${activity.packageName}.camera-capture", cameraFile!!)
-        Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, cameraUri)
-          .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-      }
-      else -> Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
-    })
-    val resolver = activity.contentResolver
+    } else {
+      val activity = owner ?: throw IllegalStateException("ENDPOINT_NOT_FOREGROUND")
+      pick(when (name) {
+        "mobile.media.pick" -> if (android.os.Build.VERSION.SDK_INT >= 33) Intent("android.provider.action.PICK_IMAGES").setType("image/*") else Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
+        "mobile.camera.capture" -> {
+          allow(Manifest.permission.CAMERA)
+          val directory = File(activity.cacheDir, "camera-capture").apply { mkdirs() }
+          cameraFile = File.createTempFile("agent-", ".jpg", directory)
+          cameraUri = FileProvider.getUriForFile(activity, "${activity.packageName}.camera-capture", cameraFile!!)
+          Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).putExtra(android.provider.MediaStore.EXTRA_OUTPUT, cameraUri)
+            .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        else -> Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
+      })
+    }
+    val resolver = context.contentResolver
     val grant = request.optJSONObject("uploadGrant") ?: throw SecurityException()
     val maxBytes = minOf(grant.getLong("maxBytes"), 10 * 1024 * 1024L)
     val fileName = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
@@ -387,7 +417,8 @@ internal object DevicePersonalTools {
       }; output.toByteArray()
     } ?: throw SecurityException() }
     try {
-      resumed.await(); currentCoroutineContext().ensureActive()
+      if (!allowBackground) resumed.await()
+      currentCoroutineContext().ensureActive()
       val auth = withContext(Dispatchers.IO) { gateway.voiceAuth() }
       val profile = gateway.currentProfile()?.takeIf { it.deviceId == sourceProfile.deviceId && it.gatewayId == sourceProfile.gatewayId && it.gatewayPublicKey == sourceProfile.gatewayPublicKey } ?: throw SecurityException()
       val path = grant.getString("path")

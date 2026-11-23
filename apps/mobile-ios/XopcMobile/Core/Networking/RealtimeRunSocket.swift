@@ -231,13 +231,14 @@ struct DeviceRunSubscriptions {
 
     private struct Observer {
         var sequence: Int
+        let conversationID: String?
         let continuation: Continuation
     }
 
     private var topics: [String: [UUID: Observer]] = [:]
 
-    mutating func add(_ topic: String, id: UUID, after sequence: Int, continuation: Continuation) -> Int {
-        topics[topic, default: [:]][id] = Observer(sequence: sequence, continuation: continuation)
+    mutating func add(_ topic: String, id: UUID, after sequence: Int, conversationID: String? = nil, continuation: Continuation) -> Int {
+        topics[topic, default: [:]][id] = Observer(sequence: sequence, conversationID: conversationID, continuation: continuation)
         return topics[topic]?.values.map(\.sequence).min() ?? sequence
     }
 
@@ -260,12 +261,32 @@ struct DeviceRunSubscriptions {
             return nil
         }
         guard let topic = payload["topic"] as? String, var observers = topics[topic] else { return nil }
+        if raw["kind"] as? String == "realtime.subscribed", topic == "sessions" {
+            let subscribed = RunStreamEvent(name: "realtime.subscribed", sequence: 0, messageId: nil, delta: nil,
+                                            offset: nil, status: nil, errorMessage: nil, toolName: nil, stage: nil)
+            for observer in observers.values where observer.conversationID != nil {
+                observer.continuation.yield(subscribed)
+            }
+            return nil
+        }
         if raw["kind"] as? String == "realtime.gap" {
             finish(topic, throwing: GatewayClientError.server("实时事件中断，正在恢复历史记录"))
             return topic
         }
-        guard raw["kind"] as? String == "realtime.event",
-              let event = try JSONDecoder().decode(RealtimeServerFrame.self, from: data).runEvent else { return nil }
+        guard raw["kind"] as? String == "realtime.event" else { return nil }
+        let decoded = try JSONDecoder().decode(RealtimeServerFrame.self, from: data)
+        guard let event = decoded.runEvent else { return nil }
+        if topic == "sessions" {
+            guard ["session.task-result", "session.agent-reaction", "session.agent-reaction.preference",
+                   "session.next-turn-suggestion.changed"].contains(event.name),
+                  let targetConversation = decoded.payload.data?.conversationId else { return nil }
+            for (id, observer) in observers where observer.conversationID == targetConversation && observer.sequence < event.sequence {
+                observers[id]?.sequence = event.sequence
+                observer.continuation.yield(event)
+            }
+            topics[topic] = observers
+            return nil
+        }
         for (id, observer) in observers where observer.sequence < event.sequence {
             observers[id]?.sequence = event.sequence
             observer.continuation.yield(event)

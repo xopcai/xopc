@@ -318,11 +318,13 @@ struct GatewayClient: GatewayServing, Sendable {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let clientID = "ios-results:\(UUID().uuidString.lowercased())"
-                    let ticket = try await issueRealtimeTicket(clientID: clientID)
-                    let socket = RealtimeRunSocket(configuration: configuration, session: session,
-                                                   ticket: ticket.ticket, clientID: clientID, runID: "", conversationID: conversationID)
-                    try await socket.consume(into: continuation)
+                    let host = await DeviceEndpointPool.shared.host(for: self)
+                    for try await event in try await host.subscribeToTaskResults(conversationID: conversationID) {
+                        if case .terminated = continuation.yield(event) {
+                            return
+                        }
+                    }
+                    continuation.finish()
                 } catch is CancellationError {
                     continuation.finish()
                 } catch {

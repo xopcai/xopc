@@ -16,4 +16,7 @@
     <string name="push_cloud_unavailable">XOPC Cloud 暂时无法发送推送。</string>
     <string name="push_gateway_unreachable">无法连接 Gateway，请检查它是否在线。</string>
     <string name="push_token_unavailable">暂时无法从 Firebase 获取推送标识。</string>
+    <string name="keepalive_channel_name">助手后台连接</string>
+    <string name="keepalive_notification_title">xopc 正在后台运行</string>
+    <string name="keepalive_notification_text">正在保持助手实时连接与响应</string>
 </resources>

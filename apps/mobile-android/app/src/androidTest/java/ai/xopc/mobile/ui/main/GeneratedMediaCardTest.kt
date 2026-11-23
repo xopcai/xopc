@@ -55,12 +55,15 @@ class GeneratedMediaCardTest {
     val actions = mutableListOf<String>()
     compose.setContent {
       MaterialTheme {
-        Column {
+        Column(Modifier.fillMaxWidth().testTag("timeline")) {
           GeneratedMediaRows(listOf(song, video, completedVideo), false, null, { actions += "play:${it.id}" },
             { actions += "confirm:${it.id}:${it.draftRevision}" }, onOpen = { actions += "open:${it.id}" })
         }
       }
     }
+    val timeline = compose.onNodeWithTag("timeline").fetchSemanticsNode().boundsInRoot
+    assertEquals(timeline.left, compose.onNodeWithTag("generated-media-card-video").fetchSemanticsNode().boundsInRoot.left, 1f)
+    assertEquals(timeline.left, compose.onNodeWithTag("generated-media-card-completed-video").fetchSemanticsNode().boundsInRoot.left, 1f)
     compose.onNodeWithText("风从山南来").assertExists()
     compose.onNodeWithText("5:29", substring = true).assertExists()
     compose.onNodeWithText("山南落日").assertExists()

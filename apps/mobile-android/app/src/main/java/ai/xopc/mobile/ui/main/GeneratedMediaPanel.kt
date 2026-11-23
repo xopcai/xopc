@@ -95,7 +95,7 @@ internal fun GeneratedMediaCard(
     shape = MaterialTheme.shapes.large,
     color = if (item.isDraft && item.canConfirm) LocalAttentionColors.current.fill else LocalChatColors.current.card,
     contentColor = MaterialTheme.colorScheme.onSurface) {
-    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).then(if (onOpen == null) Modifier else Modifier
           .clickable(onClick = onOpen).testTag("generated-${item.kind.path}-open-${item.id}")),
@@ -106,7 +106,7 @@ internal fun GeneratedMediaCard(
                 style = MaterialTheme.typography.titleLarge)
             }
           }
-          Column {
+          Column(Modifier.weight(1f)) {
             Text(item.title ?: kindLabel, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
               maxLines = if (item.kind == GeneratedMediaKind.Video) 1 else 2, overflow = TextOverflow.Ellipsis)
@@ -132,17 +132,18 @@ internal fun GeneratedMediaCard(
           cost != null -> label(zh, "预估 ¥${price(cost / 100.0)}", "Estimated ¥${price(cost / 100.0)}")
           else -> null
         }
-        estimate?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        estimate?.let { Text(it, modifier = Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall) }
         Button(onClick = onConfirm, enabled = item.canConfirm && !submitting,
           modifier = Modifier.testTag("generated-video-confirm-${item.id}")) {
           Text(if (submitting) label(zh, "正在提交", "Submitting") else label(zh, "确认生成", "Generate video"))
         }
         if (!item.canConfirm) Text(label(zh, "请检查网关的视频模型配置，再准备新草稿。",
-          "Check the gateway video model and prepare a new draft."), style = MaterialTheme.typography.bodySmall)
+          "Check the gateway video model and prepare a new draft."), modifier = Modifier.fillMaxWidth(),
+          style = MaterialTheme.typography.bodySmall)
       }
       val error = if (confirmationFailed) label(zh, "提交未完成，请检查当前草稿后重试。",
         "Submission failed. Review the current draft and try again.") else item.error
-      error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+      error?.let { Text(it, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
     }
   }
 }
@@ -253,9 +254,8 @@ internal fun GeneratedMediaRows(items: List<GeneratedMediaItem>, submitting: Boo
           DisposableEffect(music.key) { onDispose { onMusicBounds(null) } }
           Modifier.onGloballyPositioned { onMusicBounds(it.boundsInWindow()) }
         }
-        val alignment = if (item.kind == GeneratedMediaKind.Music) Alignment.Start else Alignment.End
-        Box(Modifier.fillMaxWidth(CHAT_MESSAGE_WIDTH).align(alignment),
-          contentAlignment = if (item.kind == GeneratedMediaKind.Music) Alignment.TopStart else Alignment.TopEnd) {
+        Box(Modifier.fillMaxWidth(CHAT_MESSAGE_WIDTH).align(Alignment.Start),
+          contentAlignment = Alignment.TopStart) {
           GeneratedMediaCard(item, submitting, failedDraftId == item.id, { onPlay(item) }, { onConfirm(item) }, music,
             onOpen = if (item.state == "completed") ({ onOpen(item) }) else null,
             modifier = trackBounds)

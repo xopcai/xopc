@@ -81,6 +81,19 @@ export const mobileDeviceChatToolSchema = z.enum([
   ...PERSONAL_TOOL_NAMES, 'mobile.device.get_location', 'mobile.device.get_state', 'mobile.device.get_power',
 ]);
 export type MobileDeviceChatTool = z.infer<typeof mobileDeviceChatToolSchema>;
+export const MOBILE_BACKGROUND_READ_TOOLS = [
+  'mobile.device.get_state',
+  'mobile.device.get_power',
+  'mobile.calendar.query_events',
+  'mobile.calendar.query_free_busy',
+  'mobile.contacts.find_by_name',
+  'mobile.media.list_recent',
+  'mobile.media.read_image',
+] as const;
+const mobileBackgroundReadToolSet: ReadonlySet<string> = new Set(MOBILE_BACKGROUND_READ_TOOLS);
+export function isMobileBackgroundReadableTool(name: string): name is (typeof MOBILE_BACKGROUND_READ_TOOLS)[number] {
+  return mobileBackgroundReadToolSet.has(name);
+}
 export const desktopDeviceChatToolSchema = z.enum([
   'desktop.device.get_state', 'desktop.file.pick', 'desktop.file.save', 'desktop.notification.show',
   'desktop.clipboard.read', 'desktop.clipboard.write', 'desktop.app.open_external', 'desktop.computer.control',
@@ -226,6 +239,7 @@ export const durableEndpointResultSchema = z.strictObject({
 export const endpointToolErrorCodeSchema = z.enum([
   'ENDPOINT_OFFLINE',
   'ENDPOINT_NOT_FOREGROUND',
+  'DEVICE_LOCKED',
   'ENDPOINT_DISCONNECTED',
   'TOOL_NOT_FOUND',
   'TOOL_REVISION_MISMATCH',

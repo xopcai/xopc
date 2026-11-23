@@ -11,6 +11,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 internal class DeviceTools(private val context: Context, private val gateway: GatewaySession) {
+  init {
+    DevicePersonalTools.init(context)
+  }
   fun catalog(location: Boolean = false, personal: Boolean = false, extended: Boolean = false): JSONArray {
     val tools = JSONArray(when {
       personal && extended -> DeviceToolCatalog.personalJson

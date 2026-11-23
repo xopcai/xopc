@@ -1,4 +1,4 @@
-import { desktopCapabilityTitles, desktopDeviceChatToolSchema, mobileDeviceChatToolSchema, type DesktopCapabilitySnapshot, type DesktopDeviceChatTool, type DeviceChatTool, type MobileDeviceChatTool } from '@xopcai/endpoint-tools-protocol';
+import { desktopCapabilityTitles, desktopDeviceChatToolSchema, isMobileBackgroundReadableTool, mobileDeviceChatToolSchema, type DesktopCapabilitySnapshot, type DesktopDeviceChatTool, type DeviceChatTool, type MobileDeviceChatTool } from '@xopcai/endpoint-tools-protocol';
 
 import { isXopcDatabaseOpen } from '../storage/sqlite/connection.js';
 import { DurableState } from '../storage/sqlite/durable-state.js';
@@ -37,7 +37,17 @@ export function isDesktopDeviceCapability(name: string): name is DesktopDeviceCh
   return desktopTools.has(name);
 }
 
-type CapabilityEndpoint = Pick<EndpointConnectionSnapshot, 'kind' | 'principalId' | 'executionAuthority'>;
+type CapabilityEndpoint = Pick<EndpointConnectionSnapshot, 'kind' | 'principalId' | 'executionAuthority' | 'backgroundToolsSupported'>;
+
+export function mobileToolAllowsBackground(endpoint: CapabilityEndpoint, name: string): boolean {
+  if (endpoint.kind !== 'mobile' || !endpoint.backgroundToolsSupported || !isMobileBackgroundReadableTool(name)) {
+    return false;
+  }
+  if (name === 'mobile.device.get_state' || name === 'mobile.device.get_power') {
+    return true;
+  }
+  return mobileCapabilityAllowed(endpoint.principalId, name);
+}
 
 export function isManagedDeviceCapability(endpoint: CapabilityEndpoint, name: string): name is DeviceChatTool {
   return endpoint.kind === 'mobile' ? isMobileDeviceCapability(name)

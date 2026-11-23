@@ -64,15 +64,17 @@ export struct XopcGeneratedMediaRow {
         } else {
           SymbolGlyph($r('sys.symbol.film')).fontSize(21).fontColor([this.colors.chat.secondary])
         }
-      }.width(42).height(42).borderRadius(this.colors.corner(13)).backgroundColor(this.colors.chat.canvas)
+      }.width(42).height(42).flexShrink(0).borderRadius(this.colors.corner(13)).backgroundColor(this.colors.chat.canvas)
       Column({ space: 3 }) {
-        Text(mediaTitle(this.card, this.zh)).fontSize(16).fontWeight(FontWeight.Medium)
+        Text(mediaTitle(this.card, this.zh)).width('100%').textAlign(TextAlign.Start)
+          .fontSize(16).fontWeight(FontWeight.Medium)
           .fontColor(this.colors.foreground).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.cardSubtitle()).fontSize(12)
+        Text(this.cardSubtitle()).width('100%').textAlign(TextAlign.Start)
+          .fontSize(12)
           .fontColor(this.card.item.state === 'completed' ? this.colors.success : this.colors.chat.secondary)
           .maxLines(this.card.kind === 'video' ? 1 : 2).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-    }.width('100%')
+    }.width('100%').constraintSize({ minHeight: 48 }).alignItems(VerticalAlign.Center)
   }
 
   build() {
@@ -81,7 +83,7 @@ export struct XopcGeneratedMediaRow {
         if (this.card.item.state === 'completed') {
           Button({ type: ButtonType.Normal }) { this.cardLabel() }
             .id('generated-' + this.card.kind + '-open-' + this.card.item.id).layoutWeight(1)
-            .height(48).padding(0).backgroundColor(Color.Transparent)
+            .constraintSize({ minHeight: 48 }).padding(0).backgroundColor(Color.Transparent)
             .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
             .accessibilityText($r('app.string.music_expand', mediaTitle(this.card, this.zh)))
             .onClick((): void => { this.onOpen(); })
@@ -94,35 +96,37 @@ export struct XopcGeneratedMediaRow {
           } else {
             Button({ type: ButtonType.Circle }) {
               SymbolGlyph($r('sys.symbol.play_fill')).fontSize(17).fontColor([this.colors.chat.action])
-            }.id('generated-media-play-' + this.card.item.id).width(44).height(44).padding(0)
+            }.id('generated-media-play-' + this.card.item.id).width(44).height(44).flexShrink(0).padding(0)
               .backgroundColor(this.colors.chat.bubble)
               .accessibilityText($r('app.string.chat_media_play'))
               .onClick((): void => { this.onPlay(); })
           }
         }
-      }.width('100%')
+      }.width('100%').alignItems(VerticalAlign.Center)
       if (this.card.draft) {
         if (this.card.item.estimatedCreditMicro !== undefined) {
           Text(this.zh ? '预估 ' + (this.card.item.estimatedCreditMicro / 1000000).toFixed(2) + ' 积分'
             : 'Estimated ' + (this.card.item.estimatedCreditMicro / 1000000).toFixed(2) + ' credits')
-            .fontSize(13).fontColor(this.colors.chat.secondary)
+            .width('100%').fontSize(13).fontColor(this.colors.chat.secondary)
         } else if (this.card.item.estimatedCostFen !== undefined) {
           Text((this.zh ? '预估 ¥' : 'Estimated ¥') + (this.card.item.estimatedCostFen / 100).toFixed(2))
-            .fontSize(13).fontColor(this.colors.chat.secondary)
+            .width('100%').fontSize(13).fontColor(this.colors.chat.secondary)
         }
         Button(this.submitting ? (this.zh ? '正在提交' : 'Submitting') : (this.zh ? '确认生成' : 'Generate video'))
-          .id('generated-video-confirm-' + this.card.item.id).height(44).fontSize(14)
+          .id('generated-video-confirm-' + this.card.item.id)
+          .constraintSize({ minHeight: 44, maxWidth: '100%' }).fontSize(14)
           .backgroundColor(this.colors.chat.action).fontColor(this.colors.chat.onAction)
           .enabled(this.card.canConfirm && !this.submitting)
           .onClick((): void => { this.onConfirm(); })
         if (!this.card.canConfirm) {
           Text(this.zh ? '请在网关确认视频模型配置后重新准备草稿。' : 'Check the gateway video model and prepare a new draft.')
-            .fontSize(13).fontColor(this.colors.chat.secondary)
+            .width('100%').fontSize(13).fontColor(this.colors.chat.secondary)
         }
       }
       if (this.card.item.error || this.confirmationFailed) {
         Text(this.confirmationFailed ? (this.zh ? '提交未完成，请检查当前草稿后重试。' : 'Submission failed. Review the current draft and try again.')
-          : this.card.item.error).fontSize(13).fontColor(this.colors.danger)
+          : this.card.item.error).width('100%').fontSize(13).fontColor(this.colors.danger)
+          .wordBreak(WordBreak.BREAK_ALL)
       }
     }.id('generated-media-card-' + this.card.item.id).width('100%').constraintSize({ maxWidth: 440 })
       .alignItems(HorizontalAlign.Start).padding(16)

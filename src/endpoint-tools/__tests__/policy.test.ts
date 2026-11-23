@@ -161,4 +161,17 @@ describe('EndpointToolPolicy', () => {
       resultKinds: ['json'],
     })).toThrow('does not match its trusted server contract');
   });
+
+  it('allows background execution only when explicitly permitted by caller policy', () => {
+    const calendarDescriptor = {
+      name: 'mobile.calendar.query_events', title: 'Calendar', description: 'Read calendar.',
+      inputSchema: { type: 'object' }, outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'personal.mobile-authorized-read', sensitivity: 'personal' as const, effect: 'read' as const,
+      confirmation: 'never' as const, requiresForeground: true, requiredPermissions: ['calendar-read-once'],
+      timeoutMs: 120_000, maxConcurrency: 1, supportsCancellation: true, idempotent: false,
+      resultKinds: ['json' as const],
+    };
+    expect(() => policy.evaluate(calendarDescriptor, 'background')).toThrow('Endpoint is not in the foreground');
+    expect(policy.evaluate(calendarDescriptor, 'background', { allowBackground: true })).toEqual({ confirmationRequired: false });
+  });
 });

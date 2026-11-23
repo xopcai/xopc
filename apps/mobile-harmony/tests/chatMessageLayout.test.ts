@@ -5,6 +5,7 @@ const chat = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', imp
 const content = readFileSync(new URL('../entry/src/main/ets/view/ChatMessageContent.ets', import.meta.url), 'utf8');
 const markdown = readFileSync(new URL('../entry/src/main/ets/view/MarkdownView.ets', import.meta.url), 'utf8');
 const media = readFileSync(new URL('../entry/src/main/ets/view/ChatMediaView.ets', import.meta.url), 'utf8');
+const generatedMedia = readFileSync(new URL('../entry/src/main/ets/view/GeneratedMediaView.ets', import.meta.url), 'utf8');
 const resultCapsule = readFileSync(new URL('../entry/src/main/ets/view/ChatResultCapsule.ets', import.meta.url), 'utf8');
 
 describe('chat message layout parity', () => {
@@ -43,7 +44,15 @@ describe('chat message layout parity', () => {
     expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id).width(this.assistantBubbleWidth(item.item))");
     expect(assistantLayout).toContain(".constraintSize({ maxWidth: '100%' })");
     expect(assistantLayout).toContain(".width('92%').constraintSize({ maxWidth: 640 }).alignItems(HorizontalAlign.Start)");
-    expect(chat).toContain(".justifyContent(entry.item.kind === 'music' ? FlexAlign.Start : FlexAlign.End)");
+    const mediaRows = chat.slice(chat.indexOf('  generatedMediaRows('), chat.indexOf('  @Builder\n  conversation()'));
+    expect(mediaRows).toContain('.alignItems(HorizontalAlign.Start)');
+    expect(mediaRows).toContain(".width('100%').justifyContent(FlexAlign.Start)");
+    expect(mediaRows).not.toContain('HorizontalAlign.End');
+    expect(mediaRows).not.toContain('FlexAlign.End');
+    expect(generatedMedia).toContain('.constraintSize({ minHeight: 48 }).padding(0)');
+    expect(generatedMedia).not.toContain('.height(48).padding(0)');
+    expect(generatedMedia).toContain(".constraintSize({ minHeight: 44, maxWidth: '100%' })");
+    expect(generatedMedia).toContain('.wordBreak(WordBreak.BREAK_ALL)');
     expect(assistantLayout).toContain('.backgroundColor(this.colors.assistantBubble).borderRadius(this.colors.corner(20))');
     expect(content).toContain(": this.colors.assistantBubble;");
     const workspace = chat.slice(chat.indexOf('  chatWorkspace()'), chat.indexOf('  executionDetailSheet()'));

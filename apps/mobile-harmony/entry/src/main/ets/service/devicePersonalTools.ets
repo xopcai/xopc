@@ -1,5 +1,5 @@
 import { signedHttpRequest } from './requestProof';
-import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit';
+import { abilityAccessCtrl, bundleManager, common, Permissions } from '@kit.AbilityKit';
 import { UIContext } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { contact } from '@kit.ContactsKit';
@@ -27,7 +27,7 @@ interface XopcPersonalFile { type: string; fileId: string; name: string; mimeTyp
 interface XopcPersonalFileEnvelope { ok: boolean; payload?: XopcPersonalFile; }
 interface XopcPersonalResult { invocationId: string; content: (XopcPersonalJson | XopcPersonalFile)[]; }
 interface XopcPersonalHeaders { Authorization: string; 'Content-Type': string; 'x-endpoint-id': string; 'x-endpoint-upload-token': string; }
-interface XopcPersonalPending { cancel: () => void; }
+interface XopcPersonalPending { cancel: () => void; backgroundSafe: boolean; }
 let xopcPersonalContext: common.UIAbilityContext | undefined;
 let xopcPersonalUi: UIContext | undefined;
 let xopcPersonalBusy: boolean = false;
@@ -37,6 +37,11 @@ export function attachDevicePersonalTools(context: common.UIAbilityContext, ui: 
 export function hasActivePersonalPicker(): boolean { return xopcPersonalPicker; }
 export function cancelDevicePersonalTool(id: string): void { xopcPersonalPending.get(id)?.cancel(); }
 export function cancelAllDevicePersonalTools(): void { xopcPersonalPending.forEach((pending: XopcPersonalPending): void => { pending.cancel(); }); }
+export function cancelForegroundDevicePersonalTools(): void {
+  xopcPersonalPending.forEach((pending: XopcPersonalPending): void => {
+    if (!pending.backgroundSafe) pending.cancel();
+  });
+}
 export async function prepareDeviceCapabilityPermission(name: string): Promise<void> {
   let permissions: Permissions[] = [];
   if (name === 'mobile.calendar.query_events' || name === 'mobile.calendar.query_free_busy') {
@@ -78,7 +83,8 @@ export function invokeDevicePersonalTool(payload: Object, send: (kind: string, b
     || (create && (typeof args.title !== 'string' || !args.title.trim() || args.title.length > 500))
     || (!create && !calendar && !contactPick && Object.keys(args).length !== 0)) { fail('INVALID_ARGUMENTS'); return; }
   if (request.deadlineAt <= Date.now()) { fail('TOOL_TIMEOUT'); return; }
-  if (!layoutState.foreground || !xopcPersonalContext || !xopcPersonalUi) { fail('ENDPOINT_NOT_FOREGROUND'); return; }
+  const allowBackground: boolean = calendar;
+  if (!xopcPersonalContext || (!allowBackground && (!layoutState.foreground || !xopcPersonalUi))) { fail('ENDPOINT_NOT_FOREGROUND'); return; }
   if (xopcPersonalBusy) { fail('TOOL_BUSY'); return; }
   xopcPersonalBusy = true;
   const revision: number = gatewaySession.connectionRevision();
@@ -88,11 +94,26 @@ export function invokeDevicePersonalTool(payload: Object, send: (kind: string, b
   const finish = (): void => { alive = false; clearTimeout(timer); consent?.cancel(); upload?.destroy(); xopcPersonalPending.delete(request.invocationId); };
   const cancel = (): void => { if (!alive) return; finish(); const status: XopcPersonalStatus = { invocationId: request.invocationId }; send('tool.cancelled', status); };
   const timer: number = setTimeout((): void => { if (!alive) return; finish(); fail('TOOL_TIMEOUT'); }, Math.min(120000, request.deadlineAt - Date.now()));
-  xopcPersonalPending.set(request.invocationId, { cancel });
+  xopcPersonalPending.set(request.invocationId, { cancel, backgroundSafe: allowBackground });
   const received: XopcPersonalStatus = { invocationId: request.invocationId }; send('tool.received', received);
-  const assertActive = (): void => { if (!alive) throw new Error('TOOL_CANCELLED'); gatewaySession.assertConnection(revision); if (!layoutState.foreground) throw new Error('ENDPOINT_NOT_FOREGROUND'); };
+  const assertActive = (): void => { if (!alive) throw new Error('TOOL_CANCELLED'); gatewaySession.assertConnection(revision); if (!allowBackground && !layoutState.foreground) throw new Error('ENDPOINT_NOT_FOREGROUND'); };
   const waitForeground = async (): Promise<void> => { while (alive && !layoutState.foreground) { await new Promise<void>((resolve): void => { setTimeout(resolve, 30); }); } assertActive(); };
+  const hasPermissionGranted = (permission: Permissions): boolean => {
+    try {
+      const info = bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION);
+      const tokenId: number = info.appInfo.accessTokenId;
+      return abilityAccessCtrl.createAtManager().checkAccessTokenSync(tokenId, permission) === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+    } catch (_error) {
+      return false;
+    }
+  };
   const requestCalendarPermissions = async (permissions: Permissions[]): Promise<void> => {
+    if (permissions.every((item: Permissions): boolean => hasPermissionGranted(item))) {
+      return;
+    }
+    if (!layoutState.foreground) {
+      throw new Error('ENDPOINT_NOT_FOREGROUND');
+    }
     xopcPersonalPicker = true;
     try {
       const grant = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(xopcPersonalContext!, permissions);

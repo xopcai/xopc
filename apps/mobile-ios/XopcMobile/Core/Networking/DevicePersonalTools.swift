@@ -70,12 +70,27 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         try Task.checkCancellation()
     }
 
+    private static let backgroundReadableTools: Set<String> = [
+        "mobile.calendar.query_events",
+        "mobile.calendar.query_free_busy",
+        "mobile.contacts.find_by_name",
+        "mobile.media.list_recent",
+        "mobile.media.read_image"
+    ]
+
     func acquire(_ request: PersonalDeviceRequest, capabilityScope: String?) async throws -> Data {
         guard !busy else { throw PersonalDeviceFailure(code: "TOOL_BUSY") }
-        guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+        let allowBackground = Self.backgroundReadableTools.contains(request.toolName)
+        if !allowBackground {
+            guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+        } else if foregroundPresenter == nil, !UIApplication.shared.isProtectedDataAvailable {
+            throw PersonalDeviceFailure(code: "DEVICE_LOCKED")
+        }
         busy = true; activeInvocation = request.invocationId
-        background = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { self.cancel() }
+        if !allowBackground {
+            background = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { self.cancel() }
+            }
         }
         defer {
             if let background {
@@ -95,7 +110,7 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
                     UserDefaults.standard.set(true, forKey: key)
                 }
             }
-            return try await acquireContent(request)
+            return try await acquireContent(request, allowBackground: allowBackground)
         } onCancel: { Task {
             @MainActor in if self.activeInvocation == request.invocationId {
                 self.cancel()
@@ -111,16 +126,16 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         }
     }
 
-    private func acquireContent(_ request: PersonalDeviceRequest) async throws -> Data {
+    private func acquireContent(_ request: PersonalDeviceRequest, allowBackground: Bool) async throws -> Data {
         switch request.toolName {
         case "mobile.contacts.find_by_name":
-            return try await findContacts(request.arguments.query)
+            return try await findContacts(request.arguments.query, allowBackground: allowBackground)
         case "mobile.calendar.create_event":
             return try await createEvent(request.arguments)
         case "mobile.media.list_recent":
-            return try await listPhotos()
+            return try await listPhotos(allowBackground: allowBackground)
         case "mobile.media.read_image":
-            try await allowPhotoAccess()
+            try await allowPhotoAccess(allowBackground: allowBackground)
             let asset = try photo(request.arguments.id)
             let image = try await loadPhoto(asset)
             return try JSONEncoder().encode(SelectionWire(name: "photo.jpg", mimeType: "image/jpeg", data: image))
@@ -130,7 +145,7 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
             return try await pickContact(field: request.arguments.field ?? "phone")
         default:
             if request.toolName.hasPrefix("mobile.calendar.") {
-                return try await calendarContent(request)
+                return try await calendarContent(request, allowBackground: allowBackground)
             }
             return try await acquireSelectedFile(request.toolName)
         }
@@ -263,18 +278,21 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
 }
 
 extension DevicePersonalTools {
-    private func allowPhotoAccess() async throws {
+    private func allowPhotoAccess(allowBackground: Bool = false) async throws {
         var status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         if status == .notDetermined {
+            guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
             status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
         }
         guard status == .authorized || status == .limited else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
         try Task.checkCancellation()
-        guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+        if !allowBackground {
+            guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+        }
     }
 
-    private func listPhotos() async throws -> Data {
-        try await allowPhotoAccess()
+    private func listPhotos(allowBackground: Bool) async throws -> Data {
+        try await allowPhotoAccess(allowBackground: allowBackground)
         let options = PHFetchOptions()
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         options.fetchLimit = 20
@@ -339,14 +357,22 @@ extension DevicePersonalTools {
         return try JSONSerialization.data(withJSONObject: ["type": "json", "value": ["id": asset.localIdentifier]])
     }
 
-    private func findContacts(_ input: String?) async throws -> Data {
+    private func findContacts(_ input: String?, allowBackground: Bool) async throws -> Data {
         guard let query = input?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty, query.utf16.count <= 100 else {
             throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS")
         }
         let store = CNContactStore()
-        guard try await store.requestAccess(for: .contacts) else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+        if status == .notDetermined {
+            guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+            guard try await store.requestAccess(for: .contacts) else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        } else if status != .authorized {
+            throw PersonalDeviceFailure(code: "PERMISSION_DENIED")
+        }
         try Task.checkCancellation()
-        guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+        if !allowBackground {
+            guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+        }
         let keys = [CNContactFormatter.descriptorForRequiredKeys(for: .fullName), CNContactPhoneNumbersKey as CNKeyDescriptor,
                     CNContactEmailAddressesKey as CNKeyDescriptor, CNContactIdentifierKey as CNKeyDescriptor]
         let predicate = CNContact.predicateForContacts(matchingName: query)
@@ -389,11 +415,20 @@ extension DevicePersonalTools {
         }
     }
 
-    private func calendarContent(_ request: PersonalDeviceRequest) async throws -> Data {
+    private func calendarContent(_ request: PersonalDeviceRequest, allowBackground: Bool) async throws -> Data {
         let store = EKEventStore()
-        guard try await store.requestFullAccessToEvents() else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        let status = EKEventStore.authorizationStatus(for: .event)
+        if status == .notDetermined {
+            guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+            guard try await store.requestFullAccessToEvents() else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        } else if status != .fullAccess {
+            throw PersonalDeviceFailure(code: "PERMISSION_DENIED")
+        }
         try Task.checkCancellation()
-        guard foregroundPresenter != nil, let start = request.arguments.startAt, let end = request.arguments.endAt else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+        if !allowBackground {
+            guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+        }
+        guard let start = request.arguments.startAt, let end = request.arguments.endAt else { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
         let predicate = store.predicateForEvents(
             withStart: Date(timeIntervalSince1970: Double(start) / 1000),
             end: Date(timeIntervalSince1970: Double(end) / 1000), calendars: nil

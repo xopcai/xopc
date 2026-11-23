@@ -84,6 +84,7 @@ import ai.xopc.mobile.gateway.PersonalSummary
 import ai.xopc.mobile.gateway.PersonalAssertion
 import ai.xopc.mobile.gateway.PersonalProfile
 import ai.xopc.mobile.gateway.RealtimeClient
+import ai.xopc.mobile.gateway.RealtimeKeepAliveController
 import ai.xopc.mobile.gateway.RunStreamEvent
 import android.app.Application
 import android.net.Uri
@@ -533,6 +534,24 @@ class GatewayViewModel internal constructor(application: Application, private va
   private var realtimeJob: Job? = null
   private var foregroundRecoveryJob: Job? = null
   private var returnedFromBackground = false
+
+  init {
+    viewModelScope.launch {
+      var prevActiveRun = false
+      mutableState.collect { current ->
+        val active = current.activeRunId != null
+        if (prevActiveRun && !active && returnedFromBackground) {
+          RealtimeKeepAliveController.stop(getApplication())
+        }
+        prevActiveRun = active
+      }
+    }
+  }
+
+  override fun onCleared() {
+    RealtimeKeepAliveController.stop(getApplication())
+    super.onCleared()
+  }
   private var pairingJob: Job? = null
   private var cancelPairingJob: Job? = null
   private var gatewayProbeGeneration = 0
@@ -2576,15 +2595,23 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
-  fun onBackground() { returnedFromBackground = true }
+  fun onBackground() {
+    returnedFromBackground = true
+    realtime.notifyBackground()
+    if (mutableState.value.profile != null && mutableState.value.activeRunId != null) {
+      RealtimeKeepAliveController.start(getApplication())
+    }
+  }
 
   fun onForeground() {
+    RealtimeKeepAliveController.stop(getApplication())
     if (!returnedFromBackground) return
     returnedFromBackground = false
     if (mutableState.value.profile == null || foregroundRecoveryJob?.isActive == true) return
     foregroundRecoveryJob = viewModelScope.launch {
-      // Retain the run cursor and visible reply while replacing a suspended socket.
-      if (!ai.xopc.mobile.gateway.DevicePersonalTools.hasActiveInvocation()) {
+      // Probe the existing socket first so short background trips avoid tearing down a healthy connection.
+      val alive = realtime.probeOrReconnect(1_500L)
+      if (!alive && !ai.xopc.mobile.gateway.DevicePersonalTools.hasActiveInvocation()) {
         realtimeJob?.cancelAndJoin()
         realtimeJob = null
       }

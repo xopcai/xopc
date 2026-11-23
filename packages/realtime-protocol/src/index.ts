@@ -15,9 +15,12 @@ export const REALTIME_MAX_CLIENT_FRAME_BYTES = 256 * 1024;
 export const REALTIME_HELLO_TIMEOUT_MS = 5_000;
 export const REALTIME_HEARTBEAT_INTERVAL_MS = 15_000;
 export const REALTIME_HEARTBEAT_TIMEOUT_MS = 45_000;
+export const REALTIME_BACKGROUND_HEARTBEAT_TIMEOUT_MS = 120_000;
 export const ENDPOINT_V3_CAPABILITY = 'endpoint.tools.v3' as const;
 export const MOBILE_MCP_SETUP_CARD_CAPABILITY = 'mobile.mcp-setup-card.v1' as const;
-export const REALTIME_CAPABILITIES = [ENDPOINT_V3_CAPABILITY, 'realtime.capability-negotiation.v1', 'desktop.device-frames.v1', 'desktop.durable-execution.v1', 'desktop.operation-status.v1', 'desktop.terminal.v1', 'desktop.computer.v1', 'desktop.browser.v1', MOBILE_MCP_SETUP_CARD_CAPABILITY, BROWSER_PREVIEW_CAPABILITY] as const;
+export const BACKGROUND_KEEPALIVE_CAPABILITY = 'realtime.background-keepalive.v1' as const;
+export const BACKGROUND_TOOLS_CAPABILITY = 'endpoint.background-tools.v1' as const;
+export const REALTIME_CAPABILITIES = [ENDPOINT_V3_CAPABILITY, 'realtime.capability-negotiation.v1', BACKGROUND_KEEPALIVE_CAPABILITY, BACKGROUND_TOOLS_CAPABILITY, 'desktop.device-frames.v1', 'desktop.durable-execution.v1', 'desktop.operation-status.v1', 'desktop.terminal.v1', 'desktop.computer.v1', 'desktop.browser.v1', MOBILE_MCP_SETUP_CARD_CAPABILITY, BROWSER_PREVIEW_CAPABILITY] as const;
 export type RealtimeCapability = (typeof REALTIME_CAPABILITIES)[number];
 export const REALTIME_COMPATIBILITY_ERROR_CODES = [
   'CLIENT_UPDATE_REQUIRED',
@@ -82,7 +85,9 @@ export const clientRealtimeMessageSchema = z.discriminatedUnion('kind', [
   envelope('realtime.unsubscribe', z.object({
     topics: z.array(realtimeTopicSchema).min(1).max(100),
   })),
-  envelope('realtime.ping', z.object({})),
+  envelope('realtime.ping', z.object({
+    availability: z.enum(['foreground', 'background']).optional(),
+  })),
   envelope('browser.preview', browserPreviewClientSchema),
   envelope('endpoint.message', clientEndpointMessageSchema),
   envelope('desktop.endpoint.message', z.strictObject({ message: clientEndpointMessageSchema, deviceProof: desktopDeviceFrameProofSchema })),
@@ -100,6 +105,7 @@ export const serverRealtimeMessageSchema = z.discriminatedUnion('kind', [
     connectionId: z.uuid(),
     heartbeatIntervalMs: z.literal(REALTIME_HEARTBEAT_INTERVAL_MS),
     heartbeatTimeoutMs: z.literal(REALTIME_HEARTBEAT_TIMEOUT_MS),
+    backgroundHeartbeatTimeoutMs: z.number().int().positive().optional(),
     negotiatedCapabilities: z.array(capabilitySchema).max(64).optional(),
     endpoint: z.object({
       endpointId: z.string().min(1).max(160),

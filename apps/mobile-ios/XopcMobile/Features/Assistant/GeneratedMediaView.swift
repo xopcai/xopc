@@ -267,13 +267,19 @@ struct GeneratedMediaRow: View {
             if card.isDraft {
                 if let summary = card.item.summary, !summary.isEmpty {
                     Text(verbatim: summary).font(.subheadline).lineLimit(3)
+                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if let estimate = card.item.estimatedCreditMicro {
                     Text("预计 \(Double(estimate) / 1_000_000, format: .number.precision(.fractionLength(2))) 积分")
                         .font(.caption).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 } else if let estimate = card.item.estimatedCostFen {
                     Text("预计 ¥\(Double(estimate) / 100, format: .number.precision(.fractionLength(2)))")
                         .font(.caption).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Button(action: onConfirm) {
                     Label(submitting ? "正在提交" : "确认生成", systemImage: "sparkles")
@@ -281,10 +287,14 @@ struct GeneratedMediaRow: View {
                 }.buttonStyle(.borderedProminent).disabled(!canConfirm || submitting)
                 if !canConfirm {
                     Text("当前视频服务不可用").font(.caption).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             if let error = error ?? card.item.error {
                 Text(verbatim: error).font(.caption).foregroundStyle(mobileTheme.danger)
+                    .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(12)
@@ -306,8 +316,10 @@ struct GeneratedMediaRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: card.isDraft ? AppLocalization.resolve("视频草稿") : card.title)
                     .font(.subheadline.weight(.semibold)).lineLimit(2)
+                    .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 Text(verbatim: card.cardSubtitle)
                     .font(.caption).foregroundStyle(.secondary).lineLimit(card.kind == .video ? 1 : 2)
+                    .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }

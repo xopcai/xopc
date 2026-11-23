@@ -9,7 +9,7 @@ import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import { parseEndpointPublicKey } from '../../../endpoint-tools/auth.js';
 import { deviceExecutionPrincipalId } from '../../../endpoint-tools/execution-actor.js';
 import { deviceFoldersFor, deviceFolderSnapshots, mobileFolderPlatforms, pairedFolderClientId, saveDeviceFolderSnapshot } from '../../../endpoint-tools/folder-connections.js';
-import { deviceCapabilityAllowed, deviceCapabilityTitles, isManagedDeviceCapability, saveDesktopCapabilitySnapshot, setMobileCapabilityAllowed } from '../../../endpoint-tools/device-capability-grants.js';
+import { deviceCapabilityAllowed, deviceCapabilityTitles, isManagedDeviceCapability, mobileToolAllowsBackground, saveDesktopCapabilitySnapshot, setMobileCapabilityAllowed } from '../../../endpoint-tools/device-capability-grants.js';
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 import { createLogger } from '../../../utils/logger.js';
 import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
@@ -65,7 +65,8 @@ export function registerDeviceConnectionRoutes(app: Hono, deps: AuthenticatedRou
         ? endpoint?.tools.flatMap(({ descriptor: { name, requiresForeground } }) => {
           if (!isManagedDeviceCapability(endpoint, name)) return [];
           const [titleZh, title] = deviceCapabilityTitles[name];
-          return [{ name, title, titleZh, requiresForeground, allowed: deviceCapabilityAllowed(endpoint, name),
+          const effectiveRequiresForeground = requiresForeground && !mobileToolAllowsBackground(endpoint, name);
+          return [{ name, title, titleZh, requiresForeground: effectiveRequiresForeground, allowed: deviceCapabilityAllowed(endpoint, name),
             ...(name === COMPUTER_CONTROL_TOOL && !deps.service.currentConfig.computer.enabled && { needsSetup: true as const }) }];
         }) ?? [] : undefined;
       return {
@@ -118,7 +119,8 @@ export function registerDeviceConnectionRoutes(app: Hono, deps: AuthenticatedRou
         return c.json({ ok: false, error: { code: 'FORBIDDEN' } }, 403);
       }
       const tool = runtime.registry.getTool(endpointId, toolName);
-      if (!tool || tool.descriptor.requiresForeground && endpoint.availability !== 'foreground'
+      const effectiveRequiresForeground = Boolean(tool?.descriptor.requiresForeground && !mobileToolAllowsBackground(endpoint, toolName));
+      if (!tool || effectiveRequiresForeground && endpoint.availability !== 'foreground'
         || toolName === COMPUTER_CONTROL_TOOL && !deps.service.currentConfig.computer.enabled) {
         return c.json({ ok: false, error: { code: 'TARGET_UNAVAILABLE' } }, 409);
       }

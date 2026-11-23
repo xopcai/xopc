@@ -32,7 +32,7 @@ import { appendTranscriptEntry } from '../storage/sqlite/transcript-repository.j
 import { emitSessionTranscriptUpdate } from '../session/transcript-events.js';
 
 import { EndpointRegistry, endpointToolRevision } from './registry.js';
-import { deviceCapabilityAllowed } from './device-capability-grants.js';
+import { deviceCapabilityAllowed, mobileToolAllowsBackground } from './device-capability-grants.js';
 import { EndpointToolPolicy, EndpointToolPolicyError } from './policy.js';
 import type { EndpointInvocationScope, EndpointUploadService } from './upload-service.js';
 
@@ -202,7 +202,9 @@ export class EndpointInvocationService {
       || Buffer.byteLength(JSON.stringify(params.arguments.argv)) > DESKTOP_COMMAND_ARGV_BYTES)) return Promise.reject(new EndpointToolExecutionError('INVALID_ARGUMENTS', 'Container argv exceeds its bounded contract', true));
     let confirmationRequired: boolean;
     try {
-      confirmationRequired = this.policy.evaluate(tool.descriptor, endpoint.availability).confirmationRequired;
+      confirmationRequired = this.policy.evaluate(tool.descriptor, endpoint.availability, {
+        allowBackground: mobileToolAllowsBackground(endpoint, params.toolName),
+      }).confirmationRequired;
     } catch (error) {
       if (error instanceof EndpointToolPolicyError) {
         return Promise.reject(new EndpointToolExecutionError('ENDPOINT_NOT_FOREGROUND', error.message, true));

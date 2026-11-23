@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WebSocket as WebSocketType } from 'ws';
 
-import { BROWSER_PREVIEW_CAPABILITY, MOBILE_MCP_SETUP_CARD_CAPABILITY, REALTIME_CAPABILITIES, REALTIME_MAX_CLIENT_FRAME_BYTES, REALTIME_PROTOCOL_VERSION, parseServerRealtimeMessage } from '@xopcai/realtime-protocol';
+import { BACKGROUND_KEEPALIVE_CAPABILITY, BROWSER_PREVIEW_CAPABILITY, MOBILE_MCP_SETUP_CARD_CAPABILITY, REALTIME_BACKGROUND_HEARTBEAT_TIMEOUT_MS, REALTIME_CAPABILITIES, REALTIME_HEARTBEAT_TIMEOUT_MS, REALTIME_MAX_CLIENT_FRAME_BYTES, REALTIME_PROTOCOL_VERSION, parseServerRealtimeMessage } from '@xopcai/realtime-protocol';
 import { BrowserPreviewRuntime } from '../browser-preview.js';
 import { RealtimeRuntime } from '../runtime.js';
 import { COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
@@ -461,5 +461,68 @@ describe('RealtimeRuntime', () => {
       }
     },
   );
+
+  it('extends heartbeat timeout when background keepalive capability is negotiated and client is backgrounded', async () => {
+    const intervals: Array<() => void> = [];
+    const originalInterval = globalThis.setInterval;
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval').mockImplementation(((fn: () => void, ms: number) => {
+      intervals.push(fn);
+      return originalInterval(fn, ms);
+    }) as typeof setInterval);
+    let now = Date.now();
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      runtime = new RealtimeRuntime();
+      server = createServer();
+      server.on('upgrade', (request, connection, head) => runtime!.handleUpgrade(request, connection, head));
+      await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Missing address');
+      const ticket = runtime.tickets.issue('mobile-client', 'mobile', { principalId: 'owner', scopes: ['sessions.read'] }).ticket;
+      socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`);
+      await waitForOpen(socket);
+      const messages = collectMessages(socket);
+      const closed = new Promise<{ code: number; reason: string }>((resolve) =>
+        socket!.once('close', (code, reason) => resolve({ code, reason: reason.toString() })));
+      socket.send(JSON.stringify({
+        protocolVersion: REALTIME_PROTOCOL_VERSION,
+        messageId: crypto.randomUUID(),
+        kind: 'realtime.hello',
+        sentAt: now,
+        payload: {
+          ticket,
+          clientId: 'mobile-client',
+          clientKind: 'mobile',
+          subscriptions: [],
+          capabilities: [BACKGROUND_KEEPALIVE_CAPABILITY],
+        },
+      }));
+      await expect(messages.next()).resolves.toMatchObject({
+        kind: 'realtime.ready',
+        payload: {
+          heartbeatTimeoutMs: REALTIME_HEARTBEAT_TIMEOUT_MS,
+          backgroundHeartbeatTimeoutMs: REALTIME_BACKGROUND_HEARTBEAT_TIMEOUT_MS,
+          negotiatedCapabilities: [BACKGROUND_KEEPALIVE_CAPABILITY],
+        },
+      });
+      socket.send(JSON.stringify({
+        protocolVersion: REALTIME_PROTOCOL_VERSION,
+        messageId: crypto.randomUUID(),
+        kind: 'realtime.ping',
+        sentAt: now,
+        payload: { availability: 'background' },
+      }));
+      await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.pong' });
+      now += REALTIME_HEARTBEAT_TIMEOUT_MS + 15_000;
+      intervals[0]!();
+      expect(socket.readyState).toBe(WebSocket.OPEN);
+      now += REALTIME_BACKGROUND_HEARTBEAT_TIMEOUT_MS;
+      intervals[0]!();
+      await expect(closed).resolves.toEqual({ code: 4408, reason: 'Realtime heartbeat timeout' });
+    } finally {
+      nowSpy.mockRestore();
+      intervalSpy.mockRestore();
+    }
+  });
 
 });

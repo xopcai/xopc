@@ -27,6 +27,12 @@ actor DeviceEndpointPool {
         let host = await host(for: client)
         return try await host.origin()
     }
+
+    func notifyAppLifecycle(active: Bool, background: Bool) async {
+        for host in hosts.values {
+            await host.onAppLifecycleChanged(active: active, background: background)
+        }
+    }
 }
 
 struct DeviceEndpointOrigin: Encodable, Sendable {

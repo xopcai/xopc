@@ -1444,8 +1444,8 @@ export struct XopcChatView {
                 onMusicAreaChange: (): void => { this.updateMusicPin(); },
                 onConfirm: (): void => { void this.generatedMedia.confirm(entry.item); } })
             }.width(CHAT_MESSAGE_MAX_WIDTH)
-              .alignItems(entry.item.kind === 'music' ? HorizontalAlign.Start : HorizontalAlign.End)
-          }.width('100%').justifyContent(entry.item.kind === 'music' ? FlexAlign.Start : FlexAlign.End)
+              .alignItems(HorizontalAlign.Start)
+          }.width('100%').justifyContent(FlexAlign.Start)
         }).key((card: XopcGeneratedMediaCard): string =>
           card.kind + ':' + card.item.id + ':' + (card.item.state ?? 'draft'))
       }.width('100%').padding({ top: 6 })
