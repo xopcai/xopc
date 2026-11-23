@@ -6,6 +6,7 @@ yarn.lock
 dist/
 packages/browser-ext/release/
 out/
+output/
 build/
 
 # Accidental tsc emit next to source (real output is under dist/)
