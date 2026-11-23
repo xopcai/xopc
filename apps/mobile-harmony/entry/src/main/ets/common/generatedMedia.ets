@@ -21,7 +21,7 @@ export function isGeneratedMediaInProgress(item: XopcGeneratedMediaItem): boolea
 }
 
 export function generatedMediaByReply(cards: XopcGeneratedMediaCard[], rows: XopcChatRow[],
-  requireMusicReply: boolean = false): Map<string, XopcGeneratedMediaCard[]> {
+  requireReply: boolean = false): Map<string, XopcGeneratedMediaCard[]> {
   const anchors = new Map<string, string>();
   for (const row of rows) {
     if (row.role !== 'assistant') continue;
@@ -32,8 +32,8 @@ export function generatedMediaByReply(cards: XopcGeneratedMediaCard[], rows: Xop
   const groups = new Map<string, XopcGeneratedMediaCard[]>();
   for (const card of cards) {
     const anchor = anchors.get(card.item.id);
-    // The Personal Agent's paginated history can contain older jobs that are still pending.
-    if (!anchor && card.kind === 'music' && (requireMusicReply || !isGeneratedMediaInProgress(card.item))) continue;
+    // History is paginated. Older generated media should reappear only when its reply is loaded.
+    if (!anchor && (requireReply || !isGeneratedMediaInProgress(card.item))) continue;
     const id = anchor ?? '';
     const group = groups.get(id) ?? [];
     group.push(card);

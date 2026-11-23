@@ -271,6 +271,7 @@ export struct XopcChatView {
   @Local messageDetailContentReady: boolean = false;
   private messageDetailContentTimer: number = -1;
   @Local selectingMessageId: string = '';
+  private pendingUserMenuAction: string = '';
   private pendingAssistantMenuAction: string = '';
   private assistantMenuTouch: XopcChatMenuTouch = { rowId: '', x: 0, y: 0 };
   @Local selectionOrigin: XopcChatMenuTouch = { rowId: '', x: 0, y: 0 };
@@ -723,6 +724,9 @@ export struct XopcChatView {
     }));
     this.refs = (row.refs || []).slice();
     this.showVoice = false; this.setPanel(false); this.cursor = this.draft.length;
+    this.editor.stopEditing();
+    this.getUIContext().getFocusController().clearFocus();
+    this.composerFocusAttempts = 0;
     this.focusComposerOnMount = true; this.focusMountedComposer(); this.saveDraft();
   }
 
@@ -1332,17 +1336,24 @@ export struct XopcChatView {
   userMessageMenu(row: XopcChatRow) {
     Menu() {
       MenuItem({ content: $r('app.string.chat_copy') })
-        .onClick((): void => { this.messageAction('copy', row); })
+        .onClick((): void => { this.pendingUserMenuAction = 'copy'; })
       MenuItem({ content: !this.chat.runId && this.isLatestUser(row) && row.turnId
         ? $r('app.string.chat_edit_latest') : $r('app.string.chat_reuse') })
-        .onClick((): void => { this.messageAction('edit', row); })
+        .onClick((): void => { this.pendingUserMenuAction = 'edit'; })
     }
   }
 
   private beginMessageMenu(): void {
     this.pauseAutomaticScroll();
     this.selectingMessageId = '';
+    this.pendingUserMenuAction = '';
     this.pendingAssistantMenuAction = '';
+  }
+
+  private finishUserMenu(row: XopcChatRow): void {
+    const action = this.pendingUserMenuAction;
+    this.pendingUserMenuAction = '';
+    if (action) void this.messageAction(action, row);
   }
 
   private finishAssistantMenu(row: XopcChatRow): void {
@@ -1517,7 +1528,8 @@ export struct XopcChatView {
                   })
                   .bindContextMenu(item.item.text ? this.userMessageMenu(item.item) : undefined, ResponseType.LongPress, {
                     hapticFeedbackMode: HapticFeedbackMode.ENABLED,
-                    aboutToAppear: (): void => { this.beginMessageMenu(); }
+                    aboutToAppear: (): void => { this.beginMessageMenu(); },
+                    onDisappear: (): void => { this.finishUserMenu(item.item); }
                   })
                   if (this.reactionFor(item.item)) {
                     Stack({ alignContent: Alignment.TopStart }) {
@@ -1688,14 +1700,6 @@ export struct XopcChatView {
       Button($r('app.string.chat_project_preparation_title'))
         .onClick((): void => { this.openSheet('preparation'); })
     }
-    if (this.editingTurnId) {
-      Row({ space: 8 }) {
-        Text($r('app.string.chat_editing_latest'))
-          .fontSize(12).fontColor(this.colors.secondary).layoutWeight(1)
-        Button($r('app.string.cancel')).height(40).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
-          .onClick((): void => { this.cancelEditing(); })
-      }.padding({ left: 16, right: 16 }).width('100%')
-    }
     if (this.refs.length) {
       Scroll() {
         Row({ space: 8 }) {
@@ -1780,6 +1784,21 @@ export struct XopcChatView {
     }
     Column() {
     Column() {
+      if (this.editingTurnId) {
+        Column() {
+          Row({ space: 8 }) {
+            Text($r('app.string.chat_editing_latest'))
+              .fontSize(12).fontColor(this.colors.secondary).layoutWeight(1)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Button($r('app.string.cancel')).id('chat-edit-cancel').height(36)
+              .padding({ left: 8, right: 8 })
+              .backgroundColor(Color.Transparent).fontColor(this.colors.accent).fontSize(13)
+              .responseRegion({ x: 0, y: -4, width: '100%', height: 44 })
+              .onClick((): void => { this.cancelEditing(); })
+          }.width('100%').padding({ left: 16, right: 8, top: 4, bottom: 2 }).alignItems(VerticalAlign.Center)
+          Column().width('100%').height(0.5).backgroundColor(this.colors.border)
+        }.id('chat-editing-banner').width('100%')
+      }
       if (this.attachments.length) {
         Scroll() {
           Row({ space: 8 }) {
@@ -1861,6 +1880,7 @@ export struct XopcChatView {
               .id('chat-composer').width('100%').constraintSize({ minHeight: COMPOSER_INPUT_MIN, maxHeight: this.expandedComposer ? COMPOSER_INPUT_MAX : COMPOSER_INPUT_MIN })
               .padding({ left: 4, right: 4, top: this.expandedComposer ? 5 : 10, bottom: this.expandedComposer ? 5 : 10 }).lineHeight(20)
               .enabled(!this.restoringDraft).backgroundColor(Color.Transparent)
+              .enableKeyboardOnFocus(true)
               .fontSize(16).fontColor(this.colors.foreground)
               .placeholderColor(this.colors.light && !this.panelOpen ? this.colors.tertiary : this.colors.chat.secondary)
               .onAppear((): void => { this.focusMountedComposer(); })

@@ -14,7 +14,8 @@ export function reduceChatLiveActivity(row: XopcChatRow, event: string, payload:
       item.id === payload.toolCallId)?.kind || 'working';
   } else if (event === 'tool_end' && payload.toolCallId) {
     const mediaId = payload.generatedMediaId;
-    if (payload.toolName === 'music_generation' && payload.status === 'success' && mediaId
+    if ((payload.toolName === 'music_generation' || payload.toolName === 'video_draft')
+      && payload.status === 'success' && mediaId
       && !row.generatedMediaIds?.includes(mediaId)) {
       row.generatedMediaIds = (row.generatedMediaIds ?? []).concat(mediaId);
     }

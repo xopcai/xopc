@@ -19,23 +19,178 @@ import { appSettings } from '../service/settings';
 import { XopcMarkdownView } from './MarkdownView';
 import { filePreviewKind, htmlPreviewTextLimit, normalizedFileMimeType, previewTextLimit, safeHtmlPreview, XopcFilePreviewKind } from '../common/filePreview';
 import { chatMediaSource } from '../common/chatMediaSource';
+import { generatedMediaTime } from '../common/generatedMedia';
+import { clampVideoTime, fittedVideoFrame, XopcVideoFrameSize } from '../common/videoPreview';
 import { gatewayMediaPlaybackUrl } from '../service/generatedMediaFile';
 
 @ComponentV2
 export struct XopcPreviewVideo {
   @Require @Param source: string;
   @Require @Param controller: VideoController;
-  @Param ratio: number = 16 / 9;
+  @Param ratio: number = 0;
   @Param autoplay: boolean = false;
   @Param videoId: string = 'preview-video';
   @Event onError: () => void = (): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local playing: boolean = false;
+  @Local completed: boolean = false;
+  @Local muted: boolean = false;
+  @Local fullscreen: boolean = false;
+  @Local duration: number = 0;
+  @Local currentTime: number = 0;
+  @Local scrub: number = -1;
+  @Local stageWidth: number = 0;
+  @Local stageHeight: number = 0;
+
+  @Monitor('source')
+  onSourceChanged(): void {
+    this.playing = false;
+    this.completed = false;
+    this.fullscreen = false;
+    this.duration = 0;
+    this.currentTime = 0;
+    this.scrub = -1;
+  }
+
+  @Computed get displayPosition(): number {
+    const raw = this.scrub < 0 ? this.currentTime : this.scrub;
+    return clampVideoTime(raw, this.duration);
+  }
+
+  @Computed get videoFrame(): XopcVideoFrameSize | undefined {
+    return fittedVideoFrame(this.stageWidth, this.stageHeight, this.ratio);
+  }
+
+  @Computed get videoWidth(): Length {
+    return this.videoFrame ? this.videoFrame.width : '100%';
+  }
+
+  @Computed get videoHeight(): Length {
+    return this.videoFrame ? this.videoFrame.height : '100%';
+  }
+
+  private togglePlayback(): void {
+    if (this.playing) {
+      this.controller.pause();
+      return;
+    }
+    if (this.completed) {
+      this.completed = false;
+      this.currentTime = 0;
+      this.controller.setCurrentTime(0, SeekMode.Accurate);
+    }
+    this.controller.start();
+  }
+
+  private seekTo(value: number): void {
+    const target = clampVideoTime(value, this.duration);
+    this.currentTime = target;
+    if (this.duration > 0 && target < this.duration) this.completed = false;
+    this.controller.setCurrentTime(target, SeekMode.Accurate);
+  }
 
   build() {
-    Video({ src: this.source, controller: this.controller })
-      .id(this.videoId).width('100%').aspectRatio(this.ratio).constraintSize({ maxHeight: '100%' })
-      .autoPlay(this.autoplay).controls(true).objectFit(ImageFit.Contain).borderRadius(this.colors.corner(16))
-      .onError((): void => { this.onError(); })
+    Column({ space: 12 }) {
+      Stack({ alignContent: Alignment.Center }) {
+        Video({ src: this.source, controller: this.controller, posterOptions: { showFirstFrame: true } })
+          .id(this.videoId)
+          .width(this.videoWidth)
+          .height(this.videoHeight)
+          .constraintSize({ maxWidth: '100%', maxHeight: '100%' })
+          .autoPlay(this.autoplay)
+          .muted(this.muted)
+          .controls(this.fullscreen)
+          .objectFit(ImageFit.Contain)
+          .borderRadius(this.colors.corner(16))
+          .clip(true)
+          .onClick((): void => {
+            if (!this.fullscreen) this.togglePlayback();
+          })
+          .onPrepared((event: PreparedInfo): void => {
+            this.duration = Math.max(0, event.duration);
+          })
+          .onStart((): void => {
+            this.playing = true;
+            this.completed = false;
+          })
+          .onPause((): void => {
+            this.playing = false;
+          })
+          .onStop((): void => {
+            this.playing = false;
+            this.currentTime = 0;
+          })
+          .onFinish((): void => {
+            this.playing = false;
+            this.completed = true;
+            if (this.duration > 0) this.currentTime = this.duration;
+          })
+          .onUpdate((event: PlaybackInfo): void => {
+            if (this.scrub < 0) this.currentTime = clampVideoTime(event.time, this.duration);
+          })
+          .onSeeked((event: PlaybackInfo): void => {
+            this.currentTime = clampVideoTime(event.time, this.duration);
+          })
+          .onFullscreenChange((event: FullscreenInfo): void => {
+            this.fullscreen = event.fullscreen;
+          })
+          .onError((): void => { this.onError(); })
+      }.width('100%').layoutWeight(1)
+        .onAreaChange((_previous: Area, current: Area): void => {
+          this.stageWidth = Number(current.width);
+          this.stageHeight = Number(current.height);
+        })
+
+      Column({ space: 6 }) {
+        Row({ space: 10 }) {
+          Text(generatedMediaTime(this.displayPosition))
+            .fontSize(12).fontColor(this.colors.secondary).constraintSize({ minWidth: 36 }).textAlign(TextAlign.Start)
+          Slider({ value: this.displayPosition, min: 0, max: Math.max(1, this.duration), step: 1 })
+            .id(this.videoId + '-progress').layoutWeight(1).height(28).trackThickness(4).blockSize({ width: 14, height: 14 })
+            .trackColor(this.colors.border).selectedColor(this.colors.chat.action).blockColor(this.colors.chat.action)
+            .enabled(this.duration > 0)
+            .accessibilityText($r('app.string.music_progress'))
+            .onChange((value: number, mode: SliderChangeMode): void => {
+              if (mode === SliderChangeMode.Begin || mode === SliderChangeMode.Moving) this.scrub = value;
+              if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) { this.seekTo(value); this.scrub = -1; }
+            })
+          Text(this.duration > 0 ? generatedMediaTime(this.duration) : '–:–')
+            .fontSize(12).fontColor(this.colors.secondary).constraintSize({ minWidth: 36 }).textAlign(TextAlign.End)
+        }.width('100%').alignItems(VerticalAlign.Center)
+
+        Row() {
+          Button({ type: ButtonType.Circle }) {
+            SymbolGlyph(this.playing ? $r('sys.symbol.pause_fill') : $r('sys.symbol.play_fill'))
+              .fontSize(18).fontColor([this.colors.chat.onAction])
+          }.id(this.videoId + '-toggle').width(44).height(44).padding(0)
+            .backgroundColor(this.colors.chat.action)
+            .accessibilityText(this.playing ? $r('app.string.pause') : $r('app.string.chat_media_play'))
+            .onClick((): void => { this.togglePlayback(); })
+
+          Blank().layoutWeight(1)
+
+          Row({ space: 4 }) {
+            Button({ type: ButtonType.Circle }) {
+              SymbolGlyph(this.muted ? $r('sys.symbol.speaker_slash') : $r('sys.symbol.speaker_wave_2'))
+                .fontSize(18).fontColor([this.colors.foreground])
+            }.id(this.videoId + '-mute').width(44).height(44).padding(0)
+              .backgroundColor(Color.Transparent)
+              .accessibilityText(this.muted ? $r('app.string.video_unmute') : $r('app.string.video_mute'))
+              .onClick((): void => { this.muted = !this.muted; })
+
+            Button({ type: ButtonType.Circle }) {
+              SymbolGlyph($r('sys.symbol.arrow_up_left_and_arrow_down_right'))
+                .fontSize(18).fontColor([this.colors.foreground])
+            }.id(this.videoId + '-fullscreen').width(44).height(44).padding(0)
+              .backgroundColor(Color.Transparent)
+              .accessibilityText($r('app.string.video_fullscreen'))
+              .onClick((): void => { this.controller.requestFullscreen(true); })
+          }
+        }.width('100%').alignItems(VerticalAlign.Center)
+      }.id(this.videoId + '-controls').width('100%').constraintSize({ maxWidth: 480 })
+        .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+        .backgroundColor(this.colors.chat.card).borderRadius(this.colors.corner(18))
+    }.width('100%').height('100%').alignItems(HorizontalAlign.Center)
   }
 }
 

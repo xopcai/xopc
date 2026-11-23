@@ -38,7 +38,7 @@ export function createVideoDraftTool(getConversationId: () => string | undefined
       }
       const { action, ...input } = args;
       const draft = prepareVideoDraft(conversationId, { action, ...input });
-      return { content: [{ type: 'text', text: JSON.stringify(draft) }], details: {} };
+      return { content: [{ type: 'text', text: JSON.stringify(draft) }], details: { id: draft.id } };
     },
   };
 }

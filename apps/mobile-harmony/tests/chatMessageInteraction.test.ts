@@ -72,4 +72,36 @@ describe('chat message interactions', () => {
     expect(markdown).not.toContain('Math.max(17, 28 - this.headingLevel * 2)');
     expect(markdown).not.toContain("span.kind === 'bold' || this.headingLevel > 0 || this.strong");
   });
+
+  it('defers user message menu actions until context menu dismissal so editing raises the keyboard', () => {
+    const userMenu = chat.slice(chat.indexOf('  userMessageMenu(row: XopcChatRow)'), chat.indexOf('  private beginMessageMenu()'));
+    expect(userMenu).toContain("this.pendingUserMenuAction = 'copy'");
+    expect(userMenu).toContain("this.pendingUserMenuAction = 'edit'");
+    expect(userMenu).not.toContain('this.messageAction(');
+    const userBubbleBind = chat.slice(
+      chat.indexOf('this.userMessageMenu(item.item)'),
+      chat.indexOf('if (this.reactionFor(item.item))'),
+    );
+    expect(userBubbleBind).toContain('onDisappear: (): void => { this.finishUserMenu(item.item); }');
+    const fill = chat.slice(chat.indexOf('  private fillMessageDraft('), chat.indexOf('  private isLatestUser('));
+    expect(fill).toContain('this.editor.stopEditing();');
+    expect(fill).toContain('this.getUIContext().getFocusController().clearFocus();');
+    expect(fill).toContain('this.focusComposerOnMount = true; this.focusMountedComposer();');
+    const composer = chat.slice(chat.indexOf(".id('chat-composer')"), chat.indexOf('if (this.nextTurnPrompt)'));
+    expect(composer).toContain('.enableKeyboardOnFocus(true)');
+  });
+
+  it('renders the latest-message editing banner inside the opaque composer shell', () => {
+    const shellStart = chat.indexOf(".id('chat-editing-banner')");
+    const shellEnd = chat.indexOf(".id('chat-composer-shell')");
+    const composerStart = chat.indexOf(".id('chat-composer')");
+    const taskTip = chat.indexOf(".id('task-chat-details-tip')");
+    expect(shellStart).toBeGreaterThan(taskTip);
+    expect(shellStart).toBeLessThan(composerStart);
+    expect(composerStart).toBeLessThan(shellEnd);
+    const banner = chat.slice(chat.indexOf('if (this.editingTurnId)', taskTip), chat.indexOf('if (this.attachments.length)', taskTip));
+    expect(banner).toContain("$r('app.string.chat_editing_latest')");
+    expect(banner).toContain(".id('chat-edit-cancel')");
+    expect(banner).toContain('this.cancelEditing()');
+  });
 });

@@ -549,7 +549,7 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
       FilePreviewContent(activeMedia.name, activeMedia.mimeType, payload,
         modifier = Modifier.fillMaxWidth().weight(1f))
     } else if (activeMedia.mimeType.startsWith("video/")) {
-      MessageVideoPreview(payload, activeMedia)
+      MessageVideoPreview(payload, activeMedia, Modifier.fillMaxWidth().weight(1f))
     } else if (mediaPreviewKind(activeMedia) == "audio") {
       AudioMessagePreview(payload, activeMedia)
     } else if (previewFileKind(activeMedia.name, activeMedia.mimeType) != PreviewFileKind.BINARY) {
@@ -653,7 +653,7 @@ internal fun ZoomableMessageImage(bitmap: android.graphics.Bitmap, label: String
 }
 
 @Composable
-private fun MessageVideoPreview(bytes: ByteArray, media: ConversationMedia) {
+private fun MessageVideoPreview(bytes: ByteArray, media: ConversationMedia, modifier: Modifier = Modifier) {
   val context = LocalContext.current
   var path by remember(media) { mutableStateOf<File?>(null) }
   var failed by remember(media) { mutableStateOf(false) }
@@ -674,7 +674,7 @@ private fun MessageVideoPreview(bytes: ByteArray, media: ConversationMedia) {
   }
   val video = path
   if (failed) Text(stringResource(R.string.message_preview_unavailable))
-  else if (video != null) PreviewVideo(video, Modifier.fillMaxWidth().height(360.dp), onError = { failed = true })
+  else if (video != null) PreviewVideo(video, modifier, onError = { failed = true })
   else BrandLoadingPanel()
 }
 

@@ -2,6 +2,7 @@ import { XopcPreviewVideo } from './ChatMediaView';
 import { fileIo as fs, picker } from '@kit.CoreFileKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { generatedMediaTime } from '../common/generatedMedia';
+import { parseVideoAspectRatio } from '../common/videoPreview';
 import { XopcGeneratedMediaCard } from '../model/generatedMedia';
 import { downloadGeneratedMedia, gatewayMediaPlaybackUrl, generatedMediaContentPath, removeGeneratedMediaFile } from '../service/generatedMediaFile';
 import { XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
@@ -225,7 +226,7 @@ export struct XopcGeneratedVideoDrawer {
   videoSurface() {
     XopcPreviewVideo({ source: this.path, controller: this.video,
       videoId: 'generated-video-player-' + this.card.item.id, autoplay: true,
-      ratio: this.card.item.ratio === '16:9' ? 16 / 9 : this.card.item.ratio === '9:16' ? 9 / 16 : 1,
+      ratio: parseVideoAspectRatio(this.card.item.ratio),
       onError: (): void => { this.failed = true; } })
   }
 }

@@ -219,8 +219,8 @@ final class GeneratedMediaState {
                 anchors[id] = reply.id
             }
         }
-        // An older song belongs with its reply, which may be on another page of history.
-        let visibleCards = cards.filter { $0.kind != .music || $0.active || anchors[$0.id] != nil }
+        // Older generated media belongs with its reply, which may be on another page of history.
+        let visibleCards = cards.filter { $0.active || anchors[$0.id] != nil }
         return Dictionary(grouping: visibleCards) { anchors[$0.id] ?? "" }
     }
 }

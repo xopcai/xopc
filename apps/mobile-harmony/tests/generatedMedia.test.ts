@@ -33,9 +33,37 @@ describe('generated media in chat', () => {
     ] }, pagination: { hasMore: false } })), undefined, '');
     const cards = [...generatedMediaCards('music', { jobs: [song] }), ...generatedMediaCards('video', video)];
     expect([...generatedMediaByReply(cards, rows).keys()]).toEqual(['tools', 'video-reply']);
-    expect(generatedMediaByReply(cards, []).get('')).toEqual([cards[1]]);
-    expect(generatedMediaByReply(cards, rows.slice(-1)).get('')).toEqual([cards[1]]);
+    expect(generatedMediaByReply(cards, []).size).toBe(0);
+    expect(generatedMediaByReply(cards, rows.slice(-1)).size).toBe(0);
     expect(generatedMediaByReply(cards, rows.slice(1)).has('')).toBe(false);
+  });
+
+  it('keeps completed and failed video cards with their original reply instead of pinning them to the bottom', () => {
+    const completed = { id: 'completed-video', transcriptId: 'active', state: 'completed', createdAt: 1 };
+    const failed = { id: 'failed-video', transcriptId: 'active', state: 'failed', createdAt: 2 };
+    const running = { id: 'running-video', transcriptId: 'active', state: 'running', createdAt: 3 };
+    const cards = generatedMediaCards('video', { ...video, jobs: [completed, failed, running], draft });
+    const latest: XopcChatRow[] = [{ id: 'later', role: 'assistant', text: 'Another reply' }];
+    const original: XopcChatRow = { id: 'video-reply', role: 'assistant', text: '',
+      generatedMediaIds: [completed.id, draft.id] };
+
+    expect([...generatedMediaByReply(cards, latest)]).toEqual([['', [cards[2]]]]);
+    expect(generatedMediaByReply(cards, latest, true).size).toBe(0);
+    expect([...generatedMediaByReply(cards, [original, ...latest], true)])
+      .toEqual([['video-reply', [cards[0], cards[3]]]]);
+  });
+
+  it.each([reduceChatStream, reduceChatSnapshotActivity])('anchors live video drafts to the originating Personal Agent turn via %s', reduce => {
+    const completed = { id: 'old-video', transcriptId: 'active', state: 'completed', createdAt: 1 };
+    const cards = generatedMediaCards('video', { ...video, jobs: [completed], draft });
+    const user: XopcChatRow = { id: 'question', role: 'user', text: 'Make a video' };
+    const initial = reduce(undefined, 'thinking_delta', {}, 'current');
+    expect(generatedMediaByReply(cards, chatPresentationRows([user], initial, 'current'), true).size).toBe(0);
+
+    const receipt = { toolCallId: 'draft', toolName: 'video_draft', status: 'success', generatedMediaId: draft.id };
+    const live = reduce(initial, 'tool_end', receipt, 'current');
+    expect([...generatedMediaByReply(cards, chatPresentationRows([user], live, 'current'), true)])
+      .toEqual([['live:current', [cards[1]]]]);
   });
 
   it('filters old video jobs and only enables confirmation for the configured draft model', () => {

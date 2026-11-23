@@ -60,24 +60,30 @@ struct ChatRenderingTests {
         ])
     }
 
-    @MainActor @Test func historicalMusicReappearsOnlyWithItsOriginalReply() throws {
+    @MainActor @Test func historicalGeneratedMediaReappearsOnlyWithItsOriginalReply() throws {
         let jobs = try JSONDecoder().decode([GeneratedMediaPayload].self, from: Data(#"""
         [{"id":"old-song","state":"completed","createdAt":1},
          {"id":"failed-song","state":"failed","createdAt":2},
          {"id":"new-song","state":"queued","createdAt":3},
-         {"id":"video","state":"completed","createdAt":4}]
+         {"id":"completed-video","state":"completed","createdAt":4},
+         {"id":"failed-video","state":"failed","createdAt":5},
+         {"id":"draft-video","revision":1,"createdAt":6},
+         {"id":"active-video","state":"running","createdAt":7}]
         """#.utf8))
-        let cards = jobs.map { GeneratedMediaCard(kind: $0.id == "video" ? .video : .music, item: $0) }
+        let cards = jobs.map { GeneratedMediaCard(kind: $0.id.contains("video") ? .video : .music, item: $0) }
         let messages = try JSONDecoder().decode([WireMessage].self, from: Data(#"""
-        [{"id":"original","role":"assistant","content":"","generatedMediaIds":["old-song"]},
+        [{"id":"original","role":"assistant","content":"","generatedMediaIds":["old-song","completed-video"]},
          {"id":"latest","role":"assistant","content":"A newer reply"}]
         """#.utf8))
 
         let latestPage = GeneratedMediaState.cardsByReply(cards, messages: AssistantState.timeline(from: Array(messages.suffix(1))))
-        #expect(latestPage.mapValues { $0.map(\.id) } == ["": ["new-song", "video"]])
+        #expect(latestPage.mapValues { $0.map(\.id) } == ["": ["new-song", "active-video"]])
 
         let expandedHistory = GeneratedMediaState.cardsByReply(cards, messages: AssistantState.timeline(from: messages))
-        #expect(expandedHistory.mapValues { $0.map(\.id) } == ["": ["new-song", "video"], "original": ["old-song"]])
+        #expect(expandedHistory.mapValues { $0.map(\.id) } == [
+            "": ["new-song", "active-video"],
+            "original": ["old-song", "completed-video"]
+        ])
     }
 
     @Test func publicStagesRemainOrderedUntilTheAnswerStarts() {

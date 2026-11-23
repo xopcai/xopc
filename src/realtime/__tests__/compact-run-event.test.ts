@@ -46,6 +46,19 @@ describe('compact run transport', () => {
     for (const output of [compactToolEnd({ job: { id } }), compactToolEnd({ id: 'invalid' }), compactToolEnd({ id }, true)]) {
       expect(output).not.toHaveProperty('payload.data.payload.generatedMediaId');
     }
+    const videoId = '7c3ed84c-9a9b-4ac8-8479-738197a2816a';
+    const compactVideoEnd = (details: object, isError = false) => {
+      const end = mapper.map({ type: 'tool_execution_end', toolCallId: 'video', toolName: 'video_draft',
+        result: { content: [{ type: 'text', text: 'private prompt' }], details }, isError })[0];
+      const output = compactRunEvent(broker.publish('run:r', end.type, end));
+      expect(JSON.stringify(output)).not.toMatch(/private prompt|"result"/);
+      return output;
+    };
+    expect(compactVideoEnd({ id: videoId }))
+      .toMatchObject({ payload: { data: { payload: { generatedMediaId: videoId } } } });
+    for (const output of [compactVideoEnd({ id: 'invalid' }), compactVideoEnd({ id: videoId }, true)]) {
+      expect(output).not.toHaveProperty('payload.data.payload.generatedMediaId');
+    }
   });
   it('retains tool lifecycle for consecutive actions without arguments, output or raw failures', () => {
     const mapper = new ChatStreamMapper({ runId: 'r', conversationId: 'c', channel: 'webchat' });

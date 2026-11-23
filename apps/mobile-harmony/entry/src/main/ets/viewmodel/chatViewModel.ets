@@ -667,7 +667,9 @@ export class XopcChatViewModel {
     if (data.conversationId !== this.selectedId || !data.payload) return;
     const payload = data.payload;
     const musicToolFinished = event.event === 'tool_end' && payload.toolName === 'music_generation' && payload.status === 'success';
-    const hasMusicReceipt = musicToolFinished && !!payload.generatedMediaId;
+    const hasMediaReceipt = event.event === 'tool_end'
+      && (payload.toolName === 'music_generation' || payload.toolName === 'video_draft')
+      && payload.status === 'success' && !!payload.generatedMediaId;
     if (musicToolFinished) {
       this.musicJobsRevision++;
     }
@@ -695,14 +697,14 @@ export class XopcChatViewModel {
       if (['thinking_delta', 'tool_start', 'tool_end', 'assistant_delta', 'progress'].includes(event.event)) {
         this.liveActivityRow = reduceChatSnapshotActivity(this.liveActivityRow, event.event, payload, this.runId);
       }
-      if (hasMusicReceipt && this.liveRow) {
+      if (hasMediaReceipt && this.liveRow) {
         this.liveRow = reduceChatStream(this.liveRow, event.event, payload, this.runId);
       }
       if (this.refreshTimer === -1) this.refreshTimer = setTimeout((): void => {
         this.refreshTimer = -1; this.loadHistory(false);
       }, 750);
     } else {
-      if (!hasMusicReceipt && payload.messageId && this.rows.some((row: XopcChatRow): boolean =>
+      if (!hasMediaReceipt && payload.messageId && this.rows.some((row: XopcChatRow): boolean =>
         (row.sourceIds || [row.id]).includes(payload.messageId || ''))) return;
       if (event.event === 'assistant_delta') {
         const segment = payload.messageId || this.runId;

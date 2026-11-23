@@ -16,8 +16,10 @@ export function compactRunEvent(message: RealtimeDelivery): RealtimeDelivery | n
     case 'tool_end': {
       const details = event.payload.result?.details as { id?: unknown } | undefined;
       const id = details?.id;
-      const generatedMediaId = event.payload.toolName === 'music_generation' && event.payload.status === 'success'
-        && typeof id === 'string' && /^[a-f0-9]{64}$/.test(id) ? id : undefined;
+      const generatedMediaId = event.payload.status === 'success' && typeof id === 'string' && (
+        (event.payload.toolName === 'music_generation' && /^[a-f0-9]{64}$/.test(id))
+        || (event.payload.toolName === 'video_draft' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id))
+      ) ? id : undefined;
       payload = { toolCallId: event.payload.toolCallId, messageId: event.payload.messageId,
         toolName: event.payload.toolName, status: event.payload.status, activity: event.payload.activity,
         ...(generatedMediaId ? { generatedMediaId } : {}),

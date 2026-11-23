@@ -77,20 +77,22 @@ class ChatRenderingTest {
     assertEquals(listOf("song"), row.generatedMediaIds)
   }
 
-  @Test fun historicalMusicReappearsOnlyWithItsOriginalReply() {
+  @Test fun historicalGeneratedMediaReappearsOnlyWithItsOriginalReply() {
     val items = parseGeneratedMedia(JSONObject("""{"jobs":[
       {"id":"old-song","state":"completed"},
       {"id":"failed-song","state":"failed"},
       {"id":"new-song","state":"queued"}
     ]}"""), GeneratedMediaKind.Music) + parseGeneratedMedia(JSONObject("""{"transcriptId":"current","jobs":[
-      {"id":"video","state":"completed","transcriptId":"current"}
-    ]}"""), GeneratedMediaKind.Video)
+      {"id":"completed-video","state":"completed","transcriptId":"current"},
+      {"id":"failed-video","state":"failed","transcriptId":"current"},
+      {"id":"active-video","state":"running","transcriptId":"current"}
+    ],"draft":{"id":"draft-video","revision":1}}"""), GeneratedMediaKind.Video)
     val latest = ConversationMessage("latest", "assistant", "A newer reply")
-    val original = ConversationMessage("original", "assistant", "", generatedMediaIds = listOf("old-song"))
+    val original = ConversationMessage("original", "assistant", "", generatedMediaIds = listOf("old-song", "completed-video"))
 
-    assertEquals(mapOf("" to listOf("new-song", "video")),
+    assertEquals(mapOf("" to listOf("new-song", "active-video")),
       generatedMediaByReply(items, listOf(latest)).mapValues { (_, cards) -> cards.map { it.id } })
-    assertEquals(mapOf("" to listOf("new-song", "video"), original.renderId to listOf("old-song")),
+    assertEquals(mapOf("" to listOf("new-song", "active-video"), original.renderId to listOf("old-song", "completed-video")),
       generatedMediaByReply(items, listOf(original, latest)).mapValues { (_, cards) -> cards.map { it.id } })
   }
 
