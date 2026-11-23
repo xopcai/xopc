@@ -44,18 +44,19 @@ describe('mobile notes reading and capture ergonomics', () => {
     const root = createRoot(container);
     const onToggle = vi.fn();
 
-    try {
-      await act(async () => {
-        root.render(
-          <MemoryRouter>
-            <NoteMarkdownView
-              content={'- [ ] 准备评审材料\n- [x] 发送邀请'}
-              onToggleTaskIndex={onToggle}
-            />
-          </MemoryRouter>,
-        );
-      });
+    const renderNote = (enabled: boolean) => act(async () => {
+      root.render(
+        <MemoryRouter>
+          <NoteMarkdownView
+            content={'- [ ] 准备评审材料\n- [x] 发送邀请'}
+            onToggleTaskIndex={enabled ? onToggle : undefined}
+          />
+        </MemoryRouter>,
+      );
+    });
 
+    try {
+      await renderNote(true);
       const checkboxes = container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
       expect(checkboxes).toHaveLength(2);
       expect(checkboxes[0].disabled).toBe(false);
@@ -64,6 +65,17 @@ describe('mobile notes reading and capture ergonomics', () => {
         checkboxes[0].click();
       });
       expect(onToggle).toHaveBeenCalledWith(0, true);
+      onToggle.mockClear();
+
+      await renderNote(false);
+      expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
+      await renderNote(true);
+      const restored = container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+      expect(restored).toHaveLength(2);
+      await act(async () => {
+        restored[1].click();
+      });
+      expect(onToggle.mock.calls).toEqual([[1, false]]);
     } finally {
       await act(async () => root.unmount());
       container.remove();

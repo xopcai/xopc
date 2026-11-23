@@ -175,6 +175,7 @@ export function NoteMarkdownView({
   const hostRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef(onToggleTaskIndex);
   toggleRef.current = onToggleTaskIndex;
+  const canToggleTasks = Boolean(onToggleTaskIndex);
   const renderChart = useCallback((block: MarkdownChartBlock) => (
     <ChatChartBlock source={block.source} incomplete={!block.closed} streaming={rest.streaming ?? false} copy={rest.codeCopy ?? true} />
   ), [rest.streaming, rest.codeCopy]);
@@ -182,28 +183,34 @@ export function NoteMarkdownView({
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const cleanupMedia = hydrateNoteMedia(host, noteId, attachments);
-    const checkboxCleanups: Array<() => void> = [];
-    if (toggleRef.current) {
-      const markers = host.querySelectorAll<HTMLElement>('.markdown-body [data-md-task]');
-      markers.forEach((marker, idx) => {
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = marker.getAttribute('data-md-task') === 'checked';
-        checkbox.className = 'mr-2 size-4 cursor-pointer align-middle accent-accent';
-        marker.replaceWith(checkbox);
-        const onChange = () => {
-          toggleRef.current?.(idx, checkbox.checked);
-        };
-        checkbox.addEventListener('change', onChange);
-        checkboxCleanups.push(() => checkbox.removeEventListener('change', onChange));
-      });
-    }
-    return () => {
-      cleanupMedia();
-      for (const fn of checkboxCleanups) fn();
+    return hydrateNoteMedia(host, noteId, attachments);
+  }, [attachments, content, noteId]);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host || !canToggleTasks) return;
+    const taskIndexes = new Map<HTMLInputElement, number>();
+    const markers = host.querySelectorAll<HTMLElement>('.markdown-body [data-md-task]');
+    markers.forEach((marker, index) => {
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = marker.getAttribute('data-md-task') === 'checked';
+      checkbox.className = 'mr-2 size-4 cursor-pointer align-middle accent-accent';
+      taskIndexes.set(checkbox, index);
+      marker.replaceWith(checkbox);
+    });
+    const onChange = (event: Event) => {
+      const checkbox = event.target;
+      if (!(checkbox instanceof HTMLInputElement)) return;
+      const index = taskIndexes.get(checkbox);
+      if (index !== undefined) toggleRef.current?.(index, checkbox.checked);
     };
-  }, [attachments, content, noteId, Boolean(onToggleTaskIndex)]);
+    host.addEventListener('change', onChange);
+    return () => {
+      host.removeEventListener('change', onChange);
+      for (const [checkbox, index] of taskIndexes) checkbox.replaceWith(markers[index]);
+    };
+  }, [canToggleTasks, content]);
 
   return (
     <div ref={hostRef}>
