@@ -7,12 +7,20 @@ const mocks = vi.hoisted(() => ({
   bind: vi.fn(), send: vi.fn(), listener: undefined as undefined | ((value: any) => void), snapshot: {} as any,
   capture: vi.fn(), activeTab: vi.fn(), screenshot: vi.fn(), store: undefined as any,
   loadCommands: vi.fn(),
+  retryPending: vi.fn(),
+  discardPending: vi.fn(),
+  loadEarlier: vi.fn(),
+  replaceTurn: vi.fn(),
   storageChanged: undefined as undefined | ((changes: Record<string, any>, area: string) => void),
 }));
 vi.mock('./chat-client', () => ({ BrowserChatClient: class {
   subscribe(listener: (value: unknown) => void) { mocks.listener = listener; listener(mocks.snapshot); return () => {}; }
   get currentConversationId() { return mocks.snapshot.conversationId; }
   async start() {} stop() {} async refreshInputs() {} send = mocks.send; bindActiveTab = mocks.bind;
+  retryPendingDelivery = mocks.retryPending;
+  discardPendingDelivery = mocks.discardPending;
+  loadEarlierMessages = mocks.loadEarlier;
+  replaceLatestTurn = mocks.replaceTurn;
 } }));
 vi.mock('./page-context', async importOriginal => ({ ...await importOriginal<object>(), captureTabWithPermission: mocks.capture, activeTabId: mocks.activeTab }));
 vi.mock('./voice-input', () => ({ VoiceInput: () => null }));
@@ -51,6 +59,10 @@ beforeEach(async () => {
   mocks.screenshot.mockReset();
   mocks.loadCommands.mockReset().mockResolvedValue([]);
   mocks.capture.mockReset(); mocks.activeTab.mockReset();
+  mocks.retryPending.mockReset().mockResolvedValue(undefined);
+  mocks.discardPending.mockReset().mockResolvedValue('restored unsent');
+  mocks.loadEarlier.mockReset().mockResolvedValue(1);
+  mocks.replaceTurn.mockReset().mockResolvedValue(undefined);
   mocks.store = new ComposerDrafts(vi.fn(), vi.fn().mockResolvedValue(undefined));
   mocks.snapshot = { connection: 'connected', endpointReady: true, sessionLoading: false, submitting: false, stopping: false, pendingDelivery: false, conversationId: 'a', sessions: [], messages: [], models: [] };
   const event = { addListener: vi.fn(), removeListener: vi.fn() };
@@ -276,6 +288,67 @@ describe('browser composer interactions', () => {
     await act(async () => toggle.click());
     expect(container.querySelector('.tool-detail-panel')?.textContent).toContain('xopc extension');
     expect(container.querySelector('.tool-detail-panel')?.textContent).toContain('Found 3 results');
+  });
+
+  it('offers retry and discard controls for pendingDelivery and restores discarded text', async () => {
+    await act(async () => emit({ pendingDelivery: true }));
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('.pending-delivery-actions button'));
+    expect(buttons.map((item) => item.textContent)).toEqual(['retryNow', 'discardQueuedMessage']);
+
+    await act(async () => buttons[0].click());
+    expect(mocks.retryPending).toHaveBeenCalledOnce();
+
+    await act(async () => buttons[1].click());
+    expect(mocks.discardPending).toHaveBeenCalledOnce();
+    expect(container.querySelector('textarea')!.value).toBe('restored unsent');
+  });
+
+  it('renders load earlier messages button when hasMoreHistory is true', async () => {
+    await act(async () => emit({ hasMoreHistory: true, messages: [{ id: 'm2', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }] }));
+    const loadMore = container.querySelector<HTMLButtonElement>('.load-earlier-button')!;
+    expect(loadMore.textContent).toBe('loadEarlierMessages');
+    await act(async () => loadMore.click());
+    expect(mocks.loadEarlier).toHaveBeenCalledOnce();
+  });
+
+  it('supports editing and resending the latest user turn and regenerating the latest assistant response', async () => {
+    await act(async () => emit({
+      messages: [
+        { id: 'u1', turnId: 'turn-1', role: 'user', blocks: [{ type: 'text', text: 'original question' }] },
+        { id: 'a1', role: 'assistant', blocks: [{ type: 'text', text: 'original answer' }] },
+      ],
+    }));
+
+    await act(async () => button('regenerateResponse').click());
+    expect(mocks.replaceTurn).toHaveBeenCalledWith('turn-1', 'original question');
+
+    mocks.replaceTurn.mockClear();
+    await act(async () => button('editAndResend').click());
+    const editBox = container.querySelector<HTMLTextAreaElement>('.turn-edit-box textarea')!;
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(editBox, 'updated question');
+    await act(async () => { editBox.dispatchEvent(new Event('input', { bubbles: true })); });
+    const saveBtn = container.querySelector<HTMLButtonElement>('.turn-edit-actions .session-inline-primary')!;
+    await act(async () => saveBtn.click());
+    expect(mocks.replaceTurn).toHaveBeenCalledWith('turn-1', 'updated question');
+  });
+
+  it('opens in-chat search with Cmd/Ctrl+F and matches messages', async () => {
+    await act(async () => emit({
+      messages: [
+        { id: 'm1', role: 'user', blocks: [{ type: 'text', text: 'Alpha browser note' }] },
+        { id: 'm2', role: 'assistant', blocks: [{ type: 'text', text: 'Beta summary' }] },
+      ],
+    }));
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', metaKey: true, bubbles: true, cancelable: true }));
+    });
+    const find = container.querySelector<HTMLInputElement>('.chat-find-bar input')!;
+    expect(find).toBeTruthy();
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(find, 'Beta');
+    await act(async () => { find.dispatchEvent(new Event('input', { bubbles: true })); });
+    expect(container.querySelector('.find-count')?.textContent).toBe('1/1');
+    expect(container.querySelector('.message.find-match-active')?.textContent).toContain('Beta summary');
   });
 
 });

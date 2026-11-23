@@ -28,7 +28,12 @@ import {
   readProfile,
   registerBrowserEndpoint,
 } from './sidepanel/auth';
-import { captureContextMenuSelection, PENDING_CONTEXT_KEY } from './sidepanel/page-context';
+import {
+  captureContextMenuSelection,
+  captureTabWithPermission,
+  PENDING_ACTION_KEY,
+  PENDING_CONTEXT_KEY,
+} from './sidepanel/page-context';
 
 const log = createLogger('Background');
 const BACKGROUND_CLIENT_ID_KEY = 'xopc.browser.background-client-id';
@@ -250,19 +255,88 @@ chrome.runtime.onMessage.addListener((message: BrowserRuntimeMessage, sender, se
   return true;
 });
 
+async function fetchContextMenuImageAttachment(srcUrl: string): Promise<{
+  type: 'image';
+  mimeType: string;
+  data: string;
+  name: string;
+  size: number;
+} | undefined> {
+  let url: URL;
+  try {
+    url = new URL(srcUrl);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
+  const response = await fetch(url.toString(), { signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) return undefined;
+  const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? '';
+  if (!mimeType.startsWith('image/')) return undefined;
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength === 0 || bytes.byteLength > 10 * 1024 * 1024) return undefined;
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 32 * 1024) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 32 * 1024));
+  }
+  const extension = mimeType.split('/')[1]?.replace(/[^a-z0-9]/g, '') || 'png';
+  const rawName = decodeURIComponent(url.pathname.split('/').pop() || '').trim();
+  const name = rawName && rawName.includes('.') ? rawName.slice(0, 120) : `image.${extension}`;
+  return {
+    type: 'image',
+    mimeType,
+    data: btoa(binary),
+    name,
+    size: bytes.byteLength,
+  };
+}
+
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId !== 'xopc-ask-selection' || !tab?.id) return;
+  if (!tab?.id) return;
   const tabId = tab.id;
-  void chrome.sidePanel.open({ tabId }).catch((error) => log.warn('Could not open the side panel', {
-    error: error instanceof Error ? error.message : String(error),
-  }));
-  void captureContextMenuSelection(tabId, info.selectionText ?? '', info.pageUrl).then(async (context) => {
-    await chrome.storage.session.set({
-      [PENDING_CONTEXT_KEY]: { context, tabId, source: 'current_selection' },
-    });
-  }).catch((error) => log.warn('Could not attach selected page text', {
-    error: error instanceof Error ? error.message : String(error),
-  }));
+  if (info.menuItemId === 'xopc-ask-selection') {
+    void chrome.sidePanel.open({ tabId }).catch((error) => log.warn('Could not open the side panel', {
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    void captureContextMenuSelection(tabId, info.selectionText ?? '', info.pageUrl).then(async (context) => {
+      await chrome.storage.session.set({
+        [PENDING_CONTEXT_KEY]: { context, tabId, source: 'current_selection' },
+      });
+    }).catch((error) => log.warn('Could not attach selected page text', {
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return;
+  }
+  if (info.menuItemId === 'xopc-summarize-page' || info.menuItemId === 'xopc-ask-page') {
+    void chrome.sidePanel.open({ tabId }).catch((error) => log.warn('Could not open the side panel', {
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    const prompt = info.menuItemId === 'xopc-summarize-page' ? t('promptSummarizePage') : undefined;
+    void captureTabWithPermission(tabId, 'page').then(async (context) => {
+      await chrome.storage.session.set({
+        [PENDING_CONTEXT_KEY]: { context, tabId, source: 'current_page' },
+        ...(prompt ? { [PENDING_ACTION_KEY]: { id: crypto.randomUUID(), prompt } } : {}),
+      });
+    }).catch((error) => log.warn('Could not attach current page', {
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return;
+  }
+  if (info.menuItemId === 'xopc-ask-image' && typeof info.srcUrl === 'string' && info.srcUrl) {
+    const srcUrl = info.srcUrl;
+    void chrome.sidePanel.open({ tabId }).catch((error) => log.warn('Could not open the side panel', {
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    void fetchContextMenuImageAttachment(srcUrl).then(async (attachment) => {
+      await chrome.storage.session.set({
+        [PENDING_ACTION_KEY]: attachment
+          ? { id: crypto.randomUUID(), prompt: t('promptDescribeImage'), attachment }
+          : { id: crypto.randomUUID(), prompt: `${t('promptDescribeImage')}\n${srcUrl}` },
+      });
+    }).catch((error) => log.warn('Could not attach context menu image', {
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
 });
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -272,6 +346,21 @@ chrome.runtime.onInstalled.addListener(() => {
       id: 'xopc-ask-selection',
       title: t('contextMenuAskSelection'),
       contexts: ['selection'],
+    });
+    chrome.contextMenus.create({
+      id: 'xopc-summarize-page',
+      title: t('contextMenuSummarizePage'),
+      contexts: ['page'],
+    });
+    chrome.contextMenus.create({
+      id: 'xopc-ask-page',
+      title: t('contextMenuAskPage'),
+      contexts: ['page'],
+    });
+    chrome.contextMenus.create({
+      id: 'xopc-ask-image',
+      title: t('contextMenuAskImage'),
+      contexts: ['image'],
     });
   });
   connectWithLogging();

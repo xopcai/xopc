@@ -8,7 +8,27 @@ import { t } from '../i18n';
 
 export type CaptureMode = 'page' | 'selection';
 export const PENDING_CONTEXT_KEY = 'xopc.browser.pending-context';
+export const PENDING_ACTION_KEY = 'xopc.browser.pending-action';
 export const TAB_BINDING_PREFIX = 'xopc.browser.tab-binding.';
+
+export type PendingSidePanelAction = {
+  id: string;
+  prompt?: string;
+  attachment?: {
+    type: 'image' | 'file';
+    mimeType: string;
+    data: string;
+    name: string;
+    size: number;
+  };
+};
+
+export type ActiveTabSummary = {
+  tabId: number;
+  title: string;
+  hostname: string;
+  url: string;
+};
 
 export type AttachedPageContext = {
   context: BrowserPageContextInput;
@@ -185,6 +205,24 @@ export async function captureTabWithPermission(
 
 export async function activeTabId(): Promise<number | undefined> {
   return (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+}
+
+export async function activeTabSummary(): Promise<ActiveTabSummary | undefined> {
+  if (typeof chrome === 'undefined' || !chrome.tabs?.query) return undefined;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id === undefined || !tab.url) return undefined;
+    const url = sanitizedUrl(tab.url);
+    const parsed = new URL(url);
+    return {
+      tabId: tab.id,
+      title: tab.title?.trim() || parsed.hostname,
+      hostname: parsed.hostname,
+      url,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 export async function currentTabDescriptor(): Promise<{

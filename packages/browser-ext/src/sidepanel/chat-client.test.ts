@@ -541,3 +541,124 @@ describe('transcriptId hydration and recovery', () => {
     expect(internals(client).snapshot.messages).toEqual([]);
   });
 });
+
+describe('P0-P2 resilience and conversation capabilities', () => {
+  it('surfaces stream error event messages on snapshot.error instead of silently dropping them', async () => {
+    const client = readyClient();
+    const state = internals(client);
+    state.runTopic = 'run:run-err';
+    state.update({ runId: 'run-err', streamingMessage: { id: 'stream:run-err', role: 'assistant', blocks: [] } });
+    gatewayFetch
+      .mockResolvedValueOnce(response({ payload: { messages: [], transcriptId: 'transcript' } }))
+      .mockResolvedValueOnce(response({ items: [] }));
+
+    await state.onRealtimeEvent('run:run-err', 3, 'error', {
+      timestamp: 100,
+      payload: { error: { message: 'Provider rate limit exceeded' } },
+    });
+
+    expect(state.snapshot.runId).toBeUndefined();
+    expect(state.snapshot.error).toBe('Provider rate limit exceeded');
+  });
+
+  it('discards a stuck pending outbox message and returns the unsent text', async () => {
+    const client = readyClient();
+    gatewayFetch.mockRejectedValueOnce(new TypeError('Offline'));
+    await expect(client.send('unsent prompt')).resolves.toBe('queued');
+    expect(internals(client).snapshot.pendingDelivery).toBe(true);
+    expect(internals(client).snapshot.messages).toHaveLength(1);
+
+    const restored = await client.discardPendingDelivery();
+    expect(restored).toBe('unsent prompt');
+    expect(internals(client).snapshot.pendingDelivery).toBe(false);
+    expect(internals(client).snapshot.messages).toEqual([]);
+    expect(outbox.has('input:creation:gateway:device:chat:one')).toBe(false);
+  });
+
+  it('loads earlier message pages using cursor pagination and deduplicates', async () => {
+    const client = readyClient();
+    gatewayFetch
+      .mockResolvedValueOnce(response({
+        payload: { messages: [{ id: 'm2', role: 'user', content: 'newer' }], transcriptId: 'transcript' },
+        pagination: { hasMore: true, nextBeforeCursor: 'cursor-1' },
+      }))
+      .mockResolvedValueOnce(response({
+        payload: { messages: [{ id: 'm1', role: 'user', content: 'older' }, { id: 'm2', role: 'user', content: 'newer' }] },
+        pagination: { hasMore: false },
+      }));
+
+    await internals(client).reloadMessages();
+    expect(internals(client).snapshot.hasMoreHistory).toBe(true);
+
+    const added = await client.loadEarlierMessages();
+    expect(added).toBe(1);
+    expect(internals(client).snapshot.messages.map((message) => message.id)).toEqual(['m1', 'm2']);
+    expect(internals(client).snapshot.hasMoreHistory).toBe(false);
+  });
+
+  it('replaces the latest user turn via /turns/:turnId/replace', async () => {
+    const client = readyClient();
+    gatewayFetch
+      .mockResolvedValueOnce(response({ payload: { state: { activeRunId: 'run-replaced' } } }, 202))
+      .mockResolvedValueOnce(response({ payload: { messages: [{ id: 'm1', turnId: 'turn-1', role: 'user', content: 'edited' }], transcriptId: 'transcript' } }));
+
+    await client.replaceLatestTurn('turn-1', 'edited');
+    expect(gatewayFetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/sessions/chat%3Aone/turns/turn-1/replace',
+      expect.objectContaining({ method: 'POST' }),
+      expect.objectContaining({ gatewayId: 'gateway', deviceId: 'device' }),
+    );
+    const body = JSON.parse(String(gatewayFetch.mock.calls[0][1].body));
+    expect(body).toMatchObject({
+      expectedTranscriptId: 'transcript',
+      configVersion: 1,
+      content: 'edited',
+      delivery: 'next',
+    });
+    expect(internals(client).snapshot.runId).toBe('run-replaced');
+  });
+
+  it('compacts session context and exports markdown', async () => {
+    const client = readyClient();
+    gatewayFetch
+      .mockResolvedValueOnce(response({ ok: true, payload: { result: { compacted: true } } }))
+      .mockResolvedValueOnce(response({ payload: { messages: [], transcriptId: 'transcript' } }))
+      .mockResolvedValueOnce(response({ items: [] }))
+      .mockResolvedValueOnce(response({ content: '# Chat Export\n\nHello' }));
+
+    await expect(client.compactSession('chat:one')).resolves.toBe(true);
+    await expect(client.exportSessionMarkdown('chat:one')).resolves.toBe('# Chat Export\n\nHello');
+  });
+
+  it('keeps media:// URIs out of snapshot.messages while loading inline image previews via /api/media/read', async () => {
+    const client = readyClient();
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview-1');
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    gatewayFetch
+      .mockResolvedValueOnce(response({
+        payload: {
+          messages: [{
+            id: 'img-msg',
+            role: 'user',
+            content: '',
+            media: [{ type: 'photo', mimeType: 'image/png', name: 'chart.png', size: 128, uri: 'media://inbound/chart.png' }],
+          }],
+        },
+      }))
+      .mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'Content-Type': 'image/png' } }));
+
+    await internals(client).reloadMessages();
+    expect(JSON.stringify(internals(client).snapshot.messages)).not.toContain('media://');
+    expect(client.hasAttachmentPreview('img-msg', 0)).toBe(true);
+    await expect(client.loadAttachmentPreview('img-msg', 0)).resolves.toBe('blob:preview-1');
+    expect(gatewayFetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/media/read?uri=media%3A%2F%2Finbound%2Fchart.png&conversationId=chat%3Aone',
+    );
+    client.stop();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:preview-1');
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+  });
+});

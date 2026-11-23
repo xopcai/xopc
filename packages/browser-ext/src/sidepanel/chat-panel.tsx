@@ -10,6 +10,7 @@ import { findCommand, loadComposerCommands, matchesCommandQuery, type ComposerCo
 import { ComposerPreviewDialog, type ComposerPreview } from './composer-preview';
 import { AssistantActivity } from './assistant-activity';
 import { messageText } from './chat-message-model';
+import { MessageAttachmentChip } from './message-attachment-chip';
 
 import { extensionLocale, t } from '../i18n';
 import {
@@ -19,10 +20,14 @@ import {
 } from './chat-client';
 import {
   activeTabId,
+  activeTabSummary,
   captureTabWithPermission,
+  PENDING_ACTION_KEY,
   PENDING_CONTEXT_KEY,
+  type ActiveTabSummary,
   type AttachedPageContext,
   type CaptureMode,
+  type PendingSidePanelAction,
 } from './page-context';
 import {
   captureVisibleScreenshot,
@@ -45,9 +50,12 @@ import {
   CameraIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronUpIcon,
   CloseIcon,
+  CompressIcon,
   CopyIcon,
   CursorIcon,
+  DownloadIcon,
   EditIcon,
   ExternalLinkIcon,
   EyeIcon,
@@ -56,6 +64,7 @@ import {
   PaperclipIcon,
   PinIcon,
   PlusIcon,
+  RefreshIcon,
   RotateCcwIcon,
   SearchIcon,
   SelectionIcon,
@@ -107,12 +116,32 @@ function formatFileSize(size?: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatTokenCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(count >= 10_000 ? 0 : 1)}k`;
+  return String(count);
+}
+
 function openConsoleTab(url: string): void {
   if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
     void chrome.tabs.create({ url }).catch(() => undefined);
   } else {
     window.open(url, '_blank', 'noopener,noreferrer');
   }
+}
+
+function downloadMarkdownFile(title: string, content: string): void {
+  const safeName = (title || 'xopc-chat')
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '-')
+    .slice(0, 60) || 'xopc-chat';
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${safeName}.md`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
 export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId: string }) {
@@ -174,9 +203,16 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
   const [deletingSessionKey, setDeletingSessionKey] = useState<string>();
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [sessionBusy, setSessionBusy] = useState(false);
+  const [statusNotice, setStatusNotice] = useState('');
   const [error, setError] = useState('');
   const [screenshotFallbackError, setScreenshotFallbackError] = useState('');
   const [copiedMessageId, setCopiedMessageId] = useState('');
+  const [editingTurn, setEditingTurn] = useState<{ turnId: string; text: string }>();
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [findIndex, setFindIndex] = useState(0);
+  const [remoteFindTotal, setRemoteFindTotal] = useState<number>();
+  const [activeTab, setActiveTab] = useState<ActiveTabSummary>();
   const [clarificationAnswer, setClarificationAnswer] = useState('');
   const [clarificationChoice, setClarificationChoice] = useState<string>();
   const [clarificationEditing, setClarificationEditing] = useState(false);
@@ -192,6 +228,7 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
   const [atBottom, setAtBottom] = useState(true);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const viewport = useRef<HTMLDivElement>(null);
+  const findInput = useRef<HTMLInputElement>(null);
   const followingTail = useRef(true);
   const attachmentTask = useRef(false);
   const sessionMenu = useRef<HTMLDivElement>(null);
@@ -203,6 +240,13 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
   const mentionRequest = useRef(0);
   const bindingRef = useRef(snapshot.tabBinding);
   bindingRef.current = snapshot.tabBinding;
+
+  const showTransientStatus = useCallback((message: string) => {
+    setStatusNotice(message);
+    window.setTimeout(() => {
+      setStatusNotice((current) => current === message ? '' : current);
+    }, 2_600);
+  }, []);
 
   const scrollToBottom = useCallback((smooth = false) => {
     followingTail.current = true;
@@ -224,11 +268,12 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
   useEffect(() => {
     let active = true;
     let readyForPending = false;
-    const applied = new Set<string>();
+    const appliedContexts = new Set<string>();
+    const appliedActions = new Set<string>();
     const unsubscribe = client.subscribe(setSnapshot);
     const attachPending = async (pending: AttachedPageContext | undefined) => {
-      if (!pending || !active || !readyForPending || applied.has(pending.context.sourceId)) return;
-      applied.add(pending.context.sourceId);
+      if (!pending || !active || !readyForPending || appliedContexts.has(pending.context.sourceId)) return;
+      appliedContexts.add(pending.context.sourceId);
       try {
         const key = keyForSession(client.currentConversationId);
         await drafts.load(key);
@@ -236,19 +281,43 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
         drafts.update(key, current => ({ ...current, pages: appendPageContext(current.pages, pending) }));
         await chrome.storage.session.remove(PENDING_CONTEXT_KEY);
       } catch (cause) {
-        applied.delete(pending.context.sourceId);
+        appliedContexts.delete(pending.context.sourceId);
+        if (active) setError(errorMessage(cause));
+      }
+    };
+    const applyPendingAction = async (pending: PendingSidePanelAction | undefined) => {
+      if (!pending?.id || !active || !readyForPending || appliedActions.has(pending.id)) return;
+      appliedActions.add(pending.id);
+      try {
+        const key = keyForSession(client.currentConversationId);
+        await drafts.load(key);
+        if (!active) return;
+        drafts.update(key, current => ({
+          ...current,
+          ...(pending.prompt && !current.text.trim() ? { text: pending.prompt } : {}),
+          ...(pending.attachment && current.attachments.length < MAX_BROWSER_ATTACHMENTS
+            ? { attachments: [...current.attachments, pending.attachment] }
+            : {}),
+        }));
+        await chrome.storage.session.remove(PENDING_ACTION_KEY);
+        requestAnimationFrame(() => textarea.current?.focus());
+      } catch (cause) {
+        appliedActions.delete(pending.id);
         if (active) setError(errorMessage(cause));
       }
     };
     const onStorageChanged = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-      if (area === 'session') void attachPending(changes[PENDING_CONTEXT_KEY]?.newValue as AttachedPageContext | undefined);
+      if (area !== 'session') return;
+      void attachPending(changes[PENDING_CONTEXT_KEY]?.newValue as AttachedPageContext | undefined);
+      void applyPendingAction(changes[PENDING_ACTION_KEY]?.newValue as PendingSidePanelAction | undefined);
     };
     chrome.storage.onChanged.addListener(onStorageChanged);
     void client.start().then(async () => {
       if (!active) return;
       readyForPending = true;
-      const stored = await chrome.storage.session.get(PENDING_CONTEXT_KEY);
+      const stored = await chrome.storage.session.get([PENDING_CONTEXT_KEY, PENDING_ACTION_KEY]);
       await attachPending(stored[PENDING_CONTEXT_KEY] as AttachedPageContext | undefined);
+      await applyPendingAction(stored[PENDING_ACTION_KEY] as PendingSidePanelAction | undefined);
     }).catch((cause) => { if (active) setError(errorMessage(cause)); });
     return () => {
       active = false;
@@ -259,19 +328,34 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
   }, [client]);
 
   useEffect(() => {
+    let active = true;
+    const refreshActiveTab = () => {
+      void activeTabSummary().then((summary) => {
+        if (active) setActiveTab(summary);
+      }).catch(() => undefined);
+    };
+    refreshActiveTab();
     const onUpdated = (tabId: number, change: chrome.tabs.TabChangeInfo) => {
       if (change.url || change.status === 'loading') {
         drafts.invalidate(tabId);
       }
+      if (change.url || change.title || change.status === 'complete') {
+        refreshActiveTab();
+      }
     };
     const onRemoved = (tabId: number) => {
       drafts.invalidate(tabId);
+      refreshActiveTab();
     };
+    const onActivated = () => refreshActiveTab();
     chrome.tabs.onUpdated.addListener(onUpdated);
     chrome.tabs.onRemoved.addListener(onRemoved);
+    chrome.tabs.onActivated.addListener(onActivated);
     return () => {
+      active = false;
       chrome.tabs.onUpdated.removeListener(onUpdated);
       chrome.tabs.onRemoved.removeListener(onRemoved);
+      chrome.tabs.onActivated.removeListener(onActivated);
     };
   }, []);
 
@@ -327,20 +411,31 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
       }
       if (!toolsMenu.current?.contains(target) && !toolsTrigger.current?.contains(target)) setToolsOpen(false);
     }
-    function closeOnEscape(event: KeyboardEvent) {
+    function handleKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        setFindOpen(true);
+        requestAnimationFrame(() => {
+          findInput.current?.focus();
+          findInput.current?.select();
+        });
+        return;
+      }
       if (event.key === 'Escape') {
         setMenuOpen(false);
         setToolsOpen(false);
         setRenamingSession(undefined);
         setDeletingSessionKey(undefined);
         setConfirmingReset(false);
+        setEditingTurn(undefined);
+        setFindOpen(false);
       }
     }
     document.addEventListener('mousedown', closeMenus);
-    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('mousedown', closeMenus);
-      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
@@ -352,6 +447,11 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
     setMentionTabs([]);
     setCommandsOpen(false);
     setPreview(undefined);
+    setEditingTurn(undefined);
+    setFindOpen(false);
+    setFindQuery('');
+    setFindIndex(0);
+    setRemoteFindTotal(undefined);
     setError('');
     setConfirmingReset(false);
     if (!snapshot.conversationId || snapshot.isDraftSession || !snapshot.endpointReady) return;
@@ -376,6 +476,45 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
       .finally(() => { if (active) setCommandsLoading(false); });
     return () => { active = false; };
   }, [commandsOpen, snapshot.conversationId]);
+
+  // In-chat search matches across loaded messages + optional server total when truncated
+  const findMatches = useMemo(() => {
+    const needle = findQuery.trim().toLowerCase();
+    if (!findOpen || !needle) return [];
+    return snapshot.messages
+      .filter((message) => messageText(message).toLowerCase().includes(needle))
+      .map((message) => message.id);
+  }, [findOpen, findQuery, snapshot.messages]);
+
+  const activeFindMessageId = findMatches.length > 0
+    ? findMatches[((findIndex % findMatches.length) + findMatches.length) % findMatches.length]
+    : undefined;
+
+  useEffect(() => {
+    setFindIndex(0);
+  }, [findQuery]);
+
+  useEffect(() => {
+    if (!activeFindMessageId || !viewport.current) return;
+    const node = Array.from(viewport.current.querySelectorAll<HTMLElement>('[data-message-id]'))
+      .find((element) => element.dataset.messageId === activeFindMessageId);
+    node?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  }, [activeFindMessageId, findIndex]);
+
+  useEffect(() => {
+    const needle = findQuery.trim();
+    if (!findOpen || !needle || !snapshot.hasMoreHistory || !client.findInSession) {
+      setRemoteFindTotal(undefined);
+      return;
+    }
+    let active = true;
+    const timer = setTimeout(() => {
+      void client.findInSession?.(needle).then((result) => {
+        if (active) setRemoteFindTotal(result.total);
+      }).catch(() => undefined);
+    }, 220);
+    return () => { active = false; clearTimeout(timer); };
+  }, [client, findOpen, findQuery, snapshot.hasMoreHistory]);
 
   function chooseCommand(item: ComposerCommand) {
     if (!commandRange || item.disabled) return;
@@ -510,6 +649,51 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
       setError(errorMessage(cause));
     } finally {
       setSessionBusy(false);
+    }
+  }
+
+  async function loadEarlierHistory() {
+    const target = viewport.current;
+    const prevScrollHeight = target?.scrollHeight ?? 0;
+    const prevScrollTop = target?.scrollTop ?? 0;
+    followingTail.current = false;
+    setError('');
+    try {
+      const added = await client.loadEarlierMessages?.();
+      if (added && target) {
+        requestAnimationFrame(() => {
+          const delta = target.scrollHeight - prevScrollHeight;
+          target.scrollTop = prevScrollTop + Math.max(0, delta);
+        });
+      }
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function replaceTurn(turnId: string, content: string) {
+    if (!content.trim()) return;
+    setError('');
+    followingTail.current = true;
+    setAtBottom(true);
+    try {
+      await client.replaceLatestTurn?.(turnId, content);
+      setEditingTurn(undefined);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }
+
+  async function handleDiscardPendingDelivery() {
+    setError('');
+    try {
+      const restored = await client.discardPendingDelivery?.();
+      if (restored && !draft.trim()) {
+        setDraft(restored);
+        requestAnimationFrame(() => textarea.current?.focus());
+      }
+    } catch (cause) {
+      setError(errorMessage(cause));
     }
   }
 
@@ -655,6 +839,12 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
   const agents = snapshot.agents ?? [];
   const selectedAgentId = snapshot.selectedAgentId ?? 'main';
   const activeSession = snapshot.sessions.find((session) => session.key === snapshot.conversationId);
+  const selectedModel = snapshot.models.find((model) => model.id === snapshot.modelConfig?.model);
+  const contextWindow = selectedModel?.contextWindow;
+  const totalTokens = activeSession?.totalTokens;
+  const contextRatio = typeof totalTokens === 'number' && typeof contextWindow === 'number' && contextWindow > 0
+    ? Math.min(1, totalTokens / contextWindow)
+    : undefined;
   const consoleUrl = client.getConsoleUrl?.(snapshot.conversationId);
   const connectionText = snapshot.endpointReady
     ? t('ready')
@@ -679,6 +869,34 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
     && snapshot.messages.length === 0
     && !snapshot.streamingMessage;
 
+  const latestUserIndex = useMemo(() => {
+    for (let index = snapshot.messages.length - 1; index >= 0; index -= 1) {
+      if (snapshot.messages[index].role === 'user') return index;
+    }
+    return -1;
+  }, [snapshot.messages]);
+  const latestUserMessage = latestUserIndex >= 0 ? snapshot.messages[latestUserIndex] : undefined;
+  const latestAssistantIndex = useMemo(() => {
+    for (let index = snapshot.messages.length - 1; index >= 0; index -= 1) {
+      if (snapshot.messages[index].role === 'assistant') return index;
+    }
+    return -1;
+  }, [snapshot.messages]);
+  const canReplaceLatestTurn = Boolean(
+    latestUserMessage?.turnId
+    && messageText(latestUserMessage).trim()
+    && !snapshot.runId
+    && !snapshot.submitting
+    && !snapshot.pendingDelivery
+    && snapshot.endpointReady,
+  );
+  const activeTabAttached = Boolean(
+    activeTab && pageContexts.some((page) => page.tabId === activeTab.tabId && !page.stale),
+  );
+  const activeTabControlled = Boolean(
+    activeTab && snapshot.tabBinding?.mode === 'act' && snapshot.tabBinding.tabId === String(activeTab.tabId),
+  );
+
   return (
     <section className="chat">
       {preview ? <ComposerPreviewDialog preview={preview} onClose={() => setPreview(undefined)} /> : null}
@@ -697,6 +915,24 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
           <ChevronDownIcon className="icon-sm" />
         </button>
         <div className="toolbar-actions">
+          {snapshot.messages.length > 0 ? (
+            <button
+              className={`icon-button subtle${findOpen ? ' active' : ''}`}
+              type="button"
+              aria-label={t('findInChat')}
+              title={t('findInChat')}
+              aria-pressed={findOpen}
+              onClick={() => {
+                setFindOpen((open) => {
+                  const next = !open;
+                  if (next) requestAnimationFrame(() => findInput.current?.focus());
+                  return next;
+                });
+              }}
+            >
+              <SearchIcon />
+            </button>
+          ) : null}
           {consoleUrl ? (
             <button
               className="icon-button subtle"
@@ -720,6 +956,60 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
           </button>
         </div>
       </div>
+      {findOpen ? (
+        <div className="chat-find-bar" role="search" aria-label={t('findInChat')}>
+          <SearchIcon className="find-icon" />
+          <input
+            ref={findInput}
+            value={findQuery}
+            placeholder={t('findInChatPlaceholder')}
+            aria-label={t('findInChat')}
+            onChange={(event) => setFindQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                setFindOpen(false);
+              } else if (event.key === 'Enter' && findMatches.length > 0) {
+                event.preventDefault();
+                setFindIndex((current) => current + (event.shiftKey ? -1 : 1));
+              }
+            }}
+          />
+          {findQuery.trim() ? (
+            <span className="find-count">
+              {findMatches.length > 0
+                ? `${((findIndex % findMatches.length) + findMatches.length) % findMatches.length + 1}/${findMatches.length}${remoteFindTotal && remoteFindTotal > findMatches.length ? ` (${remoteFindTotal})` : ''}`
+                : t('findNoMatches')}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="find-nav-btn"
+            aria-label={t('findPreviousMatch')}
+            disabled={findMatches.length === 0}
+            onClick={() => setFindIndex((current) => current - 1)}
+          >
+            <ChevronUpIcon />
+          </button>
+          <button
+            type="button"
+            className="find-nav-btn"
+            aria-label={t('findNextMatch')}
+            disabled={findMatches.length === 0}
+            onClick={() => setFindIndex((current) => current + 1)}
+          >
+            <ChevronDownIcon />
+          </button>
+          <button
+            type="button"
+            className="find-nav-btn"
+            aria-label={t('closePreview')}
+            onClick={() => setFindOpen(false)}
+          >
+            <CloseIcon />
+          </button>
+        </div>
+      ) : null}
       {menuOpen ? (
         <div className="session-menu" ref={sessionMenu}>
           <div className="session-menu-header">
@@ -888,6 +1178,58 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
           </div>
           {snapshot.conversationId && !snapshot.isDraftSession && snapshot.messages.length > 0 ? (
             <div className="session-menu-footer">
+              {typeof totalTokens === 'number' && totalTokens > 0 ? (
+                <div className="context-usage-row">
+                  <div className="context-usage-meta">
+                    <span>{t('contextUsage')}</span>
+                    <strong>
+                      {formatTokenCount(totalTokens)}
+                      {contextWindow ? ` / ${formatTokenCount(contextWindow)}` : ''}
+                    </strong>
+                  </div>
+                  {contextRatio !== undefined ? (
+                    <div className="context-usage-track">
+                      <span
+                        className={`context-usage-fill${contextRatio > 0.8 ? ' high' : ''}`}
+                        style={{ width: `${Math.max(4, Math.round(contextRatio * 100))}%` }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="session-footer-actions">
+                <button
+                  type="button"
+                  className="session-footer-btn"
+                  disabled={sessionBusy || Boolean(snapshot.runId)}
+                  onClick={() => void runSessionAction(async () => {
+                    const ok = await client.compactSession?.(snapshot.conversationId);
+                    if (ok) {
+                      setMenuOpen(false);
+                      showTransientStatus(t('contextCompacted'));
+                    }
+                  })}
+                >
+                  <CompressIcon />
+                  <span>{sessionBusy ? t('compactingContext') : t('compactContext')}</span>
+                </button>
+                <button
+                  type="button"
+                  className="session-footer-btn"
+                  disabled={sessionBusy}
+                  onClick={() => void runSessionAction(async () => {
+                    const markdown = await client.exportSessionMarkdown?.(snapshot.conversationId);
+                    if (markdown) {
+                      downloadMarkdownFile(activeSession?.title ?? 'xopc-chat', markdown);
+                      setMenuOpen(false);
+                      showTransientStatus(t('exportedMarkdown'));
+                    }
+                  })}
+                >
+                  <DownloadIcon />
+                  <span>{t('exportMarkdown')}</span>
+                </button>
+              </div>
               {confirmingReset ? (
                 <div className="session-reset-confirm">
                   <span>{t('confirmResetChat')}</span>
@@ -931,8 +1273,26 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
           <button type="button" onClick={() => void runControlAction(() => client.reconnect())}>{t('reconnect')}</button>
         </div>
       ) : null}
+      {statusNotice ? (
+        <div className="status-toast" role="status" aria-live="polite">
+          <CheckIcon />
+          <span>{statusNotice}</span>
+        </div>
+      ) : null}
       <div className="messages-shell">
         <div className="messages" ref={viewport} onScroll={trackScrollPosition}>
+          {snapshot.hasMoreHistory && !snapshot.sessionLoading ? (
+            <div className="load-earlier-bar">
+              <button
+                type="button"
+                className="load-earlier-button"
+                disabled={snapshot.loadingMoreHistory}
+                onClick={() => void loadEarlierHistory()}
+              >
+                {snapshot.loadingMoreHistory ? t('loadingEarlierMessages') : t('loadEarlierMessages')}
+              </button>
+            </div>
+          ) : null}
           {snapshot.sessionLoading ? (
             <div className="message-skeleton" aria-label={t('loadingChat')}>
               <div className="skeleton-user"><span /></div>
@@ -995,10 +1355,19 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
               </div>
             </div>
           ) : null}
-          {snapshot.messages.map((message) => {
+          {snapshot.messages.map((message, messageIndex) => {
             const text = messageText(message);
+            const isFindMatch = findMatches.includes(message.id);
+            const isActiveFind = activeFindMessageId === message.id;
+            const isLatestUser = messageIndex === latestUserIndex;
+            const isLatestAssistant = messageIndex === latestAssistantIndex && latestAssistantIndex > latestUserIndex;
+            const isEditingThis = Boolean(editingTurn && message.turnId && editingTurn.turnId === message.turnId);
             return (
-              <article key={message.id} className={`message ${message.role}`}>
+              <article
+                key={message.id}
+                data-message-id={message.id}
+                className={`message ${message.role}${isFindMatch ? ' find-match' : ''}${isActiveFind ? ' find-match-active' : ''}`}
+              >
                 <div className="message-heading">
                   {message.role === 'assistant' ? <span className="message-avatar"><SparkleIcon /></span> : null}
                   <span className="message-author">
@@ -1020,26 +1389,60 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
                   {message.attachments?.length ? (
                     <div className="message-attachments">
                       {message.attachments.map((attachment, index) => (
-                        <span className="message-attachment" key={`${attachment.name}-${index}`} title={attachment.mimeType}>
-                          {attachment.type === 'image' ? <CameraIcon /> : <FileIcon />}
-                          <span>
-                            <strong>{attachment.name}</strong>
-                            {formatFileSize(attachment.size) ? <small>{formatFileSize(attachment.size)}</small> : null}
-                          </span>
-                        </span>
+                        <MessageAttachmentChip
+                          key={`${attachment.name}-${index}`}
+                          attachment={attachment}
+                          hasPreview={Boolean(client.hasAttachmentPreview?.(message.id, index))}
+                          loadPreview={client.loadAttachmentPreview
+                            ? () => client.loadAttachmentPreview(message.id, index)
+                            : undefined}
+                          onPreview={(title, image) => setPreview({ title, image })}
+                        />
                       ))}
                     </div>
                   ) : null}
                   {message.role === 'assistant' ? (
                     <AssistantActivity message={message} detail={snapshot.modelConfig?.activityDetail ?? 'on'} streaming={false} />
                   ) : null}
-                  {text ? (
+                  {isEditingThis && editingTurn ? (
+                    <div className="turn-edit-box">
+                      <textarea
+                        value={editingTurn.text}
+                        rows={3}
+                        autoFocus
+                        aria-label={t('editAndResend')}
+                        onChange={(event) => setEditingTurn({ ...editingTurn, text: event.target.value })}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Escape') {
+                            event.preventDefault();
+                            setEditingTurn(undefined);
+                          } else if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && editingTurn.text.trim()) {
+                            event.preventDefault();
+                            void replaceTurn(editingTurn.turnId, editingTurn.text);
+                          }
+                        }}
+                      />
+                      <div className="turn-edit-actions">
+                        <button
+                          type="button"
+                          className="session-inline-primary"
+                          disabled={snapshot.submitting || !editingTurn.text.trim()}
+                          onClick={() => void replaceTurn(editingTurn.turnId, editingTurn.text)}
+                        >
+                          {t('send')}
+                        </button>
+                        <button type="button" onClick={() => setEditingTurn(undefined)}>
+                          {t('cancelQueuedMessage')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : text ? (
                     message.role === 'assistant'
                       ? <MarkdownContent>{text}</MarkdownContent>
                       : <div className="plain-message-content">{text}</div>
                   ) : null}
                 </div>
-                {(message.role === 'assistant' || message.role === 'user') && text ? (
+                {(message.role === 'assistant' || message.role === 'user') && text && !isEditingThis ? (
                   <div className={`message-actions${message.role === 'user' ? ' user-actions' : ''}`}>
                     <button
                       type="button"
@@ -1050,6 +1453,28 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
                       {copiedMessageId === message.id ? <CheckIcon /> : <CopyIcon />}
                       <span>{copiedMessageId === message.id ? t('copied') : t('copy')}</span>
                     </button>
+                    {isLatestUser && canReplaceLatestTurn && message.turnId ? (
+                      <button
+                        type="button"
+                        aria-label={t('editAndResend')}
+                        title={t('editAndResend')}
+                        onClick={() => setEditingTurn({ turnId: message.turnId!, text })}
+                      >
+                        <EditIcon />
+                        <span>{t('editAndResend')}</span>
+                      </button>
+                    ) : null}
+                    {isLatestAssistant && canReplaceLatestTurn && latestUserMessage?.turnId ? (
+                      <button
+                        type="button"
+                        aria-label={t('regenerateResponse')}
+                        title={t('regenerateResponse')}
+                        onClick={() => void replaceTurn(latestUserMessage.turnId!, messageText(latestUserMessage))}
+                      >
+                        <RefreshIcon />
+                        <span>{t('regenerateResponse')}</span>
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </article>
@@ -1102,6 +1527,37 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
           >
             <CloseIcon />
           </button>
+        </div>
+      ) : null}
+      {activeTab && !snapshot.clarification ? (
+        <div className="active-tab-bar" aria-label={activeTab.title}>
+          <PageIcon className="active-tab-icon" />
+          <span className="active-tab-copy" title={`${activeTab.title} (${activeTab.url})`}>
+            <strong>{activeTab.hostname}</strong>
+            <span>{activeTab.title}</span>
+          </span>
+          <div className="active-tab-actions">
+            <button
+              type="button"
+              className={`active-tab-btn${activeTabAttached ? ' attached' : ''}`}
+              disabled={!draftReady || processing || sending || snapshot.sessionLoading}
+              onClick={() => void attachPage('page')}
+            >
+              {activeTabAttached ? <CheckIcon /> : <PlusIcon />}
+              <span>{activeTabAttached ? t('attachedTabShort') : t('attachTabShort')}</span>
+            </button>
+            <button
+              type="button"
+              className={`active-tab-btn${activeTabControlled ? ' controlled' : ''}`}
+              disabled={!snapshot.endpointReady || !snapshot.conversationId}
+              onClick={() => void runControlAction(() => (
+                activeTabControlled ? client.unbindActiveTab() : client.bindActiveTab('act')
+              ))}
+            >
+              <CursorIcon />
+              <span>{t('controlTabShort')}</span>
+            </button>
+          </div>
         </div>
       ) : null}
       <form
@@ -1273,7 +1729,25 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
             onCancel={() => client.cancelInput(input.id, input.version)}
           />
         ))}
-        {snapshot.pendingDelivery ? <div className="composer-notice" role="status">{t('queuedMessageNotice')}</div> : null}
+        {snapshot.pendingDelivery ? (
+          <div className="composer-notice pending-delivery-notice" role="status">
+            <span>{t('queuedMessageNotice')}</span>
+            <div className="pending-delivery-actions">
+              <button
+                type="button"
+                disabled={!snapshot.endpointReady}
+                onClick={() => void runControlAction(async () => {
+                  await client.retryPendingDelivery?.();
+                })}
+              >
+                {t('retryNow')}
+              </button>
+              <button type="button" onClick={() => void handleDiscardPendingDelivery()}>
+                {t('discardQueuedMessage')}
+              </button>
+            </div>
+          </div>
+        ) : null}
         {error || (!connectionProblem && snapshot.error) ? (
           <div className="composer-error" role="alert">
             <AlertIcon />
@@ -1289,6 +1763,15 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
                 }}
               >
                 {t('attachScreenshotInstead')}
+              </button>
+            ) : null}
+            {!error && snapshot.error && canReplaceLatestTurn && latestUserMessage?.turnId ? (
+              <button
+                type="button"
+                className="composer-error-action"
+                onClick={() => void replaceTurn(latestUserMessage.turnId!, messageText(latestUserMessage))}
+              >
+                {t('retryNow')}
               </button>
             ) : null}
             {error ? (

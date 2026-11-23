@@ -36,6 +36,7 @@ export type BrowserChatAttachment = {
 
 export type BrowserChatMessage = {
   id: string;
+  turnId?: string;
   role: 'user' | 'assistant' | 'system';
   blocks: BrowserMessageBlock[];
   timestamp?: number;
@@ -240,6 +241,7 @@ export function normalizeChatMessages(values: readonly unknown[]): BrowserChatMe
     const sourceContexts = parseSourceContexts(row.metadata);
     const message: BrowserChatMessage = {
       id: typeof row.id === 'string' ? row.id : `${row.role}:${index}`,
+      ...(typeof row.turnId === 'string' && row.turnId ? { turnId: row.turnId } : {}),
       role: row.role,
       blocks,
       ...(startedAt === undefined ? {} : { timestamp: startedAt }),

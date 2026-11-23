@@ -133,3 +133,15 @@ export function BotIcon(props: IconProps) {
 export function TranslateIcon(props: IconProps) {
   return <IconBase {...props}><path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" /></IconBase>;
 }
+
+export function ChevronUpIcon(props: IconProps) {
+  return <IconBase {...props}><path d="m17 14-5-5-5 5" /></IconBase>;
+}
+
+export function DownloadIcon(props: IconProps) {
+  return <IconBase {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></IconBase>;
+}
+
+export function CompressIcon(props: IconProps) {
+  return <IconBase {...props}><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" /></IconBase>;
+}

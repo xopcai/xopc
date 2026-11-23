@@ -54,6 +54,7 @@ export type BrowserChatSession = {
   pinned?: boolean;
   agentId?: string;
   messageCount?: number;
+  totalTokens?: number;
 };
 
 export type BrowserConfiguredAgent = {
@@ -86,6 +87,7 @@ export type BrowserConfiguredModel = {
   name: string;
   provider?: string;
   recommended?: boolean;
+  contextWindow?: number;
   thinking?: { mode: string; options?: string[]; initialValue?: string };
 };
 
@@ -119,6 +121,8 @@ export type BrowserChatSnapshot = {
   isDraftSession?: boolean;
   gatewayUrl?: string;
   messages: BrowserChatMessage[];
+  hasMoreHistory?: boolean;
+  loadingMoreHistory?: boolean;
   streamingMessage?: BrowserChatMessage;
   runId?: string;
   clarification?: BrowserClarification;
@@ -327,12 +331,51 @@ async function clientId(): Promise<string> {
   return id;
 }
 
+function extractStreamError(payload: Record<string, unknown>): string {
+  const err = payload.error;
+  if (typeof err === 'string' && err.trim()) return err.trim();
+  if (err && typeof err === 'object' && typeof (err as Record<string, unknown>).message === 'string') {
+    const message = ((err as Record<string, unknown>).message as string).trim();
+    if (message) return message;
+  }
+  if (typeof payload.message === 'string' && payload.message.trim()) return payload.message.trim();
+  return t('errorRunFailed');
+}
+
+function indexAttachmentMediaUris(
+  target: Map<string, string>,
+  conversationId: string,
+  rawRows: readonly unknown[],
+): void {
+  for (let rowIndex = 0; rowIndex < rawRows.length; rowIndex += 1) {
+    const row = rawRows[rowIndex];
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    const record = row as Record<string, unknown>;
+    if (record.role !== 'user' && record.role !== 'assistant' && record.role !== 'system') continue;
+    const messageId = typeof record.id === 'string' ? record.id : `${record.role}:${rowIndex}`;
+    const list = [
+      ...(Array.isArray(record.media) ? record.media : []),
+      ...(Array.isArray(record.attachments) ? record.attachments : []),
+    ];
+    list.forEach((item, attachmentIndex) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+      const entry = item as Record<string, unknown>;
+      const uri = typeof entry.uri === 'string' && entry.uri.startsWith('media://') ? entry.uri : undefined;
+      if (uri) target.set(`${conversationId}:${messageId}:${attachmentIndex}`, uri);
+    });
+  }
+}
+
 export class BrowserChatClient {
   private readonly listeners = new Set<Listener>();
   private readonly transcriptCache = new Map<string, string>();
+  private readonly attachmentMediaUris = new Map<string, string>();
+  private readonly attachmentPreviewUrls = new Map<string, string>();
+  private readonly objectUrls = new Set<string>();
   private realtime?: RealtimeClient;
   private turnClaim?: TurnClaim;
   private runTopic?: string;
+  private historyCursor?: string;
   private recoveringOutbox = false;
   private sendingInput = false;
   private clarificationAttempt?: { signature: string; key: string };
@@ -463,9 +506,16 @@ export class BrowserChatClient {
     }
   }
 
+  private revokeObjectUrls(): void {
+    this.objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    this.objectUrls.clear();
+    this.attachmentPreviewUrls.clear();
+    this.attachmentMediaUris.clear();
+  }
+
   stop(): void {
-    void chrome.runtime.sendMessage({ type: 'browser/context-activity', foreground: false }).catch(() => undefined);
-    chrome.runtime.onMessage.removeListener(this.onRuntimeMessage);
+    void chrome.runtime?.sendMessage?.({ type: 'browser/context-activity', foreground: false })?.catch(() => undefined);
+    chrome.runtime?.onMessage?.removeListener?.(this.onRuntimeMessage);
     if (this.endpointPoll) clearInterval(this.endpointPoll);
     if (this.suggestionTimer) clearTimeout(this.suggestionTimer);
     this.endpointPoll = undefined;
@@ -473,6 +523,7 @@ export class BrowserChatClient {
     this.realtime?.disconnect();
     this.realtime = undefined;
     this.turnClaim = undefined;
+    this.revokeObjectUrls();
     this.update({ endpointReady: false });
   }
 
@@ -594,6 +645,7 @@ export class BrowserChatClient {
       if (typeof row.key !== 'string') return [];
       const transcriptId = typeof row.transcriptId === 'string' && row.transcriptId ? row.transcriptId : undefined;
       if (transcriptId) this.rememberTranscriptId(row.key, transcriptId);
+      const usage = row.usage && typeof row.usage === 'object' ? row.usage as Record<string, unknown> : undefined;
       return [{
         key: row.key,
         ...(transcriptId ? { transcriptId } : {}),
@@ -602,6 +654,7 @@ export class BrowserChatClient {
         pinned: row.status === 'pinned',
         ...(typeof row.agentId === 'string' ? { agentId: row.agentId } : {}),
         ...(typeof row.messageCount === 'number' ? { messageCount: row.messageCount } : {}),
+        ...(typeof usage?.totalTokens === 'number' ? { totalTokens: usage.totalTokens } : {}),
       }];
     });
     sessions.sort((left, right) => {
@@ -641,6 +694,7 @@ export class BrowserChatClient {
   async openSession(conversationId: string): Promise<void> {
     if (this.runTopic) this.realtime?.unsubscribe(this.runTopic);
     this.runTopic = undefined;
+    this.historyCursor = undefined;
     this.clearSuggestionTimer();
     const knownTranscriptId = this.snapshot.sessions.find((candidate) => candidate.key === conversationId)?.transcriptId
       ?? this.rememberedTranscriptId(conversationId);
@@ -649,6 +703,8 @@ export class BrowserChatClient {
       transcriptId: knownTranscriptId,
       isDraftSession: false,
       messages: [],
+      hasMoreHistory: false,
+      loadingMoreHistory: false,
       streamingMessage: undefined,
       runId: undefined,
       stopping: false,
@@ -740,6 +796,7 @@ export class BrowserChatClient {
     if (this.snapshot.conversationId === conversationId) {
       if (this.runTopic) this.realtime?.unsubscribe(this.runTopic);
       this.runTopic = undefined;
+      this.historyCursor = undefined;
       this.clearSuggestionTimer();
       const tabId = await activeTabId();
       await chrome.storage.session.remove([
@@ -751,6 +808,8 @@ export class BrowserChatClient {
         transcriptId: undefined,
         isDraftSession: false,
         messages: [],
+        hasMoreHistory: false,
+        loadingMoreHistory: false,
         streamingMessage: undefined,
         runId: undefined,
         stopping: false,
@@ -779,10 +838,13 @@ export class BrowserChatClient {
     if (this.snapshot.conversationId !== conversationId) return;
     if (this.runTopic) this.realtime?.unsubscribe(this.runTopic);
     this.runTopic = undefined;
+    this.historyCursor = undefined;
     this.clearSuggestionTimer();
     this.update({
       ...(nextTranscriptId ? { transcriptId: nextTranscriptId } : {}),
       messages: [],
+      hasMoreHistory: false,
+      loadingMoreHistory: false,
       streamingMessage: undefined,
       runId: undefined,
       stopping: false,
@@ -975,6 +1037,14 @@ export class BrowserChatClient {
       await writeBrowserOutbox(scope.inputKey, durable);
       outboxStored = true;
       await scope.assertCurrent();
+      attachments.forEach((attachment, index) => {
+        if (attachment.type === 'image' && attachment.data && attachment.mimeType) {
+          this.attachmentPreviewUrls.set(
+            `${conversationId}:${clientMessageId}:${index}`,
+            `data:${attachment.mimeType};base64,${attachment.data}`,
+          );
+        }
+      });
       this.update({
         messages: this.snapshot.runId ? this.snapshot.messages : [...this.snapshot.messages, {
           id: clientMessageId,
@@ -1041,6 +1111,204 @@ export class BrowserChatClient {
       const current = await scope.assertCurrent().then(() => true, () => false);
       if (current && this.snapshot.conversationId === conversationId) this.update({ submitting: false });
     }
+  }
+
+  async retryPendingDelivery(): Promise<void> {
+    this.lastOutboxRecoveryAt = 0;
+    await this.recoverOutbox();
+  }
+
+  async discardPendingDelivery(): Promise<string | undefined> {
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId || this.recoveringOutbox) return undefined;
+    const scope = await deliveryScope(conversationId, this.profileIdentity);
+    const pending = await readBrowserOutbox<BrowserOutboxRequest>(scope.inputKey);
+    await deleteBrowserOutbox(scope.inputKey);
+    await scope.assertCurrent();
+    if (this.snapshot.conversationId === conversationId) {
+      this.update({
+        pendingDelivery: false,
+        messages: pending?.clientMessageId
+          ? this.snapshot.messages.filter((message) => message.id !== pending.clientMessageId)
+          : this.snapshot.messages,
+        error: undefined,
+      });
+    }
+    return typeof pending?.input?.content === 'string' ? pending.input.content : undefined;
+  }
+
+  async replaceLatestTurn(turnId: string, content: string): Promise<void> {
+    const text = content.trim();
+    if (!text) return;
+    if (this.sendingInput) throw new Error(t('errorWaitQueuedMessage'));
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId) throw new Error(t('errorOpenChatBeforeSending'));
+    if (this.snapshot.submitting || this.snapshot.pendingDelivery || this.recoveringOutbox || this.snapshot.runId) {
+      throw new Error(t('errorWaitQueuedMessage'));
+    }
+    if (!this.turnClaim) throw new Error(t('errorEndpointNotReady'));
+    this.sendingInput = true;
+    this.clearSuggestionTimer();
+    this.update({ submitting: true, nextTurnSuggestion: undefined, error: undefined });
+    try {
+      const scope = await deliveryScope(conversationId, this.profileIdentity);
+      const { transcriptId, configVersion } = await this.hydrateAppendIdentity(conversationId, scope);
+      const clientMessageId = crypto.randomUUID();
+      const postReplace = async (claim: TurnClaim) => json<{
+        payload?: {
+          state?: { activeRunId?: string; inputs?: BrowserInputStateEntry[] };
+          activeRunId?: string;
+        };
+      }>(await gatewayFetch(
+        `/api/sessions/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(turnId)}/replace`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientMessageId,
+            expectedTranscriptId: transcriptId,
+            configVersion,
+            delivery: 'next',
+            content: text,
+            origin: { type: 'endpoint', endpointId: claim.endpointId, token: claim.token },
+          }),
+        },
+        scope.identity,
+      ));
+
+      let response: Awaited<ReturnType<typeof postReplace>>;
+      try {
+        response = await postReplace(this.turnClaim);
+      } catch (cause) {
+        if (cause instanceof GatewayRequestError && cause.status === 401 && cause.code === 'INVALID_ENDPOINT') {
+          const refreshed = await chrome.runtime.sendMessage({ type: 'browser/get-endpoint-claim' }).catch(() => undefined) as {
+            claim?: TurnClaim;
+          } | undefined;
+          if (refreshed?.claim) {
+            this.turnClaim = refreshed.claim;
+            response = await postReplace(refreshed.claim);
+          } else {
+            throw cause;
+          }
+        } else {
+          if (cause instanceof GatewayRequestError && cause.status === 409) {
+            if (cause.code === 'CONFIG_CHANGED') void this.reloadModelConfig(scope.identity).catch(() => undefined);
+            else void Promise.all([this.reloadMessages(), this.reloadModelConfig(scope.identity)]).catch(() => undefined);
+          }
+          throw cause;
+        }
+      }
+
+      if (this.snapshot.conversationId !== conversationId) return;
+      await this.reloadMessages();
+      if (this.snapshot.conversationId !== conversationId) return;
+      const runId = response.payload?.state?.activeRunId
+        ?? response.payload?.activeRunId
+        ?? await this.waitForRun(conversationId, clientMessageId);
+      if (this.snapshot.conversationId !== conversationId) return;
+      if (runId) await this.followRun(runId);
+    } finally {
+      this.sendingInput = false;
+      if (this.snapshot.conversationId === conversationId) this.update({ submitting: false });
+    }
+  }
+
+  async loadEarlierMessages(): Promise<number> {
+    const conversationId = this.snapshot.conversationId;
+    const cursor = this.historyCursor;
+    if (!conversationId || !cursor || this.snapshot.loadingMoreHistory || !this.snapshot.hasMoreHistory) return 0;
+    this.update({ loadingMoreHistory: true });
+    try {
+      const result = await json<{
+        payload: { messages?: unknown[]; transcriptId?: string };
+        pagination?: { hasMore?: boolean; nextBeforeCursor?: string };
+      }>(await gatewayFetch(
+        `/api/sessions/${encodeURIComponent(conversationId)}/messages?limit=100&before=${encodeURIComponent(cursor)}`,
+      ));
+      if (this.snapshot.conversationId !== conversationId) return 0;
+      const rawRows = result.payload.messages ?? [];
+      indexAttachmentMediaUris(this.attachmentMediaUris, conversationId, rawRows);
+      const older = normalizeChatMessages(rawRows);
+      const existingIds = new Set(this.snapshot.messages.map((message) => message.id));
+      const uniqueOlder = older.filter((message) => !existingIds.has(message.id));
+      this.historyCursor = result.pagination?.nextBeforeCursor;
+      this.update({
+        messages: [...uniqueOlder, ...this.snapshot.messages],
+        hasMoreHistory: Boolean(result.pagination?.hasMore && this.historyCursor),
+      });
+      return uniqueOlder.length;
+    } finally {
+      if (this.snapshot.conversationId === conversationId) {
+        this.update({ loadingMoreHistory: false });
+      }
+    }
+  }
+
+  async findInSession(query: string): Promise<{ total: number; truncated: boolean }> {
+    const conversationId = this.snapshot.conversationId;
+    const trimmed = query.trim();
+    if (!conversationId || !trimmed || this.snapshot.isDraftSession) return { total: 0, truncated: false };
+    const result = await json<{ total?: number; truncated?: boolean }>(
+      await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/find?q=${encodeURIComponent(trimmed)}`),
+    );
+    return {
+      total: typeof result.total === 'number' ? result.total : 0,
+      truncated: result.truncated === true,
+    };
+  }
+
+  async compactSession(conversationId = this.snapshot.conversationId): Promise<boolean> {
+    if (!conversationId || this.snapshot.isDraftSession) return false;
+    await json(await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/compaction/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force: true }),
+    }));
+    if (this.snapshot.conversationId === conversationId) {
+      await Promise.all([
+        this.reloadMessages().catch(() => undefined),
+        this.loadSessions(this.lastSessionSearch).catch(() => undefined),
+      ]);
+    }
+    return true;
+  }
+
+  async exportSessionMarkdown(conversationId = this.snapshot.conversationId): Promise<string> {
+    if (!conversationId || this.snapshot.isDraftSession) {
+      return this.snapshot.messages
+        .map((message) => `### ${message.role === 'user' ? 'User' : message.role === 'assistant' ? 'xopc' : 'System'}\n\n${message.blocks.filter((b) => b.type === 'text').map((b) => b.text).join('')}`)
+        .join('\n\n---\n\n');
+    }
+    const result = await json<{ content?: string }>(
+      await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/export?format=markdown`),
+    );
+    return typeof result.content === 'string' ? result.content : '';
+  }
+
+  hasAttachmentPreview(messageId: string, index: number): boolean {
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId) return false;
+    const key = `${conversationId}:${messageId}:${index}`;
+    return this.attachmentPreviewUrls.has(key) || this.attachmentMediaUris.has(key);
+  }
+
+  async loadAttachmentPreview(messageId: string, index: number): Promise<string | undefined> {
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId) return undefined;
+    const key = `${conversationId}:${messageId}:${index}`;
+    const cached = this.attachmentPreviewUrls.get(key);
+    if (cached) return cached;
+    const uri = this.attachmentMediaUris.get(key);
+    if (!uri) return undefined;
+    const response = await gatewayFetch(
+      `/api/media/read?uri=${encodeURIComponent(uri)}&conversationId=${encodeURIComponent(conversationId)}`,
+    );
+    if (!response.ok) return undefined;
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    this.objectUrls.add(url);
+    this.attachmentPreviewUrls.set(key, url);
+    return url;
   }
 
   private async lookupInputReceipt(
@@ -1437,9 +1705,12 @@ export class BrowserChatClient {
     }
     await chrome.storage.session.set({ [`${CURSOR_PREFIX}${runId}`]: seq });
     if (event === 'run_end' || event === 'error') {
+      const streamError = event === 'error'
+        ? extractStreamError(payload)
+        : (payload.status === 'error' || payload.error ? extractStreamError(payload) : undefined);
       if (this.snapshot.streamingMessage) {
         this.update({
-          streamingMessage: finalizeStreamingMessage(this.snapshot.streamingMessage, event === 'error'),
+          streamingMessage: finalizeStreamingMessage(this.snapshot.streamingMessage, Boolean(streamError)),
         });
       }
       this.realtime?.unsubscribe(topic);
@@ -1449,11 +1720,16 @@ export class BrowserChatClient {
         await this.reloadMessages();
       } finally {
         if (topic === this.runTopic || this.snapshot.runId === runId) {
-          this.update({ runId: undefined, streamingMessage: undefined, stopping: false });
+          this.update({
+            runId: undefined,
+            streamingMessage: undefined,
+            stopping: false,
+            ...(streamError ? { error: streamError } : {}),
+          });
         }
       }
       void this.loadSessions(this.lastSessionSearch).catch(() => undefined);
-      void this.loadNextTurnSuggestion().catch(() => undefined);
+      if (!streamError) void this.loadNextTurnSuggestion().catch(() => undefined);
     }
   }
 
@@ -1462,16 +1738,21 @@ export class BrowserChatClient {
     if (!conversationId) return;
     const result = await json<{
       payload: { messages?: unknown[]; transcriptId?: string };
+      pagination?: { hasMore?: boolean; nextBeforeCursor?: string };
     }>(await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/messages?limit=200`));
-    const messages = normalizeChatMessages(result.payload.messages ?? []);
+    const rawRows = result.payload.messages ?? [];
+    indexAttachmentMediaUris(this.attachmentMediaUris, conversationId, rawRows);
+    const messages = normalizeChatMessages(rawRows);
     if (this.snapshot.conversationId !== conversationId) return;
     const fromPayload = typeof result.payload.transcriptId === 'string' && result.payload.transcriptId
       ? result.payload.transcriptId
       : undefined;
     const transcriptId = fromPayload ?? this.resolveKnownTranscriptId(conversationId);
     if (transcriptId) this.rememberTranscriptId(conversationId, transcriptId);
+    this.historyCursor = result.pagination?.nextBeforeCursor;
     this.update({
       messages,
+      hasMoreHistory: Boolean(result.pagination?.hasMore && this.historyCursor),
       ...(transcriptId ? { transcriptId } : {}),
     });
   }
@@ -1493,6 +1774,9 @@ export class BrowserChatClient {
         name: model.name,
         ...(typeof model.provider === 'string' ? { provider: model.provider } : {}),
         ...(model.recommended === true ? { recommended: true } : {}),
+        ...(typeof model.contextWindow === 'number' && Number.isFinite(model.contextWindow)
+          ? { contextWindow: model.contextWindow }
+          : {}),
         ...(thinking && typeof thinking.mode === 'string' ? {
           thinking: {
             mode: thinking.mode,
