@@ -130,6 +130,7 @@ export { createManagedJobTool } from './managed-job-tool.js';
 
 export { createImageTool, resolveImageModelConfigForTool } from './image-tool.js';
 export { createImageGenerateTool, resolveImageGenerationModelConfigForTool } from './image-generate-tool.js';
+export { createImageGenerationTool, type ImageGenerationToolDeps } from './image-generation-tool.js';
 
 // Utility exports
 export {
@@ -155,5 +156,6 @@ export {
 } from './edit-diff.js';
 
 export { createPersonalReadTool } from './personal-read-tool.js';
+export { createPersonalScheduleTool, type PersonalScheduleToolDeps } from './personal-schedule-tool.js';
 
 export { createTaskCollaborationTool } from './task-collaboration-tool.js';

@@ -73,5 +73,6 @@ export * from './follow-ups.js';
 
 export * from './video-generation.js';
 export * from './music-generation.js';
+export * from './image-generation.js';
 
 export * from "./space.js";

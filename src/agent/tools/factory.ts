@@ -82,6 +82,7 @@ import {
 import { canRecallConversation, canRecallHistoryEntry } from '../../session/history-recall-policy.js';
 import { createSessionSearchTool } from './session-search-tool.js';
 import { createPersonalReadTool } from './personal-read-tool.js';
+import { createPersonalScheduleTool } from './personal-schedule-tool.js';
 import { createPersonalResultTool } from './personal-result-tool.js';
 import { createPersonalTaskTool, type PersonalTaskToolDeps } from './personal-task-tool.js';
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
@@ -101,6 +102,7 @@ import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 import { createCapabilityCatalogTool } from './capability-catalog-tool.js';
 import { createImageTool } from './image-tool.js';
 import { createMusicGenerationTool } from './music-generation-tool.js';
+import { createImageGenerationTool } from './image-generation-tool.js';
 import { createVideoDraftTool } from './video-draft-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
 import { BrowserNotReadyError, checkBrowserReadiness } from '../../browser/index.js';
@@ -557,7 +559,15 @@ export class AgentToolsFactory {
         ? id : undefined;
     };
     const webMediaTools = webMediaConversation()
-      ? [createVideoDraftTool(webMediaConversation), createMusicGenerationTool(webMediaConversation)]
+      ? [
+          createVideoDraftTool(webMediaConversation),
+          createMusicGenerationTool(webMediaConversation),
+          createImageGenerationTool({
+            getConversationId: webMediaConversation,
+            getConfig: () => this.deps.getConfig?.(),
+            getAgentId: () => resolvedAgentId,
+          }),
+        ]
       : [];
     const optionalTools = [imageTool, imageGenerateTool, ...webMediaTools].filter((t) => t != null) as any[];
     if (webMediaConversation() && !executionToolPolicy.taskExecution) {
@@ -906,6 +916,11 @@ export class AgentToolsFactory {
                 getCurrentConversationId: currentConversationId,
                 getCurrentAgentId: () => resolvedAgentId,
                 canConfigureFromConversation: productToolDeps.canConfigureFromConversation,
+              })] : []),
+              ...(this.deps.getAutomationService ? [createPersonalScheduleTool({
+                getAutomationService: this.deps.getAutomationService,
+                getCurrentConversationId: currentConversationId,
+                getConfig: () => this.deps.getConfig?.(),
               })] : []),
               createPersonalAttentionTool({ getConversationId: () => this.deps.getCurrentContext()?.conversationId, getConfig: () => this.deps.getConfig?.() }),
             ] : []),

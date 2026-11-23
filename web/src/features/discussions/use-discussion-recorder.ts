@@ -84,7 +84,9 @@ export function useDiscussionRecorder() {
 
   const refreshRecoverableDrafts = useCallback(async () => {
     try {
-      setRecoverableDrafts(await listDiscussionDrafts());
+      const activeId = recorderRef.current ? draftRef.current?.id : null;
+      const drafts = await listDiscussionDrafts();
+      setRecoverableDrafts(drafts.filter((item) => item.chunkCount > 0 && item.id !== activeId));
     } catch {
       setRecoverableDrafts([]);
     }
@@ -231,7 +233,11 @@ export function useDiscussionRecorder() {
       saveOutcome: storageErrorRef.current || stopError || !current.chunkCount ? 'incomplete' : interruptedRef.current ? 'interrupted' : 'complete',
     };
     try {
-      await saveDiscussionDraft(stopped);
+      if (current.chunkCount > 0) {
+        await saveDiscussionDraft(stopped);
+      } else {
+        await deleteDiscussionDraft(current.id).catch(() => undefined);
+      }
       draftRef.current = stopped;
       setDraft(stopped);
       setElapsedMs(stopped.durationMs);

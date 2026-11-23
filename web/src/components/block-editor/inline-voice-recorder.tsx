@@ -208,8 +208,8 @@ export function InlineVoiceRecorder({ noteId, onInserted, onCancel }: InlineVoic
                 : status === 'error'
                   ? errorMessage ?? (zh ? '录音失败' : 'Recording failed')
                   : zh
-                    ? '正在录制语音片段'
-                    : 'Recording voice clip'}
+                    ? '正在录制音频片段'
+                    : 'Recording audio clip'}
         </span>
         {(status === 'recording' || status === 'paused' || status === 'saving') ? (
           <span className="rounded bg-surface-panel px-1.5 py-0.5 font-mono tabular-nums text-fg">

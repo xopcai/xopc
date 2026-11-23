@@ -376,8 +376,13 @@ export function listNoteRecords(
     params.push('trashed', 'archived');
   }
   if (query.kind) {
-    conditions.push(`kind = ?`);
-    params.push(query.kind);
+    if (query.kind === 'voice') {
+      conditions.push(`(kind = ? OR voice_attachment_id IS NOT NULL)`);
+      params.push('voice');
+    } else {
+      conditions.push(`kind = ?`);
+      params.push(query.kind);
+    }
   }
   if (query.pinned !== undefined) {
     conditions.push(`pinned = ?`);

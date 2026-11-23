@@ -103,8 +103,12 @@ export function getRecordingChunks(id: string): Promise<Array<{ sequence: number
 }
 
 export function uploadRecordingChunk(id: string, sequence: number, blob: Blob, sha256: string): Promise<unknown> {
-  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/recording/chunks/${sequence}`), {
-    method: 'PUT', headers: { 'Content-Type': 'application/octet-stream', 'x-audio-sha256': sha256 }, body: blob,
+  const normalizedSha = sha256.trim().toLowerCase();
+  const query = normalizedSha ? `?sha256=${encodeURIComponent(normalizedSha)}` : '';
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/recording/chunks/${sequence}${query}`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/octet-stream', 'x-audio-sha256': normalizedSha },
+    body: blob,
   });
 }
 

@@ -2,7 +2,7 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { RecordingOutcomeCard, recordingOutcomeInput } from './recording-outcome-card';
 import { LiveTranscriptView } from './live-transcript-view';
-import { Bookmark, FileText, Mic, Pause, Play, Square, Unlink, X } from 'lucide-react';
+import { Bookmark, FileText, Mic, Pause, Play, Square, Unlink, Volume2, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -31,7 +31,12 @@ import {
 } from './discussion-draft-store';
 import { forgetDiscussionConsent, readDiscussionConsent, rememberDiscussionConsent } from './discussion-consent-cache';
 import { OPEN_DISCUSSION_CAPTURE_EVENT } from './discussion-events';
-import type { DiscussionAudioCaptureMode } from './audio-capture-mixer';
+import {
+  isSystemAudioMixSupported,
+  readPreferredDiscussionAudioMode,
+  writePreferredDiscussionAudioMode,
+  type DiscussionAudioCaptureMode,
+} from './audio-capture-mixer';
 import { drainDiscussionSegmentUploadQueue } from './discussion-segment-upload-queue';
 import type { DiscussionDetail, DiscussionDraft, DiscussionTranscript } from './discussion-types';
 import { projectRecordingStatus, verifiedSavedThrough, type RecordingSyncStage } from './recording-status';
@@ -59,6 +64,7 @@ export function GlobalDiscussionCaptureHost() {
   const gatewayUrl = useGatewayStore(state => state.baseUrl);
   const [annotationSyncFailed, setAnnotationSyncFailed] = useState(false);
   const [outcomeBusy, setOutcomeBusy] = useState(false);
+  const [switchingAudioMode, setSwitchingAudioMode] = useState(false);
   const [showRecoveries, setShowRecoveries] = useState(false);
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).notes.discussionCapture;
@@ -191,13 +197,24 @@ export function GlobalDiscussionCaptureHost() {
     setDetail(null);
     setUploadProgress(0);
     setLocalReleased(false); setAnnotationSyncFailed(false); setLocallyFinalized(null); setSyncStage('pending');
-    const draft = await recorder.start({
+    const effectiveMode = audioMode ?? readPreferredDiscussionAudioMode();
+    if (audioMode) writePreferredDiscussionAudioMode(audioMode);
+    let draft = await recorder.start({
       ...(projectId ? { projectId } : {}),
-      ...(audioMode ? { audioMode } : {}),
+      ...(effectiveMode !== 'microphone' ? { audioMode: effectiveMode } : {}),
       consentPolicyVersion: policyVersion,
       gatewayUrl,
       onLiveSegment: uploadLiveSegment,
     });
+    if (!draft && !audioMode && effectiveMode === 'meeting_mix') {
+      writePreferredDiscussionAudioMode('microphone');
+      draft = await recorder.start({
+        ...(projectId ? { projectId } : {}),
+        consentPolicyVersion: policyVersion,
+        gatewayUrl,
+        onLiveSegment: uploadLiveSegment,
+      });
+    }
     if (!draft) return;
     recordingSessionRef.current = true;
     const creation = createDiscussion({
@@ -326,9 +343,11 @@ export function GlobalDiscussionCaptureHost() {
     setFinishing(true);
     setOperationError(null);
     let releaseLease: (() => void) | undefined;
+    let stoppedDraftId: string | undefined;
     try {
       const stopped = await recorder.stop();
       if (!stopped) throw new Error(copy.emptyRecording);
+      stoppedDraftId = stopped.id;
       setLocalReleased(false); setLocallyFinalized(stopped);
       releaseLease = await acquireRecordingLease(stopped.id);
       let created = await createPromiseRef.current?.catch(() => null);
@@ -366,7 +385,8 @@ export function GlobalDiscussionCaptureHost() {
 
     } catch (error) {
       setSyncStage('failed');
-      await recorder.markUploadFailed().catch(() => undefined);
+      await recorder.markUploadFailed(stoppedDraftId).catch(() => undefined);
+      await Promise.resolve(recorder.refreshRecoverableDrafts?.()).catch(() => undefined);
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
       setVisible(true);
     } finally {
@@ -403,9 +423,58 @@ export function GlobalDiscussionCaptureHost() {
     }
   };
 
-  const recoverDraft = async (selected?: DiscussionDraft) => {
+  const toggleAudioMode = async () => {
+    if (switchingAudioMode || finishing || recovering) return;
+    const currentMode = recorder.audioMode ?? 'microphone';
+    const nextMode: DiscussionAudioCaptureMode = currentMode === 'meeting_mix' ? 'microphone' : 'meeting_mix';
+    writePreferredDiscussionAudioMode(nextMode);
+    if (!['recording', 'waiting_for_audio', 'paused'].includes(recorder.phase)) return;
+    setSwitchingAudioMode(true);
+    setOperationError(null);
+    const wasSession = recordingSessionRef.current;
+    recordingSessionRef.current = false;
+    try {
+      const committed = await recorder.stop().catch(() => recorder.draft);
+      const baseDraft = committed && committed.chunkCount > 0 ? committed : undefined;
+      const resumed = await recorder.start({
+        ...(baseDraft ? { continuation: baseDraft } : {}),
+        ...(detail?.discussion.projectId ? { projectId: detail.discussion.projectId } : {}),
+        consentPolicyVersion: baseDraft?.consentPolicyVersion ?? 1,
+        gatewayUrl,
+        audioMode: nextMode,
+        onLiveSegment: uploadLiveSegment,
+      });
+      if (!resumed) {
+        writePreferredDiscussionAudioMode(currentMode);
+        const fallback = await recorder.start({
+          ...(baseDraft ? { continuation: baseDraft } : {}),
+          ...(detail?.discussion.projectId ? { projectId: detail.discussion.projectId } : {}),
+          consentPolicyVersion: baseDraft?.consentPolicyVersion ?? 1,
+          gatewayUrl,
+          audioMode: currentMode,
+          onLiveSegment: uploadLiveSegment,
+        });
+        if (fallback && detail?.discussion.id) {
+          await recorder.setServerDiscussionId(detail.discussion.id);
+        }
+        recordingSessionRef.current = Boolean(fallback) && wasSession;
+        return;
+      }
+      if (detail?.discussion.id) {
+        await recorder.setServerDiscussionId(detail.discussion.id);
+        void connectSegmentQueue(resumed.id, detail.discussion.id);
+      }
+      recordingSessionRef.current = wasSession;
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : copy.saveFailed);
+    } finally {
+      setSwitchingAudioMode(false);
+    }
+  };
+
+  const recoverDraft = async (selected?: DiscussionDraft): Promise<boolean> => {
     let candidate = selected ?? recorder.recoverableDrafts[0];
-    if (!candidate || recovering || busyRecovery.current || finishInFlightRef.current || activeRecording) return;
+    if (!candidate || recovering || busyRecovery.current || finishInFlightRef.current || activeRecording) return false;
     busyRecovery.current = true;
     recordingSessionRef.current = false;
     setRecovering(true);
@@ -425,7 +494,7 @@ export function GlobalDiscussionCaptureHost() {
       if (settings.consentAcknowledgedAt == null || candidate.consentPolicyVersion !== settings.consentPolicyVersion) {
         setPendingRecovery(candidate);
         setConsentVersion(settings.consentPolicyVersion);
-        return;
+        return true;
       }
       let created = candidate.serverDiscussionId
         ? await getDiscussion(candidate.serverDiscussionId)
@@ -449,7 +518,7 @@ export function GlobalDiscussionCaptureHost() {
       if (created.discussion.audioDeletedAt) throw new Error('Original recording was deleted');
       if (created.discussion.audioAttachmentId && ['sealing', 'organizing', 'completed'].includes(created.discussion.status)) {
         if (annotationsSynced) { await recorder.discard(candidate.id); setLocalReleased(true); }
-        return;
+        return true;
       }
       if (created.discussion.status === 'cancelled') throw new Error('This recording was cancelled');
       if (!created.discussion.audioAttachmentId) await uploadDraftRecording(candidate, created.discussion.id, setUploadProgress, true, setSyncStage);
@@ -462,10 +531,12 @@ export function GlobalDiscussionCaptureHost() {
         setDetail(current);
       }
       if (annotationsSynced) { await recorder.discard(candidate.id); setLocalReleased(true); }
+      return true;
     } catch (error) {
       await recorder.markUploadFailed(candidate.id).catch(() => undefined);
       setSyncStage('failed');
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
+      return false;
     } finally {
       releaseLease?.();
       busyRecovery.current = false; setRecovering(false);
@@ -493,6 +564,7 @@ export function GlobalDiscussionCaptureHost() {
     if (finishInFlightRef.current || recovering || activeRecording) return;
     const candidate = selected ?? recorder.recoverableDrafts[0];
     if (!candidate) return;
+    setOperationError(null);
     let releaseLease: (() => void) | undefined;
     try { releaseLease = await acquireRecordingLease(candidate.id); await recorder.discard(candidate.id); } catch (error) { setOperationError(error instanceof Error ? error.message : copy.saveFailed); }
     finally { releaseLease?.(); }
@@ -511,13 +583,13 @@ export function GlobalDiscussionCaptureHost() {
     finally { releaseLease?.(); busyRecovery.current = false; setRecovering(false); }
   };
   useEffect(() => {
-    const open = () => { void recorder.refreshRecoverableDrafts(); setShowRecoveries(true); };
+    const open = () => { setOperationError(null); void recorder.refreshRecoverableDrafts(); setShowRecoveries(true); };
     window.addEventListener('open-recording-recoveries', open);
     return () => window.removeEventListener('open-recording-recoveries', open);
   }, [recorder.refreshRecoverableDrafts]);
   if (showRecoveries) return <div className="fixed inset-0 z-[135] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-label={copy.recoveredTitle}>
     <section className="flex h-[min(40rem,85vh)] w-[min(40rem,95vw)] flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay">
-      <header className="flex items-center justify-between border-b border-edge p-4"><h2>{copy.recoveredTitle}</h2><Button onClick={() => setShowRecoveries(false)}>{copy.close}</Button></header>
+      <header className="flex items-center justify-between border-b border-edge p-4"><h2>{copy.recoveredTitle}</h2><Button onClick={() => { setOperationError(null); setShowRecoveries(false); }}>{copy.close}</Button></header>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {operationError ? <p role="alert" className="mb-3 text-danger">{operationError}</p> : null}
         {!recorder.recoverableDrafts.length ? <p>{language === 'zh' ? '没有待恢复录音' : 'No recordings to recover'}</p> : null}
@@ -527,7 +599,7 @@ export function GlobalDiscussionCaptureHost() {
           <p className="text-sm">{language === 'zh' ? '本机已保存' : 'Saved locally'} · {verifiedSavedThrough(candidate) !== null ? formatDuration(verifiedSavedThrough(candidate)!) : language === 'zh' ? '时长待核实' : 'duration unverified'} · {formatDuration(candidate.durationMs)} {language === 'zh' ? '录制时长（中断处可能缺失）' : 'capture duration (may contain interruptions)'}</p>
           {candidate.epochs?.slice(1).map(epoch => <p key={epoch.firstChunk} className="text-xs text-fg-muted">{language === 'zh' ? '中断后续录' : 'Resumed after interruption'} · {new Date(epoch.previousEndedAt ?? epoch.startedAt).toLocaleString()} → {new Date(epoch.startedAt).toLocaleString()}</p>)}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button disabled={recovering || finishing || activeRecording} onClick={() => void recoverDraft(candidate).then(() => setShowRecoveries(false))}>{copy.recover}</Button>
+            <Button disabled={recovering || finishing || activeRecording} onClick={() => void recoverDraft(candidate).then((ok) => { if (ok) setShowRecoveries(false); })}>{copy.recover}</Button>
             <Button disabled={recovering || finishing || activeRecording || candidate.sealRequested} onClick={() => void continueDraft(candidate)}>{language === 'zh' ? '继续录制' : 'Continue recording'}</Button>
             <Button disabled={recovering || finishing || activeRecording} onClick={() => void exportDraft(candidate)}>{language === 'zh' ? '导出原音包' : 'Export originals'}</Button>
             <Button disabled={recovering || finishing || activeRecording} onClick={() => void discardRecoveredDraft(candidate)}>{language === 'zh' ? '丢弃本机副本' : 'Discard local copy'}</Button>
@@ -543,7 +615,7 @@ export function GlobalDiscussionCaptureHost() {
     if (!candidate) return null;
     return (
       <aside className="fixed bottom-5 right-5 z-[125] w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-overlay p-4 shadow-elevated">
-        <button className="text-sm font-medium text-fg" onClick={() => setShowRecoveries(true)}>{copy.recoveredTitle} ({recorder.recoverableDrafts.length})</button>
+        <button className="text-sm font-medium text-fg" onClick={() => { setOperationError(null); setShowRecoveries(true); }}>{copy.recoveredTitle} ({recorder.recoverableDrafts.length})</button>
         <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.recoveredDescription}</p>
         <div className="mt-3 flex justify-end gap-2">
           <Button variant="ghost" disabled={recovering || finishing || activeRecording} onClick={() => void discardRecoveredDraft()}>
@@ -617,7 +689,7 @@ export function GlobalDiscussionCaptureHost() {
   const inferredProject = detail?.discussion.projectId && detail.discussion.projectInferenceSource !== 'context';
   const zh = language === 'zh';
   const captureLabel = status.capture === 'recording' ? (zh ? '录音中' : 'Recording') : copy.status[status.capture];
-  const title = detail?.note.title && !/^Discussion [·•]/.test(detail.note.title) ? detail.note.title : (zh ? '语音笔记' : 'Voice note');
+  const title = detail?.note.title && !/^Discussion [·•]/.test(detail.note.title) ? detail.note.title : (zh ? '录音笔记' : 'Voice note');
   const controls = (small: boolean) => <>
     {recorder.phase === 'recording' ? <Button className={small ? 'size-10 shrink-0 px-0 shadow-none' : 'min-w-0 whitespace-nowrap shadow-none'} title={zh ? '标重点' : 'Highlight'} aria-label={zh ? '标重点' : 'Highlight'} onClick={() => void recorder.mark()}><Bookmark className="size-4 shrink-0" aria-hidden />{!small ? (zh ? '标重点' : 'Highlight') : null}</Button> : null}
     {recorder.phase === 'recording' || recorder.phase === 'waiting_for_audio' ? <Button className={small ? 'size-10 shrink-0 px-0 shadow-none' : 'min-w-0 whitespace-nowrap shadow-none'} aria-label={copy.pause} title={copy.pause} onClick={recorder.pause}><Pause className="size-4 shrink-0" aria-hidden />{!small ? copy.pause : null}</Button> : null}
@@ -639,9 +711,29 @@ export function GlobalDiscussionCaptureHost() {
     </> : <>
       <div className="space-y-3 px-4 py-4">
         <div className="flex items-center justify-between gap-4">
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <p className="font-mono text-[2.5rem] leading-none tabular-nums tracking-tight text-fg">{formatDuration(recorder.elapsedMs)}</p>
-            {recorder.audioMode === 'meeting_mix' ? (
+            {isSystemAudioMixSupported() && ['recording', 'waiting_for_audio', 'paused'].includes(recorder.phase) ? (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={recorder.audioMode === 'meeting_mix'}
+                disabled={switchingAudioMode || finishing}
+                onClick={() => void toggleAudioMode()}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${
+                  recorder.audioMode === 'meeting_mix'
+                    ? 'border-accent/40 bg-accent-soft text-accent-fg'
+                    : 'border-edge bg-surface-inset text-fg-muted hover:bg-surface-hover hover:text-fg'
+                }`}
+              >
+                <Volume2 className="size-3 shrink-0" aria-hidden />
+                <span>
+                  {recorder.audioMode === 'meeting_mix'
+                    ? (zh ? '同时录电脑声音：开' : 'Computer audio: On')
+                    : (zh ? '同时录电脑声音：关' : 'Computer audio: Off')}
+                </span>
+              </button>
+            ) : recorder.audioMode === 'meeting_mix' ? (
               <span className="inline-flex items-center rounded-md bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg">
                 {zh ? '系统声 + 麦克风混录中' : 'System audio + Mic'}
               </span>

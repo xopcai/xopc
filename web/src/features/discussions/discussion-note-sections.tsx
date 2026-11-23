@@ -36,10 +36,45 @@ function positionPlayer(player: HTMLAudioElement, seconds: number) {
 
 type ActionTask = { actionId: string; taskId: string; phase?: string; resolution?: string; deleted: boolean };
 
-export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingContent, personalNotes, personalNotesActive = false, noteTitle, noteActions }: { noteId: string; onPersonalNotes?: () => void; onMeetingContent?: () => void; personalNotes?: ReactNode; personalNotesActive?: boolean; noteTitle?: ReactNode; noteActions?: DiscussionNoteManagementActions }) {
+function formatOrganizationMarkdown(
+  organization: NonNullable<NonNullable<import('./discussion-types').DiscussionDetail['organization']>['organization']>,
+  zh: boolean,
+): string {
+  const blocks: string[] = [];
+  if (organization.summary.trim()) {
+    blocks.push(`## ${zh ? '摘要' : 'Summary'}\n\n${organization.summary.trim()}`);
+  }
+  const points = organization.keyPointEvidence?.length
+    ? organization.keyPointEvidence.map((item) => item.text.trim()).filter(Boolean)
+    : organization.keyPoints.map((item) => item.trim()).filter(Boolean);
+  if (points.length > 0) {
+    blocks.push(`## ${zh ? '重点结论' : 'Key Points'}\n\n${points.map((point) => `- ${point}`).join('\n')}`);
+  }
+  const decisions = organization.decisions.filter((item) => !item.ignored && item.text.trim());
+  if (decisions.length > 0) {
+    blocks.push(`## ${zh ? '已决定事项' : 'Decisions'}\n\n${decisions.map((item) => `- ${item.text.trim()}`).join('\n')}`);
+  }
+  const actions = organization.actionItems.filter((item) => !item.ignored && item.title.trim());
+  if (actions.length > 0) {
+    blocks.push(
+      `## ${zh ? '下一步行动' : 'Action Items'}\n\n${actions
+        .map((item) => {
+          const meta = [item.owner, item.dueDate].filter(Boolean).join(' · ');
+          return `- [ ] ${item.title.trim()}${meta ? ` (${meta})` : ''}`;
+        })
+        .join('\n')}`,
+    );
+  }
+  const questions = organization.openQuestions.filter((item) => !item.ignored && item.text.trim());
+  if (questions.length > 0) {
+    blocks.push(`## ${zh ? '待确认问题' : 'Open Questions'}\n\n${questions.map((item) => `- ${item.text.trim()}`).join('\n')}`);
+  }
+  return blocks.join('\n\n');
+}
+
+export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingContent, onPopulateNote, personalNotes, personalNotesActive = false, noteTitle, noteActions }: { noteId: string; onPersonalNotes?: () => void; onMeetingContent?: () => void; onPopulateNote?: (markdown: string) => void; personalNotes?: ReactNode; personalNotesActive?: boolean; noteTitle?: ReactNode; noteActions?: DiscussionNoteManagementActions }) {
   const location = useLocation();
   const notesPanelId = useId();
-  const notesToggle = useRef<HTMLButtonElement>(null);
   const zh = useLocaleStore(state => state.language) === 'zh';
   const { data: latestDetail, mutate, isLoading } = useSWR(['note-discussion-document', noteId], () => getDiscussionForNote(noteId), { refreshInterval: data => data && (['recording', 'stopping', 'sealing', 'organizing'].includes(data.discussion.status) || data.recordingJob?.state === 'queued' || data.recordingJob?.state === 'running') ? 3_000 : 0 });
   const [editing, setEditing] = useState<{ segment: DiscussionTranscriptSegment; text: string; speaker: string; applyToSpeakerGroup?: boolean } | null>(null);
@@ -244,7 +279,7 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
   const { discussion, transcript, organization: record } = detail;
   const organization = record?.organization;
   const displayTitle = !detail.note.title || /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(detail.note.title)
-    ? (zh ? '语音笔记' : 'Voice note')
+    ? (zh ? '录音笔记' : 'Voice note')
     : detail.note.title;
   const createdAt = discussion.recordingStartedAt ?? detail.note.createdAt;
   const created = createdAt ? new Date(createdAt).toLocaleDateString(zh ? 'zh-CN' : 'en', { month: 'short', day: 'numeric' }) : null;
@@ -253,7 +288,7 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
   const audioAvailable = !!discussion.audioAttachmentId && !discussion.audioDeletedAt;
   const processing = ['stopping', 'sealing', 'organizing'].includes(discussion.status);
   const editable = !hasUpdates && ['recording', 'completed', 'needs_attention'].includes(discussion.status);
-  const sidePanelOpen = personalNotesActive || !!evidence || evidenceLoading;
+  const evidenceDrawerOpen = !!evidence || evidenceLoading;
   const filtered = transcript.segments.filter(segment => (segment.displayText ?? segment.rawText ?? '').toLocaleLowerCase().includes(query.toLocaleLowerCase()) || segment.speakerLabel?.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   const activePlayingSegment = review.positionMs > 0
     ? transcript.segments.find(seg => review.positionMs >= seg.startedAtMs && review.positionMs < seg.endedAtMs)
@@ -275,43 +310,109 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
       else setSearchOpen(true);
     }
   }}>
-    <header className="flex shrink-0 flex-wrap items-start gap-x-4 gap-y-1 px-5 pb-3 pt-5 sm:px-7">
+    <header className="flex shrink-0 flex-wrap items-start gap-x-4 gap-y-1 px-5 pb-2.5 pt-5 sm:px-7">
       <div className="min-w-40 flex-1">
         {noteTitle ?? <h2 className="break-words text-2xl font-semibold leading-snug tracking-tight">{displayTitle}</h2>}
         <p className="mt-1 text-xs tabular-nums text-fg-muted">{[created, clock(durationMs)].filter(Boolean).join(' · ')}</p>
       </div>
       <DiscussionTools noteActions={noteActions} detail={detail} zh={zh} busy={busy} processing={processing} pageText={pageText} editing={!!edit || !!editing} />
     </header>
+    {audioAvailable ? (
+      <DiscussionAudioPlayer
+        audioRef={audio}
+        audioSourceKey={audioSource}
+        src={apiUrl(`${base}/audio`)}
+        zh={zh}
+        positionMs={review.positionMs}
+        durationMs={durationMs}
+        segments={transcript.segments}
+        markers={playerMarkers}
+        continuousMode={continuousMode}
+        onToggleContinuousMode={() => {
+          rangeEnd.current = null;
+          setContinuousMode(prev => !prev);
+        }}
+        autoFollow={autoFollow}
+        onToggleAutoFollow={() => {
+          setAutoFollow(prev => !prev);
+          setUserScrolledAway(false);
+        }}
+        onUserScrub={ms => {
+          if (!audio.current) return;
+          rangeEnd.current = null;
+          setUserScrolledAway(false);
+          positionPlayer(audio.current, ms / 1000);
+          updateReview(noteId, { positionMs: ms });
+        }}
+        onDurationChange={event => {
+          const seconds = event.currentTarget.duration;
+          setMediaDuration(Number.isFinite(seconds) && seconds > 0 ? { source: audioSource, ms: Math.floor(seconds * 1000) } : undefined);
+        }}
+        onTimeUpdate={event => {
+          const current = event.currentTarget.currentTime * 1000;
+          updateReview(noteId, { positionMs: current });
+          if (rangeEnd.current !== null && current >= rangeEnd.current) {
+            event.currentTarget.pause();
+            rangeEnd.current = null;
+          }
+          if (autoFollow && !userScrolledAway && !personalNotesActive && tab === 'transcript' && !event.currentTarget.paused) {
+            const currentSeg = transcript.segments.find(s => current >= s.startedAtMs && current < s.endedAtMs);
+            if (currentSeg && lastFollowedSequence.current !== currentSeg.sequence) {
+              lastFollowedSequence.current = currentSeg.sequence;
+              document.getElementById(`discussion-segment-${currentSeg.sequence}`)?.scrollIntoView?.({ block: 'nearest' });
+            }
+          }
+        }}
+        onLoadedMetadata={event => {
+          const player = event.currentTarget;
+          if (pendingSeek.current !== null) {
+            positionPlayer(player, pendingSeek.current);
+            pendingSeek.current = null;
+            if (ownsPlayback(player)) void player.play().catch(() => { if (player.paused) releasePlayback(player); });
+          } else positionPlayer(player, review.source === audioSource ? review.positionMs / 1000 : 0);
+        }}
+        onError={() => setError(zh ? '录音暂不可播放' : 'Recording unavailable')}
+      />
+    ) : null}
     <div className="mx-5 mb-2 flex shrink-0 flex-wrap items-center justify-between gap-x-2 border-b border-edge-subtle pb-2 sm:mx-7">
       <nav aria-label={zh ? '录音内容' : 'Recording content'} className="inline-flex items-center rounded-xl bg-surface-inset px-1">
-        {(['summary','transcript'] as const).map(value => {
-          const active = tab === value || (value === 'transcript' && tab === 'marks');
-          return <button key={value} type="button" aria-pressed={active} className="group relative isolate min-h-11 rounded-lg px-3.5 text-sm text-fg-muted aria-pressed:font-medium aria-pressed:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        {personalNotes ? (
+          <button
+            type="button"
+            aria-pressed={personalNotesActive}
+            aria-controls={notesPanelId}
             onClick={() => {
-              if (personalNotesActive && readingViewport.current && getComputedStyle(readingViewport.current).visibility === 'hidden') onMeetingContent?.();
+              clearEvidenceNavigation();
+              onPersonalNotes?.();
+            }}
+            className="group relative isolate inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3.5 text-sm text-fg-muted aria-pressed:font-medium aria-pressed:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <span aria-hidden className="absolute inset-x-0 inset-y-1 -z-10 rounded-lg group-aria-pressed:bg-surface-panel group-aria-pressed:shadow-sm" />
+            <span>{zh ? '笔记' : 'Note'}</span>
+            {detail.note.markdown.trim() ? <span className="size-1.5 rounded-full bg-accent" aria-hidden /> : null}
+          </button>
+        ) : null}
+        {(['summary','transcript'] as const).map(value => {
+          const active = !personalNotesActive && (tab === value || (value === 'transcript' && tab === 'marks'));
+          return <button key={value} type="button" aria-pressed={active} className="group relative isolate min-h-9 rounded-lg px-3.5 text-sm text-fg-muted aria-pressed:font-medium aria-pressed:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            onClick={() => {
+              if (personalNotesActive) onMeetingContent?.();
               clearEvidenceNavigation();
               setTab(value);
             }}>
-            <span aria-hidden className="absolute inset-x-0 inset-y-1.5 -z-10 rounded-lg group-aria-pressed:bg-surface-panel group-aria-pressed:shadow-sm" />
+            <span aria-hidden className="absolute inset-x-0 inset-y-1 -z-10 rounded-lg group-aria-pressed:bg-surface-panel group-aria-pressed:shadow-sm" />
             {value === 'summary' ? (zh ? '纪要' : 'Summary') : (zh ? '转写' : 'Transcript')}
           </button>;
         })}
       </nav>
       <div className="ml-auto flex items-center gap-1">
-        <button type="button" aria-label={zh ? '搜索' : 'Search'} aria-expanded={searchOpen || !!query}
-          onClick={() => { if (personalNotesActive) onMeetingContent?.(); setSearchOpen(open => !open); if (searchOpen) setQuery(''); }}
-          className="inline-flex size-11 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent">
-          <Search className="size-4" aria-hidden />
-        </button>
-        {personalNotes ? <button ref={notesToggle} type="button" aria-expanded={personalNotesActive} aria-controls={notesPanelId}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-accent-fg hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"
-          onClick={() => {
-            if (personalNotesActive) onMeetingContent?.();
-            else { clearEvidenceNavigation(); onPersonalNotes?.(); }
-          }}>
-          {personalNotesActive ? <Check className="size-4" aria-hidden /> : <SquarePen className="size-4" aria-hidden />}
-          {personalNotesActive ? (zh ? '完成' : 'Done') : (zh ? '写笔记' : 'Write notes')}
-        </button> : null}
+        {!personalNotesActive ? (
+          <button type="button" aria-label={zh ? '搜索' : 'Search'} aria-expanded={searchOpen || !!query}
+            onClick={() => { setSearchOpen(open => !open); if (searchOpen) setQuery(''); }}
+            className="inline-flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent">
+            <Search className="size-4" aria-hidden />
+          </button>
+        ) : null}
       </div>
     </div>
     {error ? <details role="alert" className="px-4 py-2 text-sm text-danger"><summary>{zh ? '操作未完成，可以稍后重试' : 'Action incomplete. Try again later'}</summary><p className="mt-2 break-words text-xs text-fg-muted">{error}</p></details> : null}
@@ -332,7 +433,7 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
         <span>{zh ? `回到播放位置 · ${clock(activePlayingSegment.startedAtMs)}` : `Jump to playback · ${clock(activePlayingSegment.startedAtMs)}`}</span>
       </button>
     ) : null}
-    <main ref={readingViewport} onWheel={() => { if (audio.current && !audio.current.paused && tab === 'transcript') setUserScrolledAway(true); }} onTouchMove={() => { if (audio.current && !audio.current.paused && tab === 'transcript') setUserScrolledAway(true); }} className={`min-h-0 min-w-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-6 pt-3 sm:px-7 ${sidePanelOpen ? 'invisible @min-[58rem]/discussion:visible' : ''} flex`}>
+    <main ref={readingViewport} onWheel={() => { if (audio.current && !audio.current.paused && tab === 'transcript') setUserScrolledAway(true); }} onTouchMove={() => { if (audio.current && !audio.current.paused && tab === 'transcript') setUserScrolledAway(true); }} className={`min-h-0 min-w-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-6 pt-3 sm:px-7 ${personalNotesActive ? 'hidden' : evidenceDrawerOpen ? 'invisible @min-[58rem]/discussion:visible flex' : 'flex'}`}>
       {tab !== 'summary' && !query.trim() ? <div className="mx-auto flex w-full max-w-[46rem] items-center justify-end gap-1.5">{editable && transcript.segments.length >= 2 ? <Button variant="ghost" disabled={busy || processing} onClick={() => void operation(() => fetchJson(apiUrl(`${base}/diarize`), { method: 'POST' }))} className="min-h-11 text-xs text-fg-muted hover:text-fg">{zh ? '识别说话人' : 'Identify speakers'}</Button> : null}<Button variant="ghost" aria-pressed={tab === 'marks'} onClick={() => setTab(tab === 'marks' ? 'transcript' : 'marks')} className="min-h-11 gap-1.5 aria-pressed:bg-surface-inset"><Bookmark className="size-4" aria-hidden />{zh ? '我的标记' : 'My highlights'}</Button></div> : null}
       {(discussion.status !== 'completed' || !organization || record?.transcriptRevision !== transcript.revision) && (discussion.status !== 'recording' || detail.recordingJob) ? <RecordingOutcomeCard context="note" nextAttemptAt={detail.processing?.nextAttemptAt} input={recordingOutcomeInput(detail)} zh={zh} busy={busy} onRetry={mode => void operation(() => mode === 'analyze' ? fetchJson(apiUrl(`${base}/organize`), { method: 'POST', body: JSON.stringify({ template }) }) : retryDiscussion(discussion.id, mode === 'regenerate' ? 'from_audio' : 'resume'))} /> : null}
       <div className="mx-auto w-full max-w-[46rem]" hidden={!!query.trim()}>
@@ -340,15 +441,40 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
         {detail.note.markdown.trim() ? (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/25 bg-accent-soft/45 px-3.5 py-2 text-xs text-fg">
             <span className="text-fg-muted">
-              {zh ? '已检测手写提纲笔记，可将个人重点与逐字稿融合整理' : 'Personal outline notes detected — fuse with transcript'}
+              {zh ? '笔记成稿已包含手写内容，可与逐字稿融合更新纪要' : 'Personal note content detected — fuse with transcript'}
+            </span>
+            <div className="flex items-center gap-3">
+              {personalNotes ? (
+                <button
+                  type="button"
+                  onClick={() => onPersonalNotes?.()}
+                  className="font-medium text-fg hover:underline"
+                >
+                  {zh ? '查看笔记' : 'Open note'}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={busy || processing || hasUpdates}
+                onClick={() => void operation(() => fetchJson(apiUrl(`${base}/organize`), { method: 'POST', body: JSON.stringify({ template }) }))}
+                className="font-medium text-accent-fg hover:underline disabled:opacity-50"
+              >
+                {zh ? '融合更新纪要' : 'Fuse into summary'}
+              </button>
+            </div>
+          </div>
+        ) : onPopulateNote ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-edge-subtle bg-surface-inset/70 px-3.5 py-2 text-xs text-fg">
+            <span className="text-fg-muted">
+              {zh ? '可将当前 AI 纪要一键转为可自由编辑的 Markdown 笔记成稿' : 'Turn this AI summary into an editable Markdown note'}
             </span>
             <button
               type="button"
-              disabled={busy || processing || hasUpdates}
-              onClick={() => void operation(() => fetchJson(apiUrl(`${base}/organize`), { method: 'POST', body: JSON.stringify({ template }) }))}
-              className="font-medium text-accent-fg hover:underline disabled:opacity-50"
+              onClick={() => onPopulateNote(formatOrganizationMarkdown(organization, zh))}
+              className="inline-flex items-center gap-1 font-medium text-accent-fg hover:underline"
             >
-              {zh ? '融合更新纪要' : 'Fuse into summary'}
+              <SquarePen className="size-3.5" aria-hidden />
+              <span>{zh ? '转为笔记正文' : 'Edit as note'}</span>
             </button>
           </div>
         ) : null}
@@ -405,13 +531,9 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
       <div className="mx-auto w-full max-w-[46rem]">
       <DiscussionLongReview key={discussion.id} id={discussion.id} query={query.trim()} zh={zh} sourceKey={`${discussion.audioSha256}:${discussion.audioDeletedAt}`} active={processing || discussion.status === 'recording'} tab={tab} refreshKey={`${discussion.updatedAt}:${transcript.revision}:${record?.revision}`} onEvidence={showEvidence} onPlay={seek} /></div>
     </main>
-      {personalNotes ? <aside id={notesPanelId} aria-label={zh ? '我的笔记' : 'My notes'} hidden={!personalNotesActive}
-        className="absolute inset-0 z-10 min-h-0 min-w-0 overflow-hidden bg-surface-panel @min-[58rem]/discussion:static @min-[58rem]/discussion:w-[24rem] @min-[58rem]/discussion:shrink-0 @min-[58rem]/discussion:border-l @min-[58rem]/discussion:border-edge-subtle"
-        onKeyDown={event => {
-          if (event.key !== 'Escape' || event.defaultPrevented) return;
-          onMeetingContent?.();
-          notesToggle.current?.focus();
-        }}>{personalNotes}</aside> : null}
+      {personalNotes ? <div id={notesPanelId} aria-label={zh ? '笔记正文' : 'Note content'} hidden={!personalNotesActive}
+        className={`min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel ${personalNotesActive ? 'flex' : 'hidden'}`}
+      >{personalNotes}</div> : null}
     {evidence || evidenceLoading ? <aside ref={evidencePanel} tabIndex={-1} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeEvidence(); } }} aria-label={zh ? '原话证据' : 'Source evidence'} className="absolute inset-0 z-20 flex min-h-0 w-full min-w-0 flex-col border-edge bg-surface-panel outline-none @min-[58rem]/discussion:static @min-[58rem]/discussion:w-[22rem] @min-[58rem]/discussion:shrink-0 @min-[58rem]/discussion:border-l">
       <header className="flex shrink-0 items-center justify-between border-b border-edge p-4"><h3>{zh ? '原话证据' : 'Source evidence'} {evidence ? `· v${evidence.transcriptRevision}` : ''}</h3><button aria-label={zh ? '关闭' : 'Close'} className="inline-flex size-11 items-center justify-center rounded-lg hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" onClick={closeEvidence}><X className="size-4" /></button></header>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
@@ -433,63 +555,6 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
       </div>
     </aside> : null}
     </div>
-    {audioAvailable ? (
-      <DiscussionAudioPlayer
-        audioRef={audio}
-        audioSourceKey={audioSource}
-        src={apiUrl(`${base}/audio`)}
-        zh={zh}
-        positionMs={review.positionMs}
-        durationMs={durationMs}
-        segments={transcript.segments}
-        markers={playerMarkers}
-        continuousMode={continuousMode}
-        onToggleContinuousMode={() => {
-          rangeEnd.current = null;
-          setContinuousMode(prev => !prev);
-        }}
-        autoFollow={autoFollow}
-        onToggleAutoFollow={() => {
-          setAutoFollow(prev => !prev);
-          setUserScrolledAway(false);
-        }}
-        onUserScrub={ms => {
-          if (!audio.current) return;
-          rangeEnd.current = null;
-          setUserScrolledAway(false);
-          positionPlayer(audio.current, ms / 1000);
-          updateReview(noteId, { positionMs: ms });
-        }}
-        onDurationChange={event => {
-          const seconds = event.currentTarget.duration;
-          setMediaDuration(Number.isFinite(seconds) && seconds > 0 ? { source: audioSource, ms: Math.floor(seconds * 1000) } : undefined);
-        }}
-        onTimeUpdate={event => {
-          const current = event.currentTarget.currentTime * 1000;
-          updateReview(noteId, { positionMs: current });
-          if (rangeEnd.current !== null && current >= rangeEnd.current) {
-            event.currentTarget.pause();
-            rangeEnd.current = null;
-          }
-          if (autoFollow && !userScrolledAway && tab === 'transcript' && !event.currentTarget.paused) {
-            const currentSeg = transcript.segments.find(s => current >= s.startedAtMs && current < s.endedAtMs);
-            if (currentSeg && lastFollowedSequence.current !== currentSeg.sequence) {
-              lastFollowedSequence.current = currentSeg.sequence;
-              document.getElementById(`discussion-segment-${currentSeg.sequence}`)?.scrollIntoView?.({ block: 'nearest' });
-            }
-          }
-        }}
-        onLoadedMetadata={event => {
-          const player = event.currentTarget;
-          if (pendingSeek.current !== null) {
-            positionPlayer(player, pendingSeek.current);
-            pendingSeek.current = null;
-            if (ownsPlayback(player)) void player.play().catch(() => { if (player.paused) releasePlayback(player); });
-          } else positionPlayer(player, review.source === audioSource ? review.positionMs / 1000 : 0);
-        }}
-        onError={() => setError(zh ? '录音暂不可播放' : 'Recording unavailable')}
-      />
-    ) : null}
     {convertingAction && record ? (
       <ActionConvertDialog
         key={`${convertingAction.actionId}:${record.revision}`}

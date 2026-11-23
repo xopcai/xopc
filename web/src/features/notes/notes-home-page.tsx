@@ -16,11 +16,11 @@ import {
   MoreHorizontal,
   NotebookText,
   PanelLeft,
+  Pin,
   Plus,
   RotateCcw,
   Search,
   Sparkles,
-  Star,
   Trash2,
   X,
 } from 'lucide-react';
@@ -43,7 +43,6 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
-import { isSystemAudioMixSupported } from '@/features/discussions/audio-capture-mixer';
 import { listDiscussionDrafts } from '@/features/discussions/discussion-draft-store';
 import { openDiscussionCapture } from '@/features/discussions/discussion-events';
 import { MeetingImportButton } from '@/features/discussions/meeting-import-button';
@@ -157,9 +156,18 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
     token ? ['notes-home-tags', token] : null,
     () => listNoteTags().catch(() => ({ items: [] })),
   );
-  const { data: recoverableDrafts = [], mutate: mutateRecoveries } = useSWR(
+  const { data: rawRecoverableDrafts = [], mutate: mutateRecoveries } = useSWR(
     token ? ['notes-home-recoveries', token] : null,
     () => listDiscussionDrafts().catch(() => []),
+  );
+  const recoverableDrafts = useMemo(
+    () =>
+      rawRecoverableDrafts.filter(
+        (draft) =>
+          draft.chunkCount > 0 &&
+          (draft.state !== 'recording' || Date.now() - draft.updatedAt > 20_000),
+      ),
+    [rawRecoverableDrafts],
   );
 
   const projects = projectData?.items ?? [];
@@ -220,6 +228,7 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
       'project-updated',
       'project-created',
       'project-deleted',
+      'discussion-drafts-changed',
     ];
     events.forEach((event) => window.addEventListener(event, refresh));
     return () => events.forEach((event) => window.removeEventListener(event, refresh));
@@ -563,12 +572,12 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
     );
   }
 
-  const navigation = [
+  const primaryViews = [
     { id: 'all', label: h.homeNav, Icon: NotebookText },
-    { id: 'favorites', label: h.favorites, Icon: Star },
-    { id: 'voice', label: zh ? '语音与妙记' : 'Voice & Minutes', Icon: AudioLines },
-    { id: 'unassigned', label: h.unassigned, Icon: Inbox },
-    { id: 'agent', label: h.agentEdited, Icon: Sparkles },
+    { id: 'favorites', label: h.favorites, Icon: Pin },
+    { id: 'voice', label: zh ? '录音' : 'Recordings', Icon: AudioLines },
+  ];
+  const lifecycleViews = [
     { id: 'archived', label: n.filterArchived, Icon: Archive },
     { id: 'trashed', label: zh ? '回收站' : 'Trash', Icon: Trash2 },
   ];
@@ -576,12 +585,12 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
   const scopeValue = projectId ? `project:${projectId}` : unassigned ? 'unassigned' : 'all';
   const streamHeading = activeTag
     ? `#${activeTag}`
-    : view === 'favorites'
+    : view === 'favorites' || view === 'pinned'
       ? h.favorites
       : view === 'voice'
         ? zh
-          ? '语音与妙记'
-          : 'Voice & Minutes'
+          ? '录音'
+          : 'Recordings'
         : view === 'agent'
           ? h.agentEdited
           : view === 'archived'
@@ -594,11 +603,11 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
                 ? currentProjectLabel
                 : unassigned
                   ? h.unassigned
-                  : h.recentNotes;
+                  : h.allNotes;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 overflow-hidden bg-surface-panel">
-      {/* Column 1: Collapsible Category / Project / Tag Navigation Rail */}
+      {/* Column 1: Collapsible 3-Group Navigation Rail (Views -> Projects/Tags -> Lifecycle) */}
       {railOpen ? (
         <aside
           aria-label={h.homeNav}
@@ -606,7 +615,7 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
         >
           <div className="mb-2 flex items-center justify-between px-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
-              {zh ? '笔记库' : 'Library'}
+              {zh ? '视图' : 'Views'}
             </span>
             {selectedNoteId ? (
               <button
@@ -621,11 +630,12 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
           </div>
 
           <div className="flex flex-col gap-0.5">
-            {navigation.map(({ id, label, Icon }) => {
+            {primaryViews.map(({ id, label, Icon }) => {
               const isCurrent =
                 !projectId &&
                 !activeTag &&
-                (id === 'unassigned' ? unassigned : !unassigned && view === id);
+                !unassigned &&
+                (id === 'favorites' ? view === 'favorites' || view === 'pinned' : view === id);
               return (
                 <button
                   key={id}
@@ -659,6 +669,19 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
               </button>
             </div>
             <div className="flex flex-col gap-0.5">
+              <button
+                type="button"
+                onClick={() => chooseScope('', 'unassigned')}
+                aria-current={!projectId && !activeTag && unassigned ? 'page' : undefined}
+                className={cn(
+                  quietButton,
+                  'min-h-7 justify-start px-2.5 text-left text-xs',
+                  !projectId && !activeTag && unassigned && 'bg-surface-hover font-medium text-fg',
+                )}
+              >
+                <Inbox className="size-3.5 shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1 truncate">{h.unassigned}</span>
+              </button>
               {projectsLoading
                 ? [0, 1, 2].map((i) => <Skeleton key={i} className="mb-1.5 h-7 w-full rounded-md" />)
                 : projects.slice(0, 10).map((project) => (
@@ -721,18 +744,39 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
             ) : null}
           </div>
 
-          {recoverableDrafts.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('open-recording-recoveries'))}
-              className="mt-2 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent-soft px-2.5 py-2 text-left text-xs font-medium text-accent-fg hover:bg-accent-soft/80"
-            >
-              <AudioLines className="size-3.5 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1 truncate">
-                {zh ? `${recoverableDrafts.length} 条待恢复录音` : `${recoverableDrafts.length} unsynced audio`}
-              </span>
-            </button>
-          ) : null}
+          <div className="mt-2 flex flex-col gap-0.5 border-t border-edge-subtle pt-2.5">
+            {lifecycleViews.map(({ id, label, Icon }) => {
+              const isCurrent = !projectId && !activeTag && !unassigned && view === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => chooseScope('', id)}
+                  aria-current={isCurrent ? 'page' : undefined}
+                  className={cn(
+                    quietButton,
+                    'min-h-7 justify-start px-2.5 text-left text-xs text-fg-subtle',
+                    isCurrent && 'bg-surface-hover font-medium text-fg',
+                  )}
+                >
+                  <Icon className="size-3.5 shrink-0" aria-hidden />
+                  <span className="truncate">{label}</span>
+                </button>
+              );
+            })}
+            {recoverableDrafts.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('open-recording-recoveries'))}
+                className="mt-1 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent-soft px-2.5 py-2 text-left text-xs font-medium text-accent-fg hover:bg-accent-soft/80"
+              >
+                <AudioLines className="size-3.5 shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1 truncate">
+                  {zh ? `${recoverableDrafts.length} 条待恢复录音` : `${recoverableDrafts.length} unsynced audio`}
+                </span>
+              </button>
+            ) : null}
+          </div>
         </aside>
       ) : null}
 
@@ -794,59 +838,15 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
                 <Plus className="size-4" aria-hidden />
               )}
             </button>
-            {isSystemAudioMixSupported() ? (
-              <DropdownMenu.Root modal={false}>
-                <DropdownMenu.Trigger asChild>
-                  <button
-                    type="button"
-                    title={h.recordAction}
-                    aria-label={h.recordAction}
-                    className="inline-flex h-8 shrink-0 items-center gap-0.5 rounded-lg border border-edge bg-surface-panel px-2 text-accent-fg hover:bg-surface-hover"
-                  >
-                    <Mic className="size-3.5" aria-hidden />
-                    <ChevronDown className="size-3 text-fg-subtle" aria-hidden />
-                  </button>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Portal>
-                  <DropdownMenu.Content
-                    align="end"
-                    sideOffset={4}
-                    className="z-50 min-w-48 rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover"
-                  >
-                    <DropdownMenu.Item
-                      onSelect={() => openDiscussionCapture(projectId || undefined, 'microphone')}
-                      className="flex cursor-pointer flex-col gap-0.5 rounded-md px-3 py-2 text-xs text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
-                    >
-                      <span className="font-medium">{zh ? '仅麦克风（线下讨论/口述）' : 'Microphone only'}</span>
-                      <span className="text-[11px] text-fg-muted">
-                        {zh ? '采集本机麦克风人声' : 'Capture local microphone'}
-                      </span>
-                    </DropdownMenu.Item>
-                    <DropdownMenu.Item
-                      onSelect={() => openDiscussionCapture(projectId || undefined, 'meeting_mix')}
-                      className="flex cursor-pointer flex-col gap-0.5 rounded-md px-3 py-2 text-xs text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
-                    >
-                      <span className="font-medium text-accent-fg">
-                        {zh ? '系统声 + 麦克风（线上会议）' : 'System audio + Mic (Online meeting)'}
-                      </span>
-                      <span className="text-[11px] text-fg-muted">
-                        {zh ? '同时录制飞书/腾讯/Zoom会议远端声与本机声' : 'Mix remote meeting audio + local mic'}
-                      </span>
-                    </DropdownMenu.Item>
-                  </DropdownMenu.Content>
-                </DropdownMenu.Portal>
-              </DropdownMenu.Root>
-            ) : (
-              <button
-                type="button"
-                onClick={() => openDiscussionCapture(projectId || undefined)}
-                title={h.recordAction}
-                aria-label={h.recordAction}
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel text-accent-fg hover:bg-surface-hover"
-              >
-                <Mic className="size-3.5" aria-hidden />
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => openDiscussionCapture(projectId || undefined)}
+              title={h.recordAction}
+              aria-label={h.recordAction}
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel text-accent-fg hover:bg-surface-hover"
+            >
+              <Mic className="size-3.5" aria-hidden />
+            </button>
           </div>
 
           <div className="flex items-center justify-between gap-2">
@@ -917,7 +917,7 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
               {[
                 { id: 'all', label: n.filterAll },
                 { id: 'favorites', label: h.favorites },
-                { id: 'voice', label: zh ? '语音' : 'Voice' },
+                { id: 'voice', label: zh ? '录音' : 'Recordings' },
                 { id: 'archived', label: n.filterArchived },
                 { id: 'trashed', label: zh ? '回收站' : 'Trash' },
               ].map(({ id, label }) => (
@@ -1172,7 +1172,7 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
                                   note.pinned && 'text-fg opacity-100',
                                 )}
                               >
-                                <Star
+                                <Pin
                                   className={cn('size-3.5', note.pinned && 'fill-current text-fg')}
                                   aria-hidden
                                 />

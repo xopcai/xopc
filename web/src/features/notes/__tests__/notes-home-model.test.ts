@@ -12,6 +12,9 @@ describe('notes home queries', () => {
     expect(notesHomeQuery(new URLSearchParams('unassigned=true&view=favorites&page=-2'), '')).toMatchObject({
       unassigned: true, pinned: true, offset: 0, search: undefined,
     });
+    expect(notesHomeQuery(new URLSearchParams('view=pinned'), '')).toMatchObject({
+      pinned: true,
+    });
     expect(notesHomeQuery(new URLSearchParams('page=not-a-number'), '').offset).toBe(0);
   });
   it('supports tag filtering and voice-only library view', () => {

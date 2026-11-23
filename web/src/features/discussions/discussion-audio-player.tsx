@@ -161,7 +161,11 @@ export function DiscussionAudioPlayer({
   };
 
   return (
-    <footer className="shrink-0 border-t border-edge-subtle bg-surface-panel px-4 py-2.5 sm:px-6">
+    <div
+      role="region"
+      aria-label={zh ? '录音播放器' : 'Audio player'}
+      className="mx-5 mb-2.5 shrink-0 rounded-xl border border-edge-subtle bg-surface-base/60 px-3.5 py-2 sm:mx-7"
+    >
       {/* Keep underlying <audio> mounted at stable DOM location for playback coordinator & tests */}
       <audio
         key={audioSourceKey}
@@ -341,6 +345,6 @@ export function DiscussionAudioPlayer({
           </button>
         </div>
       </div>
-    </footer>
+    </div>
   );
 }

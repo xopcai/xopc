@@ -225,4 +225,52 @@ describe('sqlite notes repository', () => {
     const backlinks = listNoteBacklinks('target-note');
     expect(backlinks.map((item) => item.id)).toEqual(['source-wiki-note', 'source-uri-note']);
   });
+
+  it('includes regular notes containing embedded audio clips under the recordings filter', () => {
+    upsertNoteRecord({
+      id: 'plain-text-note',
+      title: '纯文本笔记',
+      kind: 'thought',
+      status: 'inbox',
+      markdown: '没有音频附件',
+      createdAt: 100,
+      updatedAt: 100,
+      capturedVia: { channel: 'web' },
+    });
+    upsertNoteRecord({
+      id: 'inline-audio-note',
+      title: '带内联音频片段的笔记',
+      kind: 'thought',
+      status: 'inbox',
+      markdown: '正文里插入了一段录音 [音频片段](xopc-attachment://notes/inline-audio-note/clip-1)',
+      attachments: [
+        {
+          id: 'clip-1',
+          type: 'audio',
+          fileName: 'clip-1.webm',
+          filePath: '/tmp/clip-1.webm',
+          mimeType: 'audio/webm',
+          size: 4096,
+          duration: 18,
+          createdAt: 150,
+        },
+      ],
+      createdAt: 150,
+      updatedAt: 200,
+      capturedVia: { channel: 'web' },
+    });
+    upsertNoteRecord({
+      id: 'full-voice-note',
+      title: '完整录音笔记',
+      kind: 'voice',
+      status: 'inbox',
+      markdown: '',
+      createdAt: 200,
+      updatedAt: 300,
+      capturedVia: { channel: 'web' },
+    });
+
+    const recordings = listNoteRecords({ kind: 'voice', sortBy: 'updatedAt', sortOrder: 'desc' });
+    expect(recordings.items.map((item) => item.id)).toEqual(['full-voice-note', 'inline-audio-note']);
+  });
 });

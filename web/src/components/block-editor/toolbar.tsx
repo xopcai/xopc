@@ -373,7 +373,7 @@ export function BlockEditorToolbar({
           onClick={onVoiceRecord}
           isActive={voiceRecording}
           disabled={imageUploading}
-          title={zh ? '录制内联语音片段' : 'Record inline voice clip'}
+          title={zh ? '插入音频片段' : 'Insert audio clip'}
         >
           <Mic size={iconSize} />
         </ToolbarButton>

@@ -301,6 +301,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'image-generation-jobs',
+    match: (path) => /^\/api\/image-generation\/sessions\/[^/]+\/jobs(?:\/[0-9a-f]{64}\/images\/[0-9]+)?$/.test(path),
+    load: async () => {
+      const { registerImageGenerationRoutes } = await import('./image-generation.js');
+      return { register: registerImageGenerationRoutes };
+    },
+  },
+  {
     id: 'video-generation',
     match: (path) => path === '/api/video-generation/settings' || /^\/api\/video-generation\/sessions\/[^/]+\/jobs(?:\/confirm-draft|\/[^/]+\/video)?$/.test(path),
     load: async () => {

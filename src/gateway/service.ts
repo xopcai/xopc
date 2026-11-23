@@ -133,6 +133,7 @@ import { SpaceWorker } from '../space/worker.js';
 import { TaskResultDeliveryService } from '../tasks/task-result-delivery-service.js';
 import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { MusicGenerationWorker } from '../music-generation/worker.js';
+import { ImageGenerationWorker } from '../image-generation/worker.js';
 import { VideoGenerationWorker } from '../video-generation/worker.js';
 import { TaskSignalService } from '../tasks/task-signal-service.js';
 
@@ -1559,6 +1560,7 @@ export class GatewayService {
 
   private readonly spaceWorker = new SpaceWorker();
   private readonly musicGenerationWorker = new MusicGenerationWorker();
+  private readonly imageGenerationWorker = new ImageGenerationWorker(() => this.currentConfig);
   private readonly videoGenerationWorker = new VideoGenerationWorker();
 
   async start(): Promise<void> {
@@ -1849,6 +1851,7 @@ export class GatewayService {
     this.discussionSealer.start();
     this.videoGenerationWorker.start();
     this.musicGenerationWorker.start();
+    this.imageGenerationWorker.start();
     this.spaceWorker.start();
     this.discussionWorker.start();
 
@@ -2079,7 +2082,7 @@ export class GatewayService {
     this.realtime.close();
     this.voiceRealtime.close();
 
-    await Promise.all([this.videoGenerationWorker.stop(), this.musicGenerationWorker.stop(), this.spaceWorker.stop()]);
+    await Promise.all([this.videoGenerationWorker.stop(), this.musicGenerationWorker.stop(), this.imageGenerationWorker.stop(), this.spaceWorker.stop()]);
     await this.discussionWorker.stop();
     await this.discussionSealer.stop();
     await this.discussionLiveWorker.stop();

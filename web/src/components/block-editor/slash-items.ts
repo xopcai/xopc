@@ -141,11 +141,11 @@ export const SLASH_ITEMS: SlashItem[] = [
   {
     id: 'voiceRecord',
     badge: '🎙',
-    label: 'Voice Clip',
-    zhLabel: '内联语音片段',
-    description: 'Record & embed an audio clip',
-    zhDescription: '直接录制语音并插入正文',
-    keywords: ['record', 'voice', 'audio', 'mic', '录音', '语音', '口述'],
+    label: 'Audio Clip',
+    zhLabel: '插入音频片段',
+    description: 'Record & embed a short audio clip',
+    zhDescription: '录制一段音频并嵌入当前段落',
+    keywords: ['record', 'voice', 'audio', 'mic', 'clip', '录音', '音频', '语音', '口述'],
   },
   {
     id: 'image',

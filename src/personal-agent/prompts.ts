@@ -86,6 +86,12 @@ export function projectPersonalInstructions(instructions: string, toolNames: rea
     if (group.requires.every(tool => tools.has(tool))) continue;
     for (const rule of group.rules) projected = omitInstructionBlock(projected, rule);
   }
+  if (tools.has('personal_schedule')) {
+    projected += '\nUse personal_schedule directly for explicit timed or recurring personal tasks (daily briefings, weekly reports, fixed-time or countdown reminders). Use personal_attention for vague follow-ups without a fixed schedule, and do not duplicate between them. Delegate cross-project, webhook, or MCP-source automations via personal_task. Only claim saved after a successful result and report the actual nextRunAt.';
+  }
+  if (tools.has('image_generation')) {
+    projected += '\nUse image_generation directly in this chat for image generation or revision requests. Explicit requests can enqueue directly. For multi-file deliverables or complex design workflows, delegate via personal_task.';
+  }
   if (tools.has('music_generation')) {
     projected += '\nUse music_generation for song or instrumental requests. Explicit requests can enqueue directly. If the user asks to review lyrics first, present them in chat and wait for their request to generate.';
   }

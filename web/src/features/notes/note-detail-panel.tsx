@@ -189,6 +189,8 @@ function NoteDetailPanelInner({
   const contextLabels = messages(language).chat.pageContext;
   const { data: meeting } = useSWR(['note-discussion-document', noteId], () => getDiscussionForNote(noteId));
   const [showMeeting, setShowMeeting] = useState(true);
+  const [populatedGen, setPopulatedGen] = useState(0);
+  const didInitMeetingTabRef = useRef<string | null>(null);
   const [textSelection, setTextSelection] = useState<EditorTextSelection | null>(null);
   const dismissSelection = useCallback(() => setTextSelection(null), []);
   useEffect(() => { setTextSelection(null); }, [noteId]);
@@ -219,6 +221,7 @@ function NoteDetailPanelInner({
   useEffect(() => {
     assistantGeneration.current++;
     setAssistantOpen(false); setAssistantBinding(null); setOpeningChat(false); setAssistantDraft(null);
+    didInitMeetingTabRef.current = null;
     setShowMeeting(true);
     return () => { assistantGeneration.current++; };
   }, [noteId, gatewayUrl, gatewayToken]);
@@ -290,7 +293,13 @@ function NoteDetailPanelInner({
   useEffect(() => {
     if (!note || saving || pendingTitleRef.current !== null || titleComposingRef.current) return;
     setTitle(note.title ?? '');
-  }, [note, saving]);
+    if (meeting && didInitMeetingTabRef.current !== note.id) {
+      didInitMeetingTabRef.current = note.id;
+      if (note.markdown.trim().length > 0) {
+        setShowMeeting(false);
+      }
+    }
+  }, [meeting, note, saving]);
 
   const attachTitleInput = useCallback((element: HTMLInputElement | null) => {
     titleInputRef.current = element;
@@ -927,7 +936,7 @@ function NoteDetailPanelInner({
   const personalEditor = (
     <div ref={setOutlineRoot} className="relative flex h-full min-h-0 flex-col">
       {dockOutline ? <NoteOutlinePopover label={n.outline} headings={headings} current={currentHeading} onSelect={selectOutlineHeading} /> : null}
-      {meeting ? <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-2 border-b border-edge-subtle px-4 py-1"><h3 className="text-sm font-medium">{language === 'zh' ? '我的笔记' : 'My notes'}</h3><NoteDetailModeSwitcher mode={mode} onModeChange={handleModeChange} labels={{ edit: n.modeEdit, source: n.modeSource, preview: n.modePreview }} /></div> : null}
+      {meeting ? <div className="mx-auto flex w-full max-w-3xl shrink-0 flex-wrap items-center justify-between gap-x-2 px-5 pb-1 pt-2 sm:px-10"><span className="text-xs text-fg-muted">{language === 'zh' ? '笔记正文 · 支持自由排版与编辑' : 'Editable note document'}</span><NoteDetailModeSwitcher mode={mode} onModeChange={handleModeChange} labels={{ edit: n.modeEdit, source: n.modeSource, preview: n.modePreview }} /></div> : null}
           <div className="h-full min-h-0 min-w-0 flex-1">
             {isPreviewingSnapshot ? (
               <div className="h-full overflow-y-auto px-4 py-4 sm:px-6">
@@ -952,7 +961,7 @@ function NoteDetailPanelInner({
                     <div className="min-h-0 flex-1">
                       <Suspense fallback={<EditorFallback />}>
                         <BlockEditor
-                          key={`wysiwyg-${noteId}`}
+                          key={`wysiwyg-${noteId}-${populatedGen}`}
                           autoFocus={!!meeting && !showMeeting}
                           placeholder={n.editorPlaceholder}
                           documentHeader={!meeting ? documentTitle : undefined}
@@ -970,10 +979,10 @@ function NoteDetailPanelInner({
                 {mode === 'source' && (
                   <div className="flex h-full flex-col">
                     {!meeting ? <div className="mx-auto mb-3 w-full max-w-3xl px-5 pt-6 sm:px-10 sm:pt-9">{documentTitle}</div> : null}
-                    <div className={cn("min-h-0 min-w-0 flex-1", !meeting && "mx-auto w-full max-w-3xl px-3 sm:px-8")}>
+                    <div className="mx-auto min-h-0 min-w-0 w-full max-w-3xl flex-1 px-3 sm:px-8">
                       <Suspense fallback={<EditorFallback />}>
                         <MarkdownEditor
-                          key={`source-${noteId}`}
+                          key={`source-${noteId}-${populatedGen}`}
                           initialContent={displayText}
                           onChange={handleSave}
                           isDark={isDark}
@@ -986,7 +995,7 @@ function NoteDetailPanelInner({
                 {mode === 'preview' && (
                   <div
                     data-note-outline-scroll
-                    className={cn("h-full overflow-y-auto px-5 py-6 sm:px-10 sm:pt-9", !meeting && "mx-auto w-full max-w-3xl")}
+                    className="mx-auto h-full w-full max-w-3xl overflow-y-auto px-5 py-6 sm:px-10 sm:pt-9"
                     onClick={(event) => {
                       const target = event.target;
                       if (!(target instanceof HTMLImageElement)) return;
@@ -1119,6 +1128,13 @@ function NoteDetailPanelInner({
             }}
             onPersonalNotes={() => {
               handleHistoryClose();
+              handleModeChange('wysiwyg');
+              setShowMeeting(false);
+            }}
+            onPopulateNote={(markdown) => {
+              handleHistoryClose();
+              handleSave(markdown);
+              setPopulatedGen((c) => c + 1);
               handleModeChange('wysiwyg');
               setShowMeeting(false);
             }}

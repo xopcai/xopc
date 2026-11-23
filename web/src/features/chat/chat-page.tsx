@@ -40,6 +40,7 @@ import {
   extractActiveTurnConversationPlan,
 } from '@/features/chat/messages/conversation-plan';
 import { useChatMusicGeneration } from '@/features/chat/music/chat-music-generation';
+import { useChatImageGeneration } from '@/features/chat/image/chat-image-generation';
 import { isVideoDraftConfirmation, useChatVideoGeneration } from '@/features/chat/video/chat-video-generation';
 import { MessageList, type ChatTimelineEntry } from '@/features/chat/messages/message-list';
 import { chatScrollBehavior, chatTimelineAnchorIndex } from '@/features/chat/scroll/chat-scroll-geometry';
@@ -230,9 +231,10 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
     chatBusy: stream.streaming || stream.sending, readOnly, onAdjust: adjustVideoDraft,
   });
   const musicTimeline = useChatMusicGeneration(videoConversationId, language, stream.streaming || stream.sending, msgSlice.items);
-  const chatTimelineEntries = useMemo(() => [...(automationTimelineEntries ?? []), ...videoGeneration.timelineEntries, ...musicTimeline],
-    [automationTimelineEntries, videoGeneration.timelineEntries, musicTimeline]);
-  const mediaSource = personalSourceTurnId?.startsWith('music-generation:') || personalSourceTurnId?.startsWith('video-generation:');
+  const imageTimeline = useChatImageGeneration(videoConversationId, language, stream.streaming || stream.sending, msgSlice.items);
+  const chatTimelineEntries = useMemo(() => [...(automationTimelineEntries ?? []), ...videoGeneration.timelineEntries, ...musicTimeline, ...imageTimeline],
+    [automationTimelineEntries, videoGeneration.timelineEntries, musicTimeline, imageTimeline]);
+  const mediaSource = personalSourceTurnId?.startsWith('music-generation:') || personalSourceTurnId?.startsWith('video-generation:') || personalSourceTurnId?.startsWith('image-generation:');
   const mediaSourceIndex = mediaSource ? chatTimelineEntries.findIndex(entry => entry.id === personalSourceTurnId) : -1;
   const { draft: pendingVideoDraft, confirmDraft: confirmVideoDraft } = videoGeneration;
   const automationSetupBound = Boolean((sessionMetadata?.identity?.customData?.automationSetup as { automationId?: string } | undefined)?.automationId);

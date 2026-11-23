@@ -9,6 +9,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 
 import { DesktopGatewayTransport } from '../gateway/desktop-transport.js';
+import { registerDiscussionRoutes } from '../../src/gateway/hono/routes/discussions.js';
 import { registerSideChatRoutes } from '../../src/gateway/hono/routes/side-chats.js';
 import type { AuthenticatedRouteDeps } from '../../src/gateway/hono/routes/deps.js';
 
@@ -158,4 +159,68 @@ it('preserves client ownership through real side chat routes for create, reads, 
     expect(await response.json()).toMatchObject({ ok: true });
   }
   expect(operations).toEqual(['create', 'get', 'messages', 'heartbeat', 'delete']);
+});
+
+it('forwards recording chunk sha256 headers and query fallback through real discussion routes', async () => {
+  const expectedSha = 'a'.repeat(64);
+  const received: Array<{ id: string; sequence: number; sha256: string; bytes: number; idempotencyKey?: string }> = [];
+  const app = new Hono();
+  app.post('/api/notes/idempotent-check', (c) => c.json({ idempotencyKey: c.req.header('idempotency-key') ?? null }));
+  registerDiscussionRoutes(app, {
+    strictRateLimitMiddleware: async (_c, next) => next(),
+    mediaRateLimitMiddleware: async (_c, next) => next(),
+    service: {
+      discussions: {
+        uploadRecordingChunk: async (id: string, sequence: number, sha256: string, body: ReadableStream<Uint8Array>) => {
+          const reader = body.getReader();
+          let bytes = 0;
+          while (true) {
+            const next = await reader.read();
+            if (next.done) break;
+            bytes += next.value.byteLength;
+          }
+          received.push({ id, sequence, sha256, bytes });
+          return { sequence, sha256, bytes };
+        },
+      },
+    },
+  } as unknown as AuthenticatedRouteDeps);
+  const server = createServer(async (req, res) => {
+    if (req.url === '/api/browser-session') { res.setHeader('Content-Type', 'application/json'); res.end('{}'); return; }
+    const chunks = []; for await (const chunk of req) chunks.push(chunk);
+    const body = Buffer.concat(chunks);
+    const response = await app.fetch(new Request('http://localhost' + req.url, {
+      method: req.method, headers: req.headers as HeadersInit, ...(body.length ? { body } : {}),
+    }));
+    res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(await response.text());
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening'); servers.push(server);
+  transport.select({ origin: `http://127.0.0.1:${(server.address() as { port: number }).port}`, token: 'upstream', scope: 'discussions' });
+  const cookie = await login();
+
+  const headerRes = await fetch(`${transport.origin}/api/discussions/disc-1/recording/chunks/0`, {
+    method: 'PUT',
+    headers: { Cookie: cookie, Origin: transport.origin, 'Content-Type': 'application/octet-stream', 'x-audio-sha256': expectedSha },
+    body: 'chunk-0',
+  });
+  expect(headerRes.status).toBe(201);
+
+  const queryFallbackRes = await fetch(`${transport.origin}/api/discussions/disc-1/recording/chunks/1?sha256=${expectedSha.toUpperCase()}`, {
+    method: 'PUT',
+    headers: { Cookie: cookie, Origin: transport.origin, 'Content-Type': 'application/octet-stream' },
+    body: 'chunk-1',
+  });
+  expect(queryFallbackRes.status).toBe(201);
+
+  const idempotentRes = await fetch(`${transport.origin}/api/notes/idempotent-check`, {
+    method: 'POST',
+    headers: { Cookie: cookie, Origin: transport.origin, 'Content-Type': 'application/json', 'Idempotency-Key': 'idem-123' },
+    body: '{}',
+  });
+  expect(await idempotentRes.json()).toEqual({ idempotencyKey: 'idem-123' });
+
+  expect(received).toEqual([
+    { id: 'disc-1', sequence: 0, sha256: expectedSha, bytes: 7 },
+    { id: 'disc-1', sequence: 1, sha256: expectedSha, bytes: 7 },
+  ]);
 });

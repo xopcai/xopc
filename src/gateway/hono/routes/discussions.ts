@@ -269,7 +269,8 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
   authenticated.put('/api/discussions/:id/recording/chunks/:sequence', mediaRateLimitMiddleware, async (c) => {
     if (!c.req.raw.body) return c.json({ error: 'Missing audio body' }, 400);
     try {
-      return c.json(await service.discussions.uploadRecordingChunk(c.req.param('id'), Number(c.req.param('sequence')), c.req.header('x-audio-sha256') ?? '', c.req.raw.body), 201);
+      const sha256 = (c.req.header('x-audio-sha256') || c.req.query('sha256') || '').trim().toLowerCase();
+      return c.json(await service.discussions.uploadRecordingChunk(c.req.param('id'), Number(c.req.param('sequence')), sha256, c.req.raw.body), 201);
     } catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
   });
 

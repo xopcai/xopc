@@ -1,5 +1,7 @@
 export type DiscussionAudioCaptureMode = 'microphone' | 'meeting_mix';
 
+const PREFERRED_AUDIO_MODE_KEY = 'xopc.discussions.preferredAudioMode';
+
 export interface AcquiredDiscussionAudio {
   stream: MediaStream;
   mode: DiscussionAudioCaptureMode;
@@ -13,6 +15,25 @@ export function isSystemAudioMixSupported(): boolean {
     typeof navigator.mediaDevices?.getDisplayMedia === 'function' &&
     typeof AudioContext !== 'undefined'
   );
+}
+
+export function readPreferredDiscussionAudioMode(): DiscussionAudioCaptureMode {
+  if (!isSystemAudioMixSupported()) return 'microphone';
+  try {
+    return globalThis.localStorage?.getItem(PREFERRED_AUDIO_MODE_KEY) === 'meeting_mix'
+      ? 'meeting_mix'
+      : 'microphone';
+  } catch {
+    return 'microphone';
+  }
+}
+
+export function writePreferredDiscussionAudioMode(mode: DiscussionAudioCaptureMode): void {
+  try {
+    globalThis.localStorage?.setItem(PREFERRED_AUDIO_MODE_KEY, mode);
+  } catch {
+    /* ignore unavailable storage */
+  }
 }
 
 /**

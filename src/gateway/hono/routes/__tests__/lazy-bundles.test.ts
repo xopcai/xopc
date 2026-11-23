@@ -124,6 +124,16 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle(`${jobs}/other/audio`)).toBeUndefined();
   });
 
+  it('maps image generation jobs and their images without capturing nearby routes', () => {
+    const jobs = '/api/image-generation/sessions/session/jobs';
+    const image = `${jobs}/${'b'.repeat(64)}/images/0`;
+    expect(findAuthenticatedLazyRouteBundle(jobs)?.id).toBe('image-generation-jobs');
+    expect(findAuthenticatedLazyRouteBundle(image)?.id).toBe('image-generation-jobs');
+    expect(findAuthenticatedLazyRouteBundle(`${image}/extra`)?.id).not.toBe('image-generation-jobs');
+    expect(findAuthenticatedLazyRouteBundle(`${jobs}/other/images/0`)?.id).not.toBe('image-generation-jobs');
+    expect(findAuthenticatedLazyRouteBundle(`${jobs}/${'b'.repeat(64)}/images/abc`)?.id).not.toBe('image-generation-jobs');
+  });
+
   it('maps conversation video jobs and their media without capturing nearby routes', () => {
     for (const path of ['/api/video-generation/settings', '/api/video-generation/sessions/session/jobs', '/api/video-generation/sessions/session/jobs/confirm-draft', '/api/video-generation/sessions/session/jobs/job/video']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('video-generation');

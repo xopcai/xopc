@@ -144,7 +144,7 @@ export function DiscussionOrganizeSettings({ detail, template, onTemplate, zh, b
               rows={2}
               value={hotwordsDraft}
               onChange={(event) => setHotwordsDraft(event.target.value)}
-              placeholder={zh ? '例如：xopc, 妙记, 张三, SQLite WAL, Q4 OKR' : 'e.g. xopc, Alice, Q4 OKR'}
+              placeholder={zh ? '例如：xopc, 产品评审, 张三, SQLite WAL, Q4 OKR' : 'e.g. xopc, Alice, Q4 OKR'}
               className="w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-xs text-fg outline-none focus:border-accent"
             />
           </label>

@@ -32,7 +32,7 @@ function methodScope(
 
 const mediaPathSegment = '[a-zA-Z0-9_-]+';
 const libraryPlaybackPath = new RegExp(`^/api/spaces/items/${mediaPathSegment}/versions/${mediaPathSegment}/content$`);
-const generatedPlaybackPath = new RegExp(`^/api/(?:music-generation/sessions/${mediaPathSegment}/jobs/[a-f0-9]{64}/audio|video-generation/sessions/${mediaPathSegment}/jobs/${mediaPathSegment}/video)$`);
+const generatedPlaybackPath = new RegExp(`^/api/(?:music-generation/sessions/${mediaPathSegment}/jobs/[a-f0-9]{64}/audio|image-generation/sessions/${mediaPathSegment}/jobs/[a-f0-9]{64}/images/[0-9]+|video-generation/sessions/${mediaPathSegment}/jobs/${mediaPathSegment}/video)$`);
 
 export function isMediaPlaybackPath(path: string): boolean {
   return path.length <= 2048 && (libraryPlaybackPath.test(path) || generatedPlaybackPath.test(path));
@@ -92,6 +92,9 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path === '/api/video-generation/settings') return 'gateway.admin';
   if (path.startsWith('/api/video-generation/')) return methodScope(method, 'sessions.read', 'sessions.write');
   if (method === 'GET' && /^\/api\/music-generation\/sessions\/[^/]+\/jobs(?:\/[a-f0-9]{64}\/audio)?$/.test(path)) {
+    return 'sessions.read';
+  }
+  if (method === 'GET' && /^\/api\/image-generation\/sessions\/[^/]+\/jobs(?:\/[a-f0-9]{64}\/images\/[0-9]+)?$/.test(path)) {
     return 'sessions.read';
   }
   if (path.startsWith('/api/sessions') || path.startsWith('/api/side-chats')) {

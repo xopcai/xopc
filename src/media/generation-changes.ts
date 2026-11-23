@@ -1,4 +1,4 @@
-import type { MusicJobState, VideoGenerationState } from '@xopcai/gateway-contract';
+import type { ImageJobState, MusicJobState, VideoGenerationState } from '@xopcai/gateway-contract';
 
 import { afterSqliteCommit } from '../storage/sqlite/transaction.js';
 import { createLogger } from '../utils/logger.js';
@@ -6,7 +6,7 @@ import { createLogger } from '../utils/logger.js';
 const log = createLogger('MediaGeneration');
 const listeners = new Set<(conversationId: string, transcriptId: string) => void>();
 
-export function mediaGenerationPhase(state: MusicJobState | VideoGenerationState) {
+export function mediaGenerationPhase(state: ImageJobState | MusicJobState | VideoGenerationState) {
   switch (state) {
     case 'completed':
     case 'failed':

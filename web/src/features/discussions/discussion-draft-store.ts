@@ -46,12 +46,21 @@ function openDraftDatabase(): Promise<IDBDatabase> {
   });
 }
 
+function notifyDraftsChanged(): void {
+  try {
+    globalThis.window?.dispatchEvent?.(new CustomEvent('discussion-drafts-changed'));
+  } catch {
+    /* non-DOM test environment */
+  }
+}
+
 export async function saveDiscussionDraft(draft: DiscussionDraft): Promise<void> {
   const db = await openDraftDatabase();
   try {
     const transaction = db.transaction(DRAFTS, 'readwrite', { durability: 'strict' });
     transaction.objectStore(DRAFTS).put(draft);
     await transactionDone(transaction);
+    notifyDraftsChanged();
   } finally {
     db.close();
   }
@@ -66,6 +75,7 @@ export async function saveDiscussionDraftChunk(chunk: DiscussionDraftChunk, draf
       transaction.objectStore(CHUNKS).add(chunk);
       if (draft) transaction.objectStore(DRAFTS).put(draft);
       await done;
+      if (draft) notifyDraftsChanged();
     } catch (error) {
       try { transaction.abort(); } catch { /* Already aborted by the storage engine. */ }
       await done.catch(() => undefined);
@@ -159,6 +169,7 @@ export async function deleteDiscussionDraft(draftId: string): Promise<void> {
       cursor.continue();
     };
     await transactionDone(transaction);
+    notifyDraftsChanged();
   } finally {
     db.close();
   }

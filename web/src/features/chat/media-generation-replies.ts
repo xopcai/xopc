@@ -16,7 +16,7 @@ function generationId(block: ToolUseContent): string | undefined {
   }
 }
 
-export function findMediaGenerationReplyIndexes(messages: readonly Message[], toolName: 'music_generation' | 'video_draft') {
+export function findMediaGenerationReplyIndexes(messages: readonly Message[], toolName: 'music_generation' | 'video_draft' | 'image_generation') {
   const indexes = new Map<string, number>();
   messages.forEach((message, index) => {
     if (message.role !== 'assistant') return;

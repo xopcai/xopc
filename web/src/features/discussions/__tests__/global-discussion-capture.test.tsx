@@ -298,4 +298,25 @@ describe('recording completion and recovery orchestration', () => {
     } finally { online.mockRestore(); }
   });
 
+  it('keeps recoveries dialog open on failed recovery and clears stale errors when discarding or reopening empty recoveries', async () => {
+    mocks.recorder.restore = vi.fn(async (candidate) => candidate);
+    mocks.create.mockResolvedValueOnce({ ...detail, discussion: { id: 'server', status: 'recording' } });
+    mocks.upload.mockRejectedValueOnce(new Error('Invalid recording chunk metadata'));
+    mocks.recorder.discard = vi.fn(async () => { mocks.recorder.recoverableDrafts = []; });
+
+    await act(async () => { window.dispatchEvent(new Event('open-recording-recoveries')); });
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>('article button')].find(button => button.textContent === copy.recover)!.click();
+    });
+    expect(container.querySelector('[role=dialog]')).not.toBeNull();
+    expect(container.textContent).toContain('Invalid recording chunk metadata');
+
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>('article button')].find(button => button.textContent === 'Discard local copy')!.click();
+    });
+    await act(async () => { root.render(<GlobalDiscussionCaptureHost />); });
+    expect(container.textContent).toContain('No recordings to recover');
+    expect(container.textContent).not.toContain('Invalid recording chunk metadata');
+  });
+
 });

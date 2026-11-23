@@ -12,7 +12,7 @@ export function notesHomeQuery(params: URLSearchParams, search: string): NotesLi
     tag,
     kind: view === 'voice' ? 'voice' : undefined,
     unassigned: params.get('unassigned') === 'true' || view === 'unassigned' || undefined,
-    pinned: view === 'favorites' ? true : undefined,
+    pinned: view === 'favorites' || view === 'pinned' ? true : undefined,
     agentEdited: view === 'agent' || undefined,
     status: view === 'archived' ? 'archived' : view === 'trashed' ? 'trashed' : undefined,
     search: search.trim() || undefined,
