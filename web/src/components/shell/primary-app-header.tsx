@@ -25,15 +25,19 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
   const showMobileNav = !pathname.startsWith('/settings');
   const personal = pathname === '/personal';
   const chatOverlay = personal ? personalChat : /^\/chat(?:\/|$)/.test(pathname) ? 'controls' : undefined;
+  const runtime = getShellChromeRuntime();
   const chromeLayout = resolveShellChromeLayout({
-    runtime: getShellChromeRuntime(),
+    runtime,
     sidebarCollapsed,
     mobileNavOpen,
   });
+  const chatHeaderDraggable = chatOverlay === 'controls' && (runtime === 'darwin' || runtime === 'win32');
+  const slotNoDragClass = chatHeaderDraggable ? undefined : APP_CHROME_NO_DRAG_CLASS;
 
   return (
     <header
       data-app-header-overlay={chatOverlay}
+      data-app-header-draggable={chatHeaderDraggable ? '' : undefined}
       className={cn(
         'grid min-w-0 shrink-0 items-center gap-1',
         chatOverlay && 'app-header-gradient',
@@ -45,8 +49,8 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
         headerClassName,
       )}
     >
-      {chatOverlay && chromeLayout.mainHeaderDraggable ? <div className={cn('pointer-events-auto absolute inset-x-0 top-0 h-2', APP_CHROME_DRAG_CLASS)} aria-hidden /> : null}
-      <div className={cn('flex min-w-0 shrink-0 items-center gap-1 sm:gap-2.5', personal && 'self-start pt-2', APP_CHROME_NO_DRAG_CLASS)}>
+      {chatOverlay === 'identity' && chromeLayout.mainHeaderDraggable ? <div className={cn('pointer-events-auto absolute inset-x-0 top-0 h-2', APP_CHROME_DRAG_CLASS)} aria-hidden /> : null}
+      <div className={cn('flex min-w-0 shrink-0 items-center gap-1 sm:gap-2.5', personal && 'self-start pt-2', slotNoDragClass)}>
         {chromeLayout.mainHeaderLeadingInsetClass ? (
           <ShellQuickActions
             sidebarToggleVariant="main"
@@ -58,11 +62,11 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
         {startExtra}
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-hidden">
-        <div className={cn(personal ? 'w-full' : 'w-fit max-w-full', APP_CHROME_NO_DRAG_CLASS)}>
+        <div className={cn(personal ? 'w-full' : 'w-fit max-w-full', slotNoDragClass)}>
           <ProductSectionHeader fallback={main} />
         </div>
       </div>
-      <div className={cn('flex min-w-0 shrink-0 items-center justify-end gap-2', personal && 'self-start pt-2', APP_CHROME_NO_DRAG_CLASS)}>
+      <div className={cn('flex min-w-0 shrink-0 items-center justify-end gap-2', personal && 'self-start pt-2', slotNoDragClass)}>
         {end}
       </div>
     </header>

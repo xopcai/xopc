@@ -197,12 +197,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
         </div>
       ),
       end: (
-        <div
-          className={cn(
-            'flex min-w-0 max-w-[min(32rem,calc(100vw-8rem))] shrink-0 items-center justify-end gap-2',
-            APP_CHROME_NO_DRAG_CLASS,
-          )}
-        >
+        <div className="flex min-w-0 max-w-[min(32rem,calc(100vw-8rem))] shrink-0 items-center justify-end gap-2">
           {showChatAgentSelector ? <ChatAgentSelector items={chatAgents} value={chatAgentId} disabled={chatAgentDisabled} placeholder={m.chat.agentPlaceholder} newChatLabel={activeConversationId ? m.chat.agentStartNewChat : undefined} searchPlaceholder={m.chat.agentSearchPlaceholder} noMatches={m.chat.agentNoMatches} compact contentSide="bottom" contentAlign="end" onChange={onChatAgentChange} /> : null}
           {showContextControls ? <SessionContextPanel
             key={`context:${activeConversationId ?? context?.project?.id ?? 'new'}`}

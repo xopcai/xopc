@@ -37,19 +37,17 @@ export function buildSilentRepliesSection(params: {
   ].join('\n');
 }
 
-export function buildOutputDirectivesSection(isMinimal: boolean, toolNames: string[] = [], channels: string[] = []): string {
+export function buildOutputDirectivesSection(isMinimal: boolean, toolNames: string[] = []): string {
   const tools = new Set(toolNames.map(name => name.trim().toLowerCase()));
   const hasFiles = ['publish_artifacts', 'send_media', 'send_message'].some(name => tools.has(name));
   const hasVoice = tools.has('text_to_speech') || tools.has('send_media');
-  const hasReplyTags = channels.some(channel => !['webchat', 'cli'].includes(channel));
-  if (isMinimal || (!hasFiles && !hasReplyTags && !hasVoice)) {
+  if (isMinimal || (!hasFiles && !hasVoice)) {
     return '';
   }
   return [
     '## Assistant Output Directives',
     hasFiles ? 'Deliver attachments through available artifact or messaging tools using confirmed references. MEDIA:<path-or-url> and host paths do not publish files.' : '',
     hasVoice ? '`[[audio_as_voice]]` requests voice-note delivery for attached audio when supported.' : '',
-    hasReplyTags ? 'For supported native replies, put [[reply_to_current]] first in the message. Use [[reply_to:<id>]] only for an explicitly supplied id. Tags are stripped on supported channels.' : '',
   ].filter(Boolean).join('\n');
 }
 

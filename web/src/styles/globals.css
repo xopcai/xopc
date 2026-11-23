@@ -1623,6 +1623,18 @@ html.dark[data-color-scheme="porcelain"] {
   background-image: none;
 }
 
+/* Let open menus and dialogs receive input above the native drag region. */
+body:not(:has(dialog[open], [aria-modal="true"], :is([role="menu"], [role="dialog"], [role="alertdialog"])[data-state="open"]))
+  [data-app-header-draggable]:not([inert] *) {
+  -webkit-app-region: drag;
+  pointer-events: auto;
+}
+
+[data-app-header-draggable] :is(button, a, input, textarea, select, [contenteditable="true"], [role="button"]) {
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+
 /* Keep the toolbar opaque and start the fade below its controls. */
 [data-app-header-overlay="controls"]::before {
   content: "";

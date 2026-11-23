@@ -230,7 +230,7 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   );
 
   if (!isMinimal) {
-    stableSections.push(buildOutputDirectivesSection(isMinimal, toolNames, channels));
+    stableSections.push(buildOutputDirectivesSection(isMinimal, toolNames));
   }
 
   stableSections.push(

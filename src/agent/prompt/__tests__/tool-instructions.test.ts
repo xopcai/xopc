@@ -51,6 +51,15 @@ describe('prompt tool capability boundaries', () => {
     expect(prompt).not.toContain('run the smallest meaningful assertion test');
   });
 
+  it.each(['webchat', 'telegram'])('omits inline reply tags from the %s prompt when Telegram is configured', (channel) => {
+    const prompt = buildSystemPrompt('/ws', {
+      toolNames: ['send_message'],
+      runtime: { channel },
+      channels: ['webchat', 'telegram'],
+    });
+    expect(prompt).not.toMatch(/\[\[reply_to(?:_current\]\]|:)/);
+  });
+
   it('uses send_media instead of xopc:// workspace links in external messaging channels', () => {
     const external = buildSystemPrompt('/ws', {
       toolNames: ['write_file', 'send_media', 'image_generate'],
