@@ -41,7 +41,7 @@ it('imports only 2 explicitly selected projects out of 100, and no unselected do
   expect(searchKnowledgeItems({ query: 'lunar', context, policy })).toEqual([]);
   const projectId = result.items.find(i => i.candidateId === selected[0].id)!.targetId;
   expect(searchKnowledgeItems({ query: 'lunar', context: { ...context, projectId }, policy })).toHaveLength(1);
-});
+}, 30_000); // Scans 100 real directories on shared CI disks.
 it('rejects empty, unknown, duplicate, cross-owner and missing-parent selections', async () => {
   const path = join(home, 'project'); write(join(path, 'CLAUDE.md'), 'Context');
   write(join(home, '.claude.json'), JSON.stringify({ projects: { [path]: {} } }));
