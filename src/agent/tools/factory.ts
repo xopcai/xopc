@@ -82,6 +82,7 @@ import {
 import { canRecallConversation, canRecallHistoryEntry } from '../../session/history-recall-policy.js';
 import { createSessionSearchTool } from './session-search-tool.js';
 import { createPersonalReadTool } from './personal-read-tool.js';
+import { createPersonalNoteTool } from './personal-note-tool.js';
 import { createPersonalScheduleTool } from './personal-schedule-tool.js';
 import { createPersonalResultTool } from './personal-result-tool.js';
 import { createPersonalTaskTool, type PersonalTaskToolDeps } from './personal-task-tool.js';
@@ -916,6 +917,10 @@ export class AgentToolsFactory {
                 getCurrentConversationId: currentConversationId,
                 getCurrentAgentId: () => resolvedAgentId,
                 canConfigureFromConversation: productToolDeps.canConfigureFromConversation,
+              })] : []),
+              ...(this.deps.getNotesService ? [createPersonalNoteTool({
+                ...productToolDeps,
+                getCurrentConversationId: currentConversationId,
               })] : []),
               ...(this.deps.getAutomationService ? [createPersonalScheduleTool({
                 getAutomationService: this.deps.getAutomationService,

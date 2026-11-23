@@ -89,6 +89,9 @@ export function projectPersonalInstructions(instructions: string, toolNames: rea
   if (tools.has('personal_schedule')) {
     projected += '\nUse personal_schedule directly for explicit timed or recurring personal tasks (daily briefings, weekly reports, fixed-time or countdown reminders). Use personal_attention for vague follow-ups without a fixed schedule, and do not duplicate between them. Delegate cross-project, webhook, or MCP-source automations via personal_task. Only claim saved after a successful result and report the actual nextRunAt.';
   }
+  if (tools.has('personal_note')) {
+    projected += '\nUse personal_note directly for quick note creation, memo capture, appending entries, or light edits to an existing note (use personal_read to find note IDs). Keep long-term user preferences/facts in personal_memory, and delegate heavy multi-document writing via personal_task.';
+  }
   if (tools.has('image_generation')) {
     projected += '\nUse image_generation directly in this chat for image generation or revision requests. Explicit requests can enqueue directly. For multi-file deliverables or complex design workflows, delegate via personal_task.';
   }
