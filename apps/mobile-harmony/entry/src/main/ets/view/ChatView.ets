@@ -1755,7 +1755,9 @@ export struct XopcChatView {
                   Text(item.name).fontSize(14).fontColor(this.colors.foreground).maxLines(1).width('100%')
                   Text(item.description).fontSize(12).fontColor(this.colors.secondary).maxLines(1).width('100%')
                 }.alignItems(HorizontalAlign.Start).width('100%')
-              }.width('100%').height(52).padding(8).backgroundColor(Color.Transparent).onClick((): void => { this.applyPalette(item); })
+              }.width('100%').height(52).padding(8).backgroundColor(Color.Transparent)
+                .borderRadius(this.colors.corner(10)).clipShape(this.colors.cornerClip(10))
+                .onClick((): void => { this.applyPalette(item); })
             }
           }, (item: XopcPaletteItem): string => item.id)
         }.width('100%').height(Math.min(3, this.palette.items.length) * 56)
@@ -1766,10 +1768,11 @@ export struct XopcChatView {
         Row({ space: 6 }) {
           SymbolGlyph($r('sys.symbol.info_circle')).fontSize(13).fontColor([this.colors.secondary])
           Text($r('app.string.task_detail_title')).fontSize(13).fontColor(this.colors.secondary)
-        }.height(28).padding({ left: 10, right: 10 }).backgroundColor(this.colors.chat.card)
-          .borderRadius(this.colors.corner(14))
-      }.id('task-chat-details-tip').height(44).padding(0).backgroundColor(Color.Transparent)
-        .alignSelf(ItemAlign.Start).margin({ left: 16 })
+        }
+      }.id('task-chat-details-tip').height(28).padding({ left: 10, right: 10 }).backgroundColor(this.colors.chat.card)
+        .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
+        .responseRegion({ x: 0, y: -8, width: '100%', height: 44 })
+        .alignSelf(ItemAlign.Start).margin({ left: 16, top: 8, bottom: 8 })
         .onClick((): void => {
           this.dismissComposer();
           this.onNavigate({ page: 'task-detail', itemId: this.taskId });
@@ -2072,7 +2075,8 @@ export struct XopcChatView {
       Text(label).fontSize(14).fontColor(this.colors.foreground)
         .width('100%').maxLines(2).textAlign(TextAlign.Center)
     }.id(actionId).layoutWeight(1).height(44).padding({ left: 6, right: 6 })
-      .backgroundColor(Color.Transparent).focusOnTouch(false)
+      .backgroundColor(Color.Transparent).borderRadius(this.colors.corner(10)).clipShape(this.colors.cornerClip(10))
+      .focusOnTouch(false)
       .onClick((): void => {
         this.readAloudMenuOpen = false;
         if (this.showReadAloudPlayback) action();

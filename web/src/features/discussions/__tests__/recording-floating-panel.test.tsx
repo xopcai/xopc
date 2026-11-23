@@ -60,3 +60,13 @@ it('keeps the recording window above the composer when using a bottom position',
   expect(container.querySelector('aside')!.style.left).toBe('788px');
   expect(container.querySelector('aside')!.style.top).toBe('288px');
 });
+
+it('clears the mobile primary bottom navigation bar on mobile viewports', async () => {
+  const mobileNav = document.createElement('nav');
+  mobileNav.dataset.mobilePrimaryNav = '';
+  mobileNav.style.top = '640px';
+  await act(async () => container.append(mobileNav));
+  const handle = button('移动录音窗');
+  await act(async () => handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })));
+  expect(container.querySelector('aside')!.style.top).toBe('328px');
+});

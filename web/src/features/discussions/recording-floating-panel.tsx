@@ -10,9 +10,9 @@ function savedPosition(): Point | null {
     return value && Number.isFinite(value.x) && Number.isFinite(value.y) ? value : null;
   } catch { return null; }
 }
-export function RecordingFloatingPanel({ compact, onCompactChange, title, subtitle, compactActions, children, language }: {
+export function RecordingFloatingPanel({ compact, onCompactChange, title, subtitle, compactActions, footer, children, language }: {
   compact: boolean; onCompactChange: (compact: boolean) => void; title: ReactNode; subtitle?: ReactNode;
-  compactActions?: ReactNode; children: ReactNode; language: 'en' | 'zh';
+  compactActions?: ReactNode; footer?: ReactNode; children: ReactNode; language: 'en' | 'zh';
 }) {
   const zh = language === 'zh'; const root = useRef<HTMLElement>(null);
   const [position,setPosition] = useState<Point | null>(savedPosition);
@@ -26,7 +26,7 @@ export function RecordingFloatingPanel({ compact, onCompactChange, title, subtit
   }
   return <aside ref={root} aria-label={zh ? '录音浮窗' : 'Recording window'} data-recording-window={compact ? 'compact' : 'expanded'}
     className="fixed z-[125] flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay/95 text-fg shadow-elevated backdrop-blur-md"
-    style={{ ...layout.style, width: compact ? 308 : 356, cursor: moving ? 'grabbing' : undefined }}>
+    style={{ ...layout.style, width: compact ? 'min(308px, calc(100vw - 24px))' : 'min(356px, calc(100vw - 24px))', cursor: moving ? 'grabbing' : undefined }}>
     <header className={`flex shrink-0 items-center gap-1.5 ${compact ? 'px-2.5 py-2' : 'border-b border-edge-subtle px-3 py-2'}`}>
       <button type="button" aria-label={zh ? '移动录音窗' : 'Move recording window'} title={zh ? '拖动移动，也可使用方向键或点击选择位置' : 'Drag, use arrow keys, or click to choose a position'}
         aria-expanded={menu} className="flex size-8 shrink-0 touch-none items-center justify-center rounded-lg text-fg-subtle outline-none hover:bg-surface-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
@@ -64,6 +64,7 @@ export function RecordingFloatingPanel({ compact, onCompactChange, title, subtit
       {[[false,false],[true,false],[false,true],[true,true]].map(([right,bottom],index) => <button key={index} type="button" className="min-h-10 rounded-lg px-3 text-sm hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"
         onClick={() => { move({ x: right ? layout.area.right : layout.area.left, y: bottom ? layout.area.bottom : layout.area.top }); setMenu(false); }}>{(zh ? ['左上角','右上角','左下角','右下角'] : ['Top left','Top right','Bottom left','Bottom right'])[index]}</button>)}
     </div> : null}
-    <div className="min-h-0 overflow-y-auto overscroll-contain">{children}</div>
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+    {!compact && footer ? <div className="shrink-0">{footer}</div> : null}
   </aside>;
 }

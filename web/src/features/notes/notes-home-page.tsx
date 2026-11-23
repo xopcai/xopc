@@ -1,3 +1,4 @@
+import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {
   Archive,
@@ -33,6 +34,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type TouchEvent as ReactTouchEvent,
 } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -130,11 +132,14 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [creatingBlank, setCreatingBlank] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [mobileComposerOpen, setMobileComposerOpen] = useState(false);
+  const [swipedNoteId, setSwipedNoteId] = useState<string | null>(null);
   const [pinning, setPinning] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<NoteIndexEntry | null>(null);
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
 
   const pinningRef = useRef(new Set<string>());
+  const swipeTouchRef = useRef<{ id: string; startX: number; startY: number } | null>(null);
   const blankRequest = useRef<{ key: string; projectId?: string } | null>(null);
   const blankBusy = useRef(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -313,6 +318,36 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
     },
     [setParams],
   );
+
+  // Support PWA shortcuts & mobile search handoff (?new=1, ?record=1, ?focusSearch=1)
+  const launchActionParam = params.get('new') === '1'
+    ? 'new'
+    : params.get('record') === '1'
+      ? 'record'
+      : params.get('focusSearch') === '1'
+        ? 'focusSearch'
+        : null;
+
+  useEffect(() => {
+    if (!launchActionParam || !token) return;
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete('new');
+        next.delete('record');
+        next.delete('focusSearch');
+        return next;
+      },
+      { replace: true },
+    );
+    if (launchActionParam === 'new') {
+      void createBlank();
+    } else if (launchActionParam === 'record') {
+      openDiscussionCapture(projectId || undefined);
+    } else if (launchActionParam === 'focusSearch') {
+      window.requestAnimationFrame(() => searchRef.current?.focus());
+    }
+  }, [createBlank, launchActionParam, projectId, setParams, token]);
 
   function chooseScope(id: string, nextView = 'all') {
     const next = new URLSearchParams();
@@ -788,7 +823,7 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
                 <PanelLeft className="size-4" aria-hidden />
               </button>
             ) : null}
-            <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg border border-edge bg-surface-inset px-2.5 focus-within:border-accent">
+            <label className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border border-edge bg-surface-inset px-2.5 focus-within:border-accent sm:h-8">
               <Search className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
               <input
                 ref={searchRef}
@@ -797,7 +832,7 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
                 onChange={(event) => setSearch(event.target.value)}
                 aria-label={n.searchDialogTitle}
                 placeholder={n.searchPlaceholder}
-                className="min-w-0 flex-1 bg-transparent text-xs text-fg outline-none placeholder:text-fg-muted"
+                className="min-w-0 flex-1 bg-transparent text-base text-fg outline-none placeholder:text-fg-muted sm:text-xs"
               />
               {search ? (
                 <button
@@ -816,7 +851,7 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
               disabled={creatingBlank}
               title={h.blankNote}
               aria-label={h.blankNote}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-on-accent hover:bg-accent-hover disabled:opacity-50"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-on-accent hover:bg-accent-hover disabled:opacity-50 sm:size-8"
             >
               {creatingBlank ? (
                 <Loader2 className="size-3.5 animate-spin" aria-hidden />
@@ -829,10 +864,22 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
               onClick={() => openDiscussionCapture(projectId || undefined)}
               title={h.recordAction}
               aria-label={h.recordAction}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel text-accent-fg hover:bg-surface-hover"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel text-accent-fg hover:bg-surface-hover sm:size-8"
             >
               <Mic className="size-3.5" aria-hidden />
             </button>
+            <div className="flex items-center gap-1 lg:hidden">
+              <MeetingImportButton projectId={projectId || undefined} compact />
+              <button
+                type="button"
+                onClick={() => setMobileComposerOpen(true)}
+                title={h.agentAction}
+                aria-label={h.agentAction}
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-accent-fg hover:bg-surface-hover"
+              >
+                <Sparkles className="size-4" aria-hidden />
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-2">
@@ -922,11 +969,43 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
                 </button>
               ))}
             </SlidingTabList>
+            {tags.length > 0 ? (
+              <div
+                aria-label={zh ? '标签筛选' : 'Filter by tag'}
+                className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {tags.slice(0, 14).map((item) => {
+                  const active = activeTag === item.tag;
+                  return (
+                    <button
+                      key={item.tag}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => chooseTag(item.tag)}
+                      className={cn(
+                        'inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors',
+                        active
+                          ? 'border-accent/40 bg-accent-soft font-medium text-accent-fg'
+                          : 'border-edge-subtle bg-surface-inset text-fg-muted hover:text-fg',
+                      )}
+                    >
+                      <span>#{item.tag}</span>
+                      <span className="text-[10px] tabular-nums opacity-75">{item.noteCount}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         </div>
 
         {/* Stream Body */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2">
+        <div
+          onClick={() => {
+            if (swipedNoteId) setSwipedNoteId(null);
+          }}
+          className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-16 pt-2 lg:pb-2"
+        >
           {actionError ? (
             <p
               className="mb-2 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-xs text-danger"
@@ -1063,17 +1142,104 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
                             ).padStart(2, '0')}`
                           : null;
 
+                      const isSwiped = swipedNoteId === note.id;
+
                       return (
                         <li
                           key={note.id}
+                          onTouchStart={(event: ReactTouchEvent<HTMLLIElement>) => {
+                            const touch = event.touches[0];
+                            if (!touch) return;
+                            swipeTouchRef.current = {
+                              id: note.id,
+                              startX: touch.clientX,
+                              startY: touch.clientY,
+                            };
+                          }}
+                          onTouchEnd={(event: ReactTouchEvent<HTMLLIElement>) => {
+                            const start = swipeTouchRef.current;
+                            swipeTouchRef.current = null;
+                            const touch = event.changedTouches[0];
+                            if (!start || start.id !== note.id || !touch) return;
+                            const dx = touch.clientX - start.startX;
+                            const dy = touch.clientY - start.startY;
+                            if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+                            if (dx < 0) {
+                              setSwipedNoteId(note.id);
+                            } else if (swipedNoteId === note.id) {
+                              setSwipedNoteId(null);
+                            }
+                          }}
                           className={cn(
-                            'group relative rounded-xl border transition-colors',
+                            'group relative overflow-hidden rounded-xl border transition-colors',
                             isSelected
                               ? 'border-accent/40 bg-accent-soft/55'
                               : 'border-transparent hover:bg-surface-hover/75',
                           )}
                         >
-                          <div className="flex items-start gap-2.5 p-2.5">
+                          {/* Apple Notes Touch Left-Swipe Action Tray */}
+                          <div
+                            aria-hidden={!isSwiped}
+                            className={cn(
+                              'absolute inset-y-0 right-0 flex w-28 items-stretch transition-opacity lg:hidden',
+                              isSwiped ? 'opacity-100' : 'pointer-events-none opacity-0',
+                            )}
+                          >
+                            {note.status !== 'trashed' ? (
+                              <button
+                                type="button"
+                                tabIndex={isSwiped ? 0 : -1}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setSwipedNoteId(null);
+                                  void toggleFavorite(note.id, !note.pinned);
+                                }}
+                                className="flex flex-1 flex-col items-center justify-center gap-0.5 bg-accent text-[11px] font-medium text-on-accent"
+                              >
+                                <Pin className="size-3.5" aria-hidden />
+                                <span>{note.pinned ? h.unfavorite : h.favorite}</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                tabIndex={isSwiped ? 0 : -1}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setSwipedNoteId(null);
+                                  void updateNoteStatus(note.id, 'inbox');
+                                }}
+                                className="flex flex-1 flex-col items-center justify-center gap-0.5 bg-accent text-[11px] font-medium text-on-accent"
+                              >
+                                <RotateCcw className="size-3.5" aria-hidden />
+                                <span>{zh ? '恢复' : 'Restore'}</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              tabIndex={isSwiped ? 0 : -1}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSwipedNoteId(null);
+                                if (note.status === 'trashed') {
+                                  setDeleteTarget(note);
+                                } else {
+                                  void updateNoteStatus(note.id, 'trashed');
+                                }
+                              }}
+                              className="flex flex-1 flex-col items-center justify-center gap-0.5 bg-danger text-[11px] font-medium text-white"
+                            >
+                              <Trash2 className="size-3.5" aria-hidden />
+                              <span>{note.status === 'trashed' ? (zh ? '彻底删' : 'Delete') : (zh ? '回收站' : 'Trash')}</span>
+                            </button>
+                          </div>
+
+                          <div
+                            className={cn(
+                              'relative flex items-start gap-2.5 bg-surface-panel p-2.5 transition-transform duration-200 ease-out group-hover:bg-transparent',
+                              isSelected && 'bg-transparent',
+                              isSwiped && '-translate-x-28 lg:translate-x-0',
+                            )}
+                          >
                             <button
                               type="button"
                               onClick={() => openNote(note.id)}
@@ -1260,6 +1426,31 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
           )}
         </div>
 
+        {/* Mobile Thumb-Zone Quick-Capture Pill (Apple Notes / Voicenotes style) */}
+        {!selectedNoteId ? (
+          <div className="pointer-events-none sticky bottom-3 z-20 mx-auto flex justify-center px-3 pb-1 lg:hidden">
+            <div className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-edge bg-surface-overlay/95 p-1 shadow-elevated backdrop-blur-md">
+              <button
+                type="button"
+                disabled={creatingBlank}
+                onClick={() => void createBlank()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-accent px-3.5 text-xs font-medium text-on-accent hover:bg-accent-hover disabled:opacity-50"
+              >
+                {creatingBlank ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Plus className="size-3.5" aria-hidden />}
+                <span>{zh ? '新建笔记' : 'New note'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openDiscussionCapture(projectId || undefined)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium text-fg hover:bg-surface-hover"
+              >
+                <Mic className="size-3.5 text-accent-fg" aria-hidden />
+                <span>{h.recordAction}</span>
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {/* Stream Footer: Pagination */}
         {!loading && !error && total > 0 ? (
           <div
@@ -1332,7 +1523,16 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
             showBackButton
             backButtonClassName="lg:hidden"
             clearHeaderOnCleanup
-            onOpenSearch={() => searchRef.current?.focus()}
+            onOpenSearch={() => {
+              if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                const next = new URLSearchParams(routeSearch);
+                next.delete('edit');
+                next.set('focusSearch', '1');
+                navigate(`/notes?${next.toString()}`);
+                return;
+              }
+              searchRef.current?.focus();
+            }}
             autoFocus={autoFocusEditor}
             onAutoFocusConsumed={consumeAutoFocus}
           />
@@ -1472,6 +1672,46 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
           </div>
         )}
       </main>
+
+      <Dialog.Root open={mobileComposerOpen} onOpenChange={setMobileComposerOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content
+            aria-describedby={undefined}
+            className="xopc-dialog-content fixed left-1/2 top-1/2 z-[81] flex h-[min(32rem,85dvh)] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover"
+          >
+            <header className="flex shrink-0 items-center justify-between border-b border-edge-subtle px-4 py-3">
+              <Dialog.Title className="flex items-center gap-2 text-sm font-semibold text-fg">
+                <Sparkles className="size-4 text-accent-fg" aria-hidden />
+                <span>{h.agentAction}</span>
+              </Dialog.Title>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  aria-label={zh ? '关闭' : 'Close'}
+                  className="inline-flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg"
+                >
+                  <X className="size-4" aria-hidden />
+                </button>
+              </Dialog.Close>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <NotesHomeComposer
+                projects={projects}
+                projectId={destination}
+                onProjectChange={setDestination}
+                onCreated={() => {
+                  setMobileComposerOpen(false);
+                  refresh();
+                }}
+                labels={n}
+                projectsLoading={projectsLoading}
+                projectsError={Boolean(projectError)}
+              />
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <ConfirmDialog
         open={deleteTarget !== null}

@@ -150,7 +150,7 @@ export function NoteTagBar({
             onBlur={() => void handleAdd(draft)}
             placeholder={zh ? '输入标签回车…' : 'Tag name…'}
             aria-label={zh ? '新标签名称' : 'New tag name'}
-            className="h-6 w-28 rounded-md border border-accent bg-surface-panel px-2 text-xs text-fg outline-none placeholder:text-fg-subtle"
+            className="h-7 w-32 rounded-md border border-accent bg-surface-panel px-2 text-base text-fg outline-none placeholder:text-fg-subtle sm:h-6 sm:w-28 sm:text-xs"
           />
         ) : (
           <button

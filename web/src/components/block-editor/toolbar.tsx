@@ -57,7 +57,7 @@ function ToolbarButton({ onClick, isActive, disabled, title, children }: Toolbar
       aria-pressed={isActive}
       onMouseDown={event => event.preventDefault()}
       className={cn(
-        'inline-flex size-8 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+        'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent md:size-8',
         isActive && 'bg-surface-hover text-accent',
         disabled && 'pointer-events-none opacity-40',
       )}
@@ -135,7 +135,7 @@ export function BlockEditorToolbar({
 
   return (
     <div role="group" aria-label={zh ? '排版工具' : 'Formatting controls'}
-      className="flex shrink-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain border-b border-edge-subtle px-3 py-1.5">
+      className="order-last flex shrink-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain border-t border-edge-subtle bg-surface-panel/95 px-3 py-1.5 backdrop-blur-sm [scrollbar-width:none] md:order-first md:border-b md:border-t-0 [&::-webkit-scrollbar]:hidden">
       {/* Undo / Redo */}
       <ToolbarButton
         onClick={() => editor.chain().focus().undo().run()}
@@ -368,6 +368,12 @@ export function BlockEditorToolbar({
           />
         </>
       )}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().insertContent('[[').run()}
+        title={zh ? '引用关联笔记 [[ ' : 'Link note [['}
+      >
+        <span className="font-mono text-xs font-semibold leading-none">[[</span>
+      </ToolbarButton>
       {onVoiceRecord && (
         <ToolbarButton
           onClick={onVoiceRecord}

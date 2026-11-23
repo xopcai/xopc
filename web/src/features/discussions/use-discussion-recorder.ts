@@ -83,8 +83,28 @@ export function useDiscussionRecorder() {
   const [inputLevel, setInputLevel] = useState<number | null>(null);
   const intervalRef = useRef<number | null>(null);
   const lifecycleCleanupRef = useRef<(() => void) | null>(null);
+  const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
   const startInFlightRef = useRef(false);
   const stopRef = useRef<() => Promise<DiscussionDraft | null>>(() => Promise.resolve(null));
+
+  const releaseWakeLock = useCallback(() => {
+    const sentinel = wakeLockRef.current;
+    wakeLockRef.current = null;
+    if (sentinel) void sentinel.release().catch(() => undefined);
+  }, []);
+
+  const requestWakeLock = useCallback(() => {
+    if (wakeLockRef.current || typeof document === 'undefined' || document.visibilityState !== 'visible') return;
+    const wakeLockApi = (navigator as Navigator & { wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock;
+    if (!wakeLockApi?.request) return;
+    void wakeLockApi.request('screen').then((sentinel) => {
+      if (!recorderRef.current || recorderRef.current.state === 'paused') {
+        void sentinel.release().catch(() => undefined);
+        return;
+      }
+      wakeLockRef.current = sentinel;
+    }).catch(() => undefined);
+  }, []);
 
   const refreshRecoverableDrafts = useCallback(async () => {
     try {
@@ -105,6 +125,7 @@ export function useDiscussionRecorder() {
     intervalRef.current = null;
     lifecycleCleanupRef.current?.();
     lifecycleCleanupRef.current = null;
+    releaseWakeLock();
     releaseMicrophoneLease(microphoneOwner.current);
     audioCleanupRef.current?.();
     audioCleanupRef.current = null;
@@ -430,6 +451,19 @@ export function useDiscussionRecorder() {
         if (elapsed >= MAX_RECORDING_MS) void stop().catch(() => undefined);
       }, 1_000);
 
+      requestWakeLock();
+      const onVisibilityWake = () => {
+        if (document.visibilityState === 'visible' && recorderRef.current?.state === 'recording') {
+          requestWakeLock();
+        }
+      };
+      document.addEventListener('visibilitychange', onVisibilityWake);
+      const prevLifecycleCleanup = lifecycleCleanupRef.current;
+      lifecycleCleanupRef.current = () => {
+        document.removeEventListener('visibilitychange', onVisibilityWake);
+        prevLifecycleCleanup?.();
+      };
+
       return nextDraft;
     } catch (caught) {
       input.acquiredAudio?.cleanup();
@@ -465,17 +499,19 @@ export function useDiscussionRecorder() {
     setElapsedMs(clockRef.current.elapsedMs);
     recorderRef.current.pause();
     segmenterRef.current?.pause();
+    releaseWakeLock();
     setPhase('paused');
     setInputLevel(null);
-  }, []);
+  }, [releaseWakeLock]);
 
   const resume = useCallback(() => {
     if (recorderRef.current?.state !== 'paused') return;
     clockRef.current.resume();
     recorderRef.current.resume();
     segmenterRef.current?.resume();
+    requestWakeLock();
     setPhase('waiting_for_audio');
-  }, []);
+  }, [requestWakeLock]);
 
   const setServerDiscussionId = useCallback(async (serverDiscussionId: string) => {
     persistQueueRef.current = persistQueueRef.current.then(async () => {

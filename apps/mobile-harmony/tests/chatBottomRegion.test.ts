@@ -33,8 +33,11 @@ describe('chat bottom region composition', () => {
     const tip = chat.indexOf(".id('task-chat-details-tip')");
     expect(tip).toBeGreaterThan(0);
     expect(tip).toBeLessThan(chat.indexOf(".id('chat-composer')"));
-    expect(chat.slice(tip, chat.indexOf(".id('chat-composer')"))).toContain(
-      "this.onNavigate({ page: 'task-detail', itemId: this.taskId })");
+    const tipBlock = chat.slice(tip, chat.indexOf(".id('chat-composer')"));
+    expect(tipBlock).toContain("this.onNavigate({ page: 'task-detail', itemId: this.taskId })");
+    expect(tipBlock).toContain('.height(28).padding({ left: 10, right: 10 }).backgroundColor(this.colors.chat.card)');
+    expect(tipBlock).toContain('.borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))');
+    expect(tipBlock).toContain(".responseRegion({ x: 0, y: -8, width: '100%', height: 44 })");
     const detailDestination = home.slice(home.indexOf("} else if (page === 'task-detail')"),
       home.indexOf("} else if (page === 'task-edit'"));
     expect(detailDestination).toContain("XopcWorkspaceView({ section: 'tasks'");
@@ -212,6 +215,22 @@ describe('chat bottom region composition', () => {
     expect(personalChatActivity).not.toContain('statusLabel');
     expect(personalChatActivity).toContain('XopcPersonalWorkPillFill({ animate: this.activePage && !this.reduceMotion })');
     expect(personalChatActivity).toContain('.autoPlay(this.activePage && !this.reduceMotion)');
+    const workRow = personalChatActivity.slice(
+      personalChatActivity.indexOf('@Builder taskRow('),
+      personalChatActivity.indexOf('@Builder workingPill()'),
+    );
+    expect(workRow).toContain('.height(PERSONAL_WORK_PILL_HEIGHT)');
+    expect(workRow).toContain('.borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))');
+    expect(workRow).toContain(".responseRegion({ x: 0, y: -PERSONAL_WORK_TOUCH_INSET, width: '100%', height: PERSONAL_WORK_TOUCH_HEIGHT })");
+    const compactAttention = personalChatActivity.slice(
+      personalChatActivity.indexOf(".id('chat-personal-attention-compact')"),
+      personalChatActivity.indexOf('} else if (this.attentionCount > 0)'),
+    );
+    expect(compactAttention).toContain('.constraintSize({ minWidth: PERSONAL_WORK_PILL_HEIGHT }).height(PERSONAL_WORK_PILL_HEIGHT)');
+    expect(compactAttention).toContain('.backgroundColor(this.colors.attentionFill)');
+    expect(compactAttention).toContain('.borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))');
+    expect(compactAttention).toContain('.responseRegion([');
+    expect(compactAttention).not.toContain('.width(44).height(44)');
     const ordinary = header.slice(header.indexOf('} else if (this.isStandaloneDraft())'));
     expect(ordinary.match(/Blank\(\)\.layoutWeight\(1\)/g)).toHaveLength(2);
     expect(ordinary).not.toContain('this.chat.title');

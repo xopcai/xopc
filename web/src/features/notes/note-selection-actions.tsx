@@ -42,9 +42,16 @@ export function NoteSelectionActions({ noteId, selection, zh, onDismiss, onAsk }
   }, [selection, onDismiss]);
   useLayoutEffect(() => {
     const rect = root.current?.getBoundingClientRect(); if (!rect) return;
-    const left = Math.max(8, Math.min(selection.rect.left, window.innerWidth - rect.width - 8));
-    const preferred = selection.rect.bottom + 8;
-    const top = preferred + rect.height <= window.innerHeight - 8 ? preferred : Math.max(8, selection.rect.top - rect.height - 8);
+    const vv = window.visualViewport;
+    const vx = vv?.offsetLeft ?? 0;
+    const vy = vv?.offsetTop ?? 0;
+    const vw = vv?.width ?? window.innerWidth;
+    const vh = vv?.height ?? window.innerHeight;
+    const left = Math.max(vx + 8, Math.min(selection.rect.left, vx + vw - rect.width - 8));
+    const preferred = selection.rect.bottom + 10;
+    const top = preferred + rect.height <= vy + vh - 8
+      ? preferred
+      : Math.max(vy + 8, Math.min(selection.rect.top - rect.height - 10, vy + vh - rect.height - 8));
     setPosition({ left, top });
   }, [selection, expanded, result, error]);
   async function preview(instruction: string) {

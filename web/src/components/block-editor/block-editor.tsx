@@ -433,7 +433,7 @@ export function BlockEditor({
             }}
             placeholder="https://..."
             aria-label={zh ? '链接地址' : 'Link URL'}
-            className="h-8 min-w-48 flex-1 rounded-md border border-edge bg-surface-panel px-2.5 text-xs text-fg outline-none focus:border-accent"
+            className="h-8 min-w-48 flex-1 rounded-md border border-edge bg-surface-panel px-2.5 text-base text-fg outline-none focus:border-accent sm:text-xs"
           />
           <button
             type="submit"

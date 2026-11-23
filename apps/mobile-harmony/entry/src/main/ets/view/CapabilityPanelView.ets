@@ -421,13 +421,13 @@ export struct XopcCapabilityPanelView {
     if (this.visibleLinks().length > 0) {
       Column({ space: 8 }) {
         ForEach(this.visibleLinks(), (link: CapabilityPanelLink) => {
-          Button() {
+          Button({ type: ButtonType.Normal }) {
             Row({ space: 8 }) {
               Text(link.label).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.chat.action).layoutWeight(1)
               SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.chat.action]).accessibilityLevel('no')
             }.width('100%').padding({ left: 14, right: 14 })
           }.width('100%').height(44).padding(0).backgroundColor(this.colors.panel)
-            .borderRadius(this.colors.corner(14)).enabled(!this.busy)
+            .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14)).enabled(!this.busy)
             .onClick((): void => { void this.openPanelLink(link.url); })
         }, (link: CapabilityPanelLink): string => link.url + ':' + link.label)
       }.id('capability-panel-links').width('100%')
@@ -440,12 +440,13 @@ export struct XopcCapabilityPanelView {
       if (field.presentation === 'segmented') {
         Row({ space: 4 }) {
           ForEach(field.options ?? [], (option: CapabilityChoice) => {
-            Button() {
+            Button({ type: ButtonType.Normal }) {
               Text(option.label).fontSize(14).fontWeight(FontWeight.Medium).textAlign(TextAlign.Center)
                 .fontColor(this.values.get(field.id) === option.id ? this.colors.accent : this.colors.secondary)
             }.id('capability-option-' + option.id).layoutWeight(1).constraintSize({ minHeight: 44 }).padding(4)
               .backgroundColor(this.values.get(field.id) === option.id ? this.colors.surface : Color.Transparent)
-              .borderRadius(this.colors.corner(10)).accessibilitySelected(this.values.get(field.id) === option.id)
+              .borderRadius(this.colors.corner(10)).clipShape(this.colors.cornerClip(10))
+              .accessibilitySelected(this.values.get(field.id) === option.id)
               .enabled(!this.busy).onClick((): void => { this.setField(field, option.id); })
           }, (option: CapabilityChoice): string => option.id)
         }.id('capability-field-' + field.id).width('100%').padding(4)
@@ -683,7 +684,7 @@ export struct XopcCapabilityPanelView {
         .borderRadius(this.colors.corner(16))
     }
     if (this.panel?.authorizationUrl && this.panel?.qrUrl) {
-      Button() {
+      Button({ type: ButtonType.Normal }) {
         Row({ space: 10 }) {
           Text(this.showQr ? this.t('收起二维码', 'Hide QR code') : this.t('其他方式', 'Other ways'))
             .layoutWeight(1).fontSize(14).fontColor(this.colors.chat.action)
@@ -691,7 +692,8 @@ export struct XopcCapabilityPanelView {
             .fontSize(14).fontColor([this.colors.chat.action]).accessibilityLevel('no')
         }.width('100%').padding({ left: 14, right: 14 })
       }.id('capability-panel-other-methods').width('100%').height(44).padding(0)
-        .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel).accessibilitySelected(this.showQr)
+        .borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
+        .backgroundColor(this.colors.panel).accessibilitySelected(this.showQr)
         .enabled(!this.busy).onClick((): void => { this.showQr = !this.showQr; })
     }
     if (this.panel?.qrUrl && (!this.panel.authorizationUrl || this.showQr)) {

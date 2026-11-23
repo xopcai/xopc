@@ -11,8 +11,15 @@ export interface AcquiredDiscussionAudio {
 }
 
 export function isSystemAudioMixSupported(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (
+    !isElectron() &&
+    typeof navigator.userAgent === 'string' &&
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+  ) {
+    return false;
+  }
   return (
-    typeof navigator !== 'undefined' &&
     typeof navigator.mediaDevices?.getUserMedia === 'function' &&
     typeof navigator.mediaDevices?.getDisplayMedia === 'function' &&
     typeof AudioContext !== 'undefined'

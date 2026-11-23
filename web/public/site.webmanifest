@@ -19,5 +19,28 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "开始录音",
+      "short_name": "录音",
+      "description": "一键开启录音笔记并自动整理要点",
+      "url": "/#/notes?record=1",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "新建笔记",
+      "short_name": "新建",
+      "description": "创建一篇空白笔记立即开始记录",
+      "url": "/#/notes?new=1",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "全部笔记",
+      "short_name": "笔记",
+      "description": "查看所有笔记与录音记录",
+      "url": "/#/notes",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    }
   ]
 }

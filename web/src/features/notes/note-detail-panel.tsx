@@ -35,7 +35,7 @@ import {
 } from './notes-api';
 import { NoteImageLightboxProvider, useNoteImageLightbox } from './note-image-lightbox';
 import { NoteHistoryPanel } from './note-history-panel';
-import { NoteMarkdownView } from './note-markdown-view';
+import { NoteMarkdownView, toggleMarkdownTaskAtIndex } from './note-markdown-view';
 import { NoteOutlineDialog, NoteOutlinePopover, useNoteOutline } from './note-outline';
 import { NoteBreakdownPanel } from './note-breakdown-panel';
 import { NoteShareDialog } from './note-share-dialog';
@@ -1017,7 +1017,23 @@ function NoteDetailPanelInner({
                     ) : null}
                     {displayText ? (
                       <div data-note-outline-content>
-                        <NoteMarkdownView noteId={noteId} attachments={note.attachments} content={displayText} className="[&_img]:cursor-zoom-in" />
+                        <NoteMarkdownView
+                          noteId={noteId}
+                          attachments={note.attachments}
+                          content={displayText}
+                          onToggleTaskIndex={
+                            !isPreviewingSnapshot && note.status !== 'trashed'
+                              ? (taskIdx, checked) => {
+                                  const next = toggleMarkdownTaskAtIndex(displayText, taskIdx, checked);
+                                  if (next !== displayText) {
+                                    handleSave(next);
+                                    setPopulatedGen((c) => c + 1);
+                                  }
+                                }
+                              : undefined
+                          }
+                          className="[&_img]:cursor-zoom-in"
+                        />
                       </div>
                     ) : (
                       meeting ? <button type="button" className="min-h-11 rounded-lg px-2 text-sm text-accent-fg hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" onClick={() => handleModeChange('wysiwyg')}>{language === 'zh' ? '写笔记' : 'Write notes'}</button> : <p className="italic text-fg-muted">{n.emptyPreview}</p>
@@ -1028,7 +1044,7 @@ function NoteDetailPanelInner({
               </>
             )}
           </div>
-          {!isPreviewingSnapshot && mode !== 'preview' && !meeting ? (
+          {!isPreviewingSnapshot && mode !== 'preview' && (!meeting || !showMeeting) ? (
             <NoteBacklinksSection noteId={noteId} className="mx-auto mt-0 w-full max-w-3xl shrink-0 px-5 pb-3 pt-2 sm:px-10" />
           ) : null}
     </div>
@@ -1176,20 +1192,19 @@ function NoteDetailPanelInner({
         </div>
       </aside> : null}
 
-      {/* Shared side panel — animated width */}
+      {/* Shared side panel — responsive full-width on mobile, animated resizable width on desktop */}
       <div
         ref={sidePanelShellRef}
+        style={{ '--note-side-w': `${sidePanelWidth}px` } as React.CSSProperties}
         className={cn(
           'relative min-h-0 max-w-full shrink-0 flex-col overflow-hidden',
-          activeSidePanel ? 'flex' : 'hidden',
+          activeSidePanel ? 'flex w-full @min-[56rem]/note:w-[var(--note-side-w)]' : 'hidden w-0',
           !historyResizing && 'transition-[width] duration-300 ease-in-out',
         )}
-        style={{ width: activeSidePanel ? sidePanelWidth : 0 }}
       >
         <div
           ref={sidePanelInnerRef}
-          className="flex min-h-0 flex-1 flex-col"
-          style={{ width: sidePanelWidth }}
+          className="flex min-h-0 w-full flex-1 flex-col @min-[56rem]/note:w-[var(--note-side-w)]"
         >
           <div
             role="separator"
@@ -1208,10 +1223,7 @@ function NoteDetailPanelInner({
               const applyWidth = () => {
                 rafId = 0;
                 committedWidth = nextWidth;
-                if (activeSidePanel) {
-                  sidePanelShellRef.current?.style.setProperty('width', `${committedWidth}px`);
-                }
-                sidePanelInnerRef.current?.style.setProperty('width', `${committedWidth}px`);
+                sidePanelShellRef.current?.style.setProperty('--note-side-w', `${committedWidth}px`);
               };
               const onMove = (ev: PointerEvent) => {
                 const newW = startW - (ev.clientX - startX);
@@ -1237,7 +1249,7 @@ function NoteDetailPanelInner({
               window.addEventListener('pointercancel', onDone);
             }}
             className={cn(
-              'absolute left-0 top-0 z-10 h-full w-2 -translate-x-1/2 cursor-col-resize',
+              'absolute left-0 top-0 z-10 hidden h-full w-2 -translate-x-1/2 cursor-col-resize @min-[56rem]/note:block',
               "before:content-[''] before:pointer-events-none before:absolute before:left-1/2 before:top-0 before:h-full before:w-px before:-translate-x-1/2",
               'before:bg-transparent before:transition-[background-color] before:duration-150',
               'hover:before:bg-edge/65 dark:hover:before:bg-edge/75',

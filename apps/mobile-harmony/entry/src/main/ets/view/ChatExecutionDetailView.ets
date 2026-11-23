@@ -123,7 +123,7 @@ export struct XopcChatExecutionDetailView {
           }
         }.width('100%').alignItems(VerticalAlign.Center)
       }.id('chat-execution-tool-' + group.id).width('100%').padding(0)
-        .backgroundColor(Color.Transparent)
+        .backgroundColor(Color.Transparent).borderRadius(this.colors.corner(10)).clipShape(this.colors.cornerClip(10))
         .onClick((): void => {
           if (this.groupHasDetails(group)) this.expandedGroupId = this.expandedGroupId === group.id ? '' : group.id;
         })

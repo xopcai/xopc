@@ -1,6 +1,8 @@
 import { Pause, Play, Repeat, RotateCcw, RotateCw } from 'lucide-react';
 import {
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
@@ -36,6 +38,7 @@ export interface DiscussionAudioPlayerProps {
   audioRef: RefObject<HTMLAudioElement | null>;
   audioSourceKey: string;
   src: string;
+  title?: string;
   zh: boolean;
   positionMs: number;
   durationMs: number;
@@ -56,6 +59,7 @@ export function DiscussionAudioPlayer({
   audioRef,
   audioSourceKey,
   src,
+  title,
   zh,
   positionMs,
   durationMs,
@@ -126,6 +130,86 @@ export function DiscussionAudioPlayer({
       audioRef.current.playbackRate = next;
     }
   };
+
+  const scrubCallbackRef = useRef(onUserScrub);
+  scrubCallbackRef.current = onUserScrub;
+  const positionRef = useRef(positionMs);
+  positionRef.current = positionMs;
+
+  // Wire OS Lock Screen / Dynamic Island / Control Center Now Playing via W3C MediaSession API
+  useEffect(() => {
+    if (!playing || typeof navigator === 'undefined' || !('mediaSession' in navigator) || !navigator.mediaSession) {
+      return undefined;
+    }
+    const ms = navigator.mediaSession;
+    try {
+      if (typeof MediaMetadata !== 'undefined') {
+        ms.metadata = new MediaMetadata({
+          title: title?.trim() || (zh ? '录音笔记' : 'Voice note'),
+          artist: 'xopc',
+          album: zh ? '录音笔记' : 'Voice Notes',
+          artwork: [
+            { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+            { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          ],
+        });
+      }
+      ms.playbackState = 'playing';
+      const safeActions: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
+        ['play', () => { void audioRef.current?.play().catch(() => undefined); }],
+        ['pause', () => { audioRef.current?.pause(); }],
+        [
+          'seekbackward',
+          (details) => {
+            const delta = (details.seekOffset ?? 15) * 1000;
+            scrubCallbackRef.current(Math.max(0, positionRef.current - delta));
+          },
+        ],
+        [
+          'seekforward',
+          (details) => {
+            const delta = (details.seekOffset ?? 15) * 1000;
+            scrubCallbackRef.current(Math.min(effectiveDurationMs, positionRef.current + delta));
+          },
+        ],
+        [
+          'seekto',
+          (details) => {
+            if (typeof details.seekTime === 'number' && Number.isFinite(details.seekTime)) {
+              scrubCallbackRef.current(Math.max(0, Math.min(effectiveDurationMs, Math.round(details.seekTime * 1000))));
+            }
+          },
+        ],
+      ];
+      for (const [action, handler] of safeActions) {
+        try { ms.setActionHandler(action, handler); } catch { /* unsupported action */ }
+      }
+      return () => {
+        try { ms.playbackState = 'paused'; } catch { /* ignore */ }
+        for (const [action] of safeActions) {
+          try { ms.setActionHandler(action, null); } catch { /* ignore */ }
+        }
+      };
+    } catch {
+      return undefined;
+    }
+  }, [audioRef, effectiveDurationMs, playing, title, zh]);
+
+  useEffect(() => {
+    if (!playing || typeof navigator === 'undefined' || !navigator.mediaSession?.setPositionState) return;
+    const durationSec = effectiveDurationMs / 1000;
+    const positionSec = Math.max(0, Math.min(durationSec, positionMs / 1000));
+    if (!Number.isFinite(durationSec) || durationSec <= 0) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: durationSec,
+        playbackRate: rate,
+        position: positionSec,
+      });
+    } catch {
+      /* ignore transient out-of-range states */
+    }
+  }, [effectiveDurationMs, playing, positionMs, rate]);
 
   const handleTrackPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     const track = event.currentTarget;

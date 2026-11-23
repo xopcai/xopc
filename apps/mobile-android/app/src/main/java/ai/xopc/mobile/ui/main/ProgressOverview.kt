@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -206,7 +207,8 @@ internal fun ProgressAttentionRow(item: ProgressItem, busy: Boolean, onOpen: () 
   Card(shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth(),
     colors = CardDefaults.cardColors(containerColor = attention.fill, contentColor = MaterialTheme.colorScheme.onSurface)) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      Column(Modifier.fillMaxWidth().testTag("progress-item-${item.id}").clickable(enabled = canOpen, onClick = onOpen),
+      Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).testTag("progress-item-${item.id}")
+        .clickable(enabled = canOpen, onClick = onOpen),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item.statusLabel?.takeIf(String::isNotBlank)?.let { status ->
           Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

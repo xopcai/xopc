@@ -1,6 +1,6 @@
 import { useLayoutEffect, useState, type CSSProperties, type RefObject } from 'react';
 
-const COMPOSER = '[data-chat-composer-frame]';
+const COMPOSER = '[data-chat-composer-frame], [data-mobile-primary-nav]';
 const GAP = 12;
 
 type Point = { x: number; y: number };

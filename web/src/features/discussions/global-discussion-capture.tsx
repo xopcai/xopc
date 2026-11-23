@@ -642,7 +642,7 @@ export function GlobalDiscussionCaptureHost() {
     const candidate = recorder.recoverableDrafts[0];
     if (!candidate) return null;
     return (
-      <aside className="fixed bottom-5 right-5 z-[125] w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-overlay p-4 shadow-elevated">
+      <aside className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] right-4 z-[125] w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-overlay p-4 shadow-elevated md:bottom-5 md:right-5">
         <button className="text-sm font-medium text-fg" onClick={() => { setOperationError(null); setShowRecoveries(true); }}>{copy.recoveredTitle} ({recorder.recoverableDrafts.length})</button>
         <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.recoveredDescription}</p>
         <div className="mt-3 flex justify-end gap-2">
@@ -733,11 +733,35 @@ export function GlobalDiscussionCaptureHost() {
   const level = status.capture === 'recording' ? (recorder.inputLevel ?? 0.08) : 0;
   const activeMode = recorder.audioMode ?? 'microphone';
 
+  const panelFooter = (
+    <footer className="space-y-2 border-t border-edge-subtle px-4 py-2.5">
+      <div className="grid grid-flow-col auto-cols-fr gap-2">{controls(false)}</div>
+      {(recorder.phase === 'error' || recorder.phase === 'stopped') && recorder.draft && !finishing ? (
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={recovering || finishing || activeRecording} onClick={() => void recoverDraft(recorder.draft!)}>{copy.recover}</Button>
+          <Button disabled={recovering || finishing || activeRecording || recorder.draft.sealRequested} onClick={() => void continueDraft(recorder.draft!)}>{zh ? '继续录制' : 'Continue recording'}</Button>
+          <Button disabled={recovering || finishing || activeRecording} onClick={() => void exportDraft(recorder.draft!)}>{zh ? '导出原音包' : 'Export originals'}</Button>
+        </div>
+      ) : null}
+      {recorder.elapsedMs >= 105 * 60_000 || (!active && (!finishing || status.localComplete)) ? (
+        <div className="flex items-center justify-between gap-2 text-[11px] text-fg-muted">
+          <span>{recorder.elapsedMs >= 105 * 60_000 ? copy.maxDuration : ''}</span>
+          {!active && (!finishing || status.localComplete) ? (
+            <button type="button" className="rounded px-2 py-1 hover:bg-surface-hover" aria-label={copy.close} onClick={() => setVisible(false)}>
+              {copy.close}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </footer>
+  );
+
   return <RecordingFloatingPanel compact={compact} onCompactChange={setCompact} language={language}
     title={compact
       ? <span className="inline-flex items-center gap-2 font-mono text-sm font-semibold"><span className={`size-2 shrink-0 rounded-full ${dotColor}`} aria-hidden />{formatDuration(recorder.elapsedMs)}</span>
       : <span className="inline-flex items-center gap-2 truncate text-xs font-medium text-fg"><span className={`size-2 shrink-0 rounded-full ${dotColor}`} aria-hidden /><span className="truncate">{title}</span></span>}
-    compactActions={<div className="flex items-center gap-1">{controls(true)}</div>}>
+    compactActions={<div className="flex items-center gap-1">{controls(true)}</div>}
+    footer={panelFooter}>
     {compact ? <>
       <RecordingStatusPanel status={status} language={language} compact />
       {status.capture === 'interrupted' || warning ? <p role="alert" className="px-3 pb-2 text-xs text-danger">{warningLabel}</p> : null}
@@ -899,7 +923,7 @@ export function GlobalDiscussionCaptureHost() {
               }}
               placeholder={zh ? '记下重点结论或待办，结束后自动融合…' : 'Jot key points — auto-fused when finished…'}
               aria-label={zh ? '随手记' : 'Quick notes'}
-              className="w-full resize-none rounded-lg border border-edge bg-surface-panel p-2 text-xs leading-5 text-fg outline-none focus:border-accent"
+              className="w-full resize-none rounded-lg border border-edge bg-surface-panel p-2 text-base leading-5 text-fg outline-none focus:border-accent sm:text-xs"
             />
           ) : null}
         </div>
@@ -928,27 +952,6 @@ export function GlobalDiscussionCaptureHost() {
           </div>
         ) : null}
       </div>
-
-      <footer className="space-y-2 border-t border-edge-subtle px-4 py-2.5">
-        <div className="grid grid-flow-col auto-cols-fr gap-2">{controls(false)}</div>
-        {(recorder.phase === 'error' || recorder.phase === 'stopped') && recorder.draft && !finishing ? (
-          <div className="flex flex-wrap gap-2">
-            <Button disabled={recovering || finishing || activeRecording} onClick={() => void recoverDraft(recorder.draft!)}>{copy.recover}</Button>
-            <Button disabled={recovering || finishing || activeRecording || recorder.draft.sealRequested} onClick={() => void continueDraft(recorder.draft!)}>{zh ? '继续录制' : 'Continue recording'}</Button>
-            <Button disabled={recovering || finishing || activeRecording} onClick={() => void exportDraft(recorder.draft!)}>{zh ? '导出原音包' : 'Export originals'}</Button>
-          </div>
-        ) : null}
-        {recorder.elapsedMs >= 105 * 60_000 || (!active && (!finishing || status.localComplete)) ? (
-          <div className="flex items-center justify-between gap-2 text-[11px] text-fg-muted">
-            <span>{recorder.elapsedMs >= 105 * 60_000 ? copy.maxDuration : ''}</span>
-            {!active && (!finishing || status.localComplete) ? (
-              <button type="button" className="rounded px-2 py-1 hover:bg-surface-hover" aria-label={copy.close} onClick={() => setVisible(false)}>
-                {copy.close}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </footer>
     </>}
   </RecordingFloatingPanel>;
 }

@@ -20,7 +20,7 @@ export function MobilePrimaryNav() {
   const copy = messages(language).productNavigation;
   const activeDomain = productDomainAtPath(pathname);
   return (
-    <nav aria-label={copy.primaryAria} className="flex shrink-0 border-t border-edge-subtle bg-surface-panel pb-[env(safe-area-inset-bottom)] md:hidden">
+    <nav data-mobile-primary-nav="" aria-label={copy.primaryAria} className="flex shrink-0 border-t border-edge-subtle bg-surface-panel pb-[env(safe-area-inset-bottom)] md:hidden">
       {PRODUCT_DOMAINS.map((domain) => {
         const Icon = DOMAIN_ICONS[domain.id];
         const active = domain.id === activeDomain;

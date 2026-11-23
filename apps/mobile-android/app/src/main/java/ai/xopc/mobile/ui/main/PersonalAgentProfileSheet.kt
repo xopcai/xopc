@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -37,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
@@ -327,7 +329,7 @@ private fun PersonalAvatarUpload(state: PersonalUiState, onUpload: suspend (Byte
   val uploadLabel = stringResource(R.string.chat_personal_upload_avatar)
   Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
     PersonalAgentAvatar(preview ?: state.agentAvatar, if (preview != null) "custom" else state.agent?.appearance ?: "loopi", 64.dp, true,
-      modifier = Modifier.testTag("personal-setting-avatar").semantics { contentDescription = uploadLabel }
+      modifier = Modifier.clip(CircleShape).testTag("personal-setting-avatar").semantics { contentDescription = uploadLabel }
         .clickable(enabled = !busy && !disabled, role = Role.Button) { picker.launch("image/*") })
   }
   if (error) Text(stringResource(R.string.personal_agent_save_error), color = MaterialTheme.colorScheme.error)

@@ -4,8 +4,11 @@ import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ProgressTask
 import ai.xopc.mobile.gateway.ProgressTaskEdit
 import ai.xopc.mobile.theme.LocalChatColors
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -15,10 +18,12 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -211,9 +216,12 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
 
 @Composable
 internal fun TaskDetailsTip(onOpen: () -> Unit, modifier: Modifier = Modifier) {
-  Box(modifier.height(44.dp).clickable(onClick = onOpen).testTag("task-chat-details-tip"),
+  val interaction = remember { MutableInteractionSource() }
+  Box(modifier.height(44.dp).clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onOpen)
+    .testTag("task-chat-details-tip"),
     contentAlignment = Alignment.Center) {
-    Row(Modifier.height(28.dp).background(LocalChatColors.current.card, CircleShape).padding(horizontal = 10.dp),
+    Row(Modifier.height(28.dp).clip(CircleShape).background(LocalChatColors.current.card)
+      .indication(interaction, LocalIndication.current).padding(horizontal = 10.dp),
       horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
       Text("ⓘ", color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.clearAndSetSemantics { })

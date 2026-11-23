@@ -322,6 +322,7 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
         audioRef={audio}
         audioSourceKey={audioSource}
         src={apiUrl(`${base}/audio`)}
+        title={displayTitle}
         zh={zh}
         positionMs={review.positionMs}
         durationMs={durationMs}

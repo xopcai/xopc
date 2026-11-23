@@ -1,6 +1,6 @@
 import { XopcClarificationCard } from './ClarificationCard';
 import { XopcClarificationCommand } from '../model/clarification';
-import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { appThemeColors, xopcRoundedClip, XopcThemeColors } from '../common/themePalette';
 import { XopcVoiceCall } from '../service/voiceCall';
 import { userErrorMessage } from '../common/userError';
 import { XopcFloatingAudioCard, XopcFloatingAudioPosition } from './FloatingAudioCard';
@@ -57,19 +57,16 @@ export struct XopcVoiceCallView {
 
   @Builder
   control($$: XopcVoiceCallControl) {
-    Button({ type: ButtonType.Normal }) {
-      Column({ space: 7 }) {
-        Row() {
-          SymbolGlyph($$.symbol).fontSize(24).fontColor([$$.active ? this.colors.surface : this.colors.foreground])
-        }.width(54).height(54).borderRadius(27)
-          .justifyContent(FlexAlign.Center)
-          .backgroundColor($$.active ? this.colors.foreground : this.colors.input)
-        Text($$.label).fontSize(12).fontColor($$.active ? this.colors.foreground : this.colors.secondary)
-          .fontWeight($$.active ? FontWeight.Medium : FontWeight.Regular)
-      }.width('100%')
-    }.id($$.controlId).width(78).padding(0).backgroundColor(Color.Transparent)
-      .enabled($$.available).accessibilityText($$.label).accessibilitySelected($$.active)
-      .onClick((): void => { $$.action(); })
+    Column({ space: 7 }) {
+      Button({ type: ButtonType.Circle }) {
+        SymbolGlyph($$.symbol).fontSize(24).fontColor([$$.active ? this.colors.surface : this.colors.foreground])
+      }.id($$.controlId).width(54).height(54).padding(0)
+        .backgroundColor($$.active ? this.colors.foreground : this.colors.input)
+        .enabled($$.available).accessibilityText($$.label).accessibilitySelected($$.active)
+        .onClick((): void => { $$.action(); })
+      Text($$.label).fontSize(12).fontColor($$.active ? this.colors.foreground : this.colors.secondary)
+        .fontWeight($$.active ? FontWeight.Medium : FontWeight.Regular)
+    }.width(78)
   }
 
   @Builder
@@ -108,12 +105,12 @@ export struct XopcVoiceCallView {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       }.width('100%')
     }.id('voice-call-mini-open').layoutWeight(1).height(44).padding({ left: 4, right: 4 }).backgroundColor(Color.Transparent)
+      .borderRadius(22).clipShape(xopcRoundedClip(22))
       .accessibilityDescription($r('app.string.voice_call_return')).onClick((): void => { this.call.expanded = true; })
     Button({ type: ButtonType.Circle }) {
-      Stack() {
-        SymbolGlyph($r('sys.symbol.phone')).fontSize(17).fontColor([Color.White]).rotate({ angle: 135 })
-      }.width(32).height(32).borderRadius(16).backgroundColor(this.colors.danger)
-    }.id('voice-call-mini-end').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+      SymbolGlyph($r('sys.symbol.phone')).fontSize(17).fontColor([Color.White]).rotate({ angle: 135 })
+    }.id('voice-call-mini-end').width(32).height(32).padding(0).backgroundColor(this.colors.danger)
+      .margin({ right: 6 }).responseRegion({ x: -6, y: -6, width: 44, height: 44 })
       .accessibilityText($r('app.string.voice_call_end')).onClick((): void => { this.call.end(); })
   }
 

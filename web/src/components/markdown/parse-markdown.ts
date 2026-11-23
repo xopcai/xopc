@@ -67,6 +67,9 @@ function createMarkdownParser(renderChart?: (token: Tokens.Code) => string): Mar
         html({ text }) {
           return escapeHtml(text);
         },
+        checkbox({ checked }) {
+          return `<span class="md-task-box mr-1.5 inline-block select-none text-fg-muted" data-md-task="${checked ? 'checked' : 'unchecked'}">${checked ? '☑' : '☐'}</span>`;
+        },
       },
       extensions: [
         {

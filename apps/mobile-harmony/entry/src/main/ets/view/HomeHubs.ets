@@ -86,6 +86,7 @@ export struct XopcProgressView {
           }
         }.width('100%').alignItems(HorizontalAlign.Start)
       }.width('100%').padding(0).backgroundColor(Color.Transparent)
+        .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
         .onClick((): void => { if (item.openAction) this.runAction(item.openAction); })
       if ((item.primaryAction && item.primaryAction.type !== 'open') || item.secondaryActions.length > 0) {
         if (item.recommendation && !item.summary.includes('provider_setup_required')) {

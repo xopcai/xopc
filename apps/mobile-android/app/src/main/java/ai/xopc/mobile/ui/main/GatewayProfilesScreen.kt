@@ -32,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -75,7 +76,8 @@ internal fun GatewayProfilesScreen(state: ConnectionUiState, insets: PaddingValu
         Column(Modifier.fillMaxWidth().background(if (active) MaterialTheme.colorScheme.primaryContainer
           else MaterialTheme.colorScheme.surfaceContainerLow, themedCorners(18))
           .padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-          Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { expandedId = if (expandedId == id) "" else id }
+          Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(themedCorners(12))
+            .clickable { expandedId = if (expandedId == id) "" else id }
             .testTag("gateway-select-$id"), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("◉", color = MaterialTheme.colorScheme.primary,
