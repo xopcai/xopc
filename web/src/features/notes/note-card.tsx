@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Archive, MoreVertical, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, MoreVertical, Pin, PinOff, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { useLocaleStore } from '@/stores/locale-store';
@@ -124,8 +124,8 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
                   void onArchive(note.id).catch(() => undefined);
                 }}
               >
-                <Archive className="size-4" />
-                {labels.archive}
+                {note.status === 'archived' ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
+                {note.status === 'archived' ? (zh ? '取消归档' : 'Unarchive') : labels.archive}
               </DropdownMenu.Item>
               <DropdownMenu.Separator className="my-1 h-px bg-edge-subtle" />
               <DropdownMenu.Item

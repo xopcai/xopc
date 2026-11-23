@@ -10,6 +10,7 @@ import { isSTTAvailable, mergeSttConfigFromAppConfig, transcribe } from '../voic
 
 import { enrichLiveDiscussion } from './analyzer.js';
 import { acceptRankedProject, findExactProjectMention } from './project-inference.js';
+import { buildHotwordsPrompt } from './vocabulary.js';
 import {
   claimNextDiscussionTranscriptSegment,
   completeDiscussionTranscriptSegment,
@@ -125,7 +126,13 @@ export class DiscussionLiveWorker {
     const config = this.deps.getConfig();
     const sttConfig = mergeSttConfigFromAppConfig(config.tools?.media?.audio, config.tools?.media);
     if (!isSTTAvailable(sttConfig)) throw new Error('STT is not configured');
-    return transcribe(buffer, sttConfig, { mime: 'audio/wav', fileName: 'discussion-segment.wav', signal });
+    const prompt = buildHotwordsPrompt();
+    return transcribe(buffer, sttConfig, {
+      mime: 'audio/wav',
+      fileName: 'discussion-segment.wav',
+      ...(prompt ? { prompt } : {}),
+      signal,
+    });
   }
 
   private async enrichOnce(discussionId: string): Promise<void> {

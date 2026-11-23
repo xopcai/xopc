@@ -14,6 +14,12 @@ describe('notes home queries', () => {
     });
     expect(notesHomeQuery(new URLSearchParams('page=not-a-number'), '').offset).toBe(0);
   });
+  it('supports tag filtering and voice-only library view', () => {
+    expect(notesHomeQuery(new URLSearchParams('view=voice&tag=roadmap'), '')).toMatchObject({
+      kind: 'voice',
+      tag: 'roadmap',
+    });
+  });
   it('removes a repeated title while preserving a distinct preview', () => {
     expect(noteHomePreview({ title: 'Design', snippet: 'Design · The next steps' } as NoteIndexEntry)).toBe('The next steps');
     expect(noteHomePreview({ title: 'Design', snippet: 'Key decisions' } as NoteIndexEntry)).toBe('Key decisions');

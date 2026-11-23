@@ -7,6 +7,7 @@ import {
   app,
   clipboard,
   crashReporter,
+  desktopCapturer,
   dialog,
   globalShortcut,
   ipcMain,
@@ -1346,6 +1347,33 @@ app.whenReady().then(async () => {
     }
     const mediaTypes = 'mediaTypes' in details ? details.mediaTypes : undefined;
     callback(isShellChromiumPermissionGranted(permission, { mediaTypes }));
+  });
+
+  // Enable OS system-audio loopback capture for trusted main-window online meeting recordings.
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    const trustedMainFrame =
+      Boolean(mainWindow)
+      && request.frame?.top === mainWindow?.webContents.mainFrame
+      && isTrustedShellPermissionRequest([mainWindow?.webContents.getURL(), request.securityOrigin])
+      && isShellChromiumPermissionGranted('display-capture');
+    if (!trustedMainFrame) {
+      callback({});
+      return;
+    }
+    void desktopCapturer
+      .getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 }, fetchWindowIcons: false })
+      .then((sources) => {
+        const primary = sources[0];
+        if (!primary) {
+          callback({});
+          return;
+        }
+        callback({
+          video: primary,
+          ...(request.audioRequested ? { audio: 'loopback' } : {}),
+        });
+      })
+      .catch(() => callback({}));
   });
 
   await initElectronShellPreferences();

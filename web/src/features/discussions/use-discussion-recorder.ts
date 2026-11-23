@@ -14,6 +14,7 @@ import { newAnnotation, saveLocalAnnotation, resolveLocalAnnotationAnchor } from
 import { CaptureClock } from './captureClock';
 import { RecordingMediaCoverageReader } from './recording-media-coverage';
 import { LivePcmSegmenter, type LivePcmSegment } from './live-pcm-segmenter';
+import { acquireDiscussionAudioStream, type DiscussionAudioCaptureMode } from './audio-capture-mixer';
 import type { DiscussionDraft } from './discussion-types';
 
 const MAX_RECORDING_MS = DISCUSSION_MAX_DURATION_MS;
@@ -63,6 +64,8 @@ export function useDiscussionRecorder() {
   const recorderStoppedRef = useRef<Promise<void>>(Promise.resolve());
   const segmenterRef = useRef<LivePcmSegmenter | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const audioCleanupRef = useRef<(() => void) | null>(null);
+  const [audioMode, setAudioMode] = useState<DiscussionAudioCaptureMode>('microphone');
   const draftRef = useRef<DiscussionDraft | null>(null);
   const chunkIndexRef = useRef(0);
   const clockRef = useRef(new CaptureClock());
@@ -97,6 +100,8 @@ export function useDiscussionRecorder() {
     lifecycleCleanupRef.current?.();
     lifecycleCleanupRef.current = null;
     releaseMicrophoneLease(microphoneOwner.current);
+    audioCleanupRef.current?.();
+    audioCleanupRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     recorderRef.current = null;
@@ -261,6 +266,7 @@ export function useDiscussionRecorder() {
     gatewayUrl?: string;
     projectId?: string;
     consentPolicyVersion?: number;
+    audioMode?: DiscussionAudioCaptureMode;
     onLiveSegment: (draftId: string, segment: LivePcmSegment) => Promise<void> | void;
   }): Promise<DiscussionDraft | null> => {
     if (startInFlightRef.current || recorderRef.current || stopPromise.current) return null;
@@ -290,9 +296,13 @@ export function useDiscussionRecorder() {
       if (estimate?.quota != null && estimate.usage != null && estimate.quota - estimate.usage < MIN_AVAILABLE_BYTES) {
         throw new Error('Not enough local storage for a discussion recording.');
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (generation !== captureGeneration.current) { stream.getTracks().forEach(track => track.stop()); releaseMicrophoneLease(microphoneOwner.current); releaseRecordingLease(); return null; }
+      const requestedMode = input.audioMode ?? 'microphone';
+      const acquired = await acquireDiscussionAudioStream(requestedMode);
+      const stream = acquired.stream;
+      if (generation !== captureGeneration.current) { acquired.cleanup(); releaseMicrophoneLease(microphoneOwner.current); releaseRecordingLease(); return null; }
+      audioCleanupRef.current = acquired.cleanup;
       streamRef.current = stream;
+      setAudioMode(acquired.mode);
       const selectedMimeType = pickAudioMimeType();
       const recorder = selectedMimeType
         ? new MediaRecorder(stream, { mimeType: selectedMimeType, audioBitsPerSecond: 64_000 })
@@ -516,6 +526,7 @@ export function useDiscussionRecorder() {
     error,
     liveTranscriptionAvailable,
     inputLevel,
+    audioMode,
     mark, markerMessage, markerError,
     start,
     pause,

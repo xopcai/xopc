@@ -617,6 +617,9 @@ describe('lazy route bundles', () => {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('shares');
     }
     expect(findAuthenticatedLazyRouteBundle('/api/notes/note-1')?.id).toBe('notes');
+    expect(findAuthenticatedLazyRouteBundle('/api/notes/tag-summaries')?.id).toBe('notes');
+    expect(findAuthenticatedLazyRouteBundle('/api/notes/note-1/backlinks')?.id).toBe('notes');
+    expect(findAuthenticatedLazyRouteBundle('/api/notes-other/tag-summaries')).toBeUndefined();
   });
 
   it('routes models-json config endpoints to the models bundle', () => {

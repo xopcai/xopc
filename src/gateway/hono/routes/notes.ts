@@ -19,6 +19,8 @@ import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { resolveReverseProxyPublicUrl } from '../../public-url.js';
 import { getShareStore } from '../../../share/share-store.js';
 import { resolveShareUrl } from '../../../share/share-url.js';
+import { parseDiscussionShareOptions } from '../../../discussions/share-projection.js';
+import { listNoteBacklinks, listNoteTagSummaries } from '../../../storage/sqlite/index.js';
 import { NoteShareService, NoteShareVersionConflictError } from '../../../share/note-share-service.js';
 import type { ShareConfig } from '../../../share/share-types.js';
 
@@ -123,6 +125,10 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
   authenticated.get('/api/notes/project-summaries', async (c) => {
     try { return c.json(await invokeRead(c, 'xopc.notes.project_summaries', {})); }
     catch (error) { return capabilityHttpError(c, error); }
+  });
+
+  authenticated.get('/api/notes/tag-summaries', (c) => {
+    return c.json({ items: listNoteTagSummaries() });
   });
 
   // POST /api/notes — full create (JSON or multipart)
@@ -257,6 +263,15 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json(noteNotFound(), 404);
     }
     return c.json({ note });
+  });
+
+  authenticated.get('/api/notes/:id/backlinks', async (c) => {
+    const noteId = c.req.param('id');
+    const note = await service.notesServiceInstance.getNote(noteId);
+    if (!note) {
+      return c.json(noteNotFound(), 404);
+    }
+    return c.json({ items: listNoteBacklinks(noteId) });
   });
 
   // POST /api/notes/:id/chat — create or reuse a note-bound web chat thread
@@ -456,6 +471,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
         maxViews: body.maxViews === null ? null : typeof body.maxViews === 'number' ? body.maxViews : undefined,
         description: typeof body.description === 'string' ? body.description.trim() || undefined : undefined,
         gatewayTokenHash: createHash('sha256').update(principalId, 'utf8').digest('hex').slice(0, 12),
+        discussionOptions: parseDiscussionShareOptions(body.discussionOptions),
       });
       const resolved = resolveShareUrl(record.token, shareUrlContext());
       return c.json({
@@ -494,6 +510,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
         attachmentIds: Array.isArray(body.attachmentIds)
           ? body.attachmentIds.filter((id): id is string => typeof id === 'string')
           : undefined,
+        discussionOptions: parseDiscussionShareOptions(body.discussionOptions),
       });
       const resolved = resolveShareUrl(record.token, shareUrlContext());
       return c.json({ ok: true, payload: {
@@ -595,7 +612,17 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
   authenticated.post('/api/notes/:id/ai/edit', async (c) => {
     try {
       const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
-      return c.json(await capabilities.call('xopc.notes.preview_edit', { ...body, id: c.req.param('id') }, capabilityHttpContext(c)));
+      const validated = await capabilities.call('xopc.notes.preview_edit', { ...body, id: c.req.param('id') }, capabilityHttpContext(c));
+      if (!service.currentConfig) return c.json(validated);
+      const modelResult = await service.notesServiceInstance.generateAiSelectionEdit(
+        c.req.param('id'),
+        typeof body.instruction === 'string' ? body.instruction : '',
+        typeof body.markdown === 'string' ? body.markdown : undefined,
+        body.context?.range,
+        service.currentConfig,
+        c.req.raw.signal,
+      );
+      return c.json(modelResult ?? validated);
     } catch (error) { return capabilityHttpError(c, error); }
   });
 

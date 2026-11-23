@@ -32,6 +32,7 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
   const voiceShortcut = useVoiceInputShortcutStore((s) => s.shortcut);
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const voice = useRealtimeVoice({
     disabled: saving,
@@ -86,17 +87,20 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
       const trimmed = text.trim();
       if (!trimmed || saving) return;
       setSaving(true);
+      setSaveError(null);
       try {
         const note = await quickCapture(trimmed, 'web');
+        window.dispatchEvent(new CustomEvent('note-created', { detail: { noteId: note.id } }));
         onClose();
         if (shouldNavigate) {
           navigate(`/notes/${note.id}`);
         }
-      } catch {
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : n.quickCaptureFailedHint);
         setSaving(false);
       }
     },
-    [text, saving, navigate, onClose],
+    [text, saving, navigate, onClose, n.quickCaptureFailedHint],
   );
 
   const handleKeyDown = useCallback(
@@ -173,6 +177,11 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
           />
         )}
 
+        {saveError ? (
+          <p role="alert" className="border-t border-danger/20 bg-danger-soft px-4 py-2 text-xs text-danger">
+            {saveError}
+          </p>
+        ) : null}
         <div className="flex items-center justify-between border-t border-edge-subtle px-4 py-2">
           <div className="flex flex-wrap items-center gap-3 text-[11px] text-fg-muted">
             <button

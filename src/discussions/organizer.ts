@@ -1,4 +1,5 @@
 import { chapterScope } from './long-review.js';
+import { syncNoteDiscussionIndex } from '../storage/sqlite/notes-repository.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { ObjectLinkService } from '../activity/service.js';
 import type { Config } from '../config/schema.js';
@@ -6,6 +7,7 @@ import type { NotesService } from '../notes/service.js';
 import type { ProjectService } from '../projects/project-service.js';
 
 import { applyMeetingEdits } from './edits.js';
+import { diarizeDiscussionSegments } from './diarization.js';
 import { saveTranscriptRevision } from './revisions.js';
 import { getDiscussionCapture, listDiscussionTranscriptSegments, getLatestDiscussionOrganization, renewDiscussionWorkLease } from './repository.js';
 import { analyzeDiscussion } from './analyzer.js';
@@ -16,6 +18,7 @@ import {
   updateDiscussionCapture,
 } from './repository.js';
 import type { DiscussionCapture, DiscussionOrganization } from './types.js';
+import { readDiscussionVocabulary } from './vocabulary.js';
 
 const PROMPT_VERSION = 'discussion-evidence-v2';
 
@@ -42,7 +45,22 @@ export class DiscussionOrganizer {
     const inputHash = capture.canonicalTranscriptSha256;
     if (!transcript || !inputHash) throw new Error('Canonical discussion transcript is missing');
 
+    const vocab = readDiscussionVocabulary();
+    if (vocab.diarizationEnabled && !this.deps.organizeTranscript) {
+      await diarizeDiscussionSegments({
+        discussionId: capture.id,
+        segments: listDiscussionTranscriptSegments(capture.id),
+        hotwords: vocab.hotwords,
+        languageHint: capture.transcriptLanguage,
+        useModel: false,
+        signal,
+      });
+    }
+
     const transcriptRevision = saveTranscriptRevision(capture.id);
+    const noteBefore = await this.deps.notes.getNote(capture.noteId);
+    if (!noteBefore) throw new Error('Discussion note is missing');
+    const personalNotesMarkdown = noteBefore.markdown?.trim() || undefined;
     const projects = this.deps.projects.list({ status: 'active', limit: 100 }).items;
     const result = this.deps.organizeTranscript
       ? await this.deps.organizeTranscript(transcript, capture, signal)
@@ -54,6 +72,8 @@ export class DiscussionOrganizer {
         reviewScope: chapterScope(capture.id),
         template: capture.template,
         projects: projects.map(({ id, name }) => ({ id, name })),
+        personalNotesMarkdown,
+        ...(vocab.hotwords.length > 0 ? { hotwords: vocab.hotwords } : {}),
         signal,
       });
 
@@ -86,7 +106,11 @@ export class DiscussionOrganizer {
     const note = await this.deps.notes.getNote(capture.noteId);
     if (!note) throw new Error('Discussion note is missing');
     const title = result.organization.title.trim().slice(0, 200);
-    if (note.title?.startsWith('Discussion ·') && title) {
+    const hasAutoPlaceholderOrLiveTitle =
+      !note.title?.trim()
+      || note.title.startsWith('Discussion ·')
+      || Boolean(capture.generatedTitle && note.title === capture.generatedTitle);
+    if (hasAutoPlaceholderOrLiveTitle && title && note.title !== title) {
       await this.deps.notes.updateNote(capture.noteId, { title }, 'ai_edit');
     }
 
@@ -120,6 +144,7 @@ export class DiscussionOrganizer {
     if (!published) throw new Error('Discussion changed while applying organization');
     return published;
     });
+    syncNoteDiscussionIndex(capture.noteId);
     if (inferredProject) this.linkProject(updated, inferredProject.id);
     this.deps.onUpdated?.(updated);
     if (!capture.completedAt) this.deps.onCompleted?.(updated, result.organization);

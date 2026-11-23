@@ -1,12 +1,12 @@
 import { Mic, Pause, Play, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { cn } from '@/lib/cn';
 
 import { useVoicePlayerStore } from './voice-player-store';
 import type { NoteAttachment } from './notes-api';
 
-const PLAYBACK_RATES = [1, 1.5, 2] as const;
+const PLAYBACK_RATES = [1, 1.25, 1.5, 2] as const;
 
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -23,10 +23,11 @@ export type VoiceNotePlayerProps = {
 };
 
 export function VoiceNotePlayer({ noteId, attachment, transcript, className }: VoiceNotePlayerProps) {
-  const { playing, loading, currentTime, duration, noteId: activeNoteId, attachmentId: activeAttachmentId } =
+  const { playing, loading, currentTime, duration, playbackRate, noteId: activeNoteId, attachmentId: activeAttachmentId } =
     useVoicePlayerStore();
   const toggle = useVoicePlayerStore((s) => s.toggle);
   const seek = useVoicePlayerStore((s) => s.seek);
+  const setPlaybackRate = useVoicePlayerStore((s) => s.setPlaybackRate);
 
   const isActive = activeNoteId === noteId && activeAttachmentId === attachment.id;
   const isPlaying = isActive && playing;
@@ -35,7 +36,6 @@ export function VoiceNotePlayer({ noteId, attachment, transcript, className }: V
   const displayDuration = isActive && duration > 0 ? duration : (attachment.duration ?? 0);
   const progressPercent = displayDuration > 0 ? Math.min((progress / displayDuration) * 100, 100) : 0;
 
-  const [rateIndex, setRateIndex] = useState(0);
   const rangeRef = useRef<HTMLInputElement>(null);
 
   const handleToggle = useCallback(() => {
@@ -51,17 +51,10 @@ export function VoiceNotePlayer({ noteId, attachment, transcript, className }: V
   );
 
   const handleRateChange = useCallback(() => {
-    const nextIndex = (rateIndex + 1) % PLAYBACK_RATES.length;
-    setRateIndex(nextIndex);
-  }, [rateIndex]);
-
-  useEffect(() => {
-    if (!isActive) return;
-    const audio = document.querySelector('audio');
-    if (audio) {
-      audio.playbackRate = PLAYBACK_RATES[rateIndex];
-    }
-  }, [rateIndex, isActive, isPlaying]);
+    const currentIdx = PLAYBACK_RATES.indexOf(playbackRate as (typeof PLAYBACK_RATES)[number]);
+    const nextRate = PLAYBACK_RATES[(currentIdx + 1) % PLAYBACK_RATES.length];
+    setPlaybackRate(nextRate);
+  }, [playbackRate, setPlaybackRate]);
 
   return (
     <div className={cn('flex flex-col gap-3 rounded-xl border border-edge bg-surface-panel p-4', className)}>
@@ -118,7 +111,7 @@ export function VoiceNotePlayer({ noteId, attachment, transcript, className }: V
               className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
               aria-label="Playback speed"
             >
-              {PLAYBACK_RATES[rateIndex]}x
+              {playbackRate}x
             </button>
           </div>
         </div>

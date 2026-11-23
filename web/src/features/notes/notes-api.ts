@@ -134,8 +134,30 @@ export interface NoteProjectSummary {
   updatedAt?: number;
 }
 
+export interface NoteTagSummary {
+  tag: string;
+  noteCount: number;
+  updatedAt: number;
+}
+
+export interface NoteBacklinkSummary {
+  id: string;
+  title?: string;
+  kind: NoteKind;
+  updatedAt: number;
+  snippet?: string;
+}
+
 export async function listNoteProjects(): Promise<{ items: NoteProjectSummary[] }> {
   return fetchJson(apiUrl('/api/notes/project-summaries'));
+}
+
+export async function listNoteTags(): Promise<{ items: NoteTagSummary[] }> {
+  return fetchJson(apiUrl('/api/notes/tag-summaries'));
+}
+
+export async function listNoteBacklinks(noteId: string): Promise<{ items: NoteBacklinkSummary[] }> {
+  return fetchJson(apiUrl(`/api/notes/${encodeURIComponent(noteId)}/backlinks`));
 }
 
 export interface NotesListQuery {
@@ -246,12 +268,19 @@ export interface NoteShareItem {
   stale: boolean;
 }
 
+export interface DiscussionShareOptions {
+  includeSummary?: boolean;
+  includeTranscript?: boolean;
+  includePersonalNotes?: boolean;
+}
+
 export interface CreateNoteShareInput {
   expectedNoteVersion: number;
   attachmentIds?: string[];
   ttlMs?: number;
   maxViews?: number | null;
   description?: string;
+  discussionOptions?: DiscussionShareOptions;
 }
 
 export async function listNoteShares(id: string): Promise<{ items: NoteShareItem[]; total: number; noteVersion: number }> {
@@ -282,7 +311,7 @@ export async function createNoteShare(id: string, input: CreateNoteShareInput): 
   });
 }
 
-export async function refreshNoteShare(id: string, shareId: string, input: Pick<CreateNoteShareInput, 'expectedNoteVersion' | 'attachmentIds'>): Promise<void> {
+export async function refreshNoteShare(id: string, shareId: string, input: Pick<CreateNoteShareInput, 'expectedNoteVersion' | 'attachmentIds' | 'discussionOptions'>): Promise<void> {
   await fetchJson(apiUrl(`/api/notes/${encodeURIComponent(id)}/shares/${encodeURIComponent(shareId)}/refresh`), {
     method: 'POST',
     body: JSON.stringify(input),
@@ -324,7 +353,7 @@ export async function createHostedNotePublication(id: string, input: CreateNoteS
 export async function refreshHostedNotePublication(
   id: string,
   publicationId: string,
-  input: Pick<CreateNoteShareInput, 'expectedNoteVersion' | 'attachmentIds'>,
+  input: Pick<CreateNoteShareInput, 'expectedNoteVersion' | 'attachmentIds' | 'discussionOptions'>,
 ): Promise<HostedNotePublication> {
   return (await fetchJson<{ ok: true; payload: HostedNotePublication }>(
     apiUrl(`/api/notes/${encodeURIComponent(id)}/hosted-publications/${encodeURIComponent(publicationId)}/refresh`),

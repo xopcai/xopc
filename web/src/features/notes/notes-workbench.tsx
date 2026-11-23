@@ -463,26 +463,32 @@ export function NotesWorkbench({
     async (id: string) => {
       setActionError(null);
       try {
-        await updateNote(id, { status: 'archived' });
+        const target = notes.find((item) => item.id === id);
+        await updateNote(id, { status: target?.status === 'archived' ? 'inbox' : 'archived' });
         await mutate();
       } catch (error) {
         setActionError(`${n.actionFailed}: ${error instanceof Error ? error.message : n.quickCaptureFailedHint}`);
       }
     },
-    [mutate, n.actionFailed, n.quickCaptureFailedHint],
+    [mutate, n.actionFailed, n.quickCaptureFailedHint, notes],
   );
 
   const handleDelete = useCallback(
     async (id: string) => {
       setActionError(null);
       try {
-        await deleteNote(id);
+        const target = notes.find((item) => item.id === id);
+        if (target?.status === 'trashed') {
+          await deleteNote(id);
+        } else {
+          await updateNote(id, { status: 'trashed' });
+        }
         await mutate();
       } catch (error) {
         setActionError(`${n.actionFailed}: ${error instanceof Error ? error.message : n.quickCaptureFailedHint}`);
       }
     },
-    [mutate, n.actionFailed, n.quickCaptureFailedHint],
+    [mutate, n.actionFailed, n.quickCaptureFailedHint, notes],
   );
 
   const handleNoteClick = useCallback((id: string) => {

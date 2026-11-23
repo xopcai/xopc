@@ -17,8 +17,20 @@ export function meetingActionTasks(id: string) {
   });
 }
 
+export interface ConvertMeetingActionOverrides {
+  title?: string;
+  owner?: string;
+  dueDate?: string;
+  projectId?: string | null;
+}
+
 /** Task, contract, source context, outbox and conversion link commit together. */
-export function convertMeetingAction(id: string, actionId: string, organizationRevision: number) {
+export function convertMeetingAction(
+  id: string,
+  actionId: string,
+  organizationRevision: number,
+  overrides?: ConvertMeetingActionOverrides,
+) {
   return runSqliteWriteTransaction(db => {
     const capture = getDiscussionCapture(id);
     if (!capture) throw new DiscussionServiceError('not_found', 'Discussion not found');
@@ -30,15 +42,22 @@ export function convertMeetingAction(id: string, actionId: string, organizationR
     if (!action) throw new DiscussionServiceError('not_found', 'Meeting action not found');
     if ((action.supersededBy || action.disputedBy) && action.reviewedChangeId !== (action.supersededBy ?? action.disputedBy)) throw new DiscussionServiceError('conflict', 'This action has later changes; edit and confirm it before creating a task');
     if (action.ignored) throw new DiscussionServiceError('conflict', 'Restore the ignored action before creating a task');
+    const finalTitle = overrides?.title?.trim() || action.title;
+    const finalOwner = overrides?.owner !== undefined ? (overrides.owner.trim() || undefined) : action.owner;
+    const finalDueDate = overrides?.dueDate !== undefined ? (overrides.dueDate.trim() || undefined) : action.dueDate;
+    const finalProjectId =
+      overrides?.projectId !== undefined
+        ? (overrides.projectId?.trim() || undefined)
+        : capture.projectId;
     const evidenceRevision = action.evidenceRevision ?? record.transcriptRevision;
     const segments = readTranscriptRevision(id, evidenceRevision) ?? [];
     const source = segments.filter(segment => action.evidenceSegmentIds.includes(segment.sequence))
       .map(segment => `[${Math.floor(segment.startedAtMs / 1000)}s] ${segment.displayText ?? segment.rawText ?? ''}`).join('\n');
     const request = TaskCreateRequestSchema.parse({
-      idempotencyKey: `meeting:${id}:${actionId}`, title: action.title,
-      body: [action.title, action.owner ? `Owner mentioned: ${action.owner}` : '', action.dueDate ? `Date mentioned: ${action.dueDate}` : '', source].filter(Boolean).join('\n\n'),
-      projectId: capture.projectId,
-      contract: { objective: action.title, expectedOutputs: [], acceptanceCriteria: [], constraints: [], approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'manual', outputDestinations: [] },
+      idempotencyKey: `meeting:${id}:${actionId}`, title: finalTitle,
+      body: [finalTitle, finalOwner ? `Owner mentioned: ${finalOwner}` : '', finalDueDate ? `Date mentioned: ${finalDueDate}` : '', source].filter(Boolean).join('\n\n'),
+      projectId: finalProjectId,
+      contract: { objective: finalTitle, expectedOutputs: [], acceptanceCriteria: [], constraints: [], approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'manual', outputDestinations: [] },
       context: [{ targetKind: 'document', targetId: capture.noteId, role: 'reference', title: record.organization?.title, pinned: true, retrievalPolicy: {}, metadata: { discussionId: id, transcriptRevision: evidenceRevision, evidenceSegmentIds: action.evidenceSegmentIds } }],
       activation: { mode: 'capture', phase: 'backlog' },
     });

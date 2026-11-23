@@ -1,4 +1,4 @@
-export const NOTE_HEADING_LEVELS: Array<1 | 2 | 3 | 4> = [1, 2, 3, 4];
+export const NOTE_HEADING_LEVELS: Array<1 | 2 | 3 | 4 | 5 | 6> = [1, 2, 3, 4, 5, 6];
 
 export const NOTE_STARTER_KIT_OPTIONS = {
   heading: { levels: [...NOTE_HEADING_LEVELS] },
@@ -10,7 +10,7 @@ export const NOTE_TASK_ITEM_OPTIONS = { nested: true };
 
 export const NOTE_LINK_OPTIONS = {
   autolink: true,
-  protocols: ['xopc'],
+  protocols: ['xopc', 'xopc-attachment'],
   openOnClick: false,
   enableClickSelection: true,
 };
@@ -31,5 +31,7 @@ export function serializeNoteMarkdown(editor: NoteMarkdownEditor): string {
   if (!markdown?.getMarkdown) {
     throw new Error('The note editor requires the Markdown extension');
   }
-  return markdown.getMarkdown();
+  return markdown
+    .getMarkdown()
+    .replace(/^(>\s*)\\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\\]/gim, '$1[!$2]');
 }

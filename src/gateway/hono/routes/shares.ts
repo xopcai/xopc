@@ -41,6 +41,7 @@ import {
   type HostedShareBinding,
 } from '../../../share/hosted-session-share.js';
 import { HostedNotePublicationBuilder, HostedNoteVersionConflictError } from '../../../share/hosted-note-publication.js';
+import { parseDiscussionShareOptions } from '../../../discussions/share-projection.js';
 import { HostedStaticSitePublicationBuilder } from '../../../share/hosted-static-site-publication.js';
 import { publishHostedStaticSite } from '../../../share/hosted-static-site-publish.js';
 import { loadCompactionSourceSnapshot } from '../../../storage/sqlite/index.js';
@@ -962,6 +963,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
           ? body.attachmentIds.filter((id): id is string => typeof id === 'string')
           : undefined,
         description: typeof body.description === 'string' ? body.description : undefined,
+        discussionOptions: parseDiscussionShareOptions(body.discussionOptions),
       });
       const result = await hostedPublisher.createPublication(snapshot, {
         ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : 86_400_000,
@@ -1002,6 +1004,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
           ? body.attachmentIds.filter((id): id is string => typeof id === 'string')
           : previous.attachmentIds,
         description: previous.description ?? undefined,
+        discussionOptions: parseDiscussionShareOptions(body.discussionOptions),
       });
       const result = await hostedPublisher.refreshPublication(previous.id, previous.snapshotRevision, previous.shareUrl, snapshot);
       const binding: HostedShareBinding = {

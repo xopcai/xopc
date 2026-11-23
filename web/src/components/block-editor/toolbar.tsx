@@ -14,6 +14,10 @@ import {
   Quote,
   Minus,
   ImagePlus,
+  Lightbulb,
+  Mic,
+  Paperclip,
+  Table2,
   Link as LinkIcon,
   Undo2,
   Redo2,
@@ -23,6 +27,15 @@ import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { focusAfterBlockInsert } from './extensions/block-insert-focus';
+import { insertCalloutBlock } from './extensions/callout-decorations';
+import {
+  addTableColumnAfter,
+  addTableRowAfter,
+  deleteCurrentTable,
+  deleteCurrentTableColumn,
+  deleteCurrentTableRow,
+  insertMarkdownTable,
+} from './extensions/table-nodes';
 import { editSelectedLink } from './link-interaction';
 
 interface ToolbarButtonProps {
@@ -61,10 +74,22 @@ function ToolbarDivider() {
 export interface BlockEditorToolbarProps {
   editor: Editor;
   onImageUpload?: (file: File) => Promise<void>;
+  onFileUpload?: (file: File) => Promise<void>;
+  onVoiceRecord?: () => void;
+  voiceRecording?: boolean;
   imageUploading?: boolean;
+  onRequestLinkEdit?: () => void;
 }
 
-export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = false }: BlockEditorToolbarProps) {
+export function BlockEditorToolbar({
+  editor,
+  onImageUpload,
+  onFileUpload,
+  onVoiceRecord,
+  voiceRecording = false,
+  imageUploading = false,
+  onRequestLinkEdit,
+}: BlockEditorToolbarProps) {
   const zh = useLocaleStore(state => state.language === 'zh');
   const formats = useEditorState({
     editor,
@@ -83,9 +108,11 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
       orderedList: editor.isActive('orderedList'),
       taskList: editor.isActive('taskList'),
       blockquote: editor.isActive('blockquote'),
+      inTable: editor.isActive('table'),
     }),
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -181,7 +208,11 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
       >
         <Code size={iconSize} />
       </ToolbarButton>
-      <ToolbarButton onClick={() => editSelectedLink(editor)} isActive={formats.link} title={zh ? '链接' : 'Link'}>
+      <ToolbarButton
+        onClick={() => (onRequestLinkEdit ? onRequestLinkEdit() : editSelectedLink(editor))}
+        isActive={formats.link}
+        title={zh ? '链接' : 'Link'}
+      >
         <LinkIcon size={iconSize} />
       </ToolbarButton>
 
@@ -217,6 +248,21 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
         <Quote size={iconSize} />
       </ToolbarButton>
       <ToolbarButton
+        onClick={() => insertCalloutBlock(editor, 'NOTE', zh)}
+        title={zh ? '插入高亮提示块' : 'Insert callout'}
+      >
+        <Lightbulb size={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => {
+          insertMarkdownTable(editor, 3, 3);
+        }}
+        isActive={formats.inTable}
+        title={zh ? '插入表格' : 'Insert table'}
+      >
+        <Table2 size={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
         onClick={() => {
           editor.chain().focus().setHorizontalRule().run();
           focusAfterBlockInsert(editor);
@@ -226,7 +272,60 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
         <Minus size={iconSize} />
       </ToolbarButton>
 
-      {/* Image upload */}
+      {formats.inTable && (
+        <>
+          <ToolbarDivider />
+          <div className="flex shrink-0 items-center gap-0.5 text-[11px]">
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => addTableRowAfter(editor)}
+              className="rounded px-1.5 py-1 text-fg-muted hover:bg-surface-hover hover:text-fg"
+              title={zh ? '在下方添加一行' : 'Add row below'}
+            >
+              {zh ? '+行' : '+Row'}
+            </button>
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => addTableColumnAfter(editor)}
+              className="rounded px-1.5 py-1 text-fg-muted hover:bg-surface-hover hover:text-fg"
+              title={zh ? '在右侧添加一列' : 'Add column right'}
+            >
+              {zh ? '+列' : '+Col'}
+            </button>
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => deleteCurrentTableRow(editor)}
+              className="rounded px-1.5 py-1 text-fg-muted hover:bg-surface-hover hover:text-fg"
+              title={zh ? '删除当前行' : 'Delete row'}
+            >
+              {zh ? '-行' : '-Row'}
+            </button>
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => deleteCurrentTableColumn(editor)}
+              className="rounded px-1.5 py-1 text-fg-muted hover:bg-surface-hover hover:text-fg"
+              title={zh ? '删除当前列' : 'Delete column'}
+            >
+              {zh ? '-列' : '-Col'}
+            </button>
+            <button
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => deleteCurrentTable(editor)}
+              className="rounded px-1.5 py-1 text-danger hover:bg-danger-soft"
+              title={zh ? '删除整张表格' : 'Delete table'}
+            >
+              {zh ? '删表' : 'Del'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Image & Attachment upload */}
       {onImageUpload && (
         <>
           <ToolbarDivider />
@@ -245,6 +344,39 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
             className="hidden"
           />
         </>
+      )}
+      {onFileUpload && (
+        <>
+          <ToolbarButton
+            onClick={() => attachmentInputRef.current?.click()}
+            disabled={imageUploading}
+            title={zh ? '插入文件附件' : 'Attach file'}
+          >
+            <Paperclip size={iconSize} />
+          </ToolbarButton>
+          <input
+            ref={attachmentInputRef}
+            type="file"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file && !imageUploading) {
+                void onFileUpload(file);
+              }
+              if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+            }}
+            className="hidden"
+          />
+        </>
+      )}
+      {onVoiceRecord && (
+        <ToolbarButton
+          onClick={onVoiceRecord}
+          isActive={voiceRecording}
+          disabled={imageUploading}
+          title={zh ? '录制内联语音片段' : 'Record inline voice clip'}
+        >
+          <Mic size={iconSize} />
+        </ToolbarButton>
       )}
     </div>
   );

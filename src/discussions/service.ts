@@ -6,6 +6,7 @@ import { DISCUSSION_MAX_DURATION_MS, DISCUSSION_SEGMENT_MAX_BYTES, type Discussi
 import { ObjectLinkService } from '../activity/service.js';
 import type { NotesService } from '../notes/service.js';
 import type { ProjectService } from '../projects/project-service.js';
+import { syncNoteDiscussionIndex } from '../storage/sqlite/notes-repository.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -37,7 +38,9 @@ import type {
   ListDiscussionsQuery,
 } from './types.js';
 import { discussionAudioClip } from './audio-clip.js';
+import { diarizeDiscussionSegments } from './diarization.js';
 import { putAnnotation, resolvedAnnotations, evidenceFor } from './review.js';
+import { readDiscussionVocabulary, updateDiscussionVocabulary } from './vocabulary.js';
 import { editMeeting } from './edits.js';
 import { createProcessingRun, processingProgress, resetProcessingRetry } from './processing.js';
 import { saveTranscriptRevision, readTranscriptRevision, refreshCanonicalTranscript } from './revisions.js';
@@ -74,7 +77,39 @@ export class DiscussionService {
   evidence(id: string, revision: number, ids: number[]) { return evidenceFor(id, revision, ids, this.notes); }
 
   settings(): DiscussionCaptureSettings {
-    return getDiscussionCaptureSettings();
+    const base = getDiscussionCaptureSettings();
+    const vocab = readDiscussionVocabulary();
+    return {
+      ...base,
+      hotwords: vocab.hotwords,
+      diarizationEnabled: vocab.diarizationEnabled,
+    };
+  }
+
+  updatePreferences(patch: { hotwords?: unknown; diarizationEnabled?: boolean }): DiscussionCaptureSettings {
+    updateDiscussionVocabulary(patch);
+    return this.settings();
+  }
+
+  async diarize(id: string, signal?: AbortSignal): Promise<DiscussionTranscript> {
+    const capture = getDiscussionCapture(id);
+    if (!capture) throw new DiscussionServiceError('not_found', 'Discussion not found');
+    const vocab = readDiscussionVocabulary();
+    const segments = listDiscussionTranscriptSegments(id);
+    const updated = await diarizeDiscussionSegments({
+      discussionId: id,
+      segments,
+      hotwords: vocab.hotwords,
+      languageHint: capture.transcriptLanguage,
+      useModel: true,
+      signal,
+    });
+    if (updated > 0) {
+      saveTranscriptRevision(id);
+      syncNoteDiscussionIndex(capture.noteId);
+      this.emit?.('discussion.updated', { discussionId: id, noteId: capture.noteId });
+    }
+    return this.transcript(id)!;
   }
 
   acknowledgeConsent(policyVersion: number): DiscussionCaptureSettings {
@@ -82,7 +117,13 @@ export class DiscussionService {
     if (policyVersion !== settings.consentPolicyVersion) {
       throw new DiscussionServiceError('conflict', 'Recording consent policy changed; review it again');
     }
-    return acknowledgeDiscussionCaptureConsent(policyVersion);
+    const acked = acknowledgeDiscussionCaptureConsent(policyVersion);
+    const vocab = readDiscussionVocabulary();
+    return {
+      ...acked,
+      hotwords: vocab.hotwords,
+      diarizationEnabled: vocab.diarizationEnabled,
+    };
   }
 
   async create(input: CreateDiscussionInput): Promise<DiscussionDetail> {
@@ -282,6 +323,7 @@ export class DiscussionService {
       saveTranscriptRevision(id);
       return this.transcript(id)!;
     });
+    syncNoteDiscussionIndex(capture.noteId);
     this.emit?.('discussion.segment.updated', {
       discussionId: id, noteId: capture.noteId, transcriptRevision: transcript.revision,
     });
@@ -290,7 +332,9 @@ export class DiscussionService {
 
   editSummary(id: string, input: Parameters<typeof editMeeting>[1]) {
     const record = editMeeting(id, input);
-    this.emit?.('discussion.updated', { id, noteId: getDiscussionCapture(id)?.noteId, organizationRevision: record.revision });
+    const capture = getDiscussionCapture(id);
+    if (capture) syncNoteDiscussionIndex(capture.noteId);
+    this.emit?.('discussion.updated', { id, noteId: capture?.noteId, organizationRevision: record.revision });
     return record;
   }
 
@@ -376,6 +420,7 @@ export class DiscussionService {
         const capture = getDiscussionCapture(job.discussionId);
         if (!capture || capture.audioDeletedAt || capture.status === 'cancelled') throw new Error('Recording is no longer available');
         const updated = capture.audioAttachmentId ? capture : await completeRecording(capture, job.input, this.notes, assertLease, controller.signal);
+        syncNoteDiscussionIndex(updated.noteId);
         if (finishRecordingJob(job.id, this.recordingOwner)) this.emit?.('discussion.updated', updated);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -473,6 +518,7 @@ export class DiscussionService {
         audioDeletedAt: Date.now(),
       }, [capture.status]);
       if (!updated) throw new DiscussionServiceError('conflict', 'Discussion changed while deleting audio');
+      syncNoteDiscussionIndex(updated.noteId);
       this.emit?.('discussion.updated', updated);
       return this.detail(updated);
     });

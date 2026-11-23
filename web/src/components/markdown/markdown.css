@@ -742,3 +742,33 @@ html.dark .markdown-body .hljs-deletion {
   vertical-align: top;
 }
 .xopc-chat-markdown p[hidden] { display: none; }
+
+/* GitHub-style Callout blocks (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]) */
+.markdown-body blockquote.md-callout {
+  margin: 0.75em 0 1em;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0.625rem;
+  background: var(--color-accent-soft);
+  color: var(--color-fg);
+}
+.markdown-body blockquote.md-callout .md-callout-badge {
+  margin-bottom: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-accent-fg);
+}
+.markdown-body blockquote.md-callout.md-callout-warning,
+.markdown-body blockquote.md-callout.md-callout-caution {
+  border-left-color: var(--color-warning, #d97706);
+  background: color-mix(in srgb, var(--color-warning, #d97706) 10%, var(--color-surface-panel));
+}
+.markdown-body blockquote.md-callout.md-callout-warning .md-callout-badge,
+.markdown-body blockquote.md-callout.md-callout-caution .md-callout-badge {
+  color: var(--color-warning, #d97706);
+}
+.markdown-body blockquote.md-callout p:last-child {
+  margin-bottom: 0;
+}

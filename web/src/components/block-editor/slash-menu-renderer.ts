@@ -96,6 +96,7 @@ export function createSlashMenuRenderer({ editor, getRuntime }: SlashMenuRendere
     const list = scroll;
     const scrollTop = list.scrollTop;
     list.replaceChildren();
+    const zh = getRuntime().locale === 'zh';
     currentProps.items.forEach((item, index) => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -103,19 +104,19 @@ export function createSlashMenuRenderer({ editor, getRuntime }: SlashMenuRendere
 
       const icon = document.createElement('span');
       icon.className =
-        'flex size-8 shrink-0 items-center justify-center rounded-md border border-edge bg-surface-inset text-xs font-semibold uppercase text-fg-muted';
-      icon.textContent = item.label.slice(0, 2);
+        'flex size-8 shrink-0 items-center justify-center rounded-md border border-edge bg-surface-inset text-[11px] font-semibold uppercase text-fg-muted';
+      icon.textContent = item.badge || item.label.slice(0, 2);
 
       const copy = document.createElement('span');
       copy.className = 'min-w-0 flex-1';
 
       const title = document.createElement('span');
       title.className = 'block truncate text-sm font-medium text-fg';
-      title.textContent = item.label;
+      title.textContent = zh ? item.zhLabel : item.label;
 
       const description = document.createElement('span');
       description.className = 'block truncate text-xs text-fg-muted';
-      description.textContent = item.description;
+      description.textContent = zh ? item.zhDescription : item.description;
 
       copy.append(title, description);
       button.append(icon, copy);
@@ -130,6 +131,13 @@ export function createSlashMenuRenderer({ editor, getRuntime }: SlashMenuRendere
             ...getRuntime(),
             requestImagePicker:
               getRuntime().requestImagePicker ?? (() => imageInput?.click()),
+          });
+          return;
+        }
+        if (item.id === 'file' && !getRuntime().requestFilePicker) {
+          runSlashItem(item, currentProps.editor, currentProps.range, {
+            ...getRuntime(),
+            requestFilePicker: () => imageInput?.click(),
           });
           return;
         }

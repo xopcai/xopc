@@ -21,6 +21,8 @@ export interface STTResult {
 export interface STTOptions {
   /** Language hint (e.g. 'zh', 'en'). */
   language?: string;
+  /** Optional vocabulary / hotwords hint passed to STT providers. */
+  prompt?: string;
   /** Model id (provider-specific). */
   model?: string;
   /** Original upload metadata propagated to provider multipart/data URLs. */

@@ -3,8 +3,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initializeTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
 import { registerNotesRoutes } from '../notes.js';
+import { AUTHENTICATED_LAZY_ROUTE_BUNDLES } from '../lazy-bundles.js';
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 import { closeXopcDatabase, requireXopcDatabase } from '../../../../storage/sqlite/connection.js';
+import { upsertNoteRecord } from '../../../../storage/sqlite/index.js';
 
 describe('notes routes', () => {
   beforeAll(() => initializeTestAgentCatalog({ agents: [
@@ -213,5 +215,65 @@ describe('notes routes', () => {
       }),
     );
     expect(linkNoteThread).toHaveBeenCalledWith('note-1', expect.stringMatching(/^[0-9a-f-]{36}$/));
+  });
+
+  it('dispatches /api/notes/tag-summaries and /api/notes/:id/backlinks through authenticated lazy bundle', async () => {
+    requireXopcDatabase();
+    upsertNoteRecord({
+      id: 'route-target',
+      title: '目标文档',
+      kind: 'thought',
+      status: 'processed',
+      markdown: '# 目标文档',
+      tags: ['alpha'],
+      createdAt: 100,
+      updatedAt: 200,
+      capturedVia: { channel: 'web' },
+    });
+    upsertNoteRecord({
+      id: 'route-source',
+      title: '引用方文档',
+      kind: 'thought',
+      status: 'inbox',
+      markdown: '参考 [目标文档](xopc://open?kind=note&id=route-target)',
+      tags: ['alpha', 'beta'],
+      createdAt: 150,
+      updatedAt: 300,
+      capturedVia: { channel: 'web' },
+    });
+
+    const bundle = AUTHENTICATED_LAZY_ROUTE_BUNDLES.find((b) => b.match('/api/notes/tag-summaries'));
+    expect(bundle?.id).toBe('notes');
+    expect(AUTHENTICATED_LAZY_ROUTE_BUNDLES.find((b) => b.match('/api/notes/route-target/backlinks'))?.id).toBe('notes');
+
+    const loaded = await bundle!.load();
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      setGatewayPrincipal(c, { kind: 'owner', principalId: 'test-owner', scopes: ['workspace.read'] });
+      await next();
+    });
+    loaded.register(app, {
+      service: {
+        notesServiceInstance: {
+          getNote: async (id: string) => (id === 'route-target' ? { id: 'route-target', title: '目标文档' } : null),
+        },
+      },
+      strictRateLimitMiddleware: async (_c, next) => next(),
+    } as never);
+
+    const tagsRes = await app.request('/api/notes/tag-summaries');
+    expect(tagsRes.status).toBe(200);
+    const tagsBody = (await tagsRes.json()) as { items: Array<{ tag: string; noteCount: number }> };
+    expect(tagsBody.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tag: 'alpha', noteCount: 2 }),
+        expect.objectContaining({ tag: 'beta', noteCount: 1 }),
+      ]),
+    );
+
+    const backlinksRes = await app.request('/api/notes/route-target/backlinks');
+    expect(backlinksRes.status).toBe(200);
+    const backlinksBody = (await backlinksRes.json()) as { items: Array<{ id: string }> };
+    expect(backlinksBody.items.map((item) => item.id)).toContain('route-source');
   });
 });

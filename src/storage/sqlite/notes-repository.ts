@@ -50,7 +50,101 @@ function parseAttachmentNames(json: string | null): string[] | undefined {
   }
 }
 
-function rowToIndexEntry(row: NoteRow): NoteIndexEntry {
+type DiscussionNoteProjection = {
+  snippet?: string;
+  searchText?: string;
+  voiceAttachmentId?: string;
+  voiceDurationSec?: number;
+};
+
+function readDiscussionProjectionForNote(
+  db: ReturnType<typeof getSqliteDatabase>,
+  noteId: string,
+): DiscussionNoteProjection | undefined {
+  let row:
+    | {
+        audio_attachment_id: string | null;
+        audio_deleted_at: number | null;
+        duration_ms: number | null;
+        canonical_transcript: string | null;
+        generated_title: string | null;
+        organization_json: string | null;
+      }
+    | undefined;
+  try {
+    row = db
+      .prepare(
+        `SELECT dc.audio_attachment_id, dc.audio_deleted_at, dc.duration_ms,
+                dc.canonical_transcript, dc.generated_title,
+                (SELECT do.organization_json FROM discussion_organizations do
+                 WHERE do.discussion_id = dc.id AND do.status = 'completed'
+                 ORDER BY do.revision DESC LIMIT 1) AS organization_json
+         FROM discussion_captures dc
+         WHERE dc.note_id = ?
+         LIMIT 1`,
+      )
+      .get(noteId) as typeof row;
+  } catch {
+    return undefined;
+  }
+  if (!row) return undefined;
+
+  let orgSummary = '';
+  const orgParts: string[] = [];
+  if (row.organization_json) {
+    try {
+      const org = JSON.parse(row.organization_json) as {
+        title?: string;
+        summary?: string;
+        keyPoints?: Array<string | { text?: string }>;
+        decisions?: Array<{ text?: string }>;
+        actionItems?: Array<{ title?: string; owner?: string }>;
+        risks?: Array<{ text?: string }>;
+        openQuestions?: Array<{ text?: string }>;
+      };
+      if (org.title) orgParts.push(org.title);
+      if (org.summary) {
+        orgSummary = org.summary.replace(/\s+/g, ' ').trim();
+        orgParts.push(org.summary);
+      }
+      for (const kp of org.keyPoints ?? []) {
+        const text = typeof kp === 'string' ? kp : kp?.text;
+        if (text) orgParts.push(text);
+      }
+      for (const item of org.decisions ?? []) if (item?.text) orgParts.push(item.text);
+      for (const item of org.actionItems ?? []) {
+        if (item?.title) orgParts.push(item.title);
+        if (item?.owner) orgParts.push(item.owner);
+      }
+      for (const item of org.risks ?? []) if (item?.text) orgParts.push(item.text);
+      for (const item of org.openQuestions ?? []) if (item?.text) orgParts.push(item.text);
+    } catch {
+      // Ignore malformed organization JSON.
+    }
+  }
+
+  const transcript = row.canonical_transcript?.trim() ?? '';
+  const rawSnippet = orgSummary || transcript.replace(/\s+/g, ' ').trim();
+  const snippet = rawSnippet
+    ? rawSnippet.length > 100
+      ? `${rawSnippet.slice(0, 100)}…`
+      : rawSnippet
+    : undefined;
+  const searchText = [row.generated_title, ...orgParts, transcript].filter(Boolean).join('\n') || undefined;
+  const voiceAttachmentId = !row.audio_deleted_at && row.audio_attachment_id ? row.audio_attachment_id : undefined;
+  const voiceDurationSec =
+    row.duration_ms != null && Number.isFinite(row.duration_ms) && row.duration_ms > 0
+      ? Math.max(1, Math.round(row.duration_ms / 1000))
+      : undefined;
+
+  return { snippet, searchText, voiceAttachmentId, voiceDurationSec };
+}
+
+function rowToIndexEntry(row: NoteRow, db?: ReturnType<typeof getSqliteDatabase>): NoteIndexEntry {
+  const discussion =
+    db && row.kind === 'voice' && (!row.snippet || row.voice_duration_sec == null || !row.voice_attachment_id)
+      ? readDiscussionProjectionForNote(db, row.note_id)
+      : undefined;
   return {
     id: row.note_id,
     title: row.title ?? undefined,
@@ -60,10 +154,10 @@ function rowToIndexEntry(row: NoteRow): NoteIndexEntry {
     updatedAt: row.updated_at,
     pinned: row.pinned ? true : undefined,
     tags: parseTags(row.tags_json),
-    snippet: row.snippet ?? undefined,
+    snippet: row.snippet ?? discussion?.snippet ?? undefined,
     coverAttachmentId: row.cover_attachment_id ?? undefined,
-    voiceAttachmentId: row.voice_attachment_id ?? undefined,
-    voiceDurationSec: row.voice_duration_sec ?? undefined,
+    voiceAttachmentId: row.voice_attachment_id ?? discussion?.voiceAttachmentId ?? undefined,
+    voiceDurationSec: row.voice_duration_sec ?? discussion?.voiceDurationSec ?? undefined,
     attachmentNames: parseAttachmentNames(row.attachment_names_json),
     groupId: row.group_id ?? undefined,
     lastOpenedAt: row.last_opened_at ?? undefined,
@@ -78,14 +172,20 @@ function rowToIndexEntry(row: NoteRow): NoteIndexEntry {
   };
 }
 
-function noteSearchContent(note: Note): string {
+function noteSearchContent(note: Note, discussionSearchText?: string): string {
   const plain = notePlainText(note);
   const attachmentText = note.attachments?.map((a) => a.transcript).filter(Boolean).join(' ') ?? '';
   const attachmentNames = extractAttachmentFileNames(note)?.join(' ') ?? '';
-  return [note.title, plain, attachmentText, attachmentNames, ...(note.tags ?? [])].filter(Boolean).join('\n');
+  return [note.title, plain, note.ai?.summary, attachmentText, attachmentNames, discussionSearchText, ...(note.tags ?? [])]
+    .filter(Boolean)
+    .join('\n');
 }
 
-function rowMatchesPlainSearch(row: NoteRow, search: string): boolean {
+function rowMatchesPlainSearch(
+  row: NoteRow,
+  search: string,
+  db?: ReturnType<typeof getSqliteDatabase>,
+): boolean {
   const needle = search.trim().toLocaleLowerCase();
   if (!needle) {
     return true;
@@ -103,11 +203,25 @@ function rowMatchesPlainSearch(row: NoteRow, search: string): boolean {
     // Keep search usable even if a row has malformed payload JSON.
   }
 
+  if (db && row.kind === 'voice') {
+    const discussionText = readDiscussionProjectionForNote(db, row.note_id)?.searchText;
+    if (discussionText) chunks.push(discussionText);
+  }
+
   return chunks.join('\n').toLocaleLowerCase().includes(needle);
 }
 
-function noteToRow(note: Note): Omit<NoteRow, 'payload_json'> & { payload_json: string } {
+function noteToRow(
+  note: Note,
+  discussion?: DiscussionNoteProjection,
+): Omit<NoteRow, 'payload_json'> & { payload_json: string } {
   const meta = buildNoteIndexMeta(note);
+  const fallbackSummary = note.ai?.summary?.replace(/\s+/g, ' ').trim();
+  const aiSnippet = fallbackSummary
+    ? fallbackSummary.length > 100
+      ? `${fallbackSummary.slice(0, 100)}…`
+      : fallbackSummary
+    : undefined;
   return {
     note_id: note.id,
     title: note.title ?? null,
@@ -118,10 +232,10 @@ function noteToRow(note: Note): Omit<NoteRow, 'payload_json'> & { payload_json: 
     updated_at: note.updatedAt,
     pinned: note.pinned ? 1 : 0,
     tags_json: JSON.stringify(note.tags ?? []),
-    snippet: meta.snippet ?? null,
+    snippet: meta.snippet ?? discussion?.snippet ?? aiSnippet ?? null,
     cover_attachment_id: meta.coverAttachmentId ?? null,
-    voice_attachment_id: meta.voiceAttachmentId ?? null,
-    voice_duration_sec: meta.voiceDurationSec ?? null,
+    voice_attachment_id: meta.voiceAttachmentId ?? discussion?.voiceAttachmentId ?? null,
+    voice_duration_sec: meta.voiceDurationSec ?? discussion?.voiceDurationSec ?? null,
     attachment_names_json: meta.attachmentNames ? JSON.stringify(meta.attachmentNames) : null,
     group_id: note.groupId ?? null,
     last_opened_at: note.lastOpenedAt ?? null,
@@ -134,9 +248,13 @@ function noteToRow(note: Note): Omit<NoteRow, 'payload_json'> & { payload_json: 
   };
 }
 
-function upsertNoteFts(db: ReturnType<typeof getSqliteDatabase>, note: Note): void {
+function upsertNoteFts(
+  db: ReturnType<typeof getSqliteDatabase>,
+  note: Note,
+  discussionSearchText?: string,
+): void {
   db.prepare(`DELETE FROM notes_fts WHERE note_id = ?`).run(note.id);
-  const content = noteSearchContent(note);
+  const content = noteSearchContent(note, discussionSearchText);
   if (!content.trim()) {
     return;
   }
@@ -144,8 +262,9 @@ function upsertNoteFts(db: ReturnType<typeof getSqliteDatabase>, note: Note): vo
 }
 
 export function upsertNoteRecord(note: Note): void {
-  const row = noteToRow(note);
   runSqliteWriteTransaction((db) => {
+    const discussion = note.kind === 'voice' ? readDiscussionProjectionForNote(db, note.id) : undefined;
+    const row = noteToRow(note, discussion);
     db.prepare(
       `INSERT INTO notes (
         note_id, title, kind, status, payload_json, created_at, updated_at,
@@ -198,8 +317,15 @@ export function upsertNoteRecord(note: Note): void {
       row.unchecked_task_count,
       row.link_count,
     );
-    upsertNoteFts(db, note);
+    upsertNoteFts(db, note, discussion?.searchText);
   });
+}
+
+/** Refresh derived note index metadata and FTS entries after discussion transcript/summary changes without bumping note revision. */
+export function syncNoteDiscussionIndex(noteId: string): void {
+  const existing = getNoteRecord(noteId);
+  if (!existing) return;
+  upsertNoteRecord(existing);
 }
 
 export function getNoteRecord(noteId: string): Note | null {
@@ -246,8 +372,8 @@ export function listNoteRecords(
     conditions.push(`status = ?`);
     params.push(query.status);
   } else {
-    conditions.push(`status != ?`);
-    params.push('trashed');
+    conditions.push(`status NOT IN (?, ?)`);
+    params.push('trashed', 'archived');
   }
   if (query.kind) {
     conditions.push(`kind = ?`);
@@ -312,16 +438,17 @@ export function listNoteRecords(
       : query.sortBy === 'lastOpenedAt' ? 'last_opened_at' : 'created_at';
     const sortExpression = sortColumn === 'last_opened_at' ? 'COALESCE(last_opened_at, 0)' : sortColumn;
     const sortDirection = query.sortOrder === 'asc' ? 'ASC' : 'DESC';
+    const pinnedOrder = query.pinned === undefined ? 'pinned DESC, ' : '';
     const total = (db.prepare(`SELECT COUNT(*) AS total FROM notes ${where}`).get(...params) as { total: number }).total;
-    const rows = db.prepare(`${select} ORDER BY ${sortExpression} ${sortDirection}, note_id LIMIT ? OFFSET ?`)
+    const rows = db.prepare(`${select} ORDER BY ${pinnedOrder}${sortExpression} ${sortDirection}, note_id LIMIT ? OFFSET ?`)
       .all(...params, limit, offset) as NoteRow[];
-    const items = rows.map(rowToIndexEntry);
+    const items = rows.map((row) => rowToIndexEntry(row, db));
     return { items, total, limit, offset, hasMore: offset + items.length < total };
   }
 
   const rows = db.prepare(select).all(...params) as NoteRow[];
 
-  let entries = rows.map(rowToIndexEntry);
+  let entries = rows.map((row) => rowToIndexEntry(row, db));
 
   if (query.tag) {
     entries = entries.filter((entry) => entry.tags?.includes(query.tag!));
@@ -343,7 +470,7 @@ export function listNoteRecords(
     }
     const plainIds = new Set(
       rows
-        .filter((row) => rowMatchesPlainSearch(row, search))
+        .filter((row) => rowMatchesPlainSearch(row, search, db))
         .map((row) => row.note_id),
     );
     entries = entries.filter((entry) => ftsIds.has(entry.id) || plainIds.has(entry.id));
@@ -352,6 +479,9 @@ export function listNoteRecords(
   const sortField = query.sortBy || 'createdAt';
   const sortDir = query.sortOrder === 'asc' ? 1 : -1;
   entries = [...entries].sort((a, b) => {
+    if (query.pinned === undefined && Boolean(a.pinned) !== Boolean(b.pinned)) {
+      return a.pinned ? -1 : 1;
+    }
     const aVal = (a[sortField] as number | undefined) ?? 0;
     const bVal = (b[sortField] as number | undefined) ?? 0;
     return (aVal - bVal) * sortDir;
@@ -371,7 +501,7 @@ export function listNoteProjectSummaries(): NoteProjectSummary[] {
     FROM projects p
     LEFT JOIN object_links l ON l.to_kind = 'project' AND l.to_id = p.project_id
       AND l.from_kind = 'note' AND l.relation = 'belongs_to'
-    LEFT JOIN notes n ON n.note_id = l.from_id AND n.status != 'trashed'
+    LEFT JOIN notes n ON n.note_id = l.from_id AND n.status NOT IN ('trashed', 'archived')
     GROUP BY p.project_id
     ORDER BY (p.pinned_at IS NOT NULL) DESC, MAX(n.updated_at) DESC, p.updated_at DESC, p.project_id
   `).all() as Array<{
@@ -382,4 +512,105 @@ export function listNoteProjectSummaries(): NoteProjectSummary[] {
     id: row.project_id, name: row.name, description: row.description ?? undefined,
     noteCount: row.note_count, updatedAt: row.note_updated_at ?? undefined,
   }));
+}
+
+export interface NoteTagSummary {
+  tag: string;
+  noteCount: number;
+  updatedAt: number;
+}
+
+export function listNoteTagSummaries(): NoteTagSummary[] {
+  const rows = getSqliteDatabase()
+    .prepare(
+      `SELECT tags_json, updated_at FROM notes
+       WHERE status NOT IN ('trashed', 'archived')
+         AND tags_json IS NOT NULL AND tags_json != '[]'`,
+    )
+    .all() as Array<{ tags_json: string; updated_at: number }>;
+
+  const stats = new Map<string, { noteCount: number; updatedAt: number }>();
+  for (const row of rows) {
+    const tags = parseTags(row.tags_json) ?? [];
+    for (const raw of tags) {
+      const tag = raw.trim();
+      if (!tag) continue;
+      const existing = stats.get(tag);
+      if (existing) {
+        existing.noteCount += 1;
+        if (row.updated_at > existing.updatedAt) existing.updatedAt = row.updated_at;
+      } else {
+        stats.set(tag, { noteCount: 1, updatedAt: row.updated_at });
+      }
+    }
+  }
+
+  return Array.from(stats.entries())
+    .map(([tag, value]) => ({ tag, noteCount: value.noteCount, updatedAt: value.updatedAt }))
+    .sort((a, b) => b.noteCount - a.noteCount || b.updatedAt - a.updatedAt || a.tag.localeCompare(b.tag));
+}
+
+export interface NoteBacklinkSummary {
+  id: string;
+  title?: string;
+  kind: Note['kind'];
+  updatedAt: number;
+  snippet?: string;
+}
+
+export function listNoteBacklinks(noteId: string): NoteBacklinkSummary[] {
+  const db = getSqliteDatabase();
+  const target = getNoteRecord(noteId);
+  if (!target) return [];
+  const targetTitle = target.title?.trim();
+
+  const rows = db
+    .prepare(
+      `SELECT note_id, title, kind, updated_at, snippet, payload_json
+       FROM notes
+       WHERE note_id != ? AND status != 'trashed'
+       ORDER BY updated_at DESC`,
+    )
+    .all(noteId) as Array<{
+    note_id: string;
+    title: string | null;
+    kind: Note['kind'];
+    updated_at: number;
+    snippet: string | null;
+    payload_json: string;
+  }>;
+
+  const encodedId = encodeURIComponent(noteId);
+  const directUriNeedle = `xopc://open?kind=note&id=${noteId}`;
+  const encodedUriNeedle = `xopc://open?kind=note&id=${encodedId}`;
+  const wikiIdNeedle = `[[${noteId}]]`;
+  const wikiTitleNeedle = targetTitle && targetTitle.length >= 2 ? `[[${targetTitle}]]` : null;
+
+  const items: NoteBacklinkSummary[] = [];
+  for (const row of rows) {
+    let markdown = '';
+    try {
+      markdown = (JSON.parse(row.payload_json) as Note).markdown ?? '';
+    } catch {
+      continue;
+    }
+    if (!markdown) continue;
+    const matched =
+      markdown.includes(directUriNeedle)
+      || markdown.includes(encodedUriNeedle)
+      || markdown.includes(wikiIdNeedle)
+      || (wikiTitleNeedle !== null && markdown.includes(wikiTitleNeedle));
+    if (!matched) continue;
+
+    items.push({
+      id: row.note_id,
+      title: row.title ?? undefined,
+      kind: row.kind,
+      updatedAt: row.updated_at,
+      snippet: row.snippet ?? undefined,
+    });
+    if (items.length >= 30) break;
+  }
+
+  return items;
 }

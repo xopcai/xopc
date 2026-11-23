@@ -85,11 +85,15 @@ export async function transcribe(
     throw new Error('No STT providers configured');
   }
 
-  // Apply caller-supplied language hint to each provider's resolved config.
-  // (We don't bake it into resolveSTTProviderChain because it is per-call.)
-  const providersWithLanguage = options?.language
-    ? providers.map((p) => ({ ...p, language: options.language }))
-    : providers;
+  // Apply caller-supplied language / hotword prompt hints to each provider's resolved config.
+  const providersWithLanguage =
+    options?.language || options?.prompt
+      ? providers.map((p) => ({
+          ...p,
+          ...(options.language ? { language: options.language } : {}),
+          ...(options.prompt ? { prompt: p.prompt ? `${p.prompt}\n${options.prompt}` : options.prompt } : {}),
+        }))
+      : providers;
 
   const result = await runAudioTranscription({
     providers: providersWithLanguage,

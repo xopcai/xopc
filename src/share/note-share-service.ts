@@ -3,6 +3,10 @@ import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/
 import { dirname, join } from 'node:path';
 
 import { resolveStateDir } from '../config/paths.js';
+import {
+  projectDiscussionNoteForShare,
+  type DiscussionShareOptions,
+} from '../discussions/share-projection.js';
 import { collectReferencedAttachmentIds } from '../notes/note-attachment-sync.js';
 import type { Note, NoteAttachment } from '../notes/types.js';
 import { createLogger } from '../utils/logger.js';
@@ -50,6 +54,7 @@ export interface CreateNoteShareInput {
   maxViews?: number | null;
   description?: string;
   gatewayTokenHash: string;
+  discussionOptions?: DiscussionShareOptions;
 }
 
 export class NoteShareVersionConflictError extends Error {
@@ -66,7 +71,8 @@ export class NoteShareService {
   ) {}
 
   async create(noteId: string, input: CreateNoteShareInput): Promise<NoteShareRecord> {
-    const note = await this.requireNote(noteId, input.expectedNoteVersion);
+    const rawNote = await this.requireNote(noteId, input.expectedNoteVersion);
+    const note = projectDiscussionNoteForShare(rawNote, input.discussionOptions, input.attachmentIds);
     const id = randomUUID();
     const staged = await this.buildArtifact(id, note, input.attachmentIds);
     try {
@@ -89,12 +95,13 @@ export class NoteShareService {
     }
   }
 
-  async refresh(noteId: string, shareId: string, input: Pick<CreateNoteShareInput, 'expectedNoteVersion' | 'attachmentIds'>): Promise<NoteShareRecord> {
+  async refresh(noteId: string, shareId: string, input: Pick<CreateNoteShareInput, 'expectedNoteVersion' | 'attachmentIds' | 'discussionOptions'>): Promise<NoteShareRecord> {
     const record = this.store.getById(shareId);
     if (!record || record.kind !== 'note' || record.sourceNoteId !== noteId) {
       throw new Error('Note share not found');
     }
-    const note = await this.requireNote(noteId, input.expectedNoteVersion);
+    const rawNote = await this.requireNote(noteId, input.expectedNoteVersion);
+    const note = projectDiscussionNoteForShare(rawNote, input.discussionOptions, input.attachmentIds);
     const finalDir = this.artifactDir(shareId);
     const stagedDir = `${finalDir}.refresh-${randomUUID()}`;
     const backupDir = `${finalDir}.backup-${randomUUID()}`;

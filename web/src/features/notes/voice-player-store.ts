@@ -17,6 +17,8 @@ export type VoicePlayerState = {
   duration: number;
   /** Loading state. */
   loading: boolean;
+  /** Playback rate multiplier (1, 1.25, 1.5, 2). */
+  playbackRate: number;
 };
 
 type VoicePlayerActions = {
@@ -24,6 +26,7 @@ type VoicePlayerActions = {
   pause: () => void;
   toggle: (noteId: string, attachmentId: string, hintDuration?: number) => void;
   seek: (time: number) => void;
+  setPlaybackRate: (rate: number) => void;
   reset: () => void;
 };
 
@@ -34,6 +37,7 @@ const initialState: VoicePlayerState = {
   currentTime: 0,
   duration: 0,
   loading: false,
+  playbackRate: 1,
 };
 
 let audioElement: HTMLAudioElement | null = null;
@@ -102,6 +106,7 @@ export const useVoicePlayerStore = create<VoicePlayerState & VoicePlayerActions>
         currentAttachmentId = attachmentId;
         audio.src = url;
       }
+      audio.playbackRate = get().playbackRate;
       await audio.play();
       if (operation === playbackOperation) set({ loading: false });
     } catch {
@@ -134,6 +139,14 @@ export const useVoicePlayerStore = create<VoicePlayerState & VoicePlayerActions>
     const audio = getAudio();
     audio.currentTime = time;
     set({ currentTime: time });
+  },
+
+  setPlaybackRate: (rate) => {
+    const safeRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
+    if (audioElement) {
+      audioElement.playbackRate = safeRate;
+    }
+    set({ playbackRate: safeRate });
   },
 
   reset: () => {

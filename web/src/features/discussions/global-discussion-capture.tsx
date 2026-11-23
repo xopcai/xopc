@@ -31,6 +31,7 @@ import {
 } from './discussion-draft-store';
 import { forgetDiscussionConsent, readDiscussionConsent, rememberDiscussionConsent } from './discussion-consent-cache';
 import { OPEN_DISCUSSION_CAPTURE_EVENT } from './discussion-events';
+import type { DiscussionAudioCaptureMode } from './audio-capture-mixer';
 import { drainDiscussionSegmentUploadQueue } from './discussion-segment-upload-queue';
 import type { DiscussionDetail, DiscussionDraft, DiscussionTranscript } from './discussion-types';
 import { projectRecordingStatus, verifiedSavedThrough, type RecordingSyncStage } from './recording-status';
@@ -70,6 +71,11 @@ export function GlobalDiscussionCaptureHost() {
   const [consentVersion, setConsentVersion] = useState<number | null>(null);
   const [pendingRecovery, setPendingRecovery] = useState<DiscussionDraft | null>(null);
   const [pendingProjectId, setPendingProjectId] = useState<string | undefined>();
+  const [pendingAudioMode, setPendingAudioMode] = useState<DiscussionAudioCaptureMode | undefined>();
+  const [liveOutline, setLiveOutline] = useState('');
+  const liveOutlineDirtyRef = useRef(false);
+  const liveOutlineRef = useRef('');
+  liveOutlineRef.current = liveOutline;
   const [detail, setDetail] = useState<DiscussionDetail | null>(null);
   const [transcript, setTranscript] = useState<DiscussionTranscript | null>(null);
   const [finishing, setFinishing] = useState(false);
@@ -157,11 +163,28 @@ export function GlobalDiscussionCaptureHost() {
     void ensureSegmentQueueDrain();
   }, [ensureSegmentQueueDrain]);
 
-  const beginRecording = useCallback(async (projectId: string | undefined, policyVersion: number) => {
+  const flushLiveOutline = useCallback(async (noteId: string | undefined) => {
+    if (!noteId || !liveOutlineDirtyRef.current) return;
+    const text = liveOutlineRef.current;
+    liveOutlineDirtyRef.current = false;
+    try {
+      await fetchJson(apiUrl(`/api/notes/${encodeURIComponent(noteId)}`), {
+        method: 'PATCH',
+        body: JSON.stringify({ markdown: text }),
+      });
+    } catch {
+      liveOutlineDirtyRef.current = true;
+    }
+  }, []);
+
+  const beginRecording = useCallback(async (projectId: string | undefined, policyVersion: number, audioMode?: DiscussionAudioCaptureMode) => {
     openedResultNote.current = false; setCaptureSyncError(null);
     setCompact(false);
     setConsentVersion(null);
     setPendingProjectId(undefined);
+    setPendingAudioMode(undefined);
+    setLiveOutline('');
+    liveOutlineDirtyRef.current = false;
     setVisible(true);
     setOperationError(null);
     setTranscript(null);
@@ -170,6 +193,7 @@ export function GlobalDiscussionCaptureHost() {
     setLocalReleased(false); setAnnotationSyncFailed(false); setLocallyFinalized(null); setSyncStage('pending');
     const draft = await recorder.start({
       ...(projectId ? { projectId } : {}),
+      ...(audioMode ? { audioMode } : {}),
       consentPolicyVersion: policyVersion,
       gatewayUrl,
       onLiveSegment: uploadLiveSegment,
@@ -189,6 +213,7 @@ export function GlobalDiscussionCaptureHost() {
       setDetail(created);
       await recorder.setServerDiscussionId(created.discussion.id);
       void connectSegmentQueue(draft.id, created.discussion.id);
+      if (liveOutlineDirtyRef.current) void flushLiveOutline(created.note.id);
     } catch (error) {
       setSyncStage('failed');
       if (isConsentError(error)) forgetDiscussionConsent();
@@ -196,11 +221,20 @@ export function GlobalDiscussionCaptureHost() {
         ? (language === 'zh' ? '录音授权需要重新确认。结束录音后可确认并同步，本机录音会保留。' : 'Recording consent needs confirmation. Stop recording to confirm and sync; local audio is retained.')
         : error instanceof Error ? error.message : copy.saveFailed);
     }
-  }, [connectSegmentQueue, copy.saveFailed, recorder, uploadLiveSegment, gatewayUrl, language]);
+  }, [connectSegmentQueue, copy.saveFailed, flushLiveOutline, recorder, uploadLiveSegment, gatewayUrl, language]);
 
   useEffect(() => () => segmentQueueAbortRef.current?.abort(), []);
 
-  const prepareStart = useCallback(async (projectId?: string) => {
+  useEffect(() => {
+    const noteId = detail?.note.id;
+    if (!noteId || !liveOutlineDirtyRef.current) return;
+    const timer = window.setTimeout(() => {
+      void flushLiveOutline(noteId);
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [detail?.note.id, flushLiveOutline, liveOutline]);
+
+  const prepareStart = useCallback(async (projectId?: string, audioMode?: DiscussionAudioCaptureMode) => {
     if (!token || startInFlight.current || finishing) return;
     if (['recording', 'waiting_for_audio', 'requesting_permission', 'paused', 'stopping'].includes(recorder.phase)) { setVisible(true); setCompact(false); return; }
     startInFlight.current = true; setPreparing(true);
@@ -211,10 +245,11 @@ export function GlobalDiscussionCaptureHost() {
       rememberDiscussionConsent(settings);
       if (settings.consentAcknowledgedAt == null) {
         setPendingProjectId(projectId);
+        setPendingAudioMode(audioMode);
         setConsentVersion(settings.consentPolicyVersion);
         return;
       }
-      await beginRecording(projectId, settings.consentPolicyVersion);
+      await beginRecording(projectId, settings.consentPolicyVersion, audioMode);
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
     } finally { startInFlight.current = false; setPreparing(false); }
@@ -222,8 +257,8 @@ export function GlobalDiscussionCaptureHost() {
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const projectId = (event as CustomEvent<{ projectId?: string }>).detail?.projectId;
-      void prepareStart(projectId);
+      const eventDetail = (event as CustomEvent<{ projectId?: string; audioMode?: DiscussionAudioCaptureMode }>).detail;
+      void prepareStart(eventDetail?.projectId, eventDetail?.audioMode);
     };
     window.addEventListener(OPEN_DISCUSSION_CAPTURE_EVENT, handler);
     return () => window.removeEventListener(OPEN_DISCUSSION_CAPTURE_EVENT, handler);
@@ -277,7 +312,7 @@ export function GlobalDiscussionCaptureHost() {
         setPendingRecovery(null);
         await recoverDraft(candidate);
       } else {
-        await beginRecording(pendingProjectId, consentVersion);
+        await beginRecording(pendingProjectId, consentVersion, pendingAudioMode);
       }
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
@@ -315,6 +350,7 @@ export function GlobalDiscussionCaptureHost() {
       }
       createPromiseRef.current = Promise.resolve(created);
       setDetail(created);
+      await flushLiveOutline(created.note.id);
       await recorder.setServerDiscussionId(created.discussion.id);
       setBackgroundUploading(true);
       await originalUploadRef.current;
@@ -405,6 +441,7 @@ export function GlobalDiscussionCaptureHost() {
       }
       createPromiseRef.current = Promise.resolve(created);
       setDetail(created);
+      await flushLiveOutline(created.note.id);
       await recorder.setServerDiscussionId(created.discussion.id);
       let annotationsSynced = false;
       try { await syncDiscussionAnnotations(candidate.id,created.discussion.id); annotationsSynced = true; setAnnotationSyncFailed(false); }
@@ -602,7 +639,14 @@ export function GlobalDiscussionCaptureHost() {
     </> : <>
       <div className="space-y-3 px-4 py-4">
         <div className="flex items-center justify-between gap-4">
-          <p className="font-mono text-[2.5rem] leading-none tabular-nums tracking-tight text-fg">{formatDuration(recorder.elapsedMs)}</p>
+          <div className="space-y-1">
+            <p className="font-mono text-[2.5rem] leading-none tabular-nums tracking-tight text-fg">{formatDuration(recorder.elapsedMs)}</p>
+            {recorder.audioMode === 'meeting_mix' ? (
+              <span className="inline-flex items-center rounded-md bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg">
+                {zh ? '系统声 + 麦克风混录中' : 'System audio + Mic'}
+              </span>
+            ) : null}
+          </div>
           {status.capture === 'recording' ? <div className="flex items-center gap-2 text-xs text-fg-muted">
             {recorder.inputLevel != null ? <div role="meter" aria-label={copy.status.level} aria-valuemin={0} aria-valuemax={1} aria-valuenow={recorder.inputLevel} className="flex h-6 items-center gap-0.5">{[0,1,2,3,4].map(index => <span key={index} className={`w-1 rounded-full ${recorder.inputLevel! > index * .12 ? 'bg-accent' : 'bg-surface-active'}`} style={{ height: 6 + Math.min(1,recorder.inputLevel! * 3) * (index % 2 ? 10 : 18) }} />)}</div> : null}
             <span>{recorder.inputLevel == null ? copy.status.levelUnknown : (zh ? '声音输入' : 'Sound input')}</span>
@@ -611,6 +655,20 @@ export function GlobalDiscussionCaptureHost() {
         <RecordingStatusPanel status={status} language={language} />
         {status.sync === 'offline' ? <p role="status" className="rounded-lg bg-surface-inset px-3 py-2 text-xs leading-5 text-fg-muted">{zh ? '离线录音，联网后自动同步。' : 'Recording offline. Sync resumes when connected.'}</p> : null}
         {status.ai === 'textDelayed' ? <p className="text-xs leading-5 text-fg-muted">{copy.status.textDelayed}</p> : null}
+        <details className="group rounded-xl bg-surface-inset px-3 py-2.5">
+          <summary className="cursor-pointer text-xs font-medium text-fg-muted outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '边听边记 · 提纲要点（结束自动融合纪要）' : 'Jot outline · Auto-fuse into summary'}</summary>
+          <textarea
+            rows={3}
+            value={liveOutline}
+            onChange={(event) => {
+              liveOutlineDirtyRef.current = true;
+              setLiveOutline(event.target.value);
+            }}
+            placeholder={zh ? '- 记录你关注的问题、关键数字或决议草稿…' : '- Jot key takeaways, numbers, or open questions…'}
+            aria-label={zh ? '边听边记提纲' : 'Live meeting outline'}
+            className="mt-2 w-full resize-none rounded-lg border border-edge bg-surface-panel p-2 text-xs leading-5 text-fg outline-none focus:border-accent"
+          />
+        </details>
         <details className="group rounded-xl bg-surface-inset px-3 py-2.5">
           <summary className="cursor-pointer text-xs font-medium text-fg-muted outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '查看实时文字' : 'Live transcript'}</summary>
           <LiveTranscriptView text={transcript?.text ?? ''} placeholder={recorder.liveTranscriptionAvailable ? (zh ? '说话后，文字会陆续显示。' : 'Text will appear as you speak.') : copy.liveUnavailable} zh={zh} />

@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 
+import {
+  projectDiscussionNoteForShare,
+  type DiscussionShareOptions,
+} from '../discussions/share-projection.js';
 import { collectReferencedAttachmentIds } from '../notes/note-attachment-sync.js';
 import type { Note } from '../notes/types.js';
 import type { HostedPublicationSnapshot } from './hosted-session-share.js';
@@ -27,12 +31,14 @@ export class HostedNotePublicationBuilder {
     expectedNoteVersion?: number;
     attachmentIds?: string[];
     description?: string;
+    discussionOptions?: DiscussionShareOptions;
   }): Promise<HostedNotePublicationSnapshot> {
-    const note = await this.notes.getNote(noteId);
-    if (!note) throw new Error('Note not found');
-    if (input.expectedNoteVersion !== undefined && note.updatedAt !== input.expectedNoteVersion) {
-      throw new HostedNoteVersionConflictError(note.updatedAt);
+    const rawNote = await this.notes.getNote(noteId);
+    if (!rawNote) throw new Error('Note not found');
+    if (input.expectedNoteVersion !== undefined && rawNote.updatedAt !== input.expectedNoteVersion) {
+      throw new HostedNoteVersionConflictError(rawNote.updatedAt);
     }
+    const note = projectDiscussionNoteForShare(rawNote, input.discussionOptions, input.attachmentIds);
     const referenced = collectReferencedAttachmentIds(note);
     const attachments = new Map((note.attachments ?? []).map((attachment) => [attachment.id, attachment]));
     for (const id of referenced) {

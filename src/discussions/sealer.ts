@@ -6,6 +6,7 @@ import { createReadStream } from 'node:fs';
 import type { Config } from '../config/schema.js';
 import type { NotesService } from '../notes/service.js';
 import { withModelUsageOrigin } from '../providers/model-usage.js';
+import { syncNoteDiscussionIndex } from '../storage/sqlite/notes-repository.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { createLogger } from '../utils/logger.js';
 import { forEachNormalizedAudioSegment } from '../voice/audio/normalize.js';
@@ -14,6 +15,8 @@ import { isSTTAvailable, mergeSttConfigFromAppConfig, transcribe } from '../voic
 import type { STTResult } from '../voice/stt/types.js';
 
 import { missingAudioRanges, slicePcmWav } from './audio-repair.js';
+import { normalizeProviderSpeakerLabel } from './diarization.js';
+import { buildHotwordsPrompt } from './vocabulary.js';
 import {
   assertProcessingRun, claimSealingCapture, ensureProcessingRun, failOrRetryProcessing,
   getProcessingRun, readCheckpoint, releaseSealingLease, renewSealingLease, resetProcessingRetry,
@@ -103,7 +106,10 @@ export class DiscussionSealer {
       if (ageMs >= UPLOAD_GRACE_MS) {
         const updated = updateDiscussionCapture(capture.id, { status: 'needs_attention', failureStage: 'audio_upload',
           failureCode: 'recording_missing', failureMessage: 'Original recording was not uploaded' }, ['stopping','sealing']);
-        if (updated) this.deps.onUpdated?.(updated);
+        if (updated) {
+        syncNoteDiscussionIndex(capture.noteId);
+        this.deps.onUpdated?.(updated);
+      }
       }
       if (ageMs < UPLOAD_GRACE_MS) updateDiscussionCapture(capture.id, { updatedAt: Date.now() }, [capture.status]);
       return;
@@ -138,13 +144,19 @@ export class DiscussionSealer {
           canonicalTranscriptSha256: createHash('sha256').update(text).digest('hex'), transcriptLanguage: result.language,
           failureStage: undefined, failureCode: undefined, failureMessage: undefined }, ['sealing']);
       });
-      if (updated) this.deps.onUpdated?.(updated);
+      if (updated) {
+        syncNoteDiscussionIndex(capture.noteId);
+        this.deps.onUpdated?.(updated);
+      }
     } catch (error) {
       if (signal.aborted) return;
       // A newer run or worker owns the publication boundary; it must not be marked failed by this worker.
       if (getProcessingRun(capture.id)?.run_id !== run.run_id || !renewSealingLease(capture.id, this.owner)) return;
       const updated = failOrRetryProcessing(sealing, 'transcript_sealing', error);
-      if (updated) this.deps.onUpdated?.(updated);
+      if (updated) {
+        syncNoteDiscussionIndex(capture.noteId);
+        this.deps.onUpdated?.(updated);
+      }
       log.warn({ err: error, discussionId: capture.id, phase: 'transcript_sealing' }, 'Discussion transcription failed; saved original retained');
     }
   }
@@ -194,17 +206,24 @@ export class DiscussionSealer {
           const audio = gaps.length === 1 && gap.startedAtMs === offset && gap.endedAtMs === offset + durationMs
             ? buffer : slicePcmWav(decoded, gap.startedAtMs - offset, gap.endedAtMs - offset);
           if (audio.length <= 44) continue;
+          const hotwordsPrompt = buildHotwordsPrompt();
           const result = await withProcessingDeadline(requestSignal => this.deps.transcribeSegment
             ? this.deps.transcribeSegment(audio, requestSignal)
-            : transcribe(audio, sttConfig, { mime: 'audio/wav', fileName: `discussion-recovery-${index}-${gapIndex}.wav`, signal: requestSignal }),
+            : transcribe(audio, sttConfig, {
+                mime: 'audio/wav',
+                fileName: `discussion-recovery-${index}-${gapIndex}.wav`,
+                ...(hotwordsPrompt ? { prompt: hotwordsPrompt } : {}),
+                signal: requestSignal,
+              }),
           signal, this.deps.requestTimeoutMs ?? 120_000);
           const recovered: RecoveredTranscriptSegment[] = [];
           if (result.segments?.length) {
             for (const part of result.segments) {
               if (!Number.isFinite(part.startMs) || !Number.isFinite(part.endMs) || part.startMs < 0 || part.endMs <= part.startMs
                 || part.endMs > gap.endedAtMs - gap.startedAtMs + 100) throw new Error('Provider returned an invalid transcript time range');
+              const normalizedSpeaker = normalizeProviderSpeakerLabel(part.speaker, result.language !== 'en');
               recovered.push({ text: part.text, startedAtMs: gap.startedAtMs + part.startMs,
-                endedAtMs: Math.min(gap.endedAtMs, gap.startedAtMs + part.endMs), ...(part.speaker ? { speakerLabel: `${index + 1}:${gapIndex + 1}:${part.speaker}` } : {}) });
+                endedAtMs: Math.min(gap.endedAtMs, gap.startedAtMs + part.endMs), ...(normalizedSpeaker ? { speakerLabel: normalizedSpeaker } : {}) });
             }
           } else if (result.text.trim()) recovered.push({ text: result.text, ...gap });
           checkpoint = { segments: recovered, language: result.language } satisfies TranscriptionCheckpoint;

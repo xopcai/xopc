@@ -198,6 +198,8 @@ export interface DiscussionOrganizationRecord {
 export interface DiscussionCaptureSettings {
   consentPolicyVersion: number;
   consentAcknowledgedAt?: number;
+  hotwords?: string[];
+  diarizationEnabled?: boolean;
 }
 
 export interface CreateDiscussionInput {

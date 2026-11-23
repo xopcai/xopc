@@ -12,12 +12,16 @@ import { filterSlashItems, runSlashItem } from '../slash-items';
 
 describe('filterSlashItems', () => {
   it('returns all items for an empty query', () => {
-    expect(filterSlashItems('')).toHaveLength(10);
+    expect(filterSlashItems('')).toHaveLength(14);
   });
 
-  it('filters by label and keywords', () => {
+  it('filters by English and Chinese labels and keywords', () => {
     expect(filterSlashItems('photo').map((item) => item.id)).toEqual(['image']);
     expect(filterSlashItems('h1').map((item) => item.id)).toEqual(['heading1']);
+    expect(filterSlashItems('表格').map((item) => item.id)).toEqual(['table']);
+    expect(filterSlashItems('附件').map((item) => item.id)).toEqual(['file']);
+    expect(filterSlashItems('高亮').map((item) => item.id)).toEqual(['callout']);
+    expect(filterSlashItems('录音').map((item) => item.id)).toEqual(['voiceRecord']);
   });
 });
 
@@ -122,7 +126,7 @@ describe('runSlashItem', () => {
     try {
       const range = { from: 1, to: 9 };
       runSlashItem(
-        { id: 'heading1', label: 'Heading 1', description: '', keywords: [] },
+        { id: 'heading1', badge: 'H1', label: 'Heading 1', zhLabel: '一级标题', description: '', zhDescription: '', keywords: [] },
         editor,
         range,
         {},

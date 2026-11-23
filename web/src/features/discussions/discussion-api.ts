@@ -20,6 +20,22 @@ export function acknowledgeDiscussionConsent(consentPolicyVersion: number): Prom
   });
 }
 
+export function updateDiscussionCapturePreferences(patch: {
+  hotwords?: string[] | string;
+  diarizationEnabled?: boolean;
+}): Promise<DiscussionCaptureSettings> {
+  return fetchJson(apiUrl('/api/discussion-capture/settings'), {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export function diarizeDiscussion(id: string): Promise<DiscussionTranscript> {
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/diarize`), {
+    method: 'POST',
+  });
+}
+
 export async function createDiscussion(input: {
   clientRequestId: string;
   contextProjectId?: string;

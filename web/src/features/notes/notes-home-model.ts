@@ -6,12 +6,15 @@ export function notesHomeQuery(params: URLSearchParams, search: string): NotesLi
   const rawPage = Number(params.get('page') ?? 0);
   const page = Number.isSafeInteger(rawPage) && rawPage >= 0 ? rawPage : 0;
   const view = params.get('view');
+  const tag = params.get('tag')?.trim() || undefined;
   return {
     projectId: params.get('projectId') || undefined,
+    tag,
+    kind: view === 'voice' ? 'voice' : undefined,
     unassigned: params.get('unassigned') === 'true' || view === 'unassigned' || undefined,
     pinned: view === 'favorites' ? true : undefined,
     agentEdited: view === 'agent' || undefined,
-    status: view === 'archived' ? 'archived' : undefined,
+    status: view === 'archived' ? 'archived' : view === 'trashed' ? 'trashed' : undefined,
     search: search.trim() || undefined,
     sortBy: 'updatedAt', sortOrder: 'desc',
     limit: NOTES_HOME_PAGE_SIZE, offset: page * NOTES_HOME_PAGE_SIZE,

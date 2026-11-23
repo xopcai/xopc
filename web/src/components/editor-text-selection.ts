@@ -3,5 +3,6 @@ export interface EditorTextSelection {
   text: string;
   rect: { left: number; right: number; top: number; bottom: number };
   insertAfter: (markdown: string) => boolean;
+  replaceSelection?: (markdown: string) => boolean;
   restore: () => void;
 }

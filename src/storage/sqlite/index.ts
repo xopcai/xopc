@@ -239,8 +239,13 @@ export {
 export {
   deleteNoteRecord,
   getNoteRecord,
+  listNoteBacklinks,
   listNoteRecords,
+  listNoteTagSummaries,
+  syncNoteDiscussionIndex,
   upsertNoteRecord,
+  type NoteBacklinkSummary,
+  type NoteTagSummary,
 } from './notes-repository.js';
 export {
   deleteNoteAgentContextRecord,

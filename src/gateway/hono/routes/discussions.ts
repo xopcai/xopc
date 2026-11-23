@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { hasGatewayScope } from '../../security/gateway-scopes.js';
-import { convertMeetingAction, meetingActionTasks } from '../../../discussions/action-tasks.js';
+import { convertMeetingAction, meetingActionTasks, type ConvertMeetingActionOverrides } from '../../../discussions/action-tasks.js';
 import { MeetingEditSchema } from '../../../discussions/edits.js';
 import { exportDiscussion } from '../../../discussions/export.js';
 import type { Context, Hono } from 'hono';
@@ -34,6 +34,16 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
     ?? strictRateLimitMiddleware;
 
   authenticated.get('/api/discussion-capture/settings', (c) => c.json(service.discussions.settings()));
+
+  authenticated.patch('/api/discussion-capture/settings', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    return c.json(
+      service.discussions.updatePreferences({
+        ...(body.hotwords !== undefined ? { hotwords: body.hotwords } : {}),
+        ...(typeof body.diarizationEnabled === 'boolean' ? { diarizationEnabled: body.diarizationEnabled } : {}),
+      }),
+    );
+  });
 
   authenticated.put('/api/discussion-capture/settings', strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
@@ -195,6 +205,10 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
     try { return c.json(service.discussions.editSummary(c.req.param('id'), parsed.data)); }
     catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
   });
+  authenticated.post('/api/discussions/:id/diarize', strictRateLimitMiddleware, async (c) => {
+    try { return c.json(await service.discussions.diarize(c.req.param('id'), c.req.raw.signal)); }
+    catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
+  });
   authenticated.get('/api/discussions/:id/actions', async (c) => {
     if (!await service.discussions.get(c.req.param('id'))) return c.json({ error: 'Discussion not found' }, 404);
     return c.json(meetingActionTasks(c.req.param('id')));
@@ -202,7 +216,14 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
   authenticated.post('/api/discussions/:id/actions/:actionId/convert', strictRateLimitMiddleware, async (c) => {
     if (!hasGatewayScope(getGatewayPrincipal(c).scopes, 'tasks.write')) return c.json({ error: 'Task write permission required' }, 403);
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
-    try { return c.json(convertMeetingAction(c.req.param('id'), c.req.param('actionId'), Number(body.organizationRevision))); }
+    const overrides: ConvertMeetingActionOverrides = {};
+    const rawProjectId = body.projectId;
+    if (typeof body.title === 'string') overrides.title = body.title;
+    if (typeof body.owner === 'string') overrides.owner = body.owner;
+    if (typeof body.dueDate === 'string') overrides.dueDate = body.dueDate;
+    if (rawProjectId === null) overrides.projectId = null;
+    else if (typeof rawProjectId === 'string') overrides.projectId = rawProjectId;
+    try { return c.json(convertMeetingAction(c.req.param('id'), c.req.param('actionId'), Number(body.organizationRevision), overrides)); }
     catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
   });
   authenticated.get('/api/discussions/:id/export', async (c) => {

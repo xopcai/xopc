@@ -67,19 +67,24 @@ export function NoteSelectionActions({ noteId, selection, zh, onDismiss, onAsk }
     <div role="group" aria-label={zh ? '选段操作' : 'Selection actions'} className="flex shrink-0 flex-wrap items-center gap-1 p-1">
       <Button variant="ghost" className="text-xs" disabled={loading || tooLong} onClick={() => void preview('summary')}>{zh ? '摘要预览' : 'Summary'}</Button>
       <Button variant="ghost" className="text-xs" disabled={loading || tooLong} onClick={() => void preview('todo')}>{zh ? '提取待办' : 'Extract to-dos'}</Button>
+      <Button variant="ghost" className="text-xs" disabled={loading || tooLong} onClick={() => void preview('polish')}>{zh ? '润色改写' : 'Polish'}</Button>
       <Button variant="ghost" className="text-xs" disabled={loading || tooLong} onClick={() => onAsk(selection.text)}>{zh ? '引用提问' : 'Ask about selection'}</Button>
       <button type="button" className="inline-flex size-9 items-center justify-center rounded-lg hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭选段操作' : 'Close selection actions'} onClick={dismiss}><X className="size-4" /></button>
     </div>
     {tooLong ? <p className="px-3 pb-3 text-xs text-fg-muted">{zh ? '请选择不超过 16000 字的片段。' : 'Select up to 16,000 characters.'}</p> : null}
     {expanded ? <>
       <div className="min-h-0 flex-1 overflow-y-auto border-t border-edge-subtle p-3">
-        <p className="mb-3 text-xs text-fg-muted">{zh ? '按选段生成的本地整理预览，尚未写入笔记。' : 'Local preview of the selection. Your note is unchanged.'}</p>
+        <p className="mb-3 text-xs text-fg-muted">{zh ? 'AI 选段整理预览，确认前不会改动原文。' : 'AI preview of the selection. Your note is unchanged until confirmed.'}</p>
         {loading ? <div aria-busy="true" className="space-y-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div> : null}
         {result !== null ? <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6">{result}</pre> : null}
         {error ? <p role="alert" className="text-xs text-danger">{error}</p> : null}
       </div>
-      {result !== null ? <div className="flex shrink-0 justify-end gap-2 border-t border-edge-subtle p-2">
+      {result !== null ? <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-edge-subtle p-2">
         <Button variant="ghost" onClick={() => void copyTextToClipboard(result).then(ok => { setCopied(ok); if (!ok) setError(zh ? '复制失败，请重试。' : 'Copy failed. Try again.'); })}>{copied ? (zh ? '已复制' : 'Copied') : (zh ? '复制结果' : 'Copy')}</Button>
+        {selection.replaceSelection ? <Button variant="ghost" onClick={() => {
+          if (selection.replaceSelection!(result)) onDismiss();
+          else setError(zh ? '正文已变化，请重新选择片段后再整理。' : 'The note changed. Select the passage again.');
+        }}>{zh ? '替换选段' : 'Replace selection'}</Button> : null}
         <Button variant="primary" onClick={() => {
           if (selection.insertAfter(result)) onDismiss();
           else setError(zh ? '正文已变化，请重新选择片段后再整理。' : 'The note changed. Select the passage again.');

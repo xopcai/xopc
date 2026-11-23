@@ -16,6 +16,7 @@ import {
   revokeHostedPublication,
   revokeShare,
 } from '@/features/shares/shares-api';
+import { getDiscussionForNote } from '@/features/discussions/discussion-api';
 
 import {
   createNoteShare,
@@ -55,7 +56,15 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
     open && hostedConnected ? ['hosted-note-publications', note.id] : null,
     () => listHostedNotePublications(note.id),
   );
+  const discussionQuery = useSWR(
+    open && note.kind === 'voice' ? ['note-share-discussion', note.id] : null,
+    () => getDiscussionForNote(note.id).catch(() => null),
+  );
+  const discussion = discussionQuery.data ?? null;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [includeSummary, setIncludeSummary] = useState(true);
+  const [includeTranscript, setIncludeTranscript] = useState(false);
+  const [includePersonalNotes, setIncludePersonalNotes] = useState(true);
   const [ttlMs, setTtlMs] = useState('86400000');
   const [maxViews, setMaxViews] = useState('');
   const [description, setDescription] = useState('');
@@ -74,16 +83,44 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
       } catch { /* invalid references are rejected by the server */ }
       return _match;
     });
-    return (note.attachments ?? []).filter((attachment) => ids.has(attachment.id));
-  }, [note.attachments, note.id, note.markdown]);
+    const audioId = !discussion?.discussion.audioDeletedAt ? discussion?.discussion.audioAttachmentId : undefined;
+    return (note.attachments ?? []).filter((attachment) => ids.has(attachment.id) || attachment.id === audioId);
+  }, [discussion?.discussion.audioAttachmentId, discussion?.discussion.audioDeletedAt, note.attachments, note.id, note.markdown]);
 
   useEffect(() => {
     if (!open) return;
-    setSelectedIds(new Set(referencedAttachments.map((attachment) => attachment.id)));
+    const audioId = !discussion?.discussion.audioDeletedAt ? discussion?.discussion.audioAttachmentId : undefined;
+    setSelectedIds(new Set(referencedAttachments.filter((att) => att.id !== audioId).map((attachment) => attachment.id)));
+    setIncludeSummary(true);
+    setIncludeTranscript(false);
+    setIncludePersonalNotes(Boolean(note.markdown.trim()));
     setCreatedUrl(null);
     setCopied(false);
     setError(null);
-  }, [open, referencedAttachments]);
+  }, [discussion?.discussion.audioAttachmentId, discussion?.discussion.audioDeletedAt, note.markdown, open, referencedAttachments]);
+
+  const discussionOptions = discussion ? {
+    includeSummary,
+    includeTranscript,
+    includePersonalNotes: Boolean(note.markdown.trim()) && includePersonalNotes,
+  } : undefined;
+
+  const previewSummary = useMemo(() => {
+    if (!discussion) return note.markdown || t.empty;
+    const parts: string[] = [];
+    if (includeSummary && discussion.organization?.organization?.summary) {
+      parts.push(discussion.organization.organization.summary);
+    } else if (includeSummary && discussion.transcript.text) {
+      parts.push(discussion.transcript.text.slice(0, 240));
+    }
+    if (includePersonalNotes && note.markdown.trim()) {
+      parts.push(note.markdown.trim());
+    }
+    if (includeTranscript && discussion.transcript.text) {
+      parts.push(discussion.transcript.text.slice(0, 240));
+    }
+    return parts.join('\n\n') || t.empty;
+  }, [discussion, includePersonalNotes, includeSummary, includeTranscript, note.markdown, t.empty]);
 
   const handleCreate = async () => {
     setCreating(true);
@@ -95,6 +132,7 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
         ttlMs: Number(ttlMs),
         maxViews: maxViews.trim() ? Number(maxViews) : null,
         description: description.trim() || undefined,
+        ...(discussionOptions ? { discussionOptions } : {}),
       };
       if (delivery === 'hosted') {
         const result = await createHostedNotePublication(note.id, input);
@@ -120,6 +158,7 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
         await refreshHostedNotePublication(note.id, publication.id, {
           expectedNoteVersion: note.updatedAt,
           attachmentIds: [...selectedIds],
+          ...(discussionOptions ? { discussionOptions } : {}),
         });
       } else {
         await revokeHostedPublication(publication.id);
@@ -137,7 +176,11 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
     setError(null);
     try {
       if (action === 'refresh') {
-        await refreshNoteShare(note.id, share.id, { expectedNoteVersion: note.updatedAt, attachmentIds: [...selectedIds] });
+        await refreshNoteShare(note.id, share.id, {
+          expectedNoteVersion: note.updatedAt,
+          attachmentIds: [...selectedIds],
+          ...(discussionOptions ? { discussionOptions } : {}),
+        });
       } else if (action === 'extend') {
         await extendShare(share.id, 86_400_000);
       } else {
@@ -183,10 +226,32 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
 
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
             <section className="rounded-lg border border-edge bg-surface-inset p-4">
-              <div className="text-sm font-semibold text-fg">{note.title || t.untitled}</div>
-              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-xs leading-5 text-fg-muted">{note.markdown || t.empty}</p>
+              <div className="text-sm font-semibold text-fg">{(discussion?.organization?.organization?.title || note.title) || t.untitled}</div>
+              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-xs leading-5 text-fg-muted">{previewSummary}</p>
               <p className="mt-3 text-xs text-fg-subtle">{t.privateExcluded}</p>
             </section>
+
+            {discussion ? (
+              <section className="mt-5">
+                <h3 className="text-sm font-medium text-fg">{zh ? '分享内容范围' : 'Included recording content'}</h3>
+                <div className="mt-2 grid gap-2">
+                  <label className="flex items-center gap-3 rounded-lg border border-edge-subtle px-3 py-2 text-sm text-fg-muted">
+                    <input type="checkbox" checked={includeSummary} onChange={(event) => setIncludeSummary(event.target.checked)} className="accent-accent" />
+                    <span>{zh ? '会议纪要（摘要、重点结论与行动项）' : 'Meeting summary, decisions, and action items'}</span>
+                  </label>
+                  <label className="flex items-center gap-3 rounded-lg border border-edge-subtle px-3 py-2 text-sm text-fg-muted">
+                    <input type="checkbox" checked={includeTranscript} onChange={(event) => setIncludeTranscript(event.target.checked)} className="accent-accent" />
+                    <span>{zh ? '逐字稿原文' : 'Full transcript'}</span>
+                  </label>
+                  {note.markdown.trim() ? (
+                    <label className="flex items-center gap-3 rounded-lg border border-edge-subtle px-3 py-2 text-sm text-fg-muted">
+                      <input type="checkbox" checked={includePersonalNotes} onChange={(event) => setIncludePersonalNotes(event.target.checked)} className="accent-accent" />
+                      <span>{zh ? '我的补充笔记' : 'My personal notes'}</span>
+                    </label>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
 
             {referencedAttachments.length > 0 ? (
               <section className="mt-5">

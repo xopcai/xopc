@@ -18,10 +18,11 @@ export function ImageBlock({ node, updateAttributes, selected }: NodeViewProps) 
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
 
-  const handleMouseDown = useCallback(
-    (event: React.MouseEvent) => {
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent) => {
       event.preventDefault();
       event.stopPropagation();
+      event.currentTarget.setPointerCapture?.(event.pointerId);
       setResizing(true);
       startXRef.current = event.clientX;
       startWidthRef.current = containerRef.current?.offsetWidth ?? 400;
@@ -32,22 +33,24 @@ export function ImageBlock({ node, updateAttributes, selected }: NodeViewProps) 
   useEffect(() => {
     if (!resizing) return;
 
-    const handleMouseMove = (event: MouseEvent) => {
+    const handlePointerMove = (event: PointerEvent) => {
       const diff = event.clientX - startXRef.current;
-      const newWidth = Math.max(100, startWidthRef.current + diff);
+      const newWidth = Math.max(100, Math.round(startWidthRef.current + diff));
       updateAttributes({ width: newWidth });
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       setResizing(false);
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
     };
   }, [resizing, updateAttributes]);
 
@@ -83,9 +86,9 @@ export function ImageBlock({ node, updateAttributes, selected }: NodeViewProps) 
           />
         )}
         <div
-          onMouseDown={handleMouseDown}
+          onPointerDown={handlePointerDown}
           className={cn(
-            'absolute bottom-1 right-1 size-4 cursor-se-resize rounded-sm opacity-0 transition-opacity',
+            'absolute bottom-1 right-1 size-4 touch-none cursor-se-resize rounded-sm opacity-0 transition-opacity',
             'bg-accent/70 hover:bg-accent',
             (selected || resizing) && 'opacity-100',
           )}

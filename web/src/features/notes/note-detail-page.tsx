@@ -26,7 +26,7 @@ export function NoteDetailPage() {
   return (
     <div className="mx-auto flex h-full min-h-0 min-w-0 w-full flex-1 flex-col">
       <NoteDetailPanel key={noteId} noteId={noteId} onBack={handleBack}
-        showBackButton={false}
+        showBackButton
         autoFocus={searchParams.get('edit') === '1'} />
     </div>
   );

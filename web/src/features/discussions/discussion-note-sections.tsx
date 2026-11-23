@@ -18,9 +18,11 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 
+import { ActionConvertDialog, type ActionConvertDraft } from './action-convert-dialog';
 import { DiscussionAnnotations } from './discussion-annotations';
 import { newAnnotation, saveLocalAnnotation } from './discussion-annotation-store';
 import { syncDiscussionAnnotations } from './discussion-annotation-sync';
+import { DiscussionAudioPlayer, type DiscussionPlayerMarker } from './discussion-audio-player';
 import { readReviewState, useDiscussionReviewState } from './discussion-review-state';
 import { MeetingEditDialog, type MeetingEditDraft } from './meeting-edit-dialog';
 import { discussionPageText } from './discussion-page-context';
@@ -42,9 +44,14 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
   const { data: latestDetail, mutate, isLoading } = useSWR(['note-discussion-document', noteId], () => getDiscussionForNote(noteId), { refreshInterval: data => data && (['recording', 'stopping', 'sealing', 'organizing'].includes(data.discussion.status) || data.recordingJob?.state === 'queued' || data.recordingJob?.state === 'running') ? 3_000 : 0 });
   const [editing, setEditing] = useState<{ segment: DiscussionTranscriptSegment; text: string; speaker: string; applyToSpeakerGroup?: boolean } | null>(null);
   const [edit, setEdit] = useState<MeetingEditDraft | null>(null);
+  const [convertingAction, setConvertingAction] = useState<ActionConvertDraft | null>(null);
+  const [continuousMode, setContinuousMode] = useState(true);
+  const [autoFollow, setAutoFollow] = useState(true);
+  const [userScrolledAway, setUserScrolledAway] = useState(false);
+  const lastFollowedSequence = useRef<number | null>(null);
   const readingViewport = useRef<HTMLElement>(null);
   const preserveReading = useReadingPosition(readingViewport);
-  const { detail, hasUpdates, publish } = useDiscussionReading(noteId,latestDetail,preserveReading,!!editing || !!edit);
+  const { detail, hasUpdates, publish } = useDiscussionReading(noteId,latestDetail,preserveReading,!!editing || !!edit || !!convertingAction);
   const id = detail?.discussion.id;
   const base = `/api/discussions/${encodeURIComponent(id ?? '')}`;
   const { data: tasks = [], mutate: refreshTasks } = useSWR<ActionTask[]>(id ? `${base}/actions` : null, path => fetchJson(apiUrl(path)), { refreshInterval: 10_000 });
@@ -168,11 +175,12 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
   async function playTranscriptSegment(segment: DiscussionTranscriptSegment) {
     if (!detail || audioDeleted.current || !audio.current) return;
     if (evidence || evidenceLoading || returnAvailable) clearEvidenceNavigation();
+    setUserScrolledAway(false);
     const generation = sourceGeneration.current;
     const request = ++evidenceRequest.current;
     setError(null);
     if (detail.discussion.mimeType?.split(';')[0] === 'audio/wav' && segment.endedAtMs > segment.startedAtMs) {
-      seek(segment.startedAtMs, segment.endedAtMs);
+      seek(segment.startedAtMs, continuousMode ? undefined : segment.endedAtMs);
       return;
     }
     try {
@@ -184,7 +192,7 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
         return;
       }
       setFocused([]);
-      seek(range.startedAtMs, range.endedAtMs);
+      seek(range.startedAtMs, continuousMode ? undefined : range.endedAtMs);
     } catch (caught) {
       if (generation === sourceGeneration.current && request === evidenceRequest.current) setError(caught instanceof Error ? caught.message : String(caught));
     }
@@ -198,7 +206,7 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
     });
   }
   useEffect(() => {
-    sourceGeneration.current++; evidenceRequest.current++; evidenceOrigin.current = null; setReturnAvailable(false); setEvidenceLoading(false); setEvidence(null); setFocused([]); setEditing(null); setEdit(null); setSelected([]); setError(null); rangeEnd.current = null;
+    sourceGeneration.current++; evidenceRequest.current++; evidenceOrigin.current = null; setReturnAvailable(false); setEvidenceLoading(false); setEvidence(null); setFocused([]); setEditing(null); setEdit(null); setConvertingAction(null); setUserScrolledAway(false); lastFollowedSequence.current = null; setSelected([]); setError(null); rangeEnd.current = null;
     return () => { sourceGeneration.current++; };
   },[noteId]);
   useEffect(() => {
@@ -247,6 +255,17 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
   const editable = !hasUpdates && ['recording', 'completed', 'needs_attention'].includes(discussion.status);
   const sidePanelOpen = personalNotesActive || !!evidence || evidenceLoading;
   const filtered = transcript.segments.filter(segment => (segment.displayText ?? segment.rawText ?? '').toLocaleLowerCase().includes(query.toLocaleLowerCase()) || segment.speakerLabel?.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+  const activePlayingSegment = review.positionMs > 0
+    ? transcript.segments.find(seg => review.positionMs >= seg.startedAtMs && review.positionMs < seg.endedAtMs)
+    : undefined;
+  const playerMarkers: DiscussionPlayerMarker[] = (organization?.chapters ?? [])
+    .map((chapter, idx) => ({
+      id: `chapter-${idx}-${chapter.title}`,
+      label: chapter.title,
+      atMs: chapter.startedAtMs,
+      kind: 'chapter' as const,
+    }))
+    .filter((m) => m.atMs >= 0 && m.label);
   const pageText = personalNotesActive ? detail.note.markdown : tab === 'marks' || query.trim() ? '' : discussionPageText(detail, tab, { query, page, showIgnored });
   return <section className="@container/discussion relative flex h-full min-h-0 min-w-0 w-full flex-col text-fg" onClickCapture={event => { lastTrigger.current = event.target instanceof Element ? event.target.closest('button') : null; }} onKeyDown={event => {
     if (!event.defaultPrevented && (event.metaKey || event.ctrlKey) && event.key === 'f') {
@@ -300,14 +319,43 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
     {(searchOpen || query) ? <label className={`mx-5 mb-2 shrink-0 items-center gap-2 rounded-xl bg-surface-inset px-3 sm:mx-7 ${personalNotesActive ? 'hidden @min-[58rem]/discussion:flex' : 'flex'}`}><Search className="size-4 text-fg-muted" /><input ref={searchInput} aria-label={zh ? '搜索录音内容' : 'Search recording'} className="min-h-11 min-w-0 w-full bg-transparent text-sm outline-none" maxLength={200} placeholder={zh ? '搜索录音内容' : 'Search recording'} value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} /><button className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭搜索' : 'Close search'} onClick={() => { setQuery(''); setSearchOpen(false); }}><X className="size-4" /></button></label> : null}
     {returnAvailable ? <div className="flex shrink-0 items-center px-5 pb-2 text-xs text-fg-muted sm:px-7"><Button variant="ghost" onClick={returnToConclusion}>{evidenceOrigin.current?.review.tab === 'summary' ? (zh ? '返回结论' : 'Back to conclusion') : (zh ? '返回阅读位置' : 'Back to reading')}</Button></div> : null}
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-    <main ref={readingViewport} className={`min-h-0 min-w-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-6 pt-3 sm:px-7 ${sidePanelOpen ? 'invisible @min-[58rem]/discussion:visible' : ''} flex`}>
-      {tab !== 'summary' && !query.trim() ? <div className="mx-auto flex w-full max-w-[46rem] justify-end"><Button variant="ghost" aria-pressed={tab === 'marks'} onClick={() => setTab(tab === 'marks' ? 'transcript' : 'marks')} className="min-h-11 gap-1.5 aria-pressed:bg-surface-inset"><Bookmark className="size-4" aria-hidden />{zh ? '我的标记' : 'My highlights'}</Button></div> : null}
+    {tab === 'transcript' && userScrolledAway && activePlayingSegment && audio.current && !audio.current.paused ? (
+      <button
+        type="button"
+        onClick={() => {
+          setUserScrolledAway(false);
+          document.getElementById(`discussion-segment-${activePlayingSegment.sequence}`)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+        }}
+        className="absolute bottom-3 left-1/2 z-30 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-accent/40 bg-surface-overlay px-3 py-1.5 text-xs font-medium text-accent-fg shadow-popover hover:bg-accent-soft"
+      >
+        <Play className="size-3" aria-hidden />
+        <span>{zh ? `回到播放位置 · ${clock(activePlayingSegment.startedAtMs)}` : `Jump to playback · ${clock(activePlayingSegment.startedAtMs)}`}</span>
+      </button>
+    ) : null}
+    <main ref={readingViewport} onWheel={() => { if (audio.current && !audio.current.paused && tab === 'transcript') setUserScrolledAway(true); }} onTouchMove={() => { if (audio.current && !audio.current.paused && tab === 'transcript') setUserScrolledAway(true); }} className={`min-h-0 min-w-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-6 pt-3 sm:px-7 ${sidePanelOpen ? 'invisible @min-[58rem]/discussion:visible' : ''} flex`}>
+      {tab !== 'summary' && !query.trim() ? <div className="mx-auto flex w-full max-w-[46rem] items-center justify-end gap-1.5">{editable && transcript.segments.length >= 2 ? <Button variant="ghost" disabled={busy || processing} onClick={() => void operation(() => fetchJson(apiUrl(`${base}/diarize`), { method: 'POST' }))} className="min-h-11 text-xs text-fg-muted hover:text-fg">{zh ? '识别说话人' : 'Identify speakers'}</Button> : null}<Button variant="ghost" aria-pressed={tab === 'marks'} onClick={() => setTab(tab === 'marks' ? 'transcript' : 'marks')} className="min-h-11 gap-1.5 aria-pressed:bg-surface-inset"><Bookmark className="size-4" aria-hidden />{zh ? '我的标记' : 'My highlights'}</Button></div> : null}
       {(discussion.status !== 'completed' || !organization || record?.transcriptRevision !== transcript.revision) && (discussion.status !== 'recording' || detail.recordingJob) ? <RecordingOutcomeCard context="note" nextAttemptAt={detail.processing?.nextAttemptAt} input={recordingOutcomeInput(detail)} zh={zh} busy={busy} onRetry={mode => void operation(() => mode === 'analyze' ? fetchJson(apiUrl(`${base}/organize`), { method: 'POST', body: JSON.stringify({ template }) }) : retryDiscussion(discussion.id, mode === 'regenerate' ? 'from_audio' : 'resume'))} /> : null}
       <div className="mx-auto w-full max-w-[46rem]" hidden={!!query.trim()}>
       {tab === 'marks' ? <DiscussionAnnotations key={discussion.id} recordingId={discussion.clientRequestId} discussionId={discussion.id} zh={zh} onEvidence={showEvidence} onPlay={range => seek(range.startedAtMs,range.endedAtMs)} /> : tab === 'summary' ? organization ? <div className="mx-auto w-full max-w-[46rem] space-y-6">
+        {detail.note.markdown.trim() ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent/25 bg-accent-soft/45 px-3.5 py-2 text-xs text-fg">
+            <span className="text-fg-muted">
+              {zh ? '已检测手写提纲笔记，可将个人重点与逐字稿融合整理' : 'Personal outline notes detected — fuse with transcript'}
+            </span>
+            <button
+              type="button"
+              disabled={busy || processing || hasUpdates}
+              onClick={() => void operation(() => fetchJson(apiUrl(`${base}/organize`), { method: 'POST', body: JSON.stringify({ template }) }))}
+              className="font-medium text-accent-fg hover:underline disabled:opacity-50"
+            >
+              {zh ? '融合更新纪要' : 'Fuse into summary'}
+            </button>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between gap-3"><h3 className="text-base font-medium">{zh ? '摘要' : 'Summary'}</h3><div className="flex items-center gap-1"><DiscussionOrganizeSettings detail={detail} template={template} onTemplate={setTemplate} zh={zh} busy={busy} processing={processing}
         onOrganize={() => void operation(() => fetchJson(apiUrl(`${base}/organize`),{ method: 'POST',body: JSON.stringify({ template }) }))}
-        onRegenerate={() => void operation(() => retryDiscussion(discussion.id,'from_audio'))} /><button className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '编辑概要' : 'Edit overview'} title={zh ? '编辑概要' : 'Edit overview'} disabled={busy || processing || hasUpdates} onClick={() => setEdit({ kind: 'summary', itemId: 'summary', text: organization.summary })}><SquarePen className="size-4" aria-hidden /></button></div></div>
+        onRegenerate={() => void operation(() => retryDiscussion(discussion.id,'from_audio'))}
+        onDiarize={editable && transcript.segments.length >= 2 ? () => void operation(() => fetchJson(apiUrl(`${base}/diarize`), { method: 'POST' })) : undefined} /><button className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '编辑概要' : 'Edit overview'} title={zh ? '编辑概要' : 'Edit overview'} disabled={busy || processing || hasUpdates} onClick={() => setEdit({ kind: 'summary', itemId: 'summary', text: organization.summary })}><SquarePen className="size-4" aria-hidden /></button></div></div>
         <p data-reading-anchor="summary" className="whitespace-pre-wrap text-[15px] leading-7">{organization.summary}</p>{organization.summaryEditedByUser ? <p className="text-xs text-fg-muted">{zh ? '已由你编辑' : 'Edited by you'}</p> : null}
         {organization.summaryEvidenceSegmentIds?.length ? Array.from({ length: Math.ceil(organization.summaryEvidenceSegmentIds.length / 100) },(_,index) => <Button key={index} onClick={() => void cite(organization.summaryEvidenceSegmentIds!.slice(index * 100,(index + 1) * 100))}>{zh ? '查看原话' : 'View source'}{organization.summaryEvidenceSegmentIds!.length > 100 ? ` · ${index + 1}` : ''}</Button>) : null}
         {organization.keyPointEvidence?.length ? <section className="space-y-2"><h3>{zh ? '重点结论' : 'Key points'}</h3>{organization.keyPointEvidence.map(point => <div key={point.id} className="flex gap-2 text-sm"><p className="flex-1">{point.text}</p>{sourceLink(point.evidenceSegmentIds, point.evidenceRevision)}</div>)}</section> : organization.keyPoints.length ? <section className="space-y-3"><h3 className="text-base font-medium">{zh ? '重点结论' : 'Key points'}</h3><ul className="list-disc space-y-2 pl-5 text-[15px] leading-7">{organization.keyPoints.map((point,index) => <li key={`${index}:${point}`}>{point}</li>)}</ul></section> : null}
@@ -319,7 +367,13 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
         {facts(zh ? '已决定事项' : 'Decisions', organization.decisions, 'decisions')}
         {organization.actionItems.length ? <section className="space-y-3"><h3 className="font-semibold">{zh ? '下一步行动' : 'Next actions'}</h3>{organization.actionItems.filter(item => showIgnored || !item.ignored).map(item => {
           const task = tasks.find(candidate => candidate.actionId === item.id);
-          return <article data-reading-anchor={`action:${item.id}`} key={item.id} className="rounded-lg border border-edge-subtle p-3"><div className="flex items-start gap-2">{!task && !item.ignored && (!(item.supersededBy || item.disputedBy) || item.reviewedChangeId === (item.supersededBy ?? item.disputedBy)) ? <input type="checkbox" aria-label={`${zh ? '选择行动' : 'Select action'}: ${item.title}`} className="ui-checkbox" checked={selected.includes(item.id)} onChange={event => setSelected(event.target.checked ? [...selected, item.id] : selected.filter(id => id !== item.id))} /> : null}<p className="flex-1 text-sm font-medium">{item.title}{item.supersededBy || item.disputedBy ? <span className="ml-2 text-xs text-fg-muted">{zh ? '有后续变更，请复核' : 'Review later changes'}</span> : null}{item.editedByUser ? <span className="ml-2 text-xs text-fg-muted">{zh ? (item.ignored ? '已忽略' : '人工编辑') : (item.ignored ? 'Ignored' : 'Edited')}</span> : null}</p><button className="text-xs text-fg-muted" disabled={busy || processing || hasUpdates} onClick={() => setEdit({ kind: 'actionItems', itemId: item.id, text: item.title, owner: item.owner, dueDate: item.dueDate, ignored: item.ignored })}>{zh ? '编辑' : 'Edit'}</button></div><p className="mt-1 text-xs text-fg-muted">{item.owner ?? (zh ? '负责人未明确' : 'Owner unspecified')} · {item.dueDate ?? (zh ? '期限未明确' : 'Date unspecified')}</p><div className="mt-3 flex flex-wrap items-center gap-3 text-xs">{item.evidenceSegmentIds.length ? sourceLink(item.evidenceSegmentIds, item.evidenceRevision, zh ? '查看原话' : 'Source') : null}{task ? task.deleted ? <span>{zh ? '关联任务已删除' : 'Linked task deleted'}</span> : <Link className="text-accent-fg" to={taskDetailHref(`${location.pathname}${location.search}`, task.taskId)}>{task.resolution === 'done' ? (zh ? '已完成 · 查看任务' : 'Done · View task') : (zh ? '查看任务 / 交给助手' : 'View task / Delegate')}</Link> : item.ignored ? null : <Button disabled={busy || hasUpdates || (Boolean(item.supersededBy || item.disputedBy) && item.reviewedChangeId !== (item.supersededBy ?? item.disputedBy))} onClick={() => void operation(() => fetchJson(apiUrl(`${base}/actions/${encodeURIComponent(item.id)}/convert`), { method: 'POST', body: JSON.stringify({ organizationRevision: record.revision }) }))}>{zh ? '加入我的任务' : 'Add to my tasks'}</Button>}</div></article>;
+          const evidencePreview = item.evidenceSegmentIds.length
+            ? transcript.segments
+                .filter(seg => item.evidenceSegmentIds.includes(seg.sequence))
+                .map(seg => `[${clock(seg.startedAtMs)}] ${seg.displayText ?? seg.rawText ?? ''}`)
+                .join('\n')
+            : undefined;
+          return <article data-reading-anchor={`action:${item.id}`} key={item.id} className="rounded-lg border border-edge-subtle p-3"><div className="flex items-start gap-2">{!task && !item.ignored && (!(item.supersededBy || item.disputedBy) || item.reviewedChangeId === (item.supersededBy ?? item.disputedBy)) ? <input type="checkbox" aria-label={`${zh ? '选择行动' : 'Select action'}: ${item.title}`} className="ui-checkbox" checked={selected.includes(item.id)} onChange={event => setSelected(event.target.checked ? [...selected, item.id] : selected.filter(id => id !== item.id))} /> : null}<p className="flex-1 text-sm font-medium">{item.title}{item.supersededBy || item.disputedBy ? <span className="ml-2 text-xs text-fg-muted">{zh ? '有后续变更，请复核' : 'Review later changes'}</span> : null}{item.editedByUser ? <span className="ml-2 text-xs text-fg-muted">{zh ? (item.ignored ? '已忽略' : '人工编辑') : (item.ignored ? 'Ignored' : 'Edited')}</span> : null}</p><button className="text-xs text-fg-muted" disabled={busy || processing || hasUpdates} onClick={() => setEdit({ kind: 'actionItems', itemId: item.id, text: item.title, owner: item.owner, dueDate: item.dueDate, ignored: item.ignored })}>{zh ? '编辑' : 'Edit'}</button></div><p className="mt-1 text-xs text-fg-muted">{item.owner ?? (zh ? '负责人未明确' : 'Owner unspecified')} · {item.dueDate ?? (zh ? '期限未明确' : 'Date unspecified')}</p><div className="mt-3 flex flex-wrap items-center gap-3 text-xs">{item.evidenceSegmentIds.length ? sourceLink(item.evidenceSegmentIds, item.evidenceRevision, zh ? '查看原话' : 'Source') : null}{task ? task.deleted ? <span>{zh ? '关联任务已删除' : 'Linked task deleted'}</span> : <Link className="text-accent-fg" to={taskDetailHref(`${location.pathname}${location.search}`, task.taskId)}>{task.resolution === 'done' ? (zh ? '已完成 · 查看任务' : 'Done · View task') : (zh ? '查看任务 / 交给助手' : 'View task / Delegate')}</Link> : item.ignored ? null : <Button disabled={busy || hasUpdates || (Boolean(item.supersededBy || item.disputedBy) && item.reviewedChangeId !== (item.supersededBy ?? item.disputedBy))} onClick={() => setConvertingAction({ actionId: item.id, title: item.title, owner: item.owner, dueDate: item.dueDate, projectId: discussion.projectId, evidencePreview })}>{zh ? '加入我的任务' : 'Add to my tasks'}</Button>}</div></article>;
         })}</section> : null}
         {facts(zh ? '风险' : 'Risks', organization.risks, 'risks')}{facts(zh ? '尚未确定' : 'Open questions', organization.openQuestions, 'openQuestions')}
         {organization.changes?.length ? <section className="space-y-3"><h3 className="font-semibold">{zh ? '前后变更' : 'Changes during the meeting'}</h3>{organization.changes.map(change => {
@@ -379,9 +433,33 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
       </div>
     </aside> : null}
     </div>
-    {audioAvailable ? <footer className="shrink-0 border-t border-edge-subtle px-4 py-2">
-      <audio key={audioSource} ref={audio} controls preload="metadata" className="h-10 w-full" src={apiUrl(`${base}/audio`)}
-        aria-label={zh ? '录音播放器' : 'Recording player'}
+    {audioAvailable ? (
+      <DiscussionAudioPlayer
+        audioRef={audio}
+        audioSourceKey={audioSource}
+        src={apiUrl(`${base}/audio`)}
+        zh={zh}
+        positionMs={review.positionMs}
+        durationMs={durationMs}
+        segments={transcript.segments}
+        markers={playerMarkers}
+        continuousMode={continuousMode}
+        onToggleContinuousMode={() => {
+          rangeEnd.current = null;
+          setContinuousMode(prev => !prev);
+        }}
+        autoFollow={autoFollow}
+        onToggleAutoFollow={() => {
+          setAutoFollow(prev => !prev);
+          setUserScrolledAway(false);
+        }}
+        onUserScrub={ms => {
+          if (!audio.current) return;
+          rangeEnd.current = null;
+          setUserScrolledAway(false);
+          positionPlayer(audio.current, ms / 1000);
+          updateReview(noteId, { positionMs: ms });
+        }}
         onDurationChange={event => {
           const seconds = event.currentTarget.duration;
           setMediaDuration(Number.isFinite(seconds) && seconds > 0 ? { source: audioSource, ms: Math.floor(seconds * 1000) } : undefined);
@@ -392,6 +470,13 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
           if (rangeEnd.current !== null && current >= rangeEnd.current) {
             event.currentTarget.pause();
             rangeEnd.current = null;
+          }
+          if (autoFollow && !userScrolledAway && tab === 'transcript' && !event.currentTarget.paused) {
+            const currentSeg = transcript.segments.find(s => current >= s.startedAtMs && current < s.endedAtMs);
+            if (currentSeg && lastFollowedSequence.current !== currentSeg.sequence) {
+              lastFollowedSequence.current = currentSeg.sequence;
+              document.getElementById(`discussion-segment-${currentSeg.sequence}`)?.scrollIntoView?.({ block: 'nearest' });
+            }
           }
         }}
         onLoadedMetadata={event => {
@@ -404,7 +489,24 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
         }}
         onError={() => setError(zh ? '录音暂不可播放' : 'Recording unavailable')}
       />
-    </footer> : null}
+    ) : null}
+    {convertingAction && record ? (
+      <ActionConvertDialog
+        key={`${convertingAction.actionId}:${record.revision}`}
+        initial={convertingAction}
+        zh={zh}
+        busy={busy}
+        onClose={() => setConvertingAction(null)}
+        onConfirm={overrides => operation(async () => {
+          await fetchJson(apiUrl(`${base}/actions/${encodeURIComponent(convertingAction.actionId)}/convert`), {
+            method: 'POST',
+            body: JSON.stringify({ organizationRevision: record.revision, ...overrides }),
+          });
+          setSelected(prev => prev.filter(itemId => itemId !== convertingAction.actionId));
+          setConvertingAction(null);
+        })}
+      />
+    ) : null}
     {edit && record ? <MeetingEditDialog key={`${edit.kind}:${edit.itemId}:${record.revision}`} initial={edit} zh={zh} busy={busy} onClose={() => setEdit(null)} onSave={draft => operation(async () => {
       await fetchJson(apiUrl(`${base}/summary`), { method: 'PATCH', body: JSON.stringify({ ...draft, expectedRevision: record.revision }) });
       setEdit(null);

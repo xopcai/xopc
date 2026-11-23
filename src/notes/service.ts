@@ -243,6 +243,10 @@ export class NotesService {
   private createNoteWithId(id: string, params: CreateNoteParams): Note {
     const now = Date.now();
     const markdown = params.markdown ?? '';
+    const inlineTags = markdown ? parseNoteMarkdown(markdown, id).tags : [];
+    const mergedTags = params.tags?.length || inlineTags.length
+      ? Array.from(new Set([...(params.tags ?? []), ...inlineTags]))
+      : undefined;
     const note: Note = {
       id,
       title: params.title ?? deriveDefaultTitle(markdown),
@@ -253,7 +257,7 @@ export class NotesService {
       createdAt: now,
       updatedAt: now,
       capturedVia: params.capturedVia,
-      tags: params.tags,
+      tags: mergedTags,
       pinned: params.pinned,
       groupId: params.groupId,
       taskMeta: params.taskMeta,
@@ -301,7 +305,14 @@ export class NotesService {
       const normalizedPatch: Partial<Note> = { ...patch };
       if (contentTouched) normalizedPatch.lastEditTrigger = trigger;
       if (patch.markdown !== undefined) {
-        normalizedPatch.kind = patch.kind ?? inferKind(patch.markdown, Boolean(existing.attachments?.length), existing.attachments);
+        const preserveKind = existing.kind === 'task' || existing.kind === 'voice' || existing.kind === 'mixed';
+        normalizedPatch.kind = patch.kind ?? (preserveKind ? existing.kind : inferKind(patch.markdown, Boolean(existing.attachments?.length), existing.attachments));
+        if (patch.tags === undefined) {
+          const inlineTags = parseNoteMarkdown(patch.markdown, id).tags;
+          if (inlineTags.length > 0) {
+            normalizedPatch.tags = Array.from(new Set([...(existing.tags ?? []), ...inlineTags]));
+          }
+        }
       }
       normalizedPatch.remoteVersion = (existing.remoteVersion ?? 1) + 1;
       if (contentTouched || patch.attachments) {
@@ -382,6 +393,81 @@ export class NotesService {
         operations: [{ type: 'replaceRange', from: start, to: end, markdown: generated || target }],
       },
     };
+  }
+
+  async generateAiSelectionEdit(
+    id: string,
+    instruction: string,
+    markdownOverride?: string,
+    requestedRange?: { start: number; end: number },
+    config?: Config,
+    signal?: AbortSignal,
+  ): Promise<{ message: string; patch: NoteAiPatch } | null> {
+    const note = await this.store.getNote(id);
+    if (!note) return null;
+    const source = markdownOverride ?? note.markdown;
+    const start = Math.max(0, Math.min(source.length, requestedRange?.start ?? 0));
+    const end = Math.max(start, Math.min(source.length, requestedRange?.end ?? source.length));
+    const target = source.slice(start, end).trim();
+    if (!target) {
+      return this.createAiEditPatch(id, instruction, markdownOverride, requestedRange);
+    }
+
+    const modelRef = getDefaultModelSync(config);
+    if (modelRef) {
+      try {
+        const resolved = resolveModel(modelRef);
+        const wantsTodos = /待办|todo|task|行动|提醒/i.test(instruction);
+        const wantsSummary = /摘要|总结|summary|压缩/i.test(instruction);
+        const wantsPolish = /润色|改写|polish|rewrite|优化/i.test(instruction);
+        const taskPrompt = wantsTodos
+          ? '请从下方笔记片段中提炼明确、可执行的待办事项，仅输出 Markdown 待办清单（每行以 `- [ ] ` 开头），不要编造原文未提及的承诺，不要输出寒暄解释。'
+          : wantsSummary
+            ? '请将下方笔记片段提炼为结构清晰、要点精炼的 Markdown 摘要（可使用简短引用块或无序列表），忠于原意，使用与原文一致的语言，不要输出寒暄解释。'
+            : wantsPolish
+              ? '请在完全保留核心事实、数据与原有语言的前提下，对下方笔记片段进行表达润色与排版优化，使其流畅精炼，直接输出润色后的 Markdown，不要输出寒暄解释。'
+              : `请严格按照以下指令处理下方笔记片段，直接输出处理后的 Markdown 内容，不要输出寒暄解释：\n指令：${instruction.trim()}`;
+
+        const messages: UserMessage[] = [
+          {
+            role: 'user',
+            content: `${taskPrompt}\n\n---\n${target}`,
+            timestamp: Date.now(),
+          },
+        ];
+        const response = await completeWithResolvedCredentials(
+          resolved,
+          { messages },
+          { temperature: 0.2, maxTokens: 2048, signal },
+          undefined,
+          { operation: 'note.generate' },
+        );
+        let responseText = '';
+        if (Array.isArray(response.content)) {
+          for (const part of response.content) {
+            if (part && typeof part === 'object' && (part as { type?: string }).type === 'text') {
+              responseText += String((part as { text?: string }).text || '');
+            }
+          }
+        }
+        const cleaned = responseText.trim();
+        if (cleaned) {
+          return {
+            message: 'AI edit patch generated',
+            patch: {
+              id: randomUUID(),
+              summary: instruction,
+              operations: [{ type: 'replaceRange', from: start, to: end, markdown: cleaned }],
+            },
+          };
+        }
+      } catch (err) {
+        if (signal?.aborted) throw err;
+        log.warn({ err, noteId: id }, 'Model-backed note selection edit failed; falling back to local preview');
+      }
+    }
+
+    return this.createAiEditPatch(id, instruction, markdownOverride, requestedRange);
   }
 
   async catalyzeNote(id: string, config?: Config): Promise<{ note: Note; report: NoteCatalysisReport } | null> {

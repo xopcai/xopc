@@ -50,6 +50,20 @@ function createMarkdownParser(renderChart?: (token: Tokens.Code) => string): Mar
           const source = readMathFenceAt(token.raw);
           return source ? mathPlaceholder(source) : false;
         },
+        blockquote(token) {
+          const bodyHtml = this.parser.parse(token.tokens);
+          const match = bodyHtml.match(/^\s*<p>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\s*<br\s*\/?>|\s+)/i);
+          if (!match) {
+            return `<blockquote>\n${bodyHtml}</blockquote>\n`;
+          }
+          const kind = match[1].toUpperCase();
+          const kindLower = kind.toLowerCase();
+          const cleanedBody = bodyHtml.replace(
+            /^\s*<p>\s*\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\s*<br\s*\/?>|\s*)/i,
+            '<p>',
+          );
+          return `<blockquote class="md-callout md-callout-${kindLower}" data-callout="${kind}"><div class="md-callout-badge">${kind}</div>${cleanedBody}</blockquote>\n`;
+        },
         html({ text }) {
           return escapeHtml(text);
         },

@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { AlignLeft, ArrowLeft, Check, ChevronDown, Eye, Code2, FileText, History, MessageCircle, MoreHorizontal, Search, Share2, Sparkles, Trash2, X } from 'lucide-react';
+import { AlignLeft, Archive, ArchiveRestore, ArrowLeft, Check, ChevronDown, Eye, Code2, FileText, History, MessageCircle, MoreHorizontal, RotateCcw, Search, Share2, Sparkles, Trash2, X } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
@@ -42,6 +42,7 @@ import { NoteShareDialog } from './note-share-dialog';
 import { NoteSelectionActions } from './note-selection-actions';
 import { NoteReadAloudControls } from './note-read-aloud-controls';
 import { buildNoteReadAloudText } from './note-read-aloud';
+import { NoteBacklinksSection, NoteTagBar } from './note-tag-bar';
 
 type EditorMode = 'wysiwyg' | 'source' | 'preview';
 
@@ -559,6 +560,29 @@ function NoteDetailPanelInner({
     setShareDialogOpen(true);
   }, [flushPendingSave]);
 
+  const handleStatusUpdate = useCallback(
+    async (nextStatus: 'inbox' | 'archived' | 'trashed') => {
+      if (deleting || saving) return;
+      setDeleting(true);
+      setActionError(null);
+      try {
+        await flushPendingSave();
+        await updateNote(noteId, { status: nextStatus });
+        window.dispatchEvent(new CustomEvent('note-updated', { detail: { noteId } }));
+        await mutate();
+        onSaved?.();
+        if (nextStatus === 'trashed') {
+          onBack();
+        }
+      } catch (err) {
+        setActionError(`${n.actionFailed}: ${err instanceof Error ? err.message : n.quickCaptureFailedHint}`);
+      } finally {
+        setDeleting(false);
+      }
+    },
+    [deleting, flushPendingSave, mutate, n.actionFailed, n.quickCaptureFailedHint, noteId, onBack, onSaved, saving],
+  );
+
   const handleDelete = useCallback(async () => {
     if (deleting || saving) return;
     setDeleteConfirmOpen(false);
@@ -691,13 +715,35 @@ function NoteDetailPanelInner({
                 {activeSidePanel === 'history' ? <Check className="size-4 text-accent" aria-hidden /> : null}
               </DropdownMenu.Item>
               <DropdownMenu.Separator className="my-1 h-px bg-edge-subtle" />
+              {note && note.status !== 'trashed' ? (
+                <DropdownMenu.Item
+                  disabled={deleting || saving}
+                  onSelect={() => void handleStatusUpdate(note.status === 'archived' ? 'inbox' : 'archived')}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover data-[disabled]:opacity-50"
+                >
+                  {note.status === 'archived'
+                    ? <ArchiveRestore className="size-4 text-fg-muted" aria-hidden />
+                    : <Archive className="size-4 text-fg-muted" aria-hidden />}
+                  {note.status === 'archived'
+                    ? (language === 'zh' ? '取消归档' : 'Unarchive')
+                    : (language === 'zh' ? '归档' : 'Archive')}
+                </DropdownMenu.Item>
+              ) : null}
               <DropdownMenu.Item
                 disabled={deleting || saving}
-                onSelect={() => setDeleteConfirmOpen(true)}
+                onSelect={() => {
+                  if (note?.status === 'trashed') {
+                    setDeleteConfirmOpen(true);
+                  } else {
+                    void handleStatusUpdate('trashed');
+                  }
+                }}
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-danger outline-none hover:bg-danger-soft focus:bg-danger-soft data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
               >
                 <Trash2 className="size-4" aria-hidden />
-                {n.delete}
+                {note?.status === 'trashed'
+                  ? (language === 'zh' ? '彻底删除' : 'Delete permanently')
+                  : (language === 'zh' ? '移至回收站' : 'Move to Trash')}
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
@@ -740,6 +786,7 @@ function NoteDetailPanelInner({
       handleModeChange,
       getNoteReadAloudInput,
       handleShare,
+      handleStatusUpdate,
       deleting,
       saving,
       language,
@@ -826,37 +873,55 @@ function NoteDetailPanelInner({
   const voiceTitle = /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(title) ? '' : title;
   const voiceTitleLabel = language === 'zh' ? '语音笔记' : 'Voice note';
   const voiceTitleEditor = !showMeeting && !isPreviewingSnapshot ? (
-    <input
-      ref={attachTitleInput}
-      aria-label={n.titlePlaceholder}
-      value={voiceTitle}
-      placeholder={voiceTitleLabel}
-      onChange={event => handleTitleChange(event.target.value)}
-      onCompositionStart={() => { titleComposingRef.current = true; }}
-      onCompositionEnd={finishTitleComposition}
-      className="w-full rounded-md bg-transparent text-2xl font-semibold leading-snug tracking-tight placeholder:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    />
+    <div>
+      <input
+        ref={attachTitleInput}
+        aria-label={n.titlePlaceholder}
+        value={voiceTitle}
+        placeholder={voiceTitleLabel}
+        onChange={event => handleTitleChange(event.target.value)}
+        onCompositionStart={() => { titleComposingRef.current = true; }}
+        onCompositionEnd={finishTitleComposition}
+        className="w-full rounded-md bg-transparent text-2xl font-semibold leading-snug tracking-tight placeholder:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      />
+      <NoteTagBar
+        noteId={noteId}
+        tags={note.tags}
+        suggestedTags={note.ai?.suggestedTags}
+        readOnly={note.status === 'trashed'}
+        onUpdated={() => { void mutate(); onSaved?.(); }}
+      />
+    </div>
   ) : null;
 
   const documentTitle = (
-    <input
-      ref={attachTitleInput}
-      type="text"
-      aria-label={n.titlePlaceholder}
-      value={title}
-      onChange={event => handleTitleChange(event.target.value)}
-      onCompositionStart={() => { titleComposingRef.current = true; }}
-      onCompositionEnd={finishTitleComposition}
-      onKeyDown={event => {
-        if (event.key !== 'Enter' || titleComposingRef.current || event.nativeEvent.isComposing) return;
-        const body = editorContainerRef.current?.querySelector<HTMLElement>('.ProseMirror, .cm-content');
-        if (!body) return;
-        event.preventDefault();
-        body.focus();
-      }}
-      placeholder={n.titlePlaceholder}
-      className="block w-full min-w-0 rounded-md bg-transparent text-[clamp(1.75rem,4vw,2.5rem)] font-bold leading-tight tracking-tight text-fg placeholder:text-fg-muted/60 focus:outline-none"
-    />
+    <div>
+      <input
+        ref={attachTitleInput}
+        type="text"
+        aria-label={n.titlePlaceholder}
+        value={title}
+        onChange={event => handleTitleChange(event.target.value)}
+        onCompositionStart={() => { titleComposingRef.current = true; }}
+        onCompositionEnd={finishTitleComposition}
+        onKeyDown={event => {
+          if (event.key !== 'Enter' || titleComposingRef.current || event.nativeEvent.isComposing) return;
+          const body = editorContainerRef.current?.querySelector<HTMLElement>('.ProseMirror, .cm-content');
+          if (!body) return;
+          event.preventDefault();
+          body.focus();
+        }}
+        placeholder={n.titlePlaceholder}
+        className="block w-full min-w-0 rounded-md bg-transparent text-[clamp(1.75rem,4vw,2.5rem)] font-bold leading-tight tracking-tight text-fg placeholder:text-fg-muted/60 focus:outline-none"
+      />
+      <NoteTagBar
+        noteId={noteId}
+        tags={note.tags}
+        suggestedTags={note.ai?.suggestedTags}
+        readOnly={isPreviewingSnapshot || note.status === 'trashed'}
+        onUpdated={() => { void mutate(); onSaved?.(); }}
+      />
+    </div>
   );
 
   const personalEditor = (
@@ -872,6 +937,7 @@ function NoteDetailPanelInner({
                 {displayText ? (
                   <NoteMarkdownView
                     noteId={noteId}
+                    attachments={note.attachments}
                     content={displayText}
                     className="opacity-80"
                   />
@@ -893,6 +959,8 @@ function NoteDetailPanelInner({
                           initialContent={displayText}
                           onChange={handleSave}
                           noteId={noteId}
+                          attachments={note.attachments}
+                          onAttachmentUploaded={() => void mutate()}
                           onTextSelection={setTextSelection}
                         />
                       </Suspense>
@@ -928,18 +996,32 @@ function NoteDetailPanelInner({
                     {!meeting && title && !displayText.trimStart().startsWith(`# ${title.trim()}\n`) && displayText.trim() !== `# ${title.trim()}` && (
                       <h1 className="mb-5 break-words text-[clamp(1.75rem,4vw,2.5rem)] font-bold leading-tight tracking-tight text-fg">{title}</h1>
                     )}
+                    {!meeting ? (
+                      <NoteTagBar
+                        noteId={noteId}
+                        tags={note.tags}
+                        suggestedTags={note.ai?.suggestedTags}
+                        readOnly={note.status === 'trashed'}
+                        onUpdated={() => { void mutate(); onSaved?.(); }}
+                        className="mb-4 mt-0"
+                      />
+                    ) : null}
                     {displayText ? (
                       <div data-note-outline-content>
-                        <NoteMarkdownView noteId={noteId} content={displayText} className="[&_img]:cursor-zoom-in" />
+                        <NoteMarkdownView noteId={noteId} attachments={note.attachments} content={displayText} className="[&_img]:cursor-zoom-in" />
                       </div>
                     ) : (
                       meeting ? <button type="button" className="min-h-11 rounded-lg px-2 text-sm text-accent-fg hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" onClick={() => handleModeChange('wysiwyg')}>{language === 'zh' ? '写笔记' : 'Write notes'}</button> : <p className="italic text-fg-muted">{n.emptyPreview}</p>
                     )}
+                    <NoteBacklinksSection noteId={noteId} />
                   </div>
                 )}
               </>
             )}
           </div>
+          {!isPreviewingSnapshot && mode !== 'preview' && !meeting ? (
+            <NoteBacklinksSection noteId={noteId} className="mx-auto mt-0 w-full max-w-3xl shrink-0 px-5 pb-3 pt-2 sm:px-10" />
+          ) : null}
     </div>
   );
 
@@ -972,6 +1054,31 @@ function NoteDetailPanelInner({
           </div>
         ) : null}
         {actionError ? <p className="mb-3 shrink-0 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">{actionError}</p> : null}
+        {note.status === 'trashed' ? (
+          <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-fg">
+            <span>{language === 'zh' ? '此笔记当前位于回收站。' : 'This note is currently in the Trash.'}</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={deleting || saving}
+                onClick={() => void handleStatusUpdate('inbox')}
+                className="inline-flex items-center gap-1 rounded-md bg-surface-panel px-2.5 py-1 font-medium text-fg hover:bg-surface-hover disabled:opacity-50"
+              >
+                <RotateCcw className="size-3.5" aria-hidden />
+                {language === 'zh' ? '恢复笔记' : 'Restore'}
+              </button>
+              <button
+                type="button"
+                disabled={deleting || saving}
+                onClick={() => setDeleteConfirmOpen(true)}
+                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-medium text-danger hover:bg-danger-soft disabled:opacity-50"
+              >
+                <Trash2 className="size-3.5" aria-hidden />
+                {language === 'zh' ? '彻底删除' : 'Delete permanently'}
+              </button>
+            </div>
+          </div>
+        ) : null}
         <ProductAutomationFeedback
           eventType="note.created"
           source="notes"
@@ -1025,7 +1132,10 @@ function NoteDetailPanelInner({
                 if (activeSidePanel === 'history') handleHistoryClose();
                 else setActiveSidePanel('history');
               },
-              onDelete: () => setDeleteConfirmOpen(true),
+              onDelete: () => {
+                if (note.status === 'trashed') setDeleteConfirmOpen(true);
+                else void handleStatusUpdate('trashed');
+              },
               onOutline: hasOutline ? () => setOutlineOpen(true) : undefined,
               busy: deleting || saving || catalyzing || openingChat,
             }}
