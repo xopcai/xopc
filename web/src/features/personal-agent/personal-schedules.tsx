@@ -51,7 +51,7 @@ export function PersonalSchedules({ scope, visible, zh }: { scope: string; visib
     {items.length ? <ul className="space-y-0.5">
       {items.map(item => <li key={item.id}>
         <button type="button" onClick={() => setEditor(item)}
-          className="flex w-full min-w-0 items-start gap-2.5 rounded-xl px-2 py-2 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
+          className="flex w-full min-w-0 items-start gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
           <span className="mt-0.5 grid size-5 shrink-0 place-items-center text-fg-muted"><CalendarClock className="size-4" aria-hidden /></span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm leading-5 font-medium text-fg" title={item.name}>{item.name}</span>

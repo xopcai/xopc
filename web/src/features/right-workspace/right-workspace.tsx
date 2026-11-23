@@ -13,6 +13,7 @@ import { WorkspaceColumn } from '@/components/shell/workspace-column';
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
 import { SideChatColumn } from '@/features/side-chat/side-chat-column';
 import { PersonalTaskPanel } from '@/features/personal-agent/personal-task-panel';
+import { beginPersonalAvatarFlight, completePendingPersonalAvatarFlight } from '@/features/personal-agent/personal-avatar-flight';
 import { WorkspaceFilePreviewPanel } from '@/features/workspace/workspace-file-preview-dialog';
 import { FileReferencePreviewPanel } from '@/features/workspace/file-reference-preview';
 import { detectPreviewFileType } from '@/features/preview-runtime/detect-preview-file';
@@ -99,6 +100,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     if (!target) return;
     if (taskPanelHost.parentElement !== target) target.appendChild(taskPanelHost);
     if (!personalTasks && !floatingPersonalTasks) return;
+    completePendingPersonalAvatarFlight('panel', taskPanelHost.querySelector<HTMLElement>('[data-personal-avatar-anchor="panel"]'));
     taskPanelHost.querySelectorAll<HTMLElement>('[role="tabpanel"]:not([hidden])').forEach(panel => {
       panel.scrollTop = taskScrollPositions.current.get(panel) ?? 0;
     });
@@ -106,7 +108,8 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
   useLayoutEffect(() => {
     if (floatingPersonalTasks) taskOverlayClose.current?.focus({ preventScroll: true });
   }, [floatingPersonalTasks]);
-  const present = useWorkspaceMotion(panelRef, visible);
+  const present = useWorkspaceMotion(panelRef, visible, personalTasks ? 'personal' : 'default');
+  const exitingPersonalTasks = present && !visible && pathname === '/personal' && (personalTasks || !active);
   useLayoutEffect(() => {
     if (!visible && panelRef.current?.contains(document.activeElement)) {
       const selector = personalTasks ? '[data-personal-tasks-trigger]' : '[data-workspace-trigger]';
@@ -222,6 +225,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
       if (workspaceExpanded || treeOverlay) { event.preventDefault(); setExpanded(false); setTreeOverlay(false); return; }
       if (visible && personalTasks && panelRef.current?.contains(document.activeElement)) {
         event.preventDefault();
+        beginPersonalAvatarFlight('panel', 'header');
         store.setOpen(false, scope);
       }
     };
@@ -262,12 +266,17 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     store.activate(id, scope);
   }
   function closeFloatingTasks(restoreFocus: boolean) {
+    if (floatingPersonalTasks) beginPersonalAvatarFlight('panel', 'header');
     store.closePersonalTasks(scope);
     if (restoreFocus) requestAnimationFrame(() => {
       const target = panelRef.current?.querySelector<HTMLElement>('[data-personal-preview-tasks]')
         ?? document.querySelector<HTMLElement>('[data-personal-tasks-trigger]');
       target?.focus({ preventScroll: true });
     });
+  }
+  function closePersonalTasksPanel() {
+    if (personalTasks) beginPersonalAvatarFlight('panel', 'header');
+    store.setOpen(false, scope);
   }
   function toggleTree() {
     if (!active) return;
@@ -315,13 +324,13 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
 
   const retainedFiles = new Set([...allFiles].sort((a, b) => b.tab.visitedAt - a.tab.visitedAt).slice(0, 8).map(({ tab }) => tab.id));
 
-  return <>{visible && taskDrawer ? <button type="button" tabIndex={-1} aria-hidden className="absolute inset-0 z-[39] bg-scrim" onClick={() => store.setOpen(false, scope)} /> : null}
+  return <>{visible && taskDrawer ? <button type="button" tabIndex={-1} aria-hidden className="absolute inset-0 z-[39] bg-scrim" onClick={closePersonalTasksPanel} /> : null}
     {floatingPersonalTasks ? <aside id="personal-preview-details" aria-label={zh ? '助手详情' : 'Assistant details'}
-      data-personal-preview-details className={cn('file-preview-surface absolute inset-y-2 left-2 z-[45] flex min-w-0 flex-col overflow-hidden rounded-2xl shadow-popover', (single || workspaceExpanded) && 'w-[min(92%,24rem)]')}
+      data-personal-preview-details className={cn('personal-floating-details-enter file-preview-surface absolute inset-y-2 left-2 z-[45] flex min-w-0 flex-col overflow-hidden rounded-2xl shadow-popover', (single || workspaceExpanded) && 'w-[min(92%,24rem)]')}
       style={single || workspaceExpanded ? undefined : { right: panelWidth + 8 }}
       onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeFloatingTasks(true); } }}>
       <button ref={taskOverlayClose} type="button" aria-label={zh ? '收起助手详情' : 'Close assistant details'}
-        className={cn(buttonClass, 'mr-2 mt-2 self-end')} onClick={() => closeFloatingTasks(true)}><X className="size-5" aria-hidden /></button>
+        className={cn(buttonClass, 'mr-2 mt-2 self-end transition-[background-color,transform] duration-150 active:scale-90 motion-reduce:active:scale-100')} onClick={() => closeFloatingTasks(true)}><X className="size-5" aria-hidden /></button>
       <div ref={taskOverlay} className="flex min-h-0 flex-1 flex-col" />
     </aside> : null}
     <aside id="app-workspace-panel" ref={panelRef} aria-label={personalTasks ? (zh ? '派发的任务' : 'Delegated tasks') : (zh ? '文件与侧聊工作区' : 'Files and side chats')}
@@ -337,6 +346,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
       }}
     className={cn('relative min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base', present ? 'flex' : 'hidden',
       present && (single || workspaceExpanded) && (taskDrawer ? 'absolute inset-y-0 right-0 w-[min(92%,24rem)] shadow-popover' : 'absolute inset-0'),
+      exitingPersonalTasks && !single && !workspaceExpanded && 'absolute inset-y-0 right-0 shadow-popover',
       elevated ? 'z-[110]' : 'z-40')}
     style={{ width: single || workspaceExpanded ? undefined : panelWidth }}>
     {!single && !workspaceExpanded && active ? <div role="separator" aria-orientation="vertical" tabIndex={0}
@@ -387,10 +397,10 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
       {!personalTasks && !singleFileHeader ? <button className={buttonClass} aria-label={zh ? '新建标签' : 'New tab'} title={zh ? '新建标签' : 'New tab'} onClick={() => store.openTools(scope)}><Plus className="size-5" aria-hidden /></button> : null}
 
       {!personalTasks && !singleFileHeader ? <button className={buttonClass} aria-label={expanded ? (zh ? '还原工作区' : 'Restore workspace') : (zh ? '放大工作区' : 'Expand workspace')} onClick={() => setExpanded(!expanded)}>{expanded ? <Minimize2 className="size-4" aria-hidden /> : <Maximize2 className="size-4" aria-hidden />}</button> : null}
-      {!singleFileHeader ? <button className={buttonClass} data-personal-task-close={personalTasks || undefined}
+      {!singleFileHeader ? <button className={cn(buttonClass, personalTasks && 'transition-[background-color,transform] duration-150 active:scale-90 motion-reduce:active:scale-100')} data-personal-task-close={personalTasks || undefined}
         title={personalTasks ? (zh ? '收起任务' : 'Close tasks') : (zh ? `收起工作区 · ${pane.tabs.length} 个标签` : `Collapse workspace · ${pane.tabs.length} tabs`)}
         aria-label={personalTasks ? (zh ? '收起任务' : 'Close tasks') : single ? (zh ? '返回聊天' : 'Back to chat') : (zh ? '收起工作区' : 'Collapse workspace')}
-        onClick={() => store.setOpen(false, scope)}>{personalTasks ? <X className="size-5" aria-hidden /> : <PanelRight className="size-5" aria-hidden />}</button> : null}
+        onClick={personalTasks ? closePersonalTasksPanel : () => store.setOpen(false, scope)}>{personalTasks ? <X className="size-5" aria-hidden /> : <PanelRight className="size-5" aria-hidden />}</button> : null}
     </div> : null}
     {notice ? <div role="alert" className="shrink-0 border-b border-edge px-3 py-2 text-sm text-fg-muted">{notice} <button className="text-accent" onClick={() => useSideChatStore.getState().requestCreate(scope)}>{zh ? '重试新建侧聊' : 'Retry new side chat'}</button></div> : null}
     {browserError ? <div role="alert" className="shrink-0 border-b border-edge px-3 py-2 text-sm text-fg-muted">{browserError} <button className="text-accent" onClick={() => setBrowserError('')}>{zh ? '关闭提示' : 'Dismiss'}</button></div> : null}
@@ -408,9 +418,10 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     <WorkspaceTreeControlContext.Provider value={treeControl ? { button: treeControl, label: zh ? (treeShown ? '隐藏文件树' : '显示文件树') : (treeShown ? 'Hide file tree' : 'Show file tree'), active: treeShown, onToggle: toggleTree } : null}>
     <div id="workspace-content" role={showWorkspaceTabs ? 'tabpanel' : undefined} aria-labelledby={showWorkspaceTabs && active ? `workspace-tab-${active.id}` : undefined} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <div className={cn('min-h-0 min-w-0 flex-1 flex-col overflow-hidden', !treeOnly ? 'flex' : 'hidden')}>
-        {visible && hasPersonalTasks ? <div ref={taskDock} hidden={!personalTasks} className={cn(personalTasks && 'flex', 'min-h-0 flex-1 flex-col')}>
+        {(visible || present) && hasPersonalTasks ? <div ref={taskDock} hidden={!personalTasks} className={cn(personalTasks && 'flex', 'min-h-0 flex-1 flex-col')}>
           {createPortal(<PersonalTaskPanel key={scope} scope={scope} zh={zh}
-            closeOnNavigate={taskDrawer} visible={personalTasks || floatingPersonalTasks}
+            closeOnNavigate={taskDrawer} visible={visible && (personalTasks || floatingPersonalTasks)}
+            flightReady={visible && (floatingPersonalTasks || present)}
             onNavigate={floatingPersonalTasks ? () => closeFloatingTasks(false) : undefined} />, taskPanelHost)}
         </div> : null}
         {visible && active?.kind === 'browser-preview' ? <BrowserPreviewPanel key={active.id} conversationId={scope} mode={active.mode} /> : null}

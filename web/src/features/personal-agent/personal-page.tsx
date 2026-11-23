@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { Phone, Settings2, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -13,10 +13,98 @@ import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { PERSONAL_TASKS_TAB_ID, useRightWorkspaceStore } from '@/stores/right-workspace-store';
-import { PersonalAvatar, type PersonalAppearance } from './personal-avatar';
+import { PersonalAvatar, type PersonalAppearance, type PersonalAvatarActivity } from './personal-avatar';
+import {
+  PersonalAvatarFlightOverlay,
+  beginPersonalAvatarFlight,
+  cancelPersonalAvatarFlight,
+  completePendingPersonalAvatarFlight,
+  isPersonalAvatarAnchorHidden,
+  registerPersonalAvatarAnchor,
+  usePersonalAvatarFlightStore,
+} from './personal-avatar-flight';
 import { PersonalOnboarding } from './personal-onboarding';
 import { PersonalProfileSettings } from './personal-profile-settings';
 import { usePersonalWorkOverview, useRefreshPersonalWork } from './use-personal-work';
+
+function PersonalHeaderIdentityButton({
+  buttonRef,
+  appearance,
+  agentId,
+  activity,
+  title,
+  summary,
+  zh,
+  taskPanelOpen,
+  onOpen,
+}: {
+  buttonRef: RefObject<HTMLButtonElement | null>;
+  appearance: PersonalAppearance;
+  agentId: string;
+  activity: PersonalAvatarActivity;
+  title: string;
+  summary: string;
+  zh: boolean;
+  taskPanelOpen: boolean;
+  onOpen: () => void;
+}) {
+  const avatarAnchorRef = useRef<HTMLSpanElement>(null);
+  const avatarHidden = usePersonalAvatarFlightStore(state => isPersonalAvatarAnchorHidden(state, 'header'));
+  const pendingToHeaderId = usePersonalAvatarFlightStore(state => state.pending?.to === 'header' ? state.pending.id : null);
+  const returningToHeader = usePersonalAvatarFlightStore(state => state.pending?.to === 'header' || state.active?.to === 'header');
+  const justLanded = usePersonalAvatarFlightStore(state => state.justLanded?.anchor === 'header' ? state.justLanded.id : null);
+
+  useLayoutEffect(() => {
+    const node = avatarAnchorRef.current;
+    registerPersonalAvatarAnchor('header', node, () => ({ appearance, agentId, activity }));
+    return () => registerPersonalAvatarAnchor('header', null, () => ({ appearance, agentId, activity }));
+  }, [activity, agentId, appearance]);
+
+  useLayoutEffect(() => {
+    if (pendingToHeaderId === null) return;
+    if (completePendingPersonalAvatarFlight('header', avatarAnchorRef.current)) return;
+    const frame = window.requestAnimationFrame(() => {
+      completePendingPersonalAvatarFlight('header', avatarAnchorRef.current);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingToHeaderId]);
+
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      data-personal-tasks-trigger
+      aria-controls="app-workspace-panel"
+      aria-expanded={taskPanelOpen}
+      aria-describedby={summary ? 'personal-work-status' : undefined}
+      aria-label={zh ? `${title} 的任务` : `${title}'s tasks`}
+      title={summary || title}
+      onClick={() => {
+        beginPersonalAvatarFlight('header', 'panel', { appearance, agentId, activity });
+        onOpen();
+      }}
+      className="personal-header-identity group/identity flex min-w-0 max-w-full flex-col items-center gap-1 rounded-2xl px-1.5 pb-0.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:gap-1.5"
+    >
+      <span
+        ref={avatarAnchorRef}
+        data-personal-avatar-anchor="header"
+        data-activity={activity}
+        data-avatar-flight-hidden={avatarHidden ? 'true' : undefined}
+        data-avatar-landed={justLanded ? 'true' : undefined}
+        className={`personal-header-avatar-ring relative grid size-16 shrink-0 place-items-center rounded-full border border-edge-subtle bg-surface-base sm:size-20 @max-[26rem]/personal-chat:size-14 ${avatarHidden ? 'opacity-0' : ''}`}
+      >
+        <PersonalAvatar appearance={appearance} agentId={agentId} activity={activity} lively className="relative z-10 size-full" />
+      </span>
+      <span className={`personal-identity-label max-w-full min-w-0 rounded-2xl px-3 py-1 transition-[opacity,transform,background-color] duration-300 ease-out motion-reduce:transition-none ${returningToHeader ? 'translate-y-1 opacity-0' : 'translate-y-0 opacity-100'}`}>
+        <span className="block truncate text-[0.9375rem] leading-5 font-semibold text-fg sm:text-base">{title}</span>
+        {summary ? <span id="personal-work-status" role="status" className="flex min-w-0 items-center justify-center gap-1.5 text-xs leading-4 text-fg-muted">
+          {activity !== 'idle' ? <span className={`size-1.5 shrink-0 rounded-full ${activity === 'waiting' ? 'bg-warning' : 'bg-accent'}`} aria-hidden /> : null}
+          <span className="truncate">{summary}</span>
+        </span> : null}
+      </span>
+    </button>
+  );
+}
 
 export type PersonalAgent = {
   agentId: string;
@@ -94,6 +182,34 @@ export function PersonalPage() {
     if (voiceCall.expanded) setShowSettings(false);
   }, [voiceCall.expanded]);
 
+  const recordRef = useRef(record);
+  const avatarStateRef = useRef(avatarState);
+  useLayoutEffect(() => {
+    recordRef.current = record;
+    avatarStateRef.current = avatarState;
+  }, [avatarState, record]);
+
+  useEffect(() => {
+    if (!conversationId) return;
+    const isTaskPanelShown = (pane: { open?: boolean; activeId?: string | null; personalDetailsOpen?: boolean; tabs?: Array<{ id: string; kind: string }> } | undefined) => {
+      const active = pane?.tabs?.find(tab => tab.id === pane.activeId);
+      return pane?.open === true && (pane.activeId === PERSONAL_TASKS_TAB_ID
+        || (pane.personalDetailsOpen === true && (active?.kind === 'file' || active?.kind === 'browser')));
+    };
+    return useRightWorkspaceStore.subscribe((state, previous) => {
+      if (isTaskPanelShown(previous.panes[conversationId]) && !isTaskPanelShown(state.panes[conversationId])) {
+        const currentRecord = recordRef.current;
+        beginPersonalAvatarFlight('panel', 'header', currentRecord?.state === 'ready' ? {
+          appearance: currentRecord.appearance,
+          agentId: currentRecord.agentId,
+          activity: avatarStateRef.current,
+        } : undefined);
+      }
+    });
+  }, [conversationId]);
+
+  useEffect(() => cancelPersonalAvatarFlight, []);
+
   useEffect(() => {
     const updateProfile = (event: Event) => {
       const next = (event as CustomEvent<PersonalAgent | null>).detail;
@@ -136,7 +252,7 @@ export function PersonalPage() {
   useLayoutEffect(() => {
     const ready = record?.state === 'ready';
     const callLabel = zh ? '语音通话' : 'Voice call';
-    const callClass = 'touch-target inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-surface-hover/90 px-3.5 text-sm font-medium text-fg transition-colors hover:bg-surface-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent aria-expanded:bg-surface-active';
+    const callClass = 'touch-target inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-surface-hover/90 px-3.5 text-sm font-medium text-fg transition-[background-color,transform] duration-150 hover:bg-surface-active active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent aria-expanded:bg-surface-active motion-reduce:transition-colors motion-reduce:active:scale-100';
     const openCall = () => {
       setShowSettings(false);
       if (!ready) return;
@@ -157,23 +273,17 @@ export function PersonalPage() {
       personalChat: ready ? (taskPanelOpen ? 'controls' : 'identity') : undefined,
       main: <div className="flex min-w-0 justify-center">
         <h1 className="sr-only">{title}</h1>
-        {taskPanelOpen ? null : ready ? <button ref={tasksButtonRef} type="button" data-personal-tasks-trigger
-          aria-controls="app-workspace-panel" aria-expanded={taskPanelOpen}
-          aria-describedby={summary ? 'personal-work-status' : undefined}
-          aria-label={zh ? `${title} 的任务` : `${title}'s tasks`}
-          title={summary || title} onClick={toggleTasks}
-          className="group/identity flex min-w-0 max-w-full flex-col items-center gap-1 rounded-2xl px-1.5 pb-0.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:gap-1.5">
-          <span className="relative grid size-16 shrink-0 place-items-center rounded-full border border-edge-subtle bg-surface-base transition-colors group-hover/identity:border-edge sm:size-20 @max-[26rem]/personal-chat:size-14">
-            <PersonalAvatar appearance={avatar} agentId={record.agentId} activity={avatarState} className="size-full" />
-          </span>
-          <span className="personal-identity-label max-w-full min-w-0 rounded-2xl px-3 py-1">
-            <span className="block truncate text-[0.9375rem] leading-5 font-semibold text-fg sm:text-base">{title}</span>
-            {summary ? <span id="personal-work-status" role="status" className="flex min-w-0 items-center justify-center gap-1.5 text-xs leading-4 text-fg-muted">
-              {avatarState !== 'idle' ? <span className={`size-1.5 shrink-0 rounded-full ${avatarState === 'waiting' ? 'bg-warning' : 'bg-accent'}`} aria-hidden /> : null}
-              <span className="truncate">{summary}</span>
-            </span> : null}
-          </span>
-        </button> : <div className="flex items-center gap-2"><PersonalAvatar appearance={avatar} className="size-8" /><span className="text-sm font-semibold">{title}</span></div>}
+        {taskPanelOpen ? null : ready ? <PersonalHeaderIdentityButton
+          buttonRef={tasksButtonRef}
+          appearance={avatar}
+          agentId={record.agentId}
+          activity={avatarState}
+          title={title}
+          summary={summary}
+          zh={zh}
+          taskPanelOpen={taskPanelOpen}
+          onOpen={toggleTasks}
+        /> : <div className="flex items-center gap-2"><PersonalAvatar appearance={avatar} className="size-8" /><span className="text-sm font-semibold">{title}</span></div>}
       </div>,
       end: ready ? <div ref={registerHeaderActions} className="flex items-center gap-1.5 sm:gap-2">
         <button type="button" aria-haspopup="dialog" aria-expanded={voiceCall.expanded} onClick={openCall} className={callClass} aria-label={callLabel} title={callLabel}><Phone className="size-4" strokeWidth={1.75} aria-hidden /><span className="hidden @min-[32rem]/personal-header:inline">{zh ? '通话' : 'Call'}</span></button>
@@ -218,6 +328,7 @@ export function PersonalPage() {
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
+      <PersonalAvatarFlightOverlay />
     </div>
   );
 

@@ -18,18 +18,22 @@ const ACTIVITY_MOODS: Partial<Record<PersonalAvatarActivity, LoopiMood>> = {
   delivered: 'done',
 };
 
-export function PersonalAvatar({ appearance, agentId, activity = 'idle', className = '' }: {
+export function PersonalAvatar({ appearance, agentId, activity = 'idle', lively = false, className = '' }: {
   appearance: PersonalAppearance;
   agentId?: string;
   activity?: PersonalAvatarActivity;
+  lively?: boolean;
   className?: string;
 }) {
   if (appearance === 'custom' && agentId) {
-    return <AgentAvatarDisplay agentId={agentId} avatar="xopc:custom" className={className} />;
+    if (!lively) return <AgentAvatarDisplay agentId={agentId} avatar="xopc:custom" className={className} />;
+    return <span data-activity={activity} data-lively="true" className={`personal-avatar-motion inline-flex items-center justify-center ${className}`}>
+      <AgentAvatarDisplay agentId={agentId} avatar="xopc:custom" className="size-full" />
+    </span>;
   }
 
   const mood = ACTIVITY_MOODS[activity] ?? (appearance === 'custom' ? 'idle' : MOODS[appearance]);
-  return <span data-activity={activity} className={`personal-avatar-motion inline-flex items-center justify-center ${className}`} aria-hidden="true">
-    <Loopi variant="avatar" mood={mood} className="size-full" />
+  return <span data-activity={activity} data-lively={lively ? 'true' : undefined} className={`personal-avatar-motion inline-flex items-center justify-center ${className}`} aria-hidden="true">
+    <Loopi variant="avatar" mood={mood} ambient={lively} className="size-full" />
   </span>;
 }

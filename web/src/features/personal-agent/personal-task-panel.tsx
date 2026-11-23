@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { CircleCheck, Clock3, Files, ListTodo, Paperclip, Pencil, ShieldCheck } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -11,6 +11,12 @@ import { formatMediumDateTime } from '@/lib/date-formatters';
 import { cn } from '@/lib/cn';
 import { preloadTaskDetailPage } from '@/lib/route-preload';
 import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
+import {
+  completePendingPersonalAvatarFlight,
+  isPersonalAvatarAnchorHidden,
+  registerPersonalAvatarAnchor,
+  usePersonalAvatarFlightStore,
+} from './personal-avatar-flight';
 import { PersonalDeliverablesPanel } from './personal-deliverables-panel';
 import { PersonalSchedules } from './personal-schedules';
 import { formatPersonalTaskTime } from './personal-task-time';
@@ -100,11 +106,16 @@ function WorkGroup({ title, children }: { title: string; children: ReactNode }) 
   </section>;
 }
 
-export function PersonalTaskPanel({ scope, zh, closeOnNavigate = false, visible = true, onNavigate }: {
-  scope: string; zh: boolean; closeOnNavigate?: boolean; visible?: boolean; onNavigate?: () => void;
+export function PersonalTaskPanel({ scope, zh, closeOnNavigate = false, visible = true, flightReady = true, onNavigate }: {
+  scope: string; zh: boolean; closeOnNavigate?: boolean; visible?: boolean; flightReady?: boolean; onNavigate?: () => void;
 }) {
   const [tab, setTab] = useState<PersonalTab>('tasks');
   const [deliverablesVisited, setDeliverablesVisited] = useState(false);
+  const avatarAnchorRef = useRef<HTMLDivElement>(null);
+  const avatarHidden = usePersonalAvatarFlightStore(state => isPersonalAvatarAnchorHidden(state, 'panel'));
+  const pendingToPanelId = usePersonalAvatarFlightStore(state => state.pending?.to === 'panel' ? state.pending.id : null);
+  const flyingToPanel = usePersonalAvatarFlightStore(state => state.pending?.to === 'panel' || state.active?.to === 'panel');
+  const justLandedPanel = usePersonalAvatarFlightStore(state => state.justLanded?.anchor === 'panel' ? state.justLanded.id : null);
   const panelId = useId();
   const location = useLocation();
   const search = new URLSearchParams(location.search);
@@ -117,6 +128,34 @@ export function PersonalTaskPanel({ scope, zh, closeOnNavigate = false, visible 
   const { items: historyItems, error: historyError, loading, hasMore, loadMore, retry } = usePersonalWorkHistory(scope, data, tasksVisible);
   const { listRef, loadMoreRef } = usePersonalListPagination(visible && hasMore && !loading && !historyError, loadMore);
   const { profile, displayName } = usePersonalProfile();
+  const appearance = profile?.appearance ?? 'loopi';
+  const agentId = profile?.agentId;
+
+  useLayoutEffect(() => {
+    const node = visible ? avatarAnchorRef.current : null;
+    registerPersonalAvatarAnchor('panel', node, () => ({ appearance, agentId, activity: avatarState }));
+    return () => registerPersonalAvatarAnchor('panel', null, () => ({ appearance, agentId, activity: avatarState }));
+  }, [agentId, appearance, avatarState, visible]);
+
+  useLayoutEffect(() => {
+    if (!visible || !flightReady || pendingToPanelId === null) return;
+    if (completePendingPersonalAvatarFlight('panel', avatarAnchorRef.current)) return;
+    const frame = window.requestAnimationFrame(() => {
+      completePendingPersonalAvatarFlight('panel', avatarAnchorRef.current);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [flightReady, pendingToPanelId, visible]);
+
+  const boopAvatar = () => {
+    const node = avatarAnchorRef.current;
+    if (!node || typeof node.animate !== 'function' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    node.animate([
+      { transform: 'scale(1)' },
+      { transform: 'scale(0.98)', offset: 0.28 },
+      { transform: 'scale(1.018) translateY(-1.5px)', offset: 0.62 },
+      { transform: 'scale(1)' },
+    ], { duration: 360, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' });
+  };
   const current = data?.current ?? [];
   const currentIds = new Set(current.map(item => item.id));
   const attention = current.filter(needsPersonalWorkAttention);
@@ -137,35 +176,52 @@ export function PersonalTaskPanel({ scope, zh, closeOnNavigate = false, visible 
   const empty = !current.length && !data?.total && !mainPrompt;
   return <div className="flex min-h-0 flex-1 flex-col overflow-hidden" aria-label={zh ? '派发的任务' : 'Delegated tasks'}>
     <header data-personal-task-identity className="flex shrink-0 flex-col items-center px-4 pb-7 pt-1 text-center sm:px-6">
-      <div className="relative grid size-[7.5rem] place-items-center rounded-full border border-edge-subtle bg-surface-inset sm:size-32">
-        <PersonalAvatar appearance={profile?.appearance ?? 'loopi'} agentId={profile?.agentId} activity={avatarState} className="size-full" />
+      <div className="relative size-[7.5rem] sm:size-32">
+        <div
+          ref={avatarAnchorRef}
+          data-personal-avatar-anchor="panel"
+          data-activity={avatarState}
+          data-avatar-flight-hidden={avatarHidden ? 'true' : undefined}
+          data-avatar-landed={justLandedPanel ? 'true' : undefined}
+          onClick={boopAvatar}
+          className={cn(
+            'personal-panel-avatar-ring relative grid size-full cursor-pointer place-items-center rounded-full border border-edge-subtle bg-surface-inset',
+            avatarHidden && 'opacity-0',
+          )}
+        >
+          <PersonalAvatar appearance={appearance} agentId={agentId} activity={avatarState} lively className="relative z-10 size-full" />
+        </div>
         <Link to="/settings/personal" state={{ settingsBackPath: personalHref }} aria-label={zh ? '编辑助手资料' : 'Edit assistant profile'}
-          className="absolute bottom-0 right-0 grid size-9 place-items-center rounded-full border-[3px] border-surface-base bg-surface-hover text-fg hover:bg-surface-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          className={cn(
+            'personal-edit-badge absolute bottom-0 right-0 z-20 grid size-9 place-items-center rounded-full border-[3px] border-surface-base bg-surface-hover text-fg transition-[background-color,transform,opacity] duration-150 hover:scale-105 hover:bg-surface-active active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transition-colors motion-reduce:hover:scale-100 motion-reduce:active:scale-100',
+            flyingToPanel && 'pointer-events-none scale-75 opacity-0',
+            justLandedPanel && 'personal-edit-badge-pop',
+          )}>
           <Pencil className="size-3.5" strokeWidth={1.8} aria-hidden />
         </Link>
       </div>
-      <h2 className="mt-3 max-w-full truncate text-[1.375rem] leading-7 font-semibold text-fg">{displayName}</h2>
-      <div className="min-h-6 max-w-full">
+      <h2 className="personal-panel-stagger personal-panel-stagger-1 mt-3 max-w-full truncate text-[1.375rem] leading-7 font-semibold text-fg">{displayName}</h2>
+      <div className="personal-panel-stagger personal-panel-stagger-2 min-h-6 max-w-full">
         {summary ? <p className="mt-1 flex min-h-5 items-center justify-center gap-1.5 text-sm text-fg-muted" title={summary}>
           {avatarState !== 'idle' ? <span className={cn('size-1.5 shrink-0 rounded-full', avatarState === 'waiting' ? 'bg-warning' : 'bg-accent')} aria-hidden /> : null}
           <span className="truncate">{summary}</span>
         </p> : null}
       </div>
     </header>
-    <SlidingTabList role="tablist" aria-label={zh ? `任务与${spaceLabel}` : `Tasks and ${spaceLabel}`} className="mx-4 mb-3 grid shrink-0 grid-cols-2 gap-1 rounded-full bg-surface-inset p-1 sm:mx-6"
+    <SlidingTabList role="tablist" aria-label={zh ? `任务与${spaceLabel}` : `Tasks and ${spaceLabel}`} className="personal-panel-stagger personal-panel-stagger-3 mx-4 mb-3 grid shrink-0 grid-cols-2 gap-1 rounded-full bg-surface-inset p-1 sm:mx-6"
       indicatorClassName="rounded-full bg-surface-base shadow-sm dark:bg-surface-active dark:shadow-none">
       {tabs.map(({ id, label, Icon }) => <button key={id} type="button" role="tab" id={`${panelId}-${id}-tab`} aria-controls={`${panelId}-${id}`}
         aria-selected={tab === id} tabIndex={tab === id ? 0 : -1} onClick={() => {
           setTab(id);
           if (id === 'deliverables') setDeliverablesVisited(true);
         }}
-        className={cn('flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-full px-1 text-xs font-medium whitespace-nowrap text-fg-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', tab === id && 'text-fg')}>
+        className={cn('flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-full px-1 text-xs font-medium whitespace-nowrap text-fg-muted transition-[color,transform] duration-150 hover:text-fg active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:active:scale-100', tab === id && 'text-fg')}>
         <Icon className="size-4 shrink-0" strokeWidth={1.7} aria-hidden />
         {label}{id === 'tasks' && attentionCount > 0 ? <span className="text-fg-muted" aria-label={zh ? `${attentionCount} 项待处理` : `${attentionCount} need attention`}>{attentionCount}</span> : null}
       </button>)}
     </SlidingTabList>
     <div ref={listRef} hidden={!tasksVisible} role="tabpanel" id={`${panelId}-tasks`} aria-labelledby={`${panelId}-tasks-tab`}
-      className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-3 [scrollbar-gutter:stable] sm:px-6">
+      className="personal-panel-stagger personal-panel-stagger-4 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-3 [scrollbar-gutter:stable] sm:px-6">
       {!data && !error && !mainPrompt ? <div className="space-y-2" aria-label={zh ? '正在读取任务' : 'Loading tasks'}>{[0, 1, 2].map(key => <Skeleton key={key} className="h-14 rounded-xl" />)}</div> : null}
       {error ? <p role="alert" className="px-3 pb-3 text-sm text-fg-muted">{zh ? '暂时无法更新任务。' : 'Could not update tasks.'} <button type="button" className="text-accent-fg underline" onClick={() => void mutate()}>{zh ? '重试' : 'Try again'}</button></p> : null}
       {data && empty ? <p className="px-2 py-6 text-center text-sm text-fg-muted">

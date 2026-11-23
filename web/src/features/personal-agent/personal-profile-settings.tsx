@@ -169,8 +169,8 @@ export function PersonalProfileSettings({ zh, onOpenVoiceServices, showMessageRe
   const sectionSpacing = compact ? 'space-y-3' : 'space-y-5';
   return <section className={sectionSpacing} aria-label={zh ? 'Ada 助手设置' : 'Ada assistant settings'}>
     <div className={cn('flex items-center', compact ? 'gap-2' : 'flex-col')}>
-      <button type="button" disabled={uploadingAvatar} onClick={() => setShowAppearanceChoices(open => !open)} aria-expanded={showAppearanceChoices} aria-controls="personal-appearance-options" aria-label={zh ? '选择头像' : 'Choose avatar'} className="shrink-0 rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
-        <PersonalAvatar appearance={appearance} agentId={record.agentId} className={compact ? 'size-11' : 'size-16'} />
+      <button type="button" disabled={uploadingAvatar} onClick={() => setShowAppearanceChoices(open => !open)} aria-expanded={showAppearanceChoices} aria-controls="personal-appearance-options" aria-label={zh ? '选择头像' : 'Choose avatar'} className="shrink-0 rounded-full transition-[opacity,transform] duration-150 hover:scale-[1.02] hover:opacity-90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 motion-reduce:transition-opacity motion-reduce:hover:scale-100 motion-reduce:active:scale-100">
+        <PersonalAvatar appearance={appearance} agentId={record.agentId} lively className={compact ? 'size-11' : 'size-16'} />
       </button>
       <input id="personal-name" aria-label={zh ? '助手名称' : 'Assistant name'}
         value={displayName} onChange={event => setDisplayName(event.target.value)}
@@ -192,7 +192,7 @@ export function PersonalProfileSettings({ zh, onOpenVoiceServices, showMessageRe
     </div>
     <div className={sectionSpacing}>
         {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-        {showAppearanceChoices && <section id="personal-appearance-options">
+        {showAppearanceChoices && <section id="personal-appearance-options" className="personal-panel-stagger">
           <h3 className="mb-3 text-sm font-medium text-fg">{zh ? '形象' : 'Appearance'}</h3>
           <div className="grid grid-cols-4 gap-2">{APPEARANCES.map(item => <button key={item.id} type="button" onClick={() => { setAppearance(item.id); setShowAppearanceChoices(false); void queueProfileUpdate({ appearance: item.id }); }} aria-pressed={appearance === item.id} className={`flex min-w-0 flex-col items-center gap-1.5 rounded-xl px-1 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${appearance === item.id ? 'bg-accent/10 ring-1 ring-accent/40' : 'bg-surface-panel hover:bg-surface-hover'}`}><span className={`flex size-8 items-center justify-center rounded-full ${item.color}`}><PersonalAvatar appearance={item.id} className="size-8" /></span><span className="truncate text-xs text-fg-muted">{zh ? item.zh : item.en}</span></button>)}
             <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" aria-label={zh ? '上传头像' : 'Upload avatar'} onChange={event => {

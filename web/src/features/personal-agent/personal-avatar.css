@@ -6,19 +6,132 @@
   animation: personal-avatar-breathe 4.4s ease-in-out infinite;
 }
 
+.personal-avatar-motion[data-lively="true"][data-activity="working"] {
+  animation: personal-avatar-work-bob 1.9s ease-in-out infinite;
+}
+
+.personal-avatar-motion[data-lively="true"][data-activity="waiting"] {
+  animation: personal-avatar-waiting-nudge 3s ease-in-out infinite;
+}
+
 .personal-avatar-motion[data-activity="delivered"] {
-  animation: personal-avatar-nod 400ms ease-out;
+  animation: personal-avatar-nod 420ms ease-out;
+}
+
+/* Header & right-panel avatar frames: subtle, unhurried hover lift without outer border. */
+.personal-header-avatar-ring,
+.personal-panel-avatar-ring {
+  transition:
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 240ms ease;
+}
+
+[data-personal-tasks-trigger]:hover .personal-header-avatar-ring,
+[data-personal-tasks-trigger]:focus-visible .personal-header-avatar-ring {
+  border-color: transparent;
+  transform: scale(1.025);
+}
+
+[data-personal-tasks-trigger]:active .personal-header-avatar-ring {
+  border-color: transparent;
+  transform: scale(0.985);
+  transition-duration: 140ms;
+}
+
+.personal-panel-avatar-ring:hover {
+  border-color: transparent;
+  transform: scale(1.02);
+}
+
+.personal-panel-avatar-ring:active {
+  border-color: transparent;
+  transform: scale(0.985);
+  transition-duration: 140ms;
+}
+
+.personal-edit-badge-pop {
+  animation: personal-edit-badge-pop 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Unhurried staggered entrance for right-side personal panel content. */
+.personal-panel-stagger {
+  animation: personal-panel-item-in 360ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+.personal-panel-stagger-1 { animation-delay: 95ms; }
+.personal-panel-stagger-2 { animation-delay: 140ms; }
+.personal-panel-stagger-3 { animation-delay: 185ms; }
+.personal-panel-stagger-4 { animation-delay: 230ms; }
+
+.personal-floating-details-enter {
+  animation: personal-floating-details-in 380ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
 @keyframes personal-avatar-nod {
-  45% { transform: translateY(2px) rotate(6deg); }
+  45% { transform: translateY(1.5px) rotate(4deg); }
 }
 
 @keyframes personal-avatar-breathe {
   0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-2px) rotate(1.5deg); }
+  50% { transform: translateY(-1.5px) rotate(1deg); }
+}
+
+@keyframes personal-avatar-work-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-1.8px) rotate(1deg); }
+}
+
+@keyframes personal-avatar-waiting-nudge {
+  0%, 72%, 100% { transform: translateY(0) rotate(0deg); }
+  80% { transform: translateY(-1px) rotate(-2deg); }
+  88% { transform: translateY(-0.5px) rotate(2deg); }
+}
+
+@keyframes personal-edit-badge-pop {
+  0% { opacity: 0; transform: scale(0.84); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes personal-panel-item-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 5px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes personal-floating-details-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .personal-avatar-motion[data-activity] { animation: none; }
+  .personal-avatar-motion[data-activity],
+  .personal-edit-badge-pop,
+  .personal-panel-stagger,
+  .personal-floating-details-enter {
+    animation: none !important;
+  }
+
+  .personal-header-avatar-ring,
+  .personal-panel-avatar-ring {
+    transition: none !important;
+  }
+
+  [data-personal-tasks-trigger]:hover .personal-header-avatar-ring,
+  [data-personal-tasks-trigger]:focus-visible .personal-header-avatar-ring,
+  [data-personal-tasks-trigger]:active .personal-header-avatar-ring,
+  .personal-panel-avatar-ring:hover,
+  .personal-panel-avatar-ring:active {
+    transform: none;
+  }
 }

@@ -15,7 +15,7 @@ import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { usePersonalListPagination, useRefreshPersonalWork } from './use-personal-work';
 
-const previewClass = 'flex min-w-0 flex-1 items-start gap-3 rounded-xl p-2 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent';
+const previewClass = 'flex min-w-0 flex-1 items-start gap-3 rounded-xl p-2 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent';
 
 function DeliverableRow({ item, scope, zh, sourceHref, onSource }: {
   item: PersonalDeliverable; scope: string; zh: boolean; sourceHref: string; onSource?: () => void;

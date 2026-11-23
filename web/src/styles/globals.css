@@ -1640,8 +1640,14 @@ html.dark[data-color-scheme="porcelain"] {
 }
 
 @keyframes xopc-personal-thinking-dot {
-  0%, 60%, 100% { opacity: 0.45; }
-  30% { opacity: 0.8; }
+  0%, 60%, 100% {
+    opacity: 0.45;
+    transform: translateY(0) scale(0.96);
+  }
+  30% {
+    opacity: 0.85;
+    transform: translateY(-2px) scale(1.04);
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {

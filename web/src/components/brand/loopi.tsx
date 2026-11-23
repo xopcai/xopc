@@ -12,21 +12,22 @@ const human = 'M229.437 73.667 A120 120 0 0 1 316.333 160.563';
 const core = 'M130 190 C130 153 156 131 200 131 C244 131 270 153 270 190 C270 229 244 250 200 250 C156 250 130 229 130 190Z';
 
 /** Loopi is a companion, not a replacement for a person's profile image. */
-export function Loopi({ mood = 'idle', variant = 'hero', interactive = false, cycle = false, language = 'en', className = '' }: {
-  mood?: LoopiMood; variant?: 'hero' | 'avatar'; interactive?: boolean;
+export function Loopi({ mood = 'idle', variant = 'hero', interactive = false, ambient, cycle = false, language = 'en', className = '' }: {
+  mood?: LoopiMood; variant?: 'hero' | 'avatar'; interactive?: boolean; ambient?: boolean;
   cycle?: boolean; language?: 'en' | 'zh'; className?: string;
 }) {
   const id = useId().replace(/:/g, '');
   const host = useRef<HTMLSpanElement>(null);
   const svg = useRef<SVGSVGElement>(null);
   const paint = (name: string) => `url(#${id}-${name})`;
+  const ambientMotion = ambient ?? interactive;
   useEffect(() => {
     if (!svg.current || !host.current) return;
     const controller = animateLoopi(svg.current, host.current, {
-      mood, avatar: variant === 'avatar', ambient: interactive, cycle: interactive && cycle,
+      mood, avatar: variant === 'avatar', ambient: ambientMotion, cycle: interactive && cycle,
     });
     return () => controller.dispose();
-  }, [mood, variant, interactive, cycle]);
+  }, [mood, variant, interactive, ambientMotion, cycle]);
   const drawing = (
     <svg ref={svg} viewBox={variant === 'avatar' ? '40 30 320 320' : '0 0 400 400'} aria-hidden="true" focusable="false" data-loopi="ceramic-v4" data-face-rotation="0">
       <defs>
