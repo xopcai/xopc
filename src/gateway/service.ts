@@ -14,6 +14,12 @@ import { drainPersonalResultReads } from '../personal-agent/result-read-continua
 import { stopPersonalResultPreparations } from '../personal-agent/result-reader.js';
 import { PersonalProactivityService } from '../personal-agent/proactivity/service.js';
 import { reconcilePersonalProactivityAutomation } from '../personal-agent/proactivity/automation.js';
+import {
+  LocalEnvironmentSignalProducer,
+  ProactiveHubService,
+  reconcileProactivePulseAutomations,
+} from '../proactive-hub/index.js';
+import { RsiCapabilityService } from '../rsi/index.js';
 import { flushTracing } from '../observability/runtime.js';
 import { patchSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
@@ -1103,6 +1109,40 @@ export class GatewayService {
     },
   });
 
+  private readonly rsiCapability = new RsiCapabilityService({
+    getConfig: () => this.config,
+    resolveWorkspacePath: () => this.workspacePath,
+    onPublishEvent: (type, payload) => this.emit(type, payload),
+  });
+
+  private readonly proactiveHub = new ProactiveHubService({
+    getConfig: () => this.config,
+    isConversationAvailable: conversationId => !this.stopping && !this.agentRunner.hasActiveRun(conversationId)
+      && !this.agentRunner.inputs.isAcceptingInput(conversationId)
+      && (!this.voiceRealtime.hasConversation(conversationId) || this.voiceRealtime.canPublishReply(conversationId)),
+    onPublishEvent: (type, payload) => this.emit(type, payload),
+    onConversationEscalated: (conversationId, itemId, item) => {
+      this.emit('session.transcript_updated', { key: conversationId, outreachId: itemId });
+      this.emit('personal.reply.delivered', {
+        conversationId,
+        deliveryId: `reply:${itemId}`,
+        text: `${item.title}\n${item.summary}`,
+      });
+      void this.deliverTierSWeixinAlert(conversationId, item).catch(err => {
+        log.debug({ err, itemId, phase: 'proactive_weixin_escalation' }, 'Skipped companion Weixin escalation');
+      });
+    },
+    onItemResolved: async item => {
+      await this.rsiCapability.handleProactiveItemResolved(item);
+    },
+  });
+
+  private readonly localSignalProducer = new LocalEnvironmentSignalProducer({
+    ingestEvent: event => {
+      this.ingestAutomationEvent(event);
+    },
+  });
+
   private readonly taskResultDispatch = createBackgroundTask(async () => {
     const notify = (conversationId: string, deliveryId: string) => {
       this.realtime.broker.publish('sessions', 'session.task-result', { conversationId, deliveryId });
@@ -1787,8 +1827,11 @@ export class GatewayService {
     await trace.measure('automations.initialize', () => this.automationService.initialize());
     await trace.measure('homeIntelligence.reconcileAutomation', () => reconcileHomeIntelligenceAutomation(this.automationService));
     this.personalProactivity.start();
+    this.proactiveHub.start();
     await trace.measure('personalProactivity.reconcile', () => reconcilePersonalProactivityAutomation(this.automationService));
+    await trace.measure('proactivePulse.reconcile', () => reconcileProactivePulseAutomations(this.automationService));
     this.personalProactivity.tick();
+    this.proactiveHub.tick();
     await trace.measure('memoryMaintenance.reconcile', () => this.reconcileMemoryMaintenanceAutomations());
 
     await this.notesService.initialize();
@@ -2068,6 +2111,7 @@ export class GatewayService {
 
     await this.extensionLoader?.shutdown();
 
+    this.proactiveHub.stop();
     await this.personalProactivity.stop();
     await this.automationService.stop();
     this.stopSessionTranscriptAutomationEvents?.();
@@ -2418,8 +2462,20 @@ export class GatewayService {
     runId: string;
   }): { summary: string } {
     if (input.capability === 'personal.proactivity.tick') {
+      this.localSignalProducer.scanOnce();
       this.personalProactivity.tick();
-      return { summary: 'Personal attention checks queued' };
+      this.proactiveHub.tick();
+      void this.rsiCapability.scanRecoveredTaskFailures().catch(err => {
+        log.debug({ err, phase: 'rsi_recovered_scan' }, 'Deferred RSI recovered-failure scan');
+      });
+      void this.rsiCapability.scanRepeatedPatterns().catch(err => {
+        log.debug({ err, phase: 'rsi_pattern_scan' }, 'Deferred RSI repeated-pattern scan');
+      });
+      return { summary: 'Personal attention and proactive hub checks queued' };
+    }
+    if (input.capability === 'proactive.pulse.flush') {
+      const digest = this.proactiveHub.flushDigest();
+      return { summary: digest ? `Pulse digest created: ${digest.id}` : 'Pulse digest buffer was empty' };
     }
     if (input.capability === 'home.advisor.refresh') {
       const generationId = this.homeIntelligence.requestRefresh('scheduled_refresh', `automation:${input.runId}`);
@@ -2445,6 +2501,14 @@ export class GatewayService {
 
   get sessionIndexInstance(): SessionIndex {
     return this.sessionIndex;
+  }
+
+  get proactiveHubInstance(): ProactiveHubService {
+    return this.proactiveHub;
+  }
+
+  get rsiCapabilityInstance(): RsiCapabilityService {
+    return this.rsiCapability;
   }
 
   /** Process a message directly through the agent (for CLI mode). */
@@ -2484,6 +2548,26 @@ export class GatewayService {
       }
     }
     this.createNotificationService().handleGatewayEvent(type, notificationPayload);
+  }
+
+  private async deliverTierSWeixinAlert(
+    conversationId: string,
+    item: import('../proactive-hub/index.js').ProactiveItem,
+  ): Promise<void> {
+    const destination = weixinPrivateIdentity(conversationId, this.currentConfig);
+    if (!destination) return;
+    await this.channelManager.send({
+      channel: 'weixin',
+      chat_id: destination.peerId,
+      content: `【重点关注】${item.title}\n${item.summary}`,
+      type: 'message',
+      metadata: {
+        accountId: destination.accountId,
+        conversationId,
+        proactiveItemId: item.id,
+        strictWeixinIdentity: true,
+      },
+    }, { skipPersist: true, requireDelivery: true });
   }
 
   private async deliverWeixinAutomation(conversationId: string, principalId: string, run: import('../automations/index.js').AutomationRun) {
@@ -2528,6 +2612,7 @@ export class GatewayService {
 
   private projectAutomationEvent(event: AutomationEventEnvelope): void {
     this.personalProactivity.ingestEvent(event);
+    this.proactiveHub.ingestEvent(event);
     if (event.source === 'local_apps') this.emit(event.type, event.payload);
     if (event.type === 'project.deleted' && typeof event.payload.projectId === 'string') {
       const runIds = event.payload.deletedUnderstandingRunIds;

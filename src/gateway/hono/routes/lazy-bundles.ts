@@ -116,6 +116,21 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'proactive-rsi',
+    match: path => path === '/api/proactive/inbox'
+      || /^\/api\/proactive\/inbox\/[^/]+\/act$/.test(path)
+      || path === '/api/proactive/digests'
+      || path === '/api/proactive/digests/flush'
+      || path === '/api/proactive/subscriptions'
+      || /^\/api\/proactive\/subscriptions\/[^/]+$/.test(path)
+      || path === '/api/rsi/candidates'
+      || /^\/api\/rsi\/candidates\/[^/]+\/(?:adopt|reject|rollback)$/.test(path),
+    load: async () => {
+      const { registerProactiveRsiRoutes } = await import('./proactive-rsi.js');
+      return { register: registerProactiveRsiRoutes };
+    },
+  },
+  {
     id: 'agent-plugins',
     match: path => path === '/api/extensions/inspect' || path === '/api/extensions/install'
       || startsWithAny(path, ['/api/extensions/agent-plugins']),

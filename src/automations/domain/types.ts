@@ -42,6 +42,7 @@ export type AutomationAction =
       capability:
         | 'home.advisor.refresh'
         | 'personal.proactivity.tick'
+        | 'proactive.pulse.flush'
         | 'memory.temporal_sweep'
         | 'memory.daily_reconciliation'
         | 'memory.weekly_knowledge';

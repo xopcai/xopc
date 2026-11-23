@@ -8,7 +8,7 @@ import { routeWheelThroughVerticalScrollChain } from '@/lib/wheel-scroll-chain';
 
 import { WorkbenchDialog } from './workbench-dialog';
 
-const CARD_IDS = ['attention', 'delivery', 'resume', 'background', 'observation'] as const;
+const CARD_IDS = ['attention', 'proactive', 'delivery', 'resume', 'background', 'observation'] as const;
 const LANES = ['left', 'right', 'full'] as const;
 const STORAGE_KEY = 'xopc.workbench.layout';
 const DRAG_TYPE = 'application/x-xopc-workbench-card';

@@ -14,6 +14,7 @@ See [Documentation information architecture](./documentation-information-archite
 
 Active proposed designs:
 
+- [事件驱动主动感知与能力沉淀优先（RSI）建设方案](./proactive-event-driven-rsi-plan.md)：全域信号接入、四级严出过滤漏斗、受限只读预准备、Inbox/脉冲简报/对话穿透分层触达，以及带三道门禁与 SIM 的技能/Routine/过滤规则受控自进化。
 - [对话优先配置：Skill、MCP 与定时任务](./conversation-first-configuration-product-plan-2026-10-28.md)：当前实现与缺口、原 Chat 配置闭环、安全输入，以及第一阶段任务和验收标准。
 - [从服务名称到 MCP 连接：技术方案](technical/mcp-name-to-connection-technical-plan-2026-10-28.md)：有来源的服务发现、认证不确定性、有限恢复、接入方式分期及从名称开始的 E2E 门槛。
 - [微信对话配置：安全输入、OAuth 回流与原私聊续跑](technical/weixin-conversation-configuration-2026-10-28.md)

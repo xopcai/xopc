@@ -42,6 +42,8 @@ import {
   undoHomeOpportunityFeedback,
   type TaskDetail,
 } from '@/features/tasks/home-api';
+import { ProactiveInboxCard } from '@/features/proactive/proactive-inbox-card';
+import { useProactiveInbox } from '@/features/proactive/use-proactive-inbox';
 import { useHomeSnapshot } from '@/features/tasks/use-home-snapshot';
 import { HomeQuickComposer } from '@/features/tasks/home-quick-composer';
 import { HomeAdvisorCard, type HomeAdvisorReceipt } from '@/features/tasks/home-advisor-card';
@@ -418,13 +420,17 @@ export function HomePage() {
   const moving = background.filter((item) => item.kind !== 'scheduled');
   const scheduled = background.filter((item) => item.kind === 'scheduled');
   const advisorVisible = home?.advisor.state === 'ready' || home?.advisor.state === 'clarification' || Boolean(advisorReceipt);
+  const proactive = useProactiveInbox();
+  const proactiveHasItems = proactive.items.some((item) => item.category !== 'pulse_digest')
+    || proactive.bufferedCount > 0
+    || proactive.digests.length > 0;
   useEffect(() => {
     if (!advisorReceipt) return;
     const timer = window.setTimeout(() => setAdvisorReceipt(undefined), 8_000);
     return () => window.clearTimeout(timer);
   }, [advisorReceipt]);
   const mode = !home ? undefined : needsUserCount > 0 ? 'attention' : unreadDeliveries.length > 0 ? 'delivery'
-    : resumable.length > 0 || moving.length > 0 || home.runningConversations?.length || advisorVisible ? 'resume' : 'idle';
+    : resumable.length > 0 || moving.length > 0 || home.runningConversations?.length || advisorVisible || proactiveHasItems ? 'resume' : 'idle';
   const isIdle = mode === 'idle';
   const showInlineComposer = isIdle && !conversationOpen;
   const composerVisible = showInlineComposer || conversationOpen;
@@ -864,8 +870,21 @@ export function HomePage() {
       ) : advisorCard}
     </section>
   ) : null;
+  const proactiveSection = proactiveHasItems ? (
+    <ProactiveInboxCard
+      items={proactive.items}
+      digests={proactive.digests}
+      bufferedCount={proactive.bufferedCount}
+      rsiCandidates={proactive.rsiCandidates}
+      metrics={proactive.metrics}
+      loading={proactive.loading}
+      language={language}
+      onReload={proactive.reload}
+    />
+  ) : null;
   const cards: WorkbenchCard[] = [
     { id: 'attention', label: work.attention, lane: 'left', content: attentionSection },
+    { id: 'proactive', label: language === 'zh' ? '主动收件箱' : 'Agent Inbox', lane: 'left', content: proactiveSection },
     { id: 'delivery', label: work.progress, lane: 'left', content: deliverySection },
     { id: 'resume', label: work.resume, lane: 'left', content: resumeSection },
     { id: 'background', label: work.background, lane: 'right', content: backgroundSection },

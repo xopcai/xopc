@@ -17,6 +17,37 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/tasks/task-id/commands')?.id).not.toBe('task-retry');
     expect(findAuthenticatedLazyRouteBundle('/api/tasks/task-id/retry/extra')?.id).not.toBe('task-retry');
   });
+
+  it('maps proactive hub and RSI capability endpoints without capturing adjacent paths', () => {
+    for (const path of [
+      '/api/proactive/inbox',
+      '/api/proactive/inbox/item-1/act',
+      '/api/proactive/digests',
+      '/api/proactive/digests/flush',
+      '/api/proactive/subscriptions',
+      '/api/proactive/subscriptions/sub-1',
+      '/api/rsi/candidates',
+      '/api/rsi/candidates/cand-1/adopt',
+      '/api/rsi/candidates/cand-1/reject',
+      '/api/rsi/candidates/cand-1/rollback',
+    ]) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('proactive-rsi');
+    }
+    for (const path of [
+      '/api/proactive',
+      '/api/proactive-other/inbox',
+      '/api/proactive/inbox/item-1',
+      '/api/proactive/inbox/item-1/act/extra',
+      '/api/proactive/digests/other',
+      '/api/proactive/subscriptions/sub-1/extra',
+      '/api/rsi',
+      '/api/rsi-other/candidates',
+      '/api/rsi/candidates/cand-1',
+      '/api/rsi/candidates/cand-1/adopt/extra',
+    ]) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('proactive-rsi');
+    }
+  });
   it('mounts remote MCP, discovery documents, and built-in OAuth endpoints on their own exact paths', () => {
     const bundle = APP_LAZY_ROUTE_BUNDLES.find(candidate => candidate.id === 'mcp-remote');
     expect(bundle?.prefixes).toEqual([

@@ -55,6 +55,13 @@ for (const definition of [
   ['projects', 'project.deleted', 'project', 'A Project was deleted.'],
   ['discussions', 'discussion.completed', 'discussion', 'A Discussion completed.'],
   ['sessions', 'session.transcript.updated', 'session', 'A Session transcript changed.'],
+  ['local:folder', 'local.folder.batch_changed', 'folder', 'Authorized local folder files changed.'],
+  ['local:git', 'local.git.repo_state_changed', 'repository', 'Bound Git repository workspace state changed.'],
+  ['endpoint:desktop', 'endpoint.desktop.context_shift', 'device', 'Authorized desktop context shifted.'],
+  ['endpoint:desktop', 'endpoint.desktop.idle_window', 'device', 'Desktop entered an idle window suitable for background work.'],
+  ['endpoint:browser', 'endpoint.browser.saved_item', 'bookmark', 'User saved or shared a browser resource.'],
+  ['temporal:calendar', 'temporal.meeting.upcoming', 'meeting', 'An authorized calendar event is approaching.'],
+  ['temporal:pulse', 'temporal.pulse.window', 'digest', 'A scheduled morning or evening Pulse digest window opened.'],
 ] as const) {
   registerBusinessEvent({
     source: definition[0],
@@ -64,5 +71,23 @@ for (const definition of [
     schemaVersion: 1,
     payloadSchema: objectPayload,
     defaultTrust: 'system',
+  });
+}
+
+for (const definition of [
+  ['composio:gmail', 'connector.mail.received', 'mail_thread', 'An inbound email arrived on a connected mailbox.'],
+  ['composio:googlecalendar', 'connector.calendar.changed', 'calendar_event', 'A connected calendar event was created or updated.'],
+  ['composio:github', 'connector.github.pr_review_requested', 'pull_request', 'A pull request review was requested.'],
+  ['composio:github', 'connector.github.ci_failed', 'pull_request', 'A continuous integration check failed on a pull request or branch.'],
+  ['composio:linear', 'connector.linear.issue_assigned', 'issue', 'A Linear issue was assigned or updated.'],
+] as const) {
+  registerBusinessEvent({
+    source: definition[0],
+    type: definition[1],
+    subjectKind: definition[2],
+    description: definition[3],
+    schemaVersion: 1,
+    payloadSchema: objectPayload,
+    defaultTrust: 'connector',
   });
 }
