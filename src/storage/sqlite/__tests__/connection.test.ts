@@ -97,9 +97,15 @@ describe('openXopcDatabase', () => {
         'execution_environments',
         'execution_environment_bindings',
         'execution_environment_events',
+        'rsi_capability_candidates',
+        'rsi_capability_telemetry',
       ]),
     );
-    expect(tables.filter((name) => /^(scene_|proactive_)/.test(name))).toEqual([]);
+    expect(tables.filter((name) => /^(scene_|proactive_)/.test(name)).sort()).toEqual([
+      'proactive_coalesced_signals',
+      'proactive_items',
+      'proactive_subscriptions',
+    ]);
     expect(tables).not.toContain('work_understanding_threads');
     expect(tables).not.toContain('focus_watches');
     expect(tables).not.toContain('compaction_checkpoints');
