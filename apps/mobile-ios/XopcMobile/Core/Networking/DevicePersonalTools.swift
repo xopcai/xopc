@@ -99,23 +99,27 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         }
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
-            if request.gatewayCapabilityAuthorized != true, let capability = Self.writeCapabilityTitle(request.toolName) {
-                guard let capabilityScope else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
-                let key = "device-capability.\(capabilityScope).\(request.toolName)"
-                if !UserDefaults.standard.bool(forKey: key) {
-                    guard await confirm("允许后，当前 Gateway 可以继续使用「" + capability + "」。", title: "允许 Gateway 使用「" + capability + "」？") else {
-                        throw PersonalDeviceFailure(code: "USER_DENIED")
-                    }
-                    try Task.checkCancellation()
-                    UserDefaults.standard.set(true, forKey: key)
-                }
-            }
+            try await authorizeWriteCapability(request, scope: capabilityScope)
             return try await acquireContent(request, allowBackground: allowBackground)
         } onCancel: { Task {
             @MainActor in if self.activeInvocation == request.invocationId {
                 self.cancel()
             }
         } }
+    }
+
+    private func authorizeWriteCapability(_ request: PersonalDeviceRequest, scope: String?) async throws {
+        guard request.gatewayCapabilityAuthorized != true,
+              let capability = Self.writeCapabilityTitle(request.toolName)
+        else { return }
+        guard let scope else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        let key = "device-capability.\(scope).\(request.toolName)"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        guard await confirm("允许后，当前 Gateway 可以继续使用「" + capability + "」。", title: "允许 Gateway 使用「" + capability + "」？") else {
+            throw PersonalDeviceFailure(code: "USER_DENIED")
+        }
+        try Task.checkCancellation()
+        UserDefaults.standard.set(true, forKey: key)
     }
 
     private static func writeCapabilityTitle(_ toolName: String) -> String? {

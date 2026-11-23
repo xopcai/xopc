@@ -4,10 +4,10 @@ import UIKit
 
 // swiftlint:disable:next type_body_length
 actor DeviceEndpointHost {
-    private let client: GatewayClient
+    let client: GatewayClient
     private var socket: URLSessionWebSocketTask?
-    private var claim: DeviceEndpointOrigin?
-    private var pairedDeviceID: String?
+    private(set) var claim: DeviceEndpointOrigin?
+    private(set) var pairedDeviceID: String?
     private var connection: Task<DeviceEndpointOrigin, Error>?
     private var runSubscriptions = DeviceRunSubscriptions()
     private var retired = false
@@ -16,7 +16,7 @@ actor DeviceEndpointHost {
     private var heartbeat: Task<Void, Never>?
     private var probeTask: Task<Void, Never>?
     private var environmentTask: Task<Void, Never>?
-    private var appProviderAccepted = false
+    private(set) var appProviderAccepted = false
     private var appProviderSequence = 0
     private var lastReceivedAt = Date()
     private var lastPingSentAt = Date()
@@ -25,7 +25,7 @@ actor DeviceEndpointHost {
     private var foregroundTimeoutSeconds: TimeInterval = 45
     private var backgroundTimeoutSeconds: TimeInterval = 45
     private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
-    private var cachedBootstrap: (compatibility: DeviceCompatibility, multiQuestion: Bool, principalId: String, key: P256.Signing.PrivateKey)?
+    private var cachedBootstrap: Bootstrap?
     private let instance = UUID().uuidString.lowercased()
     init(client: GatewayClient) {
         self.client = client
@@ -136,25 +136,35 @@ actor DeviceEndpointHost {
         socket = nil
     }
 
+    private struct Bootstrap {
+        let compatibility: DeviceCompatibility
+        let multiQuestion: Bool
+        let principalId: String
+        let key: P256.Signing.PrivateKey
+    }
+
+    private func loadBootstrap() async throws -> Bootstrap {
+        if let cachedBootstrap {
+            return cachedBootstrap
+        }
+        let response: GatewayEnvelope<DeviceCompatibility> = try await client.request(path: "/api/endpoint-tools/compatibility")
+        let compatibility = response.payload ?? DeviceCompatibility(
+            deviceId: nil, turnDeviceContextV1: nil, clarificationVersions: nil, deviceLocationTasksV1: nil,
+            mobilePersonalToolsV1: nil, mobileExtendedPersonalToolsV1: nil, deviceStateToolsV1: nil, endpointEnvironmentV1: nil
+        )
+        let multiQuestion = await client.supportsMultiQuestion(compatibility.clarificationVersions)
+        let key = try Self.signingKey()
+        let fallback = "ios-" + SHA256.hash(data: key.publicKey.derRepresentation).prefix(16).map { String(format: "%02x", $0) }.joined()
+        let principalId = compatibility.deviceId ?? fallback
+        try await registerPrincipal(principalId, key: key)
+        let bootstrap = Bootstrap(compatibility: compatibility, multiQuestion: multiQuestion, principalId: principalId, key: key)
+        cachedBootstrap = bootstrap
+        return bootstrap
+    }
+
     // swiftlint:disable:next function_body_length
     private func connect() async throws -> DeviceEndpointOrigin {
-        let bootstrap: (compatibility: DeviceCompatibility, multiQuestion: Bool, principalId: String, key: P256.Signing.PrivateKey)
-        if let cached = cachedBootstrap {
-            bootstrap = cached
-        } else {
-            let compatibility: GatewayEnvelope<DeviceCompatibility> = try await client.request(path: "/api/endpoint-tools/compatibility")
-            let compatPayload = compatibility.payload ?? DeviceCompatibility(
-                deviceId: nil, turnDeviceContextV1: nil, clarificationVersions: nil, deviceLocationTasksV1: nil,
-                mobilePersonalToolsV1: nil, mobileExtendedPersonalToolsV1: nil, deviceStateToolsV1: nil, endpointEnvironmentV1: nil
-            )
-            let multiQuestion = await client.supportsMultiQuestion(compatPayload.clarificationVersions)
-            let key = try Self.signingKey()
-            let fallback = "ios-" + SHA256.hash(data: key.publicKey.derRepresentation).prefix(16).map { String(format: "%02x", $0) }.joined()
-            let principalId = compatPayload.deviceId ?? fallback
-            try await registerPrincipal(principalId, key: key)
-            bootstrap = (compatPayload, multiQuestion, principalId, key)
-            cachedBootstrap = bootstrap
-        }
+        let bootstrap = try await loadBootstrap()
         let endpointId = "ios:\(bootstrap.principalId):\(instance)"
         let ticket: GatewayEnvelope<RealtimeTicket> = try await client.request(path: "/api/realtime/tickets", method: "POST",
                                                                                body: client.encoder.encode(RealtimeTicketCommand(clientId: endpointId, clientKind: "mobile", protocolVersion: 2)))
@@ -200,14 +210,7 @@ actor DeviceEndpointHost {
             guard ready["kind"] as? String == "realtime.ready", let payload = ready["payload"] as? [String: Any],
                   let endpoint = payload["endpoint"] as? [String: Any], endpoint["endpointId"] as? String == endpointId,
                   let token = endpoint["turnToken"] as? String, token.count >= 32 else { throw GatewayClientError.invalidResponse }
-            if let fgMs = payload["heartbeatTimeoutMs"] as? Double, fgMs > 0 {
-                foregroundTimeoutSeconds = fgMs / 1000.0
-            }
-            if let bgMs = payload["backgroundHeartbeatTimeoutMs"] as? Double, bgMs > 0 {
-                backgroundTimeoutSeconds = bgMs / 1000.0
-            } else {
-                backgroundTimeoutSeconds = foregroundTimeoutSeconds
-            }
+            configureHeartbeat(payload)
             let multiQuestionSupported = bootstrap.multiQuestion
             guard self.socket === socket else { throw GatewayClientError.invalidResponse }
             let claim = DeviceEndpointOrigin(endpointId: endpointId, token: token,
@@ -231,6 +234,17 @@ actor DeviceEndpointHost {
                 closeSocket()
             }
             throw error
+        }
+    }
+
+    private func configureHeartbeat(_ payload: [String: Any]) {
+        if let fgMs = payload["heartbeatTimeoutMs"] as? Double, fgMs > 0 {
+            foregroundTimeoutSeconds = fgMs / 1000.0
+        }
+        if let bgMs = payload["backgroundHeartbeatTimeoutMs"] as? Double, bgMs > 0 {
+            backgroundTimeoutSeconds = bgMs / 1000.0
+        } else {
+            backgroundTimeoutSeconds = foregroundTimeoutSeconds
         }
     }
 
@@ -280,7 +294,9 @@ actor DeviceEndpointHost {
             await MainActor.run { UIApplication.shared.applicationState != .background }
         }
         let now = Date()
-        if !force, foreground == lastReportedForeground, now.timeIntervalSince(lastProviderReportAt) < 15 { return }
+        if !force, foreground == lastReportedForeground, now.timeIntervalSince(lastProviderReportAt) < 15 {
+            return
+        }
         guard self.socket === socket, appProviderAccepted else { return }
         lastReportedForeground = foreground
         lastProviderReportAt = now
@@ -458,74 +474,11 @@ actor DeviceEndpointHost {
         invocations.removeValue(forKey: id)
     }
 
-    private func invoke(_ requestData: Data) async throws {
-        guard let request = try JSONSerialization.jsonObject(with: requestData) as? [String: Any], let id = request["invocationId"] as? String else { throw GatewayClientError.invalidResponse }
-        if request["toolName"] as? String == "mobile.device.get_location" {
-            try await invokeLocation(request, id: id)
-            return
-        }
-        if let name = request["toolName"] as? String, Self.personalNames.contains(name) {
-            try await invokePersonal(requestData, id: id); return
-        }
-        try await invokeState(request, id: id)
+    func cancelInvocation(_ id: String) {
+        invocations[id]?.cancel()
     }
 
-    private func invokeState(_ request: [String: Any], id: String) async throws {
-        func fail(_ code: String) async throws {
-            try await send("tool.error", ["invocationId": id, "code": code, "message": "Device reading unavailable: \(code)"])
-        }
-        let index: Int
-        switch request["toolName"] as? String {
-        case "mobile.device.get_state": index = 0
-        case "mobile.device.get_power": index = 1
-        case DeviceToolCatalog.appToolName: index = 2
-        default: try await fail("TOOL_NOT_FOUND"); return
-        }
-        let revision = index == 2 ? DeviceToolCatalog.appToolRevision : DeviceToolCatalog.revisions[index]
-        guard request["descriptorRevision"] as? String == revision else {
-            try await fail("TOOL_REVISION_MISMATCH"); return
-        }
-        guard request["confirmationRequired"] as? Bool == false,
-              let arguments = request["arguments"] as? [String: Any], arguments.isEmpty
-        else {
-            try await fail("INVALID_ARGUMENTS"); return
-        }
-        guard let deadline = request["deadlineAt"] as? Double, deadline > Double(Self.now()) else {
-            try await fail("TOOL_TIMEOUT"); return
-        }
-        if index == 2 {
-            let foreground = await MainActor.run { UIApplication.shared.applicationState == .active }
-            try Task.checkCancellation()
-            guard appProviderAccepted, foreground else { try await fail("ENDPOINT_NOT_FOREGROUND"); return }
-            try await send("tool.received", ["invocationId": id])
-            try Task.checkCancellation()
-            try await send("tool.result", ["invocationId": id, "content": [["type": "json", "value": ["active": true]]]])
-            return
-        }
-        try await send("tool.received", ["invocationId": id])
-        let reading = try await deviceReading(index)
-        guard deadline > Double(Self.now()) else { try await fail("TOOL_TIMEOUT"); return }
-        let value = try JSONSerialization.jsonObject(with: reading)
-        try await send("tool.result", ["invocationId": id, "content": [["type": "json", "value": value]]])
-    }
-
-    private func deviceReading(_ index: Int) async throws -> Data {
-        try await MainActor.run {
-            if index == 0 {
-                return try Self.json(["capturedAt": Self.now(), "platform": "ios", "systemVersion": UIDevice.current.systemVersion,
-                                      "locale": Locale.current.identifier.replacingOccurrences(of: "_", with: "-"), "timezone": TimeZone.current.identifier])
-            }
-            let device = UIDevice.current
-            let monitoring = device.isBatteryMonitoringEnabled
-            device.isBatteryMonitoringEnabled = true
-            defer { device.isBatteryMonitoringEnabled = monitoring }
-            let level = device.batteryLevel
-            let charging: Any = device.batteryState == .unknown ? NSNull() : (device.batteryState == .charging || device.batteryState == .full)
-            return try Self.json(["capturedAt": Self.now(), "levelPercent": level >= 0 && level <= 1 ? Double(level) * 100 : NSNull(), "charging": charging])
-        }
-    }
-
-    private func send(_ kind: String, _ payload: [String: Any]) async throws {
+    func send(_ kind: String, _ payload: [String: Any]) async throws {
         if kind.hasPrefix("tool.") || kind.hasPrefix("provider.") || kind == "endpoint.availability_changed" {
             try await send("endpoint.message", ["protocolVersion": 3, "messageId": UUID().uuidString, "type": kind, "sentAt": Self.now(), "payload": payload]); return
         }
@@ -543,105 +496,5 @@ actor DeviceEndpointHost {
               frame["protocolVersion"] as? Int == 2,
               data.count <= 256 * 1024 || frame["kind"] as? String == "realtime.event" else { throw GatewayClientError.invalidResponse }
         return (frame, data)
-    }
-
-    private static func json(_ value: [String: Any]) throws -> Data {
-        try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .withoutEscapingSlashes])
-    }
-
-    private static func now() -> Int64 {
-        Int64(Date().timeIntervalSince1970 * 1000)
-    }
-}
-
-private extension DeviceEndpointHost {
-    private static let personalNames = [
-        "mobile.file.pick", "mobile.media.pick", "mobile.camera.capture", "mobile.contacts.pick",
-        "mobile.calendar.query_events", "mobile.calendar.query_free_busy", "mobile.contacts.find_by_name",
-        "mobile.calendar.create_event", "mobile.media.list_recent", "mobile.media.read_image", "mobile.media.add_to_album"
-    ]
-
-    private func invokePersonal(_ data: Data, id: String) async throws {
-        do {
-            let request = try JSONDecoder().decode(PersonalDeviceRequest.self, from: data)
-            let calendar = try validatePersonalRequest(request)
-            let remaining = request.deadlineAt - Self.now()
-            guard remaining > 0 else { throw PersonalDeviceFailure(code: "TOOL_TIMEOUT") }
-            try await send("tool.received", ["invocationId": id])
-            let timeout = Task {
-                try? await Task.sleep(for: .milliseconds(min(remaining, 120_000)))
-                if !Task.isCancelled {
-                    self.invocations[id]?.cancel()
-                }
-            }
-            defer { timeout.cancel() }
-            let gatewayIdentity = client.configuration.localIdentity ?? client.configuration.baseURL.absoluteString
-            let capabilityScope = pairedDeviceID.map { gatewayIdentity + "." + $0 }
-            let selected = try await DevicePersonalTools.shared.acquire(request, capabilityScope: capabilityScope)
-            try Task.checkCancellation()
-            let contentData: Data
-            if calendar || request.toolName.hasPrefix("mobile.contacts.") || ["mobile.media.list_recent", "mobile.media.add_to_album"].contains(request.toolName) {
-                contentData = selected
-            } else {
-                let file = try JSONDecoder().decode(DevicePersonalTools.SelectionWire.self, from: selected)
-                guard let grant = request.uploadGrant, grant.path == "/api/endpoint-tools/invocations/\(id)/files", grant.expiresAt > Self.now(), file.data.count <= grant.maxBytes,
-                      let endpointId = claim?.endpointId else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
-                var upload = try URLRequest(url: client.makeURL(path: grant.path, queryItems: [URLQueryItem(name: "name", value: file.name)]))
-                upload.httpMethod = "POST"; upload.httpBody = file.data
-                upload.setValue("Bearer \(client.configuration.token)", forHTTPHeaderField: "Authorization")
-                upload.setValue(file.mimeType, forHTTPHeaderField: "Content-Type")
-                upload.setValue(endpointId, forHTTPHeaderField: "x-endpoint-id")
-                upload.setValue(grant.token, forHTTPHeaderField: "x-endpoint-upload-token")
-                let (body, response) = try await client.session.data(for: GatewayPairingService.shared.signedRequest(upload))
-                guard (response as? HTTPURLResponse)?.statusCode == 201,
-                      let envelope = try JSONSerialization.jsonObject(with: body) as? [String: Any], let payload = envelope["payload"] as? [String: Any] else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
-                contentData = try Self.json(payload)
-            }
-            try Task.checkCancellation()
-            let content = try JSONSerialization.jsonObject(with: contentData)
-            try await send("tool.result", ["invocationId": id, "content": [content]])
-        } catch is CancellationError { try await send("tool.cancelled", ["invocationId": id]) }
-        catch {
-            let code = (error as? PersonalDeviceFailure)?.code ?? "PERMISSION_DENIED"
-            try await send("tool.error", ["invocationId": id, "code": code, "message": "Personal device request failed: \(code)"])
-        }
-    }
-
-    private func validatePersonalRequest(_ request: PersonalDeviceRequest) throws -> Bool {
-        guard let index = Self.personalNames.firstIndex(of: request.toolName),
-              request.descriptorRevision == DeviceToolCatalog.revisions[index + 3]
-        else { throw PersonalDeviceFailure(code: "TOOL_REVISION_MISMATCH") }
-        let calendar = request.toolName.hasPrefix("mobile.calendar.")
-        guard request.confirmationRequired == (["mobile.calendar.create_event", "mobile.media.add_to_album"].contains(request.toolName)) else { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
-        if calendar {
-            guard let start = request.arguments.startAt, let end = request.arguments.endAt,
-                  start >= 0, end > start, end - start <= 7 * 86_400_000
-            else { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
-        }
-        if request.toolName == "mobile.contacts.pick", !["phone", "email"].contains(request.arguments.field ?? "") {
-            throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS")
-        }
-        return calendar
-    }
-
-    private func invokeLocation(_ request: [String: Any], id: String) async throws {
-        func fail(_ code: String) async throws {
-            try await send("tool.error", ["invocationId": id, "code": code, "message": "Device reading unavailable: \(code)"])
-        }
-        guard request["descriptorRevision"] as? String == DeviceToolCatalog.revisions[2] else { try await fail("TOOL_REVISION_MISMATCH"); return }
-        guard request["confirmationRequired"] as? Bool == false,
-              let args = request["arguments"] as? [String: Any], let purpose = args["purpose"] as? String,
-              let precision = args["precision"] as? String, ["weather", "nearby"].contains(purpose), ["approximate", "precise"].contains(precision),
-              args.count == (purpose == "weather" ? 2 : 3), purpose == "weather" || ["restaurant", "cafe", "pharmacy", "park"].contains(args["category"] as? String ?? ""),
-              let deadline = request["deadlineAt"] as? Double else { try await fail("INVALID_ARGUMENTS"); return }
-        guard deadline > Double(Self.now()) else { try await fail("TOOL_TIMEOUT"); return }
-        try await send("tool.received", ["invocationId": id])
-        do {
-            let reading = try await DeviceLocation.shared.acquire(precision: precision, deadline: deadline)
-            try Task.checkCancellation()
-            guard deadline > Double(Self.now()) else { try await fail("TOOL_TIMEOUT"); return }
-            try await send("tool.result", ["invocationId": id, "content": [["type": "json", "value": JSONSerialization.jsonObject(with: reading)]]])
-        } catch let error as DeviceLocation.LocationFailure { try await fail(error.code) }
-        catch { try await fail(Task.isCancelled ? "TOOL_CANCELLED" : "PROTOCOL_ERROR") }
     }
 }

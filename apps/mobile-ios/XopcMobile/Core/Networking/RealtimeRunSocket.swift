@@ -260,7 +260,7 @@ struct DeviceRunSubscriptions {
             finishAll(throwing: GatewayClientError.server(payload["message"] as? String ?? "实时连接发生错误"))
             return nil
         }
-        guard let topic = payload["topic"] as? String, var observers = topics[topic] else { return nil }
+        guard let topic = payload["topic"] as? String, let observers = topics[topic] else { return nil }
         if raw["kind"] as? String == "realtime.subscribed", topic == "sessions" {
             let subscribed = RunStreamEvent(name: "realtime.subscribed", sequence: 0, messageId: nil, delta: nil,
                                             offset: nil, status: nil, errorMessage: nil, toolName: nil, stage: nil)
@@ -277,24 +277,33 @@ struct DeviceRunSubscriptions {
         let decoded = try JSONDecoder().decode(RealtimeServerFrame.self, from: data)
         guard let event = decoded.runEvent else { return nil }
         if topic == "sessions" {
-            guard ["session.task-result", "session.agent-reaction", "session.agent-reaction.preference",
-                   "session.next-turn-suggestion.changed"].contains(event.name),
-                  let targetConversation = decoded.payload.data?.conversationId else { return nil }
-            for (id, observer) in observers where observer.conversationID == targetConversation && observer.sequence < event.sequence {
-                observers[id]?.sequence = event.sequence
-                observer.continuation.yield(event)
-            }
-            topics[topic] = observers
+            publishSessionEvent(event, conversationID: decoded.payload.data?.conversationId)
             return nil
         }
+        publish(event, to: topic)
+        guard event.isTerminal else { return nil }
+        finish(topic, throwing: nil)
+        return topic
+    }
+
+    private mutating func publishSessionEvent(_ event: RunStreamEvent, conversationID: String?) {
+        guard let conversationID,
+              ["session.task-result", "session.agent-reaction", "session.agent-reaction.preference",
+               "session.next-turn-suggestion.changed"].contains(event.name)
+        else { return }
+        publish(event, to: "sessions", conversationID: conversationID)
+    }
+
+    private mutating func publish(_ event: RunStreamEvent, to topic: String, conversationID: String? = nil) {
+        guard var observers = topics[topic] else { return }
         for (id, observer) in observers where observer.sequence < event.sequence {
+            if let conversationID, observer.conversationID != conversationID {
+                continue
+            }
             observers[id]?.sequence = event.sequence
             observer.continuation.yield(event)
         }
         topics[topic] = observers
-        guard event.isTerminal else { return nil }
-        finish(topic, throwing: nil)
-        return topic
     }
 
     private mutating func finish(_ topic: String, throwing error: Error?) {
