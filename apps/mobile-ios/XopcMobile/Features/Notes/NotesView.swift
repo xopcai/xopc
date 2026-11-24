@@ -86,7 +86,13 @@ struct NotesView: View {
         }
         .background(mobileTheme.canvas)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            captureActions
+            NotesCaptureActions(onRecord: {
+                isSearchFocused = false
+                presentedSheet = .voice
+            }, onCreate: {
+                isSearchFocused = false
+                presentedSheet = .create
+            })
         }
         .mobilePageTitle(Text("笔记")) { Text("笔记").font(.headline) }
         .toolbar {
@@ -132,45 +138,6 @@ struct NotesView: View {
             Button("重试") { Task { await load() } }
             Button("取消", role: .cancel) {}
         } message: { Text(error ?? "未知错误") }
-    }
-
-    private var captureActions: some View {
-        HStack(spacing: 4) {
-            Button {
-                isSearchFocused = false
-                presentedSheet = .voice
-            } label: {
-                Label("录音", systemImage: "mic")
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 46)
-                    .contentShape(.capsule)
-            }
-            .accessibilityIdentifier("notes-create-voice")
-            Button {
-                isSearchFocused = false
-                presentedSheet = .create
-            } label: {
-                Label("新建笔记", systemImage: "square.and.pencil")
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: 46)
-                    .foregroundStyle(mobileTheme.action)
-                    .background(mobileTheme.action.opacity(0.12), in: .capsule)
-            }
-            .accessibilityIdentifier("notes-create-text")
-        }
-        .buttonStyle(.plain)
-        .font(.subheadline.weight(.semibold))
-        .padding(5)
-        .background(.regularMaterial, in: .capsule)
-        .overlay {
-            Capsule().strokeBorder(.primary.opacity(0.08)).allowsHitTesting(false)
-        }
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("notes-capture-actions")
     }
 
     private var statusPicker: some View {
@@ -308,6 +275,45 @@ private enum NotesSheet: Identifiable {
         case .voice: "voice"
         case let .detail(id): "detail-\(id)"
         }
+    }
+}
+
+private struct NotesCaptureActions: View {
+    @Environment(\.mobileTheme) private var mobileTheme
+    let onRecord: () -> Void
+    let onCreate: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button(action: onRecord) {
+                Label("录音", systemImage: "mic")
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 46)
+                    .contentShape(.capsule)
+            }
+            .accessibilityIdentifier("notes-create-voice")
+            Button(action: onCreate) {
+                Label("新建笔记", systemImage: "square.and.pencil")
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 46)
+                    .foregroundStyle(mobileTheme.action)
+                    .background(mobileTheme.action.opacity(0.12), in: .capsule)
+            }
+            .accessibilityIdentifier("notes-create-text")
+        }
+        .buttonStyle(.plain)
+        .font(.subheadline.weight(.semibold))
+        .padding(5)
+        .background(.regularMaterial, in: .capsule)
+        .overlay {
+            Capsule().strokeBorder(.primary.opacity(0.08)).allowsHitTesting(false)
+        }
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("notes-capture-actions")
     }
 }
 

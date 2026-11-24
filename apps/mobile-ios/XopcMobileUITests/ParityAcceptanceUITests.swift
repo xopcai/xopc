@@ -2658,7 +2658,9 @@ final class MobileLayoutParityUITests: XCTestCase {
             let (data, _) = try await URLSession.shared.data(from: unreadURL)
             let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
             unreadCount = try XCTUnwrap((json["payload"] as? [String: Any])?["unreadCount"] as? Int)
-            if unreadCount != 0 { try await Task.sleep(for: .milliseconds(250)) }
+            if unreadCount != 0 {
+                try await Task.sleep(for: .milliseconds(250))
+            }
         }
         XCTAssertEqual(unreadCount, 0)
         XCTAssertTrue(app.openHomeSidebar())
