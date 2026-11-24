@@ -170,6 +170,7 @@ class Handler(BaseHTTPRequestHandler):
   task_delivery_fixture = path.startswith('/task-delivery/')
   suggestion_fixture = path.startswith('/next-turn/')
   bubble_fixture = path.startswith('/bubble-width/')
+  table_fixture = path.startswith('/sidebar-table/')
   sidebar_fixture = path.startswith('/sidebar-pagination/')
   sidebar_actions_fixture = path.startswith('/sidebar-actions/')
   personal_unread_fixture = path.startswith('/personal-unread/')
@@ -185,6 +186,7 @@ class Handler(BaseHTTPRequestHandler):
   if task_delivery_fixture: path = path.removeprefix('/task-delivery')
   if suggestion_fixture: path = path.removeprefix('/next-turn')
   if bubble_fixture: path = path.removeprefix('/bubble-width')
+  if table_fixture: path = path.removeprefix('/sidebar-table')
   if sidebar_fixture: path = path.removeprefix('/sidebar-pagination')
   if sidebar_actions_fixture: path = path.removeprefix('/sidebar-actions')
   if personal_unread_fixture: path = path.removeprefix('/personal-unread')
@@ -448,6 +450,11 @@ class Handler(BaseHTTPRequestHandler):
    key=path.split('/')[3]
    history = messages
    if bubble_fixture: history = bubble_messages
+   if table_fixture:
+    columns = 16
+    table = '\n'.join('| ' + ' | '.join(row) + ' |' for row in (
+     [f'Column {i}' for i in range(columns)], ['---'] * columns, [f'Value {i}' for i in range(columns)]))
+    history = [{'id':'sidebar-wide-table','role':'assistant','content':table}]
    if keyboard_fixture: history = keyboard_messages
    if long_history_fixture: history = long_history_messages
    if settings_link: history = [{'id':'settings-link','role':'assistant','content':

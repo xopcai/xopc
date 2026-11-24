@@ -26,7 +26,8 @@ export struct RecordingOutcomeCard {
   }
   build() {
     Column({ space: 10 }) {
-      if (!this.noteContext) Text(recordingOutcomePhrase('leave_' + projectRecordingOutcome(this.input).leave)).fontSize(14).lineHeight(21).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
+      if (!this.noteContext) Text(recordingOutcomePhrase('leave_' + projectRecordingOutcome(this.input).leave))
+        .fontSize(13).lineHeight(20).fontColor(this.colors.secondary).width('100%')
       Button({ type: ButtonType.Normal }) {
         Row({ space: 8 }) {
           Text(recordingOutcomeStageCopy(projectRecordingOutcome(this.input).stage).title).fontSize(14).fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)

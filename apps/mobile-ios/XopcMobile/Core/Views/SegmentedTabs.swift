@@ -89,6 +89,8 @@ struct HorizontalSwipeCapture: UIViewRepresentable {
         var capture: HorizontalSwipeCapture
         private weak var region: UIView?
         private let pan = UIPanGestureRecognizer()
+        private var canScrollLeft = false
+        private var canScrollRight = false
 
         init(_ capture: HorizontalSwipeCapture) {
             self.capture = capture
@@ -110,6 +112,13 @@ struct HorizontalSwipeCapture: UIViewRepresentable {
             guard let region, let window = region.window, region.bounds.contains(touch.location(in: region)) else {
                 return false
             }
+            let touchX = touch.location(in: window).x
+            guard !capture.reserveBackEdge || touchX >= 24,
+                  !capture.reserveTrailingEdge || touchX <= window.bounds.width - 24
+            else { return false }
+
+            canScrollLeft = false
+            canScrollRight = false
             if capture.respectsHorizontalScroll {
                 var presented = window.rootViewController?.presentedViewController
                 while let controller = presented {
@@ -123,16 +132,16 @@ struct HorizontalSwipeCapture: UIViewRepresentable {
                 var target = touch.view
                 while let view = target, view !== window {
                     if let scroll = view as? UIScrollView, scroll.isScrollEnabled,
-                       scroll.alwaysBounceHorizontal || scroll.contentSize.width > scroll.bounds.width + 1
+                       let range = horizontalScrollRange(scroll)
                     {
-                        return false
+                        // Decide ownership using the scroll position at touch-down.
+                        canScrollLeft = canScrollLeft || scroll.contentOffset.x > range.lowerBound + 1
+                        canScrollRight = canScrollRight || scroll.contentOffset.x < range.upperBound - 1
                     }
                     target = view.superview
                 }
             }
-            let touchX = touch.location(in: window).x
-            return (!capture.reserveBackEdge || touchX >= 24)
-                && (!capture.reserveTrailingEdge || touchX <= window.bounds.width - 24)
+            return true
         }
 
         func gestureRecognizerShouldBegin(_: UIGestureRecognizer) -> Bool {
@@ -140,17 +149,32 @@ struct HorizontalSwipeCapture: UIViewRepresentable {
             return abs(offset.x) > abs(offset.y) * 1.25
                 && (!capture.leftOnly || offset.x < 0)
                 && (!capture.rightOnly || offset.x > 0)
+                && !(offset.x > 0 ? canScrollLeft : canScrollRight)
         }
 
         func gestureRecognizer(_: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool
         {
-            !capture.prioritizeSelection && other.view is UIScrollView
+            guard !capture.prioritizeSelection, let scroll = other.view as? UIScrollView else { return false }
+            return !capturesHorizontalScrollPan(other, in: scroll)
         }
 
         func gestureRecognizer(_: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            guard capture.prioritizeSelection, let scroll = other.view as? UIScrollView else { return false }
-            return other === scroll.panGestureRecognizer
+            guard let scroll = other.view as? UIScrollView else { return false }
+            return capturesHorizontalScrollPan(other, in: scroll)
+                || (capture.prioritizeSelection && other === scroll.panGestureRecognizer)
+        }
+
+        private func capturesHorizontalScrollPan(_ recognizer: UIGestureRecognizer, in scroll: UIScrollView) -> Bool {
+            capture.respectsHorizontalScroll && recognizer === scroll.panGestureRecognizer
+                && (scroll.alwaysBounceHorizontal || horizontalScrollRange(scroll) != nil)
+        }
+
+        private func horizontalScrollRange(_ scroll: UIScrollView) -> ClosedRange<CGFloat>? {
+            let inset = scroll.adjustedContentInset
+            let start = -inset.left
+            let end = scroll.contentSize.width - scroll.bounds.width + inset.right
+            return end > start + 1 ? start ... end : nil
         }
 
         @objc private func onPan() {

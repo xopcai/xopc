@@ -13,7 +13,7 @@ import { XopcMobileRoute } from '../model/home';
 import { internalMessageLink } from '../common/messageLink';
 import { normalizedFileMimeType } from '../common/filePreview';
 import { markdownReadingBlocks, markdownBlockGap, markdownPreviewBlocks, markdownPreviewBlockLines,
-  markdownTableWidths, MARKDOWN_TABLE_CELL_INSET } from '../common/markdownLayout';
+  markdownTableWidths, MARKDOWN_TABLE_CELL_INSET, MARKDOWN_HORIZONTAL_SCROLL_ID_PREFIX } from '../common/markdownLayout';
 import { markdownCodePreview } from '../common/markdownStreamParser';
 
 @ComponentV2
@@ -263,7 +263,8 @@ export struct XopcMarkdownView {
             Scroll() {
               Text(this.codeText(item.item)).fontFamily('monospace').fontSize(14).lineHeight(22)
                 .fontColor(this.colors.foreground).copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None)
-            }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Auto)
+            }.id(MARKDOWN_HORIZONTAL_SCROLL_ID_PREFIX + item.item.id)
+              .width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Auto)
             if (markdownCodePreview(item.item.text).length < item.item.text.length) {
               Button(this.expandedBlocks.has(item.item.id) ? $r('app.string.chat_collapse_content') : $r('app.string.chat_view_more'))
                 .height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
@@ -289,7 +290,8 @@ export struct XopcMarkdownView {
                   .margin({ bottom: 4 })
               }).key((row: XopcMarkdownTableRow): string => row.id)
             }.width(this.tableColumns.get(item.item.id)?.reduce((total: number, width: number): number => total + width, 0))
-          }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Auto)
+          }.id(MARKDOWN_HORIZONTAL_SCROLL_ID_PREFIX + item.item.id)
+            .width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Auto)
           if ((item.item.rows || []).length > 40) {
             Button(this.expandedBlocks.has(item.item.id) ? $r('app.string.chat_collapse_content') : $r('app.string.chat_view_more'))
               .height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)

@@ -3,6 +3,7 @@ import { markdownSpans, XopcMarkdownBlock, XopcMarkdownSpan, XopcMarkdownTableRo
 
 const compactTableValue = /^[+−-]?(?:[$€£¥￥]\s?|v)?[0-9]+(?:[.,:/\u00a0\u202f-][0-9]+)*(?:\s?(?:[%％‰]|[$€£¥￥]|ms|s|KB|MB|GB|TB))?$/i;
 export const MARKDOWN_TABLE_CELL_INSET: number = 6;
+export const MARKDOWN_HORIZONTAL_SCROLL_ID_PREFIX: string = 'markdown-horizontal-scroll-';
 
 export function markdownTableWidths(rows: XopcMarkdownTableRow[], available: number,
   measureText: (text: string, strong: boolean) => number): number[] {

@@ -220,6 +220,7 @@
     {"name": "note_ui_close_search", "value": "Close search"},
     {"name": "capture_panel_no_saved_audio", "value": "No audio has been confirmed saved yet"},
     {"name": "capture_panel_saving", "value": "Saving recording"},
+    {"name": "capture_panel_saved", "value": "Recording saved"},
     {"name": "capture_panel_sync_failed", "value": "Sync is unavailable. Please try again later."},
     {"name": "capture_panel_backup_later", "value": "Backs up after recording"},
     {"name": "capture_panel_notes_later", "value": "Text and notes continue after the recording is saved"},

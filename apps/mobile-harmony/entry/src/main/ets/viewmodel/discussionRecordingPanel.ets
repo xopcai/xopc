@@ -76,12 +76,12 @@ export class XopcDiscussionRecordingPanel {
   pause(capture: XopcRecordingPanelActions): void {
     if (!this.finishing && recordingPanelAvailability(capture).pause) capture.togglePause();
   }
-  finish(capture: XopcRecordingPanelActions,onSaved: (id: string) => void): Promise<void> {
+  finish(capture: XopcRecordingPanelActions,onSaved?: (id: string) => void): Promise<void> {
     if (this.finishTask) return this.finishTask;
     if (!recordingPanelAvailability(capture).finish) return Promise.resolve();
     this.finishing = true;
     this.finishTask = capture.stop().then((id: string): void => {
-      if (id && capture.phase === 'completed') onSaved(id);
+      if (id && capture.phase === 'completed') onSaved?.(id);
     }).finally((): void => { this.finishing = false; this.finishTask = undefined; });
     return this.finishTask;
   }

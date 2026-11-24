@@ -2627,6 +2627,35 @@ final class MobileLayoutParityUITests: XCTestCase {
         }
     }
 
+    func testSidebarSwipeFromMarkdownTableAtItsLeadingEdge() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/sidebar-table"
+        app.launch()
+
+        let table = app.scrollViews["chat-message-assistant-sidebar-wide-table"]
+        XCTAssertTrue(table.waitForExistence(timeout: 8))
+        let start = table.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5))
+        let end = table.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+        let sidebarProfile = app.buttons["chat-sidebar-profile"]
+        let header = table.staticTexts["markdown-table-row-0"]
+        let leftEdge = header.frame.minX
+
+        end.press(forDuration: 0.05, thenDragTo: start)
+        XCTAssertFalse(sidebarProfile.isHittable)
+        let scrolledEdge = header.frame.minX
+        XCTAssertLessThan(scrolledEdge, leftEdge - 20)
+        start.press(forDuration: 0.05, thenDragTo: end)
+        XCTAssertFalse(sidebarProfile.isHittable)
+        XCTAssertGreaterThan(header.frame.minX, scrolledEdge + 20)
+
+        // Reload to start the next gesture from the first column.
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(table.waitForExistence(timeout: 8))
+        start.press(forDuration: 0.05, thenDragTo: end)
+        XCTAssertTrue(sidebarProfile.waitForExistence(timeout: 5))
+    }
+
     func testPersonalSidebarBadgeClearsAfterOpeningTheConversation() async throws {
         app.terminate()
         let base = fixtureBase + "/personal-unread"

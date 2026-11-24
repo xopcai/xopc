@@ -220,6 +220,7 @@
     {"name": "note_ui_close_search", "value": "关闭搜索"},
     {"name": "capture_panel_no_saved_audio", "value": "尚无已确认保存的音频"},
     {"name": "capture_panel_saving", "value": "正在保存录音"},
+    {"name": "capture_panel_saved", "value": "录音已保存"},
     {"name": "capture_panel_sync_failed", "value": "暂时无法同步，请稍后重试。"},
     {"name": "capture_panel_backup_later", "value": "录音结束后自动备份"},
     {"name": "capture_panel_notes_later", "value": "原音保存后继续整理文字和笔记"},

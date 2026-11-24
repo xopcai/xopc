@@ -1523,6 +1523,22 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("chat-header-sidebar").assertIsDisplayed()
   }
 
+  @Test fun sidebarOpensFromAHorizontalSwipeOnMarkdownTable() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val columns = 1..16
+    val table = columns.joinToString(" | ", "| ", " |\n") { "Column $it" } +
+      columns.joinToString(" | ", "| ", " |\n") { "---" } +
+      columns.joinToString(" | ", "| ", " |") { "Value $it" }
+    composeTestRule.setContent {
+      MainScreen(connection = ConnectionUiState(profile = profile, selectedConversationId = "conversation",
+        messages = listOf(ConversationMessage("table-answer", "assistant", table))))
+    }
+
+    composeTestRule.onNodeWithTag("markdown-table", useUnmergedTree = true).assertIsDisplayed()
+      .performTouchInput { swipeRight(startX = width * 0.2f, endX = width * 0.8f) }
+    composeTestRule.onNodeWithTag("chat-sidebar").assertIsDisplayed()
+  }
+
   @Test fun notesTabLoadsAndOpensVerifiedDetailWithoutLeavingTab() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val note = NoteSummary("note-1", "Idea", "Preview", "inbox", "thought", 2000L,

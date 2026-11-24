@@ -790,12 +790,6 @@ export struct XopcHomeView {
         }
         XopcDiscussionRecordingPanelView({ panel: this.recordingPanel,viewportWidth: this.recordingViewportWidth,viewportHeight: this.recordingViewportHeight,
           docked: this.recordingDocked,
-          onSaved: (_id: string): void => {
-            if (this.recordingDocked && !this.capture.markerError &&
-              (this.capture.localSaveComplete || this.capture.syncStatus === 'available')) {
-              this.recordingPanel.setCompact(true);
-            }
-          },
           onOpenNote: (id: string): void => { this.recordingPanel.setCompact(true); this.navigate({ page: 'notes',itemId: id }); },
           onRecovery: (): void => { this.pathStack.clear(); this.navigate({ page: 'notes-list', itemId: '' }); void this.capture.refreshPending(this.getUIContext().getHostContext() as common.UIAbilityContext); } })
       }

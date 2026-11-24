@@ -72,6 +72,7 @@ import { editChatImageAttachment } from '../service/chatImageEditing';
 import { chatMessageNeedsPreview, latestChatMessageId } from '../common/chatMessagePreview';
 import { CHAT_MESSAGE_MAX_WIDTH, chatPlainAssistantBubbleText, chatTextBubbleWidth } from '../common/chatBubbleLayout';
 import { CHAT_SIDEBAR_PAN_TAG, canStartChatSidebarPan } from '../common/chatSidebarGesture';
+import { MARKDOWN_HORIZONTAL_SCROLL_ID_PREFIX } from '../common/markdownLayout';
 import { chatPresentationRows } from '../common/chatPresentation';
 import { XopcBrandLoading } from './MobileComponents';
 import { XopcPersonalAgentRecord, XopcPersonalReadTarget, XopcPersonalUnreadSnapshot } from '../model/personalAgent';
@@ -1716,7 +1717,7 @@ export struct XopcChatView {
     }.id('chat-content-viewport').width('100%').height('100%')
       // Keep messages behind the floating dock; reserve clearance inside the list's scroll extent.
       .clip(true)
-      .gesture(PanGesture({ fingers: 1, direction: PanDirection.Right, distance: 10 })
+      .parallelGesture(PanGesture({ fingers: 1, direction: PanDirection.Right, distance: 10 })
         .tag(CHAT_SIDEBAR_PAN_TAG)
         .onActionStart((event: GestureEvent): void => {
           this.dismissComposer();
@@ -1725,9 +1726,10 @@ export struct XopcChatView {
         .onActionUpdate((event: GestureEvent): void => { this.onSidebarDragUpdate(event.offsetX); })
         .onActionEnd((event: GestureEvent): void => { this.onSidebarDragEnd(event.offsetX, event.velocityX); })
         .onActionCancel((): void => { this.onSidebarDragCancel(); }))
-      .onGestureJudgeBegin((info: GestureInfo, event: BaseGestureEvent): GestureJudgeResult => {
-        if (info.tag !== CHAT_SIDEBAR_PAN_TAG) return GestureJudgeResult.CONTINUE;
-        return this.judgeSidebarPan(event as PanGestureEvent);
+      .onGestureRecognizerJudgeBegin((event: BaseGestureEvent, current: GestureRecognizer,
+        others: GestureRecognizer[]): GestureJudgeResult => {
+        if (current.getTag() !== CHAT_SIDEBAR_PAN_TAG) return GestureJudgeResult.CONTINUE;
+        return this.judgeSidebarPan(event as PanGestureEvent, others);
       })
     Column().id('chat-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.chat.canvas)
     Column() {
@@ -2042,12 +2044,20 @@ export struct XopcChatView {
     else if (id === 'record-voice' && !this.showVoice) this.toggleVoice();
   }
 
-  private judgeSidebarPan(event: PanGestureEvent): GestureJudgeResult {
+  private judgeSidebarPan(event: PanGestureEvent, recognizers: GestureRecognizer[]): GestureJudgeResult {
     const finger = event.fingerInfos?.[0] ?? event.fingerList[0];
     if (!finger || event.source !== SourceType.TouchScreen || !this.sidebarSwipeEnabled || !this.activePage || this.phonePage !== 0
       || this.panelOpen || this.voiceHeld
       || !canStartChatSidebarPan(finger.globalX - event.offsetX, this.sidebarSwipeWidth, event.offsetX, event.offsetY)) {
       return GestureJudgeResult.REJECT;
+    }
+    for (const recognizer of recognizers) {
+      if (!recognizer.isBuiltIn() || recognizer.getType() !== GestureControl.GestureType.PAN_GESTURE) continue;
+      const target = recognizer.getEventTargetInfo();
+      if (target instanceof ScrollableTargetInfo && target.getId().startsWith(MARKDOWN_HORIZONTAL_SCROLL_ID_PREFIX)
+        && !target.isBegin()) {
+        return GestureJudgeResult.REJECT;
+      }
     }
     return GestureJudgeResult.CONTINUE;
   }
