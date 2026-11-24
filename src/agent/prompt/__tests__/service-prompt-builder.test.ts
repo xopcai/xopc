@@ -70,7 +70,7 @@ describe('SystemPromptBuilder runtime responsibility', () => {
     expect(prompt).toContain('## Action Trust Boundary');
     expect(prompt).toContain('## Response Language');
     expect(prompt).toContain('### Persona, Ownership & Writing Style');
-    expect(prompt).toContain('## Tone & Style');
+    expect(prompt).not.toContain('## Tone & Style');
     expect(prompt).not.toContain('## Human Collaboration');
     expect(prompt).not.toContain('## Execution Bias');
     expect(prompt).not.toContain('## Problem Solving');

@@ -52,7 +52,7 @@ const PersonalTaskSchema = Type.Object({
     Type.Literal('notifications'),
   ]),
   requirements: Type.Optional(Type.Object({
-    version: Type.Optional(Type.Literal(1)), summary: Type.String({ maxLength: 300 }),
+    version: Type.Optional(Type.Literal(1)), summary: Type.Optional(Type.String({ maxLength: 300 })),
     domain: Type.Optional(Type.String({ description: 'Exact declared Specialist domain for a clear automatic match. Omit when uncertain.' })), taskType: Type.Optional(Type.String()),
     inputKinds: Type.Optional(Type.Array(Type.String())), outputKinds: Type.Optional(Type.Array(Type.String())),
     requiredTools: Type.Optional(Type.Array(Type.String())), requiredSkills: Type.Optional(Type.Array(Type.String())),

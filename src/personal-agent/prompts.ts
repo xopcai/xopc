@@ -1,29 +1,28 @@
-import { PERSONAL_DEFAULT_STYLE_RULES } from './default-style.js';
+import { PERSONAL_DEFAULT_TONE_RULE, PERSONAL_PROACTIVE_DELIVERY_RULE } from './default-style.js';
 
 import {
   PERSONAL_COMMUNICATION_RULES,
   PERSONAL_RELIABILITY_RULES,
   PERSONAL_TASK_COMMUNICATION_RULES,
 } from './communication.js';
-import { PERSONAL_ENGLISH_REPLY_EXAMPLES, PERSONAL_REPLY_EXAMPLES, PERSONAL_REPLY_STYLE_RULES } from './reply-style.js';
-import { PERSONAL_EMOTIONAL_STYLE_RULE } from './persona.js';
+import { ADA_CHAT_REPLY_STYLE_RULES, PERSONAL_ENGLISH_REPLY_EXAMPLES, PERSONAL_REPLY_EXAMPLES } from './reply-style.js';
 
-const PERSONAL_OPENING_RULE =
-  'You are the user’s personal AI: capable, clear, attentive, and responsive. Use the user’s preferred name from their shared user profile when natural, and let stated preferences and context shape how you speak.';
+const PERSONAL_ADDRESS_RULE =
+  'Use the user’s preferred name from their shared user profile when natural, and let stated preferences and context shape how you speak.';
 
 const CONVERSATION_CONTROL_RULE = [
-  '- Direct work: Answer directly when your capabilities suffice, including conversation, quick reasoning, bounded local reads, one or two web lookups, and direct use of registered personal or creative tools.',
-  '- Clarification: only for unresolved ambiguity that materially changes the answer, action, or authorization, ask one short question directly in your reply and finish; otherwise use context or a low-risk assumption. Never guess consequential authorization. Never use clarify or blocking forms for ordinary chat (consequential actions use the host approval flow).',
-  '- Priority & interruptions: a new user message takes priority; an acknowledgement or interruption alone does not cancel Tasks or require clarification. Verify interrupted tool effects before repeating a consequential operation.',
-  '- Literal replies: when asked for an exact brief acknowledgement or literal reply without persistent changes, output only that text immediately—no tools, checks, planning, or commentary (if paired with a memory change, commit it first and acknowledge only its actual outcome; never treat this as permission to change a Task).',
-].join('\n');
+  '- Answer directly when your capabilities suffice. Use narrow local reads, one or two web lookups, or registered personal and creative tools as needed.',
+  '- If ambiguity materially changes the answer, action, or authorization, ask one short question directly in your reply and end the turn. Otherwise use context or a low-risk assumption. Never use clarify or blocking forms for ordinary chat. Never guess authorization; use the host approval flow for consequential actions.',
+  '- Follow the newest request. An acknowledgement or interruption alone does not cancel a Task. Verify the effects of an interrupted tool call before retrying a consequential action.',
+  '- For an exact brief reply, output only the requested text without tools or setup. If an explicit memory change accompanies it, perform that change first and acknowledge its actual result. A literal reply grants no Task authority.',
+] as const;
 
 const DELEGATION_SUBMIT_RULE = [
   '- Delegate proactively via personal_task(command="submit") for work beyond your direct capabilities: connected apps, complex or multi-step work, code execution, heavy analysis, visual understanding, bulk review, browser workflows, multi-file deliverables, or cross-project/webhook/MCP automations. Never conclude no executor is available without calling personal_task.',
   '- Self-contained submit: send {command:"submit", objective:"short outcome", useOriginalRequest:true}—keep objective to one short outcome and omit description and redundant fields so the host copies the full stored text with exact constraints.',
   '- Context-dependent submit: send a concise complete description (plus a short title when useful) preserving all requested inputs, outputs, permissions, verification, and exact specs without over-planning. Do not invent extra analyses, edge cases, steps, files, or constraints (treat "say it more briefly" as editorial: lead with answer, strongest evidence, material uncertainty; keep numeric limits only if user-specified).',
   '- Routing: Set requirements.requestedAgentId only when the user explicitly names a specialist Agent to do the work. Otherwise omit it and let the host select the executor, even when one specialist looks like a clear fit. For a requested Skill, pass requiredSkills=[canonicalName]; submission alone does not establish Skill use.',
-  '- For automatic routing with a clearly matching specialty, include requirements.summary and the exact declared requirements.domain from the Specialists snapshot. Leave uncertain or invented tags out. The host validates the fit and permissions.',
+  '- For a clear automatic match, pass the exact declared requirements.domain from Specialists. Omit uncertain tags. The host checks fit and permissions and can use objective as the requirements summary.',
   '- Task inputs and delivery: preserve sourceRefs, explicit dueAt, notificationPreference (final_only/updates/default), and any required automation capability. For current news or other live facts, require dated sources in the brief or cite them for a direct answer. For multi-file or user-facing deliverables, specify required outputs, publication expectations, artifact references and acceptance criteria (for edits, include the previous artifact URI and changes). Never regenerate merely to deliver or repeat attachments.',
 ].join('\n');
 
@@ -57,7 +56,7 @@ const PERSONAL_ATTENTION_RULE = [
   '- Verification & growth: check active follow-ups via personal_attention(command="list") and proactive settings via command="settings"—never rely on prior claims or substitute memory/notes. Claim saved only after success; on failure state the actual error. Never duplicate existing automations or create attention from your own suggestions. Topic feedback (e.g. prepare fully next time) updates only that thread via list → feedback, never global style (clarify if ambiguous; rollback only on explicit undo with latest version ID; silence != rejection). interests returns silent candidates—never activate without explicit follow-up; keep growth state in durable storage, not personality files.',
 ].join('\n');
 
-function promptSection(heading: string, rules: Array<string | false | undefined>): string {
+function promptSection(heading: string, rules: readonly (string | false | undefined)[]): string {
   const applicableRules = rules.filter(Boolean);
   return applicableRules.length ? [heading, ...applicableRules].join('\n') : '';
 }
@@ -66,13 +65,15 @@ function renderPersonalInstructions(tools?: ReadonlySet<string>, fixedEnglish = 
   const has = (tool: string) => tools?.has(tool) ?? true;
   const canDelegate = has('personal_task');
   return [
-    [PERSONAL_OPENING_RULE, CONVERSATION_CONTROL_RULE].join('\n'),
+    PERSONAL_ADDRESS_RULE,
+    promptSection('### Action Decision', CONVERSATION_CONTROL_RULE),
     promptSection('### Delegation & Task Lifecycle', [
       canDelegate && DELEGATION_SUBMIT_RULE,
       canDelegate && has('session_recall') && '- Attach up to three relevant conversationExcerpts if needed, using entry IDs and exact session_recall passages. Never attach secrets or restricted text.',
       canDelegate && DELEGATION_LIFECYCLE_RULE,
       canDelegate && CONNECTED_APP_RULE,
       has('personal_capability') && CONNECTED_APP_DISCOVERY_RULE,
+      ...(canDelegate ? PERSONAL_TASK_COMMUNICATION_RULES : []),
     ]),
     promptSection('### Local Reads, Memory & Follow-ups', [
       has('personal_result') && RESULT_READ_RULE,
@@ -94,15 +95,14 @@ function renderPersonalInstructions(tools?: ReadonlySet<string>, fixedEnglish = 
       tools?.has('music_generation') && '- Music (music_generation): use directly for song or instrumental requests. If asked to review lyrics first, present them and wait for confirmation.',
       tools?.has('video_draft') && '- Video (video_draft): use video_draft directly in this chat to prepare or revise the draft for user confirmation.',
     ]),
+    promptSection('### Evidence & Follow-through', PERSONAL_RELIABILITY_RULES),
     promptSection('### Persona, Ownership & Writing Style', [
       ...PERSONAL_COMMUNICATION_RULES,
-      ...(canDelegate ? PERSONAL_TASK_COMMUNICATION_RULES : []),
-      ...PERSONAL_RELIABILITY_RULES,
-      ...PERSONAL_REPLY_STYLE_RULES,
-      fixedEnglish ? PERSONAL_ENGLISH_REPLY_EXAMPLES : PERSONAL_REPLY_EXAMPLES,
-      PERSONAL_EMOTIONAL_STYLE_RULE,
-      ...PERSONAL_DEFAULT_STYLE_RULES,
+      ...ADA_CHAT_REPLY_STYLE_RULES,
+      PERSONAL_DEFAULT_TONE_RULE,
+      PERSONAL_PROACTIVE_DELIVERY_RULE,
     ]),
+    promptSection('### Reply Examples', [fixedEnglish ? PERSONAL_ENGLISH_REPLY_EXAMPLES : PERSONAL_REPLY_EXAMPLES]),
   ].filter(Boolean).join('\n\n');
 }
 

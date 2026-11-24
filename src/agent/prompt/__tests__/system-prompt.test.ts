@@ -476,6 +476,8 @@ describe('conversation communication preferences', () => {
       toolNames: ['personal_result'], agentProfile: { name: 'Ada', language: 'zh-CN' },
     };
     const english = buildSystemPrompt('/ws', { ...options, responseLanguage: 'en' });
+    expect(english.startsWith('You are a personal AI assistant running inside xopc.\n\n<custom_instructions>\nUse the user’s preferred name')).toBe(true);
+    expect(english).not.toContain('You are the user’s personal AI');
     expect(english).toContain('Default: Write all user-facing prose in English.');
     expect(english).toContain('Fixed English applies even when the question');
     expect(english).toContain('Metal feels colder because');

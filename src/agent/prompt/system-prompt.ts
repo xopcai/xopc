@@ -217,11 +217,8 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
     if (!isPersonal && includeProblemSolving && !isVoice) {
       stableSections.push(buildProblemSolvingSection(toolNames));
     }
-    if (includeToneSection && !isVoice) {
-      stableSections.push(buildAestheticSection());
-      if (!isPersonal) {
-        stableSections.push(buildHumanCollaborationSection(true));
-      }
+    if (!isPersonal && includeToneSection && !isVoice) {
+      stableSections.push(buildAestheticSection(), buildHumanCollaborationSection(true));
     }
     if (!isPersonal && (normalizedTools.has('xopc_use') || normalizedTools.has('automation'))) {
       stableSections.push(buildWorkContinuitySection());

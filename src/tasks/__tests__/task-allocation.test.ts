@@ -642,16 +642,19 @@ describe('background task allocation', () => {
   });
 
   it('resolves an explicitly requested display name in the background', async () => {
-    const input = TaskCreateRequestSchema.parse({ idempotencyKey: 'named', title: 'Analyze', originConversationId: conversationId,
-      contract: { ...defineTaskContract('Analyze'), acceptancePolicy: 'manual', outputDestinations: [] },
-      activation: { mode: 'allocate', requirements: { ...requirements, requestedAgentId: 'Data Analyst' } } });
-    const result = new TaskApplicationService().create(input);
-    if (!result.ok) throw new Error('Expected task');
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId,
+      getCurrentAgentId: () => personalAgentId('local-owner'), dispatchTaskRuns: vi.fn() });
+    const input = { command: 'submit' as const, objective: 'Analyze', description: 'Check the numbers',
+      requirements: { requestedAgentId: 'Data Analyst' } };
+    expect(new Ajv({ strict: false }).compile(tool.parameters)(input)).toBe(true);
+    await tool.execute('named', input);
+    const [task] = new TaskRepository().list();
+    if (!task) throw new Error('Expected task');
     const router = vi.fn();
     await new TaskAllocationDispatcher({ context, decide: router, wake: vi.fn() }).drain();
-    expect(new TaskAllocationRepository().summary(result.model.task.id)).toMatchObject({ status: 'assigned', selectedAgentId: 'analyst' });
-    expect(savedExecutionRequirements(result.model.task.id)?.requirements.requestedAgentId).toBe('analyst');
-    expect(() => assertTaskExecutorReady(result.model.task.id, conversationId, 'analyst', context())).not.toThrow();
+    expect(new TaskAllocationRepository().summary(task.id)).toMatchObject({ status: 'assigned', selectedAgentId: 'analyst' });
+    expect(savedExecutionRequirements(task.id)?.requirements).toMatchObject({ summary: 'Analyze', requestedAgentId: 'analyst' });
+    expect(() => assertTaskExecutorReady(task.id, conversationId, 'analyst', context())).not.toThrow();
     expect(router).not.toHaveBeenCalled();
   });
 
