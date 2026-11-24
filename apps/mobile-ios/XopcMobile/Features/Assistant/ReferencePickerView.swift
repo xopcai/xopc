@@ -47,10 +47,10 @@ struct ReferencePickerView: View {
                 }, selected: kind, label: "引用类型", swipeToSelect: true, pagerProgress: pagerProgress) { next in
                     withAnimation(reduceMotion ? nil : .easeOut(duration: 0.23)) { kind = next }
                 }
-                    .accessibilityIdentifier("reference-tabs")
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .background(.bar)
+                .accessibilityIdentifier("reference-tabs")
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(.bar)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -242,7 +242,9 @@ struct MobilePagePager<Value: Hashable, Page: View>: View {
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             .scrollTargetBehavior(.paging)
             .scrollPosition(id: Binding<Value?>(get: { selection }, set: { value in
-                if let value, value != selection { selection = value }
+                if let value, value != selection {
+                    selection = value
+                }
             }), anchor: .center)
             .coordinateSpace(name: scrollSpace)
         }

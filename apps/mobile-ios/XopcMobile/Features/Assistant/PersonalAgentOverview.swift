@@ -196,7 +196,11 @@ struct PersonalAgentOverview: View {
                     .onGeometryChange(for: CGFloat?.self) { proxy in
                         guard page == tab else { return nil }
                         return min(1, max(0, -proxy.frame(in: .named(page)).minY / 108))
-                    } action: { if let amount = $0 { collapse = amount } }
+                    } action: {
+                        if let amount = $0 {
+                            collapse = amount
+                        }
+                    }
                 if page == .tasks {
                     tasks
                 } else {
@@ -242,8 +246,8 @@ struct PersonalAgentOverview: View {
             ], selected: tab, label: "助理概览", swipeToSelect: !showingEdit && setupPrompt == nil, pagerProgress: pagerProgress) { next in
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.23)) { tab = next }
             }
-                .accessibilityIdentifier("personal-overview-tabs")
-                .padding(.top, 8)
+            .accessibilityIdentifier("personal-overview-tabs")
+            .padding(.top, 8)
         }
         .padding(.horizontal, 18)
         .padding(.bottom, 8)
