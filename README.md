@@ -23,11 +23,7 @@
   <a href="https://xopc.ai/en/learn">Watch demos and tutorials</a>
 </p>
 
-<p align="center">
-  <a href="https://xopcai.github.io/xopc/xopc-desktop.mp4">
-    <img src="docs/public/xopc-desktop-preview.gif" alt="xopc desktop app demo" width="960">
-  </a>
-</p>
+https://github.com/user-attachments/assets/b9f96383-dac3-4071-96ce-9696ccb1e559
 
 ## Our vision
 
