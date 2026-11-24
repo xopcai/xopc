@@ -23,11 +23,7 @@
   <a href="https://xopc.ai/zh/learn">观看演示与实战教程</a>
 </p>
 
-<p align="center">
-  <a href="https://xopcai.github.io/xopc/xopc-desktop.mp4">
-    <img src="docs/public/xopc-desktop-preview.gif" alt="xopc 桌面应用演示" width="960">
-  </a>
-</p>
+https://github.com/user-attachments/assets/b9f96383-dac3-4071-96ce-9696ccb1e559
 
 ## 我们的愿景
 

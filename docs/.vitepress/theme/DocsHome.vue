@@ -92,7 +92,7 @@ const href = (path: string) => withBase(`/${zh.value ? 'zh/' : ''}${path}`)
 
     <section aria-labelledby="demo-title" class="docs-demo">
       <h2 id="demo-title">{{ copy.demo }}</h2>
-      <video :src="withBase('/xopc-desktop.mp4')" controls muted playsinline preload="none" :aria-label="copy.demo"></video>
+      <LaunchFilm />
       <div class="docs-footer-links">
         <a :href="`https://xopc.ai/${zh ? 'zh' : 'en'}/learn`">{{ copy.tutorials }}</a>
         <a :href="href('product')">{{ copy.philosophy }}</a>
