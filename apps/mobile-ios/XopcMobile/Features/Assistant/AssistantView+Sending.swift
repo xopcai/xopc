@@ -5,7 +5,9 @@ extension AssistantView {
         guard let conversation, let scope = composerDraftScope,
               scope == ComposerDraftStore.scope(configuration, conversationID: conversation.id) else { return }
         guard canSendOnChatConnection else {
-            if let voice { restoreDraft("", attachments: [], references: [], scope: scope, voice: voice) }
+            if let voice {
+                restoreDraft("", attachments: [], references: [], scope: scope, voice: voice)
+            }
             return
         }
         let text = voice == nil ? draft : ""

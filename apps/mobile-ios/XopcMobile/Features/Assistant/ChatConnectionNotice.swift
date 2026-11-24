@@ -9,17 +9,23 @@ struct ChatConnectionNotice: View {
     let syncFailed: Bool
     let onRetry: () -> Void
 
-    private var labels: (title: String, detail: String?, action: String?)? {
+    private struct Labels {
+        let title: String
+        var detail: String?
+        var action: String?
+    }
+
+    private var labels: Labels? {
         if phase == .connected {
-            return syncFailed ? ("会话同步中断", nil, "重试同步") : nil
+            return syncFailed ? Labels(title: "会话同步中断", action: "重试同步") : nil
         }
         guard stage > 0 else { return nil }
         if phase == .phoneOffline {
-            return ("手机网络已断开", "网络恢复后会自动重连", nil)
+            return Labels(title: "手机网络已断开", detail: "网络恢复后会自动重连")
         }
         return stage == 2
-            ? ("暂时连不上网关", "会继续自动重试", "立即重连")
-            : ("正在重连…", nil, nil)
+            ? Labels(title: "暂时连不上网关", detail: "会继续自动重试", action: "立即重连")
+            : Labels(title: "正在重连…")
     }
 
     var body: some View {

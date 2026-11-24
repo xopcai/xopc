@@ -94,11 +94,14 @@ struct AssistantView<Dock: View>: View {
     @State private var chatConnectionNoticeStage = 0
     @State private var chatConnectionRetry = 0
 
-    var canSendOnChatConnection: Bool { chatConnectionPhase == .connected }
+    var canSendOnChatConnection: Bool {
+        chatConnectionPhase == .connected
+    }
 
     private var chatConnectionObservation: ChatConnectionObservationKey {
         .init(configuration: configuration, active: isActive && scenePhase != .background && conversation != nil)
     }
+
     @State private var reselectingDesktop = false
     @State private var phone = PhoneWorkspaceModel()
     @State private var showingPhone = false
@@ -412,21 +415,26 @@ struct AssistantView<Dock: View>: View {
                 }
             }
             .task(id: ChatConnectionNoticeKey(interrupted: chatConnectionObservation.active && !canSendOnChatConnection,
-                                              retry: chatConnectionRetry)) {
+                                              retry: chatConnectionRetry))
+            {
                 guard chatConnectionObservation.active, !canSendOnChatConnection else {
                     chatConnectionNoticeStage = 0
                     return
                 }
                 let alreadyVisible = chatConnectionNoticeStage > 0
                 do {
-                    if !alreadyVisible { try await Task.sleep(for: .milliseconds(1500)) }
+                    if !alreadyVisible {
+                        try await Task.sleep(for: .milliseconds(1500))
+                    }
                     chatConnectionNoticeStage = 1
                     try await Task.sleep(for: .milliseconds(alreadyVisible ? 8000 : 6500))
                     chatConnectionNoticeStage = 2
                 } catch { return }
             }
             .onChange(of: chatConnectionPhase) { previous, phase in
-                if phase == .connected, chatConnectionObservation.active { synchronizeChatConnection() }
+                if phase == .connected, chatConnectionObservation.active {
+                    synchronizeChatConnection()
+                }
                 if previous == .phoneOffline, phase == .reconnecting, chatConnectionNoticeStage > 0 {
                     chatConnectionNoticeStage = 1
                     chatConnectionRetry += 1

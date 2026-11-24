@@ -1,40 +1,25 @@
 import CryptoKit
 import Foundation
-import Network
 import UIKit
-
-enum ChatConnectionPhase: Equatable, Sendable {
-    case reconnecting, phoneOffline, connected
-}
 
 // swiftlint:disable:next type_body_length
 actor DeviceEndpointHost {
     let client: GatewayClient
-    private var socket: URLSessionWebSocketTask?
+    private(set) var socket: URLSessionWebSocketTask?
     private(set) var claim: DeviceEndpointOrigin?
     private(set) var pairedDeviceID: String?
-    private var connection: Task<DeviceEndpointOrigin, Error>?
-    private var connectionGeneration = 0
-    private var recovery: Task<Void, Never>?
-    private var recoveryGeneration = 0
-    private var connectionPhase: ChatConnectionPhase = .reconnecting
-    private var connectionObservers: [UUID: AsyncStream<ChatConnectionPhase>.Continuation] = [:]
-    private var networkMonitor: NWPathMonitor?
-    private var networkMonitorID: UUID?
-    private var networkPathObservation: Task<Void, Never>?
-    private var networkPath: NWPath?
-    private var networkLoss: Task<Void, Never>?
+    var connectionState = DeviceEndpointConnectionState()
     private var runSubscriptions = DeviceRunSubscriptions()
-    private var retired = false
+    private(set) var retired = false
     private var invocations: [String: Task<Void, Never>] = [:]
     private var reader: Task<Void, Never>?
     private var heartbeat: Task<Void, Never>?
-    private var probeTask: Task<Void, Never>?
+    var probeTask: Task<Void, Never>?
     private var environmentTask: Task<Void, Never>?
     private(set) var appProviderAccepted = false
     private var appProviderSequence = 0
-    private var lastReceivedAt = Date()
-    private var lastPingSentAt = Date()
+    private(set) var lastReceivedAt = Date()
+    var lastPingSentAt = Date()
     private var lastProviderReportAt = Date.distantPast
     private var lastReportedForeground: Bool?
     private var foregroundTimeoutSeconds: TimeInterval = 45
@@ -46,156 +31,10 @@ actor DeviceEndpointHost {
         self.client = client
     }
 
-    func origin() async throws -> DeviceEndpointOrigin {
-        guard !retired else { throw CancellationError() }
-        guard networkPath?.status != .unsatisfied else { throw GatewayClientError.transport }
-        if let claim {
-            return claim
-        }
-        if connection == nil {
-            connectionGeneration += 1
-            connection = Task { try await connect() }
-        }
-        guard let connection else { throw GatewayClientError.transport }
-        let generation = connectionGeneration
-        defer { if generation == connectionGeneration { self.connection = nil } }
-        do { return try await connection.value }
-        catch is CancellationError where !retired && generation != connectionGeneration {
-            throw GatewayClientError.transport
-        }
-    }
-
-    func connectionChanges() -> AsyncStream<ChatConnectionPhase> {
-        let (stream, continuation) = AsyncStream<ChatConnectionPhase>.makeStream(bufferingPolicy: .bufferingNewest(1))
-        guard !retired else { continuation.finish(); return stream }
-        let id = UUID()
-        connectionObservers[id] = continuation
-        continuation.onTermination = { [weak self] _ in Task { await self?.removeConnectionObserver(id) } }
-        if connectionPhase == .phoneOffline, networkPath == nil { setConnectionPhase(.reconnecting) }
-        continuation.yield(connectionPhase)
-        startNetworkMonitor()
-        scheduleConnectionRecovery()
-        return stream
-    }
-
-    func retryConnection() {
-        guard !retired, claim == nil, networkPath?.status != .unsatisfied else { return }
-        restartConnection()
-    }
-
-    private func setConnectionPhase(_ phase: ChatConnectionPhase) {
-        guard connectionPhase != phase else { return }
-        connectionPhase = phase
-        for observer in connectionObservers.values { observer.yield(phase) }
-    }
-
-    private func scheduleConnectionRecovery() {
-        guard !retired, !connectionObservers.isEmpty, recovery == nil,
-              claim == nil, networkPath?.status != .unsatisfied else { return }
-        recoveryGeneration += 1
-        let generation = recoveryGeneration
-        recovery = Task { [weak self] in await self?.recoverConnection(generation: generation) }
-    }
-
-    private func recoverConnection(generation: Int) async {
-        defer { if generation == recoveryGeneration { recovery = nil } }
-        var delay = 1
-        while !Task.isCancelled, claim == nil {
-            do {
-                _ = try await origin()
-                guard !Task.isCancelled else { return }
-                if claim != nil { return }
-            } catch { if Task.isCancelled { return } }
-            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
-            delay = min(delay * 2, 30)
-        }
-    }
-
-    private func stopRecovery() {
-        recoveryGeneration += 1
-        recovery?.cancel()
-        recovery = nil
-    }
-
-    private func cancelConnection() {
-        connectionGeneration += 1
-        connection?.cancel()
-        connection = nil
-    }
-
-    private func restartConnection() {
-        stopRecovery()
-        cancelConnection()
-        closeSocket()
-    }
-
-    private func startNetworkMonitor() {
-        guard networkMonitor == nil else { return }
-        let monitor = NWPathMonitor()
-        let id = UUID()
-        networkMonitor = monitor
-        networkMonitorID = id
-        // Deliver path callbacks in order even when the main actor is busy with history.
-        let (paths, changes) = AsyncStream<NWPath>.makeStream(bufferingPolicy: .bufferingNewest(1))
-        monitor.pathUpdateHandler = { path in changes.yield(path) }
-        changes.onTermination = { _ in monitor.cancel() }
-        networkPathObservation = Task { [weak self] in
-            for await path in paths { await self?.networkPathChanged(path, monitorID: id) }
-        }
-        monitor.start(queue: DispatchQueue(label: "ai.xopc.chat-network"))
-    }
-
-    private func networkPathChanged(_ path: NWPath, monitorID: UUID) {
-        guard networkMonitorID == monitorID else { return }
-        networkLoss?.cancel()
-        networkLoss = nil
-        if path.status == .unsatisfied {
-            networkLoss = Task { [weak self] in
-                do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
-                await self?.applyNetworkLoss(path, monitorID: monitorID)
-            }
-            return
-        }
-        let previous = networkPath
-        networkPath = path
-        guard let previous, previous != path else { return }
-        if let socket, claim != nil {
-            Task { await probeRoute(socket) }
-        } else {
-            restartConnection()
-        }
-    }
-
-    private func applyNetworkLoss(_ path: NWPath, monitorID: UUID) {
-        guard !Task.isCancelled, networkMonitorID == monitorID else { return }
-        networkPath = path
-        networkLoss = nil
-        restartConnection()
-    }
-
-    private func removeConnectionObserver(_ id: UUID) {
-        connectionObservers.removeValue(forKey: id)
-        if connectionObservers.isEmpty { stopNetworkMonitor(); stopRecovery() }
-    }
-
-    private func stopNetworkMonitor() {
-        networkMonitorID = nil
-        networkPathObservation?.cancel(); networkPathObservation = nil
-        networkMonitor?.cancel()
-        networkMonitor = nil
-        networkLoss?.cancel()
-        networkLoss = nil
-        networkPath = nil
-    }
-
     func stop() {
         retired = true
         cachedBootstrap = nil
-        for observer in connectionObservers.values { observer.finish() }
-        connectionObservers.removeAll()
-        stopRecovery()
-        stopNetworkMonitor()
-        cancelConnection()
+        stopConnectionTracking()
         closeSocket()
         Task { await endBackgroundLease() }
     }
@@ -227,25 +66,6 @@ actor DeviceEndpointHost {
         }
     }
 
-    private func probeRoute(_ socket: URLSessionWebSocketTask) async {
-        guard self.socket === socket else { return }
-        let sentAt = Date()
-        lastPingSentAt = sentAt
-        probeTask?.cancel()
-        probeTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(2500))
-            guard !Task.isCancelled else { return }
-            await self?.verifyProbeResponse(socket: socket, sentAt: sentAt)
-        }
-        do { try await send("realtime.ping", ["availability": "foreground"]) }
-        catch { if self.socket === socket { closeSocket() } }
-    }
-
-    private func verifyProbeResponse(socket: URLSessionWebSocketTask, sentAt: Date) {
-        guard self.socket === socket, lastReceivedAt < sentAt else { return }
-        closeSocket()
-    }
-
     private func beginBackgroundLease() async {
         guard backgroundTaskID == .invalid else { return }
         let taskID = await MainActor.run {
@@ -272,7 +92,7 @@ actor DeviceEndpointHost {
         }
     }
 
-    private func closeSocket() {
+    func closeSocket() {
         claim = nil
         pairedDeviceID = nil
         runSubscriptions.finishAll(throwing: retired ? CancellationError() : DeviceRunStreamError.disconnected)
@@ -288,8 +108,7 @@ actor DeviceEndpointHost {
         environmentTask?.cancel(); environmentTask = nil
         socket?.cancel(with: .normalClosure, reason: nil)
         socket = nil
-        setConnectionPhase(networkPath?.status == .unsatisfied ? .phoneOffline : .reconnecting)
-        scheduleConnectionRecovery()
+        continueConnectionRecovery()
     }
 
     private struct Bootstrap {
@@ -321,7 +140,7 @@ actor DeviceEndpointHost {
     }
 
     // swiftlint:disable:next function_body_length
-    private func connect() async throws -> DeviceEndpointOrigin {
+    func connect() async throws -> DeviceEndpointOrigin {
         let bootstrap = try await loadBootstrap()
         try Task.checkCancellation()
         let endpointId = "ios:\(bootstrap.principalId):\(instance)"

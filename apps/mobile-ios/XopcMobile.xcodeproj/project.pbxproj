@@ -68,6 +68,7 @@
 		5283D70224A70160D71353E8 /* ChatImageSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40219CC081AE988636C9E09 /* ChatImageSourceTests.swift */; };
 		53B377DDCC67BAC4D06EA947 /* GatewayModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8F3C4A9808977FAC0A3DC5B /* GatewayModelsTests.swift */; };
 		5453C45B50467376733522BB /* ChatSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F75545AD4CD3745D041CE90 /* ChatSidebarView.swift */; };
+		5510D79F17ED5B8AA1D16477 /* DeviceEndpointHost+Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9896909FFB9548A37E7CC7B /* DeviceEndpointHost+Connection.swift */; };
 		55655885580B957F064BDAE4 /* ConfirmedAnswerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E544E250A14760B5021EDF66 /* ConfirmedAnswerView.swift */; };
 		556F77443BA8346C7D6243B4 /* GatewayClient+Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A21ADCB00C6EC5E7859AE32 /* GatewayClient+Conversation.swift */; };
 		55B7DD1306B5B77297E1CE34 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A904020C27A972B2AB0E31 /* ProfileView.swift */; };
@@ -395,6 +396,7 @@
 		D28D3A761AB72069F8013A72 /* MarkdownNoteInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownNoteInput.swift; sourceTree = "<group>"; };
 		D2EC88A60E669DCF29DDA0C3 /* DeviceEndpointTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceEndpointTypes.swift; sourceTree = "<group>"; };
 		D68CBBC1C602DFC7544A836B /* ClarificationV2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClarificationV2Tests.swift; sourceTree = "<group>"; };
+		D9896909FFB9548A37E7CC7B /* DeviceEndpointHost+Connection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DeviceEndpointHost+Connection.swift"; sourceTree = "<group>"; };
 		D99EE05B3577A196AF1EAD16 /* DeviceEndpointHost+Tools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DeviceEndpointHost+Tools.swift"; sourceTree = "<group>"; };
 		D9B1323B1C44E84AFD108F23 /* ChatMessageLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessageLinkRouter.swift; sourceTree = "<group>"; };
 		DA016590211F6147655749F4 /* AssistantTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantTimeline.swift; sourceTree = "<group>"; };
@@ -554,6 +556,7 @@
 			children = (
 				8FDDA0C2E058A5B28288921F /* ChatImageLoader.swift */,
 				7A268D1282EB841BE5D3ABED /* DeviceEndpointHost.swift */,
+				D9896909FFB9548A37E7CC7B /* DeviceEndpointHost+Connection.swift */,
 				D99EE05B3577A196AF1EAD16 /* DeviceEndpointHost+Tools.swift */,
 				D2EC88A60E669DCF29DDA0C3 /* DeviceEndpointTypes.swift */,
 				FEC9ED44CEA56D122EC800D6 /* DeviceLocation.swift */,
@@ -1011,6 +1014,7 @@
 				4EFBB47302B3D45026E5B952 /* ConversationsState.swift in Sources */,
 				0E04EDC4039351DFB9527F3F /* ConversationsView.swift in Sources */,
 				68CA8FE04D60B459505876DB /* DeviceConnectionsView.swift in Sources */,
+				5510D79F17ED5B8AA1D16477 /* DeviceEndpointHost+Connection.swift in Sources */,
 				1A551C8B00FEDA781B4F531A /* DeviceEndpointHost+Tools.swift in Sources */,
 				70E6F5D91CA3E55C8E0CF4C6 /* DeviceEndpointHost.swift in Sources */,
 				F1FEAB68D2E6A104BE59D44D /* DeviceEndpointTypes.swift in Sources */,

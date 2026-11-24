@@ -194,7 +194,9 @@ final class AssistantState {
     }
 
     private func isChatConnectionError(_ error: Error) -> Bool {
-        if let error = error as? GatewayClientError { return error.isConnectionInterruption }
+        if let error = error as? GatewayClientError {
+            return error.isConnectionInterruption
+        }
         guard let error = error as? URLError else { return false }
         return [.notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost,
                 .cannotConnectToHost, .dnsLookupFailed].contains(error.code)
