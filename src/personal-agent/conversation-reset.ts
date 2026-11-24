@@ -93,7 +93,11 @@ export async function resetPersonalConversation(
           SET custom_data_json = json_remove(COALESCE(custom_data_json, '{}'), '$.personalRead')
           WHERE conversation_id = ?`).run(conversationId);
         db.prepare(`UPDATE personal_attention_threads
-          SET status = 'expired', next_check_at = NULL, revision = revision + 1, updated_at = ?
+          SET status = 'expired',
+              terminal_reason = CASE WHEN follow_up_mode = 'one_shot' THEN 'conversation_reset' ELSE terminal_reason END,
+              next_check_at = NULL,
+              revision = revision + 1,
+              updated_at = ?
           WHERE conversation_id = ? AND status IN ('candidate', 'active', 'paused')`).run(now, conversationId);
         db.prepare(`UPDATE personal_wakeups
           SET status = 'cancelled', lease_until = 0

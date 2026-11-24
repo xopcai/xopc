@@ -666,6 +666,7 @@ export class TaskRunRepository {
             taskId: input.taskId,
             taskTitle: task.title,
             ...(task.project_id ? { projectId: task.project_id } : {}),
+            waitId: id,
             reason: input.kind,
             detail: input.reason.trim(),
             correlationId: id,

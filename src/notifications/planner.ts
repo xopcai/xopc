@@ -6,6 +6,8 @@ import {
 } from '@xopcai/gateway-contract';
 
 import type { AutomationRun } from '../automations/domain/types.js';
+import { hasCoveringOneShotFollowUp } from '../personal-agent/proactivity/one-shot-follow-up.js';
+import { isXopcDatabaseOpen } from '../storage/sqlite/connection.js';
 import { markdownNotificationPreview } from './plain-text.js';
 
 export type NotificationPlan = {
@@ -18,6 +20,7 @@ type TaskPayload = {
   sourceEventId?: unknown;
   task?: { id?: unknown; title?: unknown };
   taskId?: unknown;
+  waitId?: unknown;
   reason?: unknown;
   to?: unknown;
   resolution?: unknown;
@@ -95,6 +98,10 @@ function taskPlan(payload: unknown): NotificationPlan | null {
         ? 'task.completed'
         : undefined;
   if (!type) return null;
+  if (type === 'task.needs_input' && isXopcDatabaseOpen()) {
+    const waitId = typeof data.waitId === 'string' ? data.waitId : undefined;
+    if (hasCoveringOneShotFollowUp('local-owner', taskId, waitId)) return null;
+  }
   const taskTitle = typeof data.task?.title === 'string' ? data.task.title.trim().slice(0, 120) : '';
   const title = type === 'task.needs_input'
     ? { en: 'Action needed', zh: '需要你的操作' }

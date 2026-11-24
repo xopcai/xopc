@@ -60,6 +60,7 @@
         "project": "Project",
         "note": "Note",
         "automation": "Automation",
+        "personal_follow_up": "Follow-up",
         "local_app": "App",
         "chat_preview": "Chat preview",
         "file": "File",

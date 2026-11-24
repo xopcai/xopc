@@ -128,14 +128,16 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
                   const label = source.pending && source.origins.length ? `${relation} · ${copy.draft}` : source.pending ? copy.draft : relation;
                   const SourceIcon = source.kind === 'file' && source.fileKind === 'directory' ? Folder
                     : source.kind === 'file' ? FileText
-                      : source.kind === 'session' ? MessagesSquare
-                        : source.kind === 'browser_tab' || source.kind === 'browser_page' || source.kind === 'app_context' ? AppWindow
-                          : source.kind === 'mcp_resource' ? Database
-                            : source.kind === 'attachment' ? Paperclip : FileText;
+                      : source.kind === 'task' ? Target
+                        : source.kind === 'session' ? MessagesSquare
+                          : source.kind === 'browser_tab' || source.kind === 'browser_page' || source.kind === 'app_context' ? AppWindow
+                            : source.kind === 'mcp_resource' ? Database
+                              : source.kind === 'attachment' ? Paperclip : FileText;
                   const title = source.unavailable ? copy.unavailable : source.title || (source.kind === 'note' ? copy.untitled : copy.untitledSource);
                   const body = <><SourceIcon className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={source.unavailable ? undefined : source.title}>{title}</span><span className="shrink-0 text-xs text-fg-muted">{label}</span></>;
                   const target = source.kind === 'note' ? noteDetailHref(returnTo, source.id)
-                    : source.kind === 'session' ? `/chat/${encodeURIComponent(source.id)}` : null;
+                    : source.kind === 'task' ? taskDetailModalHref(returnTo, source.id)
+                      : source.kind === 'session' ? `/chat/${encodeURIComponent(source.id)}` : null;
                   const key = `${source.kind}:${source.id}`;
                   return !source.unavailable && target ? <Link key={key} className={rowClass} to={target} onClick={close}>{body}</Link>
                     : <div key={key} className="flex min-w-0 items-center gap-3 px-2 py-2 text-sm text-fg-muted">{body}</div>;

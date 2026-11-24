@@ -4,6 +4,7 @@ import { ChevronRight, Sparkles, X } from 'lucide-react';
 import { PersonalProvenanceDetailSchema, type PersonalFeedback, type PersonalProvenance, type PersonalProvenanceDetail } from '@xopcai/gateway-contract';
 
 import { assistantCapsuleClassName, AssistantCapsuleContent } from './assistant-capsule';
+import { formatOneShotFollowUpStatus } from '@/features/personal-agent/personal-one-shot-follow-up';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJson } from '@/lib/fetch';
@@ -88,9 +89,21 @@ export function PersonalProvenanceTail({ provenance }: { provenance: PersonalPro
               href={`#/chat/${encodeURIComponent(source.conversationId)}?entryId=${encodeURIComponent(source.entryId)}`}>
               <span className="line-clamp-2 text-xs">{source.excerpt}</span><span className="mt-1 block text-xs text-accent">{zh ? '查看相关对话' : 'View conversation'} ↗</span>
             </a>)}
-            <div><p className="mb-1 font-medium text-fg">{zh ? '后续' : 'Next'}</p><p className="text-fg-muted">{ended ? zh ? '已停止关注' : 'No longer following'
-              : detail.thread.status === 'paused' ? zh ? '已延后跟进' : 'Follow-up postponed'
-                : zh ? '有新的有效进展时，再判断是否值得交流。' : 'I will reassess when there is something useful to share.'}</p></div>
+            <div><p className="mb-1 font-medium text-fg">{zh ? '后续' : 'Next'}</p><p className="text-fg-muted">{detail.oneShotFollowUp
+              ? formatOneShotFollowUpStatus(detail.oneShotFollowUp, zh)
+              : ended ? zh ? '已停止关注' : 'No longer following'
+                : detail.thread.status === 'paused' ? zh ? '已延后跟进' : 'Follow-up postponed'
+                  : zh ? '有新的有效进展时，再判断是否值得交流。' : 'I will reassess when there is something useful to share.'}</p>
+              {detail.oneShotFollowUp?.taskId && (
+                <a
+                  href={`#/tasks/${encodeURIComponent(detail.oneShotFollowUp.taskId)}`}
+                  onClick={() => setOpen(false)}
+                  className="mt-1 inline-block text-xs text-accent hover:underline"
+                >
+                  {zh ? `查看原事项${detail.oneShotFollowUp.taskTitle ? `：${detail.oneShotFollowUp.taskTitle}` : ''}` : `Open task${detail.oneShotFollowUp.taskTitle ? `: ${detail.oneShotFollowUp.taskTitle}` : ''}`} ↗
+                </a>
+              )}
+            </div>
             {adjust && <div className="flex flex-wrap gap-2">
               <button type="button" disabled={busy} className="rounded border border-edge px-3 py-2" onClick={() => void feedback('defer', { until: Date.now() + 7 * 86_400_000 })}>{zh ? '下周再跟进' : 'Next week'}</button>
               <button type="button" disabled={busy} className="rounded border border-edge px-3 py-2" onClick={() => void feedback('adjust', { preparation: 'thorough' })}>{zh ? '以后先准备完整' : 'Prepare more thoroughly'}</button>

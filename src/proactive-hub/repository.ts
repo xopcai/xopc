@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { AutomationEventEnvelope } from '../automations/domain/types.js';
+import { hasCoveringOneShotFollowUp } from '../personal-agent/proactivity/one-shot-follow-up.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import {
   computeCoalesceKey,
@@ -340,6 +341,77 @@ export function patchProactiveSubscription(
   });
 }
 
+export function extractEventTaskWait(event: Pick<AutomationEventEnvelope, 'source' | 'subject' | 'payload'>): {
+  taskId?: string;
+  waitId?: string;
+} {
+  const payload = event.payload && typeof event.payload === 'object'
+    ? (event.payload as Record<string, unknown>)
+    : {};
+  const payloadTask = payload.task && typeof payload.task === 'object'
+    ? (payload.task as { id?: unknown }).id
+    : undefined;
+  const taskId = event.subject?.kind === 'task' && typeof event.subject.id === 'string'
+    ? event.subject.id
+    : typeof payload.taskId === 'string' && payload.taskId
+      ? payload.taskId
+      : typeof payloadTask === 'string' && payloadTask
+        ? payloadTask
+        : undefined;
+  const waitId = typeof payload.waitId === 'string' && payload.waitId
+    ? payload.waitId
+    : undefined;
+  return {
+    ...(taskId ? { taskId } : {}),
+    ...(waitId ? { waitId } : {}),
+  };
+}
+
+export function retireCoveredProactiveItems(
+  ownerId: string,
+  taskId: string,
+  waitId?: string,
+  now = Date.now(),
+): number {
+  return runSqliteWriteTransaction(db => {
+    const signals = db.prepare(`
+      SELECT coalesce_key, payload_json, subject_kind, subject_id
+      FROM proactive_coalesced_signals
+      WHERE owner_id = ? AND status IN ('buffering', 'processing')
+    `).all(ownerId) as Array<{ coalesce_key: string; payload_json: string; subject_kind: string | null; subject_id: string | null }>;
+    for (const sig of signals) {
+      const payload = JSON.parse(sig.payload_json) as Record<string, unknown>;
+      const extracted = extractEventTaskWait({
+        source: 'tasks',
+        subject: sig.subject_kind && sig.subject_id ? { kind: sig.subject_kind, id: sig.subject_id } : undefined,
+        payload,
+      });
+      if (extracted.taskId === taskId && (!waitId || !extracted.waitId || extracted.waitId === waitId)) {
+        db.prepare(`
+          UPDATE proactive_coalesced_signals
+          SET status = 'dropped', lease_token = NULL, lease_until = 0, updated_at = ?
+          WHERE owner_id = ? AND coalesce_key = ?
+        `).run(now, ownerId, sig.coalesce_key);
+      }
+    }
+
+    const items = db.prepare(`
+      SELECT id, provenance_json
+      FROM proactive_items
+      WHERE owner_id = ? AND state IN ('ready', 'buffered_digest')
+    `).all(ownerId) as Array<{ id: string; provenance_json: string }>;
+    let retired = 0;
+    for (const item of items) {
+      const prov = JSON.parse(item.provenance_json) as ProactiveProvenance;
+      if (prov.matchedTaskId === taskId && (!waitId || !prov.matchedWaitId || prov.matchedWaitId === waitId)) {
+        db.prepare("UPDATE proactive_items SET state = 'stale', updated_at = ? WHERE id = ?").run(now, item.id);
+        retired += 1;
+      }
+    }
+    return retired;
+  });
+}
+
 export function findActiveEntityAnchor(ownerId: string, event: AutomationEventEnvelope): {
   projectId?: string;
   threadId?: string;
@@ -354,7 +426,7 @@ export function findActiveEntityAnchor(ownerId: string, event: AutomationEventEn
   const subjectText = String(event.payload.subject ?? event.payload.title ?? event.payload.folderName ?? '').trim();
   let matchedThreadId: string | undefined;
   if (subjectText.length >= 3) {
-    const activeThreads = db.prepare("SELECT id, subject FROM personal_attention_threads WHERE owner_id = ? AND status = 'active' LIMIT 50")
+    const activeThreads = db.prepare("SELECT id, subject FROM personal_attention_threads WHERE owner_id = ? AND follow_up_mode = 'recurring' AND status = 'active' LIMIT 50")
       .all(ownerId) as Array<{ id: string; subject: string }>;
     const normalized = subjectText.toLowerCase();
     const hit = activeThreads.find(t => normalized.includes(t.subject.toLowerCase()) || t.subject.toLowerCase().includes(normalized));
@@ -385,6 +457,12 @@ export function admitSignalAtGate1(
   // Ignore high-frequency internal session transcript pings already handled by conversation cursor.
   if (event.source === 'sessions' && event.type === 'session.transcript.updated') {
     return { outcome: 'dropped_unmatched' };
+  }
+
+  const taskWait = extractEventTaskWait(event);
+  if (taskWait.taskId && hasCoveringOneShotFollowUp(ownerId, taskWait.taskId, taskWait.waitId)) {
+    retireCoveredProactiveItems(ownerId, taskWait.taskId, taskWait.waitId, now);
+    return { outcome: 'dropped_rule' };
   }
 
   ensureDefaultProactiveSubscriptions(ownerId, now);
@@ -598,6 +676,11 @@ export function saveProactiveItem(input: {
       WHERE owner_id = ? AND coalesce_key = ? AND state IN ('ready', 'buffered_digest')
     `).run(now, input.ownerId, input.coalesceKey);
 
+    const effectiveState = input.provenance.matchedTaskId
+      && hasCoveringOneShotFollowUp(input.ownerId, input.provenance.matchedTaskId, input.provenance.matchedWaitId)
+      ? 'stale'
+      : input.state;
+
     db.prepare(`
       INSERT INTO proactive_items(
         id, owner_id, agent_id, coalesce_key, source_event_ids_json, tier, category,
@@ -618,7 +701,7 @@ export function saveProactiveItem(input: {
       JSON.stringify(input.provenance),
       input.preparedPayload ? JSON.stringify(input.preparedPayload) : null,
       input.proposedAction ? JSON.stringify(input.proposedAction) : null,
-      input.state,
+      effectiveState,
       input.idempotencyKey,
       input.validUntil,
       now,

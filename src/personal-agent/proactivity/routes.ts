@@ -1,11 +1,33 @@
 import type { Context, Hono } from 'hono';
-import { PersonalFeedbackSchema, PersonalProactivitySettingsSchema, PersonalStrategyRollbackSchema } from '@xopcai/gateway-contract';
+import {
+  PersonalFeedbackSchema,
+  PersonalProactivitySettingsSchema,
+  PersonalStrategyRollbackSchema,
+  StopPersonalOneShotFollowUpRequestSchema,
+} from '@xopcai/gateway-contract';
 import { z } from 'zod';
 
-import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
 import type { AuthenticatedRouteDeps } from '../../gateway/hono/routes/deps.js';
+import { getGatewayPrincipal } from '../../gateway/security/gateway-principal.js';
+import { hasGatewayScope } from '../../gateway/security/gateway-scopes.js';
+import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
 import { getPersonalAgent } from '../repository.js';
-import { getProactivitySettings, listInterestCandidates, patchAttention, patchProactivitySettings, provenanceDetail, recordFeedback, rollbackStrategy, strategyState } from './repository.js';
+import {
+  getOneShotFollowUpDto,
+  OneShotFollowUpConflictError,
+  stopOneShotFollowUp,
+} from './one-shot-follow-up.js';
+import {
+  getAttention,
+  getProactivitySettings,
+  listInterestCandidates,
+  patchAttention,
+  patchProactivitySettings,
+  provenanceDetail,
+  recordFeedback,
+  rollbackStrategy,
+  strategyState,
+} from './repository.js';
 
 const AttentionPatch = z.object({ revision: z.number().int().positive(), status: z.enum(['active', 'paused', 'completed']).optional(),
   nextCheckAt: z.number().int().positive().optional() }).strict();
@@ -17,6 +39,15 @@ const SettingsPatch = z.object({ revision: z.number().int().positive(),
 
 export function registerProactivityRoutes(app: Hono, deps: AuthenticatedRouteDeps,
   owner: (context: Context) => string | null): void {
+  const canReadTasks = (c: Context): boolean => {
+    const principal = getGatewayPrincipal(c);
+    const personal = owner(c) ? getPersonalAgent(owner(c)!) : null;
+    const contextAccess = personal
+      ? resolveUserContextSessionAccess(deps.service.currentConfig, personal.conversationId).userModel
+      : false;
+    return contextAccess && hasGatewayScope(principal.scopes, 'tasks.read');
+  };
+
   app.get('/api/personal-agent/proactivity', c => {
     const ownerId = owner(c);
     return ownerId ? c.json({ ok: true, payload: getProactivitySettings(ownerId) })
@@ -30,6 +61,67 @@ export function registerProactivityRoutes(app: Hono, deps: AuthenticatedRouteDep
       return c.json({ ok: false, error: 'Interest access is unavailable' }, 403);
     }
     return c.json({ ok: true, payload: listInterestCandidates(personal.conversationId) });
+  });
+  app.get('/api/personal-agent/attention/:threadId', c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const threadId = c.req.param('threadId');
+    const readable = canReadTasks(c);
+    const oneShot = getOneShotFollowUpDto(threadId, ownerId, { canReadTask: () => readable });
+    if (oneShot) {
+      return c.json({ ok: true, payload: oneShot });
+    }
+    const thread = getAttention(threadId, ownerId);
+    if (!thread) return c.json({ ok: false, error: 'Follow-up not found' }, 404);
+    return c.json({
+      ok: true,
+      payload: {
+        id: thread.id,
+        followUpMode: thread.follow_up_mode,
+        subject: readable ? thread.subject : '',
+        status: thread.status,
+        revision: thread.revision,
+        nextCheckAt: thread.next_check_at,
+        strategy: strategyState(thread.id),
+      },
+    });
+  });
+  app.post('/api/personal-agent/attention/:threadId/stop', deps.strictRateLimitMiddleware, async c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const input = StopPersonalOneShotFollowUpRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ ok: false, error: 'Invalid stop request' }, 400);
+    const threadId = c.req.param('threadId');
+    const readable = canReadTasks(c);
+    try {
+      const result = stopOneShotFollowUp({
+        ownerId,
+        followUpId: threadId,
+        expectedRevision: input.data.expectedRevision,
+        idempotencyKey: input.data.idempotencyKey,
+        canReadTask: () => readable,
+      });
+      deps.service.emit?.('personal.follow_up.updated', {
+        followUpId: result.followUp.followUpId,
+        taskId: result.followUp.taskId,
+        conversationId: result.followUp.conversationId,
+        terminalReason: result.followUp.terminalReason,
+      });
+      deps.service.emit?.('task.changed', { taskId: result.followUp.taskId });
+      return c.json({ ok: true, payload: result });
+    } catch (error) {
+      if (error instanceof OneShotFollowUpConflictError) {
+        if (!error.followUp && error.message === 'Follow-up is unavailable') {
+          return c.json({ ok: false, error: error.message }, 404);
+        }
+        return c.json({
+          ok: false,
+          error: error.message,
+          ...(error.followUp ? { payload: error.followUp } : {}),
+        }, 409);
+      }
+      throw error;
+    }
   });
   app.post('/api/personal-agent/attention/:threadId/strategy/rollback', deps.strictRateLimitMiddleware, async c => {
     const ownerId = owner(c);

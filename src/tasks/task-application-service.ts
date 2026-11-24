@@ -1007,6 +1007,7 @@ export class TaskApplicationService {
         projectId: result.model.task.projectId,
         version: result.model.task.version,
         changedFields: commandChangedFields(input.command),
+        ...(input.command.type === 'resolve_wait' ? { waitId: input.command.waitId } : {}),
         actor,
       });
       return result;

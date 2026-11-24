@@ -11,6 +11,7 @@ export type TaskChangeInput = {
   projectId?: string;
   version: number;
   changedFields: TaskChangedField[];
+  waitId?: string;
   actor?: ActorRef;
   source?: 'user' | 'agent' | 'runtime';
   occurredAt?: number;
@@ -39,6 +40,7 @@ export function enqueueTaskChangedEvent(db: DatabaseSync, input: TaskChangeInput
     JSON.stringify({
       taskId: input.taskId,
       ...(input.projectId ? { projectId: input.projectId } : {}),
+      ...(input.waitId ? { waitId: input.waitId } : {}),
       version: input.version,
       changedFields,
       source: eventSource(input),
@@ -56,6 +58,7 @@ export function enqueueTaskAttentionRequiredEvent(
     taskId: string;
     taskTitle: string;
     projectId?: string;
+    waitId?: string;
     reason: 'blocked' | 'failed' | 'user_input' | 'approval';
     detail?: string;
     correlationId: string;
@@ -75,6 +78,7 @@ export function enqueueTaskAttentionRequiredEvent(
     JSON.stringify({
       task: { id: input.taskId, title: input.taskTitle },
       taskId: input.taskId,
+      ...(input.waitId ? { waitId: input.waitId } : {}),
       reason: input.reason,
       ...(input.detail ? { detail: input.detail } : {}),
       ...(input.projectId ? { projectId: input.projectId } : {}),

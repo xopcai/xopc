@@ -10,6 +10,7 @@ import {
 } from './task-lifecycle.js';
 import { TaskRunSchema } from './task-runs.js';
 import { PersonalDeliverableSchema } from './turn-outcome.js';
+import { PersonalOneShotFollowUpDtoSchema } from './personal-proactivity.js';
 
 export {
   TaskAttentionItemSchema,
@@ -552,6 +553,7 @@ export const TaskDetailResponseSchema = z.object({
   dependents: z.array(TaskDependencySummarySchema),
   parentTask: TaskDependencySummarySchema.optional(),
   children: z.array(TaskDependencySummarySchema).optional(),
+  oneShotFollowUps: z.array(PersonalOneShotFollowUpDtoSchema).optional(),
   allowedCommands: z.array(z.string()),
 });
 

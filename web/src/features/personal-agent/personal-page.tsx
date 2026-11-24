@@ -6,6 +6,8 @@ import type { VoiceCallPreferences } from '@xopcai/realtime-protocol/voice';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatPage } from '@/features/chat/chat-page';
+import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
+import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { useVoiceCall } from '@/features/voice/realtime/voice-call-context';
 import { fetchJson } from '@/lib/fetch';
 import { isElectron } from '@/lib/electron-env';
@@ -24,6 +26,7 @@ import {
   usePersonalAvatarFlightStore,
 } from './personal-avatar-flight';
 import { PersonalOnboarding } from './personal-onboarding';
+import { PersonalOneShotFollowUpDialog } from './personal-one-shot-follow-up';
 import { PersonalProfileSettings } from './personal-profile-settings';
 import { usePersonalWorkOverview, useRefreshPersonalWork } from './use-personal-work';
 
@@ -249,6 +252,27 @@ export function PersonalPage() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  const queryFollowUpId = new URLSearchParams(routerLocation.search).get('followUp');
+  const clearQueryFollowUp = useCallback(() => {
+    const params = new URLSearchParams(routerLocation.search);
+    params.delete('followUp');
+    const nextSearch = params.toString();
+    navigate(`${routerLocation.pathname}${nextSearch ? `?${nextSearch}` : ''}`, { replace: true, state: routerLocation.state });
+  }, [navigate, routerLocation.pathname, routerLocation.search, routerLocation.state]);
+
+  useEffect(() => {
+    if (record?.state !== 'ready') return;
+    const state = routerLocation.state as { attachTaskContext?: ComposerContextRef } | null;
+    const taskRef = state?.attachTaskContext;
+    if (!taskRef || taskRef.kind !== 'task' || !taskRef.sourceId) return;
+    const frame = window.requestAnimationFrame(() => {
+      dispatchFillChatComposer('', undefined, [taskRef]);
+      navigate(`${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}`, { replace: true, state: null });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [navigate, record?.state, routerLocation.hash, routerLocation.pathname, routerLocation.search, routerLocation.state]);
+
   useLayoutEffect(() => {
     const ready = record?.state === 'ready';
     const callLabel = zh ? '语音通话' : 'Voice call';
@@ -329,6 +353,13 @@ export function PersonalPage() {
         </Popover.Portal>
       </Popover.Root>
       <PersonalAvatarFlightOverlay />
+      {queryFollowUpId && (
+        <PersonalOneShotFollowUpDialog
+          followUpId={queryFollowUpId}
+          open={Boolean(queryFollowUpId)}
+          onOpenChange={open => { if (!open) clearQueryFollowUp(); }}
+        />
+      )}
     </div>
   );
 

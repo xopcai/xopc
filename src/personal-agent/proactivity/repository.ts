@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import { PersonalFeedbackSchema, PersonalProactivitySettingsSchema, type PersonalFeedback,
-  PersonalStrategyRollbackSchema, type PersonalProactivitySettings, type PersonalProvenanceDetail } from '@xopcai/gateway-contract';
+  PersonalStrategyRollbackSchema, type PersonalProactivitySettings, type PersonalProvenanceDetail,
+  type PersonalOneShotDestination, type PersonalOneShotTerminalReason } from '@xopcai/gateway-contract';
 
 import { DurableState } from '../../storage/sqlite/durable-state.js';
 import { createContextEvidence } from '../../storage/sqlite/context-evidence-repository.js';
@@ -10,6 +11,7 @@ import { readCurrentTranscriptId } from '../../storage/sqlite/session-instance-r
 import { getPersonalAgentByConversation } from '../repository.js';
 import { getUserProfileSnapshot } from '../../user-model/profile.js';
 import { isExplicitFollowUp, requestedCheckTime } from './follow-up-request.js';
+import { getOneShotFollowUpDto } from './one-shot-follow-up.js';
 
 export interface AttentionThread {
   id: string; owner_id: string; agent_id: string; conversation_id: string;
@@ -18,6 +20,17 @@ export interface AttentionThread {
   authority: 'user_explicit' | 'inferred'; task_id: string | null; project_id: string | null;
   next_check_at: number | null; pause_until: number | null; expires_at: number;
   last_meaningful_at: number; revision: number; created_at: number; updated_at: number;
+  follow_up_mode: 'recurring' | 'one_shot';
+  wait_id: string | null;
+  destination: PersonalOneShotDestination | null;
+  check_at: number | null;
+  valid_until: number | null;
+  timezone: string | null;
+  contract_key: string | null;
+  session_input_id: string | null;
+  last_checked_at: number | null;
+  last_check_error: string | null;
+  terminal_reason: PersonalOneShotTerminalReason | null;
 }
 export interface AttentionSource {
   entryId: string; transcriptId: string; conversationId: string; excerpt: string;
@@ -32,6 +45,7 @@ export interface Outreach {
   thread_revision: number; context_revision: number; policy_revision: number; decision: string;
   reason: string; state: string; text: string | null; provenance_json: string; valid_until: number;
   message_entry_id: string | null; notified_at: number | null; created_at: number; published_at: number | null;
+  destination: PersonalOneShotDestination; acknowledged_at: number | null;
 }
 
 export function getProactivitySettings(ownerId: string): PersonalProactivitySettings {
@@ -121,7 +135,7 @@ export function saveAttention(input: {
     const explicit = input.explicit && Boolean(explicitSource);
     if (input.explicit && !explicit) throw new Error('Follow-up requires an explicit user request');
     if (!Number.isFinite(input.nextCheckAt)) throw new Error('Invalid attention time');
-    const existing = db.prepare('SELECT * FROM personal_attention_threads WHERE conversation_id = ? AND subject = ? COLLATE NOCASE LIMIT 1')
+    const existing = db.prepare("SELECT * FROM personal_attention_threads WHERE conversation_id = ? AND subject = ? COLLATE NOCASE AND follow_up_mode = 'recurring' LIMIT 1")
       .get(input.conversationId, subject) as unknown as AttentionThread | undefined;
     // Automatic extraction cannot resurrect a topic explicitly ended by its owner.
     if (existing && ['completed', 'expired', 'paused'].includes(existing.status)) return existing;
@@ -198,15 +212,26 @@ export function enqueueWakeup(thread: AttentionThread, kind: string, identity: s
 }
 export function enqueueDue(now = Date.now()): void {
   runSqliteWriteTransaction(db => {
-    db.prepare("UPDATE personal_attention_threads SET status = 'expired', revision = revision + 1 WHERE expires_at <= ? AND status IN ('candidate','active','paused')").run(now);
-    db.prepare("UPDATE personal_attention_threads SET status = 'active', pause_until = NULL, revision = revision + 1 WHERE status = 'paused' AND pause_until <= ? AND expires_at > ?").run(now, now);
+    db.prepare(`
+      UPDATE personal_attention_threads
+      SET status = 'expired', terminal_reason = 'expired', next_check_at = NULL, revision = revision + 1, updated_at = ?
+      WHERE follow_up_mode = 'one_shot' AND valid_until <= ? AND status = 'active'
+    `).run(now, now);
+    db.prepare(`
+      UPDATE personal_outreach SET state = 'stale', text = NULL
+      WHERE state = 'ready' AND thread_id IN (
+        SELECT id FROM personal_attention_threads WHERE follow_up_mode = 'one_shot' AND status = 'expired'
+      )
+    `).run();
+    db.prepare("UPDATE personal_attention_threads SET status = 'expired', revision = revision + 1 WHERE follow_up_mode = 'recurring' AND expires_at <= ? AND status IN ('candidate','active','paused')").run(now);
+    db.prepare("UPDATE personal_attention_threads SET status = 'active', pause_until = NULL, revision = revision + 1 WHERE follow_up_mode = 'recurring' AND status = 'paused' AND pause_until <= ? AND expires_at > ?").run(now, now);
     // Renew an overdue check identity after offline time or a full-day resource pause.
     db.prepare(`UPDATE personal_attention_threads SET revision = revision + 1, next_check_at = ?
-      WHERE status = 'active' AND next_check_at <= ? AND EXISTS
+      WHERE follow_up_mode = 'recurring' AND status = 'active' AND next_check_at <= ? AND EXISTS
       (SELECT 1 FROM personal_wakeups w WHERE w.thread_id = personal_attention_threads.id
         AND w.thread_revision = personal_attention_threads.revision AND w.expires_at <= ?
         AND w.status IN ('pending','evaluating','cancelled','dead_letter'))`).run(now, now, now);
-    const threads = db.prepare("SELECT * FROM personal_attention_threads WHERE status = 'active' AND next_check_at <= ? ORDER BY next_check_at LIMIT 30")
+    const threads = db.prepare("SELECT * FROM personal_attention_threads WHERE follow_up_mode = 'recurring' AND status = 'active' AND next_check_at <= ? ORDER BY next_check_at LIMIT 30")
       .all(now) as unknown as AttentionThread[];
     for (const thread of threads) enqueueWakeup(thread, thread.authority === 'user_explicit' ? 'follow_up' : 'discussion',
       `due:${thread.revision}:${thread.next_check_at}`, now);
@@ -225,12 +250,14 @@ export function provenanceDetail(ownerId: string, id: string): PersonalProvenanc
   const snapshot = JSON.parse(outreach.provenance_json);
   const currentSources = getAttentionSources(thread.id, snapshot.sourceIds);
   const sources = sourceFingerprint(currentSources) === snapshot.fingerprint ? currentSources : [];
+  const oneShot = thread.follow_up_mode === 'one_shot' ? getOneShotFollowUpDto(thread.id, ownerId) : undefined;
   return { provenance: snapshot.display,
     thread: { id: thread.id, subject: sources.length ? thread.subject : '', status: thread.status,
       revision: thread.revision, nextCheckAt: thread.next_check_at },
     whyNow: sources.length ? outreach.reason : '', sourcesAvailable: sources.length > 0,
     sources: sources.map(({ processingPolicy: _policy, version: _version, ...source }) => source),
-    strategy: strategyState(thread.id) };
+    strategy: strategyState(thread.id),
+    ...(oneShot ? { oneShotFollowUp: oneShot } : {}) };
 }
 export function recordFeedback(ownerId: string, id: string, raw: PersonalFeedback, now = Date.now()): void {
   const input = PersonalFeedbackSchema.parse(raw);

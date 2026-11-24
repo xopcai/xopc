@@ -1,5 +1,6 @@
 import { AssistantCapsuleContent, assistantCapsuleClassName, assistantCapsuleDetailClassName, assistantCapsuleListClassName } from '@/features/chat/messages/assistant-capsule';
 import { AutomationTaskCard } from '@/features/automations/automation-task-card';
+import { PersonalFollowUpReceiptCapsule } from '@/features/personal-agent/personal-one-shot-follow-up';
 import type {
   ProductDeliveryEnvelope,
   ProductReference,
@@ -8,6 +9,7 @@ import type {
 import { productReferenceOpenRoute } from '@xopcai/gateway-contract';
 import {
   AppWindow,
+  Bell,
   Bot,
   ChevronRight,
   FileText,
@@ -55,6 +57,7 @@ const KIND_ICON = {
   project: FolderKanban,
   note: NotebookPen,
   automation: Bot,
+  personal_follow_up: Bell,
   local_app: AppWindow,
   chat_preview: LayoutTemplate,
   file: FileText,
@@ -199,6 +202,15 @@ function DeliveryRow({
   };
 
   if (reference.kind === 'automation' && delivery.operation !== 'failed') return <li className="min-w-0 max-w-full"><AutomationTaskCard automationId={reference.id} runId={reference.runId} language={language} embedded /></li>;
+  if (reference.kind === 'personal_follow_up' && delivery.operation !== 'failed') {
+    return (
+      <PersonalFollowUpReceiptCapsule
+        followUpId={reference.id}
+        fallbackTitle={reference.title}
+        fallbackStatus={reference.status}
+      />
+    );
+  }
 
   const open = () => {
     if (filePath && canPreviewFile) {

@@ -17,8 +17,15 @@ import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqli
 import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
 import { createLogger } from '../../utils/logger.js';
 import { personalConversationState } from '../conversation-state.js';
-import { getPersonalAgent } from '../repository.js';
+import { getPersonalAgent, getPersonalAgentByConversation } from '../repository.js';
 import { PERSONAL_PERSONA_GUIDANCE } from '../persona.js';
+import { isExplicitOneShotFollowUp } from './follow-up-request.js';
+import {
+  evaluateOneShotWakeups,
+  publishOneShotOutreach,
+  reconcileOneShotForTaskEvent,
+  type OneShotStateChange,
+} from './one-shot-follow-up.js';
 import { enqueueDue, enqueueWakeup, getAttention, getAttentionSources, getProactivitySettings, isQuiet, localDay,
   listAttention, preparationStrategy, recordFeedback, reserveModelCall, saveAttention, sourceFingerprint, userText,
   type AttentionThread, type Outreach, type Wakeup } from './repository.js';
@@ -45,9 +52,12 @@ const ExtractionSchema = z.object({
 }).strict();
 
 export interface ProactivityDeps {
+  ownerId?: string;
   getConfig: () => Config;
   isAvailable: (conversationId: string) => boolean;
   notify: (conversationId: string, outreachId: string) => void;
+  onFollowUpUpdated?: (change: OneShotStateChange) => void;
+  onBeforePublishOneShot?: (info: { ownerId: string; taskId: string; waitId: string; followUpId: string; outreachId: string; now: number }) => void;
   call?: (conversationId: string, operation: string, prompt: string, signal: AbortSignal) => Promise<string>;
   now?: () => number;
 }
@@ -58,11 +68,12 @@ export class PersonalProactivityService {
   private controller?: AbortController;
   private readonly stopWaiters: Array<() => void> = [];
   constructor(private readonly deps: ProactivityDeps) {}
+  private ownerId(): string { return this.deps.ownerId ?? 'local-owner'; }
   private now(): number { return this.deps.now?.() ?? Date.now(); }
   private accessible(conversationId: string): boolean {
     const config = this.deps.getConfig();
     const access = resolveUserContextSessionAccess(config, conversationId);
-    const personal = getPersonalAgent('local-owner');
+    const personal = getPersonalAgentByConversation(conversationId);
     const agent = personal ? new AgentCatalogRepository().get(personal.agentId) : undefined;
     if (!personal || personal.conversationId !== conversationId || personal.state !== 'ready' || agent?.enabled === false) return false;
     return access.userModel && config.userContext.userModel.writePolicy !== 'deny'
@@ -82,7 +93,7 @@ export class PersonalProactivityService {
       LIMIT 1`).get(thread.task_id, thread.conversation_id));
   }
   private async call(conversationId: string, operation: string, prompt: string): Promise<string> {
-    const personal = getPersonalAgent('local-owner');
+    const personal = getPersonalAgentByConversation(conversationId);
     if (this.stopped || !this.available(conversationId) || personal && getProactivitySettings(personal.ownerId).mode === 'off') {
       throw new ProcessingPaused('Personal background processing paused');
     }
@@ -132,9 +143,13 @@ export class PersonalProactivityService {
   ingestEvent(event: AutomationEventEnvelope): void {
     if (event.trust !== 'system' || !['tasks', 'projects'].includes(event.source)
       || !['task.changed.v2', 'task.deleted.v1', 'project.changed', 'project.deleted'].includes(event.type)) return;
+    if (event.source === 'tasks' && event.subject?.id) {
+      const oneShotChanges = reconcileOneShotForTaskEvent(event.subject.id, event.type, this.now());
+      for (const change of oneShotChanges) this.deps.onFollowUpUpdated?.(change);
+    }
     runSqliteWriteTransaction(db => {
       const field = event.source === 'tasks' ? 'task_id' : 'project_id';
-      const threads = db.prepare(`SELECT * FROM personal_attention_threads WHERE status = 'active' AND ${field} = ? AND created_at <= ?`)
+      const threads = db.prepare(`SELECT * FROM personal_attention_threads WHERE follow_up_mode = 'recurring' AND status = 'active' AND ${field} = ? AND created_at <= ?`)
         .all(event.subject?.id ?? null, event.occurredAtMs) as unknown as AttentionThread[];
       for (const thread of threads) {
         if (event.type.includes('deleted')) {
@@ -147,6 +162,17 @@ export class PersonalProactivityService {
     if (this.running || this.stopped) return;
     this.running = true;
     try {
+      const evalChanges = evaluateOneShotWakeups(this.now(), { getConfig: this.deps.getConfig });
+      for (const change of evalChanges) {
+        if (change.terminalReason) this.deps.onFollowUpUpdated?.(change);
+      }
+      publishOneShotOutreach(this.now(), {
+        getConfig: this.deps.getConfig,
+        isConversationAvailable: conversationId => this.deps.isAvailable(conversationId),
+        notifyPersonalTranscript: this.deps.notify,
+        onFollowUpUpdated: this.deps.onFollowUpUpdated,
+        onBeforePublishDestination: this.deps.onBeforePublishOneShot,
+      });
       await this.evaluate();
       await this.extract();
       this.publish();
@@ -156,7 +182,7 @@ export class PersonalProactivityService {
     }
   }
   private async extract(): Promise<void> {
-    const personal = getPersonalAgent('local-owner');
+    const personal = getPersonalAgent(this.ownerId());
     if (!personal || personal.state !== 'ready' || !this.available(personal.conversationId)
       || getProactivitySettings(personal.ownerId).mode === 'off') return;
     const db = getSqliteDatabase();
@@ -171,13 +197,31 @@ export class PersonalProactivityService {
       .all(transcriptId, position ?? 0, this.now() - 30 * 86_400_000) as Array<{ entry_id: string; payload_json: string; seq: number; created_at: number }>;
     if (position === undefined) rows.reverse();
     if (!rows.length) return;
-    const sources = rows.map(row => ({ id: row.entry_id, text: userText(JSON.parse(row.payload_json)).slice(0, 1600), observedAt: row.created_at }));
+    const oneShotSourceIds = new Set(
+      (db.prepare(`
+        SELECT s.entry_id FROM personal_attention_sources s
+        JOIN personal_attention_threads t ON t.id = s.thread_id
+        WHERE s.transcript_id = ? AND t.follow_up_mode = 'one_shot'
+      `).all(transcriptId) as Array<{ entry_id: string }>).map(item => item.entry_id),
+    );
+    const sources = rows
+      .map(row => {
+        const parsed = JSON.parse(row.payload_json) as { content?: unknown; metadata?: { sourceContexts?: Array<{ kind?: unknown }> } };
+        const hasTaskContext = Boolean(parsed.metadata?.sourceContexts?.some(ref => ref?.kind === 'task'));
+        return { id: row.entry_id, text: userText(parsed).slice(0, 1600), observedAt: row.created_at, hasTaskContext };
+      })
+      .filter(source => !oneShotSourceIds.has(source.id) && !(source.hasTaskContext && isExplicitOneShotFollowUp(source.text)))
+      .map(({ hasTaskContext: _ignored, ...source }) => source);
+    if (!sources.length) {
+      cursor.set(transcriptId, rows.at(-1)!.seq);
+      return;
+    }
     const priorUserStatements = db.prepare(`SELECT entry_id,payload_json,created_at FROM transcript_entries
       WHERE transcript_id = ? AND seq < ? AND role = 'user' AND created_at >= ?
       AND COALESCE(json_extract(payload_json, '$.metadata.hiddenFromClient'), 0) = 0 ORDER BY seq DESC LIMIT 24`)
       .all(transcriptId, rows[0].seq, this.now() - 30 * 86_400_000)
       .map(row => ({ id: String(row.entry_id), text: userText(JSON.parse(String(row.payload_json))).slice(0, 1600), observedAt: Number(row.created_at) }));
-    const threads = listAttention(personal.conversationId);
+    const threads = listAttention(personal.conversationId).filter(thread => thread.follow_up_mode === 'recurring');
     const replies = db.prepare("SELECT id,thread_id FROM personal_outreach WHERE conversation_id = ? AND state = 'published' ORDER BY published_at DESC LIMIT 5")
       .all(personal.conversationId);
     const prompt = [
@@ -235,8 +279,10 @@ export class PersonalProactivityService {
     const db = getSqliteDatabase();
     const now = this.now();
     const claimed = runSqliteWriteTransaction(() => {
-      const rows = db.prepare(`SELECT * FROM personal_wakeups WHERE status IN ('pending','evaluating')
-        AND lease_until <= ? AND next_attempt_at <= ? AND not_before <= ? AND expires_at > ? ORDER BY created_at LIMIT 10`)
+      const rows = db.prepare(`SELECT w.* FROM personal_wakeups w
+        JOIN personal_attention_threads t ON t.id = w.thread_id
+        WHERE t.follow_up_mode = 'recurring' AND w.status IN ('pending','evaluating')
+        AND w.lease_until <= ? AND w.next_attempt_at <= ? AND w.not_before <= ? AND w.expires_at > ? ORDER BY w.created_at LIMIT 10`)
         .all(now, now, now, now) as unknown as Wakeup[];
       for (const wakeup of rows) {
         const thread = getAttention(wakeup.thread_id);
@@ -342,7 +388,10 @@ export class PersonalProactivityService {
   private publish(): void {
     const db = getSqliteDatabase();
     const now = this.now();
-    const rows = db.prepare("SELECT * FROM personal_outreach WHERE state = 'ready' OR (state = 'published' AND notified_at IS NULL) ORDER BY created_at LIMIT 20")
+    const rows = db.prepare(`SELECT o.* FROM personal_outreach o
+      JOIN personal_attention_threads t ON t.id = o.thread_id
+      WHERE t.follow_up_mode = 'recurring' AND (o.state = 'ready' OR (o.state = 'published' AND o.notified_at IS NULL))
+      ORDER BY o.created_at LIMIT 20`)
       .all() as unknown as Outreach[];
     for (const row of rows) {
       const published = runSqliteWriteTransaction(() => {

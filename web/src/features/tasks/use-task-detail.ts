@@ -77,13 +77,19 @@ export function useTaskDetail(taskId: string) {
       setLastChange(parsed.data);
       refresh();
     };
+    const onFollowUpUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ taskId?: string }>).detail;
+      if (!detail?.taskId || detail.taskId === taskId) refresh();
+    };
     const onRealtimeRecovery = () => refresh();
     window.addEventListener('task-changed-v2', onTaskChanged);
+    window.addEventListener('personal-follow-up-updated', onFollowUpUpdated);
     window.addEventListener('gateway-realtime-connected', onRealtimeRecovery);
     window.addEventListener('realtime-gap', onRealtimeRecovery);
     return () => {
       window.clearTimeout(refreshTimer);
       window.removeEventListener('task-changed-v2', onTaskChanged);
+      window.removeEventListener('personal-follow-up-updated', onFollowUpUpdated);
       window.removeEventListener('gateway-realtime-connected', onRealtimeRecovery);
       window.removeEventListener('realtime-gap', onRealtimeRecovery);
     };

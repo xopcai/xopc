@@ -10,6 +10,7 @@ export const ProductReferenceKindSchema = z.enum([
   'project',
   'note',
   'automation',
+  'personal_follow_up',
   'local_app',
   'chat_preview',
   'file',
@@ -163,6 +164,8 @@ export function productReferenceRoute(reference: ProductReference): string | nul
       return `/notes/${id}`;
     case 'automation':
       return `/automations?automation=${id}${reference.runId ? `&view=run&run=${encodeURIComponent(reference.runId)}` : ''}`;
+    case 'personal_follow_up':
+      return `/personal?followUp=${id}`;
     case 'local_app':
       return `/local-apps/${id}`;
     case 'chat_preview':

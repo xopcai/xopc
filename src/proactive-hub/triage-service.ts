@@ -30,14 +30,17 @@ import {
   admitSignalAtGate1,
   applyProactiveItemResolution,
   claimDueCoalescedSignals,
+  extractEventTaskWait,
   finalizeCoalescedSignal,
   findActiveEntityAnchor,
   flushPulseDigestBatch,
   listProactiveInboxItems,
   markProactiveConversationDelivered,
+  retireCoveredProactiveItems,
   saveProactiveItem,
   type Gate1AdmissionResult,
 } from './repository.js';
+import { hasCoveringOneShotFollowUp } from '../personal-agent/proactivity/one-shot-follow-up.js';
 import type {
   CoalescedSignal,
   PreparedScoutPackage,
@@ -126,6 +129,10 @@ export class ProactiveHubService {
     const settings = getProactivitySettings(this.ownerId());
     if (settings.mode === 'off') return { outcome: 'dropped_rule' };
     return admitSignalAtGate1(this.ownerId(), event, this.now());
+  }
+
+  retireCoveredTaskWait(taskId: string, waitId?: string, now = this.now()): number {
+    return retireCoveredProactiveItems(this.ownerId(), taskId, waitId, now);
   }
 
   tick(): void {
@@ -301,6 +308,12 @@ export class ProactiveHubService {
       payload: signal.payload,
     };
     const anchor = findActiveEntityAnchor(ownerId, syntheticEnvelope);
+    const taskWait = extractEventTaskWait(syntheticEnvelope);
+    if (taskWait.taskId && hasCoveringOneShotFollowUp(ownerId, taskWait.taskId, taskWait.waitId)) {
+      retireCoveredProactiveItems(ownerId, taskWait.taskId, taskWait.waitId, now);
+      if (signal.leaseToken) finalizeCoalescedSignal(ownerId, signal.coalesceKey, signal.leaseToken, 'dropped', now);
+      return;
+    }
 
     try {
       // Shortcut: explicit digest_only subscriptions bypass heavy Scout and buffer directly into Pulse Digest.
@@ -324,6 +337,8 @@ export class ProactiveHubService {
             ...(signal.subscriptionId ? { subscriptionId: signal.subscriptionId } : {}),
             ...(anchor.projectId ? { matchedProjectId: anchor.projectId } : {}),
             ...(anchor.threadId ? { matchedThreadId: anchor.threadId } : {}),
+            ...(taskWait.taskId ? { matchedTaskId: taskWait.taskId } : {}),
+            ...(taskWait.waitId ? { matchedWaitId: taskWait.waitId } : {}),
             reason: 'Matched digest-only subscription without interrupting active work',
             evidenceRefs: [`event:${signal.latestEventId}`],
             score: { actionability: 1, urgency: 0, novelty: 1, preparedness: 1, disruptionPenalty: 0, netScore: 3 },
@@ -487,6 +502,8 @@ export class ProactiveHubService {
           ...(signal.subscriptionId ? { subscriptionId: signal.subscriptionId } : {}),
           ...(anchor.projectId ? { matchedProjectId: anchor.projectId } : {}),
           ...(anchor.threadId ? { matchedThreadId: anchor.threadId } : {}),
+          ...(taskWait.taskId ? { matchedTaskId: taskWait.taskId } : {}),
+          ...(taskWait.waitId ? { matchedWaitId: taskWait.waitId } : {}),
           reason: scout.reason,
           evidenceRefs: scout.evidenceRefs,
           score,
@@ -501,7 +518,7 @@ export class ProactiveHubService {
 
       if (signal.leaseToken) finalizeCoalescedSignal(ownerId, signal.coalesceKey, signal.leaseToken, 'triaged', now);
 
-      if (tier === 'tier_a_inbox' || tier === 'tier_s_chat') {
+      if (created.state === 'ready' && (tier === 'tier_a_inbox' || tier === 'tier_s_chat')) {
         this.deps.onPublishEvent?.('proactive.inbox.updated', { itemId: created.id, tier, state: created.state });
       }
     } catch (err) {
@@ -529,6 +546,11 @@ export class ProactiveHubService {
       .filter(item => item.tier === 'tier_s_chat' && item.state === 'ready' && !item.conversationEntryId);
 
     for (const item of dueItems) {
+      if (item.provenance.matchedTaskId
+        && hasCoveringOneShotFollowUp(ownerId, item.provenance.matchedTaskId, item.provenance.matchedWaitId)) {
+        retireCoveredProactiveItems(ownerId, item.provenance.matchedTaskId, item.provenance.matchedWaitId, now);
+        continue;
+      }
       const dailyBudget = new DurableState<number>('proactive.chat-escalations', ownerId);
       const dayKey = localDay(now, settings.timezone);
       if ((dailyBudget.get(dayKey) ?? 0) >= Math.max(1, settings.dailyMessages)) {

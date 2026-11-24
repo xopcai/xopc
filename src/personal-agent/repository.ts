@@ -41,11 +41,11 @@ export function resolveMessageReactionsEnabled(preference: boolean | undefined, 
   return preference ?? (config?.experimental?.personalAgentMessageReactions === true);
 }
 
-type PersonalSession = { conversation_id: string; agent_id: string; active_transcript_id: string | null };
+type PersonalSession = { conversation_id: string; agent_id: string; active_transcript_id: string | null; custom_data_json: string | null };
 
 function personalSession(column: 'agent_id' | 'conversation_id', value: string): PersonalSession | null {
   if (!isXopcDatabaseOpen()) return null;
-  const row = getSqliteDatabase().prepare(`SELECT conversation_id, agent_id, active_transcript_id
+  const row = getSqliteDatabase().prepare(`SELECT conversation_id, agent_id, active_transcript_id, custom_data_json
     FROM sessions WHERE ${column} = ? AND json_extract(custom_data_json, '$.personalAgent') = 1
     ORDER BY created_at LIMIT 1`).get(value) as PersonalSession | undefined;
   return row ?? null;
@@ -90,7 +90,13 @@ export function getPersonalAgentByConversation(conversationId: string): Personal
   if (!session) return null;
   const agent = new AgentCatalogRepository().get(session.agent_id);
   if (!agent) return null;
-  const ownerId = 'local-owner';
+  let ownerId = 'local-owner';
+  if (session.custom_data_json) {
+    try {
+      const parsed = JSON.parse(session.custom_data_json) as { ownerId?: unknown };
+      if (typeof parsed.ownerId === 'string' && parsed.ownerId.trim()) ownerId = parsed.ownerId.trim();
+    } catch { /* ignore invalid custom_data_json */ }
+  }
   return agent.id === personalAgentId(ownerId) ? toRecord(ownerId, agent, session) : null;
 }
 

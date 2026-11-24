@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ObservationStateSchema } from './observation.js';
+import { PersonalOneShotWorkbenchAlertSchema } from './personal-proactivity.js';
 
 export const HomeDecisionSchema = z.object({
   id: z.string(),
@@ -88,6 +89,7 @@ export const HomeWorkbenchItemSchema = z.object({
   openAction: HomeActionSchema.optional(),
   primaryAction: HomeActionSchema.optional(),
   secondaryActions: z.array(HomeActionSchema).max(2).default([]),
+  unreadFollowUp: PersonalOneShotWorkbenchAlertSchema.optional(),
 });
 
 export const HomeRunningConversationSchema = z.object({
@@ -324,6 +326,7 @@ export const HomeResponseSchema = z.object({
   background: z.array(HomeWorkbenchItemSchema),
   backgroundCount: z.number().int().nonnegative(),
   decisions: z.array(HomeDecisionSchema),
+  unreadFollowUps: z.array(PersonalOneShotWorkbenchAlertSchema).optional(),
   advisor: HomeAdvisorSchema,
   attentionPolicy: z.object({
     visibleDecisionCount: z.number().int().nonnegative(),

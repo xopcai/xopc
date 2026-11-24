@@ -16,6 +16,8 @@ import {
   acknowledgeHomeAttention,
   decideConnectorApproval,
 } from '../../../storage/sqlite/index.js';
+import { acknowledgeWorkbenchFollowUp } from '../../../personal-agent/proactivity/one-shot-follow-up.js';
+import { getPersonalOwnerId } from '../../security/gateway-principal.js';
 import { HomeQueryService } from '../../../tasks/home-query-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import {
@@ -179,6 +181,24 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
 
   authenticated.post('/api/home/attention/acknowledge', deps.strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    if (body.kind === 'one_shot_follow_up') {
+      const ownerId = getPersonalOwnerId(c);
+      if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+      const outreachId = typeof body.outreachId === 'string' && body.outreachId.trim()
+        ? body.outreachId.trim()
+        : typeof body.runId === 'string' ? body.runId.trim() : '';
+      if (!outreachId) return c.json({ ok: false, error: 'outreachId is required' }, 400);
+      const acknowledged = acknowledgeWorkbenchFollowUp(ownerId, outreachId);
+      if (!acknowledged) return c.json({ ok: false, error: 'Published workbench follow-up reminder not found' }, 404);
+      service.emit?.('personal.follow_up.updated', {
+        followUpId: acknowledged.followUpId,
+        taskId: acknowledged.taskId,
+        outreachId,
+        destination: 'workbench',
+      });
+      service.emit?.('task.changed', { taskId: acknowledged.taskId });
+      return c.json({ ok: true, status: 'acknowledged', followUpId: acknowledged.followUpId, taskId: acknowledged.taskId });
+    }
     const kind = body.kind === 'automation_run' ? body.kind : undefined;
     const runId = typeof body.runId === 'string' ? body.runId.trim() : '';
     if (!kind || !runId) return c.json({ ok: false, error: 'kind and runId are required' }, 400);

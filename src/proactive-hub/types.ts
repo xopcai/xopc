@@ -140,6 +140,8 @@ export interface ProactiveProvenance {
   subscriptionId?: string;
   matchedProjectId?: string;
   matchedThreadId?: string;
+  matchedTaskId?: string;
+  matchedWaitId?: string;
   reason: string;
   evidenceRefs: string[];
   score: ProactiveTriageScore;

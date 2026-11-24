@@ -403,7 +403,7 @@ function normalizeMessageContextRefs(metadata: unknown): Message['contextRefs'] 
     const row = asRecord(value);
     if (
       !row
-      || (row.kind !== 'note' && row.kind !== 'file' && row.kind !== 'session'
+      || (row.kind !== 'note' && row.kind !== 'task' && row.kind !== 'file' && row.kind !== 'session'
         && row.kind !== 'browser_tab' && row.kind !== 'workbook' && row.kind !== 'mcp_resource')
       || typeof row.sourceId !== 'string'
       || typeof row.version !== 'string'

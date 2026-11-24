@@ -722,3 +722,11 @@ it('maps the screenshot AI analysis endpoint without matching neighboring routes
   expect(findAuthenticatedLazyRouteBundle('/api/screenshot/analyze/extra')).toBeUndefined();
   expect(findAuthenticatedLazyRouteBundle('/api/screenshot-other/analyze')).toBeUndefined();
 });
+
+it('maps personal one-shot follow-up detail, stop, and home acknowledge routes without neighboring overlap', () => {
+  expect(findAuthenticatedLazyRouteBundle('/api/personal-agent/attention/thread-1')?.id).toBe('personal-agent');
+  expect(findAuthenticatedLazyRouteBundle('/api/personal-agent/attention/thread-1/stop')?.id).toBe('personal-agent');
+  expect(findAuthenticatedLazyRouteBundle('/api/personal-agent-other/attention/thread-1')).toBeUndefined();
+  expect(findAuthenticatedLazyRouteBundle('/api/home/attention/acknowledge')?.id).toBe('home');
+  expect(findAuthenticatedLazyRouteBundle('/api/home-other/attention/acknowledge')).toBeUndefined();
+});

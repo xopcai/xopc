@@ -1,10 +1,18 @@
 import { taskDescriptionForDisplay, type TaskRunStatus } from '@xopcai/gateway-contract';
-import type { Ref } from 'react';
-import { Link } from 'react-router-dom';
+import { Bell, MessageCircle } from 'lucide-react';
+import { useState, type Ref } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
+import { Button } from '@/components/ui/button';
 import { ChatMarkdownRenderer } from '@/features/chat/rendering/markdown/chat-markdown-renderer';
+import {
+  acknowledgeWorkbenchFollowUpApi,
+  formatOneShotFollowUpStatus,
+  PersonalOneShotFollowUpDialog,
+  stopOneShotFollowUpApi,
+} from '@/features/personal-agent/personal-one-shot-follow-up';
 
-import type { TaskDetail } from './home-api';
+import { fetchTask, type TaskDetail } from './home-api';
 import { currentTaskReceipt } from './task-detail-summary';
 import { TaskExpandableContent } from './task-expandable-content';
 import { TaskInputCard } from './task-input-card';
@@ -20,6 +28,12 @@ export function TaskCurrentAction({ detail, executorName, language, onUpdated, r
   ref?: Ref<HTMLElement>;
 }) {
   const zh = language === 'zh';
+  const navigate = useNavigate();
+  const [followUpDialogId, setFollowUpDialogId] = useState<string | null>(null);
+  const [followUpBusy, setFollowUpBusy] = useState(false);
+  const [followUpNotice, setFollowUpNotice] = useState<string | null>(null);
+  const [ackBusy, setAckBusy] = useState(false);
+
   const pausedWait = detail.waits.find((wait) => wait.kind === 'paused');
   const actionableWaits = detail.allowedCommands.includes('resolve_wait') && !pausedWait
     ? detail.waits.filter((wait) => (wait.kind === 'user_input'
@@ -44,6 +58,66 @@ export function TaskCurrentAction({ detail, executorName, language, onUpdated, r
         ? (zh ? '请检查交付物并勾选通过的验收项。' : 'Review the deliverables and check the criteria that pass.')
         : (activeRun && activeProgress[activeRun.status]) ?? receipt?.summary
           ?? (zh ? '任务尚未开始，可开始执行或设置执行时间。' : 'Start the task or set an execution time.')), language);
+
+  const primaryFollowUp = detail.oneShotFollowUps?.[0];
+  const unreadWorkbenchAlert = primaryFollowUp?.destination === 'workbench'
+    && primaryFollowUp.outreach?.state === 'published'
+    && primaryFollowUp.outreach.acknowledgedAt === null
+    ? primaryFollowUp.outreach
+    : null;
+
+  async function refreshTaskDetail() {
+    try {
+      const latest = await fetchTask(detail.task.id);
+      onUpdated(latest);
+    } catch {
+      // Realtime or SWR revalidation will recover on transient fetch error.
+    }
+  }
+
+  async function handleStopFollowUp() {
+    if (!primaryFollowUp || followUpBusy) return;
+    setFollowUpBusy(true);
+    setFollowUpNotice(null);
+    try {
+      const result = await stopOneShotFollowUpApi(primaryFollowUp.followUpId, primaryFollowUp.revision);
+      if (result.outcome === 'already_delivered') {
+        setFollowUpNotice(zh ? '已提醒，跟进已结束。' : 'Already reminded; follow-up has ended.');
+      } else if (result.outcome === 'stopped') {
+        setFollowUpNotice(zh ? '已停止这次跟进。' : 'Follow-up stopped.');
+      }
+      await refreshTaskDetail();
+    } catch {
+      await refreshTaskDetail();
+    } finally {
+      setFollowUpBusy(false);
+    }
+  }
+
+  async function handleAcknowledgeWorkbenchAlert() {
+    if (!unreadWorkbenchAlert || ackBusy) return;
+    setAckBusy(true);
+    try {
+      await acknowledgeWorkbenchFollowUpApi(unreadWorkbenchAlert.outreachId);
+      await refreshTaskDetail();
+    } finally {
+      setAckBusy(false);
+    }
+  }
+
+  function discussWithPersonal() {
+    navigate('/personal', {
+      state: {
+        attachTaskContext: {
+          kind: 'task' as const,
+          sourceId: detail.task.id,
+          expectedVersion: String(detail.task.version),
+          title: detail.task.title,
+        },
+      },
+    });
+  }
+
   const attentionContent = detail.attention.length > 0 ? <ul className="mt-3 space-y-3">
     {detail.attention.map((item, index) => {
       const hasInlineControl = actionableWaits.some((wait) => (item.kind === 'input_required' && wait.kind === 'user_input')
@@ -59,14 +133,100 @@ export function TaskCurrentAction({ detail, executorName, language, onUpdated, r
   </ul> : null;
 
   return <section ref={ref} tabIndex={-1} aria-label={zh ? '当前需要处理' : 'Current action'} className="rounded-xl bg-surface-panel p-4">
-    <h2 className="text-sm font-semibold text-fg">{needsAttention
-      ? (zh ? '需要你处理' : 'Your action needed')
-      : (zh ? '当前进展' : 'Current progress')}{actionableWaits.length > 1 ? ` · ${actionableWaits.length}` : ''}</h2>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h2 className="text-sm font-semibold text-fg">{needsAttention
+        ? (zh ? '需要你处理' : 'Your action needed')
+        : (zh ? '当前进展' : 'Current progress')}{actionableWaits.length > 1 ? ` · ${actionableWaits.length}` : ''}</h2>
+      {detail.task.phase !== 'closed' && (
+        <Button
+          type="button"
+          variant="ghost"
+          className="min-h-8 gap-1.5 px-2.5 text-xs text-fg-muted hover:text-fg"
+          onClick={discussWithPersonal}
+        >
+          <MessageCircle className="size-3.5" aria-hidden />
+          {zh ? '和助手讨论' : 'Discuss with assistant'}
+        </Button>
+      )}
+    </div>
+
+    {unreadWorkbenchAlert && (
+      <div
+        role="status"
+        data-workbench-followup-unread
+        className="mt-3 flex flex-wrap items-start justify-between gap-3 rounded-lg border border-accent/35 bg-accent-soft/45 px-3.5 py-3 text-sm"
+      >
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-accent-fg">
+            <Bell className="size-3.5 shrink-0" aria-hidden />
+            {zh ? '约定提醒已到达' : 'Scheduled follow-up reminder'}
+          </p>
+          <p className="text-xs leading-5 text-fg">
+            {unreadWorkbenchAlert.text || (zh ? '到约定检查时刻，该待决项仍需你处理。' : 'This pending item still requires your decision.')}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          className="min-h-8 shrink-0 px-2.5 text-xs"
+          disabled={ackBusy}
+          onClick={() => void handleAcknowledgeWorkbenchAlert()}
+        >
+          {ackBusy ? (zh ? '确认中' : 'Confirming') : (zh ? '知道了' : 'Acknowledge')}
+        </Button>
+      </div>
+    )}
+
+    {primaryFollowUp && (
+      <div
+        data-task-one-shot-followup={primaryFollowUp.followUpId}
+        className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-edge bg-surface-inset/60 px-3 py-2 text-xs"
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <Bell className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
+          <span className="truncate text-fg">
+            {zh ? '条件跟进：' : 'Follow-up: '}
+            <span className="font-medium">{formatOneShotFollowUpStatus(primaryFollowUp, zh)}</span>
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setFollowUpDialogId(primaryFollowUp.followUpId)}
+            className="rounded px-2 py-1 font-medium text-accent hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {zh ? '查看跟进' : 'View follow-up'}
+          </button>
+          {primaryFollowUp.status === 'active' && (
+            <button
+              type="button"
+              disabled={followUpBusy}
+              onClick={() => void handleStopFollowUp()}
+              className="rounded border border-edge px-2 py-1 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50"
+            >
+              {followUpBusy ? (zh ? '正在停止' : 'Stopping') : (zh ? '停止跟进' : 'Stop follow-up')}
+            </button>
+          )}
+        </div>
+      </div>
+    )}
+    {followUpNotice && (
+      <p role="status" className="mt-2 text-xs text-fg-muted">{followUpNotice}</p>
+    )}
+
     {actionableWaits.map((wait) => <TaskInputCard key={wait.id} wait={wait} detail={detail} zh={zh} onUpdated={onUpdated} />)}
     {actionableWaits.length > 0 ? attentionContent ? <details className="mt-3"><summary className="cursor-pointer text-xs text-fg-muted">{zh ? '等待详情' : 'Waiting details'}</summary>{attentionContent}</details> : null
       : attentionContent ?? <TaskExpandableContent content={summary} contentKey={`${detail.task.id}:current-progress`} language={language} previewHeight={72} className="mt-2 text-sm leading-6 text-fg-muted">
         <ChatMarkdownRenderer content={taskDescriptionForDisplay(summary)} compact />
       </TaskExpandableContent>}
 
+    {followUpDialogId && (
+      <PersonalOneShotFollowUpDialog
+        followUpId={followUpDialogId}
+        open={Boolean(followUpDialogId)}
+        onOpenChange={open => { if (!open) setFollowUpDialogId(null); }}
+        onChanged={() => void refreshTaskDetail()}
+      />
+    )}
   </section>;
 }

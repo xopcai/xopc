@@ -1113,6 +1113,13 @@ export class GatewayService {
     notify: (conversationId, outreachId) => {
       this.emit('session.transcript_updated', { key: conversationId, outreachId });
     },
+    onFollowUpUpdated: (change) => {
+      this.emit('personal.follow_up.updated', change);
+      this.emit('task.changed', { taskId: change.taskId });
+    },
+    onBeforePublishOneShot: (info) => {
+      this.proactiveHub.retireCoveredTaskWait(info.taskId, info.waitId, info.now);
+    },
   });
 
   private readonly rsiCapability = new RsiCapabilityService({

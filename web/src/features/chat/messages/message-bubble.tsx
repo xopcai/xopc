@@ -852,11 +852,15 @@ export const MessageBubble = memo(function MessageBubble({
                 browserTabLabel={m.chat.atMention.browserTabs}
                 mcpResourceLabel={m.chat.atMention.mcpResources}
                 workbookLabel={language === 'zh' ? '工作簿' : 'Workbook'}
+                taskLabel={language === 'zh' ? '任务' : 'Task'}
                 truncatedLabel={m.chat.commandPalette.contextTruncated}
                 showMoreLabel={m.chat.contextReferencesMore}
                 showLessLabel={m.chat.contextReferencesLess}
                 onOpen={ref => ref.kind === 'workbook'
-                  ? navigate(spaceWorkbookRoute(ref.sourceId, ref.version)) : openReferencedNote(ref.sourceId)}
+                  ? navigate(spaceWorkbookRoute(ref.sourceId, ref.version))
+                  : ref.kind === 'task'
+                    ? navigate(`/tasks/${encodeURIComponent(ref.sourceId)}`)
+                    : openReferencedNote(ref.sourceId)}
               />
             ) : null}
 

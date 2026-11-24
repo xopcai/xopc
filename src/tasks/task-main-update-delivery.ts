@@ -8,6 +8,7 @@ import { TaskResultDeliveryRepository } from './task-result-delivery-repository.
 import { TaskAllocationRepository } from './task-allocation-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { isPersonalConversation } from '../personal-agent/repository.js';
+import { hasCoveringOneShotFollowUp } from '../personal-agent/proactivity/one-shot-follow-up.js';
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
 import { TASK_MAIN_UPDATE_MAX_ATTEMPTS, TaskMainUpdateExhaustedError, taskMainUpdateRetryDelay } from './task-main-update-retry.js';
 
@@ -71,8 +72,9 @@ export class TaskMainUpdateDelivery {
       }
       try {
         if (entry.kind === 'question' && personal && !this.#entries.hasSubmittedMainUpdate(entry.id)
-          && this.#entries.coordination(entry.taskId).some(item => item.kind === 'answer' && item.causationId === entry.id)) {
-          this.#entries.decideMainUpdate(entry.id, 'silent', 'The question was already answered');
+          && (this.#entries.coordination(entry.taskId).some(item => item.kind === 'answer' && item.causationId === entry.id)
+            || hasCoveringOneShotFollowUp('local-owner', entry.taskId))) {
+          this.#entries.decideMainUpdate(entry.id, 'silent', 'The question is already answered or governed by an explicit one-shot follow-up');
           this.#entries.markMainUpdateDelivered(entry.id);
           delivered += 1;
           continue;

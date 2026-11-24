@@ -2443,7 +2443,18 @@ CREATE TABLE personal_attention_threads (
   authority TEXT NOT NULL CHECK(authority IN ('user_explicit','inferred')),
   task_id TEXT, project_id TEXT, next_check_at INTEGER, pause_until INTEGER, expires_at INTEGER NOT NULL,
   last_meaningful_at INTEGER NOT NULL, revision INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+  follow_up_mode TEXT NOT NULL DEFAULT 'recurring' CHECK(follow_up_mode IN ('recurring','one_shot')),
+  wait_id TEXT,
+  destination TEXT CHECK(destination IS NULL OR destination IN ('personal','workbench')),
+  check_at INTEGER,
+  valid_until INTEGER,
+  timezone TEXT,
+  contract_key TEXT,
+  session_input_id TEXT,
+  last_checked_at INTEGER,
+  last_check_error TEXT,
+  terminal_reason TEXT CHECK(terminal_reason IS NULL OR terminal_reason IN ('delivered','resolved_before_check','stopped','expired','task_closed','task_deleted','access_revoked','conversation_reset'))
 );
 
 CREATE TABLE personal_attention_sources (
@@ -2472,7 +2483,9 @@ CREATE TABLE personal_outreach (
   state TEXT NOT NULL CHECK(state IN ('decided','ready','published','stale','cancelled')),
   text TEXT, provenance_json TEXT NOT NULL CHECK(json_valid(provenance_json)),
   valid_until INTEGER NOT NULL, message_entry_id TEXT, notified_at INTEGER,
-  created_at INTEGER NOT NULL, published_at INTEGER
+  created_at INTEGER NOT NULL, published_at INTEGER,
+  destination TEXT NOT NULL DEFAULT 'personal' CHECK(destination IN ('personal','workbench')),
+  acknowledged_at INTEGER
 );
 
 CREATE TABLE personal_feedback (
@@ -3527,6 +3540,18 @@ CREATE INDEX personal_attention_due ON personal_attention_threads(status, next_c
 CREATE INDEX personal_wakeups_due ON personal_wakeups(status, next_attempt_at, not_before);
 
 CREATE INDEX personal_outreach_pending ON personal_outreach(state, created_at);
+
+CREATE UNIQUE INDEX personal_one_shot_active_contract
+  ON personal_attention_threads(owner_id, contract_key)
+  WHERE follow_up_mode = 'one_shot' AND status = 'active' AND contract_key IS NOT NULL;
+
+CREATE UNIQUE INDEX personal_one_shot_session_input
+  ON personal_attention_threads(owner_id, session_input_id)
+  WHERE follow_up_mode = 'one_shot' AND session_input_id IS NOT NULL;
+
+CREATE INDEX personal_one_shot_task_wait
+  ON personal_attention_threads(task_id, wait_id, status)
+  WHERE follow_up_mode = 'one_shot';
 
 CREATE INDEX personal_strategy_versions_thread ON personal_strategy_versions(thread_id, revision DESC);
 

@@ -158,6 +158,12 @@ function DecisionCard({
             {item.openAction ? (
               <button type="button" className="touch-target min-w-0 break-words rounded-sm text-left text-sm font-semibold text-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" onClick={() => onAction(item.openAction!, item.id)}>{item.title}</button>
             ) : <span className="break-words text-sm font-semibold text-fg">{item.title}</span>}
+            {item.unreadFollowUp ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-accent-soft px-1.5 py-0.5 text-xs font-medium text-accent-fg">
+                <span className="size-1.5 rounded-full bg-accent" aria-hidden />
+                {locale === 'zh' ? '约定提醒' : 'Follow-up alert'}
+              </span>
+            ) : null}
             {due || item.kind === 'failure' ? <span className="rounded-md bg-warning-soft px-1.5 py-0.5 text-xs text-fg-muted">{due ?? failureLabel}</span> : null}
           </div>
           <p className="mt-1 line-clamp-2 break-words text-xs leading-5 text-fg-muted">{subtitle}</p>

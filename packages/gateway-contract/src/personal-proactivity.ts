@@ -66,6 +66,100 @@ export const PersonalInterestCandidateSchema = z.object({
   lastSupportedAt: z.number(), expiresAt: z.number(),
   sources: z.array(z.object({ entryId: z.string(), excerpt: z.string(), observedAt: z.number() })),
 });
+export const PersonalOneShotDestinationSchema = z.enum(['personal', 'workbench']);
+export type PersonalOneShotDestination = z.infer<typeof PersonalOneShotDestinationSchema>;
+
+export const PersonalOneShotTerminalReasonSchema = z.enum([
+  'delivered',
+  'resolved_before_check',
+  'stopped',
+  'expired',
+  'task_closed',
+  'task_deleted',
+  'access_revoked',
+  'conversation_reset',
+]);
+export type PersonalOneShotTerminalReason = z.infer<typeof PersonalOneShotTerminalReasonSchema>;
+
+export const PersonalOneShotDisplayStateSchema = z.enum([
+  'scheduled',
+  'queued_delivery',
+  'delivered',
+  'resolved_before_check',
+  'stopped',
+  'expired',
+  'ended',
+]);
+export type PersonalOneShotDisplayState = z.infer<typeof PersonalOneShotDisplayStateSchema>;
+
+export const PersonalOneShotOutreachSummarySchema = z.object({
+  outreachId: z.string().uuid(),
+  state: z.enum(['decided', 'ready', 'published', 'stale', 'cancelled']),
+  destination: PersonalOneShotDestinationSchema,
+  text: z.string().nullable().optional(),
+  publishedAt: z.number().nullable(),
+  acknowledgedAt: z.number().nullable(),
+});
+export type PersonalOneShotOutreachSummary = z.infer<typeof PersonalOneShotOutreachSummarySchema>;
+
+export const PersonalOneShotFollowUpDtoSchema = z.object({
+  followUpId: z.string().uuid(),
+  status: z.enum(['candidate', 'active', 'paused', 'completed', 'expired']),
+  displayState: PersonalOneShotDisplayStateSchema,
+  revision: z.number().int().positive(),
+  subject: z.string(),
+  summary: z.string(),
+  taskId: z.string(),
+  taskTitle: z.string().optional(),
+  projectId: z.string().nullable(),
+  projectName: z.string().optional(),
+  waitId: z.string(),
+  waitKind: z.enum(['user_input', 'approval']).optional(),
+  waitSummary: z.string().optional(),
+  destination: PersonalOneShotDestinationSchema,
+  timezone: z.string(),
+  checkAt: z.number(),
+  validUntil: z.number(),
+  lastCheckedAt: z.number().nullable(),
+  lastCheckError: z.string().nullable(),
+  terminalReason: PersonalOneShotTerminalReasonSchema.nullable(),
+  conversationId: z.string(),
+  outreach: PersonalOneShotOutreachSummarySchema.nullable(),
+  sourcesAvailable: z.boolean(),
+  sources: z.array(z.object({
+    conversationId: z.string(),
+    transcriptId: z.string(),
+    entryId: z.string(),
+    excerpt: z.string(),
+  })),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+export type PersonalOneShotFollowUpDto = z.infer<typeof PersonalOneShotFollowUpDtoSchema>;
+
+export const PersonalOneShotWorkbenchAlertSchema = z.object({
+  followUpId: z.string().uuid(),
+  outreachId: z.string().uuid(),
+  taskId: z.string(),
+  waitId: z.string(),
+  title: z.string(),
+  text: z.string(),
+  publishedAt: z.number(),
+});
+export type PersonalOneShotWorkbenchAlert = z.infer<typeof PersonalOneShotWorkbenchAlertSchema>;
+
+export const StopPersonalOneShotFollowUpRequestSchema = z.object({
+  expectedRevision: z.number().int().positive().optional(),
+  idempotencyKey: z.string().min(1).max(200),
+}).strict();
+export type StopPersonalOneShotFollowUpRequest = z.infer<typeof StopPersonalOneShotFollowUpRequestSchema>;
+
+export const StopPersonalOneShotFollowUpResponseSchema = z.object({
+  outcome: z.enum(['stopped', 'already_delivered', 'already_ended']),
+  followUp: PersonalOneShotFollowUpDtoSchema,
+}).strict();
+export type StopPersonalOneShotFollowUpResponse = z.infer<typeof StopPersonalOneShotFollowUpResponseSchema>;
+
 export const PersonalProvenanceDetailSchema = z.object({
   provenance: PersonalProvenanceSchema,
   thread: z.object({ id: z.string(), subject: z.string(), status: z.string(), revision: z.number(), nextCheckAt: z.number().nullable() }),
@@ -73,5 +167,6 @@ export const PersonalProvenanceDetailSchema = z.object({
   sources: z.array(z.object({ conversationId: z.string(), transcriptId: z.string(), entryId: z.string(), excerpt: z.string() })),
   sourcesAvailable: z.boolean(),
   strategy: PersonalStrategyStateSchema.optional(),
+  oneShotFollowUp: PersonalOneShotFollowUpDtoSchema.optional(),
 });
 export type PersonalProvenanceDetail = z.infer<typeof PersonalProvenanceDetailSchema>;
