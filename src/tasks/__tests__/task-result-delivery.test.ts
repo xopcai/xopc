@@ -1034,7 +1034,8 @@ describe('background task result delivery', () => {
       DROP TABLE space_versions; DROP TABLE space_items; DROP TABLE space_backfill; DROP TABLE space_media_cleanup;
       DROP TABLE task_signoffs; DROP TABLE task_bound_criterion_reviews; DROP TABLE task_results;
       ALTER TABLE task_runs DROP COLUMN instruction_sequence_at_start;
-      ALTER TABLE task_contracts DROP COLUMN brief; ALTER TABLE task_contracts DROP COLUMN result_policy`);
+      ALTER TABLE task_contracts DROP COLUMN brief; ALTER TABLE task_contracts DROP COLUMN result_policy;
+      ALTER TABLE ai_usage_events DROP COLUMN total_input_tokens`);
     setSchemaVersion(db, 278);
     const copyPath = join(stateDir, 'cutover-copy.db');
     db.prepare('VACUUM INTO ?').run(copyPath);
