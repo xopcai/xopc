@@ -188,8 +188,8 @@ it('connects Slack, confirms durable events, replies in the original thread and 
 
     await receive('dm', { ...dm, ts: '1800000000.02' });
     expect(admitted[0]).toMatchObject({ content: 'Private hello', chat_id: 'user:DDIRECT', metadata: { isGroup: false } });
-    await reply(admitted[0]!, 'Private reply');
-    expect(sends.at(-1)).toMatchObject({ channel: 'DDIRECT', text: 'Private reply' });
+    await reply(admitted[0]!, 'Private **reply** <!channel>');
+    expect(sends.at(-1)).toMatchObject({ channel: 'DDIRECT', text: 'Private *reply* &lt;!channel&gt;', mrkdwn: true });
     expect(sends.at(-1)).not.toHaveProperty('thread_ts');
 
     const mention = { type: 'app_mention', channel: 'CGENERAL', ts: '1800000001.10', text: '<@UBOT> Channel hello' };

@@ -12,6 +12,8 @@ describe('feishu format', () => {
   it('strips markdown markers for plain Feishu text payloads', () => {
     const md = 'Hello **world**';
     expect(markdownToFeishuPlainText(md)).toBe('Hello world');
+    expect(markdownToFeishuPlainText('Visit https://example.com')).toBe('Visit https://example.com');
+    expect(markdownToFeishuPlainText('[cred](https://u:p@example.com) [rel](/settings)')).toBe('cred rel');
   });
 
   it('respects raw render mode', () => {

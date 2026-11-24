@@ -26,6 +26,7 @@ export function personalCapabilities(conversationId: string, query: string, acco
     resolveConnectionCandidate(candidate.candidateRef);
     const installation = getConnectorInstallation(`${candidate.candidateRef}-${principal.principalId}`);
     const executorProfiles: NonNullable<PersonalCapability['executorProfiles']> = [];
+    let toolCapableModelBlocked = false;
     const executors = catalog.agents.filter(agent => agent.purpose !== 'task_dispatcher' && agent.enabled !== false
       && agent.id !== principal.agentId && !agent.id.startsWith('personal-')
       && repository.get(agent.id)?.provisioningState === 'ready').filter(agent => {
@@ -35,8 +36,12 @@ export function personalCapabilities(conversationId: string, query: string, acco
         // These three gateways are host-owned registrations; account access is checked below.
         getAgentToolAvailability: (_id, tool) => ({ condition: `tool:${tool}`, state: 'verified', reasonCode: 'external_gateway_registered' }),
       });
-      const eligible = assessment.eligibility === 'eligible'
-        && (!installation?.allowedAgentIds.length || installation.allowedAgentIds.includes(agent.id));
+      const allowedByPolicy = !installation?.allowedAgentIds.length || installation.allowedAgentIds.includes(agent.id);
+      if (allowedByPolicy && !assessment.model.available
+        && assessment.checks.filter(check => check.condition.startsWith('tool:')).every(check => check.state === 'verified')) {
+        toolCapableModelBlocked = true;
+      }
+      const eligible = assessment.eligibility === 'eligible' && allowedByPolicy;
       if (eligible) executorProfiles.push({ id: assessment.id, name: assessment.name, description: assessment.description,
         specialistProfile: assessment.specialistProfile, profileSource: assessment.profileSource });
       return eligible;
@@ -57,9 +62,12 @@ export function personalCapabilities(conversationId: string, query: string, acco
       : selected.length === 1 ? 'ready' : selected.length > 1 ? 'needs_account_selection'
         : relevantConnections.some(connection => connection.status === 'active' && !isExpired(connection)) ? 'blocked'
           : relevantConnections.some(connection => ['expired', 'revoked'].includes(connection.status) || isExpired(connection)) ? 'needs_reauthorization' : 'needs_connection';
+    const unavailableReason = toolCapableModelBlocked
+      ? 'No specialist Agent currently has an available configured model; check model provider sign-in or credentials'
+      : 'No available specialist Agent has the external search, describe and execute tools';
     return { connectorId: candidate.candidateRef, label: candidate.label, capabilities: candidate.capabilities, status,
       executorAgentIds: executors.map(agent => agent.id), executorProfiles, accounts,
-      ...(status === 'unavailable' ? { reason: 'No available specialist Agent has the external search, describe and execute tools' }
+      ...(status === 'unavailable' ? { reason: unavailableReason }
         : status === 'blocked' ? { reason: 'Connector or account policy does not allow this request' } : {}) };
   });
 }

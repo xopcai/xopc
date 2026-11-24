@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type WebSocket from 'ws';
 
 import { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';
+import { formatWeComOutboundChunks } from '@xopcai/xopc/channels/enterprise/format.js';
 import { createEnterpriseChannel, type EnterpriseMedia, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
 import type { EnterpriseCredentials, EnterpriseRegistration } from '@xopcai/xopc/channels/enterprise/setup.js';
 import { ChannelConnectionRejectedError, fetchJson, record, runChannelSocket, string, type OnSocketFailure } from '@xopcai/xopc/channels/enterprise/socket.js';
@@ -135,17 +136,24 @@ function connection(credentials: EnterpriseCredentials, receive?: (message: Ente
     },
     heartbeat: (socket: WebSocket) => command(socket, 'ping').then(() => undefined),
     async send(socket: WebSocket, target: string, group: boolean, text: string, replyId?: string) {
-      const body = { msgtype: 'markdown', markdown: { content: text } };
-      if (replyId) {
-        try {
-          return await command(socket, 'aibot_respond_msg', body, replyId);
-        } catch (error) {
-          // Only fall back after a definite rejection to avoid duplicate replies.
-          if (group || !(error instanceof WeComCommandError)) throw error;
+      const formatted = formatWeComOutboundChunks(text);
+      const chunks = formatted.length > 0 ? formatted : [text];
+      let lastId = '';
+      for (const [index, content] of chunks.entries()) {
+        const body = { msgtype: 'markdown', markdown: { content } };
+        if (index === 0 && replyId) {
+          try {
+            lastId = await command(socket, 'aibot_respond_msg', body, replyId);
+            continue;
+          } catch (error) {
+            // Only fall back after a definite rejection to avoid duplicate replies.
+            if (group || !(error instanceof WeComCommandError)) throw error;
+          }
         }
+        if (group && index === 0) throw new Error('WeCom group replies require an active mention');
+        lastId = await command(socket, 'aibot_send_msg', { chatid: target, ...body });
       }
-      if (group) throw new Error('WeCom group replies require an active mention');
-      return command(socket, 'aibot_send_msg', { chatid: target, ...body });
+      return lastId;
     },
     async sendMedia(socket: WebSocket, target: string, _group: boolean, media: EnterpriseMedia, caption?: string, replyId?: string) {
       const { type, mediaId } = await uploadMedia(socket, media);
@@ -160,7 +168,10 @@ function connection(credentials: EnterpriseCredentials, receive?: (message: Ente
         messageId = await command(socket, 'aibot_respond_msg', body, replyId);
       }
       if (caption && usedProactiveSend) {
-        await command(socket, 'aibot_send_msg', { chatid: target, msgtype: 'markdown', markdown: { content: caption } });
+        const captionChunks = formatWeComOutboundChunks(caption);
+        for (const content of captionChunks.length > 0 ? captionChunks : [caption]) {
+          await command(socket, 'aibot_send_msg', { chatid: target, msgtype: 'markdown', markdown: { content } });
+        }
       }
       return messageId;
     },

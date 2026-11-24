@@ -28,22 +28,26 @@ function coordinator(options: {
     save: vi.fn(async () => {}),
     clear: vi.fn(async () => {}),
   };
+  const refreshModels = vi.fn();
+  const reloadImageProviders = vi.fn();
   const instance = new XopcCloudCatalogCoordinator({
     source: { fetch: options.fetch }, store, persistence,
-    refreshModels: vi.fn(), reloadImageProviders: vi.fn(),
+    refreshModels, reloadImageProviders,
     withLock: async (operation) => operation(),
     onPermanentAuthFailure: options.onPermanentAuthFailure,
   });
-  return { instance, store, persistence };
+  return { instance, store, persistence, refreshModels, reloadImageProviders };
 }
 
 describe('XopcCloudCatalogCoordinator', () => {
-  it('hydrates a disk snapshot and reports stale state without deleting it', async () => {
+  it('hydrates a disk snapshot, refreshes the model registry, and reports stale state without deleting it', async () => {
     const cached = { ...source(), lastSuccessAt: 1, models: models.map((model) => ({ ...model, availability: 'available' as const })) };
-    const { instance, store } = coordinator({ fetch: vi.fn(), loadSync: () => cached });
+    const { instance, store, refreshModels, reloadImageProviders } = coordinator({ fetch: vi.fn(), loadSync: () => cached });
 
     await expect(instance.hydrate()).resolves.toMatchObject({ state: 'stale', source: 'disk', modelCount: 1 });
     expect(store.getSource('xopc-cloud')?.etag).toBe('catalog-1');
+    expect(refreshModels).toHaveBeenCalledOnce();
+    expect(reloadImageProviders).toHaveBeenCalledOnce();
   });
 
   it('coalesces refresh, commits once, and preserves the last good snapshot on failure', async () => {

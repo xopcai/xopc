@@ -206,10 +206,22 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
     const sendText = plugin.outbound!.sendText!;
     const sendMedia = plugin.outbound!.sendMedia!;
     expect(plugin.capabilities.media).toBe(true);
-    await sendText({ cfg, to: admitted[0]!.chat_id, text: 'direct reply', outboundMetadata: admitted[0]!.metadata });
+    await sendText({ cfg, to: admitted[0]!.chat_id, text: 'direct **reply**\n- item 1\n- item 2', outboundMetadata: admitted[0]!.metadata });
     await sendText({ cfg, to: group.chat_id, text: 'group reply', outboundMetadata: group.metadata });
     if (channel === 'dingtalk') {
-      expect(sends.at(-1)?.body).toMatchObject({ openConversationId: 'team', msgParam: '{"content":"group reply"}' });
+      expect(sends.at(-2)?.body).toMatchObject({
+        userIds: ['owner'],
+        msgKey: 'sampleMarkdown',
+        msgParam: JSON.stringify({
+          title: 'direct reply',
+          text: 'direct **reply**\n\n• item 1  \n• item 2',
+        }),
+      });
+      expect(sends.at(-1)?.body).toMatchObject({
+        openConversationId: 'team',
+        msgKey: 'sampleMarkdown',
+        msgParam: JSON.stringify({ title: 'group reply', text: 'group reply' }),
+      });
       expect(frames.some(frame => frame.headers?.messageId === 'callback-group' && frame.code === 200)).toBe(true);
     } else {
       expect(frames.at(-1)).toMatchObject({
@@ -242,7 +254,7 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
       ]);
       expect(sends.slice(-3)).toMatchObject([
         { path: '/v1.0/robot/oToMessages/batchSend', body: { userIds: ['owner'], msgKey: 'sampleImageMsg', msgParam: '{"photoURL":"@media-1"}' } },
-        { path: '/v1.0/robot/oToMessages/batchSend', body: { userIds: ['owner'], msgKey: 'sampleText', msgParam: '{"content":"Generated portrait"}' } },
+        { path: '/v1.0/robot/oToMessages/batchSend', body: { userIds: ['owner'], msgKey: 'sampleMarkdown', msgParam: '{"title":"Generated portrait","text":"Generated portrait"}' } },
         { path: '/v1.0/robot/groupMessages/send', body: { openConversationId: 'team', msgKey: 'sampleFile', msgParam: '{"mediaId":"@media-2","fileName":"report.pdf","fileType":"pdf"}' } },
       ]);
     } else {

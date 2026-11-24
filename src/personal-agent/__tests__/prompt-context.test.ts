@@ -30,11 +30,13 @@ afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
 describe('personal prompt snapshot', () => {
   it('includes a bounded global specialist and connected-app snapshot without raw tool allowlists', () => {
     catalog.create({ id: 'researcher', toolAllowlist: ['web_search'], profile: { name: 'Researcher', description: 'Deep multi-source synthesis' } }, { ready: true });
+    catalog.create({ id: 'general', profile: { name: 'Smart Assistant', description: 'General assistant' } }, { ready: true });
     const builder = new PersonalPromptContext();
     const first = builder.build(config, conversationId)!;
-    expect(first).toContain('Specialists:');
+    expect(first).toContain('Specialists');
     expect(first).toContain('researcher');
     expect(first).toContain('Researcher');
+    expect(first).toContain('connected_apps');
     expect(first).not.toContain('web_search');
     expect(first).toContain('Connected apps:');
     expect(first).toContain('Delegated tasks:');

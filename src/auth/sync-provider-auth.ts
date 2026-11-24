@@ -67,7 +67,7 @@ function hasOAuthTokenSync(provider: string): boolean {
   try {
     const token = JSON.parse(readFileSync(oauthPath, 'utf-8')) as OAuthToken;
     if (!token.access?.trim()) return false;
-    if (token.expiresAt && token.expiresAt < Date.now()) return false;
+    if (token.expiresAt && token.expiresAt <= Date.now() && !token.refresh?.trim()) return false;
     return true;
   } catch {
     return false;

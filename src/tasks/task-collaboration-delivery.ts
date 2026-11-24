@@ -26,11 +26,9 @@ export class TaskCollaborationDelivery {
       const { entry, clientMessageId } = pending;
       const task = this.#tasks.get(entry.taskId);
       const activeWaits = this.#runs.listActiveWaits(entry.taskId);
-      const questionWait = activeWaits.find((item) =>
-        entry.causationId
-          ? item.condition.collaborationEntryId === entry.causationId
-          : entry.kind === 'instruction' && typeof item.condition.collaborationEntryId === 'string',
-      );
+      const questionWait = entry.causationId
+        ? activeWaits.find((item) => item.condition.collaborationEntryId === entry.causationId)
+        : undefined;
       const answersExistingWait = Boolean(questionWait && (entry.kind === 'answer' || entry.kind === 'instruction'));
       if (!task || (task.phase === 'closed' && (task.resolution !== 'done' || !answersExistingWait))) {
         this.#entries.markStale(entry.id);

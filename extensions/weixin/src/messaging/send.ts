@@ -23,8 +23,13 @@ function resolveToUserIdForApi(sessionTo: string, override?: string): string {
  */
 export function markdownToPlainText(text: string): string {
   let result = text;
-  // Code blocks: strip fences, keep code content
-  result = result.replace(/```[^\n]*\n?([\s\S]*?)```/g, (_, code: string) => code.trim());
+  // Code blocks: stash code content without fences so subsequent markdown stripping
+  // does not alter comments, underscores, or operators inside code.
+  const codeBlocks: string[] = [];
+  result = result.replace(/```[^\n]*\n?([\s\S]*?)```/g, (_, code: string) => {
+    const index = codeBlocks.push(code.trim()) - 1;
+    return `\u0000WX_CODE_${index}\u0000`;
+  });
   // Images: remove entirely
   result = result.replace(/!\[[^\]]*\]\([^)]*\)/g, "");
   // Weixin has no Markdown anchors: retain safe destinations as visible, tappable URLs.
@@ -42,10 +47,26 @@ export function markdownToPlainText(text: string): string {
   result = result.replace(/^\|(.+)\|$/gm, (_, inner: string) =>
     inner.split("|").map((cell) => cell.trim()).join("  "),
   );
+  // Headings, blockquotes, horizontal rules, and bullet markers
+  result = result.replace(/^#{1,6}\s+/gm, "");
+  result = result.replace(/^>\s?/gm, "");
+  result = result.replace(/^[ \t]*(?:[-*_][ \t]*){3,}$/gm, "───");
+  result = result.replace(/^([ \t]*)[-*+]\s+/gm, "$1• ");
+  // Inline formatting (protect inline code before stripping emphasis markers)
+  const inlineCodes: string[] = [];
+  result = result.replace(/`([^`\n]+)`/g, (_, code: string) => {
+    const index = inlineCodes.push(code) - 1;
+    return `\u0000WX_INLINE_${index}\u0000`;
+  });
+  result = result.replace(/\*\*\*([^*\n]+)\*\*\*/g, "$1");
+  result = result.replace(/___([^_\n]+)___/g, "$1");
   result = result.replace(/\*\*([^*]+)\*\*/g, "$1");
-  result = result.replace(/\*([^*]+)\*/g, "$1");
+  result = result.replace(/\*([^*\n]+)\*/g, "$1");
   result = result.replace(/__([^_]+)__/g, "$1");
-  result = result.replace(/`([^`]+)`/g, "$1");
+  result = result.replace(/(^|[^\w])_([^_\n]+)_(?=[^\w]|$)/g, "$1$2");
+  result = result.replace(/~~([^~]+)~~/g, "$1");
+  result = result.replace(/\u0000WX_INLINE_(\d+)\u0000/g, (_, index: string) => inlineCodes[Number(index)] ?? "");
+  result = result.replace(/\u0000WX_CODE_(\d+)\u0000/g, (_, index: string) => codeBlocks[Number(index)] ?? "");
   return result.replace(/\u0000WX_LINK_(\d+)\u0000/g, (_, index: string) => links[Number(index)] ?? '').trim();
 }
 

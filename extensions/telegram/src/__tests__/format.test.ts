@@ -92,6 +92,14 @@ describe('markdownToTelegramHtml', () => {
     // Unknown tags like <script> should be stripped for security
     expect(markdownToTelegramHtml('<script>alert(1)</script>')).toBe('alert(1)');
   });
+
+  it('should convert markdown tables to readable bullets by default', () => {
+    const md = '| Game | Genre |\n| --- | --- |\n| Balatro | Roguelike |';
+    const html = markdownToTelegramHtml(md);
+    expect(html).not.toContain('| --- |');
+    expect(html).toContain('<b>Balatro</b>');
+    expect(html).toContain('Genre: Roguelike');
+  });
 });
 
 describe('wrapFileReferencesInHtml', () => {

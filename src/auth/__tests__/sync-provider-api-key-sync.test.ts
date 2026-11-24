@@ -25,7 +25,7 @@ vi.mock('../../config/paths.js', async (importOriginal) => {
   };
 });
 
-const { resolveProviderApiKeyForAgentSync, resolveProviderApiKeySync } =
+const { hasProviderAuthOnDiskSync, resolveProviderApiKeyForAgentSync, resolveProviderApiKeySync } =
   await import('../sync-provider-auth.js');
 
 describe('resolveProviderApiKeySync', () => {
@@ -108,5 +108,35 @@ describe('resolveProviderApiKeySync', () => {
     expect(resolveProviderApiKeyForAgentSync('openai', 'studio', config)).toBe('sk-studio');
     expect(resolveProviderApiKeyForAgentSync('openai', 'main', config)).toBe('sk-main');
     expect(resolveProviderApiKeyForAgentSync('openai', undefined, config)).toBe('sk-shared');
+  });
+
+  it('treats an expired OAuth access token as configured when a refresh token is present', () => {
+    writeFileSync(
+      join(tmpRoot, 'oauth', 'xopc-cloud.json'),
+      JSON.stringify({
+        type: 'oauth',
+        provider: 'xopc-cloud',
+        access: 'expired-access-token',
+        refresh: 'valid-refresh-token',
+        expiresAt: Date.now() - 60_000,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+    expect(hasProviderAuthOnDiskSync('xopc-cloud')).toBe(true);
+    expect(resolveProviderApiKeySync('xopc-cloud')).toBeUndefined();
+
+    writeFileSync(
+      join(tmpRoot, 'oauth', 'xopc-cloud.json'),
+      JSON.stringify({
+        type: 'oauth',
+        provider: 'xopc-cloud',
+        access: 'expired-access-token',
+        expiresAt: Date.now() - 60_000,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+    expect(hasProviderAuthOnDiskSync('xopc-cloud')).toBe(false);
   });
 });

@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
+import { formatDiscordOutboundChunks } from '@xopcai/xopc/channels/enterprise/format.js';
 import { createEnterpriseChannel, type EnterpriseMedia, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
 import type { ChannelSetupLink, EnterpriseCredentials } from '@xopcai/xopc/channels/enterprise/setup.js';
 import { ChannelConnectionRejectedError, fetchJson, record, string } from '@xopcai/xopc/channels/enterprise/socket.js';
 import { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';
-import { chunkText } from '@xopcai/xopc/markdown/chunk.js';
 
 import { runDiscordGateway, snowflake } from './gateway.js';
 
@@ -116,7 +116,7 @@ function discordTransport(credentials: EnterpriseCredentials, receive: (message:
   return {
     async send(target: string, _group: boolean, text: string, replyId?: string) {
       if (!snowflake.test(target) || (replyId && !snowflake.test(replyId))) throw new Error('Invalid Discord message target');
-      const chunks = chunkText(text, 1900);
+      const chunks = formatDiscordOutboundChunks(text, 1900);
       if (!chunks.length) throw new Error('Discord message is empty');
       // REST delivery remains available while the Gateway socket is reconnecting.
       await ensureBot(signal);
@@ -137,10 +137,11 @@ function discordTransport(credentials: EnterpriseCredentials, receive: (message:
     async sendMedia(target: string, _group: boolean, media: EnterpriseMedia, caption?: string, replyId?: string) {
       if (!snowflake.test(target) || (replyId && !snowflake.test(replyId))) throw new Error('Invalid Discord message target');
       await ensureBot(signal);
+      const formattedCaption = caption ? formatDiscordOutboundChunks(caption, 1900)[0] : undefined;
       return postChannelMessage(target, () => {
         const form = new FormData();
         form.append('payload_json', JSON.stringify({
-          ...(caption ? { content: caption.slice(0, 2000) } : {}),
+          ...(formattedCaption ? { content: formattedCaption } : {}),
           allowed_mentions: { parse: [], replied_user: false },
           ...(replyId ? { message_reference: { message_id: replyId, fail_if_not_exists: false } } : {}),
           attachments: [{ id: 0, filename: media.filename }],

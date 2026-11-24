@@ -102,7 +102,21 @@ export function markdownToFeishuPlainText(markdown: string): string {
   const sortedLinks = [...ir.links].toSorted((a, b) => b.start - a.start);
   for (const link of sortedLinks) {
     const linkText = ir.text.slice(link.start, link.end);
-    const replacement = `${linkText} (${link.href})`;
+    const href = link.href.trim();
+    const isSafe = /^(https?|mailto):/i.test(href);
+    let hasCredentials = false;
+    if (isSafe) {
+      try {
+        const parsed = new URL(href);
+        hasCredentials = Boolean(parsed.username || parsed.password);
+      } catch {
+        hasCredentials = true;
+      }
+    }
+    const replacement =
+      !isSafe || hasCredentials || linkText.trim() === href
+        ? linkText
+        : `${linkText} (${href})`;
     result = result.slice(0, link.start) + replacement + result.slice(link.end);
   }
 

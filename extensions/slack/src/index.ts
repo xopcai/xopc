@@ -1,5 +1,6 @@
 import type WebSocket from 'ws';
 
+import { formatSlackOutboundChunks, formatSlackOutboundMrkdwn } from '@xopcai/xopc/channels/enterprise/format.js';
 import { createEnterpriseChannel, type EnterpriseMedia, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
 import type { EnterpriseCredentials } from '@xopcai/xopc/channels/enterprise/setup.js';
 import { ChannelConnectionRejectedError, fetchJson, postJson, record, runChannelSocket, string, type OnSocketFailure } from '@xopcai/xopc/channels/enterprise/socket.js';
@@ -108,17 +109,23 @@ function slackTransport(credentials: EnterpriseCredentials, receive: (message: E
   let bot: BotIdentity | undefined;
   const send = async (target: string, _group: boolean, text: string, threadId?: string) => {
     if (!slackId.test(target) || (threadId && !timestamp.test(threadId))) throw new Error('Invalid Slack message target');
-    const result = await slackCall('chat.postMessage', credentials.id, {
-      channel: target,
-      text,
-      mrkdwn: false,
-      unfurl_links: false,
-      unfurl_media: false,
-      ...(threadId ? { thread_ts: threadId } : {}),
-    });
-    const ts = string(result.ts);
-    if (!timestamp.test(ts)) throw new Error('Slack did not confirm message delivery');
-    return ts;
+    const chunks = formatSlackOutboundChunks(text);
+    const payloads = chunks.length > 0 ? chunks : [text];
+    let lastTs = '';
+    for (const chunk of payloads) {
+      const result = await slackCall('chat.postMessage', credentials.id, {
+        channel: target,
+        text: chunk,
+        mrkdwn: true,
+        unfurl_links: false,
+        unfurl_media: false,
+        ...(threadId ? { thread_ts: threadId } : {}),
+      });
+      const ts = string(result.ts);
+      if (!timestamp.test(ts)) throw new Error('Slack did not confirm message delivery');
+      lastTs = ts;
+    }
+    return lastTs;
   };
 
   const sendMedia = async (target: string, _group: boolean, media: EnterpriseMedia, caption?: string, threadId?: string) => {
@@ -144,11 +151,12 @@ function slackTransport(credentials: EnterpriseCredentials, receive: (message: E
       throw new Error(`Slack file upload failed (${uploadResponse.status})`);
     }
     await uploadResponse.body?.cancel();
+    const formattedCaption = caption ? formatSlackOutboundMrkdwn(caption) : '';
     await slackCall('files.completeUploadExternal', credentials.id, {
       files: [{ id: fileId, title: media.filename }],
       channel_id: target,
       ...(threadId ? { thread_ts: threadId } : {}),
-      ...(caption ? { initial_comment: caption } : {}),
+      ...(formattedCaption ? { initial_comment: formattedCaption } : {}),
     });
     return fileId;
   };

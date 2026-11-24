@@ -74,7 +74,11 @@ export class XopcCloudCatalogCoordinator {
   async hydrate(): Promise<CatalogReadiness> {
     if (!this.store.getSource('xopc-cloud')) {
       const source = this.persistence.loadSync();
-      if (source) this.store.saveSource('xopc-cloud', source, 'disk');
+      if (source) {
+        this.store.saveSource('xopc-cloud', source, 'disk');
+        this.refreshModels();
+        this.reloadImageProviders();
+      }
     }
     return this.snapshot();
   }

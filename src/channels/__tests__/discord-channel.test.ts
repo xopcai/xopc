@@ -205,8 +205,10 @@ it('configures Discord and preserves direct, mention and thread delivery across 
     expect(admitted[1]).toMatchObject({ chat_id: `group:${channel}`, content: 'hello 5' });
     expect(admitted[2]).toMatchObject({ chat_id: `group:${thread}`, content: 'hello 6' });
     expect(admitted[2]?.metadata?.conversationId).not.toBe(admitted[1]?.metadata?.conversationId);
-    await reply(admitted[1]!, 'channel reply');
+    await reply(admitted[1]!, '| Service | State |\n| --- | --- |\n| API | **OK** |');
     expect(sends.at(-1)?.channel).toBe(channel);
+    expect(String(sends.at(-1)?.body.content)).not.toContain('| --- |');
+    expect(String(sends.at(-1)?.body.content)).toContain('**OK**');
     await reply(admitted[2]!, 'thread reply');
     expect(sends.at(-1)).toMatchObject({ channel: thread, body: { message_reference: { message_id: messageId(6) } } });
 

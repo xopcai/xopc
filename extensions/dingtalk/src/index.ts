@@ -1,6 +1,7 @@
 import { extname } from 'node:path';
 
 import { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';
+import { formatDingTalkOutboundMessages } from '@xopcai/xopc/channels/enterprise/format.js';
 import { createEnterpriseChannel, type EnterpriseMedia, type EnterpriseMessage } from '@xopcai/xopc/channels/enterprise/plugin.js';
 import type { EnterpriseCredentials, EnterpriseRegistration } from '@xopcai/xopc/channels/enterprise/setup.js';
 import { ChannelConnectionRejectedError, postJson, ProviderHttpError, record, runChannelSocket, string, type OnSocketFailure } from '@xopcai/xopc/channels/enterprise/socket.js';
@@ -129,6 +130,18 @@ function transport(credentials: EnterpriseCredentials, receive: (message: Enterp
     return mediaId;
   };
 
+  const sendMarkdownMessages = async (target: string, group: boolean, text: string) => {
+    const payloads = formatDingTalkOutboundMessages(text);
+    if (payloads.length === 0) {
+      return sendRobotMessage(target, group, 'sampleText', { content: text });
+    }
+    let messageId = '';
+    for (const payload of payloads) {
+      messageId = await sendRobotMessage(target, group, 'sampleMarkdown', payload);
+    }
+    return messageId;
+  };
+
   return {
     run(signal: AbortSignal, online: Parameters<typeof runChannelSocket>[2], onFailure: OnSocketFailure) {
       return runChannelSocket(signal, async () => ({
@@ -159,7 +172,7 @@ function transport(credentials: EnterpriseCredentials, receive: (message: Enterp
       }), online, onFailure);
     },
     send(target: string, group: boolean, text: string) {
-      return sendRobotMessage(target, group, 'sampleText', { content: text });
+      return sendMarkdownMessages(target, group, text);
     },
     async sendMedia(target: string, group: boolean, media: EnterpriseMedia, caption?: string) {
       const asImage = media.kind === 'image' && dingtalkImageMimes.has(media.mimeType.toLowerCase());
@@ -172,7 +185,7 @@ function transport(credentials: EnterpriseCredentials, receive: (message: Enterp
             fileType: extname(media.filename).slice(1).toLowerCase() || 'bin',
           });
       if (caption) {
-        await sendRobotMessage(target, group, 'sampleText', { content: caption });
+        await sendMarkdownMessages(target, group, caption);
       }
       return messageId;
     },

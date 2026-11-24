@@ -146,7 +146,7 @@ export function markdownToTelegramHtml(
   const ir = markdownToIR(markdown, {
     linkify: true,
     enableSpoilers: options.enableSpoilers ?? true,
-    tableMode: options.tableMode ?? "off",
+    tableMode: options.tableMode ?? "bullets",
   });
   return renderIRToTelegramHtml(ir);
 }
@@ -158,6 +158,7 @@ export function markdownToPlainText(markdown: string): string {
   const ir = markdownToIR(markdown, {
     linkify: true,
     enableSpoilers: true,
+    tableMode: "bullets",
   });
 
   // Build plain text by taking the IR text and adding link URLs
@@ -167,7 +168,7 @@ export function markdownToPlainText(markdown: string): string {
   const sortedLinks = [...ir.links].sort((a, b) => b.start - a.start);
   for (const link of sortedLinks) {
     const linkText = ir.text.slice(link.start, link.end);
-    const replacement = `${linkText} (${link.href})`;
+    const replacement = linkText.trim() === link.href.trim() ? linkText : `${linkText} (${link.href})`;
     result = result.slice(0, link.start) + replacement + result.slice(link.end);
   }
 
@@ -193,6 +194,7 @@ export function markdownToTelegramChunks(
   const ir = markdownToIR(markdown, {
     linkify: true,
     enableSpoilers: true,
+    tableMode: "bullets",
   });
 
   const chunks = chunkMarkdownIR(ir, limit);
@@ -209,7 +211,7 @@ export function markdownToTelegramChunks(
  */
 export function renderTelegramHtmlText(
   text: string,
-  options: { textMode?: "markdown" | "html"; enableSpoilers?: boolean } = {}
+  options: { textMode?: "markdown" | "html"; enableSpoilers?: boolean; tableMode?: MarkdownTableMode } = {}
 ): string {
   const textMode = options.textMode ?? "markdown";
   if (textMode === "html") {
@@ -219,6 +221,7 @@ export function renderTelegramHtmlText(
   const ir = markdownToIR(text, {
     linkify: true,
     enableSpoilers: options.enableSpoilers ?? true,
+    tableMode: options.tableMode ?? "bullets",
   });
   return renderIRToTelegramHtml(ir);
 }

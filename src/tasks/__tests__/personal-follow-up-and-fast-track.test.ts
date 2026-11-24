@@ -192,7 +192,7 @@ describe('Personal Agent fast-track execution, live visibility, and unified foll
     expect(personalRequestForTask(receipt.taskId)?.requestId).toBe(receipt.requestId);
   });
 
-  it('fast-tracks lightweight allocation with zero LLM calls, tracks live tool activity, and completes in a single pass', async () => {
+  it('routes explicit requestedAgentId in 0ms and delegates unassigned multi-candidate selection to TaskRouter while keeping single-pass lightweight execution', async () => {
     const modelSpy = vi.spyOn(modelCalls, 'completeWithResolvedCredentials');
     activateOriginInput('csv-input', '分析销售 CSV 数据并给出按月汇总趋势。');
     const tool = createPersonalTaskTool({
@@ -201,10 +201,12 @@ describe('Personal Agent fast-track execution, live visibility, and unified foll
       dispatchTaskRuns: vi.fn(),
     });
 
+    // Tier 1: Personal Agent picks analyst via requestedAgentId -> 0 LLM calls
     const sub = await tool.execute('fast-submit', {
       command: 'submit',
       objective: '分析销售 CSV 数据并给出按月汇总趋势',
       useOriginalRequest: true,
+      requirements: { summary: '销售 CSV 汇总', requestedAgentId: 'analyst' },
     });
     const subJson = parseToolJson<{ taskId?: string; task?: { id: string } }>(sub);
     const taskId = (subJson.taskId ?? subJson.task?.id)!;
@@ -286,6 +288,48 @@ describe('Personal Agent fast-track execution, live visibility, and unified foll
         text: expect.stringContaining('10 月销售额环比增长 18%'),
       }),
     ]));
+
+    // Tier 2: Omitted requestedAgentId with natural phrasing -> skips ContractPlanner, invokes TaskRouter once!
+    modelSpy.mockResolvedValueOnce({
+      role: 'assistant',
+      content: [{ type: 'text', text: '{"kind":"select","agentId":"analyst","reason":"数据清洗与工作簿汇总最匹配数据分析专家。"}' }],
+      api: 'openai-responses',
+      provider: 'openai',
+      model: 'test',
+      usage: { input: 100, output: 30, cacheRead: 0, cacheWrite: 0, totalTokens: 130, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: 'stop',
+      timestamp: Date.now(),
+    } as never);
+    activateOriginInput('q3-workbook', '基于完整内置数据生成「Q3 销售汇总」可编辑工作簿＋一页简报。');
+    const q3Sub = await tool.execute('q3-submit', {
+      command: 'submit',
+      objective: '生成 Q3 销售汇总可编辑工作簿与一页简报',
+      useOriginalRequest: true,
+    });
+    const q3Json = parseToolJson<{ taskId?: string; task?: { id: string } }>(q3Sub);
+    const q3TaskId = (q3Json.taskId ?? q3Json.task?.id)!;
+    createdTaskIds.push(q3TaskId);
+
+    const routerAllocator = new TaskAllocationDispatcher({
+      context: () => ({
+        ownAgentId: ownerAgentId,
+        getAgentToolAvailability: (_agentId, toolName) => ({
+          condition: `tool:${toolName}`,
+          state: 'verified',
+          reasonCode: 'registered',
+        }),
+      }),
+      wake: vi.fn(),
+    });
+    routerAllocator.dispatch();
+    await vi.waitFor(() => expect(new TaskAllocationRepository().summary(q3TaskId)?.status).toBe('assigned'));
+    routerAllocator.stop();
+    // Exactly 1 LLM call (TaskRouter only — ModelTaskContractPlanner was skipped!)
+    expect(modelSpy).toHaveBeenCalledTimes(1);
+    expect(new TaskAllocationRepository().summary(q3TaskId)).toMatchObject({
+      status: 'assigned',
+      selectedAgentId: 'analyst',
+    });
   });
 
   it('handles unified follow_up across allocating, running, waiting, and completed warm-session states', async () => {
@@ -320,12 +364,13 @@ describe('Personal Agent fast-track execution, live visibility, and unified foll
     expect(new TaskAllocationRepository().summary(taskId)?.status).toBe('pending');
     expect(new TaskRepository().require(taskId).body).toContain('/var/log/app');
 
-    // Allocate & start worker session
+    // Allocate & start worker session via TaskRouter decision
     const allocator = new TaskAllocationDispatcher({
       context: () => ({
         ownAgentId: ownerAgentId,
         getAgentToolAvailability: (_id, name) => ({ condition: `tool:${name}`, state: 'verified', reasonCode: 'registered' }),
       }),
+      decide: async () => ({ kind: 'select', agentId: 'coder', reason: '日志脚本与仓库分析匹配代码专家。' }),
       wake: vi.fn(),
     });
     allocator.dispatch();

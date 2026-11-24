@@ -16,3 +16,27 @@ it('does not turn unsafe, relative or credential-bearing anchors into clickable 
     expect(markdownToPlainText(`[安全入口](${href})`)).toBe('安全入口');
   }
 });
+
+it('strips headings, blockquotes, strikethrough, and italic while preserving code and snake_case', () => {
+  const md = [
+    '## 推荐列表',
+    '> 轻松玩玩',
+    '- **《双影奇境》**：_co-op_ 与 ~~旧版~~',
+    '变量名 foo_bar_baz 保持不变',
+    '```python',
+    '# keep comment',
+    'value = a_b_c * 2',
+    '```',
+  ].join('\n');
+  const out = formatWeixinOutboundText(md);
+  expect(out).not.toContain('##');
+  expect(out).not.toContain('**');
+  expect(out).not.toContain('~~');
+  expect(out).not.toContain('_co-op_');
+  expect(out).not.toContain('> ');
+  expect(out).toContain('推荐列表');
+  expect(out).toContain('• 《双影奇境》：co-op 与 旧版');
+  expect(out).toContain('foo_bar_baz');
+  expect(out).toContain('# keep comment');
+  expect(out).toContain('value = a_b_c * 2');
+});

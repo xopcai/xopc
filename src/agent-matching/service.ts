@@ -101,7 +101,7 @@ export function assessSpecialist(agentId: string, input: SpecialistTaskRequireme
   for (const [kind, value, declared] of tags) (declared?.includes(value) ? matched : missing).push(`${kind}:${value}`);
   return {
     id: agentId, revision: agent?.revision, name: agent?.profile?.name ?? agentId,
-    description: (agent?.profile?.description ?? '').slice(0, 300), profileSource: profile ? 'declared' : 'absent',
+    description: (agent?.profile?.description || agent?.profile?.instructions || '').slice(0, 300), profileSource: profile ? 'declared' : 'absent',
     ...(profile ? { specialistProfile: profile } : {}), availableTools, model, verifiedSkills,
     eligibility: checks.some(check => check.state === 'blocked') ? 'blocked'
       : checks.some(check => check.state === 'unknown') ? 'needs_verification' : 'eligible',
