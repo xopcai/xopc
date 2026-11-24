@@ -10,7 +10,7 @@ const videoUrl = 'https://github.com/user-attachments/assets/b9f96383-dac3-4071-
     class="launch-film"
     :src="videoUrl"
     :poster="withBase('/xopc-launch-film-poster.jpg')"
-    :aria-label="lang === 'zh' ? 'XOPC 产品宣传片' : 'XOPC launch film'"
+    :aria-label="lang.startsWith('zh') ? 'XOPC 产品宣传片' : 'XOPC launch film'"
     controls
     playsinline
     preload="none"
