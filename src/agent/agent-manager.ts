@@ -943,6 +943,10 @@ export class AgentManager implements AgentInstanceGateway {
     return this.toolsFactory.getAgentToolAvailability(agentId, name);
   }
 
+  getAgentRegisteredToolNames(agentId: string): string[] {
+    return this.toolsFactory.getAgentRegisteredToolNames(agentId);
+  }
+
   getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
     const profile = resolveEffectiveAgentProfile(agentId);
     return this.buildAgentSkillAvailability(profile, profile.resolvedWorkspacePath, undefined, '');

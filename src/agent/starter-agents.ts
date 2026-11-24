@@ -1,9 +1,12 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 import type { AgentEntry } from '../agent-config/index.js';
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { WORKSPACE_FILES } from '../config/paths.js';
+import { writeTextAtomicSync } from '../infra/write-file-atomic.js';
+import { createLogger } from '../utils/logger.js';
 import {
   resolveAgentProfileDir,
   resolveAgentWorkspaceDir,
@@ -11,20 +14,33 @@ import {
 
 export const STARTER_AGENTS_INITIALIZED_VERSION = 1;
 
+const log = createLogger('StarterAgents');
+
 type StarterAgent = {
   id: string;
   purpose?: AgentEntry['purpose'];
-  tools?: AgentEntry['tools'];
   toolAllowlist?: AgentEntry['toolAllowlist'];
-  skills?: AgentEntry['skills'];
   profile?: AgentEntry['profile'];
   specialistProfile?: AgentEntry['specialistProfile'];
   profileFiles: Record<string, string>;
 };
 
-function denyTools(names: string[]): AgentEntry['tools'] {
-  return Object.fromEntries(names.map((name) => [name, { mode: 'deny' as const }]));
-}
+const LEGACY_CONDUCTOR_TOOL_ALLOWLIST = [
+  'xopc_use', 'tool_manual', 'session_recall', 'session_search',
+  'knowledge_search', 'knowledge_get', 'user_context_search', 'user_context_get',
+  'find', 'grep', 'read_file',
+];
+
+const LEGACY_TOOL_GUIDANCE: Record<string, string> = {
+  conductor: 'Use find, grep, and read_file only for focused workspace inspection; delegate deeper research, coding, or writing to specialist Agents.',
+  coder: '- Boundaries: use web only for primary external docs/APIs/standards; do not use messaging, media, image generation, or automation tools for coding tasks.',
+  writer: '- Do not use exec_command, browser_use, send_message, send_media, automation, or external sends.',
+  researcher: '- Do not use exec_command, send_message, send_media, automation, or external sends.',
+  'data-analyst': '- Do not use browser_use, image_generate, send_message, send_media, automation, or external sends.',
+  creative: '- Do not use exec_command, send_message, send_media, automation, or external sends.',
+};
+
+const CONDUCTOR_TOOL_GUIDANCE = 'Use conversation search, knowledge reads, and workspace tools to resolve focused questions. Delegate independently verifiable work when a specialist is a good fit.';
 
 export const STARTER_AGENTS: readonly StarterAgent[] = [
   {
@@ -74,11 +90,6 @@ You are Smart Assistant, a reliable general-purpose assistant who understands th
       examples: [{'request': 'Plan delivery across several specialists', 'deliverable': 'A task plan with deliverables and acceptance criteria'}],
       limitations: [],
     },
-    toolAllowlist: [
-      'xopc_use', 'tool_manual', 'session_recall', 'session_search',
-      'knowledge_search', 'knowledge_get', 'user_context_search', 'user_context_get',
-      'find', 'grep', 'read_file',
-    ],
     profile: {
       name: 'Conductor', description: 'User-facing coordination Agent for task planning, delegation, progress, verification, and reporting to the user.', creature: 'coordinator', language: 'en', emoji: '🎼',
       instructions: [
@@ -90,7 +101,7 @@ You are Smart Assistant, a reliable general-purpose assistant who understands th
     },
     profileFiles: {
       [WORKSPACE_FILES.SOUL]: '# SOUL.md - Conductor\n\nYou speak directly with the user and coordinate specialist Agents—stay responsive while they work, verify outcomes from receipts, and report meaningful progress cleanly.\n',
-      [WORKSPACE_FILES.TOOLS]: '# TOOLS.md - Conductor\n\nUse find, grep, and read_file only for focused workspace inspection; delegate deeper research, coding, or writing to specialist Agents.\n',
+      [WORKSPACE_FILES.TOOLS]: `# TOOLS.md - Conductor\n\n${CONDUCTOR_TOOL_GUIDANCE}\n`,
     },
   },
   {
@@ -105,7 +116,6 @@ You are Smart Assistant, a reliable general-purpose assistant who understands th
       examples: [{'request': 'Fix a failing repository test', 'deliverable': 'A focused code patch with verification results'}],
       limitations: [],
     },
-    tools: denyTools([]),
     profile: { name: 'Coding Expert', description: 'Software engineering agent for repository understanding, implementation, debugging, refactoring, tests, and review.', creature: 'software engineer', language: 'en', emoji: '💻' },
     profileFiles: {
       [WORKSPACE_FILES.SOUL]: `# SOUL.md - Coding Expert
@@ -120,7 +130,6 @@ You are Coding Expert, a pragmatic software engineer for xopc.
 
 - Editing: use apply_patch for source edits; write_file only for new files or intentional full rewrites.
 - Commands & Git: use exec_command for tests, typechecks, builds, and read-only git (git status, diff, log, show, branch --show-current). Ask before commit, push, checkout, reset, rebase, merge, deleting branches, or discarding changes.
-- Boundaries: use web only for primary external docs/APIs/standards; do not use messaging, media, image generation, or automation tools for coding tasks.
 `,
     },
   },
@@ -136,7 +145,6 @@ You are Coding Expert, a pragmatic software engineer for xopc.
       examples: [{'request': 'Rewrite an announcement for customers', 'deliverable': 'An audience-aware document draft'}],
       limitations: [],
     },
-    tools: denyTools([]),
     profile: { name: 'Writing Assistant', description: 'Drafting, editing, rewriting, and audience-aware content.', creature: 'editor', language: 'en', emoji: '✍️' },
     profileFiles: {
       [WORKSPACE_FILES.SOUL]: `# SOUL.md - Writing Assistant
@@ -151,7 +159,6 @@ You are Writing Assistant, a drafting and editing specialist.
 
 - Use read_file for local drafts and web_search/web_fetch (primary sources first) for fact checks.
 - Use write_file/apply_patch only when asked to save or revise a file, keeping existing structure unless a rewrite is requested.
-- Do not use exec_command, browser_use, send_message, send_media, automation, or external sends.
 `,
     },
   },
@@ -167,7 +174,6 @@ You are Writing Assistant, a drafting and editing specialist.
       examples: [{'request': 'Compare evidence about a current topic', 'deliverable': 'A dated report with primary source links'}],
       limitations: [],
     },
-    tools: denyTools([]),
     profile: { name: 'Research Assistant', description: 'Deep research, source comparison, and fact synthesis.', creature: 'analyst', language: 'en', emoji: '🔍' },
     profileFiles: {
       [WORKSPACE_FILES.SOUL]: `# SOUL.md - Research Assistant
@@ -181,7 +187,6 @@ You are Research Assistant, a source-first research and synthesis specialist.
 
 - Use web_search to map the topic, web_fetch for primary sources, read_file for local materials, and browser_use only when interactive access is required.
 - Use write_file/apply_patch only when explicitly asked to save a report or research artifact.
-- Do not use exec_command, send_message, send_media, automation, or external sends.
 `,
     },
   },
@@ -197,7 +202,6 @@ You are Research Assistant, a source-first research and synthesis specialist.
       examples: [{'request': 'Analyze monthly sales from a CSV', 'deliverable': 'A reproducible report and charts'}],
       limitations: [],
     },
-    tools: denyTools([]),
     profile: { name: 'Data Analyst', description: 'Data cleaning, analysis, visualization, and reproducible reports.', creature: 'data analyst', language: 'en', emoji: '📊' },
     profileFiles: {
       [WORKSPACE_FILES.SOUL]: `# SOUL.md - Data Analyst
@@ -210,7 +214,6 @@ You are Data Analyst, a reproducible data analysis specialist.
       [WORKSPACE_FILES.TOOLS]: `# TOOLS.md - Data Analyst
 
 - Use read_file/list_dir/grep/find to inspect datasets, exec_command and write_file/apply_patch for reproducible scripts, charts, and sanity checks (row counts, spot checks), and web tools only for needed reference docs.
-- Do not use browser_use, image_generate, send_message, send_media, automation, or external sends.
 `,
     },
   },
@@ -226,7 +229,6 @@ You are Data Analyst, a reproducible data analysis specialist.
       examples: [{'request': 'Create a campaign visual', 'deliverable': 'An image asset matching the creative brief'}],
       limitations: [],
     },
-    tools: denyTools([]),
     profile: { name: 'Creative Assistant', description: 'Visual direction, image prompts, design critique, and creative options.', creature: 'creative director', language: 'en', emoji: '🎨' },
     profileFiles: {
       [WORKSPACE_FILES.SOUL]: `# SOUL.md - Creative Assistant
@@ -240,17 +242,10 @@ You are Creative Assistant, a visual direction and ideation specialist.
       [WORKSPACE_FILES.TOOLS]: `# TOOLS.md - Creative Assistant
 
 - Use image_generate for requested visual options/mockups/assets, image for visual critique, web_search/web_fetch (and browser_use only when needed) for visual references, and write_file/apply_patch when asked to save briefs or prompts.
-- Do not use exec_command, send_message, send_media, automation, or external sends.
 `,
     },
   },
 ];
-
-function writeFileIfMissing(path: string, content: string): void {
-  if (!existsSync(path)) {
-    writeFileSync(path, content, 'utf-8');
-  }
-}
 
 export function materializeStarterAgentFiles(): void {
   for (const starter of STARTER_AGENTS) {
@@ -259,7 +254,24 @@ export function materializeStarterAgentFiles(): void {
     mkdirSync(profileDir, { recursive: true });
     mkdirSync(workspaceDir, { recursive: true });
     for (const [name, content] of Object.entries(starter.profileFiles)) {
-      writeFileIfMissing(join(profileDir, name), content);
+      const path = join(profileDir, name);
+      if (!existsSync(path)) {
+        writeFileSync(path, content, 'utf-8');
+        continue;
+      }
+      const legacyGuidance = name === WORKSPACE_FILES.TOOLS ? LEGACY_TOOL_GUIDANCE[starter.id] : undefined;
+      if (!legacyGuidance) continue;
+      const legacyContent = starter.id === 'conductor'
+        ? content.replace(CONDUCTOR_TOOL_GUIDANCE, legacyGuidance)
+        : `${content}${legacyGuidance}\n`;
+      try {
+        const stat = lstatSync(path, { throwIfNoEntry: false });
+        if (stat?.isFile() && stat.size === Buffer.byteLength(legacyContent) && readFileSync(path, 'utf-8') === legacyContent) {
+          writeTextAtomicSync(path, content, { mode: stat.mode & 0o777 });
+        }
+      } catch (err) {
+        log.warn({ err, agentId: starter.id, path }, 'Could not update shipped tool guidance');
+      }
     }
   }
 }
@@ -273,8 +285,10 @@ export function ensureStarterAgentsInitialized(): { changed: boolean } {
     if (existing) {
       const current = existing.provisioningState === 'ready'
         ? existing : repository.markProvisioned(starter.id);
+      const legacyConductorToolAllowlist = starter.id === 'conductor'
+        && isDeepStrictEqual(current.toolAllowlist, LEGACY_CONDUCTOR_TOOL_ALLOWLIST);
       if ((starter.toolAllowlist && current.toolAllowlist === undefined)
-        || (starter.skills && current.skills === undefined)
+        || legacyConductorToolAllowlist
         || (starter.specialistProfile && current.specialistProfile === undefined)) {
         const { revision, provisioningState: _state, provisioningError: _error,
           createdAt: _created, updatedAt: _updated, deletedAt: _deleted, ...entry } = current;
@@ -284,7 +298,7 @@ export function ensureStarterAgentsInitialized(): { changed: boolean } {
             ? { specialistProfile: starter.specialistProfile } : {}),
           ...(starter.toolAllowlist && entry.toolAllowlist === undefined
             ? { toolAllowlist: starter.toolAllowlist } : {}),
-          ...(starter.skills && entry.skills === undefined ? { skills: starter.skills } : {}),
+          ...(legacyConductorToolAllowlist ? { toolAllowlist: undefined } : {}),
         });
         changed = true;
       }
@@ -296,9 +310,7 @@ export function ensureStarterAgentsInitialized(): { changed: boolean } {
       ...(starter.purpose ? { purpose: starter.purpose } : {}),
       ...(starter.specialistProfile ? { specialistProfile: starter.specialistProfile } : {}),
       ...(starter.profile ? { profile: starter.profile } : {}),
-      ...(starter.tools ? { tools: starter.tools } : {}),
       ...(starter.toolAllowlist ? { toolAllowlist: starter.toolAllowlist } : {}),
-      ...(starter.skills ? { skills: starter.skills } : {}),
     }, { ready: true });
     changed = true;
   }

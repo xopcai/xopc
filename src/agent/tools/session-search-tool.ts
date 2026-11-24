@@ -299,7 +299,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
     label: 'Session search',
     description: deps.localOnly
       ? 'List, search, or read owner chats across agents, projects, and workspaces. Omit query to list recent chats (filterable by since/until/agentId/projectId); pass query for short matching excerpts; pass conversationId to read bounded turns from a specific chat. No model or network calls.'
-      : 'List, search, read, or summarize owner chats across agents, projects, and workspaces. Omit query to list recent sessions (filterable by since/until/agentId/projectId, or set summarize=true to summarize matched sessions); pass query for keyword search with summaries; pass conversationId to read turns or summarize a specific chat.',
+      : 'List, search, read, or summarize owner chats across agents, projects, and workspaces. Omit query to list recent sessions (filterable by since/until/agentId/projectId, or set summarize=true to summarize matched sessions); pass query for keyword search with summaries; pass conversationId to read turns or summarize a specific chat. For citable Task evidence, read original turns with conversationId and summarize=false.',
     parameters: deps.localOnly
       ? Type.Object({
           ...SessionSearchSchema.properties,

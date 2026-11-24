@@ -1195,6 +1195,7 @@ export class GatewayService {
         getConfig: () => this.config,
         getAgentSkillAvailability: agentId => this.agentService.getAgentSkillAvailability(agentId),
         getAgentToolAvailability: (agentId, name) => this.agentService.getAgentToolAvailability(agentId, name),
+        getAgentRegisteredToolNames: agentId => this.agentService.getAgentRegisteredToolNames(agentId),
       }),
       wake: () => this.dispatchTaskRuns(),
     });

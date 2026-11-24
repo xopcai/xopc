@@ -15,7 +15,11 @@ import { join } from 'node:path';
 
 import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { resolveEffectiveAgentConfig } from '../../agent-config/index.js';
+import { AgentToolsFactory } from '../../agent/tools/factory.js';
+import type { MessageBus } from '../../infra/bus/index.js';
+import { writeKnowledgeItem } from '../../knowledge-memory/index.js';
 import { personalAgentId } from '../../personal-agent/repository.js';
+import { ProjectStore } from '../../projects/project-store.js';
 import { TaskRunCoordinator } from '../task-run-coordinator.js';
 import { TaskCollaborationDelivery } from '../task-collaboration-delivery.js';
 import { buildTaskExecutionDirective } from '../task-context-assembler.js';
@@ -31,6 +35,7 @@ import { TaskApplicationService } from '../task-application-service.js';
 import { TaskAllocationRepository } from '../task-allocation-repository.js';
 import { TaskAllocationDispatcher } from '../task-allocation-service.js';
 import { TaskRepository } from '../task-repository.js';
+import { bindResearchSources, taskResearchEvidence } from '../task-research-result.js';
 import { TaskRunRepository } from '../task-run-repository.js';
 import { TaskRunDispatcher } from '../task-run-dispatcher.js';
 import { retryTask } from '../task-retry-service.js';
@@ -94,6 +99,74 @@ const decide = vi.fn(async () => ({ kind: 'select' as const, agentId: 'analyst',
 const dispatcher = () => new TaskAllocationDispatcher({ context, decide, wake: vi.fn() });
 
 describe('background task allocation', () => {
+  it('routes an evidence-based weekly report with registered history and knowledge tools', async () => {
+    catalog.create({ id: 'researcher', specialistProfile: { ...profile, domains: ['research'], taskTypes: ['research'] } }, { ready: true });
+    const general = catalog.get('general')!;
+    catalog.update(general.id, general.revision, { id: general.id, tools: { knowledge_get: { mode: 'deny' } } });
+    const project = new ProjectStore().create({ name: 'Atlas', workspaceRoot: stateDirectory });
+    const source = createConversation({ agentId: 'analyst', sourceChannel: 'webchat', projectId: project.id }, stateDirectory);
+    appendTranscriptEntry(source.key, { role: 'user', content: 'Atlas completed the migration.', timestamp: Date.now() });
+    const decisionText = 'Atlas rollout is scheduled for Friday.';
+    const decision = writeKnowledgeItem({ kind: 'decision', scope: { type: 'project', id: project.id }, content: decisionText,
+      canonicalKey: 'atlas-rollout', confidence: 1, importance: 0.8, originClass: 'owner', status: 'active' }).item;
+    const config = ConfigSchema.parse({});
+    const store = new SessionStore({ config });
+    let executionConversationId = conversationId;
+    const factory = new AgentToolsFactory({ workspace: stateDirectory, bus: {} as MessageBus,
+      getCurrentContext: () => ({ channel: 'webchat', chatId: 'default', conversationId: executionConversationId }),
+      getConfig: () => config, getSessionStore: () => store,
+      getPrimaryModel: () => ({ provider: 'test', id: 'fast', input: ['text'] }) as never });
+    const objective = 'Compile a weekly report with citations from past conversations and saved project decisions';
+    const created = new TaskApplicationService().create(TaskCreateRequestSchema.parse({
+      idempotencyKey: 'weekly-report', title: 'Weekly report', body: objective, projectId: project.id, originConversationId: conversationId,
+      contract: { ...defineTaskContract(objective), outputDestinations: [] },
+      activation: { mode: 'allocate', requirements: { version: 1, summary: objective } },
+    }));
+    if (!created.ok) throw new Error('Expected a submitted weekly report');
+    const task = created.model.task;
+    await new TaskAllocationDispatcher({
+      context: () => ({ ...context(), getConfig: () => config,
+        getAgentRegisteredToolNames: id => factory.getAgentRegisteredToolNames(id),
+        getAgentToolAvailability: (id, name) => factory.getAgentToolAvailability(id, name) }),
+      decide: async ({ candidates }) => {
+        expect(candidates.find(candidate => candidate.id === 'researcher')).toMatchObject({
+          toolEvidence: 'registration',
+          availableTools: expect.arrayContaining(['session_search', 'knowledge_search', 'knowledge_get']),
+        });
+        expect(candidates.find(candidate => candidate.id === 'general')?.availableTools).not.toContain('knowledge_get');
+        return { kind: 'select', agentId: 'researcher', reason: 'Research expertise and registered evidence readers' };
+      },
+      wake: vi.fn(),
+    }).drain();
+    const run = new TaskRunRepository().getActiveRoot(task.id)!;
+    expect(run.executorRef).toMatchObject({ agentId: 'researcher' });
+    const worker = createConversation({ agentId: 'researcher', sourceChannel: 'webchat', projectId: project.id }, stateDirectory);
+    executionConversationId = worker.key;
+    new TaskConversationRepository().activateExecutionSession({ taskId: task.id, runId: run.id, agentId: 'researcher', conversationId: worker.key });
+    TaskRunCoordinator.start({ runId: run.id, fallbackObjective: objective, context: {
+      runId: run.id, conversationId: worker.key, agentId: 'researcher', taskId: task.id, origin: 'task', channel: 'webchat', triggerKind: 'user',
+    } });
+    const workerTools = factory.createAllTools({ agentId: 'researcher', conversationId: worker.key });
+    const read = async (name: string, args: unknown, toolCallId = name) => {
+      const result = await workerTools.find(tool => tool.name === name)!.execute(toolCallId, args);
+      appendTranscriptEntry(worker.key, { role: 'toolResult', toolCallId, toolName: name, ...result, isError: false, timestamp: Date.now() });
+      return result;
+    };
+    await read('session_search', { limit: 5 }, 'list-sessions');
+    const history = await read('session_search', { conversationId: source.key });
+    expect(history.content[0]).toMatchObject({ text: expect.stringContaining('Atlas completed the migration.') });
+    const search = await read('knowledge_search', { query: 'Atlas rollout' });
+    expect(search.details).toMatchObject({ results: [expect.objectContaining({ id: decision.id })] });
+    const decisionRead = await read('knowledge_get', { id: decision.id });
+    expect(decisionRead.details).toMatchObject({ item: { content: decisionText } });
+    const evidence = taskResearchEvidence(worker.key).tools;
+    expect(evidence.map(tool => tool.toolCallId)).toEqual(['session_search', 'knowledge_search', 'knowledge_get']);
+    expect(bindResearchSources({ claims: [], sources: [
+      { id: 'history', toolCallId: 'session_search', excerpt: 'Atlas completed the migration.' },
+      { id: 'decision', toolCallId: 'knowledge_get', excerpt: decisionText },
+    ] }, evidence)).toHaveLength(2);
+  });
+
   it('allocates persisted tasks with old discovery requirements using the current tool entry', async () => {
     const task = submit('legacy-discovery-requirement');
     const analyst = catalog.get('analyst')!;

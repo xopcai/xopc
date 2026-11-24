@@ -63,6 +63,24 @@ function LocationProbe() {
   return <output data-testid="location">{location.pathname}{location.search}</output>;
 }
 
+function mockSidebarScroll(control: HTMLButtonElement) {
+  const scrollRegion = container.querySelector<HTMLDivElement>('.app-sidebar-nav-scroll')!;
+  Object.defineProperty(scrollRegion, 'clientHeight', { value: 400 });
+  vi.spyOn(scrollRegion, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 240, 400));
+  const bounds = vi.spyOn(control, 'getBoundingClientRect').mockReturnValue(new DOMRect(16, 380, 80, 24));
+  const scrollTo = (scrollTop: number) => {
+    scrollRegion.scrollTop = scrollTop;
+    scrollRegion.dispatchEvent(new Event('scroll'));
+  };
+  return { bounds, scrollTo };
+}
+
+async function clickSidebarButton(label: string, region: ParentNode = container) {
+  const control = [...region.querySelectorAll('button')].find((button) => button.textContent?.trim() === label);
+  expect(control).toBeDefined();
+  await act(async () => control!.click());
+}
+
 it('expands executions below the configuration chat and opens the selected run', async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   const timestamp = new Date().toISOString();
@@ -144,11 +162,7 @@ it.each([true, false])('previews four older chats and reveals the rest on demand
     <MemoryRouter initialEntries={['/chat/latest']}><SidebarTaskList /></MemoryRouter>
   </SWRConfig>));
 
-  const click = async (label: string) => {
-    const control = [...container.querySelectorAll('button')].find((button) => button.textContent?.trim() === label);
-    expect(control).toBeDefined();
-    await act(async () => control!.click());
-  };
+  const click = clickSidebarButton;
   expect(container.querySelector('button[aria-pressed="true"][title="Recent"]')).not.toBeNull();
   expect(container.querySelector('section[aria-label="Today"] a[aria-current="page"]')?.getAttribute('title')).toContain('Another project');
   expect(container.querySelector('section[aria-label="Yesterday"]')?.textContent).toContain('Standalone chat');
@@ -164,7 +178,9 @@ it.each([true, false])('previews four older chats and reveals the rest on demand
   expect(requestsAt(40)).toHaveLength(0);
 
   if (hasOlderPreview) {
-    await click('View more');
+    const control = [...olderSection.querySelectorAll('button')].find((button) => button.textContent === 'View more')!;
+    const { scrollTo } = mockSidebarScroll(control);
+    await act(async () => scrollTo(300));
     expect(olderChatLinks()).toHaveLength(5);
     expect(requestsAt(20)).toHaveLength(0);
     await click('View more');
@@ -187,5 +203,153 @@ it.each([true, false])('previews four older chats and reveals the rest on demand
 
   await click('Recent');
   expect(container.querySelector('button[aria-label="Create project"]')).toBeNull();
+  expect(container.querySelectorAll('section[aria-label="Older"] a')).toHaveLength(4);
+  if (hasOlderPreview) {
+    await click('View more');
+    await click('View more');
+  }
+  await click('View more');
+  expect(requestsAt(40)).toHaveLength(2);
   expect(container.querySelectorAll('section[aria-label="Older"] a')).toHaveLength(history.length);
+});
+
+it.each(['project', 'inbox'])('loads more %s chats on downward scroll and keeps them visible during refresh', async (scope) => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  localStorage.setItem('xopc-web-sidebar-session-view', 'projects');
+  const project = { id: 'first-project', name: 'First project' } as Project;
+  const isProject = scope === 'project';
+  const chats = Array.from({ length: 7 }, (_, index) => ({
+    key: `chat-${index}`,
+    name: `Chat ${index}`,
+    sourceChannel: 'webchat',
+    status: 'active',
+    updatedAt: new Date(Date.now() - index * 60_000).toISOString(),
+    projectId: isProject ? project.id : undefined,
+    customData: {},
+  }) as SessionMetadata);
+  const page = { items: chats, total: chats.length, limit: 5000, offset: 0, hasMore: false };
+  const preview = { ...page, items: chats.slice(0, 5), hasMore: true };
+  const empty = { ...page, total: 0, items: [] };
+  vi.mocked(fetchSidebarChatList).mockResolvedValue({
+    ok: true,
+    projects: {
+      items: isProject ? [{ project, sessions: preview.items, sessionTotal: chats.length, sessionHasMore: true }] : [],
+      total: Number(isProject), limit: 12, offset: 0, hasMore: false,
+    },
+    inbox: isProject ? empty : preview,
+    pinned: [], layouts: {}, childrenByConversationId: {},
+  });
+  let resolveFirstLoad!: (value: typeof page) => void;
+  let resolveRefresh!: (value: typeof page) => void;
+  const firstLoad = new Promise<typeof page>((resolve) => { resolveFirstLoad = resolve; });
+  const refresh = new Promise<typeof page>((resolve) => { resolveRefresh = resolve; });
+  const fetchExpanded = vi.fn().mockReturnValueOnce(firstLoad).mockReturnValueOnce(refresh);
+  vi.mocked(listSessions).mockImplementation(async (query) => {
+    if (query?.projectId === project.id || query?.unassigned) return fetchExpanded(query);
+    return empty;
+  });
+  container = document.createElement('div');
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () => root.render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, errorRetryCount: 0 }}>
+    <MemoryRouter><SidebarTaskList /></MemoryRouter>
+  </SWRConfig>));
+
+  const section = container.querySelector(`section[aria-label="${isProject ? project.name : 'Standalone conversations'}"]`)!;
+  const control = [...section.querySelectorAll('button')].find((button) => button.textContent === 'Show more')!;
+  const { bounds, scrollTo } = mockSidebarScroll(control);
+  bounds.mockReturnValue(new DOMRect(16, 600, 80, 24));
+  await act(async () => scrollTo(100));
+  bounds.mockReturnValue(new DOMRect(16, 380, 80, 24));
+  await act(async () => scrollTo(95));
+  expect(fetchExpanded).not.toHaveBeenCalled();
+
+  await act(async () => { scrollTo(100); scrollTo(105); });
+  expect(fetchExpanded).toHaveBeenCalledExactlyOnceWith(expect.objectContaining(
+    isProject ? { projectId: project.id } : { unassigned: true },
+  ));
+  expect(control.disabled).toBe(true);
+  await act(async () => resolveFirstLoad(page));
+  expect(section.querySelectorAll('a')).toHaveLength(7);
+
+  await act(async () => window.dispatchEvent(new Event('session-updated')));
+  expect(fetchExpanded).toHaveBeenCalledTimes(2);
+  expect(section.querySelectorAll('a')).toHaveLength(7);
+  expect(section.textContent).toContain('Chat 6');
+
+  await act(async () => resolveRefresh({ ...page, items: [...chats.slice(0, -1), { ...chats[6], name: 'Renamed chat' }] }));
+  expect(section.querySelectorAll('a')).toHaveLength(7);
+  expect(section.textContent).toContain('Renamed chat');
+
+  const toggleSection = section.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+  await act(async () => toggleSection.click());
+  await act(async () => toggleSection.click());
+  expect(section.querySelectorAll('a')).toHaveLength(5);
+
+  let resolvePendingLoad!: (value: typeof page) => void;
+  fetchExpanded.mockReturnValueOnce(new Promise<typeof page>((resolve) => { resolvePendingLoad = resolve; }));
+  await clickSidebarButton('Show more', section);
+  await act(async () => toggleSection.click());
+  await act(async () => toggleSection.click());
+  await act(async () => resolvePendingLoad(page));
+  expect(section.querySelectorAll('a')).toHaveLength(5);
+
+  fetchExpanded.mockResolvedValueOnce(page);
+  await clickSidebarButton('Show more', section);
+  expect(section.querySelectorAll('a')).toHaveLength(7);
+  await clickSidebarButton('Recent');
+  await clickSidebarButton('Projects');
+  const returnedSection = container.querySelector(`section[aria-label="${isProject ? project.name : 'Standalone conversations'}"]`)!;
+  expect(returnedSection.querySelectorAll('a')).toHaveLength(5);
+});
+
+it('releases extra project pages when leaving the tab, including a page still loading', async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  localStorage.setItem('xopc-web-sidebar-session-view', 'projects');
+  const empty = { items: [], total: 0, limit: 20, offset: 0, hasMore: false };
+  const sidebarPage = (name: string, offset: number, hasMore: boolean) => ({
+    ok: true as const,
+    projects: {
+      items: [{ project: { id: name, name } as Project, sessions: [], sessionTotal: 0, sessionHasMore: false }],
+      total: 2, limit: 12, offset, hasMore,
+    },
+    inbox: empty, pinned: [], layouts: {}, childrenByConversationId: {},
+  });
+  const first = sidebarPage('First project', 0, true);
+  const second = sidebarPage('Extra project', 12, false);
+  let resolvePendingPage!: (value: typeof second) => void;
+  const pendingPage = new Promise<typeof second>((resolve) => { resolvePendingPage = resolve; });
+  const fetchExtraPage = vi.fn().mockReturnValueOnce(pendingPage).mockResolvedValue(second);
+  vi.mocked(fetchSidebarChatList).mockImplementation(async (query) => query?.projectOffset ? fetchExtraPage() : first);
+  vi.mocked(listSessions).mockResolvedValue(empty);
+  container = document.createElement('div');
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () => root.render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, errorRetryCount: 0 }}>
+    <MemoryRouter><SidebarTaskList /></MemoryRouter>
+  </SWRConfig>));
+
+  const extraProject = () => container.querySelector('section[aria-label="Extra project"]');
+  const loadMore = async () => {
+    const control = container.querySelector<HTMLButtonElement>('button[data-sidebar-load-more]')!;
+    await act(async () => control.click());
+  };
+  const switchTabs = async () => {
+    await clickSidebarButton('Recent');
+    await clickSidebarButton('Projects');
+  };
+  await loadMore();
+  expect(fetchExtraPage).toHaveBeenCalledTimes(1);
+  await switchTabs();
+  await act(async () => resolvePendingPage(second));
+  expect(extraProject()).toBeNull();
+
+  await loadMore();
+  expect(fetchExtraPage).toHaveBeenCalledTimes(2);
+  expect(extraProject()).not.toBeNull();
+  await switchTabs();
+  expect(extraProject()).toBeNull();
+  await loadMore();
+  expect(fetchExtraPage).toHaveBeenCalledTimes(3);
+  expect(extraProject()).not.toBeNull();
 });

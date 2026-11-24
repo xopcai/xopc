@@ -1,12 +1,13 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { suggestedEvidenceRanges } from '../../tasks/task-evidence-ranges.js';
-import { isTaskEvidenceTool } from '../../tasks/task-evidence-tools.js';
+import { hasTaskEvidenceContent, isTaskEvidenceTool } from '../../tasks/task-evidence-tools.js';
 
 /** Tool-call IDs are protocol metadata and may be invisible to the model; expose the host ID in Task reads. */
 export function withTaskEvidenceIdentity<T extends AgentTool>(tool: T): T {
   if (!isTaskEvidenceTool(tool.name)) return tool;
   return { ...tool, execute: async (...args: Parameters<T['execute']>) => {
     const result = await tool.execute(args[0], args[1], args[2], args[3]);
+    if (!hasTaskEvidenceContent(tool.name, result.details as Parameters<typeof hasTaskEvidenceContent>[1])) return result;
     // Evidence listings/replays and progress messages are not new source observations.
     if (tool.name === 'task_collaboration' && !(result.details as { taskSourceRead?: unknown })?.taskSourceRead) return result;
     const artifacts = (result.details as { artifacts?: Array<{ artifactId: string; title: string; availability: string }> })?.artifacts;

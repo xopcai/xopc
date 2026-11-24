@@ -101,9 +101,9 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
     return () => { pending.current = null; };
   }, [locationKey, gatewaySession]);
 
-  const experts = agents.filter(({ id, purpose }) =>
-    id !== 'main' && id !== 'task-router' && !isPersonalAgentId(id) && purpose !== 'task_dispatcher',
-  );
+  const experts = agents
+    .filter(({ id, purpose }) => id !== 'task-router' && !isPersonalAgentId(id) && purpose !== 'task_dispatcher')
+    .sort((a, b) => Number(b.id === 'main') - Number(a.id === 'main'));
 
   async function openExpert(agentId: string, forceNew = false) {
     if (pending.current) return;

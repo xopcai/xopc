@@ -241,20 +241,33 @@ export interface CreateCoreToolsOptions {
 }
 
 export class AgentToolsFactory {
-  getAgentToolAvailability(candidateId: string, name: string) {
+  private getCandidateToolRegistration(candidateId: string) {
     const candidate = resolveEffectiveAgentConfigForAgent(candidateId).config;
     const denied = new Set(Object.entries(candidate.tools).filter(([, policy]) => policy.mode === 'deny').map(([tool]) => tool));
-    const tools = this.createAllTools({ agentId: candidateId, workspace: candidate.workspace,
-      conversationId: '', disabledTools: denied, toolAllowlist: candidate.toolAllowlist });
-    const registered = tools.some(tool => tool.name === name);
-    const taskActivatable = TASK_EXECUTION_TOOL_IDS.includes(name) && !denied.has(name)
-      && (!candidate.toolAllowlist || candidate.toolAllowlist.includes(name));
-    const discoveryActivatable = name === 'tool_search' && !denied.has('xopc_tool_search')
+    const tools = this.createCoreTools({ agentId: candidateId, workspace: candidate.workspace,
+      conversationId: '', disabledTools: denied, toolAllowlist: candidate.toolAllowlist,
+      getSkillManager: this.deps.getSkillManager });
+    const registered = new Set(tools.map(tool => tool.name));
+    const discoveryActivatable = !denied.has('xopc_tool_search')
       && (!candidate.toolAllowlist || candidate.toolAllowlist.includes('tool_search') || candidate.toolAllowlist.includes('xopc_tool_search'));
-    const activatable = (this.getLazyCapabilityToolNames().includes(name) || taskActivatable || discoveryActivatable) && !denied.has(name) && (!candidate.toolAllowlist || candidate.toolAllowlist.includes(name) || discoveryActivatable);
+    const activatable = new Set([...this.getLazyCapabilityToolNames(), ...TASK_EXECUTION_TOOL_IDS]
+      .filter(name => !denied.has(name) && (!candidate.toolAllowlist || candidate.toolAllowlist.includes(name))));
+    if (discoveryActivatable && !denied.has('tool_search')) activatable.add('tool_search');
+    return { candidate, registered, activatable };
+  }
+
+  getAgentRegisteredToolNames(candidateId: string): string[] {
+    const { registered, activatable } = this.getCandidateToolRegistration(candidateId);
+    return [...new Set([...registered, ...activatable])].sort();
+  }
+
+  getAgentToolAvailability(candidateId: string, name: string) {
+    const registration = this.getCandidateToolRegistration(candidateId);
+    const registered = registration.registered.has(name);
+    const activatable = registration.activatable.has(name);
     return { condition: `tool:${name}`, state: registered || activatable ? 'verified' as const : 'blocked' as const,
       reasonCode: registered ? 'tool_registered' : activatable ? 'tool_activatable' : 'tool_not_registered',
-      detail: candidate.tools[name]?.mode === 'ask' ? 'Runtime approval is still required' : 'Registration checked; execution environment is checked by the tool' };
+      detail: registration.candidate.tools[name]?.mode === 'ask' ? 'Runtime approval is still required' : 'Registration checked; execution environment is checked by the tool' };
   }
 
   private browserRuntime: BrowserRuntime | null = null;

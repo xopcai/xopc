@@ -13,7 +13,7 @@ import {
   markChatRunRunning,
   useChatRunPresenceStore,
 } from '@/features/chat/session/chat-run-presence-store';
-import { getSessionDetail } from '@/features/sessions/session-api';
+import { getSessionDetail, listSessions } from '@/features/sessions/session-api';
 import type { SessionDetail } from '@/features/sessions/session.types';
 
 import { SidebarExpertList } from '../sidebar-expert-list';
@@ -24,10 +24,13 @@ vi.mock('@/stores/gateway-store', () => ({
 vi.mock('@/stores/locale-store', () => ({
   useLocaleStore: (select: (state: { language: string }) => unknown) => select({ language: 'zh' }),
 }));
-vi.mock('@/features/chat/session/local-session-drafts', () => ({ readLocalSessionDraft: async () => undefined }));
-vi.mock('@/features/sessions/session-api', () => ({ getSessionDetail: vi.fn() }));
+vi.mock('@/features/chat/session/local-session-drafts', () => ({
+  readLocalSessionDraft: async () => undefined,
+  findLatestLocalExpertDraft: async () => undefined,
+}));
+vi.mock('@/features/sessions/session-api', () => ({ getSessionDetail: vi.fn(), listSessions: vi.fn() }));
 
-const agents = [{ id: 'coder' }, { id: 'researcher', name: '调研专家' }];
+const agents = [{ id: 'coder' }, { id: 'main' }, { id: 'researcher', name: '调研专家' }];
 
 function TestSidebar() {
   const { conversationId } = useParams();
@@ -80,6 +83,21 @@ async function renderSidebar() {
 function replyingRow() {
   return container.querySelector('[title="回复中"]')?.closest('li');
 }
+
+it('lists the general assistant first and reopens its latest conversation', async () => {
+  const assistantChat = session('assistant-chat', 'main');
+  vi.mocked(getSessionDetail).mockImplementation(async (id) => id === assistantChat.key ? assistantChat : session(id, 'coder'));
+  vi.mocked(listSessions).mockResolvedValue({ items: [assistantChat], total: 1, limit: 20, offset: 0, hasMore: false });
+  await renderSidebar();
+
+  const assistant = container.querySelector<HTMLButtonElement>('ul > li:first-child button');
+  expect(assistant?.textContent).toContain('通用助手');
+  expect(container.querySelector('button[aria-label="与 通用助手 新建对话"]')).not.toBeNull();
+
+  await act(async () => assistant!.click());
+  expect(listSessions).toHaveBeenCalledWith(expect.objectContaining({ agentId: 'main' }));
+  expect(assistant?.getAttribute('aria-current')).toBe('page');
+});
 
 it('keeps the three dots on the replying expert when navigation selects another expert', async () => {
   vi.mocked(getSessionDetail).mockImplementation(async (id) => session(id, id === 'research-chat' ? 'researcher' : 'coder'));

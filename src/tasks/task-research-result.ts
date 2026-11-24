@@ -20,7 +20,7 @@ import { TaskRunRepository } from './task-run-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
 import { defineTaskContract } from './task-contract-definition.js';
 import { observedEvidenceExcerpt, suggestedEvidenceRanges } from './task-evidence-ranges.js';
-import { isTaskEvidenceTool } from './task-evidence-tools.js';
+import { hasTaskEvidenceContent, isTaskEvidenceTool } from './task-evidence-tools.js';
 import { resolveTaskLocale } from './task-language.js';
 import { isChatOnlyDelivery } from './task-final-reply.js';
 import { checkTaskDelivery } from './task-delivery-checks.js';
@@ -267,7 +267,8 @@ export function taskResearchEvidence(conversationId: string): { rows: { payload_
   const tools: ToolRecord[] = rows.flatMap(row => {
     const stored = JSON.parse(row.payload_json);
     const value = stored.customType === 'codemode-tool-result' ? stored.data : stored;
-    if (!isTaskEvidenceTool(value.toolName) || value.toolName === 'managed_job' && (value.details?.status !== 'success' || value.details?.exitCode !== 0)
+    if (!isTaskEvidenceTool(value.toolName) || !hasTaskEvidenceContent(value.toolName, value.details)
+      || value.toolName === 'managed_job' && (value.details?.status !== 'success' || value.details?.exitCode !== 0)
       || value.toolName === 'task_collaboration' && value.details?.taskSourceRead?.taskId !== link.taskId || value.isError || value.details?.error || ['failed', 'blocked', 'error', 'running', 'queued', 'timed_out', 'cancelled'].includes(value.details?.status) || value.details?.timedOut === true
       || typeof value.details?.exitCode === 'number' && value.details.exitCode !== 0 || !Array.isArray(value.content)) return [];
     const body = value.content.filter(part => part.type === 'text').map(part => part.text).join('\n');

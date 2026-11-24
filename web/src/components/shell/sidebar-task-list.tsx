@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type UIEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import useSWRInfinite from 'swr/infinite';
 
 import { AutomationRunList } from '@/features/automations/automation-run-list';
@@ -114,10 +114,12 @@ const OLDER_SESSION_PREVIEW_LIMIT = 4;
 const PROJECT_LIMIT = 12;
 const PROJECT_PREVIEW_LIMIT = 5;
 const SIDEBAR_STALE_DAYS = 60;
+const SIDEBAR_LOAD_MORE_THRESHOLD_PX = 100;
 const SIDEBAR_DRAG_MIME = 'application/x-xopc-sidebar-item';
 
 const SESSION_VIEWS = ['recent', 'projects', 'experts'] as const;
 type SessionView = (typeof SESSION_VIEWS)[number];
+type PaginatedSessionView = Exclude<SessionView, 'experts'>;
 
 const SESSION_VIEW_STORAGE_KEY = 'xopc-web-sidebar-session-view';
 const SESSION_VIEW_ORDER_STORAGE_KEY = 'xopc-web-sidebar-session-view-order';
@@ -230,16 +232,11 @@ function SidebarSortableItem({ spec, children }: { spec?: SidebarSortSpec; child
 type ProjectSidebarGroup = {
   project: Project;
   sessions: SessionMetadata[];
-  sessionTotal: number;
   sessionHasMore: boolean;
   sessionLoading?: boolean;
 };
 
-type ProjectSessionOverride = {
-  sessions: SessionMetadata[];
-  sessionTotal: number;
-  hasMore: boolean;
-};
+type SidebarSessionPage = Awaited<ReturnType<typeof listSessions>>;
 
 function sessionTitle(s: SessionMetadata, unnamedLabel: string): string {
   return s.name?.trim() || unnamedLabel;
@@ -863,6 +860,7 @@ function SidebarProjectSection({
               type="button"
               className="ml-4 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
               onClick={() => onToggleExpanded(group.project.id)}
+              data-sidebar-load-more={group.sessionHasMore ? '' : undefined}
               disabled={group.sessionLoading}
               aria-busy={group.sessionLoading || undefined}
             >
@@ -995,6 +993,7 @@ function SidebarInboxSection({
             type="button"
             className="ml-4 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
             onClick={onLoadMore}
+            data-sidebar-load-more=""
             disabled={loadingMore}
             aria-busy={loadingMore || undefined}
           >
@@ -1130,19 +1129,19 @@ function SidebarTaskListContent({
   const [createProjectError, setCreateProjectError] = useState<string | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
   const [autoUnderstand, setAutoUnderstand] = useState(false);
-  const [includedConversationId, setIncludedConversationId] = useState<string | undefined>(() => activeConversationId);
+  const includedConversationId = useRef(activeConversationId);
   const [view, setView] = useState<SessionView>(readSessionView);
   const [viewOrder, setViewOrder] = useState(readSessionViewOrder);
   const [showAllLoadedOlder, setShowAllLoadedOlder] = useState(false);
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(() => new Set());
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
-  const [projectSessionOverrides, setProjectSessionOverrides] = useState<Record<string, ProjectSessionOverride>>({});
-  const [extraTaskGroups, setExtraTaskGroups] = useState<Record<string, SidebarTaskGroup>>({});
-  const [loadingProjectIds, setLoadingProjectIds] = useState<Set<string>>(() => new Set());
-  const [inboxExtraItems, setInboxExtraItems] = useState<SessionMetadata[]>([]);
-  const [inboxHasMoreOverride, setInboxHasMoreOverride] = useState<boolean | null>(null);
-  const [loadingInboxMore, setLoadingInboxMore] = useState(false);
+  const [expandedSessionLists, setExpandedSessionLists] = useState<Record<string, SidebarSessionPage>>({});
+  const [loadingSessionLists, setLoadingSessionLists] = useState<Set<string>>(() => new Set());
+  const sessionListScopes = useRef(new Map<string, { revalidate?: () => void } | null>());
+  const pageWindows = useRef({ recent: { size: Infinity }, projects: { size: Infinity } });
+  const scrollRegionRef = useRef<HTMLDivElement>(null);
+  const previousScrollTop = useRef(0);
+  const { mutate: mutateCache } = useSWRConfig();
   const [pendingOrders, setPendingOrders] = useState<Record<string, string[]>>({});
   const reorderBusyRef = useRef(new Set<string>());
   const workspacePicker = useDirectoryPicker({
@@ -1150,35 +1149,44 @@ function SidebarTaskListContent({
     onPicked: setCreateProjectWorkspace,
   });
 
+  const fetchSidebarPage = useCallback(async <T,>(
+    view: PaginatedSessionView,
+    pageIndex: number,
+    fetchPage: () => Promise<T>,
+  ): Promise<T> => {
+    if (pageIndex === 0) return fetchPage();
+
+    const pageWindow = pageWindows.current[view];
+    if (pageIndex >= pageWindow.size) throw new DOMException('Sidebar pagination reset', 'AbortError');
+    const page = await fetchPage();
+    // SWR caches individual pages even if its combined response has been superseded.
+    if (pageWindow !== pageWindows.current[view]) throw new DOMException('Sidebar pagination reset', 'AbortError');
+    return page;
+  }, []);
+
   const { data, size, setSize, isValidating, mutate } = useSWRInfinite<Awaited<ReturnType<typeof fetchSidebarChatList>>>(
     (pageIndex, previousPageData) => {
       if (!token) return null;
       if (previousPageData && !previousPageData.projects.hasMore) return null;
-      return ['sidebar-chat-list', gateway, token, includedConversationId ?? '', pageIndex] as const;
+      return ['sidebar-chat-list', gateway, token, pageIndex] as const;
     },
-    async ([, , , includeConversationId, pageIndex]: readonly [
+    async ([, , , pageIndex]: readonly [
       'sidebar-chat-list',
-      string,
       string,
       string,
       number,
     ]) => {
-      return fetchSidebarChatList({
+      return fetchSidebarPage('projects', pageIndex, () => fetchSidebarChatList({
         projectLimit: PROJECT_LIMIT,
         projectOffset: pageIndex * PROJECT_LIMIT,
         sessionPreviewLimit: PROJECT_PREVIEW_LIMIT,
         inboxLimit: pageIndex === 0 ? PAGE_SIZE : 1,
         inboxOffset: 0,
         staleDays: SIDEBAR_STALE_DAYS,
-        includeConversationId: includeConversationId || undefined,
-      });
+        includeConversationId: includedConversationId.current,
+      }));
     },
-    {
-      // Changing includeConversationId to reveal a freshly created chat must not
-      // replace the visible list with the first-load skeleton.
-      keepPreviousData: true,
-      revalidateOnFocus: false,
-    },
+    { revalidateOnFocus: false },
   );
 
   const {
@@ -1192,13 +1200,13 @@ function SidebarTaskListContent({
     (page, previous) => !token || (previous && !previous.hasMore)
       ? null
       : ['sidebar-recent-sessions', gateway, token, page] as const,
-    ([, , , page]: readonly ['sidebar-recent-sessions', string, string, number]) => listSessions({
+    ([, , , page]: readonly ['sidebar-recent-sessions', string, string, number]) => fetchSidebarPage('recent', page, () => listSessions({
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,
       excludeArchived: true,
       rootConversationsOnly: true,
       excludeAutomationRuns: true,
-    }),
+    })),
     { revalidateOnFocus: false },
   );
   const recentItems = useMemo(() => {
@@ -1222,51 +1230,44 @@ function SidebarTaskListContent({
       for (const entry of p.projects.items) {
         if (seenProjects.has(entry.project.id)) continue;
         seenProjects.add(entry.project.id);
-        const override = projectSessionOverrides[entry.project.id];
-        const sessions = (override?.sessions ?? entry.sessions).filter(isSidebarConversation);
+        const containerId = `project:${entry.project.id}`;
+        const expanded = expandedSessionLists[containerId];
+        const sessions = (expanded?.items ?? entry.sessions).filter(isSidebarConversation);
         groups.push({
           project: entry.project,
-          sessions,
-          sessionTotal: override?.sessionTotal ?? entry.sessionTotal,
-          sessionHasMore: override?.hasMore ?? entry.sessionHasMore,
-          sessionLoading: loadingProjectIds.has(entry.project.id),
+          sessions: orderSidebarItems(
+            sessions,
+            pendingOrders[containerId] ?? data?.[0]?.layouts[containerId]?.itemIds,
+            (session) => session.key,
+          ),
+          sessionHasMore: !expanded && entry.sessionHasMore,
+          sessionLoading: loadingSessionLists.has(containerId),
         });
       }
     }
-    const orderedGroups = groups.map((group) => ({
-      ...group,
-      sessions: orderSidebarItems(
-        group.sessions,
-        pendingOrders[`project:${group.project.id}`],
-        (session) => session.key,
-      ),
-    }));
-    return orderSidebarItems(orderedGroups, pendingOrders.projects, (group) => group.project.id);
-  }, [data, loadingProjectIds, pendingOrders, projectSessionOverrides]);
+    return orderSidebarItems(groups, pendingOrders.projects, (group) => group.project.id);
+  }, [data, expandedSessionLists, loadingSessionLists, pendingOrders]);
   const taskGroups = useMemo((): Record<string, SidebarTaskGroup> => {
     const groups: Record<string, SidebarTaskGroup> = {};
     for (const page of recentPages ?? []) Object.assign(groups, page.childrenByConversationId);
     for (const page of data ?? []) Object.assign(groups, page.childrenByConversationId);
-    return { ...groups, ...extraTaskGroups };
-  }, [data, extraTaskGroups, recentPages]);
+    for (const page of Object.values(expandedSessionLists)) Object.assign(groups, page.childrenByConversationId);
+    return groups;
+  }, [data, expandedSessionLists, recentPages]);
 
   const firstInbox = data?.[0]?.inbox;
+  const expandedInbox = expandedSessionLists.inbox;
   const inboxItems = useMemo(() => {
-    const out: SessionMetadata[] = [];
-    const seen = new Set<string>();
-    for (const session of [...(firstInbox?.items ?? []), ...inboxExtraItems]) {
-      if (seen.has(session.key) || !isSidebarConversation(session)) continue;
-      seen.add(session.key);
-      out.push(session);
-    }
+    const out = (expandedInbox?.items ?? firstInbox?.items ?? []).filter(isSidebarConversation);
     out.sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a));
     return orderSidebarItems(
       out,
       pendingOrders.inbox ?? data?.[0]?.layouts.inbox?.itemIds,
       (session) => session.key,
     );
-  }, [data, firstInbox?.items, inboxExtraItems, pendingOrders.inbox]);
-  const inboxHasMore = inboxHasMoreOverride ?? firstInbox?.hasMore ?? false;
+  }, [data, expandedInbox, firstInbox?.items, pendingOrders.inbox]);
+  const inboxHasMore = !expandedInbox && (firstInbox?.hasMore ?? false);
+  const loadingInboxMore = loadingSessionLists.has('inbox');
 
   const items = useMemo(() => {
     const out: SessionMetadata[] = [];
@@ -1325,19 +1326,94 @@ function SidebarTaskListContent({
     ? recentGroups.older
     : recentGroups.older.slice(0, Math.max(OLDER_SESSION_PREVIEW_LIMIT, activeOlderIndex + 1));
 
-  const loadingMore = Boolean(data && size > data.length);
+  const loadingMore = Boolean(isValidating && data && size > data.length);
   const lastPage = data?.[data.length - 1];
   const hasMorePages = lastPage?.projects.hasMore ?? false;
   const loadingFirst = Boolean(token && !data && isValidating);
 
+  const setViewPageCount = useCallback((view: PaginatedSessionView, pageCount: number) => {
+    pageWindows.current[view].size = pageCount;
+    void (view === 'recent' ? setRecentSize : setSize)(pageCount);
+  }, [setRecentSize, setSize]);
+
+  const releaseSessionLists = useCallback((containerId?: string) => {
+    if (containerId === undefined) {
+      sessionListScopes.current.clear();
+      setExpandedSessionLists({});
+      setLoadingSessionLists(new Set());
+      return;
+    }
+    sessionListScopes.current.delete(containerId);
+    setExpandedSessionLists((current) => {
+      if (!current[containerId]) return current;
+      const next = { ...current };
+      delete next[containerId];
+      return next;
+    });
+    setLoadingSessionLists((current) => {
+      if (!current.has(containerId)) return current;
+      const next = new Set(current);
+      next.delete(containerId);
+      return next;
+    });
+  }, []);
+
+  const loadSessionList = useCallback(async function loadSessionList(containerId: string, background = false) {
+    const pending = sessionListScopes.current.get(containerId);
+    if (pending) {
+      if (background) pending.revalidate = () => void loadSessionList(containerId, true);
+      return;
+    }
+
+    let loaded = pending === null;
+    const request: { revalidate?: () => void } = {};
+    sessionListScopes.current.set(containerId, request);
+    if (!background) setLoadingSessionLists((current) => new Set(current).add(containerId));
+    try {
+      const result = await listSessions({
+        ...(containerId === 'inbox' ? { unassigned: true } : { projectId: containerId.slice('project:'.length) }),
+        limit: 5000,
+        offset: 0,
+        updatedAfter: sidebarUpdatedAfter,
+        includePinned: true,
+        includeConversationId: activeConversationId,
+        rootConversationsOnly: true,
+        excludeAutomationRuns: true,
+      });
+      if (sessionListScopes.current.get(containerId) === request) {
+        loaded = true;
+        setExpandedSessionLists((current) => ({ ...current, [containerId]: result }));
+      }
+    } catch {
+      if (!background && sessionListScopes.current.get(containerId) === request) {
+        showComposerNotification('warning', sb.sessionFilters.error);
+      }
+    } finally {
+      if (sessionListScopes.current.get(containerId) === request) {
+        if (loaded) sessionListScopes.current.set(containerId, null);
+        else sessionListScopes.current.delete(containerId);
+        if (!background) {
+          setLoadingSessionLists((current) => {
+            const next = new Set(current);
+            next.delete(containerId);
+            return next;
+          });
+        }
+        request.revalidate?.();
+      }
+    }
+  }, [activeConversationId, sb.sessionFilters.error, sidebarUpdatedAfter]);
+
+  const revalidateExpandedSessionLists = useCallback(() => {
+    // Keep expanded rows mounted while their data is refreshed.
+    for (const containerId of sessionListScopes.current.keys()) void loadSessionList(containerId, true);
+  }, [loadSessionList]);
+
   const refreshSidebar = useCallback(() => {
-    setProjectSessionOverrides({});
-    setInboxExtraItems([]);
-    setInboxHasMoreOverride(null);
-    setExtraTaskGroups({});
+    revalidateExpandedSessionLists();
     void mutate();
     void mutateRecent();
-  }, [mutate, mutateRecent]);
+  }, [mutate, mutateRecent, revalidateExpandedSessionLists]);
 
   const reorderSidebar = useCallback((containerId: string, itemIds: string[]) => {
     if (reorderBusyRef.current.has(containerId)) return;
@@ -1369,12 +1445,22 @@ function SidebarTaskListContent({
   const onScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
       const el = e.currentTarget;
-      if (view !== 'projects' || !hasMorePages || loadingMore) return;
-      const { scrollTop, scrollHeight, clientHeight } = el;
-      if (scrollHeight - scrollTop - clientHeight > 100) return;
-      void setSize(size + 1);
+      const lastScrollTop = previousScrollTop.current;
+      previousScrollTop.current = el.scrollTop;
+      if (el.scrollTop <= lastScrollTop) return;
+
+      const bottom = el.getBoundingClientRect().top + el.clientHeight;
+      const controls = el.querySelectorAll<HTMLButtonElement>('button[data-sidebar-load-more]');
+      // Prefer the lowest control near the viewport edge when multiple groups are visible.
+      for (const control of Array.from(controls).reverse()) {
+        const bounds = control.getBoundingClientRect();
+        if (bounds.height === 0 || bounds.top > bottom + SIDEBAR_LOAD_MORE_THRESHOLD_PX
+          || bounds.bottom < bottom - SIDEBAR_LOAD_MORE_THRESHOLD_PX) continue;
+        if (!control.disabled) control.click();
+        break;
+      }
     },
-    [hasMorePages, loadingMore, setSize, size, view],
+    [],
   );
 
   useEffect(() => {
@@ -1415,9 +1501,12 @@ function SidebarTaskListContent({
 
   useEffect(() => {
     if (view !== 'projects' || !token || !activeConversationId || !data) return;
+    if (includedConversationId.current === activeConversationId) return;
     if (items.some((session) => session.key === activeConversationId)) return;
-    setIncludedConversationId((prev) => (prev === activeConversationId ? prev : activeConversationId));
-  }, [activeConversationId, data, items, token, view]);
+    includedConversationId.current = activeConversationId;
+    void mutate();
+    revalidateExpandedSessionLists();
+  }, [activeConversationId, data, items, mutate, revalidateExpandedSessionLists, token, view]);
 
   const openRename = useCallback((session: SessionMetadata) => {
     setRenameTarget({ key: session.key, name: sessionTitle(session, m.chat.newSession) });
@@ -1496,72 +1585,13 @@ function SidebarTaskListContent({
   };
 
   const toggleProjectExpanded = useCallback((projectId: string) => {
-    const group = projectGroups.find((candidate) => candidate.project.id === projectId);
-    if (!group) return;
-    const isExpanded = expandedProjects.has(projectId);
-    if (isExpanded && !group.sessionHasMore) {
-      setExpandedProjects((prev) => {
-        const next = new Set(prev);
-        next.delete(projectId);
-        return next;
-      });
-      return;
-    }
-    setExpandedProjects((prev) => {
-      const next = new Set(prev);
-      next.add(projectId);
-      return next;
-    });
-    if (!group.sessionHasMore || loadingProjectIds.has(projectId)) return;
-
-    setLoadingProjectIds((prev) => new Set(prev).add(projectId));
-    void (async () => {
-      try {
-        const result = await listSessions({
-          projectId,
-          limit: 5000,
-          offset: 0,
-          updatedAfter: sidebarUpdatedAfter,
-          includePinned: true,
-          includeConversationId: activeConversationId,
-          rootConversationsOnly: true,
-          excludeAutomationRuns: true,
-        });
-        setExtraTaskGroups((prev) => ({ ...prev, ...result.childrenByConversationId }));
-        setProjectSessionOverrides((prev) => {
-          const existing = prev[projectId]?.sessions ?? group.sessions;
-          const seen = new Set(existing.map((session) => session.key));
-          const appended = [...existing];
-          for (const session of result.items) {
-            if (seen.has(session.key)) continue;
-            seen.add(session.key);
-            appended.push(session);
-          }
-          const ordered = orderSidebarItems(
-            appended,
-            pendingOrders[`project:${projectId}`] ?? data?.[0]?.layouts[`project:${projectId}`]?.itemIds,
-            (session) => session.key,
-          );
-          return {
-            ...prev,
-            [projectId]: {
-              sessions: ordered,
-              sessionTotal: result.total,
-              hasMore: false,
-            },
-          };
-        });
-      } finally {
-        setLoadingProjectIds((prev) => {
-          const next = new Set(prev);
-          next.delete(projectId);
-          return next;
-        });
-      }
-    })();
-  }, [activeConversationId, data, expandedProjects, loadingProjectIds, pendingOrders, projectGroups, sidebarUpdatedAfter]);
+    const containerId = `project:${projectId}`;
+    if (expandedSessionLists[containerId]) releaseSessionLists(containerId);
+    else void loadSessionList(containerId);
+  }, [expandedSessionLists, loadSessionList, releaseSessionLists]);
 
   const toggleProjectCollapsed = useCallback((projectId: string) => {
+    if (!collapsedProjectIds.has(projectId)) releaseSessionLists(`project:${projectId}`);
     setCollapsedProjectIds((prev) => {
       const next = new Set(prev);
       if (next.has(projectId)) {
@@ -1571,44 +1601,16 @@ function SidebarTaskListContent({
       }
       return next;
     });
-  }, []);
+  }, [collapsedProjectIds, releaseSessionLists]);
+
+  const toggleInboxCollapsed = () => {
+    if (!inboxCollapsed) releaseSessionLists('inbox');
+    setInboxCollapsed(!inboxCollapsed);
+  };
 
   const loadMoreInbox = useCallback(() => {
-    if (!inboxHasMore || loadingInboxMore) return;
-    setLoadingInboxMore(true);
-    void (async () => {
-      try {
-        const result = await listSessions({
-          unassigned: true,
-          limit: 5000,
-          offset: 0,
-          updatedAfter: sidebarUpdatedAfter,
-          includePinned: true,
-          includeConversationId: activeConversationId,
-          rootConversationsOnly: true,
-          excludeAutomationRuns: true,
-        });
-        setExtraTaskGroups((prev) => ({ ...prev, ...result.childrenByConversationId }));
-        setInboxExtraItems((prev) => {
-          const seen = new Set([...(firstInbox?.items ?? []), ...prev].map((session) => session.key));
-          const next = [...prev];
-          for (const session of result.items) {
-            if (seen.has(session.key)) continue;
-            seen.add(session.key);
-            next.push(session);
-          }
-          return orderSidebarItems(
-            next,
-            pendingOrders.inbox ?? data?.[0]?.layouts.inbox?.itemIds,
-            (session) => session.key,
-          );
-        });
-        setInboxHasMoreOverride(false);
-      } finally {
-        setLoadingInboxMore(false);
-      }
-    })();
-  }, [activeConversationId, data, firstInbox?.items, inboxHasMore, loadingInboxMore, pendingOrders.inbox, sidebarUpdatedAfter]);
+    if (inboxHasMore) void loadSessionList('inbox');
+  }, [inboxHasMore, loadSessionList]);
 
   const createProjectChat = useCallback((project: Project) => {
     navigateToNewChat(navigate, newChatHrefForProject(project.id), {
@@ -1654,9 +1656,9 @@ function SidebarTaskListContent({
   const canLoadRecentPage = recentHasMore && !recentError && !validatingRecent && !pendingRecentPage;
   useEffect(() => {
     if (view === 'recent' && needsOlderPreview && canLoadRecentPage) {
-      void setRecentSize(recentSize + 1);
+      setViewPageCount('recent', recentSize + 1);
     }
-  }, [canLoadRecentPage, needsOlderPreview, recentSize, setRecentSize, view]);
+  }, [canLoadRecentPage, needsOlderPreview, recentSize, setViewPageCount, view]);
 
   const recentLoadError = recentError ? (
     <div role="alert" className="space-y-2 p-2 text-xs text-fg-muted">
@@ -1689,6 +1691,18 @@ function SidebarTaskListContent({
   };
 
   const changeView = (next: SessionView) => {
+    if (next === view) return;
+    if (view !== 'experts') {
+      pageWindows.current[view] = { size: 1 };
+      setViewPageCount(view, 1);
+      const pageKey = view === 'recent' ? 'sidebar-recent-sessions' : 'sidebar-chat-list';
+      void mutateCache((key) => Array.isArray(key) && key[0] === pageKey
+        && key[1] === gateway && key[2] === token && key.at(-1) > 0, undefined, { revalidate: false });
+    }
+    if (view === 'recent') setShowAllLoadedOlder(false);
+    if (view === 'projects') releaseSessionLists();
+    if (scrollRegionRef.current) scrollRegionRef.current.scrollTop = 0;
+    previousScrollTop.current = 0;
     setView(next);
     try {
       globalThis.localStorage?.setItem(SESSION_VIEW_STORAGE_KEY, next);
@@ -1761,6 +1775,7 @@ function SidebarTaskListContent({
     <TaskGroupsContext value={taskGroups}>
     <div className="flex min-h-0 flex-1 flex-col">
       <div
+        ref={scrollRegionRef}
         className="app-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-2"
         onScroll={onScroll}
       >
@@ -1812,10 +1827,11 @@ function SidebarTaskListContent({
                   <button
                     type="button"
                     className="min-h-8 w-full rounded-lg px-2 text-left text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                    data-sidebar-load-more=""
                     disabled={!hasHiddenOlder && !canLoadRecentPage}
                     onClick={() => {
                       setShowAllLoadedOlder(true);
-                      if (!hasHiddenOlder && canLoadRecentPage) void setRecentSize(recentSize + 1);
+                      if (!hasHiddenOlder && canLoadRecentPage) setViewPageCount('recent', recentSize + 1);
                     }}
                   >
                     {sb.timelineViewMore}
@@ -1841,7 +1857,7 @@ function SidebarTaskListContent({
                         <SidebarProjectSection
                           key={group.project.id}
                           group={group}
-                          isExpanded={expandedProjects.has(group.project.id)}
+                          isExpanded={Boolean(expandedSessionLists[`project:${group.project.id}`])}
                           isCollapsed={collapsedProjectIds.has(group.project.id)}
                           activeConversationId={activeConversationId}
                           onToggleExpanded={toggleProjectExpanded}
@@ -1876,7 +1892,7 @@ function SidebarTaskListContent({
                 hasMore={inboxHasMore}
                 loadingMore={loadingInboxMore}
                 isCollapsed={inboxCollapsed}
-                onToggleCollapsed={() => setInboxCollapsed((value) => !value)}
+                onToggleCollapsed={toggleInboxCollapsed}
                 onCreateChat={() => {
                   navigateToNewChat(navigate, '/chat/new?projectScope=none', { state: { forceNewChat: true } }, onNavigate);
                 }}
@@ -1930,7 +1946,8 @@ function SidebarTaskListContent({
             <button
               type="button"
               className="mx-4 rounded-lg px-2 py-1.5 text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              onClick={() => void setSize(size + 1)}
+              data-sidebar-load-more=""
+              onClick={() => setViewPageCount('projects', (data?.length ?? 0) + 1)}
             >
               {sb.sessionFilters.more}
             </button>

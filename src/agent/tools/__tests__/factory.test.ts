@@ -228,19 +228,21 @@ describe('AgentToolsFactory', () => {
     expect(factory.createCoreTools({ toolAllowlist: ['clarify'] }).map(tool => tool.name)).toEqual(['clarify']);
   });
 
-  it('provides Conductor with focused reads without file writes or shell access', () => {
+  it('provides Conductor with the ordinary Agent tool surface', () => {
     const factory = new AgentToolsFactory({
       workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,
       dispatchTaskRuns: () => {},
+      getSkillManager: () => ({}) as never,
     });
     const toolAllowlist = STARTER_AGENTS.find((agent) => agent.id === 'conductor')?.toolAllowlist;
-    const names = factory.createCoreTools({ toolAllowlist }).map((tool) => tool.name);
+    const names = factory.createCoreTools({ agentId: 'conductor', toolAllowlist,
+      getSkillManager: () => ({}) as never }).map(tool => tool.name);
     expect(names).toEqual(expect.arrayContaining([
       'xopc_use', 'tool_manual',
       'knowledge_search', 'knowledge_get', 'user_context_search', 'user_context_get',
-      'find', 'grep', 'read_file',
+      'find', 'grep', 'read_file', 'write_file', 'apply_patch', 'exec_command',
+      'knowledge_write', 'skills_list', 'skill_view', 'skill_manage',
     ]));
-    expect(names).not.toEqual(expect.arrayContaining(['write_file', 'apply_patch', 'exec_command', 'knowledge_write']));
   });
   it('routes heartbeat notifications through final-result delivery even with explicit destinations', async () => {
     const conversationId = createConversation({ agentId: 'main', sourceChannel: 'heartbeat', sessionType: 'heartbeat' }).key;
