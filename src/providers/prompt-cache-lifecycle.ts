@@ -1,6 +1,6 @@
 import type { Api, Model } from '@earendil-works/pi-ai';
 
-import type { PromptCachePolicy } from './prompt-cache-plan.js';
+import { supportsExplicitOpenAICache, type PromptCachePolicy } from './prompt-cache-plan.js';
 
 const cacheTouchByScope = new Map<string, number>();
 const MAX_CACHE_TOUCHES = 512;
@@ -10,7 +10,7 @@ function scopeKey(conversationId: string, model: Model<Api>): string {
 }
 
 export function resolvePromptCacheTtlMs(model: Model<Api>, policy: PromptCachePolicy): number {
-  if (model.api === 'openai-responses' && /^gpt-5\.6(?:-|$)/.test(model.id)) {
+  if (supportsExplicitOpenAICache(model)) {
     return 30 * 60_000;
   }
   return policy.lifetime === 'long' ? 60 * 60_000 : 5 * 60_000;

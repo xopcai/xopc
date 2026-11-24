@@ -9,7 +9,9 @@ import {
 } from '../prompt-cache-lifecycle.js';
 
 const anthropic = { provider: 'anthropic', id: 'claude', api: 'anthropic-messages' } as Model<Api>;
-const openai = { provider: 'openai', id: 'gpt-5.6', api: 'openai-responses' } as Model<Api>;
+const openai = {
+  provider: 'openai', id: 'gpt-6.2-sol', api: 'openai-responses', compat: { supportsExplicitPromptCacheMode: true },
+} as Model<Api>;
 
 describe('prompt cache lifecycle', () => {
   beforeEach(clearPromptCacheTouches);

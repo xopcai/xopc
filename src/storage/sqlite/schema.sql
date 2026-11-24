@@ -2109,6 +2109,7 @@ CREATE TABLE "ai_usage_events" (
   cache_write_tokens INTEGER,
   reasoning_tokens INTEGER,
   total_tokens INTEGER,
+  total_input_tokens INTEGER,
   estimated_cost_microusd INTEGER,
   cost_source TEXT NOT NULL CHECK(cost_source IN ('model_catalog', 'local', 'unknown')),
   pricing_snapshot_json TEXT CHECK(pricing_snapshot_json IS NULL OR json_valid(pricing_snapshot_json)),

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -11,9 +11,9 @@ const mocks = vi.hoisted(() => ({
   fetchDeepUnderstandingRun: vi.fn(),
   confirmDeepUnderstandingRun: vi.fn(),
   dismissWorkDiscoveryOnboarding: vi.fn(),
-  grantUnderstandingWorkFolder: vi.fn(),
-  startWorkDiscoveryRun: vi.fn(),
-  fetchWorkDiscoveryRun: vi.fn(),
+  resolveWorkspaceProject: vi.fn(),
+  startProjectUnderstanding: vi.fn(),
+  fetchProjectUnderstanding: vi.fn(),
   fetchConnectorInstances: vi.fn(),
   fetchComposioConnectorCatalog: vi.fn(),
 }));
@@ -26,12 +26,17 @@ vi.mock('@/features/work-discovery/api', () => ({
   cancelDeepUnderstandingRun: vi.fn(async () => ({})),
   confirmDeepUnderstandingRun: mocks.confirmDeepUnderstandingRun,
   dismissWorkDiscoveryOnboarding: mocks.dismissWorkDiscoveryOnboarding,
-  grantUnderstandingWorkFolder: mocks.grantUnderstandingWorkFolder,
-  startWorkDiscoveryRun: mocks.startWorkDiscoveryRun,
-  fetchWorkDiscoveryRun: mocks.fetchWorkDiscoveryRun,
-  cancelWorkDiscoveryRun: vi.fn(async () => ({})),
-  selectWorkDiscoverySuggestion: vi.fn(async () => {}),
-  submitWorkDiscoveryRecognitionFeedback: vi.fn(async () => ({})),
+}));
+
+vi.mock('@/features/projects/api', () => ({
+  resolveWorkspaceProject: mocks.resolveWorkspaceProject,
+}));
+
+vi.mock('@/features/projects/project-understanding-api', () => ({
+  startProjectUnderstanding: mocks.startProjectUnderstanding,
+  fetchProjectUnderstanding: mocks.fetchProjectUnderstanding,
+  isProjectUnderstandingRunning: (status?: string) =>
+    status === 'queued' || status === 'probing' || status === 'analyzing',
 }));
 
 vi.mock('@/features/connectors/connectors-api', () => ({
@@ -66,7 +71,12 @@ vi.mock('@/stores/locale-store', () => ({
 import { useUnderstandingActivityStore } from '@/features/work-discovery/understanding-activity-store';
 import { DeepUnderstandingOnboarding } from '../deep-understanding-onboarding';
 
-describe('DeepUnderstandingOnboarding (Step 2 About You + Step 3 Workspace Project)', () => {
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="route">{`${location.pathname}${location.search}`}</output>;
+}
+
+describe('DeepUnderstandingOnboarding (Parallel User Understanding + Multi-Project Async Setup)', () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -100,6 +110,17 @@ describe('DeepUnderstandingOnboarding (Step 2 About You + Step 3 Workspace Proje
           changedFileCount: 3,
           evidence: ['git repo'],
         },
+        {
+          id: 'cand-docs',
+          rootPath: '/Users/demo/develop/docs',
+          displayName: 'docs',
+          source: 'common_work_root',
+          projectKind: 'general',
+          projectKindConfidence: 0.85,
+          score: 82,
+          changedFileCount: 0,
+          evidence: ['docs folder'],
+        },
       ],
       recentFiles: [],
       processingTarget: { provider: 'openai', remoteModel: true },
@@ -112,22 +133,34 @@ describe('DeepUnderstandingOnboarding (Step 2 About You + Step 3 Workspace Proje
       confirmedAssertionIds: ['a1'],
       createdRuleIds: ['r1'],
     });
-    mocks.grantUnderstandingWorkFolder.mockResolvedValue({ id: 'grant-1' });
-    mocks.startWorkDiscoveryRun.mockResolvedValue({
-      id: 'proj-run-1',
-      status: 'analyzing',
-      stage: 'folder_structure',
-      rootPath: '/Users/demo/develop/xopc',
-      projectId: 'proj-1',
-      conversationId: 'conv-1',
+    mocks.resolveWorkspaceProject.mockImplementation(async ({ workspacePath }: { workspacePath: string }) => {
+      const name = workspacePath.split('/').filter(Boolean).pop() ?? 'project';
+      return {
+        ok: true,
+        created: true,
+        reason: 'auto_created',
+        project: {
+          id: `proj-${name}`,
+          name,
+          slug: name,
+          status: 'active',
+          workspaceRoot: workspacePath,
+          executionMode: 'local_checkout',
+          successCriteria: [],
+          scope: {},
+          nonGoals: [],
+          health: 'unknown',
+          version: 1,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      };
     });
-    mocks.fetchWorkDiscoveryRun.mockResolvedValue({
-      id: 'proj-run-1',
+    mocks.startProjectUnderstanding.mockResolvedValue({ status: 'queued' });
+    mocks.fetchProjectUnderstanding.mockResolvedValue({
       status: 'analyzing',
-      stage: 'recent_progress',
-      rootPath: '/Users/demo/develop/xopc',
-      projectId: 'proj-1',
-      conversationId: 'conv-1',
+      overview: null,
+      updatedAt: null,
     });
   });
 
@@ -139,7 +172,104 @@ describe('DeepUnderstandingOnboarding (Step 2 About You + Step 3 Workspace Proje
     vi.clearAllMocks();
   });
 
-  it('hides undetected local sources, shows cloud connectors, runs Step 2 Reveal, and transitions to Step 3 project creation', async () => {
+  it('runs user understanding in the background without blocking multi-project creation or direct chat entry', async () => {
+    // Keep startDeepUnderstandingRun pending to prove Page 1 NEVER blocks Page 2.
+    let resolveDeepStart!: (value: unknown) => void;
+    mocks.startDeepUnderstandingRun.mockReturnValue(new Promise((resolve) => { resolveDeepStart = resolve; }));
+
+    const onNavigateAway = vi.fn();
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <DeepUnderstandingOnboarding onNavigateAway={onNavigateAway} />
+          <LocationProbe />
+        </MemoryRouter>,
+      );
+      await Promise.resolve();
+    });
+
+    // Only detected local sources + cloud connectors appear (no noisy undetected Bookmarks card).
+    expect(container.textContent).toContain('Obsidian');
+    expect(container.textContent).toContain('AI Rules');
+    expect(container.textContent).toContain('Gmail');
+    expect(container.textContent).not.toContain('Bookmarks');
+
+    // Start Page 1 user understanding (stays in-flight in the background).
+    const startButton = [...container.querySelectorAll('button')]
+      .find((btn) => btn.textContent?.includes('Start learning'))!;
+    await act(async () => {
+      startButton.click();
+      await Promise.resolve();
+    });
+
+    // Immediately switch to Page 2 while Page 1 start is STILL pending!
+    const continueBgBtn = [...container.querySelectorAll('button')]
+      .find((btn) => btn.textContent?.includes('Continue in background'))!;
+    await act(async () => {
+      continueBgBtn.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Choose your projects');
+    expect(container.textContent).toContain('Learning about you in background');
+
+    // Multi-select the second folder (`docs`) in addition to the pre-selected first folder (`xopc`).
+    const docsBtn = [...container.querySelectorAll('button')]
+      .find((btn) => btn.textContent?.includes('docs'))!;
+    await act(async () => {
+      docsBtn.click();
+      await Promise.resolve();
+    });
+
+    // Create 2 projects must NOT be disabled while Page 1 is still launching!
+    const createTwoBtn = [...container.querySelectorAll('button')]
+      .find((btn) => btn.textContent?.includes('Create 2 projects'))!;
+    expect(createTwoBtn.disabled).toBe(false);
+
+    await act(async () => {
+      createTwoBtn.click();
+      await Promise.resolve();
+    });
+
+    expect(mocks.resolveWorkspaceProject).toHaveBeenCalledTimes(2);
+    expect(mocks.resolveWorkspaceProject).toHaveBeenCalledWith({ workspacePath: '/Users/demo/develop/xopc', autoCreate: true });
+    expect(mocks.resolveWorkspaceProject).toHaveBeenCalledWith({ workspacePath: '/Users/demo/develop/docs', autoCreate: true });
+    expect(mocks.startProjectUnderstanding).toHaveBeenCalledWith('proj-xopc');
+    expect(mocks.startProjectUnderstanding).toHaveBeenCalledWith('proj-docs');
+
+    // Both projects are created and immediately allow jumping into chat without waiting for understanding!
+    expect(container.textContent).toContain('2 projects created');
+    expect(container.textContent).toContain('Analyzing…');
+
+    // Enter chat directly for the second project (`docs`) while understanding is still running.
+    const chatButtons = [...container.querySelectorAll('button')]
+      .filter((btn) => btn.textContent?.trim() === 'Chat');
+    expect(chatButtons).toHaveLength(2);
+    await act(async () => {
+      chatButtons[1]?.click();
+      await Promise.resolve();
+    });
+
+    expect(mocks.dismissWorkDiscoveryOnboarding).toHaveBeenCalledOnce();
+    expect(onNavigateAway).toHaveBeenCalledOnce();
+    expect(container.querySelector('[data-testid="route"]')?.textContent).toBe('/chat/new?projectId=proj-docs');
+
+    // Even after onboarding left, resolving the pending deep run updates the global background store.
+    await act(async () => {
+      resolveDeepStart({
+        id: 'run-deep-bg',
+        status: 'running',
+        phase: 'analyzing_writing',
+        selectedSources: ['local-obsidian'],
+        sourceStatuses: [{ sourceId: 'local-obsidian', status: 'collecting', itemCount: 0 }],
+        startedAt: Date.now(),
+      });
+      await Promise.resolve();
+    });
+    expect(useUnderstandingActivityStore.getState().deepRun?.id).toBe('run-deep-bg');
+  });
+
+  it('also lets users wait for both Step 1 Reveal and Step 2 project understanding completion', async () => {
     const runningRun = {
       id: 'run-deep-1',
       status: 'running' as const,
@@ -195,33 +325,29 @@ describe('DeepUnderstandingOnboarding (Step 2 About You + Step 3 Workspace Proje
     };
     mocks.startDeepUnderstandingRun.mockResolvedValue(runningRun);
     mocks.fetchDeepUnderstandingRun.mockResolvedValue(completedRun);
+    mocks.fetchProjectUnderstanding.mockResolvedValue({
+      status: 'completed',
+      overview: 'TypeScript personal assistant monorepo with Gateway and React console.',
+      updatedAt: Date.now(),
+    });
 
-    const onRequestClose = vi.fn();
     await act(async () => {
       root.render(
         <MemoryRouter>
-          <DeepUnderstandingOnboarding onRequestClose={onRequestClose} />
+          <DeepUnderstandingOnboarding onNavigateAway={vi.fn()} />
+          <LocationProbe />
         </MemoryRouter>,
       );
       await Promise.resolve();
     });
 
-    // Only detected local sources + cloud connectors appear (no noisy undetected Bookmarks card).
-    expect(container.textContent).toContain('Obsidian');
-    expect(container.textContent).toContain('AI Rules');
-    expect(container.textContent).toContain('Gmail');
-    expect(container.textContent).not.toContain('Bookmarks');
-
-    // Start Step 2 deep understanding.
     const startButton = [...container.querySelectorAll('button')]
       .find((btn) => btn.textContent?.includes('Start learning'))!;
     await act(async () => {
       startButton.click();
       await Promise.resolve();
     });
-    expect(mocks.startDeepUnderstandingRun).toHaveBeenCalledOnce();
 
-    // Deliver completion event to view Reveal.
     await act(async () => {
       window.dispatchEvent(new CustomEvent('understanding-completed', {
         detail: { runId: completedRun.id, run: completedRun },
@@ -229,42 +355,33 @@ describe('DeepUnderstandingOnboarding (Step 2 About You + Step 3 Workspace Proje
       await Promise.resolve();
     });
     expect(container.textContent).toContain('Builds local-first AI desktop tools');
-    expect(container.textContent).toContain('Lead with conclusions and compact tables');
 
-    // Save & advance to Step 3 (Workspace Project setup).
     const saveNextButton = [...container.querySelectorAll('button')]
-      .find((btn) => btn.textContent?.includes('Save & set up workspace'))!;
+      .find((btn) => btn.textContent?.includes('Save & choose projects'))!;
     await act(async () => {
       saveNextButton.click();
       await Promise.resolve();
     });
-
     expect(mocks.confirmDeepUnderstandingRun).toHaveBeenCalledWith(
       completedRun.id,
       expect.objectContaining({ markOnboardingCompleted: false }),
     );
-    expect(container.textContent).toContain('Set up a workspace');
-    expect(container.textContent).toContain('xopc');
 
-    // Create project & start understanding for the selected folder.
-    const createProjectBtn = [...container.querySelectorAll('button')]
+    const createBtn = [...container.querySelectorAll('button')]
       .find((btn) => btn.textContent?.includes('Create project & analyze'))!;
     await act(async () => {
-      createProjectBtn.click();
+      createBtn.click();
       await Promise.resolve();
     });
 
-    expect(mocks.grantUnderstandingWorkFolder).toHaveBeenCalledWith('/Users/demo/develop/xopc', 'remote_allowed');
-    expect(mocks.startWorkDiscoveryRun).toHaveBeenCalledWith('/Users/demo/develop/xopc');
-
-    // Allow continuing in background straight into the workspace.
-    const bgBtn = [...container.querySelectorAll('button')]
-      .find((btn) => btn.textContent?.includes('Continue in background'))!;
+    // Simulate background project understanding completing while user waits.
     await act(async () => {
-      bgBtn.click();
+      window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: 'proj-xopc' } }));
       await Promise.resolve();
     });
-    expect(onRequestClose).toHaveBeenCalledOnce();
+
+    expect(container.textContent).toContain('Projects ready');
+    expect(container.textContent).toContain('TypeScript personal assistant monorepo');
   });
 
   it('adapts local source presentation for Windows/Linux without Apple sources and surfaces custom Obsidian/notes action', async () => {

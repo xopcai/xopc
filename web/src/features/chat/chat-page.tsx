@@ -802,7 +802,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
   useEffect(() => {
     if (!autoSendQuery || (!draftQuery.trim() && !attachmentsHandoffId)) return;
     if (!auth.hasToken || session.showSessionLoading || session.sessionRoutePending) return;
-    if (!session.conversationId || stream.sending || stream.streaming) return;
+    if (!session.conversationId || !session.modelConfigReady || session.modelConfigSaving || stream.sending || stream.streaming) return;
     const message = buildComposerDraftSeed(skillQuery, draftQuery);
     const attachments = attachmentsHandoffId
       ? takeComposerPayloadHandoff(attachmentsHandoffId)
@@ -830,6 +830,8 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
     pathname,
     searchParams,
     session.conversationId,
+    session.modelConfigReady,
+    session.modelConfigSaving,
     session.sessionRoutePending,
     session.showSessionLoading,
     skillQuery,

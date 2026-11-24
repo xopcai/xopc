@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   refreshCloud: vi.fn(),
   refreshModels: vi.fn(),
   dismissSetup: vi.fn(),
+  dismissWorkDiscovery: vi.fn(async () => {}),
 }));
 
 vi.mock('@/lib/electron-env', () => ({ isElectron: () => mocks.desktop }));
@@ -35,11 +36,18 @@ vi.mock('@/features/onboarding/deep-understanding-onboarding', () => ({
 
 vi.mock('@/features/work-discovery/api', () => ({
   fetchWorkDiscoveryOnboarding: mocks.fetchWorkDiscoveryOnboarding,
-  dismissWorkDiscoveryOnboarding: vi.fn(async () => {}),
+  dismissWorkDiscoveryOnboarding: mocks.dismissWorkDiscovery,
 }));
 
 vi.mock('@/features/onboarding/onboarding-card', () => ({
-  OnboardingCard: ({ onComplete, onPendingChange }: { onComplete: () => Promise<void>; onPendingChange: (pending: boolean) => void }) => <div><button data-testid="model-setup-stage" onClick={() => void onComplete()}>Model setup</button><button data-testid="begin-setup-save" onClick={() => onPendingChange(true)}>Saving</button><button data-testid="end-setup-save" onClick={() => onPendingChange(false)}>Saved</button></div>,
+  OnboardingCard: ({ onComplete, onDismiss, onPendingChange }: { onComplete: () => Promise<void>; onDismiss: () => void; onPendingChange: (pending: boolean) => void }) => (
+    <div>
+      <button data-testid="model-setup-stage" onClick={() => void onComplete()}>Model setup</button>
+      <button data-testid="skip-setup" onClick={onDismiss}>Skip setup</button>
+      <button data-testid="begin-setup-save" onClick={() => onPendingChange(true)}>Saving</button>
+      <button data-testid="end-setup-save" onClick={() => onPendingChange(false)}>Saved</button>
+    </div>
+  ),
 }));
 
 vi.mock('@/features/onboarding/cloud-onboarding', () => ({
@@ -120,17 +128,23 @@ describe('OnboardingDialog', () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it('blocks Escape while applying a default and allows it after saving', async () => {
+  it.each([
+    ['Escape', () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))],
+    ['Skip setup', () => document.querySelector<HTMLButtonElement>('[data-testid="skip-setup"]')!.click()],
+  ])('handles %s with the same setup dismissal and save guard', async (_method, dismiss) => {
     mocks.desktop = true; mocks.needsSetup = true;
     mocks.fetchWorkDiscoveryOnboarding.mockResolvedValue(null);
     await act(async () => root.render(<MemoryRouter><OnboardingDialog /></MemoryRouter>));
     await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="begin-setup-save"]')!.click());
-    await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+    await act(async () => { dismiss(); });
     expect(document.querySelector('[data-testid="model-setup-stage"]')).not.toBeNull();
     expect(mocks.dismissSetup).not.toHaveBeenCalled();
+    expect(mocks.dismissWorkDiscovery).not.toHaveBeenCalled();
     await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="end-setup-save"]')!.click());
-    await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+    await act(async () => { dismiss(); });
     expect(mocks.dismissSetup).toHaveBeenCalledOnce();
+    expect(mocks.dismissWorkDiscovery).toHaveBeenCalledOnce();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
   afterEach(async () => {

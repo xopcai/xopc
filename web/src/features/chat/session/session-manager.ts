@@ -213,7 +213,7 @@ export class SessionManager {
     assertScope();
     const draft = await readLocalSessionDraft(conversationId);
     if (draft) {
-      if (!draft.creation.model && !draft.submission && !draft.materialization) {
+      if (!draft.creation.model.trim() && !draft.submission && !draft.materialization) {
         const [models, defaults] = await Promise.all([fetchConfiguredModelsCached(), fetchGatewayAgentEffectiveConfig(draft.creation.agentId)]);
         assertScope();
         const modelRef = defaults.config.models.chat.primary;
@@ -221,7 +221,7 @@ export class SessionManager {
         const model = models.find(item => item.id === modelRef) ?? (matches.length === 1 ? matches[0] : undefined);
         const latest = await readLocalSessionDraft(conversationId);
         assertScope();
-        if (latest && !latest.creation.model && !latest.submission && !latest.materialization && model) {
+        if (latest && !latest.creation.model.trim() && !latest.submission && !latest.materialization && model) {
           latest.creation.model = model.id;
           latest.creation.thinkingLevel = model.thinking?.initialValue ?? 'off';
           await saveLocalSessionDraft(latest);

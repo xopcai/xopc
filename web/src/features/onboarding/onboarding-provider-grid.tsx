@@ -69,14 +69,14 @@ export function OnboardingProviderGrid({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-base font-semibold text-fg">
-            {language === 'zh' ? '连接我自己的模型服务' : 'Connect my own model service'}
+            {language === 'zh' ? '自定义模型服务' : 'Custom model service'}
           </span>
           <span className="mt-1 block text-xs leading-5 text-fg-muted">
             {browseDisabled && !disabled
               ? (language === 'zh' ? '正在加载可用的模型服务…' : 'Loading available model services…')
               : language === 'zh'
-                ? '使用自己的账号、API Key、本地模型或私有接口。'
-                : 'Use your own account, API key, local model, or private endpoint.'}
+                ? '支持账号、API Key、本地模型和私有接口。'
+                : 'Use an account, API key, local model, or private endpoint.'}
           </span>
         </span>
         <ChevronRight className="size-4.5 shrink-0 text-fg-subtle" aria-hidden />

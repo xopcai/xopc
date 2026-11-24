@@ -11,6 +11,7 @@ import { EXTENSION_PROVIDER_BASE_URL } from '../../../providers/index.js';
 import type { ProviderPlugin } from '../../../extensions/types/providers.js';
 import { XopcCloudAccountService } from '../../../providers/xopc-cloud-account-service.js';
 import { withCloudCreditBudget } from '../../../providers/xopc-cloud-credit-budget.js';
+import { PROMPT_CACHE_BOUNDARY } from '../../prompt/cache-boundary.js';
 
 const FAKE_TOOLS = [{ name: 'search', description: 'Search', parameters: {} }];
 const FAKE_CONTEXT = normalizeContext({
@@ -60,10 +61,29 @@ describe('wrapStreamFnForXopcExtensions', () => {
     await withCloudCreditBudget({ conversationId: 'chat', runId: 'run', limitCreditMicro: '10000' }, async () => {
       const stream = await wrapped({ ...makeBuiltinModel(), provider: 'xopc-cloud' }, FAKE_CONTEXT, { headers: { 'x-test': '1' } });
       await stream.result();
-      expect(original.mock.calls[0][2].headers).toEqual({ 'x-test': '1', 'x-xopc-credit-budget': '00000000-0000-4000-8000-000000000001' });
+      expect(original.mock.calls[0][2].headers).toEqual({ 'x-test': '1', 'x-xopc-prompt-cache': 'short',
+        'x-xopc-credit-budget': '00000000-0000-4000-8000-000000000001' });
       expect(() => wrapped(makeBuiltinModel(), FAKE_CONTEXT)).toThrow('credit_budget_exhausted');
     });
     expect(original).toHaveBeenCalledOnce();
+  });
+
+  it('sends opaque Cloud affinity and prefix hints across requests', async () => {
+    const original = vi.fn(() => createAssistantMessageEventStream());
+    const model = { ...makeBuiltinModel(), provider: 'xopc-cloud', baseUrl: 'https://router.xopc.ai/v1' } as Model<Api>;
+    const wrapped = wrapStreamFnForXopcExtensions(original, { mode: 'auto', lifetime: 'long' }, 'private-transcript-id');
+    const makeContext = (dynamic: string) => normalizeContext({
+      systemPrompt: `固定${PROMPT_CACHE_BOUNDARY}${dynamic}`, messages: [],
+    });
+    await wrapped(model, makeContext('first'));
+    await wrapped(model, makeContext('second'));
+    const first = original.mock.calls[0][2].headers;
+    expect(first).toMatchObject({ 'x-xopc-prompt-cache': 'long',
+      'x-xopc-prompt-affinity': expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
+      'x-xopc-prompt-prefix': expect.stringMatching(/^2\.[A-Za-z0-9_-]{43}$/) });
+    expect(original.mock.calls[1][2].headers).toEqual(first);
+    await wrapStreamFnForXopcExtensions(original, { mode: 'off', lifetime: 'short' }, 'private-transcript-id')(model, makeContext('first'));
+    expect(original.mock.calls[2][2].headers).toEqual({ 'x-xopc-prompt-cache': 'off' });
   });
 
   it('delegates builtin models with the prompt-cache adapter', async () => {

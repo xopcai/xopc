@@ -85,6 +85,25 @@ describe('AI usage repository', () => {
     expect(getAiUsageEvent('call-3')?.status).toBe('unknown');
   });
 
+  it('keeps total input and measured zero distinct from unreported Cloud cache writes', () => {
+    insertAiUsageEvent({
+      id: 'cloud-cache', traceId: 'cloud-run', category: 'chat', operation: 'agent.answer',
+      trigger: 'user', reasonKey: 'usage.reason.agentAnswer', provider: 'xopc-cloud', model: 'auto',
+      status: 'running', startedAt: 100, costSource: 'unknown',
+    });
+    finishAiUsageEvent('cloud-cache', {
+      status: 'succeeded', finishedAt: 150, totalInputTokens: 4000,
+      usage: { input: 4000, output: 20, cacheRead: 0, totalTokens: 4020,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    });
+    expect(getAiUsageEvent('cloud-cache')).toMatchObject({
+      input_tokens: 4000, total_input_tokens: 4000, cache_read_tokens: 0, cache_write_tokens: null,
+    });
+    expect(listAiUsageEvents({ from: 0, to: 1000 }).items[0]).toMatchObject({
+      inputTokens: 4000, totalInputTokens: 4000, cacheReadTokens: 0, cacheWriteTokens: undefined,
+    });
+  });
+
   it('does not treat a failed priced call without usage as a known zero cost', () => {
     insertAiUsageEvent({
       id: 'call-4', traceId: 'run-4', category: 'chat', operation: 'agent.answer',

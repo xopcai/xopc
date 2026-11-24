@@ -1,6 +1,6 @@
 import type { ModelSetupPreview } from '@xopcai/gateway-contract';
 
-import { Check, CheckCircle2, ChevronRight, LoaderCircle, Pencil, X } from 'lucide-react';
+import { Check, CheckCircle2, ChevronRight, LoaderCircle, Pencil } from 'lucide-react';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 import { Loopi } from '@/components/brand/loopi';
@@ -220,6 +220,10 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
     finally { dispatch({ type: 'patch', patch: { busy: false } }); }
   };
 
+  const skipButton = canDismiss ? (
+    <Button variant="ghost" disabled={busy} onClick={onDismiss}>{o.skipSetup}</Button>
+  ) : null;
+
   if (desktop) {
     const zh = language === 'zh';
     const trimmedName = callName.trim();
@@ -238,17 +242,6 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
                 setLanguage(nextLanguage);
               }}
             />
-            {canDismiss ? (
-              <button
-                type="button"
-                aria-label={o.skipSetup}
-                disabled={busy}
-                className="inline-flex size-9 items-center justify-center rounded-xl text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                onClick={onDismiss}
-              >
-                <X className="size-4" aria-hidden />
-              </button>
-            ) : null}
           </div>
         </header>
 
@@ -273,7 +266,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
                     onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
                     onBlur={() => setEditingName(false)}
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === 'Escape') {
+                      if (event.key === 'Enter') {
                         event.preventDefault();
                         setEditingName(false);
                       }
@@ -309,20 +302,22 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
             </div>
 
             <h1 className="text-[1.875rem] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-[2.25rem]">
-              {zh ? '连接 XOPC Cloud' : 'Connect XOPC Cloud'}
+              {zh ? '配置模型' : 'Set up models'}
             </h1>
             <p className="mt-3 max-w-[26rem] text-sm leading-6 text-fg-muted">
               {zh
-                ? '登录后自动配齐聊天、图片、语音和任务模型，即刻进入你的工作。电脑操作默认关闭，无需 API Key。'
-                : 'Sign in to configure chat, image, voice, and task models automatically. Computer control stays off by default. No API key required.'}
+                ? '连接后自动配置模型。电脑操作默认关闭。'
+                : 'Connect to set up models automatically. Computer control is off by default.'}
             </p>
 
-            <div className="mt-8 w-full rounded-2xl border border-edge bg-surface-panel p-5 text-left shadow-surface">
+            <div className="mt-8 w-full text-left">
               <fieldset disabled={busy} className="min-w-0">
                 <OAuthProviderConnect
                   providerId="xopc-cloud"
                   displayName="XOPC Cloud"
                   connected={cloudConnected}
+                  showIdleDescription={false}
+                  secondaryAction={cloudConnected ? undefined : skipButton}
                   onConnected={() => {
                     setCloudAuthorized(true);
                     void finishCloudSetup();
@@ -331,11 +326,12 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
               </fieldset>
 
               {cloudConnected ? (
-                <div className="mt-4 flex justify-end">
+                <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                  {skipButton}
                   <Button
                     type="button"
                     variant="primary"
-                    className="h-10 w-full gap-1.5 rounded-xl px-5"
+                    className="h-10 gap-1.5 rounded-xl px-5"
                     disabled={busy}
                     onClick={() => void finishCloudSetup()}
                   >
@@ -363,7 +359,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
               }}
               className="mt-6 text-xs font-medium text-fg-muted transition-colors hover:text-fg hover:underline"
             >
-              {zh ? '使用自有 API Key 或本地模型' : 'Use your own API key or local model'}
+              {zh ? '使用 API Key 或本地模型' : 'Use an API key or local model'}
             </button>
           </div>
         </main>
@@ -407,17 +403,6 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
               setLanguage(nextLanguage);
             }}
           />
-          {canDismiss ? (
-            <button
-              type="button"
-              aria-label={o.skipSetup}
-              disabled={busy}
-              className="inline-flex size-10 items-center justify-center rounded-xl text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              onClick={onDismiss}
-            >
-              <X className="size-4" aria-hidden />
-            </button>
-          ) : null}
         </div>
       </header>
 
@@ -450,26 +435,29 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
                   />
                 </label>
                 <div className="mt-3 min-h-5">{error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}</div>
-                <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-10">
-                  <span />
+                <Button variant="ghost" className="self-start" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider', error: null } })}>
+                  {language === 'zh' ? '稍后设置称呼' : 'Set name later'}
+                </Button>
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-10">
                   <OnboardingProgress step={step} label={stepLabel} />
-                  <Button variant="ghost" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider', error: null } })}>{language === 'zh' ? '稍后设置称呼' : 'Set name later'}</Button>
-                  <Button variant="primary" className="h-11 justify-self-end px-5" disabled={busy} onClick={() => void continueFromCallName()}>
-                    {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
-                    {busy ? o.savingProfile : o.continue}
-                    {!busy ? <ChevronRight className="size-4" aria-hidden /> : null}
-                  </Button>
+                  <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                    {skipButton}
+                    <Button variant="primary" className="h-11 px-5" disabled={busy} onClick={() => void continueFromCallName()}>
+                      {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
+                      {busy ? o.savingProfile : o.continue}
+                      {!busy ? <ChevronRight className="size-4" aria-hidden /> : null}
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : null}
 
             {step === 'provider' ? (
               <div className="flex min-h-[30rem] flex-col">
-                <p className="text-xs font-medium tracking-wide text-accent-fg">{desktop ? 'XOPC Cloud' : language === 'zh' ? '模型设置' : 'Model setup'}</p>
-                <h1 className="mt-3 text-[2rem] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-4xl">{desktop ? (language === 'zh' ? '连接 XOPC Cloud' : 'Connect XOPC Cloud') : o.step1Title}</h1>
-                <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">{desktop ? (language === 'zh' ? '登录后自动配置聊天、图片、语音和任务模型，开启可用能力。电脑操作默认关闭，无需 API Key。' : 'Sign in to set up chat, image, voice, and task models and enable available capabilities. Computer control stays off by default. No API key required.') : o.step1Subtitle}</p>
+                <h1 className="text-[2rem] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-4xl">{o.step1Title}</h1>
+                <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">{o.step1Subtitle}</p>
                 <div className="mt-8">
-                  {desktop ? <fieldset disabled={busy} className="min-w-0"><OAuthProviderConnect providerId="xopc-cloud" displayName="XOPC Cloud" connected={cloudConnected} onConnected={() => { setCloudAuthorized(true); void finishCloudSetup(); }} /></fieldset> : <OnboardingProviderGrid
+                  <OnboardingProviderGrid
                     onSelect={(id) => {
                       dispatch({ type: 'patch', patch: { selectedProvider: id, error: null } });
                       setProviderDialogOpen(true);
@@ -477,13 +465,13 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
                     onBrowseProviders={() => { dispatch({ type: 'patch', patch: { selectedProvider: null } }); setProviderDialogOpen(true); }}
                     disabled={busy}
                     browseDisabled={providerData.loading}
-                  />}
+                  />
                 </div>
                 <div className="mt-3 min-h-5">{error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}</div>
                 <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-8">
                   <Button variant="ghost" className="justify-self-start" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'callName', error: null } })}>{o.back}</Button>
                   <OnboardingProgress step={step} label={stepLabel} />
-                  {desktop && cloudConnected ? <Button variant="primary" className="h-11 justify-self-end px-5" disabled={busy} onClick={() => void finishCloudSetup()}>{busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}{error ? (language === 'zh' ? '重试' : 'Retry') : o.continue}</Button> : <span />}
+                  <div className="justify-self-end">{skipButton}</div>
                 </div>
               </div>
             ) : null}
@@ -506,14 +494,16 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
                   {cloudSetup?.uses.some(use => !use.selected) ? (language === 'zh' ? ' 部分能力暂无可用模型，可稍后在模型设置中查看。' : ' Some capabilities have no available model. Review them in Model settings.') : null}
                 </p>
                 <div className="mt-3 min-h-5">{error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}</div>
-                <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-10">
-                  <span />
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-10">
                   <OnboardingProgress step={step} label={stepLabel} />
-                  <Button variant="primary" className="h-11 justify-self-end px-5" disabled={busy} onClick={() => void completeOnboarding()}>
-                    {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
-                    {language === 'zh' ? '开始使用 XOPC' : 'Start using XOPC'}
-                    {!busy ? <ChevronRight className="size-4" aria-hidden /> : null}
-                  </Button>
+                  <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                    {skipButton}
+                    <Button variant="primary" className="h-11 px-5" disabled={busy} onClick={() => void completeOnboarding()}>
+                      {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
+                      {language === 'zh' ? '开始使用 XOPC' : 'Start using XOPC'}
+                      {!busy ? <ChevronRight className="size-4" aria-hidden /> : null}
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : null}

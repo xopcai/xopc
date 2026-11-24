@@ -39,7 +39,7 @@ import {
 import { readLocalSessionDraft, saveLocalSessionDraft, readSessionTranscript, readPendingSessionCommand, savePendingSessionCommand, clearPendingSessionCommand, confirmSessionCommand } from '../session/local-session-drafts';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { patchSessionAgentConfigView } from '../session/patch-session-agent-config-view';
-import { SessionManager, type SessionAgentConfig } from '../session/session-manager';
+import { SessionManager, SessionModelRequiredError, type SessionAgentConfig } from '../session/session-manager';
 import { watchSubmittedRun } from './submitted-run-watch';
 import { beginResponseLatency, bindResponseLatency, discardPendingResponseLatency, markResponseSubmission, recordResponseText, finishResponseLatency } from './response-latency';
 
@@ -456,12 +456,16 @@ export class MessageSender {
         }
         const pending = await readPendingSessionCommand(chatId);
         assertScope();
-        if (!draft && !pending && configVersion === undefined) {
+        if (!pending && (draft ? (!draft.submission && !draft.creation.model.trim()) : configVersion === undefined)) {
           const agentConfig = await new SessionManager().loadSessionAgentConfig(chatId);
           controller.signal.throwIfAborted();
           assertScope();
           patchSessionAgentConfigView(chatId, agentConfig);
           configVersion = agentConfig.configVersion;
+          if (draft) {
+            draft = await readLocalSessionDraft(chatId);
+            assertScope();
+          }
         }
         input.interactionCapabilities = pending ? pending.input.interactionCapabilities : draft?.submission ? draft.submission.input.interactionCapabilities : await readClarificationCapabilities();
         if (pending) {
@@ -470,6 +474,7 @@ export class MessageSender {
           clientMessageId = pending.clientMessageId;
           body = sessionInputCommandSchema.parse({ ...pending, origin });
         } else if (draft) {
+          if (!draft.submission && !draft.creation.model.trim()) throw new SessionModelRequiredError();
           input.endpointContext = draft.submission?.input.endpointContext ?? await captureEnvironment();
           const proposed = { kind: 'start' as const, clientMessageId, creation: draft.creation, input };
           if (draft.submission && canonicalSessionCommand(draft.submission.input) !== canonicalSessionCommand(input)) {

@@ -18,6 +18,7 @@ import {
 } from '@/features/endpoint-tools/turn-claim';
 import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
 import { contextRefWireToken, sessionInputCommandSchema, type AppContextEnvelope } from '@xopcai/gateway-contract';
+import { SessionManager, SessionModelRequiredError } from '@/features/chat/session/session-manager';
 import { savePendingSessionCommand, readLocalSessionDraft, confirmSessionCommand, type LocalSessionDraft } from '@/features/chat/session/local-session-drafts';
 
 const realtimeState = vi.hoisted(() => ({
@@ -332,6 +333,59 @@ describe('MessageSender terminal state', () => {
       expect(body).toMatchObject({ kind: 'append', configVersion: 7, expectedTranscriptId: 'transcript', input: { content: 'first message' } });
       expect(draft).toBeUndefined();
     } finally {
+      vi.mocked(readLocalSessionDraft).mockImplementation(async () => undefined);
+      vi.mocked(confirmSessionCommand).mockReset();
+    }
+  });
+
+  it('hydrates an empty local draft model before starting a conversation', async () => {
+    let draft: LocalSessionDraft = {
+      conversationId, createdAt: new Date().toISOString(),
+      creation: { agentId: 'main', projectId: null, execution: null, temporary: false, model: '', thinkingLevel: 'off' },
+    };
+    vi.mocked(readLocalSessionDraft).mockImplementation(async () => structuredClone(draft));
+    const loadConfigSpy = vi.spyOn(SessionManager.prototype, 'loadSessionAgentConfig').mockImplementation(async () => {
+      draft = { ...draft, creation: { ...draft.creation, model: 'xopc-cloud/auto', thinkingLevel: 'low' } };
+      return {
+        localDraft: true, model: 'xopc-cloud/auto', thinkingLevel: 'low', fixedModel: false,
+        activityDetail: { default: 'on', override: null, effective: 'on', source: 'default' },
+        effectiveWorkspacePath: '', workingDirectoryLocked: false,
+        workspaceSource: 'agent_default_root', userContextMode: 'enabled',
+      };
+    });
+    vi.mocked(apiFetch).mockImplementation(async (_url, init) => acceptedInput(conversationId, JSON.parse(String(init?.body)).clientMessageId));
+    try {
+      await expect(new MessageSender().send('hello after onboard', conversationId)).resolves.toBeUndefined();
+      expect(loadConfigSpy).toHaveBeenCalledWith(conversationId);
+      const requests = vi.mocked(apiFetch).mock.calls.filter(([url]) => String(url).endsWith('/inputs'));
+      expect(requests).toHaveLength(1);
+      const body = JSON.parse(String(requests[0][1]?.body));
+      expect(sessionInputCommandSchema.safeParse(body).success).toBe(true);
+      expect(body).toMatchObject({ kind: 'start', creation: { model: 'xopc-cloud/auto', thinkingLevel: 'low' } });
+    } finally {
+      loadConfigSpy.mockRestore();
+      vi.mocked(readLocalSessionDraft).mockImplementation(async () => undefined);
+      vi.mocked(confirmSessionCommand).mockReset();
+    }
+  });
+
+  it('throws SessionModelRequiredError instead of a raw ZodError when a draft still has no model', async () => {
+    const draft: LocalSessionDraft = {
+      conversationId, createdAt: new Date().toISOString(),
+      creation: { agentId: 'main', projectId: null, execution: null, temporary: false, model: '', thinkingLevel: 'off' },
+    };
+    vi.mocked(readLocalSessionDraft).mockImplementation(async () => structuredClone(draft));
+    const loadConfigSpy = vi.spyOn(SessionManager.prototype, 'loadSessionAgentConfig').mockResolvedValue({
+      localDraft: true, model: '', thinkingLevel: 'off', fixedModel: false,
+      activityDetail: { default: 'on', override: null, effective: 'on', source: 'default' },
+      effectiveWorkspacePath: '', workingDirectoryLocked: false,
+      workspaceSource: 'agent_default_root', userContextMode: 'enabled',
+    });
+    try {
+      await expect(new MessageSender().send('hello without model', conversationId)).rejects.toBeInstanceOf(SessionModelRequiredError);
+      expect(vi.mocked(apiFetch)).not.toHaveBeenCalled();
+    } finally {
+      loadConfigSpy.mockRestore();
       vi.mocked(readLocalSessionDraft).mockImplementation(async () => undefined);
       vi.mocked(confirmSessionCommand).mockReset();
     }

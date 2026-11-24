@@ -69,7 +69,7 @@ describe('prompt cache payload adaptation', () => {
   it('adds a Bedrock history cache point before the current user message', () => {
     const bedrock = model('bedrock-converse-stream');
     const payload = transformPromptCachePayload(bedrock, {
-      system: [{ text: prompt }],
+      system: [{ text: prompt }, { cachePoint: { type: 'default', ttl: '1h' } }],
       messages: [
         { role: 'user', content: [{ text: 'old' }] },
         { role: 'assistant', content: [{ text: 'answer' }] },
@@ -77,13 +77,32 @@ describe('prompt cache payload adaptation', () => {
       ],
     }) as Record<string, any>;
 
-    expect(payload.messages[0].content.at(-1)).toEqual({ cachePoint: { type: 'default' } });
+    expect(payload.messages[0].content.at(-1)).toEqual({ cachePoint: { type: 'default', ttl: '1h' } });
     expect(payload.messages[2].content.at(-1)).toEqual({ text: 'current' });
+  });
+
+  it('only strips the internal marker when Bedrock does not supply a cache point', () => {
+    const messages = [{ role: 'user', content: [{ toolResult: {} }] }];
+    expect(transformPromptCachePayload(model('bedrock-converse-stream'), {
+      system: [{ text: prompt }], messages,
+    })).toEqual({ system: [{ text: 'stable\ndynamic' }], messages });
   });
 
   it('strips the internal marker for implicit-prefix-cache providers', () => {
     expect(preparePromptCacheContext(model('openai-responses'), { systemPrompt: prompt }))
       .toEqual({ systemPrompt: 'stable\ndynamic' });
+  });
+
+  it('keeps official DeepSeek Flash history before dynamic instructions', () => {
+    const deepseek = { ...model('openai-completions', 'deepseek'), id: 'deepseek-flash',
+      baseUrl: 'https://api.deepseek.com' } as Model<Api>;
+    const history = [{ role: 'user', content: 'Inspect' }, { role: 'assistant', content: 'Found it' }];
+    const payload = { messages: [{ role: 'system', content: 'stable\ndynamic' }, ...history] };
+    const context = { systemPrompt: prompt };
+    expect(transformPromptCachePayload(deepseek, payload, undefined, context)).toEqual({
+      messages: [{ role: 'system', content: 'stable' }, ...history, { role: 'system', content: 'dynamic' }],
+    });
+    expect(transformPromptCachePayload({ ...deepseek, baseUrl: 'https://example.test' }, payload, undefined, context)).toBe(payload);
   });
 
   it('composes after an existing payload transform', async () => {
@@ -142,7 +161,7 @@ describe('prompt cache payload adaptation', () => {
     expect(transformed.cacheRetention).toBe('none');
   });
 
-  it('places explicit OpenAI breakpoints in input without duplicating system instructions', async () => {
+  it('uses implicit history lookup with an explicit stable breakpoint', async () => {
     const openai = { ...model('openai-responses'), id: 'gpt-5.6', compat: { supportsExplicitPromptCacheMode: true } } as Model<Api>;
     const context = { systemPrompt: prompt, tools: [] };
     const options = withPromptCachePayloadTransform(openai, context, undefined);
@@ -156,15 +175,38 @@ describe('prompt cache payload adaptation', () => {
       ],
     }, openai) as Record<string, any>;
 
-    expect(payload.prompt_cache_options).toEqual({ mode: 'explicit', ttl: '30m' });
+    expect(payload.prompt_cache_options).toEqual({ mode: 'implicit', ttl: '30m' });
     expect(payload.instructions).toBeUndefined();
     expect(payload.input).toHaveLength(4);
     expect(payload.input[0]).toEqual({ role: 'developer', content: [
       { type: 'input_text', text: 'stable', prompt_cache_breakpoint: { mode: 'explicit' } },
       { type: 'input_text', text: 'dynamic' },
     ] });
-    expect(payload.input[2].content[0].prompt_cache_breakpoint).toEqual({ mode: 'explicit' });
+    expect(payload.input[2].content[0].prompt_cache_breakpoint).toBeUndefined();
     expect(payload.input[3].content[0].prompt_cache_breakpoint).toBeUndefined();
+  });
+
+  it('keeps GPT-6.2 history unchanged when current instructions change', async () => {
+    const openai = { ...model('openai-responses'), id: 'gpt-6.2-sol',
+      compat: { supportsExplicitPromptCacheMode: true, supportsLongCacheRetention: true } } as Model<Api>;
+    const history = [
+      { role: 'user', content: 'Start' },
+      { type: 'function_call_output', output: 'First result' },
+    ];
+    const makePayload = (dynamic: string) => withPromptCachePayloadTransform(
+      openai, { systemPrompt: `stable${PROMPT_CACHE_BOUNDARY}${dynamic}` }, undefined,
+      { mode: 'auto', lifetime: 'long' },
+    ).onPayload!({
+      prompt_cache_options: { mode: 'explicit' },
+      input: [{ role: 'developer', content: `stable\n${dynamic}` }, ...history],
+    }, openai) as Promise<Record<string, unknown>>;
+    const first = await makePayload('Continue reviewing');
+    const second = await makePayload('Write the final answer');
+    expect(first.prompt_cache_key).toBe(second.prompt_cache_key);
+    expect(first.input).toEqual(second.input);
+    expect(second).toMatchObject({ instructions: 'Write the final answer', prompt_cache_options: { mode: 'implicit', ttl: '30m' },
+      input: [{ role: 'developer', content: [{ type: 'input_text', text: 'stable',
+        prompt_cache_breakpoint: { mode: 'explicit', ttl: '12h' } }] }, ...history] });
   });
 
   it('does not overwrite an upstream OpenAI instruction transform', async () => {

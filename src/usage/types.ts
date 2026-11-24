@@ -61,6 +61,7 @@ export type AiUsageEvent = {
   finishedAt?: number;
   durationMs?: number;
   inputTokens?: number;
+  totalInputTokens?: number;
   outputTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
@@ -74,7 +75,9 @@ export type AiUsageEvent = {
 
 export type AiUsageFinish = {
   status: Exclude<AiUsageStatus, 'running'>;
-  usage?: Usage;
+  usage?: Omit<Usage, 'cacheRead' | 'cacheWrite'> & Partial<Pick<Usage, 'cacheRead' | 'cacheWrite'>>;
+  totalInputTokens?: number;
+  resolvedModel?: string;
   errorSummary?: string;
   output?: unknown;
   finishedAt?: number;

@@ -80,6 +80,7 @@ export function OnboardingDialog() {
   };
 
   const dismissExperience = () => {
+    if (setupPending) return;
     closeExperience();
     modelSetup.dismissPermanently();
     void dismissWorkDiscoveryOnboarding().catch(() => {});
@@ -96,7 +97,7 @@ export function OnboardingDialog() {
       open={experience.open}
       onOpenChange={(nextOpen) => {
         if (!nextOpen) {
-          if (experience.stage === 'setup') { if (!setupPending) dismissExperience(); }
+          if (experience.stage === 'setup') dismissExperience();
           else if (experience.stage === 'cloud') void dismissCloud().catch(closeExperience);
           else leaveExperience();
         }

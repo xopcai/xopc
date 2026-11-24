@@ -269,6 +269,29 @@ export async function createProject(input: {
   return res.project;
 }
 
+export type ResolveWorkspaceProjectResult = {
+  ok: true;
+  project: Project | null;
+  reason?: 'exact' | 'contained' | 'auto_created';
+  created?: boolean;
+};
+
+export async function resolveWorkspaceProject(input: {
+  workspacePath: string;
+  autoCreate?: boolean;
+  projectKind?: ProjectKindSelection;
+}): Promise<ResolveWorkspaceProjectResult> {
+  return fetchJson<ResolveWorkspaceProjectResult>(apiUrl('/api/projects/resolve-workspace'), {
+    method: 'POST',
+    headers: { 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify({
+      workspacePath: input.workspacePath,
+      autoCreate: input.autoCreate ?? true,
+      ...(input.projectKind ? { projectKind: input.projectKind } : {}),
+    }),
+  });
+}
+
 export async function inferProjectDefaults(input: {
   name?: string;
   description?: string;

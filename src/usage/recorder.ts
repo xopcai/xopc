@@ -10,7 +10,7 @@ import { createLogger } from '../utils/logger.js';
 import { classifyCostSource, dollarsToMicrousd, pricingSnapshot } from './cost.js';
 import { resolveAiUsageScenario } from './scenario-registry.js';
 import type { AiUsageContext, AiUsageFinish, AiUsageModel } from './types.js';
-import { hasAuthoritativeCloudUsage } from './cloud-wire.js';
+import { getCloudUsageReport } from './cloud-wire.js';
 import { withUsageReceiptContext, reconcileCloudUsageReceipt } from './cloud-receipts.js';
 
 const log = createLogger('AiUsage');
@@ -80,6 +80,8 @@ export function startAiUsageCall(model: AiUsageModel, context: AiUsageContext, i
       observation.update({
         'gen_ai.usage.input_tokens': result.usage?.input,
         'gen_ai.usage.output_tokens': result.usage?.output,
+        'gen_ai.response.model': result.resolvedModel,
+        'xopc.usage.totalInputTokens': result.totalInputTokens,
         'langfuse.observation.usage_details': JSON.stringify({ input: result.usage?.input, output: result.usage?.output, cache_read: result.usage?.cacheRead, cache_write: result.usage?.cacheWrite }),
         'langfuse.observation.cost_details': costSource === 'unknown' ? undefined : JSON.stringify({ total: result.usage?.cost?.total }),
         'xopc.costSource': costSource,
@@ -108,7 +110,15 @@ function finishFromMessage(call: AiUsageCall | undefined, message: AssistantMess
   const status = message.stopReason === 'aborted'
     ? 'aborted'
     : message.stopReason === 'error' ? 'failed' : 'succeeded';
-  call.finish({ status, usage: status !== 'succeeded' && hasAuthoritativeCloudUsage(message) === false ? undefined : message.usage, errorSummary: message.errorMessage, output: message.content });
+  const cloud = getCloudUsageReport(message);
+  const usage = status !== 'succeeded' && cloud?.authoritative === false ? undefined
+    : cloud ? { ...message.usage, cacheRead: cloud.cacheRead, cacheWrite: cloud.cacheWrite } : message.usage;
+  const totalInputTokens = cloud ? cloud.totalInputTokens
+    : usage ? usage.input + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0) : undefined;
+  call.finish({
+    status, usage, totalInputTokens, resolvedModel: cloud?.resolvedModel,
+    errorSummary: message.errorMessage, output: message.content,
+  });
 }
 
 export function observeAiUsageStream(

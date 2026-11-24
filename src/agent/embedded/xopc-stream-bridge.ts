@@ -17,7 +17,9 @@ import {
   preparePromptCacheContext,
   withPromptCachePayloadTransform,
 } from '../../providers/prompt-cache-payload.js';
-import type { PromptCachePolicy } from '../../providers/prompt-cache-plan.js';
+import { resolvePromptCachePolicy, type PromptCachePolicy } from '../../providers/prompt-cache-plan.js';
+import { digestCacheText } from '../../providers/prompt-cache-fingerprint.js';
+import { splitPromptCacheBoundary } from '../prompt/cache-boundary.js';
 import { withCloudUsageResponse } from '../../usage/cloud-receipts.js';
 import { assertCloudCreditBudgetActive, cloudCreditBudgetHeaders, hasCloudCreditBudget, reportCloudCreditError } from '../../providers/xopc-cloud-credit-budget.js';
 
@@ -32,9 +34,12 @@ import { assertCloudCreditBudgetActive, cloudCreditBudgetHeaders, hasCloudCredit
  */
 export function wrapStreamFnForXopcExtensions(
   originalStreamFn: StreamFn,
-  promptCachePolicy?: PromptCachePolicy,
+  policyInput?: PromptCachePolicy,
+  transcriptId?: string,
 ): StreamFn {
   const extensionStreamFn = createExtensionAwareStreamFn();
+  const promptCachePolicy = resolvePromptCachePolicy(policyInput);
+  const affinity = transcriptId ? digestCacheText(transcriptId) : undefined;
 
   return ((model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions) => {
     assertCloudCreditBudgetActive();
@@ -48,7 +53,19 @@ export function wrapStreamFnForXopcExtensions(
       systemPrompt: getCurrentSystemPrompt(context.messages),
       tools: getCurrentTools(context.messages),
     };
-    const preparedContext = preparePromptCacheContext(model, promptContext);
+    if (model.provider === 'xopc-cloud') {
+      const split = splitPromptCacheBoundary(promptContext.systemPrompt);
+      const cacheEnabled = promptCachePolicy.mode !== 'off';
+      options = { ...options, headers: {
+        ...options?.headers,
+        'x-xopc-prompt-cache': cacheEnabled ? promptCachePolicy.lifetime : 'off',
+        ...(cacheEnabled && affinity ? { 'x-xopc-prompt-affinity': affinity } : {}),
+        ...(cacheEnabled && split?.stablePrefix && split.dynamicSuffix ? {
+          'x-xopc-prompt-prefix': `${split.stablePrefix.length}.${digestCacheText(split.stablePrefix)}`,
+        } : {}),
+      } };
+    }
+    const preparedContext = preparePromptCacheContext(model, promptContext, promptCachePolicy);
     const providerContext = preparedContext.systemPrompt === promptContext.systemPrompt
       ? context
       : normalizeContext({

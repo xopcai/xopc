@@ -28,7 +28,8 @@ export function resolvePromptCachePolicy(policy?: Partial<PromptCachePolicy>): P
 export function isOfficialOpenAIModel(model: Model<Api>): boolean {
   if (model.api === 'azure-openai-responses') return true;
   if (model.api !== 'openai-completions' && model.api !== 'openai-responses') return false;
-  return model.provider === 'openai' || model.baseUrl?.includes('api.openai.com') === true;
+  if (!model.baseUrl) return model.provider === 'openai';
+  return URL.parse(model.baseUrl)?.origin === 'https://api.openai.com';
 }
 
 export function supportsExplicitOpenAICache(model: Model<Api>): boolean {

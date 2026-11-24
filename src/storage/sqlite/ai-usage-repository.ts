@@ -20,17 +20,17 @@ export function insertAiUsageEvent(event: AiUsageEvent): void {
       id, trace_id, parent_event_id, conversation_id, run_id, agent_id,
       category, operation, trigger_kind, reason_key, provider, model, status,
       started_at, finished_at, duration_ms, input_tokens, output_tokens,
-      cache_read_tokens, cache_write_tokens, reasoning_tokens, total_tokens,
+      cache_read_tokens, cache_write_tokens, reasoning_tokens, total_tokens, total_input_tokens,
       estimated_cost_microusd, cost_source, pricing_snapshot_json, error_summary,
       created_at, updated_at, otel_trace_id, otel_span_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(
         event.id, event.traceId, event.parentEventId ?? null, event.conversationId ?? null,
         event.runId ?? null, event.agentId ?? null, event.category, event.operation,
         event.trigger, event.reasonKey, event.provider, event.model, event.status,
         event.startedAt, event.finishedAt ?? null, event.durationMs ?? null,
         event.inputTokens ?? null, event.outputTokens ?? null, event.cacheReadTokens ?? null,
-        event.cacheWriteTokens ?? null, event.reasoningTokens ?? null, event.totalTokens ?? null,
+        event.cacheWriteTokens ?? null, event.reasoningTokens ?? null, event.totalTokens ?? null, event.totalInputTokens ?? null,
         event.estimatedCostMicrousd ?? null, event.costSource,
         event.pricingSnapshot ? JSON.stringify(event.pricingSnapshot) : null,
         boundedError(event.errorSummary) ?? null, event.startedAt, event.startedAt, event.otelTraceId ?? null, event.otelSpanId ?? null,
@@ -45,13 +45,13 @@ export function finishAiUsageEvent(id: string, finish: AiUsageFinish & { estimat
     db.prepare(`UPDATE ai_usage_events SET
       status = ?, finished_at = ?, duration_ms = MAX(0, ? - started_at),
       input_tokens = ?, output_tokens = ?, cache_read_tokens = ?, cache_write_tokens = ?,
-      reasoning_tokens = ?, total_tokens = ?, estimated_cost_microusd = ?,
+      reasoning_tokens = ?, total_tokens = ?, total_input_tokens = ?, estimated_cost_microusd = ?,
       error_summary = ?, updated_at = ?
       WHERE id = ? AND status = 'running'`)
       .run(
         finish.status, finishedAt, finishedAt, usage?.input ?? null, usage?.output ?? null,
         usage?.cacheRead ?? null, usage?.cacheWrite ?? null, usage?.reasoning ?? null,
-        usage?.totalTokens ?? null, finish.estimatedCostMicrousd ?? null,
+        usage?.totalTokens ?? null, finish.totalInputTokens ?? null, finish.estimatedCostMicrousd ?? null,
         boundedError(finish.errorSummary) ?? null, finishedAt, id,
       );
   });
@@ -293,6 +293,7 @@ function eventFromRow(row: UsageRow) {
     finishedAt: row.finished_at === null ? undefined : Number(row.finished_at),
     durationMs: row.duration_ms === null ? undefined : Number(row.duration_ms),
     inputTokens: row.input_tokens === null ? undefined : Number(row.input_tokens),
+    totalInputTokens: row.total_input_tokens === null ? undefined : Number(row.total_input_tokens),
     outputTokens: row.output_tokens === null ? undefined : Number(row.output_tokens),
     cacheReadTokens: row.cache_read_tokens === null ? undefined : Number(row.cache_read_tokens),
     cacheWriteTokens: row.cache_write_tokens === null ? undefined : Number(row.cache_write_tokens),

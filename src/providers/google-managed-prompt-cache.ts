@@ -85,7 +85,7 @@ export async function applyGoogleManagedPromptCache(params: {
     toolConfig: config.toolConfig,
   };
   const key = digestCacheText(
-    `${params.model.provider}\0${params.model.id}\0${stablePrompt}\0${canonicalizeCacheValue(cacheConfig)}`,
+    `${resolveBaseUrl(params.model)}\0${digestCacheText(apiKey)}\0${params.model.id}\0${params.policy.lifetime}\0${stablePrompt}\0${canonicalizeCacheValue(cacheConfig)}`,
   );
   const now = params.now ?? Date.now();
   const existing = entries.get(key);

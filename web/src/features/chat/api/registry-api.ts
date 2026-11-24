@@ -28,6 +28,7 @@ async function fetchConfiguredModels(): Promise<ConfiguredModel[]> {
 let _modelsCache: ConfiguredModel[] | null = null;
 let _modelsCacheExpiry = 0;
 let _modelsInflight: Promise<ConfiguredModel[]> | null = null;
+let _modelsCacheGen = 0;
 
 const MODELS_CACHE_TTL_MS = 60_000; // 60 seconds
 
@@ -39,8 +40,10 @@ export const CONFIGURED_MODELS_SWR_KEY = 'gateway-configured-models';
  * Also revalidates the SWR key so any mounted `useSWR` hook re-renders.
  */
 export async function invalidateConfiguredModelsCache(): Promise<void> {
+  _modelsCacheGen += 1;
   _modelsCache = null;
   _modelsCacheExpiry = 0;
+  _modelsInflight = null;
   // Lazy import to avoid circular deps; mutate is a standalone SWR util.
   const { mutate } = await import('swr');
   await mutate(CONFIGURED_MODELS_SWR_KEY);
@@ -55,24 +58,30 @@ export async function fetchConfiguredModelsCached(forceRefresh = false): Promise
   if (!forceRefresh && _modelsCache && now < _modelsCacheExpiry) {
     return _modelsCache;
   }
+  const gen = _modelsCacheGen;
   // Bypass shared in-flight dedupe so callers that pass `true` always get a fresh list (e.g. onboarding).
   if (forceRefresh) {
     const models = await fetchConfiguredModels();
-    _modelsCache = models;
-    _modelsCacheExpiry = Date.now() + MODELS_CACHE_TTL_MS;
+    if (gen === _modelsCacheGen) {
+      _modelsCache = models;
+      _modelsCacheExpiry = Date.now() + MODELS_CACHE_TTL_MS;
+    }
     return models;
   }
   if (_modelsInflight) return _modelsInflight;
 
-  _modelsInflight = fetchConfiguredModels()
+  const pending = fetchConfiguredModels()
     .then((models) => {
-      _modelsCache = models;
-      _modelsCacheExpiry = Date.now() + MODELS_CACHE_TTL_MS;
+      if (gen === _modelsCacheGen) {
+        _modelsCache = models;
+        _modelsCacheExpiry = Date.now() + MODELS_CACHE_TTL_MS;
+      }
       return models;
     })
     .finally(() => {
-      _modelsInflight = null;
+      if (_modelsInflight === pending) _modelsInflight = null;
     });
+  _modelsInflight = pending;
 
-  return _modelsInflight;
+  return pending;
 }

@@ -16,8 +16,10 @@ import {
   Loader2,
   Lock,
   Mail,
+  MessageSquare,
   Pencil,
   Plus,
+  RotateCcw,
   ShieldCheck,
   Sparkles,
   StickyNote,
@@ -31,7 +33,7 @@ import { Loopi } from '@/components/brand/loopi';
 import { APP_CHROME_BAR_CLASS, APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { newChatAutoSendHref } from '@/features/chat/session/composer-handoff-params';
+import { newChatAutoSendHref, newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { ConnectorLogo } from '@/features/connectors/components/connector-logo';
 import { InstallConnectorDialog } from '@/features/connectors/components/install-connector-dialog';
 import { buildInitialDraft, type InstallDraft } from '@/features/connectors/components/install-connector-draft';
@@ -45,26 +47,26 @@ import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
 import { markDesktopHabitAnchorPending } from '@/features/onboarding/desktop-habit-toast';
 import { OnboardingLanguageSwitch } from '@/features/onboarding/onboarding-language-switch';
+import { resolveWorkspaceProject, type Project } from '@/features/projects/api';
+import {
+  fetchProjectUnderstanding,
+  isProjectUnderstandingRunning,
+  startProjectUnderstanding,
+  type ProjectUnderstanding,
+} from '@/features/projects/project-understanding-api';
 import {
   cancelDeepUnderstandingRun,
-  cancelWorkDiscoveryRun,
   confirmDeepUnderstandingRun,
   discoverWorkDiscoveryCandidates,
   dismissWorkDiscoveryOnboarding,
   fetchDeepUnderstandingRun,
   fetchLocalSourcePreviews,
-  fetchWorkDiscoveryRun,
-  grantUnderstandingWorkFolder,
-  selectWorkDiscoverySuggestion,
   startDeepUnderstandingRun,
-  startWorkDiscoveryRun,
-  submitWorkDiscoveryRecognitionFeedback,
   type DeepUnderstandingPhase,
   type DeepUnderstandingRun,
   type LocalSourcePreview,
   type WorkDiscoveryCandidate,
   type WorkDiscoveryProcessingTarget,
-  type WorkDiscoveryRun,
   type WorkUnderstandingThread,
   type WritingStyleDimension,
 } from '@/features/work-discovery/api';
@@ -90,8 +92,15 @@ import type {
 
 type OnboardingStep = 'understand' | 'projects';
 type UnderstandView = 'select' | 'analyzing' | 'reveal';
-type ProjectView = 'select' | 'analyzing' | 'ready';
+type ProjectView = 'select' | 'created';
 type ItemDecision = 'accepted' | 'edited' | 'rejected';
+
+type CreatedOnboardingProject = {
+  project: Project;
+  created: boolean;
+  understandingStatus: ProjectUnderstanding['status'];
+  overview: string | null;
+};
 
 const TIER1_ORDER = [
   'local-ai-instructions',
@@ -198,10 +207,13 @@ function phaseCenterLabel(phase: DeepUnderstandingPhase, zh: boolean): string {
   return zh ? '整理初版认识…' : 'Finishing up…';
 }
 
-function projectStageLabel(stage: WorkDiscoveryRun['stage'], zh: boolean): string {
-  if (stage === 'folder_structure') return zh ? '扫描目录结构…' : 'Scanning folder structure…';
-  if (stage === 'recent_progress') return zh ? '梳理近期进展…' : 'Analyzing recent progress…';
-  return zh ? '生成项目概览与建议…' : 'Preparing project overview…';
+function compactOverviewSnippet(overview: string | null): string | null {
+  if (!overview) return null;
+  const firstLine = overview
+    .split('\n')
+    .map((line) => line.replace(/^[#>*\-\s]+/, '').trim())
+    .find(Boolean);
+  return firstLine ? firstLine.slice(0, 120) : null;
 }
 
 export function DeepUnderstandingOnboarding({
@@ -221,28 +233,29 @@ export function DeepUnderstandingOnboarding({
   const connectorCopy = allMessages.connectorsSettings;
   const navigate = useNavigate();
 
-  // Top-level step: Step 2 (About You) -> Step 3 (Local Folder -> Project)
+  // Independent pages: Page 1 (About You) and Page 2 (Projects) can run fully in parallel.
   const [step, setStep] = useState<OnboardingStep>('understand');
   const [understandView, setUnderstandView] = useState<UnderstandView>('select');
   const [projectView, setProjectView] = useState<ProjectView>('select');
 
-  // Shared discovery state
-  const [loadingDiscovery, setLoadingDiscovery] = useState(true);
+  // Page 1: Local + Remote Sources (independent loading & action states)
+  const [loadingLocalSources, setLoadingLocalSources] = useState(true);
   const [hostPlatform, setHostPlatform] = useState<HostPlatform>(() => normalizeHostPlatform(window.electronAPI?.platform));
   const [previews, setPreviews] = useState<LocalSourcePreview[]>([]);
-  const [processingTarget, setProcessingTarget] = useState<WorkDiscoveryProcessingTarget | null>(null);
   const [tier2Sources, setTier2Sources] = useState<ElectronUnderstandingSourceDefinition[]>([]);
   const [selectedTier1, setSelectedTier1] = useState<Set<string>>(() => new Set());
   const [selectedTier2, setSelectedTier2] = useState<Set<string>>(() => new Set());
   const [customNoteDirs, setCustomNoteDirs] = useState<string[]>([]);
 
-  // Connectors (remote sources in Step 2)
   const [connectors, setConnectors] = useState<ConnectorDefinition[]>(() => sortUnderstandingConnectors(ONBOARDING_CONNECTOR_FALLBACKS));
   const [connectorInstances, setConnectorInstances] = useState<ConnectorInstance[]>([]);
+  const [sessionConnectedIds, setSessionConnectedIds] = useState<Set<string>>(() => new Set());
   const [installDraft, setInstallDraft] = useState<InstallDraft | null>(null);
 
-  // Step 2 Deep Understanding Run + Calibration
   const [deepRun, setDeepRun] = useState<DeepUnderstandingRun | null>(null);
+  const [understandLaunching, setUnderstandLaunching] = useState(false);
+  const [understandConfirming, setUnderstandConfirming] = useState(false);
+  const [understandError, setUnderstandError] = useState<string | null>(null);
   const [deepConfirmed, setDeepConfirmed] = useState(false);
   const [aboutDecisions, setAboutDecisions] = useState<Record<string, { decision: ItemDecision; statement: string }>>({});
   const [writingDecisions, setWritingDecisions] = useState<Record<string, { decision: ItemDecision; statement: string }>>({});
@@ -252,16 +265,18 @@ export function DeepUnderstandingOnboarding({
   const [newRuleText, setNewRuleText] = useState('');
   const [calibrationAnswers, setCalibrationAnswers] = useState<Record<string, string>>({});
 
-  // Step 3 Work Folders / Project Setup
+  // Page 2: Multi-Project Selection -> Fast Creation + Async Understanding (independent states)
+  const [loadingWorkFolders, setLoadingWorkFolders] = useState(true);
+  const [processingTarget, setProcessingTarget] = useState<WorkDiscoveryProcessingTarget | null>(null);
   const [workCandidates, setWorkCandidates] = useState<WorkDiscoveryCandidate[]>([]);
   const [customWorkFolders, setCustomWorkFolders] = useState<string[]>([]);
-  const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(null);
-  const [projectRun, setProjectRun] = useState<WorkDiscoveryRun | null>(null);
+  const [selectedFolderPaths, setSelectedFolderPaths] = useState<Set<string>>(() => new Set());
+  const [createdProjects, setCreatedProjects] = useState<CreatedOnboardingProject[]>([]);
+  const [projectsCreating, setProjectsCreating] = useState(false);
+  const [projectError, setProjectError] = useState<string | null>(null);
 
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [pickerPurpose, setPickerPurpose] = useState<'notes' | 'project'>('notes');
-
+  const initializedFoldersRef = useRef(false);
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -273,10 +288,9 @@ export function DeepUnderstandingOnboarding({
     if (mountedRef.current) setConnectorInstances(next);
   }, []);
 
-  const refreshPreviews = useCallback(async (dirs: string[]) => {
-    const [previewList, candidatesResult, catalog] = await Promise.allSettled([
+  const refreshLocalSources = useCallback(async (dirs: string[]) => {
+    const [previewList, catalog] = await Promise.allSettled([
       fetchLocalSourcePreviews(dirs),
-      discoverWorkDiscoveryCandidates(),
       window.electronAPI?.understandingSources?.catalog() ?? Promise.resolve([]),
     ]);
     if (!mountedRef.current) return;
@@ -286,16 +300,28 @@ export function DeepUnderstandingOnboarding({
       const detectedIds = previewList.value.previews.filter((item) => item.detected).map((item) => item.sourceId);
       setSelectedTier1((prev) => (prev.size > 0 ? new Set([...prev, ...detectedIds]) : new Set(detectedIds)));
     }
-    if (candidatesResult.status === 'fulfilled') {
-      setProcessingTarget(candidatesResult.value.processingTarget);
-      const discovered = candidatesResult.value.candidates;
-      setWorkCandidates(discovered);
-      setSelectedFolderPath((prev) => prev ?? discovered[0]?.rootPath ?? null);
-    }
     if (catalog.status === 'fulfilled') {
       setTier2Sources(catalog.value.filter((source) => source.tier === 2 && source.availability === 'available'));
     }
-    setLoadingDiscovery(false);
+    setLoadingLocalSources(false);
+  }, []);
+
+  const refreshWorkCandidates = useCallback(async () => {
+    try {
+      const result = await discoverWorkDiscoveryCandidates();
+      if (!mountedRef.current) return;
+      setProcessingTarget(result.processingTarget);
+      setWorkCandidates(result.candidates);
+      const firstCandidatePath = result.candidates[0]?.rootPath;
+      if (!initializedFoldersRef.current && firstCandidatePath) {
+        initializedFoldersRef.current = true;
+        setSelectedFolderPaths((prev) => (prev.size > 0 ? prev : new Set([firstCandidatePath])));
+      }
+    } catch {
+      // Non-fatal: users can still pick any local folder manually.
+    } finally {
+      if (mountedRef.current) setLoadingWorkFolders(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -306,13 +332,10 @@ export function DeepUnderstandingOnboarding({
     } else if (store.deepRun?.status === 'completed' && store.deepRun.result) {
       setDeepRun(store.deepRun);
     }
-    if (store.directoryRun && ['queued', 'probing', 'analyzing'].includes(store.directoryRun.status)) {
-      setProjectRun(store.directoryRun);
-      setStep('projects');
-      setProjectView('analyzing');
-    }
 
-    void refreshPreviews([]);
+    // Load Page 1 and Page 2 discovery fully independently so neither delays the other.
+    void refreshLocalSources([]);
+    void refreshWorkCandidates();
     void loadConnectorInstances();
     void fetchComposioConnectorCatalog({ page: 1, pageSize: 20, verification: 'verified' })
       .then((result) => {
@@ -321,7 +344,7 @@ export function DeepUnderstandingOnboarding({
         }
       })
       .catch(() => {});
-  }, [loadConnectorInstances, refreshPreviews]);
+  }, [loadConnectorInstances, refreshLocalSources, refreshWorkCandidates]);
 
   const picker = useDirectoryPicker({
     onPicked: (pickedPath) => {
@@ -330,13 +353,13 @@ export function DeepUnderstandingOnboarding({
           if (prev.includes(pickedPath)) return prev;
           const next = [...prev, pickedPath];
           setSelectedTier1((sel) => new Set(sel).add('local-markdown-notes'));
-          void refreshPreviews(next);
+          void refreshLocalSources(next);
           return next;
         });
         return;
       }
       setCustomWorkFolders((prev) => (prev.includes(pickedPath) ? prev : [pickedPath, ...prev]));
-      setSelectedFolderPath(pickedPath);
+      setSelectedFolderPaths((prev) => new Set(prev).add(pickedPath));
     },
   });
 
@@ -345,9 +368,10 @@ export function DeepUnderstandingOnboarding({
     picker.pick();
   };
 
-  // Apply Step 2 Deep Run updates
+  // Apply Page 1 Deep Run updates (always updates global store so background tracking survives unmount)
   const applyDeepRunState = useCallback((next: DeepUnderstandingRun) => {
     useUnderstandingActivityStore.getState().updateDeepRun(next);
+    if (!mountedRef.current) return;
     setDeepRun(next);
     if (next.status === 'completed' && next.result) {
       const nextAbout: Record<string, { decision: ItemDecision; statement: string }> = {};
@@ -362,12 +386,12 @@ export function DeepUnderstandingOnboarding({
       setWritingDecisions(nextWriting);
       setUnderstandView((current) => (current === 'analyzing' ? 'reveal' : current));
     } else if (next.status === 'failed' || next.status === 'canceled') {
-      setError(next.errorMessage ?? (zh ? '分析未完成，可重试或跳过。' : 'Analysis did not finish. Retry or skip.'));
+      setUnderstandError(next.errorMessage ?? (zh ? '分析未完成，可重试或跳过。' : 'Analysis did not finish. Retry or skip.'));
       setUnderstandView((current) => (current === 'analyzing' ? 'select' : current));
     }
   }, [zh]);
 
-  // Listen to Step 2 Deep Run progress (even while user moved on to Step 3!)
+  // Listen to Page 1 Deep Run progress (continues even while user works on Page 2)
   useEffect(() => {
     if (!deepRun || deepRun.status !== 'running') return;
     let cancelled = false;
@@ -395,43 +419,47 @@ export function DeepUnderstandingOnboarding({
     };
   }, [applyDeepRunState, deepRun]);
 
-  // Listen to Step 3 Project WorkDiscoveryRun progress
-  const applyProjectRunState = useCallback((next: WorkDiscoveryRun) => {
-    useUnderstandingActivityStore.getState().updateDirectoryRun(next);
-    setProjectRun(next);
-    if (next.status === 'completed') {
-      setProjectView('ready');
-    } else if (next.status === 'failed' || next.status === 'canceled') {
-      setError(next.errorMessage ?? (zh ? '项目理解未完成，可重试或跳过。' : 'Project analysis failed. Retry or skip.'));
-      setProjectView('select');
+  // Listen to Page 2 async background project understanding updates (when user waits on Created view)
+  const runningProjectIdsKey = useMemo(
+    () => createdProjects
+      .filter((entry) => isProjectUnderstandingRunning(entry.understandingStatus))
+      .map((entry) => entry.project.id)
+      .join(','),
+    [createdProjects],
+  );
+
+  const syncProjectUnderstandingStatus = useCallback(async (projectId: string) => {
+    try {
+      const state = await fetchProjectUnderstanding(projectId);
+      if (!mountedRef.current) return;
+      setCreatedProjects((prev) => prev.map((entry) => (
+        entry.project.id === projectId
+          ? { ...entry, understandingStatus: state.status, overview: state.overview }
+          : entry
+      )));
+    } catch {
+      // Retry on next event or poll tick.
     }
-  }, [zh]);
+  }, []);
 
   useEffect(() => {
-    if (!projectRun || !['queued', 'probing', 'analyzing'].includes(projectRun.status)) return;
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const next = await fetchWorkDiscoveryRun(projectRun.id);
-        if (!cancelled) applyProjectRunState(next);
-      } catch {
-        // Recover on next tick or realtime event.
-      }
+    if (!runningProjectIdsKey) return;
+    const ids = runningProjectIdsKey.split(',').filter(Boolean);
+    const idSet = new Set(ids);
+    const pollAll = () => {
+      for (const projectId of ids) void syncProjectUnderstandingStatus(projectId);
     };
-    const interval = window.setInterval(() => void poll(), 1_200);
-    const onEvent = (event: Event) => {
-      const detail = (event as CustomEvent<{ runId?: string }>).detail;
-      if (detail?.runId && detail.runId !== projectRun.id) return;
-      void poll();
+    const onProjectUpdated = (event: Event) => {
+      const projectId = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (projectId && idSet.has(projectId)) void syncProjectUnderstandingStatus(projectId);
     };
-    const names = ['work-discovery-progress', 'work-discovery-completed', 'work-discovery-failed', 'work-discovery-canceled'];
-    for (const name of names) window.addEventListener(name, onEvent);
+    window.addEventListener('project-updated', onProjectUpdated);
+    const timer = window.setInterval(pollAll, 2_000);
     return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      for (const name of names) window.removeEventListener(name, onEvent);
+      window.removeEventListener('project-updated', onProjectUpdated);
+      window.clearInterval(timer);
     };
-  }, [applyProjectRunState, projectRun]);
+  }, [runningProjectIdsKey, syncProjectUnderstandingStatus]);
 
   const previewMap = useMemo(() => new Map(previews.map((item) => [item.sourceId, item])), [previews]);
   const detectedTier1 = useMemo(
@@ -449,16 +477,27 @@ export function DeepUnderstandingOnboarding({
     [connectors, instanceByConnectorId],
   );
 
+  const createdProjectPaths = useMemo(
+    () => new Set(createdProjects.map((entry) => entry.project.workspaceRoot).filter((p): p is string => Boolean(p))),
+    [createdProjects],
+  );
+
   const allWorkFolders = useMemo(() => {
     const seen = new Set<string>();
-    const items: Array<{ path: string; name: string; meta: string; isRepo: boolean }> = [];
+    const items: Array<{ path: string; name: string; meta: string; isRepo: boolean; existingProject: boolean }> = [];
     for (const custom of customWorkFolders) {
       if (seen.has(custom)) continue;
       seen.add(custom);
       const parts = custom.replaceAll('\\', '/').split('/').filter(Boolean);
-      items.push({ path: custom, name: parts[parts.length - 1] ?? custom, meta: compactPath(custom), isRepo: false });
+      items.push({
+        path: custom,
+        name: parts[parts.length - 1] ?? custom,
+        meta: compactPath(custom),
+        isRepo: false,
+        existingProject: createdProjectPaths.has(custom),
+      });
     }
-    for (const candidate of workCandidates.slice(0, 5)) {
+    for (const candidate of workCandidates.slice(0, 6)) {
       if (seen.has(candidate.rootPath)) continue;
       seen.add(candidate.rootPath);
       const meta = candidate.branch
@@ -469,10 +508,11 @@ export function DeepUnderstandingOnboarding({
         name: candidate.displayName,
         meta,
         isRepo: candidate.projectKind === 'coding',
+        existingProject: Boolean(candidate.projectId) || createdProjectPaths.has(candidate.rootPath),
       });
     }
     return items;
-  }, [customWorkFolders, workCandidates, zh]);
+  }, [createdProjectPaths, customWorkFolders, workCandidates, zh]);
 
   const toggleTier1 = (sourceId: string) => {
     setSelectedTier1((prev) => {
@@ -492,23 +532,28 @@ export function DeepUnderstandingOnboarding({
     });
   };
 
-  const leaveToApp = useCallback((destination?: { conversationId?: string; prompt?: string }) => {
+  const toggleWorkFolder = (folderPath: string) => {
+    setSelectedFolderPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderPath)) next.delete(folderPath);
+      else next.add(folderPath);
+      return next;
+    });
+  };
+
+  const leaveToApp = useCallback((destination?: { projectId?: string; prompt?: string }) => {
     markDesktopHabitAnchorPending();
-    if (destination?.conversationId) {
-      const params = new URLSearchParams();
-      if (destination.prompt) {
-        params.set('draft', destination.prompt);
-        params.set('autoSend', '1');
-      }
-      const query = params.toString();
+    if (destination?.projectId) {
       onNavigateAway?.();
-      navigate(`/chat/${encodeURIComponent(destination.conversationId)}${query ? `?${query}` : ''}`);
+      if (!onNavigateAway) onRequestClose?.();
+      navigate(newChatHrefForProject(destination.projectId));
       return;
     }
     if (destination?.prompt?.trim()) {
       const href = newChatAutoSendHref(destination.prompt.trim());
       if (href) {
         onNavigateAway?.();
+        if (!onNavigateAway) onRequestClose?.();
         navigate(href);
         return;
       }
@@ -517,14 +562,15 @@ export function DeepUnderstandingOnboarding({
     if (!onRequestClose) navigate('/chat');
   }, [navigate, onNavigateAway, onRequestClose]);
 
-  const launchStep2Understanding = useCallback(async () => {
-    if (busy) return;
+  // Page 1: Launch background Deep Understanding (completely decoupled from Page 2!)
+  const launchStep1Understanding = useCallback(async () => {
+    if (understandLaunching) return;
     if (selectedLocalCount === 0) {
       setStep('projects');
       return;
     }
-    setBusy(true);
-    setError(null);
+    setUnderstandLaunching(true);
+    setUnderstandError(null);
     setUnderstandView('analyzing');
 
     try {
@@ -544,8 +590,10 @@ export function DeepUnderstandingOnboarding({
 
       const tier1List = [...selectedTier1];
       if (tier1List.length === 0 && precollectedItems.length === 0) {
-        setStep('projects');
-        setUnderstandView('select');
+        if (mountedRef.current) {
+          setUnderstandView('select');
+          setStep('projects');
+        }
         return;
       }
 
@@ -559,17 +607,19 @@ export function DeepUnderstandingOnboarding({
       });
       applyDeepRunState(run);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-      setUnderstandView('select');
+      if (mountedRef.current) {
+        setUnderstandError(cause instanceof Error ? cause.message : String(cause));
+        setUnderstandView('select');
+      }
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setUnderstandLaunching(false);
     }
-  }, [applyDeepRunState, busy, customNoteDirs, processingTarget?.remoteModel, selectedLocalCount, selectedTier1, selectedTier2]);
+  }, [applyDeepRunState, customNoteDirs, processingTarget?.remoteModel, selectedLocalCount, selectedTier1, selectedTier2, understandLaunching]);
 
-  const commitStep2Confirmation = useCallback(async (nextAction: 'projects' | 'finish' | WorkUnderstandingThread) => {
-    if (!deepRun || !deepRun.result || busy) return;
-    setBusy(true);
-    setError(null);
+  const commitStep1Confirmation = useCallback(async (nextAction: 'projects' | 'finish' | WorkUnderstandingThread) => {
+    if (!deepRun || !deepRun.result || understandConfirming) return;
+    setUnderstandConfirming(true);
+    setUnderstandError(null);
     const completingFlow = nextAction !== 'projects';
     try {
       await confirmDeepUnderstandingRun(deepRun.id, {
@@ -613,54 +663,98 @@ export function DeepUnderstandingOnboarding({
         leaveToApp({ prompt });
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setUnderstandError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setBusy(false);
+      setUnderstandConfirming(false);
     }
-  }, [aboutDecisions, busy, calibrationAnswers, customRules, deepRun, leaveToApp, writingDecisions, zh]);
+  }, [aboutDecisions, calibrationAnswers, customRules, deepRun, leaveToApp, understandConfirming, writingDecisions, zh]);
 
-  const launchStep3ProjectSetup = useCallback(async () => {
-    if (!selectedFolderPath || busy) return;
-    setBusy(true);
-    setError(null);
-    setProjectView('analyzing');
+  // Page 2: Fast multi-project creation + async background project understanding (never blocks chat entry!)
+  const launchProjectCreation = useCallback(async () => {
+    const paths = [...selectedFolderPaths];
+    if (paths.length === 0 || projectsCreating) return;
+    setProjectsCreating(true);
+    setProjectError(null);
     try {
-      const policy = processingTarget?.remoteModel === false ? 'local_only' : 'remote_allowed';
-      await grantUnderstandingWorkFolder(selectedFolderPath, policy);
-      const started = await startWorkDiscoveryRun(selectedFolderPath);
-      applyProjectRunState(started);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-      setProjectView('select');
-    } finally {
-      setBusy(false);
-    }
-  }, [applyProjectRunState, busy, processingTarget?.remoteModel, selectedFolderPath]);
+      const settled = await Promise.allSettled(
+        paths.map(async (workspacePath) => {
+          const resolved = await resolveWorkspaceProject({ workspacePath, autoCreate: true });
+          if (!resolved.project) {
+            throw new Error(zh
+              ? `目录不可作为项目根目录：${compactPath(workspacePath)}`
+              : `Folder cannot be used as a project root: ${compactPath(workspacePath)}`);
+          }
+          const project = resolved.project;
+          window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
+          let understandingStatus: ProjectUnderstanding['status'] = 'queued';
+          try {
+            const started = await startProjectUnderstanding(project.id);
+            understandingStatus = started.status;
+          } catch {
+            understandingStatus = 'failed';
+          }
+          return {
+            project,
+            created: resolved.created !== false,
+            understandingStatus,
+            overview: null,
+          } satisfies CreatedOnboardingProject;
+        }),
+      );
 
-  const handleFinishAll = useCallback(async () => {
+      if (!mountedRef.current) return;
+
+      const succeeded: CreatedOnboardingProject[] = [];
+      const failures: string[] = [];
+      for (const result of settled) {
+        if (result.status === 'fulfilled') succeeded.push(result.value);
+        else failures.push(result.reason instanceof Error ? result.reason.message : String(result.reason));
+      }
+
+      if (failures.length > 0) {
+        setProjectError(failures.join(' · '));
+      }
+
+      if (succeeded.length > 0) {
+        setCreatedProjects((prev) => {
+          const byId = new Map(prev.map((entry) => [entry.project.id, entry]));
+          for (const entry of succeeded) byId.set(entry.project.id, entry);
+          return [...byId.values()];
+        });
+        setProjectView('created');
+      }
+    } finally {
+      if (mountedRef.current) setProjectsCreating(false);
+    }
+  }, [projectsCreating, selectedFolderPaths, zh]);
+
+  const retryProjectUnderstanding = useCallback(async (projectId: string) => {
+    setCreatedProjects((prev) => prev.map((entry) => (
+      entry.project.id === projectId ? { ...entry, understandingStatus: 'queued' } : entry
+    )));
+    try {
+      const started = await startProjectUnderstanding(projectId);
+      if (!mountedRef.current) return;
+      setCreatedProjects((prev) => prev.map((entry) => (
+        entry.project.id === projectId ? { ...entry, understandingStatus: started.status } : entry
+      )));
+    } catch {
+      if (!mountedRef.current) return;
+      setCreatedProjects((prev) => prev.map((entry) => (
+        entry.project.id === projectId ? { ...entry, understandingStatus: 'failed' } : entry
+      )));
+    }
+  }, []);
+
+  const handleSkipToChat = useCallback(async () => {
     await dismissWorkDiscoveryOnboarding().catch(() => {});
     leaveToApp();
   }, [leaveToApp]);
 
-  const handleEnterProjectChat = useCallback(async (suggestion?: NonNullable<WorkDiscoveryRun['result']>['suggestions'][number]) => {
-    if (!projectRun) {
-      await handleFinishAll();
-      return;
-    }
-    setBusy(true);
-    try {
-      await submitWorkDiscoveryRecognitionFeedback(projectRun.id, 'confirmed').catch(() => {});
-      if (suggestion) {
-        await selectWorkDiscoverySuggestion(projectRun.id, suggestion.id).catch(() => {});
-      }
-      leaveToApp({
-        conversationId: projectRun.conversationId,
-        prompt: suggestion?.actionPrompt ?? projectRun.result?.conversationStarter,
-      });
-    } finally {
-      setBusy(false);
-    }
-  }, [handleFinishAll, leaveToApp, projectRun]);
+  const handleOpenProjectChat = useCallback((projectId: string) => {
+    void dismissWorkDiscoveryOnboarding().catch(() => {});
+    leaveToApp({ projectId });
+  }, [leaveToApp]);
 
   const addCustomRule = () => {
     const trimmed = newRuleText.trim();
@@ -684,20 +778,21 @@ export function DeepUnderstandingOnboarding({
     });
   }, [deepRun, selectedTier1, selectedTier2, zh]);
 
-  const projectSignals: UnderstandingSignal[] = useMemo(() => {
-    const name = selectedFolderPath ? (selectedFolderPath.replaceAll('\\', '/').split('/').filter(Boolean).pop() ?? selectedFolderPath) : 'Workspace';
-    return [
-      { id: 'folder', label: name, kind: 'folder' },
-      { id: 'git', label: zh ? 'Git 进展' : 'Git Activity', kind: 'git' },
-      { id: 'docs', label: zh ? '项目文档' : 'Project Docs', kind: 'file' },
-    ];
-  }, [selectedFolderPath, zh]);
-
   const reveal = deepRun?.result;
+  const understandRunning = understandLaunching || deepRun?.status === 'running';
+  const understandReady = !deepConfirmed && deepRun?.status === 'completed' && Boolean(deepRun.result);
+  const anyProjectUnderstandingRunning = createdProjects.some((entry) => isProjectUnderstandingRunning(entry.understandingStatus));
+  const allProjectsUnderstood = createdProjects.length > 0 && !anyProjectUnderstandingRunning
+    && createdProjects.every((entry) => entry.understandingStatus === 'completed');
+  const activeError = step === 'understand' ? understandError : projectError;
+  const clearActiveError = () => {
+    if (step === 'understand') setUnderstandError(null);
+    else setProjectError(null);
+  };
 
   return (
     <div className="xopc-onboarding-experience flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-base text-fg">
-      {/* Clean top bar — clears macOS left traffic lights AND Windows right caption buttons; zero top-left text or broken skip */}
+      {/* Clean top bar — clears macOS left traffic lights AND Windows right caption buttons; tabs are always independently clickable */}
       {!embedded ? (
         <header
           className={cn(
@@ -722,6 +817,11 @@ export function DeepUnderstandingOnboarding({
             >
               <span>1</span>
               <span>{zh ? '认识你' : 'About You'}</span>
+              {understandRunning ? (
+                <Loader2 className={cn('size-3 animate-spin', step === 'understand' ? 'text-surface-panel' : 'text-accent-fg')} aria-hidden />
+              ) : understandReady || deepConfirmed ? (
+                <Check className={cn('size-3', step === 'understand' ? 'text-surface-panel' : 'text-success')} aria-hidden />
+              ) : null}
             </button>
             <button
               type="button"
@@ -733,6 +833,11 @@ export function DeepUnderstandingOnboarding({
             >
               <span>2</span>
               <span>{zh ? '工作项目' : 'Workspace'}</span>
+              {anyProjectUnderstandingRunning ? (
+                <Loader2 className={cn('size-3 animate-spin', step === 'projects' ? 'text-surface-panel' : 'text-accent-fg')} aria-hidden />
+              ) : allProjectsUnderstood ? (
+                <Check className={cn('size-3', step === 'projects' ? 'text-surface-panel' : 'text-success')} aria-hidden />
+              ) : null}
             </button>
           </nav>
           <div
@@ -747,17 +852,17 @@ export function DeepUnderstandingOnboarding({
       {/* Scrollable centered Apple-style canvas */}
       <main className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8">
         <div className="mx-auto flex w-full max-w-[38rem] flex-col">
-          {error ? (
+          {activeError ? (
             <div role="alert" className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-xs text-danger">
-              <span>{error}</span>
-              <button type="button" onClick={() => setError(null)} aria-label={zh ? '关闭提示' : 'Dismiss'}>
+              <span>{activeError}</span>
+              <button type="button" onClick={clearActiveError} aria-label={zh ? '关闭提示' : 'Dismiss'}>
                 <X className="size-3.5" />
               </button>
             </div>
           ) : null}
 
           {/* ============================================================== */}
-          {/* STEP 2: ABOUT YOU (Local Sources + Remote Connectors)          */}
+          {/* PAGE 1: ABOUT YOU (Local Sources + Remote Connectors)          */}
           {/* ============================================================== */}
           {step === 'understand' && understandView === 'select' ? (
             <section className="space-y-6" aria-label={zh ? '认识你' : 'Get to know you'}>
@@ -767,11 +872,11 @@ export function DeepUnderstandingOnboarding({
                   {zh ? '认识你' : 'Get to know you'}
                 </h1>
                 <p className="mt-1 text-sm text-fg-muted">
-                  {zh ? '选择想要了解的来源，随时可改可删。' : 'Pick what to learn from. Editable anytime.'}
+                  {zh ? '选好来源后将在后台异步理解，可随时切去建立项目。' : 'Selected sources run in the background — switch to projects anytime.'}
                 </p>
               </div>
 
-              {/* Group 1: Local Sources (only detected items + compact Apple chips) */}
+              {/* Group 1: Local Sources */}
               <div className="overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-surface">
                 <div className="flex items-center justify-between border-b border-edge-subtle px-4 py-2.5">
                   <span className="text-xs font-medium text-fg-muted">
@@ -787,7 +892,7 @@ export function DeepUnderstandingOnboarding({
                   </button>
                 </div>
 
-                {loadingDiscovery ? (
+                {loadingLocalSources ? (
                   <div className="space-y-2 p-3" aria-busy>
                     <Skeleton className="h-11 rounded-xl" />
                     <Skeleton className="h-11 rounded-xl" />
@@ -877,7 +982,7 @@ export function DeepUnderstandingOnboarding({
                               onClick={() => {
                                 const next = customNoteDirs.filter((item) => item !== dir);
                                 setCustomNoteDirs(next);
-                                void refreshPreviews(next);
+                                void refreshLocalSources(next);
                               }}
                               aria-label={zh ? '移除目录' : 'Remove directory'}
                               className="hover:text-fg"
@@ -889,7 +994,7 @@ export function DeepUnderstandingOnboarding({
                       </div>
                     ) : null}
 
-                    {/* Compact macOS Apple Apps row (darwin only, opt-in, zero verbose copy) */}
+                    {/* Compact macOS Apple Apps row (darwin only) */}
                     {hostPlatform === 'darwin' && tier2Sources.length > 0 ? (
                       <div className="flex flex-wrap items-center gap-2 bg-surface-base/35 px-4 py-3">
                         <span className="mr-1 text-[11px] text-fg-subtle">Apple</span>
@@ -922,16 +1027,20 @@ export function DeepUnderstandingOnboarding({
                 )}
               </div>
 
-              {/* Group 2: Remote Connectors (compact Apple-style chips) */}
+              {/* Group 2: Remote Connectors (binding starts background account learning automatically) */}
               <div className="overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-surface">
                 <div className="flex items-center justify-between border-b border-edge-subtle px-4 py-2.5">
                   <span className="text-xs font-medium text-fg-muted">
-                    {zh ? '云端服务（可选）' : 'Cloud services (optional)'}
+                    {zh ? '云端服务（绑定后自动后台学习）' : 'Cloud services (syncs in background)'}
                   </span>
                   {connectedRemoteCount > 0 ? (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
                       <CheckCircle2 className="size-3.5" aria-hidden />
-                      <span>{zh ? `已连接 ${connectedRemoteCount}` : `${connectedRemoteCount} connected`}</span>
+                      <span>
+                        {sessionConnectedIds.size > 0
+                          ? (zh ? `已连接 ${connectedRemoteCount} · 后台同步` : `${connectedRemoteCount} connected · syncing`)
+                          : (zh ? `已连接 ${connectedRemoteCount}` : `${connectedRemoteCount} connected`)}
+                      </span>
                     </span>
                   ) : null}
                 </div>
@@ -967,14 +1076,14 @@ export function DeepUnderstandingOnboarding({
             </section>
           ) : null}
 
-          {/* STEP 2: ANALYZING */}
+          {/* PAGE 1: ANALYZING (User may wait OR jump straight to Page 2) */}
           {step === 'understand' && understandView === 'analyzing' ? (
             <section className="flex flex-col items-center py-6 text-center" aria-live="polite">
               <h2 className="text-xl font-semibold tracking-tight text-fg">
                 {zh ? '正在认识你' : 'Getting to know you'}
               </h2>
               <p className="mt-1 text-xs text-fg-muted">
-                {zh ? '可随时切到下一步建立项目，分析会在后台继续。' : 'You can move on to set up a workspace while this finishes in the background.'}
+                {zh ? '可在此等待，或直接去选择工作项目，分析会在后台继续。' : 'Wait here or move on to projects — this continues in the background.'}
               </p>
               <UnderstandingSourceConvergence
                 signals={convergenceSignals}
@@ -984,7 +1093,7 @@ export function DeepUnderstandingOnboarding({
             </section>
           ) : null}
 
-          {/* STEP 2: REVEAL & CALIBRATION */}
+          {/* PAGE 1: REVEAL & CALIBRATION */}
           {step === 'understand' && understandView === 'reveal' && reveal ? (
             <section className="space-y-4" aria-label={zh ? '确认对你的认识' : 'Review understanding'}>
               <div className="flex items-center justify-between">
@@ -1041,8 +1150,8 @@ export function DeepUnderstandingOnboarding({
                                 </p>
                                 <div className="mt-0.5 flex items-center gap-2 text-[11px] text-fg-muted">
                                   {domainMeta ? <span>{zh ? domainMeta.zh : domainMeta.en}</span> : null}
-                                  {(item.sourceIds?.length ?? 0) >= 2 ? (
-                                    <span className="text-accent-fg">{zh ? `${item.sourceIds!.length} 源印证` : `${item.sourceIds!.length} sources`}</span>
+                                  {item.sourceIds && item.sourceIds.length >= 2 ? (
+                                    <span className="text-accent-fg">{zh ? `${item.sourceIds.length} 源印证` : `${item.sourceIds.length} sources`}</span>
                                   ) : null}
                                 </div>
                               </div>
@@ -1196,8 +1305,8 @@ export function DeepUnderstandingOnboarding({
                       <button
                         key={thread.id}
                         type="button"
-                        disabled={busy}
-                        onClick={() => void commitStep2Confirmation(thread)}
+                        disabled={understandConfirming}
+                        onClick={() => void commitStep1Confirmation(thread)}
                         className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover/50"
                       >
                         <div className="min-w-0 flex-1">
@@ -1244,19 +1353,19 @@ export function DeepUnderstandingOnboarding({
           ) : null}
 
           {/* ============================================================== */}
-          {/* STEP 3: LOCAL WORKSPACE FOLDER -> CREATE PROJECT & UNDERSTAND  */}
+          {/* PAGE 2: MULTI-PROJECT SELECTION -> INSTANT CREATE + ASYNC RUN  */}
           {/* ============================================================== */}
           {step === 'projects' ? (
-            <section className="space-y-5" aria-label={zh ? '建立工作项目' : 'Set up a workspace project'}>
-              {/* Background Step 2 Status Pill */}
-              {deepRun && !deepConfirmed ? (
+            <section className="space-y-5" aria-label={zh ? '建立工作项目' : 'Set up workspace projects'}>
+              {/* Non-blocking Page 1 Status Pill */}
+              {understandRunning || understandReady ? (
                 <div className="flex justify-center">
-                  {deepRun.status === 'running' ? (
+                  {understandRunning ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-panel px-3 py-1 text-xs text-fg-muted shadow-surface">
                       <Loader2 className="size-3 animate-spin text-accent-fg" aria-hidden />
                       <span>{zh ? '后台正在认识你…' : 'Learning about you in background…'}</span>
                     </span>
-                  ) : deepRun.status === 'completed' && deepRun.result ? (
+                  ) : (
                     <button
                       type="button"
                       onClick={() => {
@@ -1268,7 +1377,7 @@ export function DeepUnderstandingOnboarding({
                       <Sparkles className="size-3" aria-hidden />
                       <span>{zh ? '个人画像已就绪 · 点击校准' : 'Your profile is ready · Review'}</span>
                     </button>
-                  ) : null}
+                  )}
                 </div>
               ) : null}
 
@@ -1279,15 +1388,36 @@ export function DeepUnderstandingOnboarding({
                       <FolderGit2 className="size-6" aria-hidden />
                     </span>
                     <h1 className="text-2xl font-semibold tracking-tight text-fg">
-                      {zh ? '建立你的第一个项目' : 'Set up a workspace'}
+                      {zh ? '选择工作项目' : 'Choose your projects'}
                     </h1>
                     <p className="mt-1 text-sm text-fg-muted">
-                      {zh ? '选择一个本地目录，自动建立项目并梳理近期进展。' : 'Pick a local folder to create a project and map recent progress.'}
+                      {zh ? '支持多选本地目录，建好项目即可直接对话，理解在后台自动完成。' : 'Select one or more folders. Projects open immediately while analysis runs in the background.'}
                     </p>
                   </div>
 
                   <div className="overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-surface">
-                    {loadingDiscovery ? (
+                    <div className="flex items-center justify-between border-b border-edge-subtle px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-fg-muted">
+                          {zh ? '本机工作目录' : 'Local folders'}
+                        </span>
+                        {selectedFolderPaths.size > 0 ? (
+                          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg">
+                            {zh ? `已选 ${selectedFolderPaths.size}` : `${selectedFolderPaths.size} selected`}
+                          </span>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openFolderPicker('project')}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
+                      >
+                        <FolderPlus className="size-3.5" aria-hidden />
+                        <span>{zh ? '添加文件夹' : 'Add folder'}</span>
+                      </button>
+                    </div>
+
+                    {loadingWorkFolders ? (
                       <div className="space-y-2 p-3" aria-busy>
                         <Skeleton className="h-12 rounded-xl" />
                         <Skeleton className="h-12 rounded-xl" />
@@ -1295,12 +1425,12 @@ export function DeepUnderstandingOnboarding({
                     ) : (
                       <div className="divide-y divide-edge-subtle">
                         {allWorkFolders.map((folder) => {
-                          const selected = selectedFolderPath === folder.path;
+                          const selected = selectedFolderPaths.has(folder.path);
                           return (
                             <button
                               key={folder.path}
                               type="button"
-                              onClick={() => setSelectedFolderPath(folder.path)}
+                              onClick={() => toggleWorkFolder(folder.path)}
                               aria-pressed={selected}
                               className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover/50"
                             >
@@ -1311,7 +1441,14 @@ export function DeepUnderstandingOnboarding({
                                 {folder.isRepo ? <GitBranch className="size-4" aria-hidden /> : <FolderOpen className="size-4" aria-hidden />}
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-medium text-fg">{folder.name}</span>
+                                <span className="flex items-center gap-2">
+                                  <span className="truncate text-sm font-medium text-fg">{folder.name}</span>
+                                  {folder.existingProject ? (
+                                    <span className="shrink-0 rounded bg-surface-inset px-1.5 py-0.5 text-[10px] text-fg-muted">
+                                      {zh ? '已有项目' : 'Existing'}
+                                    </span>
+                                  ) : null}
+                                </span>
                                 <span className="block truncate text-xs text-fg-muted">{folder.meta}</span>
                               </span>
                               <span className={cn(
@@ -1340,58 +1477,85 @@ export function DeepUnderstandingOnboarding({
                 </>
               ) : null}
 
-              {projectView === 'analyzing' ? (
-                <div className="flex flex-col items-center py-6 text-center" aria-live="polite">
-                  <h2 className="text-xl font-semibold tracking-tight text-fg">
-                    {zh ? '正在建立项目并理解目录' : 'Setting up your project'}
-                  </h2>
-                  <p className="mt-1 text-xs text-fg-muted">
-                    {zh ? '可随时先进入工作台，理解会在后台完成。' : 'You can enter the workspace now while analysis finishes in the background.'}
-                  </p>
-                  <UnderstandingSourceConvergence
-                    signals={projectSignals}
-                    ariaLabel={projectStageLabel(projectRun?.stage, zh)}
-                    centerLabel={projectStageLabel(projectRun?.stage, zh)}
-                  />
-                </div>
-              ) : null}
-
-              {projectView === 'ready' && projectRun?.result ? (
-                <div className="space-y-4">
+              {projectView === 'created' && createdProjects.length > 0 ? (
+                <div className="space-y-5">
                   <div className="flex flex-col items-center text-center">
-                    <span className="mb-2 flex size-10 items-center justify-center rounded-full bg-success-soft text-success">
+                    <span className={cn(
+                      'mb-2.5 flex size-11 items-center justify-center rounded-full',
+                      allProjectsUnderstood ? 'bg-success-soft text-success' : 'bg-accent-soft text-accent-fg',
+                    )}>
                       <CheckCircle2 className="size-5" aria-hidden />
                     </span>
                     <h2 className="text-xl font-semibold tracking-tight text-fg">
-                      {zh ? '项目已就绪' : 'Project is ready'}
+                      {allProjectsUnderstood
+                        ? (zh ? '项目理解已完成' : 'Projects ready')
+                        : (createdProjects.length === 1
+                          ? (zh ? '项目已创建' : 'Project created')
+                          : (zh ? `已创建 ${createdProjects.length} 个项目` : `${createdProjects.length} projects created`))}
                     </h2>
-                    <p className="mt-1 max-w-md text-xs text-fg-muted">{projectRun.result.projectSummary}</p>
+                    <p className="mt-1 max-w-md text-xs text-fg-muted">
+                      {anyProjectUnderstandingRunning
+                        ? (zh ? '后台正在异步理解项目，现在就可以直接进入对话，也可以在此等待。' : 'Understanding runs in the background. Open any project chat now, or wait here.')
+                        : (zh ? '点击任意项目即可开始对话。' : 'Open any project below to start chatting.')}
+                    </p>
                   </div>
 
-                  {projectRun.result.suggestions.length > 0 ? (
-                    <div className="overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-surface">
-                      <div className="border-b border-edge-subtle px-4 py-2 text-xs font-medium text-fg-muted">
-                        {zh ? '推荐第一步' : 'Suggested next steps'}
-                      </div>
-                      <div className="divide-y divide-edge-subtle">
-                        {projectRun.result.suggestions.slice(0, 3).map((suggestion) => (
-                          <button
-                            key={suggestion.id}
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void handleEnterProjectChat(suggestion)}
-                            className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover/50"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium text-fg group-hover:text-accent-fg">{suggestion.title}</div>
-                              <div className="mt-0.5 truncate text-xs text-fg-muted">{suggestion.rationale}</div>
+                  <div className="overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-surface">
+                    <div className="divide-y divide-edge-subtle">
+                      {createdProjects.map((entry) => {
+                        const running = isProjectUnderstandingRunning(entry.understandingStatus);
+                        const completed = entry.understandingStatus === 'completed';
+                        const failed = entry.understandingStatus === 'failed' || entry.understandingStatus === 'canceled';
+                        const snippet = compactOverviewSnippet(entry.overview);
+                        return (
+                          <div key={entry.project.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
+                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-fg">
+                                <FolderGit2 className="size-4" aria-hidden />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="truncate text-sm font-medium text-fg">{entry.project.name}</span>
+                                  {running ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg">
+                                      <Loader2 className="size-2.5 animate-spin" aria-hidden />
+                                      <span>{zh ? '后台理解中…' : 'Analyzing…'}</span>
+                                    </span>
+                                  ) : completed ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-[11px] font-medium text-success">
+                                      <Check className="size-2.5" aria-hidden />
+                                      <span>{zh ? '已理解' : 'Ready'}</span>
+                                    </span>
+                                  ) : failed ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => void retryProjectUnderstanding(entry.project.id)}
+                                      className="inline-flex items-center gap-1 rounded-full border border-edge px-2 py-0.5 text-[11px] text-fg-muted hover:text-fg"
+                                    >
+                                      <RotateCcw className="size-2.5" aria-hidden />
+                                      <span>{zh ? '重试理解' : 'Retry'}</span>
+                                    </button>
+                                  ) : null}
+                                </div>
+                                <div className="mt-0.5 truncate text-xs text-fg-muted">
+                                  {snippet ?? (entry.project.workspaceRoot ? compactPath(entry.project.workspaceRoot) : '')}
+                                </div>
+                              </div>
                             </div>
-                            <ArrowRight className="size-4 shrink-0 text-fg-muted group-hover:text-accent-fg" aria-hidden />
-                          </button>
-                        ))}
-                      </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => handleOpenProjectChat(entry.project.id)}
+                              className="h-8 shrink-0 gap-1 rounded-lg px-2.5 text-xs font-medium text-accent-fg hover:bg-accent-soft"
+                            >
+                              <MessageSquare className="size-3.5" aria-hidden />
+                              <span>{zh ? '进入对话' : 'Chat'}</span>
+                            </Button>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ) : null}
+                  </div>
                 </div>
               ) : null}
             </section>
@@ -1399,10 +1563,10 @@ export function DeepUnderstandingOnboarding({
         </div>
       </main>
 
-      {/* Pinned Apple-style Footer Bar — primary CTA & skip always visible above the fold */}
+      {/* Pinned Apple-style Footer Bar — each page's controls are independent and never cross-blocked */}
       <footer className="shrink-0 border-t border-edge-subtle bg-surface-panel/90 px-5 py-3.5 backdrop-blur-md sm:px-8">
         <div className="mx-auto flex w-full max-w-[38rem] items-center justify-between gap-3">
-          {/* STEP 2 FOOTERS */}
+          {/* PAGE 1 FOOTERS */}
           {step === 'understand' && understandView === 'select' ? (
             <>
               <Button
@@ -1424,14 +1588,14 @@ export function DeepUnderstandingOnboarding({
                 </span>
                 <Button
                   type="button"
-                  disabled={busy}
-                  onClick={() => void launchStep2Understanding()}
+                  disabled={understandLaunching}
+                  onClick={() => void launchStep1Understanding()}
                   className="h-9 gap-1.5 rounded-xl px-4 text-sm font-medium"
                 >
                   <span>
                     {selectedLocalCount > 0
                       ? (zh ? '开始认识我' : 'Start learning')
-                      : (zh ? '下一步' : 'Next')}
+                      : (zh ? '下一步：工作项目' : 'Next: Projects')}
                   </span>
                   <ArrowRight className="size-4" aria-hidden />
                 </Button>
@@ -1457,7 +1621,7 @@ export function DeepUnderstandingOnboarding({
                 onClick={() => setStep('projects')}
                 className="h-9 gap-1.5 rounded-xl px-4 text-sm font-medium"
               >
-                <span>{zh ? '后台继续，下一步：工作项目' : 'Continue in background → Workspace'}</span>
+                <span>{zh ? '后台继续，去选项目' : 'Continue in background → Projects'}</span>
                 <ArrowRight className="size-4" aria-hidden />
               </Button>
             </>
@@ -1468,25 +1632,25 @@ export function DeepUnderstandingOnboarding({
               <Button
                 type="button"
                 variant="ghost"
-                disabled={busy}
-                onClick={() => void commitStep2Confirmation('finish')}
+                disabled={understandConfirming}
+                onClick={() => void commitStep1Confirmation('finish')}
                 className="text-xs text-fg-muted hover:text-fg"
               >
-                {zh ? '跳过项目，直接进入' : 'Skip workspace'}
+                {zh ? '保存并进入对话' : 'Save & start chatting'}
               </Button>
               <Button
                 type="button"
-                disabled={busy}
-                onClick={() => void commitStep2Confirmation('projects')}
+                disabled={understandConfirming}
+                onClick={() => void commitStep1Confirmation('projects')}
                 className="h-9 gap-1.5 rounded-xl px-4 text-sm font-medium"
               >
-                <span>{zh ? '保存，下一步：工作项目' : 'Save & set up workspace'}</span>
+                <span>{zh ? '保存，下一步：工作项目' : 'Save & choose projects'}</span>
                 <ArrowRight className="size-4" aria-hidden />
               </Button>
             </>
           ) : null}
 
-          {/* STEP 3 FOOTERS */}
+          {/* PAGE 2 FOOTERS */}
           {step === 'projects' && projectView === 'select' ? (
             <>
               <div className="flex items-center gap-1">
@@ -1502,69 +1666,69 @@ export function DeepUnderstandingOnboarding({
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => void handleFinishAll()}
+                  onClick={() => void handleSkipToChat()}
                   className="text-xs text-fg-muted hover:text-fg"
                 >
-                  {zh ? '跳过' : 'Skip'}
+                  {zh ? '跳过，直接对话' : 'Skip to chat'}
                 </Button>
               </div>
               <Button
                 type="button"
-                disabled={busy || !selectedFolderPath}
-                onClick={() => void launchStep3ProjectSetup()}
+                disabled={projectsCreating || selectedFolderPaths.size === 0}
+                onClick={() => void launchProjectCreation()}
                 className="h-9 gap-1.5 rounded-xl px-4 text-sm font-medium"
               >
-                <span>{zh ? '建立项目并理解' : 'Create project & analyze'}</span>
-                <ArrowRight className="size-4" aria-hidden />
+                {projectsCreating ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                    <span>{zh ? '正在创建项目…' : 'Creating…'}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>
+                      {selectedFolderPaths.size > 1
+                        ? (zh ? `创建 ${selectedFolderPaths.size} 个项目并理解` : `Create ${selectedFolderPaths.size} projects`)
+                        : (zh ? '创建项目并理解' : 'Create project & analyze')}
+                    </span>
+                    <ArrowRight className="size-4" aria-hidden />
+                  </>
+                )}
               </Button>
             </>
           ) : null}
 
-          {step === 'projects' && projectView === 'analyzing' ? (
-            <>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  if (projectRun?.id) void cancelWorkDiscoveryRun(projectRun.id).catch(() => {});
-                  setProjectView('select');
-                }}
-                className="text-xs text-fg-muted hover:text-fg"
-              >
-                {zh ? '取消' : 'Cancel'}
-              </Button>
-              <Button
-                type="button"
-                onClick={() => void handleFinishAll()}
-                className="h-9 gap-1.5 rounded-xl px-4 text-sm font-medium"
-              >
-                <span>{zh ? '后台继续，进入工作台' : 'Continue in background'}</span>
-                <ArrowRight className="size-4" aria-hidden />
-              </Button>
-            </>
-          ) : null}
-
-          {step === 'projects' && projectView === 'ready' ? (
-            <>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => void handleFinishAll()}
-                className="text-xs text-fg-muted hover:text-fg"
-              >
-                {zh ? '稍后再看' : 'Later'}
-              </Button>
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() => void handleEnterProjectChat()}
-                className="h-9 gap-1.5 rounded-xl px-4 text-sm font-medium"
-              >
-                <span>{zh ? '进入项目对话' : 'Open project chat'}</span>
-                <ArrowRight className="size-4" aria-hidden />
-              </Button>
-            </>
-          ) : null}
+          {step === 'projects' && projectView === 'created' && createdProjects[0] ? (() => {
+            const primaryProject = createdProjects[0].project;
+            return (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setProjectView('select')}
+                  className="gap-1 px-2 text-xs text-fg-muted hover:text-fg"
+                >
+                  <Plus className="size-3.5" aria-hidden />
+                  <span>{zh ? '继续添加项目' : 'Add more projects'}</span>
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleOpenProjectChat(primaryProject.id)}
+                  className="h-9 gap-1.5 rounded-xl px-4 text-sm font-medium"
+                >
+                  <span>
+                    {createdProjects.length === 1
+                      ? (anyProjectUnderstandingRunning
+                        ? (zh ? `直接进入「${primaryProject.name}」对话` : `Open ${primaryProject.name} now`)
+                        : (zh ? `进入「${primaryProject.name}」对话` : `Open ${primaryProject.name}`))
+                      : (anyProjectUnderstandingRunning
+                        ? (zh ? '跳过等待，直接进入对话' : 'Open project chat now')
+                        : (zh ? '进入项目对话' : 'Open project chat'))}
+                  </span>
+                  <ArrowRight className="size-4" aria-hidden />
+                </Button>
+              </>
+            );
+          })() : null}
         </div>
       </footer>
 
@@ -1582,7 +1746,8 @@ export function DeepUnderstandingOnboarding({
           onChange={setInstallDraft}
           onClose={() => setInstallDraft(null)}
           t={connectorCopy}
-          onInstalled={async () => {
+          onInstalled={async (instance) => {
+            setSessionConnectedIds((prev) => new Set(prev).add(instance.connectorId));
             await loadConnectorInstances();
             setInstallDraft(null);
           }}

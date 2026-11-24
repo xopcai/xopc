@@ -5,7 +5,7 @@
     "step0Title": "What should I call you?",
     "step0Subtitle": "You can change this anytime.",
     "step1Title": "Choose an AI service",
-    "step1Subtitle": "We’ll automatically configure its recommended model.",
+    "step1Subtitle": "The recommended model is set up automatically.",
     "step2Title": "Enter your API key",
     "step2Subtitle": "Connect securely to continue.",
     "step2Placeholder": "Paste your API key here",
@@ -16,7 +16,7 @@
     "continue": "Continue",
     "savingProfile": "Remembering…",
     "skipCallName": "Skip — I'll set this later",
-    "skipSetup": "Skip — I'll set this up later",
+    "skipSetup": "Skip setup",
     "stepOf": "Step {{current}} of {{total}}",
     "providerRecommended": "Recommended",
     "workDiscovery": {

@@ -1,12 +1,24 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { normalizeContext } from '@earendil-works/pi-ai';
+import { getModel } from '@earendil-works/pi-ai/compat';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  acquireEmbeddedSessionRunner,
   buildEmbeddedRunnerFingerprint,
+  drainEmbeddedSessionRunnerShutdowns,
   evictEmbeddedSessionRunner,
   getEmbeddedSessionRunnerStats,
   isEmbeddedSessionRunnerEnabled,
   resetEmbeddedSessionRunnerForTest,
 } from '../session-runner.js';
+import { InMemoryTranscriptRuntime } from '../transcript-runtime.js';
+import { PROMPT_CACHE_BOUNDARY } from '../../prompt/cache-boundary.js';
+import { seedTestAgentCatalog } from '../../../agent-catalog/test-support.js';
+import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../storage/sqlite/connection.js';
 
 describe('EmbeddedSessionRunner fingerprint', () => {
   afterEach(() => {
@@ -81,5 +93,53 @@ describe('EmbeddedSessionRunner fingerprint', () => {
     evictEmbeddedSessionRunner('missing-session');
     expect(getEmbeddedSessionRunnerStats().evictions).toBe(before);
     expect(getEmbeddedSessionRunnerStats().pooled).toBe(0);
+  });
+
+  it('sends one stable cache identity and applies the latest policy on runner reuse', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'xopc-runner-cache-'));
+    vi.stubEnv('XOPC_STATE_DIR', cwd);
+    const transcriptRuntime = new InMemoryTranscriptRuntime({ runtimeId: 'cache-runner', cwd });
+    const model = getModel('openai', 'gpt-6.2-sol');
+    const params = { runtimeId: transcriptRuntime.runtimeId, transcriptId: transcriptRuntime.transcriptId,
+      workspaceDir: cwd, model, modelRef: 'openai/gpt-6.2-sol', systemPrompt: 'stable', tools: [],
+      thinkingLevel: 'off' as const, transcriptRuntime };
+    const payloads: Array<Record<string, unknown>> = [];
+    const fetch: typeof globalThis.fetch = async (_url, init) => {
+      payloads.push(JSON.parse(String(init?.body)));
+      const event = { type: 'response.completed', response: { id: 'fixture', status: 'completed', output: [],
+        usage: { input_tokens: 20, output_tokens: 0, total_tokens: 20 } } };
+      return new Response(`data: ${JSON.stringify(event)}\n\n`, { headers: { 'content-type': 'text/event-stream' } });
+    };
+    try {
+      openXopcDatabase({ path: join(cwd, 'xopc.db') });
+      seedTestAgentCatalog({ agents: [{ id: 'main', enabled: true, workspace: cwd }] });
+      for (const [index, mode] of ['auto', 'auto', 'off'].entries()) {
+        const runner = await acquireEmbeddedSessionRunner({ ...params,
+          promptCachePolicy: { mode: mode === 'off' ? 'off' : 'auto', lifetime: 'short' } });
+        try {
+          expect(runner.reused).toBe(index > 0);
+          const context = normalizeContext({
+            systemPrompt: `stable${PROMPT_CACHE_BOUNDARY}dynamic ${index}`,
+            messages: [{ role: 'user', content: 'hello', timestamp: 0 }],
+          });
+          const stream = await runner.session.agent.streamFunction(model, context, { apiKey: 'sk-fixture', fetch, maxRetries: 0 });
+          expect((await stream.result()).errorMessage).toBeUndefined();
+        } finally {
+          runner.release();
+        }
+      }
+      expect(payloads[0]).toMatchObject({ instructions: 'dynamic 0', prompt_cache_key: expect.any(String) });
+      expect(payloads[1]).toMatchObject({ instructions: 'dynamic 1', prompt_cache_key: payloads[0]!.prompt_cache_key });
+      expect(payloads[0]!.input).toEqual(payloads[1]!.input);
+      expect(payloads[2]).not.toHaveProperty('prompt_cache_key');
+      expect(payloads[2]).toMatchObject({ prompt_cache_options: { mode: 'explicit' } });
+    } finally {
+      evictEmbeddedSessionRunner(transcriptRuntime.runtimeId);
+      await drainEmbeddedSessionRunnerShutdowns();
+      closeXopcDatabase();
+      resetXopcDatabaseSingletonForTest();
+      vi.unstubAllEnvs();
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 });

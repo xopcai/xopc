@@ -7,6 +7,7 @@ import type { AgentSession, ExtensionAPI, SettingsManager } from '@earendil-work
 import type { Model, Api } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
+import type { PromptCachePolicy } from '../../providers/prompt-cache-plan.js';
 import { guardSessionManager, type GuardedPiTranscriptManager } from './session-tool-result-guard.js';
 import { transformUserMessageForPersistence } from '../inbound/attachment-pipeline.js';
 import type { EmbeddedTranscriptRuntime } from './transcript-runtime.js';
@@ -102,6 +103,7 @@ export type AcquireEmbeddedSessionRunnerParams = {
   codemode?: CodemodePolicy;
   mcp?: NativeMcpConfig;
   executionToolPolicy?: ExecutionToolPolicy;
+  promptCachePolicy?: PromptCachePolicy;
 };
 
 export type AcquiredEmbeddedSessionRunner = {
@@ -223,7 +225,6 @@ export class EmbeddedSessionRunnerPool {
       entry.lastUsedAt = Date.now();
       reused = true;
       this.stats.reuses += 1;
-      entry.session.agent.streamFunction = entry.baseStreamFn;
       log.debug({ runtimeId: params.runtimeId, surface: executionToolPolicy.surface,
         policyRevision: executionToolPolicy.revision }, 'Reusing pooled embedded session runner');
     } else {
@@ -237,6 +238,9 @@ export class EmbeddedSessionRunnerPool {
         policyRevision: executionToolPolicy.revision }, 'Created embedded session runner');
     }
 
+    entry.session.agent.streamFunction = wrapStreamFnForXopcExtensions(
+      entry.baseStreamFn, params.promptCachePolicy, params.transcriptId,
+    );
     entry.activeLeases++;
     let released = false;
     return {
@@ -411,8 +415,7 @@ export class EmbeddedSessionRunnerPool {
     session.setActiveToolsByName(toolNames);
     await session.bindExtensions({});
 
-    const baseStreamFn = wrapStreamFnForXopcExtensions(session.agent.streamFunction);
-    session.agent.streamFunction = baseStreamFn;
+    const baseStreamFn = session.agent.streamFunction;
 
     const fingerprint = buildEmbeddedRunnerFingerprint({
       transcriptId,

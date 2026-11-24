@@ -73,7 +73,9 @@ Diagnostic logs include the session, stage, chunk, requested and actual output b
 
 ## Prompt caching
 
-xopc keeps stable instructions and project context ahead of a cache boundary, with heartbeat, channel, interaction, and active-project state after it. Provider adapters turn that boundary into separate cache blocks for Anthropic and Bedrock; implicit-prefix-cache providers receive the same ordering without the internal marker. OpenAI prompt cache routing uses a hash of the stable prompt and ordered tool schemas rather than the conversation id, so equivalent agents can reuse the same prefix while session identity remains independent.
+xopc puts stable instructions and project context before the cache boundary. Runtime and active-project state follow it. Anthropic and eligible Bedrock models use native cache points. Compatible OpenAI Responses models use implicit lookup for conversation history and an explicit breakpoint for the stable instructions. GPT-6.2 Responses carries current instructions separately. Compatible Codex models and the official DeepSeek V4.1 Flash endpoint can carry them as a system update after the history.
+
+XOPC Cloud sends a hashed transcript identifier and a verified prefix boundary. The gateway scopes the identifier to the authenticated caller and checks current route eligibility before preferring a recent successful target. It reports cached reads and writes when the upstream provides them. An omitted count means unknown.
 
 Set `runtime.promptCache` in **Settings → Agent defaults**, or override it for one Agent in the Agent editor. The value is `{ "mode": "off" | "auto", "lifetime": "short" | "long" }`. `auto` lets each provider adapter select its native cache mechanism. Long lifetime can increase cache-write cost and provider-side state retention, so use it only when the stable prefix is reused across longer idle intervals.
 

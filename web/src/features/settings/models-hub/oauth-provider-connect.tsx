@@ -1,5 +1,5 @@
 import { CheckCircle2, Cloud, Loader2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -18,12 +18,16 @@ export function OAuthProviderConnect({
   providerId,
   displayName,
   connected,
+  showIdleDescription = true,
+  secondaryAction,
   onConnected,
   onPendingChange,
 }: {
   providerId: string;
   displayName: string;
   connected: boolean;
+  showIdleDescription?: boolean;
+  secondaryAction?: ReactNode;
   onConnected?: () => void;
   onPendingChange?: (pending: boolean) => void;
 }) {
@@ -101,13 +105,22 @@ export function OAuthProviderConnect({
   };
 
   const active = connected || status === 'connected';
+  const authorizeButton = (
+    <Button type="button" variant={active ? 'secondary' : 'primary'} disabled={status === 'waiting'} onClick={() => void connect()}>
+      {status === 'waiting' ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+      {status === 'waiting' ? (zh ? '等待授权…' : 'Waiting…') : active ? (zh ? '重新授权' : 'Reauthorize') : (zh ? '授权' : 'Authorize')}
+    </Button>
+  );
+
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-edge bg-surface-inset p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface-active text-fg-muted"><Cloud className="size-5" aria-hidden /></span>
         <div className="min-w-0">
           <div className="flex items-center gap-2"><h2 className="text-sm font-semibold text-fg">{displayName}</h2>{active ? <CheckCircle2 className="size-4 text-emerald-500" aria-label={zh ? '已连接' : 'Connected'} /> : null}</div>
-          <p className="mt-1 text-sm text-fg-muted">{status === 'waiting' ? (zh ? '请在浏览器中完成 OAuth 授权。' : 'Complete OAuth authorization in your browser.') : active ? (zh ? '已通过 OAuth 连接。' : 'Connected with OAuth.') : (zh ? '使用 OAuth 连接，无需 API Key。' : 'Connect with OAuth. No API key is required.')}</p>
+          {status === 'waiting' || active || showIdleDescription ? (
+            <p className="mt-1 text-sm text-fg-muted">{status === 'waiting' ? (zh ? '请在浏览器中完成 OAuth 授权。' : 'Complete OAuth authorization in your browser.') : active ? (zh ? '已通过 OAuth 连接。' : 'Connected with OAuth.') : (zh ? '使用 OAuth 连接，无需 API Key。' : 'Connect with OAuth. No API key is required.')}</p>
+          ) : null}
           {status === 'waiting' && authorizationUrl ? (
             <a className="mt-1 inline-flex text-sm text-accent hover:underline" href={authorizationUrl} target="_blank" rel="noreferrer">
               {zh ? '打开授权页面' : 'Open authorization page'}
@@ -116,10 +129,12 @@ export function OAuthProviderConnect({
           {error ? <p className="mt-1 text-sm text-danger">{error}</p> : null}
         </div>
       </div>
-      <Button type="button" variant={active ? 'secondary' : 'primary'} disabled={status === 'waiting'} onClick={() => void connect()}>
-        {status === 'waiting' ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-        {status === 'waiting' ? (zh ? '等待授权…' : 'Waiting…') : active ? (zh ? '重新授权' : 'Reauthorize') : (zh ? '授权' : 'Authorize')}
-      </Button>
+      {secondaryAction ? (
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {secondaryAction}
+          {authorizeButton}
+        </div>
+      ) : authorizeButton}
     </div>
   );
 }

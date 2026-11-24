@@ -5,6 +5,7 @@ import { canonicalizeCacheValue, digestCacheText } from './prompt-cache-fingerpr
 import {
   resolvePromptCachePolicy,
   resolvePromptCacheProviderMode,
+  isOfficialOpenAIModel,
   supportsExplicitOpenAICache,
   type PromptCachePlan,
   type PromptCachePolicy,
@@ -122,23 +123,23 @@ function splitBedrockSystem(payload: unknown): unknown {
   for (let index = 0; index < record.system.length; index += 1) {
     const value = record.system[index];
     const block = asRecord(value);
-    const split = block && typeof block.text === 'string'
-      ? splitPromptCacheBoundary(block.text)
-      : undefined;
+    if (typeof block?.text !== 'string') {
+      system.push(value);
+      continue;
+    }
+    const split = splitPromptCacheBoundary(block.text);
     if (!split) {
       system.push(value);
       continue;
     }
-
     changed = true;
-    system.push({ ...block, text: split.stablePrefix });
     const next = asRecord(record.system[index + 1]);
-    if (next?.cachePoint) {
-      system.push(next);
-      index += 1;
-    } else {
-      system.push({ cachePoint: { type: 'default' } });
+    if (!next?.cachePoint) {
+      system.push({ ...block, text: stripPromptCacheBoundary(block.text) });
+      continue;
     }
+    system.push({ ...block, text: split.stablePrefix }, next);
+    index += 1;
     if (split.dynamicSuffix) system.push({ text: split.dynamicSuffix });
   }
   return changed ? { ...record, system } : payload;
@@ -147,6 +148,9 @@ function splitBedrockSystem(payload: unknown): unknown {
 function addBedrockHistoryBreakpoint(payload: unknown): unknown {
   const record = asRecord(payload);
   if (!record || !Array.isArray(record.messages)) return payload;
+  const checkpoint = Array.isArray(record.system)
+    ? record.system.map(asRecord).find(block => block?.cachePoint) : undefined;
+  if (!checkpoint) return payload;
   const messages = [...record.messages];
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = asRecord(messages[index]);
@@ -154,55 +158,28 @@ function addBedrockHistoryBreakpoint(payload: unknown): unknown {
     const content = [...message.content];
     const containsToolResult = content.some((block) => 'toolResult' in (asRecord(block) ?? {}));
     if (index === messages.length - 1 && !containsToolResult) continue;
-    content.push({ cachePoint: { type: 'default' } });
+    if (content.some(block => asRecord(block)?.cachePoint)) return payload;
+    content.push(checkpoint);
     messages[index] = { ...message, content };
     return { ...record, messages };
   }
   return payload;
 }
 
-function addBreakpointToContent(content: unknown): unknown {
-  if (typeof content === 'string') {
-    return [{ type: 'input_text', text: content, prompt_cache_breakpoint: { mode: 'explicit' } }];
-  }
-  if (!Array.isArray(content)) return content;
-  const blocks = [...content];
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = asRecord(blocks[index]);
-    if (!block) continue;
-    blocks[index] = { ...block, prompt_cache_breakpoint: { mode: 'explicit' } };
-    return blocks;
-  }
-  return content;
-}
-
-function addOpenAIHistoryBreakpoint(items: unknown): unknown {
-  if (!Array.isArray(items)) return items;
-  const next = [...items];
-  for (let index = next.length - 1; index >= 0; index -= 1) {
-    const item = asRecord(next[index]);
-    if (!item) continue;
-    if (item.type === 'function_call_output') {
-      next[index] = { ...item, output: addBreakpointToContent(item.output) };
-      return next;
-    }
-    if (item.role === 'system' || item.role === 'developer' || !('content' in item)) continue;
-    if (index === next.length - 1 && item.role === 'user') continue;
-    const content = addBreakpointToContent(item.content);
-    if (content === item.content) continue;
-    next[index] = { ...item, content };
-    return next;
-  }
-  return items;
-}
-
 function applyOpenAIExplicitCache(
+  model: Model<Api>,
   payload: unknown,
   context: { systemPrompt?: string },
-  cacheKey: string,
+  plan: PromptCachePlan,
 ): unknown {
   const record = asRecord(payload);
   if (!record) return payload;
+  // Implicit lookup also checks recent user and tool boundaries from previous requests.
+  const result: JsonRecord = {
+    ...record,
+    prompt_cache_key: plan.cacheKey,
+    prompt_cache_options: { ...asRecord(record.prompt_cache_options), mode: 'implicit', ttl: '30m' },
+  };
   const split = splitPromptCacheBoundary(context.systemPrompt ?? '');
   const stablePrompt = split?.stablePrefix ?? stripPromptCacheBoundary(context.systemPrompt ?? '');
   const dynamicPrompt = split?.dynamicSuffix ?? '';
@@ -218,28 +195,24 @@ function applyOpenAIExplicitCache(
     if ((initialMessage?.role === 'system' || initialMessage?.role === 'developer')
       && initialText === stripPromptCacheBoundary(context.systemPrompt ?? '')
       && stablePrompt) {
-      // Responses instructions is a string; cache breakpoints belong in input content blocks.
+      const lateInstructions = dynamicPrompt && /^gpt-6\.2(?:-|$)/.test(model.id)
+        && record.instructions === undefined;
+      const longPrefix = plan.policy.lifetime === 'long' && model.compat !== undefined
+        && 'supportsLongCacheRetention' in model.compat && model.compat.supportsLongCacheRetention;
       input[0] = {
         ...initialMessage,
+        ...(lateInstructions ? { role: 'developer' } : {}),
         content: [
-          { type: 'input_text', text: stablePrompt, prompt_cache_breakpoint: { mode: 'explicit' } },
-          ...(dynamicPrompt ? [{ type: 'input_text', text: dynamicPrompt }] : []),
+          { type: 'input_text', text: stablePrompt,
+            prompt_cache_breakpoint: { mode: 'explicit', ...(longPrefix ? { ttl: '12h' } : {}) } },
+          ...(dynamicPrompt && !lateInstructions ? [{ type: 'input_text', text: dynamicPrompt }] : []),
         ],
       };
+      if (lateInstructions) result.instructions = dynamicPrompt;
     }
-    return {
-      ...record,
-      input: addOpenAIHistoryBreakpoint(input),
-      prompt_cache_key: cacheKey,
-      prompt_cache_options: { mode: 'explicit', ttl: '30m' },
-    };
+    result.input = input;
   }
-
-  return {
-    ...record,
-    prompt_cache_key: cacheKey,
-    prompt_cache_options: { mode: 'explicit', ttl: '30m' },
-  };
+  return result;
 }
 
 export function transformPromptCachePayload(
@@ -248,11 +221,38 @@ export function transformPromptCachePayload(
   plan: PromptCachePlan = buildPromptCachePlan(model, {}),
   context: { systemPrompt?: string } = {},
 ): unknown {
+  if (model.api === 'openai-completions' && model.provider === 'deepseek' && model.id === 'deepseek-flash'
+    && URL.parse(model.baseUrl)?.origin === 'https://api.deepseek.com' && plan.policy.mode !== 'off') {
+    const record = asRecord(payload);
+    const systemPrompt = context.systemPrompt ?? '';
+    const split = splitPromptCacheBoundary(systemPrompt);
+    if (Array.isArray(record?.messages) && record.messages.length > 1 && split?.stablePrefix && split.dynamicSuffix) {
+      const [first, ...history] = record.messages;
+      const initial = asRecord(first);
+      if (initial?.role === 'system' && initial.content === stripPromptCacheBoundary(systemPrompt)) {
+        return { ...record, messages: [{ ...initial, content: split.stablePrefix }, ...history,
+          { role: 'system', content: split.dynamicSuffix }] };
+      }
+    }
+  }
+  if (model.api === 'openai-codex-responses' && plan.policy.mode !== 'off'
+    && model.compat && 'supportsMidConvoSystemMessages' in model.compat && model.compat.supportsMidConvoSystemMessages) {
+    const record = asRecord(payload);
+    const systemPrompt = context.systemPrompt ?? '';
+    const split = splitPromptCacheBoundary(systemPrompt);
+    if (record?.instructions === stripPromptCacheBoundary(systemPrompt) && Array.isArray(record.input)
+      && split?.stablePrefix && split.dynamicSuffix) {
+      return { ...record, instructions: split.stablePrefix,
+        input: [...record.input, { role: 'developer', content: split.dynamicSuffix }] };
+    }
+  }
   if (plan.providerMode === 'none' || plan.providerMode === 'managed') return payload;
   if (model.api === 'anthropic-messages') {
+    const lifetime = plan.policy.lifetime === 'long' && model.compat && 'supportsLongCacheRetention' in model.compat
+      && model.compat.supportsLongCacheRetention === false ? 'short' : plan.policy.lifetime;
     return addAnthropicHistoryBreakpoint(
-      splitAnthropicSystem(payload, plan.policy.lifetime),
-      plan.policy.lifetime,
+      splitAnthropicSystem(payload, lifetime),
+      lifetime,
     );
   }
   if (model.api === 'bedrock-converse-stream') {
@@ -263,7 +263,7 @@ export function transformPromptCachePayload(
     && asRecord(payload)?.prompt_cache_options != null) {
     // pi resolves authentication after xopc's stream wrapper. Respect the cache
     // field it omits for subscription credentials and unsupported models.
-    return applyOpenAIExplicitCache(payload, context, plan.cacheKey);
+    return applyOpenAIExplicitCache(model, payload, context, plan);
   }
   const record = asRecord(payload);
   return record && plan.cacheKey ? { ...record, prompt_cache_key: plan.cacheKey } : payload;
@@ -272,8 +272,9 @@ export function transformPromptCachePayload(
 export function preparePromptCacheContext<T extends { systemPrompt?: string }>(
   model: Model<Api>,
   context: T,
+  policy = resolvePromptCachePolicy(),
 ): T {
-  if (model.api === 'anthropic-messages' || model.api === 'bedrock-converse-stream') return context;
+  if (policy.mode !== 'off' && (model.api === 'anthropic-messages' || model.api === 'bedrock-converse-stream')) return context;
   if (!context.systemPrompt) return context;
   return { ...context, systemPrompt: stripPromptCacheBoundary(context.systemPrompt) };
 }
@@ -286,9 +287,13 @@ export function withPromptCachePayloadTransform(
 ): SimpleStreamOptions {
   const plan = buildPromptCachePlan(model, context, policyInput, options?.reasoning);
   const upstream = options?.onPayload;
-  const cacheRetention = model.api === 'anthropic-messages' || model.api === 'bedrock-converse-stream'
-    ? plan.providerMode === 'none' ? 'none' : plan.policy.lifetime
-    : 'none';
+  const usesSdkRetention = model.api === 'anthropic-messages' || model.api === 'bedrock-converse-stream';
+  const usesOpenAILongRetention = plan.providerMode === 'implicit' && isOfficialOpenAIModel(model)
+    && plan.policy.lifetime === 'long' && model.compat !== undefined
+    && 'supportsLongCacheRetention' in model.compat && model.compat.supportsLongCacheRetention;
+  const cacheRetention = plan.policy.mode === 'off' ? 'none'
+    : usesSdkRetention || usesOpenAILongRetention ? plan.policy.lifetime
+      : model.api === 'openai-codex-responses' ? 'short' : 'none';
 
   return {
     ...options,

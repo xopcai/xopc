@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { completeSimple, streamSimple, normalizeContext, type Model, type Api } from '@earendil-works/pi-ai/compat';
 import { describe, expect, it, vi } from 'vitest';
 
-import { cloudWireUsage } from '../cloud-wire.js';
+import { cloudWireUsage, getCloudUsageReport } from '../cloud-wire.js';
 
 const model = { provider:'openai',id:'wire-test',name:'Wire test',api:'openai-completions',baseUrl:'https://example.invalid/v1',
   reasoning:false,input:['text'],contextWindow:32000,maxTokens:1000,cost:{input:0,output:0,cacheRead:0,cacheWrite:0} } as Model<Api>;
@@ -12,6 +12,15 @@ function response(usage: object) {
     'data: '+JSON.stringify({id:'wire',object:'chat.completion.chunk',model:'wire-test',choices:[{index:0,delta:{},finish_reason:'stop'}],usage})+'\n\ndata: [DONE]\n\n', {headers:{'Content-Type':'text/event-stream'}});
 }
 describe('Cloud authoritative usage',()=>{
+  it.each([0, 3000, undefined])('distinguishes cache reads of %s from unreported writes', async cacheRead => {
+    const usage = { prompt_tokens: 4000, completion_tokens: 20, total_tokens: 4020,
+      prompt_tokens_details: { cached_tokens: cacheRead, uncached_tokens: 4000 - (cacheRead ?? 0) } };
+    const wire = cloudWireUsage({ apiKey: 'test', fetch: (async () => response(usage)) as typeof fetch });
+    const message = wire.apply(await completeSimple(model, context, wire.options));
+    expect(message.usage).toMatchObject({ input: 4000 - (cacheRead ?? 0), totalTokens: 4020 });
+    expect(getCloudUsageReport(message)).toMatchObject({ authoritative: true, totalInputTokens: 4000, cacheRead, cacheWrite: undefined });
+  });
+
   it('preserves total_tokens even when compatible prompt/output components omit tokens',async()=>{
     const transport=vi.fn(async()=>response({prompt_tokens:716,completion_tokens:96,total_tokens:7852}));
     const wire=cloudWireUsage({apiKey:'test',fetch:transport as typeof fetch});

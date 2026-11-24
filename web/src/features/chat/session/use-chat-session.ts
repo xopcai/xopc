@@ -93,6 +93,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
   const sessionName = sessionSlice?.name ?? null;
   const sessionModel = sessionSlice?.model ?? '';
   const modelRegistry = useSWR(CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, { revalidateOnFocus: false });
+  const hasConfiguredModels = (modelRegistry.data?.length ?? 0) > 0;
   const modelConfigReady = isSessionModelReady(sessionSlice, modelRegistry.data);
   const modelConfigSaving = sessionSlice?.modelConfigSaving ?? false;
   const thinkingLevel = sessionSlice?.thinkingLevel ?? DEFAULT_THINKING;
@@ -106,7 +107,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
     if (!visibleConversationId || sending || streaming) return;
     void sessionMgrRef.current.loadSessionAgentConfig(visibleConversationId)
       .then((cfg) => patchSessionAgentConfigView(visibleConversationId, cfg)).catch(() => undefined);
-  }, [visibleConversationId, sending, streaming]);
+  }, [visibleConversationId, sending, streaming, hasConfiguredModels]);
 
   useEffect(() => {
     const refresh = (event: Event) => {

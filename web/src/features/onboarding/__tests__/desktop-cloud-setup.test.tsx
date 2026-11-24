@@ -25,8 +25,8 @@ vi.mock('@/features/settings/models-hub/connected-providers-grid', () => ({
 }));
 vi.mock('@/features/settings/models-hub/provider-setup-api', () => ({ previewModelSetup: api.preview, applyModelSetup: api.apply }));
 vi.mock('@/features/settings/models-hub/oauth-provider-connect', () => ({
-  OAuthProviderConnect: ({ providerId, onConnected }: { providerId: string; onConnected: () => void }) => (
-    <button data-provider={providerId} onClick={onConnected}>Authorize Cloud</button>
+  OAuthProviderConnect: ({ providerId, onConnected, secondaryAction }: { providerId: string; onConnected: () => void; secondaryAction?: React.ReactNode }) => (
+    <div>{secondaryAction}<button data-provider={providerId} onClick={onConnected}>Authorize Cloud</button></div>
   ),
 }));
 vi.mock('@/features/onboarding/onboarding-provider-grid', () => ({
@@ -86,8 +86,25 @@ const click = async (name: string) => act(async () => {
   button.click();
 });
 
+it('keeps setup dismissal beside the current desktop primary action', async () => {
+  const onDismiss = vi.fn();
+  await renderCard({ onDismiss });
+  expect([...container.querySelectorAll('header button')].map(button => button.textContent)).toEqual(['EN', '中文']);
+  const authorize = container.querySelector('[data-provider="xopc-cloud"]');
+  expect(authorize?.previousElementSibling?.textContent).toBe('跳过引导');
+  await click('跳过引导');
+  expect(onDismiss).toHaveBeenCalledOnce();
+  expect(api.complete).not.toHaveBeenCalled();
+
+  api.connected = true;
+  await renderCard({ onDismiss });
+  const buttons = [...container.querySelectorAll('button')];
+  expect(buttons.filter(button => button.textContent === '跳过引导')).toHaveLength(1);
+  expect(buttons.find(button => button.textContent === '继续')?.previousElementSibling?.textContent).toBe('跳过引导');
+});
+
 it('takes Electron directly to single-screen Cloud setup, auto-initializes Ada, and completes without a dead success screen', async () => {
-  expect(container.textContent).toContain('连接 XOPC Cloud');
+  expect(container.querySelector('h1')?.textContent).toBe('配置模型');
   expect(container.textContent).toContain('你好，Mic');
   expect(container.textContent).not.toContain('Choose provider');
   expect(container.querySelector('[role="dialog"]')).toBeNull();
@@ -131,7 +148,7 @@ it('does not report success when Cloud has no usable default model', async () =>
 });
 
 it('lets Electron users open custom API key / local model setup on demand', async () => {
-  await click('使用自有 API Key 或本地模型');
+  await click('使用 API Key 或本地模型');
   expect(container.querySelector('[role="dialog"]')?.textContent).toBe('Model configuration');
 });
 
@@ -154,7 +171,7 @@ it('coalesces default application and reports pending state until it finishes', 
   await act(async () => { authorize.click(); authorize.click(); });
   expect(api.apply).toHaveBeenCalledOnce();
   expect(pending).toHaveBeenLastCalledWith(true);
-  expect(container.querySelector<HTMLButtonElement>('[aria-label="跳过，稍后再设置"]')!.disabled).toBe(true);
+  expect([...container.querySelectorAll('button')].find(button => button.textContent === '跳过引导')?.disabled).toBe(true);
   await act(async () => finish());
   expect(pending).toHaveBeenLastCalledWith(false);
   expect(api.complete).toHaveBeenCalledOnce();

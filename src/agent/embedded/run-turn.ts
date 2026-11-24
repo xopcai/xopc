@@ -64,7 +64,6 @@ import { allowsExecutionTool, filterExecutionTools, resolveExecutionToolPolicy }
 import { getExecutionAuthority } from '../../infra/execution-authority.js';
 import { configurationCapabilityCorrection } from './configuration-capability-correction.js';
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
-import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { projectContextForModel } from '../memory/context-budget.js';
 import { projectVoiceHistory, voiceHistoryNotice } from '../prompt/voice-history.js';
 import { assessContext, recoverContext as recoverContextUntraced } from '../memory/context-recovery.js';
@@ -465,6 +464,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       systemPrompt: [systemPrompt, rootInstructions, getSessionInteractionPolicy(toolPolicyConversationId).mode === 'plan' ? PLAN_MODE_INSTRUCTIONS : ''].filter(Boolean).join('\n\n'),
       thinkingLevel: configuredThinking ?? thinkingLevel ?? 'medium',
       transcriptRuntime,
+      promptCachePolicy,
     });
 
     preparationTimings.runnerAcquireMs = performance.now() - runnerStartedAt;
@@ -571,10 +571,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       }
     };
 
-    const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(
-      session.agent.streamFunction,
-      params.promptCachePolicy,
-    );
+    const providerStreamFn = session.agent.streamFunction;
     let evidenceProjection: ReturnType<typeof projectWorkEvidence> | undefined;
     let voiceTurnUserTimestamp: number | undefined;
     const baseTransformContext = session.agent.transformContext;
@@ -760,7 +757,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         conversationId,
         runId,
         traceId: runId,
-      }, () => streamFnWithXopcExtensions(streamModel, effectiveContext, { ...options }), { context: recordedContext, reasoning: options?.reasoning });
+      }, () => providerStreamFn(streamModel, effectiveContext, { ...options }), { context: recordedContext, reasoning: options?.reasoning });
       void Promise.resolve(stream).then(value => value.result()).finally(releaseComputerFrames).catch(() => {});
       return stream;
     };

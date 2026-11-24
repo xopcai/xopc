@@ -47,6 +47,7 @@ export type UsageEvent = {
   finishedAt?: number;
   durationMs?: number;
   inputTokens?: number;
+  totalInputTokens?: number;
   outputTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;

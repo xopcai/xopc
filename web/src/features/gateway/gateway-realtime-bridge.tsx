@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useSWRConfig } from 'swr';
 
 import { clearChatSkillsCache, clearSkillPaletteCaches } from '@/features/chat/palette/command-palette-api';
+import { invalidateConfiguredModelsCache } from '@/features/chat/api/registry-api';
 import { clearConnectorPaletteCache } from '@/features/search/global-command-palette/connector-palette-api';
 import { startChatRunStateBridge } from '@/features/chat/session/chat-run-state-bridge';
 import { startAgentRunStreamEventBridge } from '@/features/gateway/agent-run-stream-event-bridge';
@@ -70,7 +71,10 @@ export function GatewayRealtimeBridge() {
       clearConnectorPaletteCache();
       const section = configReloadSection((event as CustomEvent<unknown>).detail);
       if (section === 'skills') clearSkillPaletteCaches();
-      else if (section === 'agents') clearChatSkillsCache();
+      else {
+        if (section === 'agents') clearChatSkillsCache();
+        void invalidateConfiguredModelsCache();
+      }
     };
     const onGap = (event: Event) => {
       const topic = (event as CustomEvent<{ topic?: string }>).detail?.topic;
