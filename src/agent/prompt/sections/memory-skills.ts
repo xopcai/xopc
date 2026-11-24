@@ -32,7 +32,7 @@ export function buildMemorySection(params: {
     lines.push('- Use `knowledge_search` for project facts, decisions, lessons, commitments, and open questions.');
   }
   if (names.has('session_recall')) lines.push('- Use `session_recall` for exact raw content from the current session.');
-  if (names.has('session_search')) lines.push('- Use `session_search` for other conversations.');
+  if (names.has('session_search')) lines.push('- Use `session_search` for other conversations across agents and projects (filter by `since`/`until`/`agentId`/`projectId`, search by keyword, or read/summarize by `conversationId`).');
   if (names.has('knowledge_write')) {
     lines.push('- Use `knowledge_write` for reusable task knowledge; it is stored as a reviewable candidate with provenance.');
   }

@@ -218,13 +218,37 @@ export class HomeObservation {
     });
   }
 
+  private hasObservableWorkHistory(): boolean {
+    if (this.db.prepare('SELECT 1 FROM tasks LIMIT 1').get()) return true;
+    const rows = this.db.prepare(`SELECT s.conversation_id FROM sessions s
+      WHERE s.source_channel!='automation' AND s.parent_conversation_id IS NULL AND s.hidden_from_session_list=0
+      AND COALESCE(CASE WHEN json_valid(s.custom_data_json) THEN json_extract(s.custom_data_json, '$.workDiscovery') END, 0) != 1
+      AND ${OWNER_LEARNING_SESSION_SQL}
+      AND COALESCE((SELECT user_context_mode FROM session_config WHERE conversation_id=s.conversation_id),'enabled')='enabled'
+      AND EXISTS (SELECT 1 FROM transcripts tr JOIN transcript_entries e ON e.transcript_id=tr.transcript_id
+        WHERE tr.conversation_id=s.conversation_id AND e.role='user')
+      ORDER BY s.updated_at DESC LIMIT 20`).all() as Array<{ conversation_id: string }>;
+    return rows.some(row => this.readable(row.conversation_id));
+  }
+
   state(topicIds?: readonly string[]): ObservationState {
     const session = this.session();
-    if (!session) return { status: 'disabled', revision: 0, analyzedRevision: 0, lastProcessedAt: null, topics: [] };
+    if (!session) {
+      return {
+        status: 'disabled',
+        revision: 0,
+        analyzedRevision: 0,
+        lastProcessedAt: null,
+        hasWorkHistory: this.hasObservableWorkHistory(),
+        topics: [],
+      };
+    }
     const topics = this.db.prepare(`SELECT * FROM home_observation_topics WHERE session_id=? AND excluded=0 ${topicIds ? `AND id IN (${topicIds.map(()=>'?').join(',') || 'NULL'})` : ''} ORDER BY rowid DESC ${topicIds ? '' : 'LIMIT 20'}`)
       .all(session.id,...(topicIds ?? [])) as TopicRow[];
-      return { id: session.id, status: session.status, revision: session.revision, analyzedRevision: session.analyzed_revision,
-      lastProcessedAt: session.last_processed_at, topics: topics.filter(t => this.readable(t.source_key)).map(t => ({
+    const readableTopics = topics.filter(t => this.readable(t.source_key));
+    return { id: session.id, status: session.status, revision: session.revision, analyzedRevision: session.analyzed_revision,
+      lastProcessedAt: session.last_processed_at, hasWorkHistory: readableTopics.length > 0 || this.hasObservableWorkHistory(),
+      topics: readableTopics.map(t => ({
         id: t.id, title: t.title, projectId: t.project_id ?? undefined, revision: t.revision,
         entries: (this.db.prepare('SELECT id,kind,text,source_ref AS sourceRef,created_at AS createdAt FROM home_observation_entries WHERE topic_id=? ORDER BY created_at DESC,rowid DESC LIMIT 20').all(t.id) as ObservationState['topics'][number]['entries'])
           .filter(e => !e.sourceRef || this.readable(e.sourceRef)).map(e => {

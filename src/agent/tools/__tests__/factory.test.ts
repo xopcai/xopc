@@ -23,14 +23,16 @@ import { personalAgentId } from '../../../personal-agent/repository.js';
 import { TaskRepository } from '../../../tasks/task-repository.js';
 import { TaskConversationRepository } from '../../../tasks/task-conversation-repository.js';
 import { PERSONAL_MAIN_TOOL_IDS } from '../../../personal-agent/policy.js';
+import { ProjectStore } from '../../../projects/project-store.js';
+import { SessionStore } from '../../../session/store.js';
 import { STARTER_AGENTS } from '../../starter-agents.js';
-import { closeXopcDatabase } from '../../../storage/sqlite/index.js';
+import { appendTranscriptEntry, closeXopcDatabase, setSessionConfig } from '../../../storage/sqlite/index.js';
 import { AgentToolsFactory } from '../factory.js';
 import { getExternalToolRegistry } from '../../external-tools/tool-registry.js';
 import { getXopcToolMetadata } from '../../embedded/tool-metadata.js';
 
 describe('AgentToolsFactory', () => {
-  beforeAll(() => initializeTestAgentCatalog({ agents: [{ id: personalAgentId('local-owner') }] }));
+  beforeAll(() => initializeTestAgentCatalog({ agents: [{ id: personalAgentId('local-owner') }, { id: 'coder' }, { id: 'writer' }] }));
   afterAll(() => closeXopcDatabase());
 
   it('keeps core execution eager and preserves specialized capabilities through native discovery', () => {
@@ -424,6 +426,85 @@ describe('AgentToolsFactory', () => {
       { conversationId: 'parent:side-chat:isolated', runId: 'run-1', toolCallId: 'q1' },
       expect.objectContaining({ question: 'Continue?' }),
     );
+  });
+
+  it('wires session_search to allow Ada and specialist agents to discover and read across agents, projects, and workspaces while keeping privacy guards', async () => {
+    const adaAgent = personalAgentId('local-owner');
+    const config = ConfigSchema.parse({});
+    const store = new SessionStore({ config });
+    const projectA = new ProjectStore().create({ name: 'Project Alpha', workspaceRoot: '/ws-alpha' });
+    const projectB = new ProjectStore().create({ name: 'Project Beta', workspaceRoot: '/ws-beta' });
+
+    const adaConv = createConversation({
+      agentId: adaAgent,
+      sourceChannel: 'webchat',
+      name: 'Ada Personal',
+      hiddenFromSessionList: true,
+      customData: { personalAgent: true, keepHiddenFromSessionList: true },
+    }, '/ws-home').key;
+    const coderConv = createConversation({
+      agentId: 'coder',
+      sourceChannel: 'webchat',
+      projectId: projectA.id,
+      name: 'Alpha Weekly Coding',
+    }, '/ws-alpha').key;
+    const writerConv = createConversation({
+      agentId: 'writer',
+      sourceChannel: 'webchat',
+      projectId: projectB.id,
+      name: 'Beta Release Notes',
+    }, '/ws-beta').key;
+    const tempConv = createConversation({
+      agentId: 'coder',
+      sourceChannel: 'webchat',
+      name: 'Temporary Scratch',
+    }, '/ws-alpha').key;
+    setSessionConfig(tempConv, { userContextMode: 'temporary' }, '/ws-alpha');
+
+    appendTranscriptEntry(adaConv, { role: 'user', content: 'Coordinated weekly review with Ada', timestamp: Date.now() });
+    appendTranscriptEntry(coderConv, { role: 'user', content: 'Shipped Project Alpha caching layer', timestamp: Date.now() });
+    appendTranscriptEntry(writerConv, { role: 'user', content: 'Finished Project Beta release draft', timestamp: Date.now() });
+    appendTranscriptEntry(tempConv, { role: 'user', content: 'Secret temporary note', timestamp: Date.now() });
+
+    // Ada can list and read coder (Project A) and writer (Project B), excluding temporary session
+    const adaFactory = new AgentToolsFactory({
+      workspace: '/ws-home',
+      bus: {} as MessageBus,
+      getCurrentContext: () => ({ channel: 'webchat', chatId: 'default', conversationId: adaConv }),
+      getConfig: () => config,
+      getSessionStore: () => store,
+      getPrimaryModel: () => ({ provider: 'test', id: 'fast', input: ['text'] }) as never,
+    });
+    const adaSearch = adaFactory.createCoreTools({ conversationId: adaConv, agentId: adaAgent, toolAllowlist: PERSONAL_MAIN_TOOL_IDS })
+      .find(tool => tool.name === 'session_search')!;
+    const adaList = JSON.parse((await adaSearch.execute('ada-list', { limit: 10 })).content[0].text);
+    const adaListedIds = adaList.results.map((item: { key: string }) => item.key);
+    expect(adaListedIds).toEqual(expect.arrayContaining([coderConv, writerConv]));
+    expect(adaListedIds).not.toContain(tempConv);
+
+    const adaReadCoder = JSON.parse((await adaSearch.execute('ada-read', { conversationId: coderConv })).content[0].text);
+    expect(adaReadCoder).toMatchObject({ success: true, mode: 'read', conversationId: coderConv, agentId: 'coder', projectId: projectA.id });
+    expect(adaReadCoder.messages[0].content).toContain('Shipped Project Alpha caching layer');
+
+    // Coder (Project A) can discover and read Ada's hidden personal session and Writer's Project B session
+    const coderFactory = new AgentToolsFactory({
+      workspace: '/ws-alpha',
+      bus: {} as MessageBus,
+      getCurrentContext: () => ({ channel: 'webchat', chatId: 'default', conversationId: coderConv }),
+      getConfig: () => config,
+      getSessionStore: () => store,
+      getPrimaryModel: () => ({ provider: 'test', id: 'fast', input: ['text'] }) as never,
+    });
+    const coderSearch = coderFactory.createCoreTools({ conversationId: coderConv, agentId: 'coder' })
+      .find(tool => tool.name === 'session_search')!;
+    const coderList = JSON.parse((await coderSearch.execute('coder-list', { limit: 10 })).content[0].text);
+    const coderListedIds = coderList.results.map((item: { key: string }) => item.key);
+    expect(coderListedIds).toEqual(expect.arrayContaining([adaConv, writerConv]));
+    expect(coderListedIds).not.toContain(tempConv);
+
+    const coderReadAda = JSON.parse((await coderSearch.execute('coder-read-ada', { conversationId: adaConv })).content[0].text);
+    expect(coderReadAda).toMatchObject({ success: true, mode: 'read', conversationId: adaConv, agentId: adaAgent });
+    expect(coderReadAda.messages[0].content).toContain('Coordinated weekly review with Ada');
   });
 
 });

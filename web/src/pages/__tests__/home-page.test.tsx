@@ -164,4 +164,42 @@ describe('home card actions', () => {
     expect(dialog().textContent).not.toContain('No result for the current task version');
     await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
   });
+
+  it('hides cold-start clutter on an empty idle workbench until the user has work history', async () => {
+    mocks.home.observation = {
+      status: 'disabled',
+      revision: 0,
+      analyzedRevision: 0,
+      lastProcessedAt: null,
+      hasWorkHistory: false,
+      topics: [],
+    };
+    await render();
+    expect(container.textContent).toContain('What do you want to get done?');
+    expect(button('Search projects and conversations')).toBeTruthy();
+    expect(container.textContent).not.toContain('Nothing needs your attention right now');
+    expect(button('Result history')).toBeUndefined();
+    expect(container.textContent).not.toContain('Let me handle it');
+    expect(button('Find recurring work')).toBeUndefined();
+
+    mocks.home = {
+      ...mocks.home,
+      observation: { ...mocks.home.observation, hasWorkHistory: true },
+    };
+    await render();
+    expect(container.textContent).toContain('Let me handle it');
+    expect(button('Find recurring work')).toBeTruthy();
+  });
+
+  it('keeps the no-attention status when non-idle work is present', async () => {
+    mocks.home.resumable = [{
+      id: 'conv-1',
+      kind: 'conversation',
+      title: 'Weekly sync',
+      updatedAt: Date.now(),
+      href: '/chat/conv-1',
+    }];
+    await render();
+    expect(container.textContent).toContain('Nothing needs your attention right now');
+  });
 });

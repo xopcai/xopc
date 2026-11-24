@@ -48,7 +48,7 @@ export const ObservationTopicSchema = z.object({
 });
 export const ObservationStateSchema = z.object({
   id: z.string().optional(), status: z.enum(['disabled', 'active', 'paused']), revision: z.number(),
-  analyzedRevision: z.number(), lastProcessedAt: z.number().nullable(), starters: z.array(ObservationStarterSchema).optional(), followUps: z.array(FollowUpSchema).optional(), followUpCandidates: z.array(FollowUpCandidateSchema).optional(), topics: z.array(ObservationTopicSchema),
+  analyzedRevision: z.number(), lastProcessedAt: z.number().nullable(), hasWorkHistory: z.boolean().optional(), starters: z.array(ObservationStarterSchema).optional(), followUps: z.array(FollowUpSchema).optional(), followUpCandidates: z.array(FollowUpCandidateSchema).optional(), topics: z.array(ObservationTopicSchema),
 });
 export const ObservationCommandSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('start'), backfillDays: z.number().int().min(0).max(30).default(30) }),

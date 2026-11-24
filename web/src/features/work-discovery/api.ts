@@ -324,14 +324,22 @@ export async function grantUnderstandingWorkFolder(
   return response.source;
 }
 
-export async function fetchLocalSourcePreviews(customNoteDirectories?: string[]): Promise<LocalSourcePreview[]> {
+export type LocalSourcePreviewResponse = {
+  platform: 'darwin' | 'win32' | 'linux' | string;
+  previews: LocalSourcePreview[];
+};
+
+export async function fetchLocalSourcePreviews(customNoteDirectories?: string[]): Promise<LocalSourcePreviewResponse> {
   const query = customNoteDirectories?.length
     ? `?customNoteDirectories=${encodeURIComponent(customNoteDirectories.join(','))}`
     : '';
-  const response = await fetchJson<{ previews: LocalSourcePreview[] }>(
+  const response = await fetchJson<{ platform?: string; previews: LocalSourcePreview[] }>(
     apiUrl(`/api/context-sources/local-preview${query}`),
   );
-  return response.previews;
+  return {
+    platform: response.platform ?? 'darwin',
+    previews: response.previews,
+  };
 }
 
 export async function startDeepUnderstandingRun(input: {

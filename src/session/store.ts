@@ -49,6 +49,7 @@ import {
   loadTranscriptHistoryRowsForSession,
   loadTranscriptRowsForSession,
   patchSessionMetadata,
+  readSessionTranscriptEntries,
   replaceTranscriptRows,
   resetSessionRecord,
   restoreBeforeCompactionBoundary,
@@ -56,6 +57,8 @@ import {
   searchSessionTranscript,
   setSessionConfig,
   type SessionMetadataSeed,
+  type SessionTranscriptReadOptions,
+  type SessionTranscriptReadResult,
 } from '../storage/sqlite/index.js';
 import type { TranscriptCompactionRecord, XopcSessionTranscriptV1 } from './transcript-format.js';
 import {
@@ -1068,6 +1071,11 @@ export class SessionStore {
   recallSession(key: string, query: string, options?: { limit?: number; beforeSeq?: number; orderBySeq?: boolean; matchMode?: 'keyword' | 'phrase' }) {
     requireXopcDatabase();
     return searchSessionTranscript(key, query, options);
+  }
+
+  readSessionEntries(key: string, options?: SessionTranscriptReadOptions): SessionTranscriptReadResult {
+    requireXopcDatabase();
+    return readSessionTranscriptEntries(key, options);
   }
 
   async exportSession(key: string, format: ExportFormat): Promise<string> {

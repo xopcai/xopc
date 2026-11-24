@@ -64,7 +64,7 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
       limitations: [],
     },
     toolAllowlist: [
-      'xopc_use', 'tool_manual', 'session_recall',
+      'xopc_use', 'tool_manual', 'session_recall', 'session_search',
       'knowledge_search', 'knowledge_get', 'user_context_search', 'user_context_get',
       'find', 'grep', 'read_file',
     ],

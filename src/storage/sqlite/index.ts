@@ -229,10 +229,13 @@ export {
   loadTranscriptRowsForSession,
   loadCompactionSourceSnapshot,
   paginateTranscriptMessages,
+  readSessionTranscriptEntries,
   replaceTranscriptRows,
   restoreBeforeCompactionBoundary,
   searchSessionTranscript,
   type CompactionSourceSnapshot,
+  type SessionTranscriptReadOptions,
+  type SessionTranscriptReadResult,
   type SessionTranscriptRecallMatch,
   type TranscriptSourceEntry,
 } from './transcript-repository.js';

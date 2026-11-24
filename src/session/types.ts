@@ -163,9 +163,12 @@ export interface SessionListQuery extends SessionDiscoveryQuery {
   search?: string;
   sessionTypes?: SessionType[];
   includeHidden?: boolean;
+  /** Include the personal agent (Ada) conversation even when hidden from the sidebar session list. */
+  includePersonalAgent?: boolean;
   projectId?: string;
   unassigned?: boolean;
   updatedAfter?: number;
+  updatedBefore?: number;
   includePinned?: boolean;
   includeConversationId?: string;
   sortBy?: 'updatedAt' | 'createdAt' | 'messageCount' | 'lastAccessedAt';

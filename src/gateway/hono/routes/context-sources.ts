@@ -146,7 +146,7 @@ export function registerContextSourceRoutes(authenticated: Hono, deps: Authentic
       ? rawDirs.split(',').map((dir) => dir.trim()).filter(Boolean).slice(0, 10)
       : undefined;
     const previews = await service.previewLocalUnderstandingSources(customNoteDirectories);
-    return c.json({ previews });
+    return c.json({ platform: process.platform, previews });
   });
 
   authenticated.post('/api/context-sources/understanding-runs', limited, async (c) => {

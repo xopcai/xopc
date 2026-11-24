@@ -56,22 +56,32 @@ describe('Tier 1 understanding source collectors', () => {
     expect(byTitle.get('Clipped Note')?.ownerAttribution).toBe('other');
   });
 
-  it('collects local markdown notes including custom directories and skips Obsidian vaults', async () => {
+  it('collects local markdown notes including Windows OneDrive, Linux org/notes, and user-picked custom Obsidian dirs', async () => {
     const home = await mkdtemp(join(tmpdir(), 'xopc-local-notes-'));
-    const notesDir = join(home, 'Notes');
-    const customDir = join(home, 'CustomNotes');
-    await mkdir(notesDir, { recursive: true });
-    await mkdir(customDir, { recursive: true });
-    await writeFile(join(notesDir, 'weekly.md'), '# Weekly Reflection\nFocus on deep work blocks every morning before noon.');
-    await writeFile(join(customDir, 'essay.md'), '# Product Essay\nGreat tools reduce cognitive friction rather than adding wizards.');
+    const oneDrive = join(home, 'OneDrive');
+    const customVault = join(home, 'DDriveVault');
+    await mkdir(join(oneDrive, 'Documents', 'Notes'), { recursive: true });
+    await mkdir(join(customVault, '.obsidian'), { recursive: true });
+    await writeFile(join(oneDrive, 'Documents', 'Notes', 'roadmap.md'), '# Roadmap\nShip cross-platform local note discovery on Windows OneDrive.');
+    await writeFile(join(customVault, 'architecture.md'), '# Architecture\nExplicitly chosen custom directories are scanned even when containing .obsidian.');
 
-    const items = await collectLocalMarkdownNoteItems({
+    const winItems = await collectLocalMarkdownNoteItems({
       homeDirectory: home,
-      platform: 'darwin',
-      customDirectories: [customDir],
+      platform: 'win32',
+      environment: { OneDrive: oneDrive },
+      customDirectories: [customVault],
     });
-    expect(items.map((item) => item.title).sort()).toEqual(['essay', 'weekly']);
-    expect(items.every((item) => item.ownerAttribution === 'user')).toBe(true);
+    expect(winItems.map((item) => item.title).sort()).toEqual(['architecture', 'roadmap']);
+    expect(winItems.every((item) => item.ownerAttribution === 'user')).toBe(true);
+
+    const linuxHome = await mkdtemp(join(tmpdir(), 'xopc-linux-notes-'));
+    await mkdir(join(linuxHome, 'org'), { recursive: true });
+    await writeFile(join(linuxHome, 'org', 'journal.md'), '# Linux Journal\nKeep terminal workflow fast, keyboard-first, and reproducible.');
+    const linuxItems = await collectLocalMarkdownNoteItems({
+      homeDirectory: linuxHome,
+      platform: 'linux',
+    });
+    expect(linuxItems.map((item) => item.title)).toEqual(['journal']);
   });
 
   it('assigns accurate ownerAttribution for recent files (Documents authored vs Downloads)', async () => {

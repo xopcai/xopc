@@ -79,7 +79,7 @@ import {
   type MarketplaceSkillInstallToolOptions,
   type MarketplaceSkillInstallToolResult,
 } from './index.js';
-import { canRecallConversation, canRecallHistoryEntry } from '../../session/history-recall-policy.js';
+import { canSearchConversation, canSearchHistoryEntry } from '../../session/history-recall-policy.js';
 import { createSessionSearchTool } from './session-search-tool.js';
 import { createPersonalReadTool } from './personal-read-tool.js';
 import { createPersonalNoteTool } from './personal-note-tool.js';
@@ -872,10 +872,12 @@ export class AgentToolsFactory {
         ? [
             createSessionSearchTool({
               localOnly: personalToolsConfigured,
-              canRecallConversation: id => canRecallConversation(this.deps.getConfig?.(), {
+              includePersonalAgent: true,
+              historyScope: 'owner_cross_session',
+              canRecallConversation: id => canSearchConversation(this.deps.getConfig?.(), {
                 agentId: resolvedAgentId, workspaceId: workspace, conversationId: currentConversationId() ?? '', projectId: currentProjectId(),
               }, id),
-              canRecallEntry: (id, entryId, text) => canRecallHistoryEntry({
+              canRecallEntry: (id, entryId, text) => canSearchHistoryEntry({
                 agentId: resolvedAgentId, workspaceId: workspace, conversationId: currentConversationId() ?? '', projectId: currentProjectId(),
               }, id, entryId, text),
               getHistoryContext: () => ({ agentId: resolvedAgentId, workspaceId: workspace, conversationId: currentConversationId() ?? '', projectId: currentProjectId() }),

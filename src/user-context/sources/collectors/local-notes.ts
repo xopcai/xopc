@@ -24,21 +24,60 @@ const FRONTMATTER_EXTERNAL = /^(?:url|source|source_url|clipped|author)\s*:/im;
 export interface LocalMarkdownNotesCollectionOptions {
   homeDirectory?: string;
   platform?: NodeJS.Platform;
+  environment?: NodeJS.ProcessEnv;
   customDirectories?: string[];
   nowMs?: number;
   excludeIds?: string[];
 }
 
-function defaultNoteDirectories(home: string, platform: NodeJS.Platform): string[] {
+async function resolveLinuxXdgDocuments(home: string): Promise<string | null> {
+  const config = await readFile(join(home, '.config', 'user-dirs.dirs'), 'utf8').catch(() => '');
+  for (const line of config.split('\n')) {
+    const match = /^XDG_DOCUMENTS_DIR=(.+)$/.exec(line.trim());
+    if (!match?.[1]) continue;
+    const raw = match[1].trim().replace(/^"|"$/g, '').replace(/^\$HOME(?=\/|$)|^\$\{HOME\}(?=\/|$)/, home);
+    if (raw.startsWith('/')) return resolve(raw);
+  }
+  return null;
+}
+
+async function defaultNoteDirectories(
+  home: string,
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+): Promise<string[]> {
   const dirs = [
     join(home, 'Notes'),
     join(home, 'Documents', 'Notes'),
     join(home, 'Documents', 'Logseq', 'pages'),
     join(home, 'Documents', 'Logseq', 'journals'),
-    join(home, 'Documents', 'Bear'),
   ];
   if (platform === 'darwin') {
-    dirs.push(join(home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs', 'Notes'));
+    dirs.push(
+      join(home, 'Documents', 'Bear'),
+      join(home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs', 'Notes'),
+    );
+  } else if (platform === 'win32') {
+    dirs.push(join(home, 'Documents', 'Joplin'));
+    for (const oneDrive of [env.OneDrive, env.OneDriveConsumer, env.OneDriveCommercial]) {
+      if (!oneDrive) continue;
+      dirs.push(
+        join(oneDrive, 'Notes'),
+        join(oneDrive, 'Documents', 'Notes'),
+      );
+    }
+  } else if (platform === 'linux') {
+    dirs.push(
+      join(home, 'notes'),
+      join(home, 'Documents', 'notes'),
+      join(home, 'org'),
+      join(home, 'Logseq', 'pages'),
+      join(home, 'Logseq', 'journals'),
+    );
+    const xdgDocs = await resolveLinuxXdgDocuments(home);
+    if (xdgDocs) {
+      dirs.push(join(xdgDocs, 'Notes'), join(xdgDocs, 'notes'));
+    }
   }
   return dirs;
 }
@@ -46,21 +85,23 @@ function defaultNoteDirectories(home: string, platform: NodeJS.Platform): string
 async function resolveExistingNoteRoots(
   home: string,
   platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
   customDirectories: string[] = [],
 ): Promise<string[]> {
-  const candidates = [
-    ...customDirectories.map((dir) => resolve(dir)),
-    ...defaultNoteDirectories(home, platform),
-  ];
+  const customResolved = new Set(customDirectories.map((dir) => resolve(dir)));
+  const defaults = await defaultNoteDirectories(home, platform, env);
+  const candidates = [...customResolved, ...defaults];
   const roots: string[] = [];
   const seen = new Set<string>();
   for (const dir of candidates) {
     if (seen.has(dir)) continue;
     const info = await stat(dir).catch(() => null);
     if (!info?.isDirectory()) continue;
-    // Skip directories that are Obsidian vaults (handled by local-obsidian).
-    const obsidianDir = await stat(join(dir, '.obsidian')).catch(() => null);
-    if (obsidianDir?.isDirectory()) continue;
+    // Skip auto-discovered Obsidian vaults (handled by local-obsidian), but always respect user-picked custom directories.
+    if (!customResolved.has(dir)) {
+      const obsidianDir = await stat(join(dir, '.obsidian')).catch(() => null);
+      if (obsidianDir?.isDirectory()) continue;
+    }
     seen.add(dir);
     roots.push(dir);
   }
@@ -118,8 +159,9 @@ export async function previewLocalMarkdownNotes(
 ): Promise<LocalSourcePreview> {
   const home = options.homeDirectory ?? homedir();
   const platform = options.platform ?? process.platform;
+  const environment = options.environment ?? process.env;
   const nowMs = options.nowMs ?? Date.now();
-  const roots = await resolveExistingNoteRoots(home, platform, options.customDirectories);
+  const roots = await resolveExistingNoteRoots(home, platform, environment, options.customDirectories);
   if (!roots.length) return { sourceId: SOURCE_ID, detected: false, itemCount: 0 };
   const scanned = (await Promise.all(roots.map((root) => scanRoot(root, nowMs, new Set())))).flat();
   return {
@@ -135,9 +177,10 @@ export async function collectLocalMarkdownNoteItems(
 ): Promise<UnderstandingSourceItem[]> {
   const home = options.homeDirectory ?? homedir();
   const platform = options.platform ?? process.platform;
+  const environment = options.environment ?? process.env;
   const nowMs = options.nowMs ?? Date.now();
   const excluded = new Set((options.excludeIds ?? []).map((id) => id.trim().toLowerCase()));
-  const roots = await resolveExistingNoteRoots(home, platform, options.customDirectories);
+  const roots = await resolveExistingNoteRoots(home, platform, environment, options.customDirectories);
   if (!roots.length) return [];
 
   const candidates = (await Promise.all(roots.map((root) => scanRoot(root, nowMs, excluded))))

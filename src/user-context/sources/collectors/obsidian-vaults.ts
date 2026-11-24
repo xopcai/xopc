@@ -48,6 +48,7 @@ function obsidianConfigPaths(home: string, platform: NodeJS.Platform, env: NodeJ
   return [
     join(configHome, 'obsidian', 'obsidian.json'),
     join(home, '.var', 'app', 'md.obsidian.Obsidian', 'config', 'obsidian', 'obsidian.json'),
+    join(home, 'snap', 'obsidian', 'current', '.config', 'obsidian', 'obsidian.json'),
   ];
 }
 

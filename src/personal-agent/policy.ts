@@ -8,7 +8,7 @@ export const PERSONAL_MAIN_TOOL_IDS = [
 
 export const PERSONAL_TOOL_DESCRIPTIONS: Readonly<Record<string, string>> = {
   session_recall: 'Find exact facts in this conversation, including compacted history. Cannot access other chats.',
-  session_search: 'Search other chats locally for short matching excerpts. No model or network calls.',
+  session_search: 'List, search, or read owner chats across agents and projects (supports since/until, agentId, projectId, and reading by conversationId). No model or network calls.',
   list_dir: 'List workspace directory entries quickly to orient before answering a simple question or composing a Task brief.',
   web_search: 'Run a fast web lookup (1-2 calls max) to answer simple factual or live questions directly. Delegate multi-source research, surveys or synthesis to personal_task.',
   web_fetch: 'Read one specific web page directly for a quick answer. Delegate multi-page research, interactive browsing or file generation to personal_task.',

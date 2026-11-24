@@ -742,7 +742,28 @@ export function HomePage() {
       </div>
     </section>
   ) : null;
-  const hasAdvisor = !home?.observation && advisorVisible;
+  const hasObservationActivity = Boolean(
+    home?.observation && (
+      home.observation.status !== 'disabled'
+      || home.observation.topics.length > 0
+      || (home.observation.followUps?.length ?? 0) > 0
+      || (home.observation.followUpCandidates?.length ?? 0) > 0
+    ),
+  );
+  const hasHomeWork = needsUserCount > 0
+    || deliveries.length > 0
+    || resumable.length > 0
+    || background.length > 0
+    || (home?.runningConversations?.length ?? 0) > 0
+    || advisorVisible
+    || proactiveHasItems;
+  const showObservationCard = Boolean(
+    home?.observation && (
+      hasObservationActivity
+      || (home.observation.hasWorkHistory ?? hasHomeWork)
+    ),
+  );
+  const hasAdvisor = !showObservationCard && advisorVisible;
   const renderDecision = (item: HomeWorkbenchItem, primary: boolean) => (
     <DecisionCard
       key={item.id}
@@ -892,8 +913,8 @@ export function HomePage() {
       id: 'observation',
       label: language === 'zh' ? '交给我' : 'Let me handle it',
       lane: 'right',
-      content: home?.observation ? (
-        <HomeObservationCard observation={home.observation} advisor={home.advisor} language={language} emphasizeStart={mode !== 'attention' && mode !== 'delivery'} onUpdated={() => void load()} />
+      content: showObservationCard && home?.observation ? (
+        <HomeObservationCard observation={home.observation} advisor={home.advisor} language={language} emphasizeStart={mode === 'resume'} onUpdated={() => void load()} />
       ) : null,
     },
   ];
@@ -1037,7 +1058,7 @@ export function HomePage() {
 
       {loading ? <HomeSkeleton /> : home ? (
         <div ref={stageRef} tabIndex={-1} className="flex min-h-0 w-full flex-1 flex-col gap-4 outline-none">
-          {needsUserCount === 0 ? <p className="text-xs font-medium text-fg-muted" aria-live="polite">{work.noAttention}</p> : null}
+          {needsUserCount === 0 && !isIdle ? <p className="text-xs font-medium text-fg-muted" aria-live="polite">{work.noAttention}</p> : null}
           {showInlineComposer ? (
             <section className="mx-auto flex w-full max-w-[640px] flex-1 flex-col justify-center pb-12 pt-10 text-center sm:pb-20 sm:pt-16">
               <h2 className="text-2xl font-semibold tracking-tight text-fg sm:text-3xl">{work.startTitle}</h2>
@@ -1065,12 +1086,16 @@ export function HomePage() {
               />
               <div className="mt-3 flex flex-wrap justify-center gap-2">
                 <Button variant="ghost" onClick={() => window.dispatchEvent(new Event('open-command-palette'))}><Search className="size-4" aria-hidden />{work.findWork}</Button>
-                <Button variant="ghost" onClick={() => openDelivery('history')}>{work.deliveryHistory}</Button>
+                {deliveries.length > 0 ? (
+                  <Button variant="ghost" onClick={() => openDelivery('history')}>{work.deliveryHistory}</Button>
+                ) : null}
               </div>
             </section>
           ) : null}
 
-          <HomeWorkbenchLayout cards={visibleCards} editing={editingLayout} language={language} />
+          {visibleCards.length > 0 ? (
+            <HomeWorkbenchLayout cards={visibleCards} editing={editingLayout} language={language} />
+          ) : null}
           {!isIdle && !deliverySection && deliveries.length > 0 ? (
             <Button variant="ghost" className="self-start px-2 text-xs" onClick={() => openDelivery('history')}>{work.deliveryHistory}</Button>
           ) : null}

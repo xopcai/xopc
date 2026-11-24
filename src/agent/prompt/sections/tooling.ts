@@ -68,7 +68,7 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   knowledge_get: 'Read one knowledge item returned by search',
   knowledge_write: 'Store a scoped knowledge candidate with provenance',
   session_recall: 'Search exact raw turns in the current session, including compacted history',
-  session_search: 'Search other chat sessions or list recent sessions',
+  session_search: 'List, search, read, or summarize owner chat sessions across agents and projects (supports since/until, agentId, projectId, conversationId)',
   session_status: 'Show session usage/time/model state',
   tool_manual: 'Load built-in usage manuals for complex tools',
   delegate_task: 'Spawn an isolated sub-agent for a delegated task',

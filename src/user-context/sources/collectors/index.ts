@@ -58,6 +58,7 @@ export async function collectTier1Source(
       items = await collectLocalMarkdownNoteItems({
         homeDirectory: options.homeDirectory,
         platform: options.platform,
+        environment: options.environment,
         customDirectories: options.customNoteDirectories,
         nowMs: options.nowMs,
         excludeIds: options.excludeIds,
@@ -103,6 +104,7 @@ export async function previewTier1Sources(
     previewLocalMarkdownNotes({
       homeDirectory: options.homeDirectory,
       platform: options.platform,
+      environment: options.environment,
       customDirectories: options.customNoteDirectories,
       nowMs: options.nowMs,
     }),

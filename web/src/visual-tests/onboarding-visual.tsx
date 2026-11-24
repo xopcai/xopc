@@ -105,8 +105,12 @@ window.fetch = async (input) => {
   if (url.includes('/api/imports/sources')) {
     return json({ ok: true, data: { sources: [{ id: 'claude-code', name: 'Claude Code', detected: true }] } });
   }
+  if (url.includes('/api/connectors')) {
+    return json({ connectors: [], instances: [] });
+  }
   if (url.includes('/api/context-sources/local-preview')) {
     return json({
+      platform: 'darwin',
       previews: [
         { sourceId: 'local-ai-instructions', detected: true, itemCount: 2, summary: 'Claude · Codex' },
         { sourceId: 'local-obsidian', detected: true, itemCount: 42, summary: 'MainVault' },

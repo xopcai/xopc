@@ -121,7 +121,11 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
   const params: Array<string | number> = [];
 
   if (!query.includeHidden) {
-    conditions.push(`s.hidden_from_session_list = 0`);
+    conditions.push(
+      query.includePersonalAgent
+        ? `(s.hidden_from_session_list = 0 OR COALESCE(CASE WHEN json_valid(s.custom_data_json) THEN json_extract(s.custom_data_json, '$.personalAgent') END, 0) = 1)`
+        : `s.hidden_from_session_list = 0`,
+    );
     conditions.push(`NOT (s.source_channel = 'automation' AND (COALESCE(CASE WHEN json_valid(s.custom_data_json) THEN json_extract(s.custom_data_json, '$.systemInternal') END, 0) = 1 OR COALESCE(CASE WHEN json_valid(s.custom_data_json) THEN json_extract(s.custom_data_json, '$.automationId') END, '') LIKE 'system-memory-%'))`);
 
   }
@@ -198,6 +202,11 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
       params.push(includeConversationId);
     }
     conditions.push(`(${clauses.join(' OR ')})`);
+  }
+
+  if (query.updatedBefore !== undefined) {
+    conditions.push(`s.updated_at <= ?`);
+    params.push(query.updatedBefore);
   }
 
   if (query.channel) {

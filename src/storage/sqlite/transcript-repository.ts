@@ -12,6 +12,7 @@ import {
   type TranscriptStoredRow,
   type XopcTranscriptCompactionEntry,
 } from '../../session/session-context-for-llm.js';
+import { VOICE_TRANSCRIPT_TYPE, voiceTranscriptMessage } from '../../session/voice-transcript.js';
 import {
   classifyStoredRow,
   estimateTokensFromMessages,
@@ -44,6 +45,22 @@ export interface SessionTranscriptRecallMatch {
   role: string | null;
   createdAt: number;
   content: string;
+}
+
+export interface SessionTranscriptReadOptions {
+  roles?: string[];
+  since?: number;
+  until?: number;
+  offset?: number;
+  limit?: number;
+  order?: 'asc' | 'desc';
+}
+
+export interface SessionTranscriptReadResult {
+  entries: SessionTranscriptRecallMatch[];
+  total: number;
+  offset: number;
+  hasMore: boolean;
 }
 
 function nextSeq(db: DatabaseSync, transcriptId: string): number {
@@ -341,6 +358,81 @@ export function searchSessionTranscript(
     });
   if (options.orderBySeq) matches.sort((a, b) => b.seq - a.seq);
   return matches.slice(0, limit);
+}
+
+/** Read chronological text entries from a session's active transcript, including voice turns. */
+export function readSessionTranscriptEntries(
+  conversationId: string,
+  options: SessionTranscriptReadOptions = {},
+): SessionTranscriptReadResult {
+  const transcriptId = getCurrentTranscriptId(conversationId);
+  const offset = Math.max(0, options.offset ?? 0);
+  const limit = Math.min(200, Math.max(1, options.limit ?? 40));
+  if (!transcriptId) {
+    return { entries: [], total: 0, offset, hasMore: false };
+  }
+  const db = getSqliteDatabase();
+  const conditions = [`transcript_id = ?`, `entry_kind <> 'compaction'`];
+  const params: Array<string | number> = [transcriptId];
+  if (options.since !== undefined) {
+    conditions.push(`created_at >= ?`);
+    params.push(options.since);
+  }
+  if (options.until !== undefined) {
+    conditions.push(`created_at <= ?`);
+    params.push(options.until);
+  }
+  const orderSql = options.order === 'desc' ? 'DESC' : 'ASC';
+  const rows = db
+    .prepare(
+      `SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at
+       FROM transcript_entries
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY seq ${orderSql}`,
+    )
+    .all(...params) as TranscriptEntryRow[];
+
+  const allowedRoles = options.roles?.length ? new Set(options.roles) : new Set(['user', 'assistant']);
+  const entries: SessionTranscriptRecallMatch[] = [];
+  for (const row of rows) {
+    const stored = transcriptEntryRowToStoredRow(row);
+    let logicalRole = row.role;
+    let content = '';
+    if (
+      row.role === 'custom'
+      && stored
+      && typeof stored === 'object'
+      && (stored as { customType?: unknown }).customType === VOICE_TRANSCRIPT_TYPE
+    ) {
+      const projected = voiceTranscriptMessage(stored as { content?: unknown; details?: unknown; timestamp?: string | number });
+      if (!projected) continue;
+      logicalRole = projected.role;
+      content = extractFtsContent(projected);
+    } else if (row.entry_kind === 'message') {
+      content = extractFtsContent(stored);
+    } else {
+      continue;
+    }
+    if (!logicalRole || !allowedRoles.has(logicalRole)) continue;
+    const trimmed = content.trim();
+    if (!trimmed) continue;
+    entries.push({
+      entryId: row.entry_id,
+      seq: row.seq,
+      role: logicalRole,
+      createdAt: row.created_at,
+      content: trimmed,
+    });
+  }
+
+  const total = entries.length;
+  const page = entries.slice(offset, offset + limit);
+  return {
+    entries: page,
+    total,
+    offset,
+    hasMore: offset + page.length < total,
+  };
 }
 
 export function loadTranscriptRowsForSession(conversationId: string): TranscriptStoredRow[] {

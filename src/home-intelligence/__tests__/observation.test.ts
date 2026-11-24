@@ -181,4 +181,46 @@ describe('long-term Home observation', () => {
     expect(db.prepare('SELECT COUNT(*) AS n FROM home_opportunity_projections').get()?.n).toBe(0);
     expect(new TaskRepository().get(result.taskId)).toBeDefined();
   });
+
+  it('reports hasWorkHistory as false on a cold start and ignores hidden onboarding sessions', () => {
+    const o = observer();
+    expect(o.state().hasWorkHistory).toBe(false);
+
+    const hiddenId = randomUUID();
+    createConversation({
+      agentId: 'main',
+      sourceChannel: 'webchat',
+      sessionType: 'chat',
+      hiddenFromSessionList: true,
+      customData: { workDiscovery: true },
+      routing: { source: 'webchat', accountId: 'default', peerKind: 'direct', peerId: 'owner', agentId: 'main' },
+    }, '', hiddenId);
+    appendTranscriptEntry(hiddenId, { role: 'user', content: 'Onboarding discovery', timestamp: now });
+    expect(o.state().hasWorkHistory).toBe(false);
+
+    const keepHiddenId = randomUUID();
+    createConversation({
+      agentId: 'main',
+      sourceChannel: 'webchat',
+      sessionType: 'chat',
+      hiddenFromSessionList: true,
+      customData: { keepHiddenFromSessionList: true },
+      routing: { source: 'webchat', accountId: 'default', peerKind: 'direct', peerId: 'owner', agentId: 'main' },
+    }, '', keepHiddenId);
+    appendTranscriptEntry(keepHiddenId, { role: 'user', content: 'Hidden background note', timestamp: now });
+    expect(o.state().hasWorkHistory).toBe(false);
+
+    const emptyVisibleId = randomUUID();
+    createConversation({
+      agentId: 'main',
+      sourceChannel: 'webchat',
+      sessionType: 'chat',
+      routing: { source: 'webchat', accountId: 'default', peerKind: 'direct', peerId: 'owner', agentId: 'main' },
+    }, '', emptyVisibleId);
+    expect(o.state().hasWorkHistory).toBe(false);
+
+    source('整理项目周报');
+    expect(o.state().hasWorkHistory).toBe(true);
+    expect(observer(() => false).state().hasWorkHistory).toBe(false);
+  });
 });
