@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+import { stripFrontMatter } from '../../context/workspace.js';
 import { PROMPT_CACHE_BOUNDARY } from '../cache-boundary.js';
 import { NO_REPLY } from '../../messaging/no-reply.js';
 import { buildSystemPrompt, splitBuiltSystemPrompt } from '../system-prompt.js';
@@ -198,8 +200,8 @@ describe('buildSystemPrompt response language', () => {
       expect(prompt).toContain('Write user-facing prose in the language of the current user request.');
       expect(prompt).toContain(`Only when the current user message has no identifiable language, fall back to the Agent primary language: ${displayName}.`);
       expect(prompt).not.toContain(`Write all user-facing prose in ${displayName}.`);
-      expect(prompt).toContain('not surrounding runtime metadata, quoted material, or source context');
-      expect(prompt).toContain('Re-evaluate it on each turn.');
+      expect(prompt).toContain('Infer language each turn from the user’s request.');
+      expect(prompt).toContain('Ignore runtime metadata, quotations and sources.');
       expect(prompt).toContain('Explicit user language instructions override the default: use a current-turn override first');
     });
 
@@ -468,16 +470,37 @@ describe('conversation communication preferences', () => {
     expect(prompt).toContain('replacing stale settings in conversation, summaries, memory, and profile Markdown');
   });
 
-  it('skips duplicate tone/human sections and unmodified stock AGENTS/TOOLS templates for personal role while keeping custom files', () => {
-    const stockAgents = '# AGENTS.md - Workspace Rules\n\n## Tool Use\n- Prefer narrow file edits over broad rewrites.\n\n## Maintenance\nThis file is a starting point. Update it when workspace-specific rules become clear.';
-    const stockTools = '# TOOLS.md - Local Notes\n\n- home-server → 192.168.1.100, user: admin\n\nAdd whatever helps you do your job. This is your cheat sheet.';
-    const customTools = `${stockTools}\n\n- studio-mic → USB Audio`;
+  it.each(['full', 'voice'] as const)('uses the shared language contract for Ada in %s mode', promptMode => {
+    const options = {
+      promptRole: 'personal' as const, promptMode,
+      toolNames: ['personal_result'], agentProfile: { name: 'Ada', language: 'zh-CN' },
+    };
+    const english = buildSystemPrompt('/ws', { ...options, responseLanguage: 'en' });
+    expect(english).toContain('Default: Write all user-facing prose in English.');
+    expect(english).toContain('Fixed English applies even when the question');
+    expect(english).toContain('Metal feels colder because');
+    expect(english).not.toContain('导出失败，还没有生成文件');
+    expect(english).toContain('a current-turn override first, then the latest active conversation preference, then the default above');
+    expect(english).toContain('Revocation clears the preference');
+    expect(english).not.toMatch(/follow the current (?:user|request language)|in the language of the current user request/i);
+
+    const auto = buildSystemPrompt('/ws', options);
+    expect(auto).toContain('Default: Write user-facing prose in the language of the current user request.');
+    expect(auto).toContain('导出失败，还没有生成文件');
+    expect(auto).toContain('Only when the current user message has no identifiable language');
+    expect(auto).not.toContain('## Personal Coordination');
+  });
+
+  it.each(['../../context/workspace-templates', '../../../../docs/reference/templates'])('filters only the unmodified profile bodies from %s', (templateDir) => {
+    const stockFiles = ['AGENTS.md', 'TOOLS.md'].map(name => ({
+      path: `profile/${name}`,
+      content: stripFrontMatter(readFileSync(new URL(`${templateDir}/${name}`, import.meta.url), 'utf8')).trimEnd(),
+    }));
+    const options = { promptRole: 'personal' as const, toolNames: ['personal_task', 'read_file'] };
     const stockPrompt = buildSystemPrompt('/ws', {
-      promptRole: 'personal',
-      toolNames: ['personal_task', 'read_file'],
+      ...options,
       contextFiles: [
-        { path: 'profile/AGENTS.md', content: stockAgents },
-        { path: 'profile/TOOLS.md', content: stockTools },
+        ...stockFiles.map(file => ({ ...file, content: `${file.content.replace(/\r?\n/g, '\r\n')}\r\n\r\n` })),
         { path: 'profile/SOUL.md', content: '# SOUL.md\nBe warm.' },
       ],
     });
@@ -487,12 +510,16 @@ describe('conversation communication preferences', () => {
     expect(stockPrompt).not.toContain('Prefer narrow file edits over broad rewrites.');
     expect(stockPrompt).toContain('Be warm.');
 
-    const customPrompt = buildSystemPrompt('/ws', {
-      promptRole: 'personal',
-      toolNames: ['personal_task', 'read_file'],
-      contextFiles: [{ path: 'profile/TOOLS.md', content: customTools }],
-    });
-    expect(customPrompt).toContain('studio-mic → USB Audio');
+    const customized = stockFiles.map((file, index) => ({
+      ...file,
+      content: file.content.replace(/\n([^\n]+)$/, `\n\n- Local rule ${index + 1}.\n\n$1`),
+    }));
+    const customPrompt = buildSystemPrompt('/ws', { ...options, contextFiles: customized });
+    expect(customPrompt).toContain('Local rule 1.');
+    expect(customPrompt).toContain('Local rule 2.');
+    const executorPrompt = buildSystemPrompt('/ws', { contextFiles: stockFiles });
+    expect(executorPrompt).toContain('192.168.1.100');
+    expect(executorPrompt).toContain('Prefer narrow file edits over broad rewrites.');
   });
 
   it('bounds default instruction size while retaining authorization and verification', () => {

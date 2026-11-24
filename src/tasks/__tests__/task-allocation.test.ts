@@ -85,6 +85,11 @@ function submit(key = 'submit', acceptancePolicy: 'manual' | 'verified_auto' = '
   if (!result.ok) throw new Error('Expected submission');
   return result.model.task;
 }
+
+function addSecondAnalyst() {
+  catalog.create({ id: 'second-analyst', profile: { name: 'Second Analyst' }, specialistProfile: profile }, { ready: true });
+}
+
 const decide = vi.fn(async () => ({ kind: 'select' as const, agentId: 'analyst', reason: 'Sales expertise and verified tools' }));
 const dispatcher = () => new TaskAllocationDispatcher({ context, decide, wake: vi.fn() });
 
@@ -517,7 +522,14 @@ describe('background task allocation', () => {
     expect(validate({ command: 'cancel', taskId: 'task' })).toBe(true);
   });
 
+  it('reserves requestedAgentId in the model-facing contract for an explicit user choice', () => {
+    const tool = createPersonalTaskTool({});
+    expect(tool.description).toContain('requirements.requestedAgentId only when the user explicitly names the specialist');
+    expect(tool.parameters.properties.requirements.properties.requestedAgentId.description).toContain('the user explicitly named');
+  });
+
   it('cancels through the personal tool during router selection without starting an executor', async () => {
+    addSecondAnalyst();
     const task = submit();
     const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId,
       getCurrentAgentId: () => personalAgentId('local-owner'), dispatchTaskRuns: vi.fn() });
@@ -593,6 +605,7 @@ describe('background task allocation', () => {
   });
 
   it('ignores a router result when the user cancels during selection', async () => {
+    addSecondAnalyst();
     const task = submit();
     const worker = new TaskAllocationDispatcher({ context, wake: vi.fn(), decide: async () => {
       new TaskApplicationService().execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'cancel',
@@ -642,7 +655,28 @@ describe('background task allocation', () => {
     expect(router).not.toHaveBeenCalled();
   });
 
+  it('assigns a unique eligible specialty without treating it as a user selection', async () => {
+    const task = submit('unique-specialty');
+    const router = vi.fn();
+    await new TaskAllocationDispatcher({ context, decide: router, wake: vi.fn() }).drain();
+    expect(router).not.toHaveBeenCalled();
+    expect(new TaskAllocationRepository().summary(task.id)).toMatchObject({ status: 'assigned', selectedAgentId: 'analyst' });
+    expect(savedExecutionRequirements(task.id)?.requirements.requestedAgentId).toBeUndefined();
+    expect(getSqliteDatabase().prepare('SELECT selection_source, reason_source FROM agent_selection_records WHERE task_id = ?').get(task.id))
+      .toMatchObject({ selection_source: 'match', reason_source: 'system' });
+  });
+
+  it('asks the model router when a second eligible specialist matches the same requirements', async () => {
+    addSecondAnalyst();
+    const task = submit('ambiguous-specialty');
+    const router = vi.fn(async () => ({ kind: 'select' as const, agentId: 'second-analyst', reason: 'Also qualified' }));
+    await new TaskAllocationDispatcher({ context, decide: router, wake: vi.fn() }).drain();
+    expect(router).toHaveBeenCalledOnce();
+    expect(new TaskAllocationRepository().summary(task.id)).toMatchObject({ status: 'assigned', selectedAgentId: 'second-analyst' });
+  });
+
   it('retries allocation on the same Task after answering the router question', async () => {
+    addSecondAnalyst();
     const task = submit();
     await new TaskAllocationDispatcher({ context, wake: vi.fn(), decide: async () => ({ kind: 'needs_input', question: 'Which period?' }) }).drain();
     const question = new TaskCollaborationRepository().recent(task.id, undefined, 10).find(entry => entry.kind === 'question')!;
@@ -657,6 +691,7 @@ describe('background task allocation', () => {
   });
 
   it.each(['new', 'legacy', 'failed legacy'] as const)('opens the task conversation (%s)', async scenario => {
+    addSecondAnalyst();
     const directory = mkdtempSync(join(tmpdir(), 'xopc-allocation-http-'));
     const store = new SessionStore(directory);
     const token = 'allocation-http-test-token';

@@ -63,7 +63,7 @@ describe('SystemPromptBuilder runtime responsibility', () => {
     expect(prompt).toContain('## Personal Coordination');
     expect(prompt).not.toContain('OBSOLETE_PERSONAL_STYLE');
     expect(prompt).toContain('Tone: friendly and natural.');
-    expect(prompt).toContain('submit the complete request and source references through the available coordination tools before reading input materials');
+    expect(prompt).toContain('submit the complete request and source references before reading input materials');
     expect(prompt).toContain('Do not wait, poll, or continue executing the delegated work');
     expect(prompt).toContain('Submission is not completion');
     expect(prompt).toContain('## Safety');

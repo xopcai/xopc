@@ -6,6 +6,8 @@
  * not to manually reread startup files.
  */
 
+import { createHash } from 'node:crypto';
+
 import type { EmbeddedContextFile } from '../bootstrap/types.js';
 import { personalInstructions, projectPersonalInstructions } from '../../personal-agent/prompts.js';
 import type { AgentProfile } from '../../agent-config/index.js';
@@ -119,7 +121,7 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   } = options;
 
   const customInstructions = promptRole === 'personal'
-    ? projectPersonalInstructions(personalInstructions(), toolNames) : storedCustomInstructions;
+    ? projectPersonalInstructions(personalInstructions(), toolNames, responseLanguage === 'en') : storedCustomInstructions;
 
   if (promptMode === 'none') {
     return joinSections([
@@ -141,7 +143,7 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   const sectionOverrides = promptContribution?.sectionOverrides ?? {};
 
   const orderedContextFiles = sortContextFilesForPrompt(
-    contextFiles.filter((file) => file.path.trim().length > 0 && !(isPersonal && isStockPersonalTemplateNoise(file))),
+    contextFiles.filter((file) => file.path.trim().length > 0 && !(isPersonal && isStockPersonalTemplate(file))),
   );
   const hasProfileMemory = orderedContextFiles.some(
     (file) => getContextFileBasename(file.path) === 'memory.md',
@@ -167,9 +169,9 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
     })] : []),
   ];
 
-  if (isPersonal) {
+  if (isPersonal && normalizedTools.has('personal_task')) {
     stableSections.push(buildPersonalCoordinationSection());
-  } else if (!isMinimal) {
+  } else if (!isPersonal && !isMinimal) {
     stableSections.push(
       buildOverridablePromptSection({
         override: sectionOverrides.execution_bias,
@@ -308,22 +310,21 @@ function buildCoderHarnessSection(): string {
   ].join('\n');
 }
 
-function isStockPersonalTemplateNoise(file: EmbeddedContextFile): boolean {
-  const base = getContextFileBasename(file.path);
-  const text = file.content.trim();
-  if (base === 'agents.md') {
-    return text.startsWith('# AGENTS.md - Workspace Rules')
-      && text.includes('Prefer narrow file edits over broad rewrites.')
-      && text.endsWith('This file is a starting point. Update it when workspace-specific rules become clear.')
-      && text.length <= 1650;
-  }
-  if (base === 'tools.md') {
-    return text.startsWith('# TOOLS.md - Local Notes')
-      && text.includes('home-server → 192.168.1.100, user: admin')
-      && text.endsWith('Add whatever helps you do your job. This is your cheat sheet.')
-      && text.length <= 850;
-  }
-  return false;
+// Digests of the shipped profile bodies from workspace-templates and docs/reference/templates.
+// Keep old digests when a seed changes so existing unedited profiles still match.
+const STOCK_PERSONAL_TEMPLATE_DIGESTS = new Map([
+  ['agents.md', [
+    '10a4e3df43c3fe19568eaaf7b1f3f96a20182501c8a19f7c1ffe1cbb257d376f',
+    'b73357279e8f5d21366a937a7a49d7e9322f5dd7f14a085241683251387657c6',
+  ]],
+  ['tools.md', ['95b55da7511ac7ee54efe6927d8ceb131919f897d45653ff9bb30b04e9d9592b']],
+]);
+
+function isStockPersonalTemplate(file: EmbeddedContextFile): boolean {
+  const knownDigests = STOCK_PERSONAL_TEMPLATE_DIGESTS.get(getContextFileBasename(file.path));
+  if (!knownDigests) return false;
+  const body = file.content.replace(/\r\n?/g, '\n').trimEnd();
+  return knownDigests.includes(createHash('sha256').update(body).digest('hex'));
 }
 
 /** Split a built prompt at the cache boundary (for tests and provider adapters). */

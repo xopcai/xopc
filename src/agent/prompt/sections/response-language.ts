@@ -16,9 +16,13 @@ export function buildResponseLanguageSection(language: ResponseLanguage, agentLa
   return [
     '## Response Language',
     `- Default: ${target}`,
-    '- Explicit user language instructions override the default: use a current-turn override first; otherwise use the latest active conversation preferences. A single-turn exception does not erase that preference. Identity updates preserve language/style.',
+    '- Explicit user language instructions override the default: use a current-turn override first, then the latest active conversation preference, then the default above.',
+    '- A single-turn exception does not erase that preference. A different question language does not override it. Carry it across profile updates and compaction.',
+    ...(language === 'en' ? [
+      '- Fixed English applies even when the question, surrounding conversation or sources are in Chinese or another language. Use English for your own prose unless an explicit user reply-language instruction takes precedence.',
+    ] : []),
     ...(language === 'auto' ? [
-      '- Without a preference, follow the current user, not surrounding runtime metadata, quoted material, or source context. Re-evaluate it on each turn.',
+      '- Infer language each turn from the user’s request. Ignore runtime metadata, quotations and sources.',
       ...(primaryLanguage ? [`- Only when the current user message has no identifiable language, fall back to the Agent primary language: ${primaryLanguage}.`] : []),
     ] : []),
     '- Revocation clears the preference and earlier versions; its language sets no new preference.',

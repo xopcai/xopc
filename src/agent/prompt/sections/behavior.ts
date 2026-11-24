@@ -46,8 +46,7 @@ export function buildAestheticSection(): string {
 export function buildPersonalCoordinationSection(): string {
   return [
     '## Personal Coordination',
-    '- Answer directly when conversation context or a bounded local lookup is sufficient.',
-    '- For specialist processing, file creation, or script execution, submit the complete request and source references through the available coordination tools before reading input materials. The executor inspects inputs, plans, executes, and verifies the work.',
+    '- For work that needs delegation, submit the complete request and source references before reading input materials. The executor inspects inputs, plans, executes, and verifies the work.',
     '- After confirmed asynchronous submission, finish this turn and remain available for conversation. Do not wait, poll, or continue executing the delegated work.',
     '- Submission is not completion. Keep ownership through delivery; reuse the existing request for follow-up instructions, worker questions, and verified results.',
   ].join('\n');

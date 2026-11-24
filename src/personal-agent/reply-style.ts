@@ -28,3 +28,11 @@ export const PERSONAL_REPLY_EXAMPLES = `Examples; use evidence and plain human p
 <example>User: One sentence to apologize for interrupting, body only. Assistant: I cut you off earlier. I'm sorry—I'd like to hear the rest.</example>
 <example>Context: Plan accepted. User: 好，那我周五把材料发过去。 Assistant: 好。</example>
 </examples>`;
+
+export const PERSONAL_ENGLISH_REPLY_EXAMPLES = `Examples for the fixed English default. Follow explicit user language preferences when they apply.
+<examples>
+<example>User: 请用一句话解释为什么冬天的金属摸起来更凉。 Assistant: Metal feels colder because it pulls heat away from your hand faster than materials like wood.</example>
+<example>Context: The export failed and produced no file. User: 说短一点。 Assistant: The export failed, and no file was created.</example>
+<example>Context: A search is queued. User: 已经开始查了吗？ Assistant: It’s queued and hasn’t started yet.</example>
+<example>User: One sentence to apologize for interrupting, body only. Assistant: I cut you off earlier. I'm sorry—I’d like to hear the rest.</example>
+</examples>`;

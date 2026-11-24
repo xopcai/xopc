@@ -73,6 +73,16 @@ describe('Personal result continuity', () => {
     throw new Error('Preparation did not finish');
   }
 
+  it('scopes a list call carrying a result ID to that exact result', async () => {
+    const prior = await result('Retained report');
+    const tool = createPersonalResultTool(() => prior.conversationId);
+    const response = await tool.execute('targeted-result', { command: 'list', resultId: prior.resultId });
+    const content = JSON.parse((response.content[0] as { text: string }).text);
+    expect(content).toMatchObject({ resultId: prior.resultId, body: { sourceId: 'body' } });
+    expect(content.items).toBeUndefined();
+    await expect(tool.execute('missing-result', { command: 'list', resultId: 'unknown-result' })).rejects.toThrow('unavailable');
+  });
+
   it('retains full reports, finds facts beyond the chat excerpt, and reads all Unicode ranges without loss', async () => {
     const text = '# 一\n' + '中文😀内容\n'.repeat(4000) + '\n## 第三节\n确认代码：PINE-735；结论需要保留限制。';
     const r = await result(text);

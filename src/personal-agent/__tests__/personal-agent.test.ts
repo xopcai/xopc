@@ -379,14 +379,14 @@ describe('personal Agent identity', () => {
     expect(direct).not.toContain('Joyce');
     expect(direct).toContain('personal_task(command="submit")');
     expect(direct).toContain('requiredSkills=[canonicalName]');
-    expect(direct).toMatch(/When the user names a specialist Agent[^\n]*pass its ID in requirements\.requestedAgentId/);
-    expect(direct).toContain('The background Task Router selects and starts the executor');
+    expect(direct).toContain('Set requirements.requestedAgentId only when the user explicitly names a specialist Agent');
+    expect(direct).toContain('omit it and let the host select the executor, even when one specialist looks like a clear fit');
     expect(direct).not.toContain('call delegate_task');
     expect(direct).toContain('Do not invent extra analyses');
     expect(direct).toContain('Answer directly when your capabilities suffice');
     expect(direct).toContain('ask one short question directly in your reply');
     expect(direct).toContain('Never use clarify');
-    expect(direct).toContain('acknowledge once after confirmed persistence');
+    expect(direct).toMatch(/acknowledge once after confirmed persistence/i);
     expect(direct).toContain('Reuse the existing Task');
     expect(direct).toContain('For current news or other live facts');
   });

@@ -39,6 +39,21 @@ export interface AllocationDecisionInput {
   signal: AbortSignal;
 }
 
+function findDeterministicExecutor(candidates: SpecialistAssessment[], requirements: ReturnType<typeof normalizeSpecialistRequirements>): SpecialistAssessment | undefined {
+  const first = candidates[0];
+  if (requirements.requestedAgentId) return first;
+  if (candidates.length === 1 && first?.missing.length === 0 && !first.specialistProfile?.limitations.length) return first;
+  const { domain, taskType } = requirements;
+  if ((!domain && !taskType) || domain === 'general' || domain === 'coordination') return undefined;
+
+  const matches = candidates.filter(candidate => candidate.profileSource === 'declared' && candidate.missing.length === 0
+    && candidate.specialistProfile?.domains.some(value => value !== 'general' && value !== 'coordination'));
+  const [match, alternative] = matches;
+  if (!match || alternative) return undefined;
+  return match.specialistProfile?.limitations.length || match.checks.some(check => check.condition !== 'model' && check.state !== 'verified')
+    ? undefined : match;
+}
+
 /** The router is a separate Catalog Agent; it does not execute a TaskRun or call business tools. */
 export async function decideTaskAllocation(input: AllocationDecisionInput): Promise<AllocationDecision> {
   const catalog = new AgentCatalogRepository();
@@ -248,12 +263,11 @@ export class TaskAllocationDispatcher {
     const snapshotHash = selectionRequestHash(candidates.map(candidate => ({ id: candidate.id, revision: candidate.revision })));
     const nonCoordination = candidates.filter(candidate => !candidate.specialistProfile?.domains?.includes('coordination'));
     const routingCandidates = !requirements.requestedAgentId && nonCoordination.length > 0 ? nonCoordination : candidates;
-    const deterministic = Boolean(requirements.requestedAgentId) || (routingCandidates.length === 1 && routingCandidates[0]!.missing.length === 0
-      && !routingCandidates[0]!.specialistProfile?.limitations.length);
+    const deterministic = findDeterministicExecutor(routingCandidates, requirements);
     const decision = deterministic
-      ? { kind: 'select' as const, agentId: routingCandidates[0]!.id, reason: requirements.requestedAgentId
+      ? { kind: 'select' as const, agentId: deterministic.id, reason: requirements.requestedAgentId
           ? zh ? '用户明确指定的执行者已通过检查。' : 'The requested executor passed availability checks.'
-          : zh ? '唯一候选覆盖需求且已通过执行条件检查。' : 'The sole candidate covers the requirements and passed availability checks.' }
+          : zh ? '只有一个候选者匹配已声明需求并通过执行条件检查。' : 'One eligible candidate matched the declared requirements and passed execution checks.' }
       : DecisionSchema.parse(await (this.deps.decide ?? decideTaskAllocation)({ task, candidates: routingCandidates, signal }));
     if (signal.aborted || this.#stopped) throw new Error('Task allocation interrupted');
     if (decision.kind !== 'select') {

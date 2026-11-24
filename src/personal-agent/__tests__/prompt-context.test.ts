@@ -40,6 +40,8 @@ describe('personal prompt snapshot', () => {
     expect(first).not.toContain('web_search');
     expect(first).toContain('Connected apps:');
     expect(first).toContain('Delegated tasks:');
+    expect(first).toContain('Work results:');
+    expect(first).not.toMatch(/personal_task|personal_result|requestedAgentId/);
     expect(builder.build(config, conversationId)).toBe(first);
   });
 
