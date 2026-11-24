@@ -69,12 +69,12 @@ import XCTest
         }
         composer.typeText("APPROVAL_MOBILE_\(key): run the command.")
         app.buttons["assistant-chat-send"].tap()
-        let approve = app.buttons["批准本次操作"]
+        let approve = app.buttons["允许"]
         XCTAssertTrue(approve.waitForExistence(timeout: 30), "Actual tool request must show the native approval card")
-        XCTAssertTrue(app.buttons["拒绝本次操作"].exists)
+        XCTAssertTrue(app.buttons["拒绝"].exists)
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5), "Approval must dismiss the composer keyboard")
         XCTAssertTrue(approve.isHittable, "Approval actions must be visible")
-        XCTAssertTrue(app.staticTexts["需要你的批准"].firstMatch.isHittable, "Approval title must not be clipped above the viewport")
+        XCTAssertTrue(app.staticTexts["确认操作"].firstMatch.isHittable, "Approval title must not be clipped above the viewport")
         try await Task.sleep(for: .seconds(1))
         let pending = try await state(key)
         XCTAssertEqual(pending["count"] as? Int, 0, "No execution before approval")
@@ -82,7 +82,7 @@ import XCTest
         if phase == "expire" {
             try await verifyExpiry(key, phase: phase, approve: approve)
         } else {
-            app.buttons[phase == "approve" ? "批准本次操作" : "拒绝本次操作"].tap()
+            app.buttons[phase == "approve" ? "允许" : "拒绝"].tap()
             let deadline = Date().addingTimeInterval(35)
             var completed = false
             while Date() < deadline {

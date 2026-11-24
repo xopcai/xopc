@@ -67,16 +67,15 @@ class ClarificationCardTest {
         listOf(ai.xopc.mobile.gateway.ClarificationChoice("blog", "Blog", null), ai.xopc.mobile.gateway.ClarificationChoice("social", "Social", null)), "blog"),
       ai.xopc.mobile.gateway.ClarificationQuestion("direction", "Direction", "Content direction?", "text", emptyList(), null)))
     compose.setContent { MaterialTheme { ClarificationCard(prompt, false, null, { submitted = it }) } }
-    compose.waitUntil(5000) { compose.onAllNodesWithText(label(R.string.voice_answer_send)).fetchSemanticsNodes().isNotEmpty() &&
+    compose.waitUntil(5000) { compose.onAllNodesWithText(label(R.string.clarify_next)).fetchSemanticsNodes().isNotEmpty() &&
       compose.onAllNodesWithText("Blog", substring = true).fetchSemanticsNodes().any { !it.config.contains(androidx.compose.ui.semantics.SemanticsProperties.Disabled) } }
-    compose.onNodeWithText(label(R.string.voice_answer_send)).performScrollTo().assertIsNotEnabled()
-    compose.onNodeWithText("Blog", substring = true).performScrollTo().performClick()
+    compose.onNodeWithText(label(R.string.clarify_next)).assertIsNotEnabled()
+    compose.onNodeWithText("Blog", substring = true).performClick()
     compose.runOnIdle { assertNull(submitted) }
-    compose.onNodeWithText(label(R.string.clarify_next)).performScrollTo().performClick()
     compose.onNode(hasSetTextAction()).performTextInput("Engineering notes\n中文")
-    compose.onNodeWithText(label(R.string.clarify_previous)).performScrollTo().performClick()
-    compose.onNodeWithText("✓ Blog", substring = true).assertExists()
-    compose.onNodeWithText(label(R.string.voice_answer_send)).performScrollTo().performClick()
+    compose.onNodeWithText(label(R.string.clarify_previous)).performClick()
+    compose.onNode(isSelected()).assertExists()
+    compose.onNodeWithText(label(R.string.clarify_confirm)).performClick()
     compose.waitUntil(5000) { submitted != null }
     compose.runOnIdle {
       assertEquals(2, submitted?.schemaVersion)

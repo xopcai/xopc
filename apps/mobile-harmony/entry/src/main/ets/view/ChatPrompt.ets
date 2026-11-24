@@ -12,6 +12,6 @@ export struct XopcChatPrompt {
           onDraft: (record: string): void => { this.model.updateDraft(record); }, submitting: this.model.busy, errorMessage: this.model.error,
           onRespond: (command: XopcClarificationCommand): void => { this.model.respond(command); } })
       }
-    }.width('92%').margin({ bottom: 8 })
+    }.width('calc(100% - 24vp)').margin({ top: 4, bottom: 8 })
   }
 }

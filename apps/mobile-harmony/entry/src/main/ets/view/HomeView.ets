@@ -60,6 +60,7 @@ export struct XopcHomeView {
   @Local recordingPanel: XopcDiscussionRecordingPanel = new XopcDiscussionRecordingPanel();
   @Local recordingViewportWidth: number = 0;
   @Local recordingViewportHeight: number = 0;
+  @Local notesListVisible: boolean = false;
   @Local sidebarOpen: boolean = false;
   @Local sidebarMounted: boolean = false;
   @Local sidebarProgress: number = 0;
@@ -96,6 +97,7 @@ export struct XopcHomeView {
   private taskOpening: boolean = false;
   private automationOpening: boolean = false;
   private ordinaryOpening: boolean = false;
+  private noteCaptureOpening: boolean = false;
   private disposed: boolean = false;
   private navigationRevision: number = 0;
   private readonly onMotionChange = (reduced: boolean): void => { layoutState.reduceMotion = reduced; };
@@ -107,6 +109,9 @@ export struct XopcHomeView {
     this.pathStack.setInterception({
       willShow: (_from: NavDestinationContext | NavBar, to: NavDestinationContext | NavBar): void => {
         this.detailRoute = typeof to === 'string' ? '' : to.pathInfo.name;
+        const route = typeof to === 'string' ? undefined : to.pathInfo.param as XopcMobileRoute | undefined;
+        this.notesListVisible = this.detailRoute === 'notes-list' ||
+          ((this.detailRoute === 'notes' || this.detailRoute === 'inbox') && !route?.itemId);
       }
     });
     pushNotifications.restore();
@@ -153,6 +158,18 @@ export struct XopcHomeView {
     return !!this.music.track && this.detailVisible && this.detailRoute !== 'library' && this.detailRoute !== 'notes-list' &&
       this.detailRoute !== 'project-chat' && this.detailRoute !== 'task-conversation' &&
       this.detailRoute !== 'automation-configuration-chat';
+  }
+  @Computed get recordingDocked(): boolean {
+    return this.notesListVisible && this.recordingViewportWidth > 0 && this.recordingViewportWidth < 840;
+  }
+  @Computed get recordingAvailable(): boolean {
+    return !this.recordingPanel.dismissed && (this.capture.active || this.capture.phase === 'completed');
+  }
+
+  private collapseNotesRecording(): boolean {
+    if (!this.recordingDocked || !this.recordingAvailable || this.recordingPanel.small) return false;
+    this.recordingPanel.setCompact(true);
+    return true;
   }
   aboutToDisappear(): void {
     chatDraftIntake.clear();
@@ -268,6 +285,12 @@ export struct XopcHomeView {
   }
 
   private async startNoteCapture(): Promise<void> {
+    if (this.recordingAvailable) {
+      this.recordingPanel.setCompact(false);
+      return;
+    }
+    if (this.noteCaptureOpening) return;
+    this.noteCaptureOpening = true;
     this.recordingPanel.fresh();
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     try {
@@ -294,6 +317,8 @@ export struct XopcHomeView {
       } catch (error) {
         this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
       }
+    } finally {
+      this.noteCaptureOpening = false;
     }
   }
 
@@ -537,12 +562,13 @@ export struct XopcHomeView {
       }.hideTitleBar(true).backgroundColor(this.colors.surface).onBackPressed((): boolean => this.libraryBackHandler?.() ?? false)
     } else if (page === 'notes-list' || ((page === 'notes' || page === 'inbox') && !(param as XopcMobileRoute).itemId)) {
       NavDestination() {
-        XopcNotesTabView({ activePage: this.detailRoute === page && this.layout.foreground,
+        XopcNotesTabView({ activePage: this.notesListVisible && this.detailRoute === page && this.layout.foreground,
+          recordingAvailable: this.recordingAvailable,
           initialStatus: page === 'inbox' ? 'inbox' : '',
           onExit: (): void => { this.pathStack.pop(); },
           onStartVoice: (): void => { void this.startNoteCapture(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
-      }.hideTitleBar(true).backgroundColor(this.colors.surface)
+      }.hideTitleBar(true).backgroundColor(this.colors.surface).onBackPressed((): boolean => this.collapseNotesRecording())
     } else if (page === 'personal-goals') {
       NavDestination() {
         XopcPersonalGoalsView({ onExit: (): void => { this.pathStack.pop(); } })
@@ -756,9 +782,20 @@ export struct XopcHomeView {
             .backgroundColor(this.colors.surface)
         }
       }.width('100%').height('100%')
-      if (!this.recordingPanel.dismissed && (this.capture.active || this.capture.phase === 'completed') && this.recordingViewportWidth > 0 && this.recordingViewportHeight > 0) {
+      if (this.recordingAvailable && (!this.recordingDocked || !this.recordingPanel.small) &&
+        this.recordingViewportWidth > 0 && this.recordingViewportHeight > 0) {
+        if (this.recordingDocked) {
+          Column() {}.width('100%').height('100%').backgroundColor('#330F172A').zIndex(49)
+            .accessibilityLevel('no').onClick((): void => { this.collapseNotesRecording(); })
+        }
         XopcDiscussionRecordingPanelView({ panel: this.recordingPanel,viewportWidth: this.recordingViewportWidth,viewportHeight: this.recordingViewportHeight,
-          onSaved: (_id: string): void => {},
+          docked: this.recordingDocked,
+          onSaved: (_id: string): void => {
+            if (this.recordingDocked && !this.capture.markerError &&
+              (this.capture.localSaveComplete || this.capture.syncStatus === 'available')) {
+              this.recordingPanel.setCompact(true);
+            }
+          },
           onOpenNote: (id: string): void => { this.recordingPanel.setCompact(true); this.navigate({ page: 'notes',itemId: id }); },
           onRecovery: (): void => { this.pathStack.clear(); this.navigate({ page: 'notes-list', itemId: '' }); void this.capture.refreshPending(this.getUIContext().getHostContext() as common.UIAbilityContext); } })
       }

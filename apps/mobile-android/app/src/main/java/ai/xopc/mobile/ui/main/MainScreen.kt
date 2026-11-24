@@ -1660,7 +1660,16 @@ internal fun MainContent(
           if (isTaskChat(connection)) TaskDetailsTip(
             onOpen = { closeKeyboard(); taskDetailsOpen = true },
             modifier = Modifier.align(Alignment.Start).padding(start = 16.dp))
-          MainBottomSurface("assistant-bottom-surface", assistantActionsOpen) {
+          val activeClarification = connection.clarification
+          if (activeClarification != null) {
+            ClarificationCard(
+              activeClarification,
+              connection.clarificationBusy,
+              connection.clarificationError,
+              onRespondToClarification,
+              Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+          } else MainBottomSurface("assistant-bottom-surface", assistantActionsOpen) {
             AssistantComposer(connection, assistantComposerValue, { value ->
               inputVoiceNotice.clear()
               onDismissComposerErrors(gatewayId, conversationId)
@@ -3073,7 +3082,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   var olderAnchor by remember(readingPosition) { mutableStateOf<Pair<String, Int>?>(null) }
   val messageDragged by messageListState.interactionSource.collectIsDraggedAsState()
   val density = LocalDensity.current
-  val bottomGap = if (showConnectionWait || connection.clarification != null) 104.dp else 12.dp
+  val bottomGap = if (showConnectionWait) 104.dp else 12.dp
   val bottomChromePx = with(density) { (bottomChromeHeight + bottomGap).roundToPx() }
   val latestLabelGapPx = with(density) { 24.dp.roundToPx() }
   val latestMarkerPx = with(density) { 1.dp.roundToPx() }
@@ -3572,11 +3581,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
       }
     }
   if (isTaskChat(connection)) taskChrome({ onMessageSearchOpenChange(true) }, { optionsOpen = true })
-  connection.clarification?.let { prompt ->
-    Box(Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
-      ClarificationCard(prompt, connection.clarificationBusy, connection.clarificationError, onRespondToClarification, Modifier.fillMaxWidth())
-    }
-  }
   if (showConnectionWait && connection.clarification == null) Box(modifier = Modifier.align(Alignment.BottomCenter)
     .padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
     ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait, onConnectionWaitAction)

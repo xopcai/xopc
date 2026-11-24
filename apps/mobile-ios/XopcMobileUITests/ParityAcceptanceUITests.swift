@@ -20,7 +20,8 @@ final class ParityAcceptanceUITests: XCTestCase {
         }
         app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "chinese"
         app.launchEnvironment["XOPC_UI_TEST_SYNTHETIC_AUDIO"] = "1"
-        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = "http://127.0.0.1:18790"
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_URL"]
+            ?? "http://127.0.0.1:18790"
         app.launch()
         XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
     }
@@ -910,8 +911,14 @@ final class ParityAcceptanceUITests: XCTestCase {
             XCTAssertTrue(app.buttons["notes-open-search"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.textFields["notes-search-field"].exists)
         }
-        XCTAssertTrue(app.buttons["notes-create-voice"].exists)
-        app.buttons["notes-create-text"].tap()
+        let record = app.buttons["notes-create-voice"]
+        let create = app.buttons["notes-create-text"]
+        XCTAssertTrue(record.isHittable)
+        XCTAssertTrue(create.isHittable)
+        let controls = record.frame.union(create.frame)
+        XCTAssertEqual(controls.midX, app.frame.midX, accuracy: 3)
+        XCTAssertGreaterThan(controls.midY, app.frame.maxY - 120)
+        create.tap()
         XCTAssertTrue(app.navigationBars["新建笔记"].waitForExistence(timeout: 5))
     }
 

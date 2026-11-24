@@ -220,7 +220,14 @@ struct AssistantView<Dock: View>: View {
                     if let conversation, !conversation.isDraft, isActive, !showingPhone {
                         ConversationMcpAction(configuration: configuration, conversationID: conversation.id, activeRun: state.isRunActive)
                     }
-                    bottomDock(composer).padding(.bottom, 4)
+                    if state.clarification != nil {
+                        clarificationCard
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 8)
+                            .onAppear { composerFocused = false }
+                    } else {
+                        bottomDock(composer).padding(.bottom, 4)
+                    }
                 }
             }
         }
@@ -607,7 +614,6 @@ struct AssistantView<Dock: View>: View {
                             }
                             .frame(minHeight: 44)
                         }
-                        clarificationCard
                         personalConnectionCard
                         if automationSetup {
                             ContentUnavailableView("用对话创建定时任务", systemImage: "clock",
@@ -817,7 +823,6 @@ struct AssistantView<Dock: View>: View {
         if let unanchored = cards[""] {
             generatedMediaRows(unanchored, maximumWidth: maximumMessageWidth, viewportHeight: viewportHeight)
         }
-        clarificationCard
         if showsStagedProgress {
             AssistantStagesView(progress: state.runProgress,
                                 answerStarted: state.messages.contains {

@@ -243,6 +243,7 @@
 "没有匹配的笔记" = "No Matching Notes";
 "新建一条文字笔记，或调整筛选条件。" = "Create a text note or change the filters.";
 "新建笔记" = "New Note";
+"录音" = "Record";
 "文字笔记" = "Text Note";
 "语音笔记" = "Voice Note";
 "搜索笔记" = "Search Notes";
@@ -992,11 +993,22 @@
 "你正在操作" = "You control the phone";
 "另一设备正在操作" = "Another device is operating";
 
-"上一题" = "Previous";
+"仅本次生效" = "One-time approval";
+"交给助手" = "Let AI decide";
+"其他…" = "Other…";
+"补充说明…" = "Add details…";
+"输入回答…" = "Type your answer…";
+"参数" = "Parameters";
+"影响" = "Impact";
+"清除" = "Clear";
+"更多操作" = "More options";
+"内容过长，请精简" = "Too long — please shorten";
+"%lld 项" = "%lld fields";
+"上一题" = "Back";
 "下一题" = "Next";
-"重试提交" = "Retry submission";
-"此请求已过期" = "This request has expired";
-"回答内容过长，请精简后再提交" = "Answers are too long. Shorten them before submitting.";
+"重试提交" = "Retry";
+"此请求已过期" = "Expired";
+"回答内容过长，请精简后再提交" = "Too long — please shorten";
 
 "记住的你" = "Memories";
 "记住你的偏好。记错了，随时改。" = "Your preferences, in your words. You can correct anything.";

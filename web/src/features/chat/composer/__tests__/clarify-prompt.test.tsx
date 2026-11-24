@@ -20,7 +20,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); });
 const render = () => act(async () => root.render(<ClarifyPrompt {...props} />));
-function button(text: string) { return Array.from(container.querySelectorAll('button')).find(item => item.textContent?.includes(text))!; }
+function button(text: string) { return Array.from(container.querySelectorAll('button')).find(item => item.textContent?.includes(text) || item.getAttribute('aria-label') === text)!; }
 const click = (text: string) => act(async () => button(text).click());
 async function type(text: string) {
   await act(async () => {
@@ -73,25 +73,38 @@ describe('clarify prompt', () => {
     await type('a'.repeat(8001)); expect(button(labels.clarifySend).disabled).toBe(true);
     expect(container.querySelector('textarea')!.getAttribute('aria-invalid')).toBe('true');
   });
-  it('advances choices automatically, restores earlier answers and submits the full batch', async () => {
+  it('advances choices automatically, restores earlier answers, and confirms before submitting multi-question batch', async () => {
     props.prompt = { ...props.prompt!, ...clarifyToolInputV2Schema.parse(batchFixture), choiceDetails: undefined, recommendedChoiceId: undefined };
     await render();
-    expect(container.textContent).toContain('0/3 answered');
+    expect(container.textContent).toContain('0/3');
     expect(container.querySelector('textarea')).toBeNull();
     expect(props.onSubmit).not.toHaveBeenCalled();
     await click('Blog');
-    expect(container.textContent).toContain('1/3 answered');
+    expect(container.textContent).toContain('1/3');
     await click('Weekly'); await type('Engineering notes');
     expect(props.onSubmit).not.toHaveBeenCalled();
-    await click('Previous');
+    await click(labels.clarifyPrevious);
     expect(container.querySelector('[aria-pressed="true"]')?.textContent).toContain('Weekly');
-    await click('Previous');
+    await click(labels.clarifyPrevious);
     expect(container.querySelector('[aria-pressed="true"]')?.textContent).toContain('Blog');
+    // Re-selecting while editing an earlier question must NOT silently auto-submit.
     await click('Blog');
+    expect(props.onSubmit).not.toHaveBeenCalled();
+    await click(labels.clarifySubmitAll);
     expect(props.onSubmit).toHaveBeenCalledWith({ schemaVersion: 2, answers: [
       { questionId: 'channel', choiceId: 'blog' },
       { questionId: 'frequency', choiceId: 'weekly' }, { questionId: 'direction', text: 'Engineering notes' },
     ] });
+  });
+  it('supports numeric keyboard shortcuts and collapsing/expanding to inspect chat context', async () => {
+    await render();
+    await click(labels.clarifyCollapse);
+    expect(container.querySelector('[role="group"]')).toBeNull();
+    await click(labels.clarifyExpand);
+    await act(async () => {
+      container.querySelector('section')!.dispatchEvent(new KeyboardEvent('keydown', { key: '2', bubbles: true }));
+    });
+    expect(props.onSubmit).toHaveBeenCalledWith({ response: { choiceId: 'prod' } });
   });
   it('submits a single v2 choice immediately and blocks duplicate clicks while saving', async () => {
     const fixture = clarifyToolInputV2Schema.parse(batchFixture);

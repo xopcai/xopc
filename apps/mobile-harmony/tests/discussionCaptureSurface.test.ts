@@ -15,13 +15,16 @@ describe('HarmonyOS voice note surface', () => {
     expect(home).not.toContain('this.noteCaptureBar()');
     expect(home).toContain('onStartVoice: (): void => { void this.startNoteCapture(); }');
     expect(home).toContain('await this.capture.start(context)');
-    expect(notes).toContain("actionLabel: $r('app.string.new_note')");
+    expect(notes).toContain("Stack({ alignContent: Alignment.Bottom })");
+    expect(notes).toContain(".id('notes-capture-actions')");
+    expect(notes).toContain(".id('notes-create-text')");
     expect(notes).toContain("this.onNavigate({ page: 'note-create', itemId: '' })");
     expect(notes).toContain(".id('notes-create-voice')");
-    expect(notes).toContain('.onClick((): void => { this.onStartVoice(); })');
+    expect(notes).toContain('this.onStartVoice();');
   });
 
   it('renders live transcript, pause, marker, finish and retry states', () => {
+    const home = source('../entry/src/main/ets/view/HomeView.ets');
     const panel = source('../entry/src/main/ets/view/DiscussionRecordingPanel.ets');
     expect(panel).toContain(".id('discussion-recording-float')");
     expect(panel).toContain('this.capture.visibleTranscript');
@@ -30,6 +33,9 @@ describe('HarmonyOS voice note surface', () => {
     expect(panel).toContain('void this.finishRecording()');
     expect(panel).toContain('.onActionCancel((): void => { this.panel.dragCancel(); })');
     expect(panel).toContain('this.positionChoices()');
+    expect(panel).toContain(".id('capture-sheet-handle')");
+    expect(panel).toContain('direction: PanDirection.Down');
+    expect(home).toContain('(!this.recordingDocked || !this.recordingPanel.small)');
     const notes = source('../entry/src/main/ets/view/NotesTabView.ets');
     expect(notes).not.toContain('this.capturePane()');
   });

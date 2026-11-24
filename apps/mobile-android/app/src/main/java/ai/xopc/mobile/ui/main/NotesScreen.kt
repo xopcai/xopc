@@ -54,6 +54,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -65,6 +66,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -103,6 +105,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.ensureActive
@@ -482,12 +485,6 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(end = 12.dp),
           maxLines = 1, overflow = TextOverflow.Ellipsis)
         PageSearchButton(searchOpen, R.string.notes_search, "notes-open-search", ::toggleSearch)
-        if (voiceNotes != null && voiceScope != null) {
-          IconButton(onClick = { focusManager.clearFocus(force = true); voiceCapture = true },
-            modifier = Modifier.testTag("notes-new-voice")) {
-            ActionIcon(R.drawable.action_microphone, size = 24.dp, contentDescription = stringResource(R.string.voice_note_title))
-          }
-        }
         IconButton(onClick = {
           focusManager.clearFocus(force = true)
           fileSpaceId = null
@@ -497,11 +494,6 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           fileBrowserOpen = true
         }, modifier = Modifier.testTag("notes-open-files")) {
           ActionIcon(R.drawable.action_folder, size = 24.dp, contentDescription = stringResource(R.string.notes_files))
-        }
-        IconButton(onClick = { editorOpen = true; onNew() },
-          enabled = !state.draftLoading && !state.draftSaving,
-          modifier = Modifier.testTag("notes-new")) {
-          ActionIcon(R.drawable.action_add, size = 24.dp, contentDescription = stringResource(R.string.notes_new))
         }
       }
     }
@@ -522,10 +514,40 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       Modifier.weight(1f), onResolveConflict, onAddAttachment = { attachmentSheetOpen = true },
       attachmentBusy = attachmentBusy, attachmentError = attachmentError)
     else if (selectedId == null) {
-      NotesListContent(state, query, { query = it },
-      { onSearch(query.trim(), state.status) }, { status -> onSearch(query.trim(), status) },
-      { id -> selectedId = id; onOpen(id) }, onLoadMore, Modifier.weight(1f),
-      { id -> editorOpen = true; onOpenDraft(id) }, searchOpen = searchOpen, listState = notesListState, filtersOpen = filtersOpen)
+      Box(Modifier.weight(1f).fillMaxWidth()) {
+        NotesListContent(state, query, { query = it },
+          { onSearch(query.trim(), state.status) }, { status -> onSearch(query.trim(), status) },
+          { id -> selectedId = id; onOpen(id) }, onLoadMore, Modifier.fillMaxSize(),
+          { id -> editorOpen = true; onOpenDraft(id) }, searchOpen = searchOpen,
+          listState = notesListState, filtersOpen = filtersOpen, bottomContentPadding = 76.dp)
+        Surface(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp)
+          .testTag("notes-capture-actions"), shape = CircleShape,
+          color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 4.dp) {
+          Row(Modifier.padding(5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            if (voiceNotes != null && voiceScope != null) {
+              TextButton(onClick = { focusManager.clearFocus(force = true); voiceCapture = true },
+                modifier = Modifier.heightIn(min = 46.dp).testTag("notes-new-voice"),
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                  ActionIcon(R.drawable.action_microphone, size = 18.dp)
+                  Text(stringResource(R.string.notes_record))
+                }
+              }
+            }
+            Button(onClick = { focusManager.clearFocus(force = true); editorOpen = true; onNew() },
+              modifier = Modifier.heightIn(min = 46.dp).testTag("notes-new"),
+              enabled = !state.draftLoading && !state.draftSaving, shape = CircleShape,
+              colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer)) {
+              Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                ActionIcon(R.drawable.action_new_chat, size = 18.dp)
+                Text(stringResource(R.string.notes_new))
+              }
+            }
+          }
+        }
+      }
     } else if (discussion != null && voiceNotes != null && voiceScope != null) {
       val note = requireNotNull(discussion)
       VoiceNoteResult(note, { file -> voiceNotes.downloadAudio(voiceScope, note, file) }, onRetry = {
@@ -1164,7 +1186,8 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
   onSubmit: () -> Unit, onStatus: (String) -> Unit, onOpen: (String) -> Unit,
   onLoadMore: () -> Unit, modifier: Modifier = Modifier, onOpenDraft: (String) -> Unit = {},
   searchOpen: Boolean = false, listState: LazyListState = rememberLazyListState(),
-  filtersOpen: MutableState<Boolean> = rememberSaveable { mutableStateOf(false) }) {
+  filtersOpen: MutableState<Boolean> = rememberSaveable { mutableStateOf(false) },
+  bottomContentPadding: Dp = 20.dp) {
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (searchOpen) Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
       .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14)),
@@ -1201,7 +1224,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
     )
     LazyColumn(state = listState, modifier = Modifier.weight(1f).testTag("notes-list"),
       verticalArrangement = Arrangement.spacedBy(8.dp),
-      contentPadding = PaddingValues(bottom = 20.dp)) {
+      contentPadding = PaddingValues(bottom = bottomContentPadding)) {
       if (state.loading && state.items.isEmpty()) item {
         BrandLoadingPanel(modifier = Modifier.testTag("notes-loading"))
       }

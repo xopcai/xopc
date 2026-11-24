@@ -19,6 +19,7 @@ export struct XopcNotesTabView {
   @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
   @Local capture: XopcDiscussionCapture = discussionCapture;
   @Param activePage: boolean = false;
+  @Param recordingAvailable: boolean = false;
   @Param initialStatus: XopcNoteStatus | '' = '';
   @Local searchText: string = '';
   @Local searchOpen: boolean = false;
@@ -66,6 +67,64 @@ export struct XopcNotesTabView {
     }
   }
 
+  @Monitor('capture.phase')
+  refreshSavedRecording(): void {
+    if (this.activePage && this.initialized && this.capture.phase === 'completed') void this.model.list(false, true);
+  }
+
+  private recordingLabel(): Resource {
+    if (!this.recordingAvailable) return $r('app.string.notes_action_record');
+    switch (this.capture.phase) {
+      case 'recording': return this.capture.captureStatus === 'recording'
+        ? $r('app.string.capture_live') : $r('app.string.notes_action_recording_waiting');
+      case 'paused': return $r('app.string.capture_paused');
+      case 'stopping':
+      case 'organizing': return $r('app.string.capture_saving');
+      case 'completed': return this.capture.localSaveComplete || this.capture.syncStatus === 'available'
+        ? $r('app.string.notes_action_recording_saved') : $r('app.string.capture_open_details');
+      default: return $r('app.string.capture_open_details');
+    }
+  }
+
+  @Builder
+  captureActions() {
+    Row({ space: 4 }) {
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 6 }) {
+          if (this.capture.phase === 'recording' || this.capture.phase === 'paused') {
+            Row() {}.width(7).height(7).borderRadius(4)
+              .backgroundColor(this.capture.captureStatus === 'recording' ? this.colors.danger : this.colors.secondary)
+          } else {
+            SymbolGlyph($r('sys.symbol.mic')).fontSize(18).fontColor([this.colors.secondary])
+          }
+          Text(this.recordingLabel()).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).maxLines(1)
+          if (this.capture.phase === 'recording' || this.capture.phase === 'paused') {
+            Text(xopcFormatCaptureTime(this.capture.elapsedMs)).fontSize(12).fontFamily('monospace').fontColor(this.colors.secondary)
+          }
+        }.justifyContent(FlexAlign.Center)
+      }.id('notes-create-voice').height(46).padding({ left: 12, right: 12 })
+        .borderRadius(23).backgroundColor(Color.Transparent)
+        .onClick((): void => {
+          this.getUIContext().getFocusController().clearFocus();
+          this.onStartVoice();
+        })
+      if (!this.model.selecting) {
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 6 }) {
+            SymbolGlyph($r('sys.symbol.square_and_pencil')).fontSize(18).fontColor([this.colors.accent])
+            Text($r('app.string.new_note')).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.accent).maxLines(1)
+          }.justifyContent(FlexAlign.Center)
+        }.id('notes-create-text').height(46).padding({ left: 14, right: 14 })
+          .borderRadius(23).backgroundColor(this.colors.accentSoft).accessibilityText($r('app.string.new_note'))
+          .onClick((): void => {
+            this.getUIContext().getFocusController().clearFocus();
+            this.onNavigate({ page: 'note-create', itemId: '' });
+          })
+      }
+    }.id('notes-capture-actions').padding(5).margin({ bottom: 12 })
+      .borderRadius(30).backgroundColor(this.colors.panel).shadow(ShadowStyle.OUTER_DEFAULT_SM)
+  }
+
   private async restoreRecording(id: string): Promise<void> {
     if (this.capture.recoveryBusy) return;
     const noteId = await this.capture.recoverRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, id);
@@ -88,17 +147,16 @@ export struct XopcNotesTabView {
   @Builder
   listPane() {
     Column() {
-      XopcPageHeader({ heading: $r('app.string.notes'), backVisible: true, onBack: this.onExit,
+      XopcPageHeader({ heading: $r('app.string.notes'), showStaticTitle: true, backVisible: true, onBack: this.onExit,
         searchId: 'notes-open-search', searchOpen: this.searchOpen, searchLabel: $r('app.string.search_notes'),
-        onSearch: (): void => { this.toggleSearch(); }, actionLabel: $r('app.string.new_note'),
-        actionIcon: $r('sys.symbol.plus'), onAction: (): void => { this.onNavigate({ page: 'note-create', itemId: '' }); } })
+        onSearch: (): void => { this.toggleSearch(); } })
       if (this.searchOpen) {
         Column() {
           XopcPageSearchField({ searchId: 'notes-search', text: this.searchText, placeholder: $r('app.string.search_notes'),
             onChange: (value: string): void => { this.searchText = value; }, onSubmit: (): void => { this.searchAll(); } })
         }.padding({ left: 20, right: 20, bottom: 12 })
       }
-      Row({ space: 8 }) {
+      Row() {
         XopcSegmentedTabs({ options: [
           { key: '', label: $r('app.string.note_all') },
           { key: 'inbox', label: $r('app.string.inbox') },
@@ -108,10 +166,6 @@ export struct XopcNotesTabView {
           this.model.status = key as XopcNoteStatus | '';
           void this.model.list(false, true);
         } }).layoutWeight(1)
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.mic')).fontSize(20).fontColor([this.colors.foreground])
-        }.id('notes-create-voice').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
-          .accessibilityText($r('app.string.note_voice_option')).onClick((): void => { this.onStartVoice(); })
       }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
       if (this.capture.pendingRecordings.length && this.capture.phase !== 'recording' && this.capture.phase !== 'paused') {
         Button({ type: ButtonType.Normal }) {
@@ -157,6 +211,7 @@ export struct XopcNotesTabView {
             .onClick((): void => { void this.model.list(); })
         }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
       }
+      Stack({ alignContent: Alignment.Bottom }) {
         List({ space: 8 }) {
           if (this.model.loading && !this.model.items.length) {
             ListItem() { XopcListSkeleton() }
@@ -210,7 +265,10 @@ export struct XopcNotesTabView {
                 onLoad: (): void => { void this.model.list(true); } })
             }
           }
-        }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
+        }.width('100%').height('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
+          .contentEndOffset(!this.model.selecting || this.recordingAvailable ? 72 : 0)
+        if (!this.model.selecting || this.recordingAvailable) this.captureActions()
+      }.layoutWeight(1).width('100%')
       if (this.model.selecting) {
         Row({ space: 4 }) {
           Button($r('app.string.pin')).layoutWeight(1).height(44).enabled(!this.model.saving)

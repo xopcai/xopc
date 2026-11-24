@@ -1434,6 +1434,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
               ) : null}
               <ReadAloudDock />
               <DeviceInteractionPanel conversationId={session.conversationId} active={stream.streaming || stream.sending} />
+              <div className={cn(clarify.clarifyPrompt && 'opacity-55 transition-opacity duration-150 hover:opacity-100 focus-within:opacity-100')}>
               <ChatComposer
                 personal={personal}
                 addActions={!readOnly && (videoAvailable || Boolean(window.electronAPI?.screenshot)) ? {
@@ -1566,6 +1567,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                 voiceTaskId={taskId ?? undefined}
                 prepareVoiceSession={session.projectPreparation ? projectComposer.prepareSession : undefined}
               />
+              </div>
               </div>
             </div>
           </div>

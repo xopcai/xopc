@@ -98,7 +98,7 @@ try {
   await composer.click();
   await page.keyboard.insertText('CLARIFY_E2E_START: help me prepare a publishing plan. Ask the three independent questions together.');
   await composer.press('Enter');
-  await page.getByText('0/3 answered', { exact: true }).waitFor();
+  await page.getByText('0/3', { exact: true }).waitFor();
   assert.equal(await page.locator('[aria-pressed="true"]').count(), 0);
   await page.screenshot({ path: join(evidence, 'desktop-question.png') });
   await page.getByRole('button', { name: /Blog.*Long-form content/ }).click();
@@ -108,11 +108,11 @@ try {
   const waitingId = await page.locator('section[data-clarification-id]').getAttribute('data-clarification-id');
   await page.screenshot({ path: join(evidence, 'desktop-before-submit.png') });
   await page.reload();
-  await page.getByText('3/3 answered', { exact: true }).waitFor();
+  await page.getByText('3/3', { exact: true }).waitFor();
   assert.equal(await page.locator('section[data-clarification-id] textarea').inputValue(), 'Engineering notes');
-  await page.getByRole('button', { name: 'Previous', exact: true }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   assert.equal(await page.getByRole('button', { name: /Weekly/ }).getAttribute('aria-pressed'), 'true');
-  await page.getByRole('button', { name: 'Previous', exact: true }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   assert.equal(await page.getByRole('button', { name: /Blog.*Long-form content/ }).getAttribute('aria-pressed'), 'true');
   const collapse = page.getByRole('button', { name: 'Collapse sidebar', exact: true }).first();
   if (await collapse.isVisible()) await collapse.click();
@@ -127,7 +127,7 @@ try {
   await page.setViewportSize({ width: 1365, height: 1000 });
   await page.locator('nav button').filter({ hasText: /^3\./ }).click();
   const accepted = page.waitForResponse(r => /\/clarifications\/.+\/responses$/.test(new URL(r.url()).pathname) && r.request().method() === 'POST');
-  await page.getByRole('button', { name: 'Submit and continue', exact: true }).dblclick();
+  await page.getByRole('button', { name: 'Confirm', exact: true }).dblclick();
   assert.equal((await accepted).status(), 202);
   await page.getByText('CLARIFY_E2E_COMPLETE: Blog / Weekly / Engineering notes', { exact: false }).waitFor({ timeout: 60000 });
   assert(submissions.length >= 1);

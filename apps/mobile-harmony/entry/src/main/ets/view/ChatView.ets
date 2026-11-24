@@ -1808,6 +1808,7 @@ export struct XopcChatView {
           this.onNavigate({ page: 'task-detail', itemId: this.taskId });
         })
     }
+    if (!this.prompt.prompt) {
     Column() {
     Column() {
       if (this.editingTurnId) {
@@ -1962,6 +1963,7 @@ export struct XopcChatView {
     XopcChatActionPanel({ open: this.panelOpen, canSwitchAgent: this.canSwitchAgent, disabledIds: this.disabledActionIds(),
       onSelect: (id: string): void => { this.chooseAction(id); } })
     }.width('calc(100% - 24vp)').backgroundColor(this.panelOpen ? this.colors.panel : Color.Transparent).borderRadius(this.colors.corner(28))
+    }
     }.id('chat-bottom-surface').width('100%').backgroundColor(Color.Transparent)
       .borderRadius(this.colors.corner(24)).clip(true)
     }.id('chat-bottom-region').width('100%')

@@ -6,6 +6,7 @@ import { common } from '@kit.AbilityKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { xopcFormatCaptureTime } from '../common/discussionAudio';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
+import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcDiscussionRecordingPanel, recordingPanelAvailability } from '../viewmodel/discussionRecordingPanel';
 
 @ComponentV2
@@ -13,12 +14,15 @@ export struct XopcDiscussionRecordingPanelView {
   @Require @Param panel: XopcDiscussionRecordingPanel;
   @Param viewportWidth: number = 0;
   @Param viewportHeight: number = 0;
+  @Param docked: boolean = false;
   @Event onSaved: (id: string) => void = (_id: string): void => {};
   @Event onOpenNote: (id: string) => void = (_id: string): void => {};
   @Event onRecovery: () => void = (): void => {};
   @Local outcomeModel: XopcDiscussionNoteViewModel = new XopcDiscussionNoteViewModel();
   @Local capture: XopcDiscussionCapture = discussionCapture;
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local layout: XopcLayoutState = layoutState;
+  @Local sheetDragOffset: number = 0;
 
   aboutToAppear(): void { this.resizePanel(); this.updateNotice(); this.followOutcome(); }
   aboutToDisappear(): void { this.outcomeModel.stop(); }
@@ -39,8 +43,11 @@ export struct XopcDiscussionRecordingPanelView {
     else if (mode === 'sync') void this.finishRecording();
     else void this.outcomeModel.retryOutcome(mode);
   }
-  @Monitor('viewportWidth','viewportHeight')
-  resizePanel(): void { this.panel.resize(this.viewportWidth,this.viewportHeight); }
+  @Monitor('viewportWidth','viewportHeight','docked')
+  resizePanel(): void {
+    this.sheetDragOffset = 0;
+    this.panel.resize(this.viewportWidth,this.viewportHeight);
+  }
   @Monitor('capture.captureInterrupted','capture.shutdownIncomplete','capture.error','capture.markerError','capture.backgroundAvailable','capture.phase','capture.interruptionCount')
   updateNotice(): void {
     this.panel.setNotice(this.capture.interruptionCount > 0 || !!this.capture.markerError || !!this.capture.error || this.capture.captureInterrupted || this.capture.shutdownIncomplete ||
@@ -95,25 +102,42 @@ export struct XopcDiscussionRecordingPanelView {
     }
   }
   @Builder
+  sheetHandle() {
+    Button({ type: ButtonType.Normal }) {
+      Row() {}.width(32).height(4).borderRadius(2).backgroundColor(this.colors.tertiary)
+    }.id('capture-sheet-handle').width(80).height(44).padding(0).alignSelf(ItemAlign.Center)
+      .backgroundColor(Color.Transparent).accessibilityText($r('app.string.capture_panel_minimize'))
+      .onClick((): void => { this.panel.setCompact(true); })
+      .gesture(PanGesture({ fingers: 1, direction: PanDirection.Down, distance: 6 })
+        .onActionUpdate((event: GestureEvent): void => { this.sheetDragOffset = Math.max(0, event.offsetY); })
+        .onActionEnd((event: GestureEvent): void => {
+          this.sheetDragOffset = 0;
+          if (event.offsetY >= 44) this.panel.setCompact(true);
+        })
+        .onActionCancel((): void => { this.sheetDragOffset = 0; }))
+  }
+  @Builder
   header() {
     Row({ space: 4 }) {
-      Button({ type: ButtonType.Normal }) {
-        Column({ space: 3 }) {
-          ForEach([0,1,2],(index: number) => {
-            Row({ space: 3 }) {
-              Row() {}.width(3).height(3).borderRadius(2).backgroundColor(this.colors.secondary)
-              Row() {}.width(3).height(3).borderRadius(2).backgroundColor(this.colors.secondary)
-            }
-          },(index: number): string => index.toString())
+      if (!this.docked) {
+        Button({ type: ButtonType.Normal }) {
+          Column({ space: 3 }) {
+            ForEach([0,1,2],(index: number) => {
+              Row({ space: 3 }) {
+                Row() {}.width(3).height(3).borderRadius(2).backgroundColor(this.colors.secondary)
+                Row() {}.width(3).height(3).borderRadius(2).backgroundColor(this.colors.secondary)
+              }
+            },(index: number): string => index.toString())
+          }
         }
+          .id('capture-float-move').width(44).height(44).padding(0).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(Color.Transparent)
+          .accessibilityText($r('app.string.capture_panel_move')).onClick((): void => { this.panel.togglePositions(); })
+          .gesture(PanGesture({ fingers: 1,direction: PanDirection.All,distance: 6 })
+            .onActionStart((_event: GestureEvent): void => { this.panel.dragStart(); })
+            .onActionUpdate((event: GestureEvent): void => { this.panel.dragTo(event.offsetX,event.offsetY); })
+            .onActionEnd((_event: GestureEvent): void => { this.panel.dragEnd(); })
+            .onActionCancel((): void => { this.panel.dragCancel(); }))
       }
-        .id('capture-float-move').width(44).height(44).padding(0).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.capture_panel_move')).onClick((): void => { this.panel.togglePositions(); })
-        .gesture(PanGesture({ fingers: 1,direction: PanDirection.All,distance: 6 })
-          .onActionStart((_event: GestureEvent): void => { this.panel.dragStart(); })
-          .onActionUpdate((event: GestureEvent): void => { this.panel.dragTo(event.offsetX,event.offsetY); })
-          .onActionEnd((_event: GestureEvent): void => { this.panel.dragEnd(); })
-          .onActionCancel((): void => { this.panel.dragCancel(); }))
       Column({ space: 2 }) {
         if (this.panel.small) {
           Text(xopcFormatCaptureTime(this.capture.elapsedMs)).fontSize(17).fontFamily('monospace').fontColor(this.colors.foreground).maxLines(1)
@@ -127,8 +151,10 @@ export struct XopcDiscussionRecordingPanelView {
         }
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       if (this.panel.small && !this.panel.narrow) { this.compactActions() }
-      this.iconAction(this.panel.small ? $r('app.string.capture_panel_expand') : $r('app.string.capture_panel_minimize'),this.panel.small ? $r('sys.symbol.chevron_up') : $r('sys.symbol.minus'),'capture-float-size',true,(): void => { this.panel.setCompact(!this.panel.small); })
-    }.width('100%').height(56).padding({ left: 8,right: 8 })
+      this.iconAction(this.panel.small ? $r('app.string.capture_panel_expand') : $r('app.string.capture_panel_minimize'),
+        this.panel.small ? $r('sys.symbol.chevron_up') : this.docked ? $r('sys.symbol.chevron_down') : $r('sys.symbol.minus'),
+        'capture-float-size',true,(): void => { this.panel.setCompact(!this.panel.small); })
+    }.width('100%').height(56).padding({ left: this.docked ? 16 : 8,right: 8 })
   }
   @Builder
   positionChoices() {
@@ -215,6 +241,7 @@ export struct XopcDiscussionRecordingPanelView {
   }
   build() {
     Column() {
+      if (this.docked) this.sheetHandle()
       this.header()
       if (this.panel.positionMenu) {
         Scroll() { this.positionChoices() }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
@@ -263,6 +290,14 @@ export struct XopcDiscussionRecordingPanelView {
       }
     }.id('discussion-recording-float').width(this.panel.cardWidth).height(this.panel.cardHeight)
       .alignItems(HorizontalAlign.Start).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(20))
-      .shadow(ShadowStyle.OUTER_DEFAULT_SM).clip(true).position({ x: this.panel.panelX,y: this.panel.panelY }).zIndex(50)
+      .shadow(ShadowStyle.OUTER_DEFAULT_SM).clip(true)
+      .position({
+        x: this.docked ? (this.viewportWidth - this.panel.cardWidth) / 2 : this.panel.panelX,
+        y: this.docked ? this.viewportHeight - this.panel.cardHeight - 8 : this.panel.panelY
+      }).translate({ y: this.docked ? this.sheetDragOffset : 0 })
+      .transition(this.docked && !this.layout.reduceMotion
+        ? TransitionEffect.move(TransitionEdge.BOTTOM).animation({ duration: 220, curve: Curve.EaseOut })
+        : TransitionEffect.OPACITY.animation({ duration: 0 }))
+      .zIndex(50)
   }
 }

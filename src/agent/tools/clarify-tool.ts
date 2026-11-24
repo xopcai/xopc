@@ -3,22 +3,41 @@ import { clarifyToolInputV2Schema, normalizeClarificationQuestion } from '@xopca
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
-const ChoiceSchema = Type.Object({ id: Type.String(), label: Type.String(), description: Type.Optional(Type.String()) }, { additionalProperties: false });
+const ChoiceSchema = Type.Object({
+  id: Type.String(),
+  label: Type.String({ description: 'Short, scannable option title (aim for 2–10 characters / 1–4 words).' }),
+  description: Type.Optional(Type.String({ description: 'Optional 1-phrase trade-off or detail (<= 25 chars). Omit when the label is already clear.' })),
+}, { additionalProperties: false });
 const QuestionSchema = Type.Union([
-  Type.Object({ id: Type.String(), header: Type.String(), question: Type.String(), type: Type.Literal('text') }, { additionalProperties: false }),
-  Type.Object({ id: Type.String(), header: Type.String(), question: Type.String(), type: Type.Literal('single_choice'),
-    choices: Type.Array(ChoiceSchema, { minItems: 2, maxItems: 10 }), recommendedChoiceId: Type.Optional(Type.String()) }, { additionalProperties: false }),
+  Type.Object({
+    id: Type.String(),
+    header: Type.String({ description: 'Short 1–3 word topic tag (2–6 Chinese chars) for step navigation.' }),
+    question: Type.String({ description: 'One direct, concise question (<= 35 Chinese chars / <= 18 words). Do not list options in the question.' }),
+    type: Type.Literal('text'),
+  }, { additionalProperties: false }),
+  Type.Object({
+    id: Type.String(),
+    header: Type.String({ description: 'Short 1–3 word topic tag (2–6 Chinese chars) for step navigation.' }),
+    question: Type.String({ description: 'One direct, concise question (<= 35 Chinese chars / <= 18 words). Do not repeat choices inside the question.' }),
+    type: Type.Literal('single_choice'),
+    choices: Type.Array(ChoiceSchema, { minItems: 2, maxItems: 10, description: 'Prefer 2–4 distinct choices. Do not include an "Other/Custom" choice; the UI provides custom input natively.' }),
+    recommendedChoiceId: Type.Optional(Type.String()),
+  }, { additionalProperties: false }),
 ]);
 
 const ClarifySchema = Type.Object({
   question: Type.Optional(Type.String({
-    description: 'The question to ask the user. Be specific and concise.',
+    description: 'One direct, concise question (<= 35 Chinese chars / <= 18 words). Put background context in your normal message, not here, and never repeat choices inside the question.',
   })),
   interactionMode: Type.Optional(Type.Union([Type.Literal('quick'), Type.Literal('compose')], { description: 'quick submits a choice immediately; compose lets the user select and add details before submitting.' })),
-  choiceDetails: Type.Optional(Type.Array(Type.Object({ id: Type.String(), label: Type.String(), description: Type.Optional(Type.String()) }), { minItems: 2, maxItems: 10, description: 'Answer choices with stable unique IDs and optional descriptions.' })),
+  choiceDetails: Type.Optional(Type.Array(Type.Object({
+    id: Type.String(),
+    label: Type.String({ description: 'Short, scannable option title (aim for 2–10 characters / 1–4 words).' }),
+    description: Type.Optional(Type.String({ description: 'Optional 1-phrase nuance (<= 25 chars). Omit if self-explanatory.' })),
+  }), { minItems: 2, maxItems: 10, description: 'Prefer 2–4 clear, mutually exclusive choices with stable IDs. Never add an "Other/Custom" option (the UI includes it automatically).' })),
   recommendedChoiceId: Type.Optional(Type.String()),
   schemaVersion: Type.Optional(Type.Literal(2)),
-  questions: Type.Optional(Type.Array(QuestionSchema, { minItems: 1, maxItems: 3, description: 'Independent questions answered together. Supported by capable Web/Electron main chats and delegated MCP runs. Never use for approvals.' })),
+  questions: Type.Optional(Type.Array(QuestionSchema, { minItems: 1, maxItems: 3, description: '1–3 independent decisions answered together. Use 1 question when possible. Supported by capable Web/Electron/Mobile main chats and delegated MCP runs. Never use for approvals.' })),
 }, { additionalProperties: false, anyOf: [{ required: ['question'] }, { required: ['schemaVersion', 'questions'] }] });
 
 export type ClarifyRequestPayload = ClarificationPresentation & {
@@ -76,10 +95,13 @@ export function createClarifyTool(deps: ClarifyToolDeps): AgentTool {
       '- When you can reasonably infer the answer from context\n' +
       '- For trivial decisions that do not affect the task\n' +
       '- When the user explicitly said "just do it" or "your choice"\n\n' +
-      'TIPS:\n' +
-      '- Provide choices when there are clear options (faster for the user)\n' +
-      '- Keep questions short and specific\n' +
-      '- Set recommendedChoiceId when one option is clearly more likely',
+      'WRITING & STRUCTURE RULES (strictly follow to minimize user reading effort):\n' +
+      '- Keep each question to one crisp sentence (aim for <= 35 Chinese chars or <= 18 words); never repeat options inside the question\n' +
+      '- Use 2–4 distinct, scannable choices whenever possible; keep labels short (2–10 chars / 1–4 words)\n' +
+      '- Add choice descriptions only when the label alone is ambiguous (<= 1 short phrase)\n' +
+      '- Never include an "Other / Custom" choice — the UI natively provides custom input\n' +
+      '- Set recommendedChoiceId when one option is clearly the best default\n' +
+      '- Combine into 1 question whenever possible; use multi-question (v2) only for 2–3 genuinely independent decisions',
     parameters: ClarifySchema,
 
     async execute(
