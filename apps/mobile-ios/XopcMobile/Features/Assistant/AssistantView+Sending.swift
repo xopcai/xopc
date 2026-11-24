@@ -4,6 +4,10 @@ extension AssistantView {
     func send(voice: MessageAttachment? = nil) {
         guard let conversation, let scope = composerDraftScope,
               scope == ComposerDraftStore.scope(configuration, conversationID: conversation.id) else { return }
+        guard canSendOnChatConnection else {
+            if let voice { restoreDraft("", attachments: [], references: [], scope: scope, voice: voice) }
+            return
+        }
         let text = voice == nil ? draft : ""
         let selectedAttachments = voice.map { [$0] } ?? attachments
         let selectedReferences = voice == nil ? references : []

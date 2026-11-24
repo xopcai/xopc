@@ -874,7 +874,14 @@
     <string name="clarify_more">More options</string>
     <string name="clarify_placeholder">Type your answer…</string>
     <string name="clarify_confirm">Confirm</string>
-    <string name="assistant_connection_interrupted">Connection interrupted · Reconnecting…</string>
+    <string name="chat_network_offline">Phone is offline</string>
+    <string name="chat_network_reconnecting">Reconnecting…</string>
+    <string name="chat_network_auto_resume">We’ll reconnect when your network returns</string>
+    <string name="chat_gateway_unreachable">Can’t reach the gateway</string>
+    <string name="chat_network_auto_retry">We’ll keep trying automatically</string>
+    <string name="chat_reconnect_now">Reconnect now</string>
+    <string name="chat_sync_interrupted">Chat sync interrupted</string>
+    <string name="chat_retry_sync">Retry sync</string>
     <string name="assistant_select_text">Select text</string>
     <string name="progress_change_log">Change log</string>
     <string name="phone_open">View phone</string>

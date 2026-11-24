@@ -100,7 +100,7 @@ export struct XopcChatMessageContent {
     Column({ space: this.showPreview ? 2 : 8 }) {
       if (this.row.role === 'assistant' && this.row.live && this.showWaiting && !chatAnswerStarted(this.row)) {
         XopcChatStepsView({ row: this.row,
-          connection: this.connection, animateDots: this.animateStreaming, onShowDetail: this.onShowExecution })
+          animateDots: this.connection === 'connected' && this.animateStreaming, onShowDetail: this.onShowExecution })
       }
       if (this.showFailure && this.row.outcome?.status === 'failed') {
         Text($r('app.string.chat_response_failed')).fontSize(13).fontColor(this.colors.danger)

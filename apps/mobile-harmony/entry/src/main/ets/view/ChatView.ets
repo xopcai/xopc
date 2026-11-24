@@ -160,8 +160,20 @@ export struct XopcChatView {
   }
   @Local floatingHeaderHeight: number = 0;
   @Local connectionBannerHeight: number = 0;
+  @Computed get networkNotice(): string {
+    if (this.hasConnectionIssue()) return '';
+    if (this.chat.connection === 'connected') {
+      return !this.chat.loading && (this.chat.cachedHistory || this.hasChatConnectionError) ? 'sync' : '';
+    }
+    if (!this.chat.connectionNotice) return '';
+    if (this.chat.connection === 'network_offline') return 'offline';
+    return this.chat.connectionNotice === 'retry' ? 'retry' : 'progress';
+  }
+  @Computed get hasChatConnectionError(): boolean {
+    return !!this.chat.connectionError && this.chat.error === this.chat.connectionError;
+  }
   @Computed get showConnectionBanner(): boolean {
-    return this.hasConnectionIssue() || this.chat.cachedHistory || !!this.chat.error;
+    return this.hasConnectionIssue() || (!!this.chat.error && !this.hasChatConnectionError);
   }
   @Event onOpenSidebar: () => void = (): void => {};
   @Param sidebarSwipeWidth: number = 0;
@@ -1103,7 +1115,7 @@ export struct XopcChatView {
   }
 
   private async send(): Promise<void> {
-    if (this.restoringDraft) return;
+    if (this.restoringDraft || this.chat.connection !== 'connected' || this.chat.cachedHistory) return;
     // A local-first conversation becomes visible before its model catalog is loaded.
     // Do not create a doomed optimistic bubble during that short initialization window.
     if (this.options.loading || this.options.saving) return;
@@ -1169,7 +1181,7 @@ export struct XopcChatView {
   private async sendVoice(closeVoiceAfterSend: boolean = true): Promise<void> {
     const id = this.chat.selectedId;
     const sent = await this.voice.send(async (attachment: XopcChatAttachment): Promise<boolean> => {
-      if (!this.visible || this.disposed || id !== this.chat.selectedId) return false;
+      if (!this.visible || this.disposed || id !== this.chat.selectedId || this.chat.connection !== 'connected') return false;
       const context = this.getUIContext().getHostContext();
       let accepted = false;
       this.chat.send('', [attachment], [], (): void => {
@@ -1333,7 +1345,7 @@ export struct XopcChatView {
           .backgroundColor(this.colors.chat.action).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
           .accessibilityText(this.chat.runId && !this.personalConversation ? $r('app.string.chat_send_next') : $r('app.string.send'))
           .enabled(!!this.chat.selectedId && !this.chat.loading && !this.chat.cachedHistory && !this.pickingAttachment
-            && this.voice.state === 'idle' && !this.voice.busy && !this.chat.sending
+            && this.chat.connection === 'connected' && this.voice.state === 'idle' && !this.voice.busy && !this.chat.sending
             && !this.options.loading && !this.options.saving && !!this.options.modelId)
           .onClick((): void => { this.send(); })
       }
@@ -1535,7 +1547,7 @@ export struct XopcChatView {
                     Text('!').fontSize(18).fontWeight(FontWeight.Bold).fontColor(this.colors.danger)
                   }.id('chat-message-retry-' + item.item.id).width(32).height(44).padding(0).flexShrink(0)
                     .backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_retry_send'))
-                    .enabled(!this.chat.sending && !this.chat.loading && !this.chat.cachedHistory)
+                    .enabled(!this.chat.sending && !this.chat.loading && !this.chat.cachedHistory && this.chat.connection === 'connected')
                     .onClick((): void => { this.retryMessage(item.item.id); })
                 }
                 Stack({ alignContent: Alignment.TopStart }) {
@@ -1575,8 +1587,8 @@ export struct XopcChatView {
             Column({ space: 2 }) {
               if (this.personalConversation && item.item.live && !chatAnswerStarted(item.item) && !this.prompt.prompt) {
                 XopcChatStepsView({ row: item.item,
-                  connection: this.chat.connection,
-                  animateDots: this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion })
+                  animateDots: this.chat.connection === 'connected' && this.atBottom && this.activePage
+                    && this.layout.foreground && !this.layout.reduceMotion })
               }
               if (chatAnswerStarted(item.item) || (item.item.media || []).length > 0 || (item.item.refs || []).length > 0
                 || (!item.item.live && ((item.item.deliveries || []).length > 0 || (item.item.outcome?.deliverables || []).length > 0))
@@ -1619,8 +1631,8 @@ export struct XopcChatView {
               }
               if (!this.personalConversation && (item.item.live || !!chatStageStatus(item.item))) {
                 XopcChatStepsView({ row: item.item, staged: true, paused: !!item.item.live && !!this.prompt.prompt,
-                  connection: this.chat.connection,
-                  animateDots: this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion })
+                  animateDots: this.chat.connection === 'connected' && this.atBottom && this.activePage
+                    && this.layout.foreground && !this.layout.reduceMotion })
               }
               this.generatedMediaRows({ replyId: item.item.id })
             }.width('100%').alignItems(HorizontalAlign.Start)
@@ -1720,6 +1732,7 @@ export struct XopcChatView {
     Column().id('chat-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.chat.canvas)
     Column() {
     Column() {
+    if (this.networkNotice) { this.chatNetworkNotice() }
     if (this.connectionWait.snapshot?.wait) { XopcChatConnectionWait({ model: this.connectionWait }) }
     if (this.prompt.prompt) { XopcChatPrompt({ model: this.prompt }) }
     if (this.options.preparationError) {
@@ -2294,6 +2307,38 @@ export struct XopcChatView {
   }
 
   @Builder
+  chatNetworkNotice() {
+    Row({ space: 8 }) {
+      SymbolGlyph(this.networkNotice === 'offline' ? $r('sys.symbol.exclamationmark_circle') : $r('sys.symbol.arrow_clockwise'))
+        .fontSize(16).fontColor([this.colors.secondary]).accessibilityLevel('no')
+      Column({ space: 2 }) {
+        Text(this.networkNotice === 'offline' ? $r('app.string.chat_network_offline')
+          : this.networkNotice === 'sync' ? $r('app.string.chat_sync_interrupted')
+          : this.networkNotice === 'retry' ? $r('app.string.chat_gateway_unreachable') : $r('app.string.chat_network_reconnecting'))
+          .fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+        if (this.networkNotice === 'offline' || this.networkNotice === 'retry') {
+          Text(this.networkNotice === 'offline' ? $r('app.string.chat_network_auto_resume') : $r('app.string.chat_network_auto_retry'))
+            .fontSize(12).fontColor(this.colors.secondary)
+        } else if (this.chat.cachedHistory) {
+          Text($r('app.string.chat_cached_history')).fontSize(12).fontColor(this.colors.secondary)
+        }
+      }.layoutWeight(1).alignItems(HorizontalAlign.Start).padding({ top: 8, bottom: 8 })
+      if (this.networkNotice === 'retry' || this.networkNotice === 'sync') {
+        Button({ type: ButtonType.Normal }) {
+          Text(this.networkNotice === 'sync' ? $r('app.string.chat_retry_sync') : $r('app.string.chat_reconnect_now'))
+            .fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
+        }.id('chat-network-retry').constraintSize({ minWidth: 44, minHeight: 44 }).padding({ left: 8, right: 8 })
+          .backgroundColor(Color.Transparent)
+          .onClick((): void => {
+            if (this.networkNotice === 'sync') void this.chat.retryHistory();
+            else this.chat.reconnect();
+          })
+      }
+    }.id('chat-network-notice').width('calc(100% - 24vp)').constraintSize({ minHeight: 44 }).padding({ left: 12, right: 4 })
+      .borderRadius(this.colors.corner(14)).backgroundColor(this.colors.chat.card).margin({ top: 4 })
+  }
+
+  @Builder
   chatWorkspace() {
     Stack({ alignContent: Alignment.TopStart }) {
     Column() {
@@ -2311,11 +2356,7 @@ export struct XopcChatView {
           }
         }.width('100%').padding(8).alignItems(VerticalAlign.Center)
       }
-      if (this.chat.cachedHistory) {
-        Text($r('app.string.chat_cached_history')).id('chat-cached-history').fontSize(12).fontColor(this.colors.secondary)
-          .padding({ left: 16, right: 16, bottom: 6 })
-      }
-      if (this.chat.error) {
+      if (this.chat.error && !this.hasChatConnectionError) {
         Row({ space: 8 }) {
           Text(userErrorMessage(this.chat.error, 'generic')).fontSize(12).fontColor(this.colors.secondary).layoutWeight(1).maxLines(3)
           Button($r('app.string.refresh')).height(44).onClick((): void => { this.chat.retryHistory(); })

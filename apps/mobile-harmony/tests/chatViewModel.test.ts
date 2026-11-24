@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => {
   return { history: vi.fn(), list: vi.fn(), activeRun: vi.fn(), send: vi.fn(), uuid: vi.fn(),
     replaceLatest: vi.fn(), nextTurnSuggestion: vi.fn(), reportSuggestion: vi.fn(),
     create: vi.fn(), draft: vi.fn(), pendingInput: vi.fn(), reconcile: vi.fn(),
-    subscribe: vi.fn(), unsubscribe: vi.fn(), cachedHistory: vi.fn(), rememberHistory: vi.fn() };
+    subscribe: vi.fn(), unsubscribe: vi.fn(), reconnect: vi.fn(), cachedHistory: vi.fn(), rememberHistory: vi.fn() };
 });
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {
   history = mocks.history; list = mocks.list; activeRun = mocks.activeRun; send = mocks.send; uuid = mocks.uuid;
@@ -15,7 +15,8 @@ vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChat
   cachedHistory = mocks.cachedHistory; rememberHistory = mocks.rememberHistory;
 } }));
 vi.mock('../entry/src/main/ets/service/realtimeClient.ets', () => ({ realtimeClient: {
-  subscribe: mocks.subscribe, unsubscribe: mocks.unsubscribe, start() {}, turnClaim() {},
+  subscribe: mocks.subscribe, unsubscribe: mocks.unsubscribe, reconnect: mocks.reconnect, start() {},
+  currentState: () => 'connected',
 } }));
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: {
   currentProfile: () => ({ gatewayId: 'gateway', deviceId: 'device' }),
@@ -364,6 +365,56 @@ describe('chat history isolation', () => {
   });
   beforeEach(() => { vi.resetAllMocks(); mocks.draft.mockResolvedValue(undefined); mocks.reconcile.mockResolvedValue(undefined);
     mocks.activeRun.mockResolvedValue({ active: false }); mocks.rememberHistory.mockResolvedValue(undefined); });
+  it('keeps short interruptions quiet and offers a retry only for a sustained outage', () => {
+    vi.useFakeTimers();
+    const chat = new XopcChatViewModel(); chat.activate();
+    try {
+      realtimeClient.onState('network_offline');
+      vi.advanceTimersByTime(700);
+      realtimeClient.onState('reconnecting');
+      vi.advanceTimersByTime(700);
+      expect(chat.connectionNotice).toBe('');
+      realtimeClient.onState('connected');
+      vi.advanceTimersByTime(8000);
+      expect(chat.connectionNotice).toBe('');
+
+      realtimeClient.onState('reconnecting');
+      vi.advanceTimersByTime(1500);
+      expect(chat.connectionNotice).toBe('progress');
+      vi.advanceTimersByTime(6500);
+      expect(chat.connectionNotice).toBe('retry');
+      realtimeClient.onState('network_offline');
+      realtimeClient.onState('reconnecting');
+      expect(chat.connectionNotice).toBe('progress');
+      vi.advanceTimersByTime(8000);
+      chat.reconnect();
+      expect(mocks.reconnect).toHaveBeenCalledOnce();
+      expect(chat.connectionNotice).toBe('progress');
+      realtimeClient.onState('connected');
+      expect(chat.connectionNotice).toBe('');
+    } finally { chat.dispose(); vi.useRealTimers(); }
+  });
+  it('resyncs saved history when realtime recovers before the interrupted history request settles', async () => {
+    let failHistory!: (error: Error) => void;
+    mocks.cachedHistory.mockResolvedValue(page('one', 'saved'));
+    mocks.history.mockImplementationOnce(() => new Promise((_resolve, reject) => { failHistory = reject; }));
+    mocks.history.mockResolvedValue(page('one', 'fresh'));
+    const chat = new XopcChatViewModel(); chat.activate();
+    try {
+      realtimeClient.onState('reconnecting');
+      const opening = chat.open('one');
+      await vi.waitFor(() => expect(mocks.history).toHaveBeenCalledOnce());
+      expect(chat.rows[0].text).toBe('saved');
+      realtimeClient.onState('connected');
+      failHistory(new Error('NETWORK_TIMEOUT'));
+      await opening;
+      await vi.waitFor(() => expect(chat.rows[0].text).toBe('fresh'));
+      expect(mocks.history).toHaveBeenCalledTimes(2);
+      expect(chat.cachedHistory).toBe(false);
+      expect(chat.error).toBe('');
+      expect(mocks.send).not.toHaveBeenCalled();
+    } finally { chat.dispose(); }
+  });
   it('opens a requested conversation and switches run subscriptions', async () => {
     mocks.history.mockImplementation(async (id) => page(id, id));
     mocks.activeRun.mockImplementation(async (id) => ({ active: true, runId: id + '-run' }));

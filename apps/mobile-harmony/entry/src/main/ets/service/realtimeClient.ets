@@ -5,7 +5,7 @@ import { cancelDeviceLocation, cancelAllDeviceLocations } from './deviceLocation
 import { i18n } from '@kit.LocalizationKit';
 import { XopcEndpointContext } from '../model/sessionCommand';
 import { deviceToolCatalog, invokeDeviceTool } from './deviceTools';
-import { webSocket } from '@kit.NetworkKit';
+import { connection, webSocket } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { XopcDeviceCrypto } from './deviceCrypto';
@@ -40,6 +40,10 @@ export class XopcRealtimeClient {
   private reconnectTimer: number = -1;
   private heartbeatTimer: number = -1;
   private probeTimer: number = -1;
+  private networkLossTimer: number = -1;
+  private networkWatch?: connection.NetConnection;
+  private networkId?: number;
+  private state: string = 'offline';
   private attempt: number = 0;
   private lastReceived: number = 0;
   private lastPingSent: number = 0;
@@ -66,27 +70,43 @@ export class XopcRealtimeClient {
   onEvent: (event: XopcEvent) => void = (_event: XopcEvent): void => {};
   onGap: (topic: string) => void = (_topic: string): void => {};
 
+  currentState(): string { return this.state; }
+
+  private setState(state: string): void {
+    if (this.state === state) return;
+    this.state = state;
+    this.onState(state);
+  }
+
   start(): void {
     if (!this.stopped) return;
     this.stopped = false;
-    this.connect();
+    this.attempt = 0;
+    this.watchNetwork();
+    void this.connect();
+  }
+
+  reconnect(): void {
+    if (this.stopped) { this.start(); return; }
+    if (this.networkId === 0 || this.ready) return;
+    this.restartConnection();
   }
 
   stop(): void {
+    this.shutdown();
+    this.setState('offline');
+  }
+
+  private shutdown(): void {
     this.stopped = true;
     this.generation++;
     clearTimeout(this.reconnectTimer); this.reconnectTimer = -1;
+    this.stopNetworkWatch();
     this.release();
-    this.onState('offline');
   }
 
   suspendForBackground(): void {
-    if (this.stopped) return;
-    this.stopped = true;
-    this.generation++;
-    clearTimeout(this.reconnectTimer); this.reconnectTimer = -1;
-    this.release();
-    this.onState('offline');
+    if (!this.stopped) this.stop();
   }
 
   onAppForegroundChanged(foreground: boolean): void {
@@ -100,35 +120,112 @@ export class XopcRealtimeClient {
       return;
     }
     if (this.stopped) {
-      this.attempt = 0;
-      this.start();
+      if (this.state === 'offline') this.start();
       return;
     }
+    const networkId = this.defaultNetworkId();
+    if (this.networkWatch && networkId !== undefined && networkId !== this.networkId) {
+      this.networkChanged(networkId);
+    }
     if (this.reconnectTimer !== -1) {
-      clearTimeout(this.reconnectTimer); this.reconnectTimer = -1;
-      this.attempt = 0;
-      void this.connect();
+      this.restartConnection();
       return;
     }
     if (this.ready && this.socket) {
-      const generation = this.generation;
-      const probeSentAt = Date.now();
-      this.lastPingSent = probeSentAt;
       const availability: AppAvailability = { availability: 'foreground' };
       this.send('endpoint.availability_changed', availability);
       this.publishProviderState(true);
-      const ping: XopcPingPayload = { availability: 'foreground' };
-      this.send('realtime.ping', ping);
-      clearTimeout(this.probeTimer);
-      this.probeTimer = setTimeout((): void => {
-        this.probeTimer = -1;
-        if (generation === this.generation && !this.stopped && this.lastReceived < probeSentAt) {
-          hilog.info(0x0000, 'XopcRealtime', 'Foreground probe timed out, reconnecting');
-          this.attempt = 0;
-          this.retry(generation);
-        }
-      }, 2500);
+      this.probeRoute();
     }
+  }
+
+  private probeRoute(): void {
+    const generation = this.generation;
+    clearTimeout(this.probeTimer);
+    this.probeTimer = setTimeout((): void => {
+      this.probeTimer = -1;
+      if (generation !== this.generation || this.stopped) return;
+      hilog.info(0x0000, 'XopcRealtime', 'Realtime route probe timed out, reconnecting');
+      this.restartConnection();
+    }, 2500);
+    this.lastPingSent = Date.now();
+    const ping: XopcPingPayload = { availability: gatewaySession.isForeground() ? 'foreground' : 'background' };
+    this.send('realtime.ping', ping);
+  }
+
+  private defaultNetworkId(): number | undefined {
+    try { return connection.getDefaultNetSync().netId; } catch (_) { return undefined; }
+  }
+
+  private watchNetwork(): void {
+    try {
+      const watcher = connection.createNetConnection();
+      this.networkWatch = watcher;
+      this.networkId = this.defaultNetworkId();
+      watcher.on('netAvailable', (handle: connection.NetHandle): void => {
+        if (this.networkWatch !== watcher || !handle.netId) return;
+        clearTimeout(this.networkLossTimer); this.networkLossTimer = -1;
+        this.networkChanged(handle.netId);
+      });
+      watcher.on('netLost', (handle: connection.NetHandle): void => {
+        if (this.networkWatch !== watcher || (this.networkId !== undefined && handle.netId !== this.networkId)) return;
+        this.checkNetworkAfterLoss(watcher);
+      });
+      watcher.on('netUnavailable', (): void => { this.checkNetworkAfterLoss(watcher); });
+      watcher.register((error: BusinessError): void => {
+        if (this.networkWatch !== watcher) {
+          if (!error) this.unregisterNetworkWatch(watcher);
+        } else if (error) {
+          this.stopNetworkWatch();
+          if (this.state === 'network_offline') this.restartConnection();
+        }
+      });
+    } catch (_) { this.stopNetworkWatch(); }
+  }
+
+  private checkNetworkAfterLoss(watcher: connection.NetConnection): void {
+    if (this.networkWatch !== watcher) return;
+    // HarmonyOS can deliver netLost immediately before the replacement network becomes available.
+    clearTimeout(this.networkLossTimer);
+    this.networkLossTimer = setTimeout((): void => {
+      this.networkLossTimer = -1;
+      this.networkChanged(this.defaultNetworkId() ?? 0);
+    }, 400);
+  }
+
+  private networkChanged(id: number): void {
+    if (id === this.networkId) return;
+    const previous = this.networkId;
+    this.networkId = id;
+    if (!id) {
+      this.generation++;
+      clearTimeout(this.reconnectTimer); this.reconnectTimer = -1;
+      this.release();
+      this.setState('network_offline');
+    } else if (this.ready) {
+      this.probeRoute();
+    } else if (previous !== undefined || this.reconnectTimer !== -1) {
+      this.restartConnection();
+    }
+  }
+
+  private unregisterNetworkWatch(watcher: connection.NetConnection): void {
+    try { watcher.unregister((_error: BusinessError): void => {}); } catch (_) {}
+  }
+
+  private stopNetworkWatch(): void {
+    clearTimeout(this.networkLossTimer); this.networkLossTimer = -1;
+    const watcher = this.networkWatch;
+    this.networkWatch = undefined; this.networkId = undefined;
+    if (watcher) this.unregisterNetworkWatch(watcher);
+  }
+
+  private restartConnection(): void {
+    this.generation++;
+    clearTimeout(this.reconnectTimer); this.reconnectTimer = -1;
+    this.release();
+    this.attempt = 0;
+    void this.connect(true);
   }
 
   reset(): void {
@@ -184,36 +281,48 @@ export class XopcRealtimeClient {
     if (generation !== this.generation || this.stopped || this.reconnectTimer !== -1) return;
     this.generation++;
     this.release();
-    this.onState('reconnecting');
+    this.setState('reconnecting');
     const delay = Math.min(30000, 1000 * Math.pow(2, this.attempt++)) * (0.75 + Math.random() * 0.5);
-    this.reconnectTimer = setTimeout((): void => { this.reconnectTimer = -1; this.connect(); }, delay);
+    this.reconnectTimer = setTimeout((): void => { this.reconnectTimer = -1; void this.connect(true); }, delay);
   }
 
-  private async connect(): Promise<void> {
+  private async connect(recovering: boolean = false): Promise<void> {
+    if (this.networkId === 0) { this.setState('network_offline'); return; }
     const generation = ++this.generation;
     let phase: string = 'profile';
-    this.onState('connecting');
+    this.setState(recovering ? 'reconnecting' : 'connecting');
     try {
       const profile = gatewaySession.currentProfile();
       if (!profile) throw new Error('NOT_PAIRED');
+      let health: string = '';
+      if (recovering) {
+        // Resolve a reachable route with a read before requesting a one-time ticket.
+        phase = 'route';
+        health = await gatewaySession.request('/api/health');
+        if (generation !== this.generation) return;
+      }
       const origin = gatewaySession.activeOrigin();
       const cacheKey = profile.gatewayId + ':' + profile.deviceId + ':' + origin;
       let compatibilityPayload: XopcDeviceCompatibility | undefined = this.bootstrapCacheKey === cacheKey ? this.cachedCompatibility : undefined;
       if (!compatibilityPayload) {
         phase = 'compatibility';
         const compatibility = JSON.parse(await gatewaySession.request('/api/endpoint-tools/compatibility')) as XopcPayload<XopcDeviceCompatibility>;
+        if (generation !== this.generation) return;
         compatibilityPayload = compatibility.payload ?? {};
         let clarificationV2 = false;
         try {
-          const health = JSON.parse(await gatewaySession.request('/api/health')) as XopcClarificationHealth;
-          clarificationV2 = health.clarificationVersions?.includes(2) === true;
+          const healthPayload = JSON.parse(health || await gatewaySession.request('/api/health')) as XopcClarificationHealth;
+          clarificationV2 = healthPayload.clarificationVersions?.includes(2) === true;
         } catch (_error) {}
+        if (generation !== this.generation) return;
         const registration: XopcEndpointRegistration = {
           principalId: profile.deviceId, displayName: 'xopc HarmonyOS', kind: 'mobile', platform: 'harmonyos',
           publicKey: await this.crypto.publicKeyDer()
         };
+        if (generation !== this.generation) return;
         phase = 'register';
         await gatewaySession.request('/api/endpoint-tools/principals', 'POST', JSON.stringify(registration));
+        if (generation !== this.generation) return;
         this.bootstrapCacheKey = cacheKey;
         this.cachedCompatibility = compatibilityPayload;
         this.cachedClarificationV2 = clarificationV2;
@@ -229,6 +338,8 @@ export class XopcRealtimeClient {
       };
       phase = 'ticket';
       const response = JSON.parse(await gatewaySession.request('/api/realtime/tickets', 'POST', JSON.stringify(ticketRequest))) as XopcPayload<XopcTicket>;
+      if (generation !== this.generation) return;
+      const socketOrigin = gatewaySession.activeOrigin();
       if (!response.payload?.ticket || !response.payload.realtime) throw new Error('INVALID_REALTIME_TICKET');
       if (XOPC_REALTIME_PROTOCOL_VERSION < response.payload.realtime.minVersion) {
         this.fail('client_update_required');
@@ -255,7 +366,7 @@ export class XopcRealtimeClient {
       endpoint.signature = await this.crypto.sign(endpointProof(endpoint));
       if (generation !== this.generation || this.stopped) return;
       phase = 'verify-route';
-      await gatewaySession.verifyRoute(profile, origin);
+      await gatewaySession.verifyRoute(profile, socketOrigin);
       if (generation !== this.generation || this.stopped) return;
       const socket = webSocket.createWebSocket(); this.socket = socket;
       socket.on('open', (_error: BusinessError, _value: Object): void => {
@@ -315,8 +426,10 @@ export class XopcRealtimeClient {
         }
       }, 5000);
       phase = 'socket';
-      const socketUrl = origin.replace(/^https:/, 'wss:') + '/api/realtime/v1/ws';
-      await socket.connect(socketUrl, { header: await connectionProof(socketUrl, response.payload.ticket) });
+      const socketUrl = socketOrigin.replace(/^https:/, 'wss:') + '/api/realtime/v1/ws';
+      const header = await connectionProof(socketUrl, response.payload.ticket);
+      if (generation !== this.generation) return;
+      await socket.connect(socketUrl, { header });
     } catch (error) {
       if (generation !== this.generation) return;
       const reason = (error as Error).message ?? '';
@@ -332,7 +445,7 @@ export class XopcRealtimeClient {
     }
   }
 
-  private fail(state: string): void { this.clearBootstrapCache(); this.stop(); this.onState(state); }
+  private fail(state: string): void { this.clearBootstrapCache(); this.shutdown(); this.setState(state); }
 
   private send(kind: string, payload: Object): void {
     if (!this.socket) return;
@@ -362,6 +475,7 @@ export class XopcRealtimeClient {
   private receive(raw: string): void {
     const frame = JSON.parse(raw) as XopcFrame<Object>;
     if (frame.protocolVersion !== XOPC_REALTIME_PROTOCOL_VERSION || !frame.payload) throw new Error('INVALID_REALTIME_FRAME');
+    clearTimeout(this.probeTimer); this.probeTimer = -1;
     this.lastReceived = Date.now();
     if (frame.kind === 'realtime.ready') {
       const payload = frame.payload as XopcReady;
@@ -373,7 +487,7 @@ export class XopcRealtimeClient {
       if (this.supportsEnvironment) this.contextPublisher.start(this.claim);
       this.ready = true; this.attempt = 0;
       this.send('provider.catalog.replace', JSON.parse(APP_PROVIDER_JSON) as Object);
-      this.onState('connected');
+      this.setState('connected');
     } else if (frame.kind === 'endpoint.message') {
       const inner = frame.payload as XopcDeviceEndpointMessage;
       if (inner.protocolVersion !== 3) throw new Error('INVALID_ENDPOINT_FRAME');

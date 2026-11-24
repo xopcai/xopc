@@ -9,6 +9,7 @@ struct AssistantComposer: View {
     @Environment(\.colorScheme) private var colorScheme
     let configuration: GatewayConfiguration
     var focusAllowed = true
+    var connectionReady = true
     var personalName: String?
     var suggestion: NextTurnSuggestion?
     var onAcceptSuggestion: (NextTurnSuggestion) -> Void = { _ in }
@@ -444,7 +445,7 @@ struct AssistantComposer: View {
     }
 
     private var sendEnabled: Bool {
-        hasPayload
+        hasPayload && connectionReady
     }
 
     private func selectAction(_ action: AssistantAction) {

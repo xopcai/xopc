@@ -89,8 +89,9 @@ internal class RealtimeClient(
     readySocket?.send(endpointFrame("endpoint.availability_changed", JSONObject().put("availability", "background")))
   }
 
-  suspend fun probeOrReconnect(timeoutMs: Long = 1_500L): Boolean {
-    appForeground = true
+  suspend fun probeOrReconnect(timeoutMs: Long = 1_500L, foreground: Boolean = true): Boolean {
+    appForeground = foreground
+    val availability = if (foreground) "foreground" else "background"
     val deferred = CompletableDeferred<Boolean>()
     val socket = synchronized(this) {
       val current = readySocket ?: return false
@@ -99,16 +100,15 @@ internal class RealtimeClient(
       current
     }
     val sent = runCatching {
-      socket.send(endpointFrame("endpoint.availability_changed", JSONObject().put("availability", "foreground")))
-      socket.send(frame("realtime.ping", JSONObject().put("availability", "foreground")))
+      socket.send(endpointFrame("endpoint.availability_changed", JSONObject().put("availability", availability)))
+      socket.send(frame("realtime.ping", JSONObject().put("availability", availability)))
     }.getOrDefault(false)
     if (!sent) {
       synchronized(this) { if (pendingProbe === deferred) pendingProbe = null }
       return false
     }
-    val alive = withTimeoutOrNull(timeoutMs) { deferred.await() } == true
-    synchronized(this) { if (pendingProbe === deferred) pendingProbe = null }
-    return alive
+    return try { withTimeoutOrNull(timeoutMs) { deferred.await() } == true }
+    finally { synchronized(this) { if (pendingProbe === deferred) pendingProbe = null } }
   }
 
   @Synchronized fun sendBrowserPreview(payload: JSONObject): Boolean =
@@ -136,22 +136,25 @@ internal class RealtimeClient(
   suspend fun run(onState: (String) -> Unit, onInvalidation: (String) -> Unit,
     onRunEvent: (RunStreamEvent) -> Unit,
     onTaskResult: (String) -> Unit = { onInvalidation("sessions") },
-    onSuggestionChanged: (String?) -> Unit = {}) {
+    onSuggestionChanged: (String?) -> Unit = {},
+    recovering: Boolean = false) {
     var attempt = 0
+    onState(if (recovering) "reconnecting" else "connecting")
     while (currentCoroutineContext().isActive) {
-      onState(if (attempt == 0) "connecting" else "reconnecting")
       try {
-        connectOnce(onState, onInvalidation, onRunEvent, onTaskResult, onSuggestionChanged)
-        attempt = 0
+        connectOnce({
+          attempt = 0
+          onState(it)
+        }, onInvalidation, onRunEvent, onTaskResult, onSuggestionChanged)
       } catch (error: CancellationException) {
         throw error
       } catch (_: Exception) {
         DeviceLocation.cancelAll(); DevicePersonalTools.cancelAll()
         claim = null
-        onState("reconnecting")
-        delay((1_000L shl attempt.coerceAtMost(4)).coerceAtMost(30_000L))
-        attempt++
       }
+      onState("reconnecting")
+      delay((1_000L shl attempt.coerceAtMost(5)).coerceAtMost(30_000L))
+      attempt++
     }
   }
 
@@ -161,7 +164,11 @@ internal class RealtimeClient(
     val profile = gateway.currentProfile() ?: throw IllegalStateException("NOT_PAIRED")
     val clientId = "android:${profile.deviceId}"
     val displayName = "xopc Android"
-    val origin = runInterruptible(Dispatchers.IO) { gateway.activeVerifiedOrigin() }
+    val origin = runInterruptible(Dispatchers.IO) {
+      // A safe read can rediscover a reachable route before any one-time requests.
+      gateway.request("/api/health", expectedGatewayId = profile.gatewayId)
+      gateway.activeVerifiedOrigin()
+    }
     val cacheKey = "${profile.gatewayId}:${profile.deviceId}:$origin"
     val bootstrap = bootstrapCache?.takeIf { it.key == cacheKey } ?: run {
       val registration = JSONObject().put("principalId", profile.deviceId).put("displayName", displayName)
@@ -217,17 +224,23 @@ internal class RealtimeClient(
       }
 
       override fun onMessage(webSocket: WebSocket, text: String) {
-        pendingProbe?.complete(true)
+        synchronized(this@RealtimeClient) {
+          if (readySocket === webSocket) pendingProbe?.complete(true)
+        }
         if (text.length > 4 * 1024 * 1024 || events.trySend(text).isFailure) webSocket.close(1009, "Frame too large")
       }
 
       override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
         if (code == 4401 || code == 4403 || code == 4409) bootstrapCache = null
-        pendingProbe?.complete(false)
+        synchronized(this@RealtimeClient) {
+          if (readySocket === webSocket) pendingProbe?.complete(false)
+        }
         events.close()
       }
       override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-        pendingProbe?.complete(false)
+        synchronized(this@RealtimeClient) {
+          if (readySocket === webSocket) pendingProbe?.complete(false)
+        }
         events.close()
       }
     }

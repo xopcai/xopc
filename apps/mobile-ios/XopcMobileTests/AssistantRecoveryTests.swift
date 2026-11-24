@@ -135,10 +135,33 @@ struct AssistantRecoveryTests {
         let second = AsyncThrowingStream<RunStreamEvent, Error>.makeStream()
         gateway.runStream = second.stream; gateway.historyFails = true
         await state.resumeConversation(conversation, using: gateway)
-        #expect(state.errorMessage != nil)
+        #expect(state.historyConnectionError)
+        #expect(state.errorMessage == nil)
         second.continuation.yield(recoveryDelta(" again", offset: 5))
         try await waitForReply("Hello again", in: state)
         state.pauseConversation(); first.continuation.finish(); second.continuation.finish()
+    }
+
+    @Test func connectionRecoveryRetriesHistoryWithoutReplacingTheActiveStream() async throws {
+        let state = AssistantState()
+        let conversation = ConversationSelection.draft(agentId: "main").materialized(transcriptId: "transcript")
+        let stream = AsyncThrowingStream<RunStreamEvent, Error>.makeStream()
+        var gateway = GatewayStub(activeRun: ActiveRun(active: true, runId: "run"))
+        gateway.runStream = stream.stream
+        await state.loadConversation(conversation, using: gateway)
+        stream.continuation.yield(recoveryDelta("Hello", offset: 0))
+        try await waitForReply("Hello", in: state)
+        gateway.historyFails = true
+        await state.synchronizeAfterConnection(conversation, using: gateway)
+        #expect(state.historyConnectionError)
+        #expect(state.messages.map(\.text) == ["Hello"])
+
+        gateway.historyFails = false
+        await state.synchronizeAfterConnection(conversation, using: gateway)
+        #expect(!state.historyConnectionError)
+        stream.continuation.yield(recoveryDelta(" again", offset: 5))
+        try await waitForReply("Hello again", in: state)
+        state.pauseConversation(); stream.continuation.finish()
     }
 
     @Test func assistantReconnectsAfterTransportLossWithoutManualRefresh() async throws {

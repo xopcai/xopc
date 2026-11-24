@@ -66,6 +66,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onLoadOlderHistory = gateway::loadOlderHistory,
             onSelectConversation = gateway::selectConversation, onCreateConversation = gateway::createConversation,
             onRestoreConversation = gateway::restoreConversation, onRetryConversation = gateway::retryConversation,
+            onRetryChatNetwork = gateway::retryChatNetwork,
             onCreateProjectConversation = gateway::createProjectConversation,
             onSelectTaskChildConversation = gateway::selectTaskChildConversation,
             onDiscardDraft = gateway::discardLocalDraft,

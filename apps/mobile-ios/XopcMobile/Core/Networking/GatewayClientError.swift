@@ -9,6 +9,13 @@ enum GatewayClientError: LocalizedError, Equatable {
     case server(String)
     case transport
 
+    var isConnectionInterruption: Bool {
+        switch self {
+        case .transport, .http(statusCode: 502 ... 504, message: _): true
+        default: false
+        }
+    }
+
     var errorDescription: String? {
         switch self {
         case .invalidURL:

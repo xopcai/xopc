@@ -3,11 +3,12 @@ import SwiftUI
 struct AssistantActivityView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    var connected = true
 
     var body: some View {
         HStack(spacing: 6) {
             ForEach(0 ..< 3, id: \.self) { index in
-                WaitingReplyDot(index: index, animate: !reduceMotion && scenePhase == .active)
+                WaitingReplyDot(index: index, animate: connected && !reduceMotion && scenePhase == .active)
             }
         }
         .padding(.horizontal, 12)
@@ -24,6 +25,7 @@ struct AssistantStagesView: View {
     let progress: AssistantRunProgress
     let answerStarted: Bool
     let paused: Bool
+    var connected = true
     @State private var expanded = false
 
     private var status: String? {
@@ -68,7 +70,7 @@ struct AssistantStagesView: View {
                     .foregroundStyle(status == "error" ? Color.red : Color.secondary)
                     .accessibilityIdentifier("assistant-stages-status")
             } else {
-                AssistantActivityView()
+                AssistantActivityView(connected: connected)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

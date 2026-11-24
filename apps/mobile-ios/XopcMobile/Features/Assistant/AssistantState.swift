@@ -13,6 +13,9 @@ final class AssistantState {
     private(set) var unavailableConversationID: String?
     private(set) var isLoading = false
     private(set) var errorMessage: String?
+    private(set) var historyConnectionError = false
+    private var syncAfterHistoryFailure = false
+    private var resolvingInitialHistory = false
     private(set) var messages: [TimelineMessage] = []
     private(set) var isLoadingHistory = false
     private(set) var isSending = false
@@ -103,6 +106,9 @@ final class AssistantState {
         runProgress = AssistantRunProgress()
         activityLabel = nil
         errorMessage = nil
+        historyConnectionError = false
+        syncAfterHistoryFailure = false
+        resolvingInitialHistory = false
         contextSummary = nil
         contextError = nil
         clarification = nil
@@ -116,6 +122,8 @@ final class AssistantState {
         historyGeneration += 1
         let generation = historyGeneration
         isLoadingHistory = false
+        resolvingInitialHistory = false
+        syncAfterHistoryFailure = false
         if let conversation,
            !conversation.isDraft,
            conversation.id == loadedConversationID,
@@ -132,9 +140,12 @@ final class AssistantState {
         prepareConversation(conversation)
         guard let conversation, !conversation.isDraft else { return }
         isLoadingHistory = true
+        resolvingInitialHistory = true
         defer {
             if generation == historyGeneration {
                 isLoadingHistory = false
+                syncAfterHistoryFailure = false
+                resolvingInitialHistory = false
             }
         }
         do {
@@ -148,6 +159,7 @@ final class AssistantState {
             isLoadingHistory = false
             let run = try await gateway.fetchActiveRun(conversationID: conversation.id)
             guard generation == historyGeneration, !Task.isCancelled else { return }
+            resolvingInitialHistory = false
             runID = run.active ? run.runId : nil
             if let runID {
                 runProgress.begin(runID); runProgress.restore(history.session.messages)
@@ -162,6 +174,12 @@ final class AssistantState {
         } catch {
             guard generation == historyGeneration, !Task.isCancelled else { return }
             reportHistoryFailure(error, conversationID: conversation.id)
+            if historyConnectionError, syncAfterHistoryFailure {
+                syncAfterHistoryFailure = false
+                isLoadingHistory = false
+                resolvingInitialHistory = false
+                await synchronizeAfterConnection(conversation, using: gateway)
+            }
         }
     }
 
@@ -171,7 +189,30 @@ final class AssistantState {
             messages = []
             runID = nil
         }
-        errorMessage = error.localizedDescription
+        historyConnectionError = isChatConnectionError(error)
+        errorMessage = historyConnectionError ? nil : error.localizedDescription
+    }
+
+    private func isChatConnectionError(_ error: Error) -> Bool {
+        if let error = error as? GatewayClientError { return error.isConnectionInterruption }
+        guard let error = error as? URLError else { return false }
+        return [.notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost,
+                .cannotConnectToHost, .dnsLookupFailed].contains(error.code)
+    }
+
+    func synchronizeAfterConnection(_ conversation: ConversationSelection, using gateway: any GatewayServing) async {
+        guard loadedConversationID == conversation.id, !conversation.isDraft else { return }
+        if resolvingInitialHistory {
+            syncAfterHistoryFailure = true
+            return
+        }
+        historyConnectionError = false
+        if runID != nil, runObservation != nil {
+            // The active stream owns its replay cursor through a reconnect.
+            await refreshHistory(conversation, using: gateway, retainLive: true)
+        } else {
+            await resumeConversation(conversation, using: gateway)
+        }
     }
 
     func isCurrentConversation(_ id: String) -> Bool {
@@ -352,7 +393,11 @@ final class AssistantState {
 
     private func waitAfterFailure(_ error: Error, in conversation: ConversationSelection, generation: Int) async {
         guard isObserving(conversation, generation: generation) else { return }
-        errorMessage = error.localizedDescription
+        if isChatConnectionError(error) {
+            reportHistoryFailure(error, conversationID: conversation.id)
+        } else {
+            errorMessage = error.localizedDescription
+        }
         try? await Task.sleep(for: .seconds(2))
     }
 
@@ -406,6 +451,7 @@ final class AssistantState {
             messages = saved + live
             loadedHistorySeq = history.pagination.revision
             errorMessage = nil
+            historyConnectionError = false
         } catch is CancellationError { return }
         catch {
             guard loadedConversationID == conversation.id, generation == runGeneration, !Task.isCancelled else { return }

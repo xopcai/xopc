@@ -90,6 +90,15 @@ struct AssistantView<Dock: View>: View {
 
     @State private var desktopChatTarget: DesktopChatTarget?
     @State private var desktopTargetRetry = 0
+    @State private var chatConnectionPhase: ChatConnectionPhase = .reconnecting
+    @State private var chatConnectionNoticeStage = 0
+    @State private var chatConnectionRetry = 0
+
+    var canSendOnChatConnection: Bool { chatConnectionPhase == .connected }
+
+    private var chatConnectionObservation: ChatConnectionObservationKey {
+        .init(configuration: configuration, active: isActive && scenePhase != .background && conversation != nil)
+    }
     @State private var reselectingDesktop = false
     @State private var phone = PhoneWorkspaceModel()
     @State private var showingPhone = false
@@ -205,6 +214,11 @@ struct AssistantView<Dock: View>: View {
                 .modifier(ChatScrollEdgeEffect())
                 .ignoresSafeArea(.container, edges: .top)
             VStack(spacing: 0) {
+                if chatConnectionObservation.active, !showingPhone {
+                    ChatConnectionNotice(phase: chatConnectionPhase, stage: chatConnectionNoticeStage,
+                                         syncFailed: state.historyConnectionError, onRetry: retryChatConnection)
+                        .padding(.horizontal, 12)
+                }
                 if readAloud.owner == readAloudOwner, readAloud.state == .failed, let error = readAloud.errorMessage {
                     TransientComposerFeedback(message: error) { readAloud.stop() }
                         .padding(.horizontal, 20)
@@ -389,6 +403,40 @@ struct AssistantView<Dock: View>: View {
     private var chatObservation: some View {
         let key = suggestionKey
         return chatLayout
+            .task(id: chatConnectionObservation) {
+                guard chatConnectionObservation.active else { return }
+                let host = await DeviceEndpointPool.shared.host(for: GatewayClient(configuration: configuration))
+                for await phase in await host.connectionChanges() {
+                    guard !Task.isCancelled else { return }
+                    chatConnectionPhase = phase
+                }
+            }
+            .task(id: ChatConnectionNoticeKey(interrupted: chatConnectionObservation.active && !canSendOnChatConnection,
+                                              retry: chatConnectionRetry)) {
+                guard chatConnectionObservation.active, !canSendOnChatConnection else {
+                    chatConnectionNoticeStage = 0
+                    return
+                }
+                let alreadyVisible = chatConnectionNoticeStage > 0
+                do {
+                    if !alreadyVisible { try await Task.sleep(for: .milliseconds(1500)) }
+                    chatConnectionNoticeStage = 1
+                    try await Task.sleep(for: .milliseconds(alreadyVisible ? 8000 : 6500))
+                    chatConnectionNoticeStage = 2
+                } catch { return }
+            }
+            .onChange(of: chatConnectionPhase) { previous, phase in
+                if phase == .connected, chatConnectionObservation.active { synchronizeChatConnection() }
+                if previous == .phoneOffline, phase == .reconnecting, chatConnectionNoticeStage > 0 {
+                    chatConnectionNoticeStage = 1
+                    chatConnectionRetry += 1
+                }
+            }
+            .onChange(of: configuration) {
+                chatConnectionPhase = .reconnecting
+                chatConnectionNoticeStage = 0
+                chatConnectionRetry += 1
+            }
             .task(id: key) {
                 await state.observeNextTurnSuggestion(in: key.conversationID == nil ? nil : conversation,
                                                       transcriptID: key.transcriptID, locale: key.locale,
@@ -416,6 +464,25 @@ struct AssistantView<Dock: View>: View {
                 guard isActive, !conversationSuspendedInBackground, let conversation, !conversation.isDraft else { return }
                 await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
             }
+    }
+
+    private func retryChatConnection() {
+        if chatConnectionPhase == .connected {
+            synchronizeChatConnection()
+        } else if chatConnectionPhase == .reconnecting {
+            chatConnectionRetry += 1
+            Task {
+                let host = await DeviceEndpointPool.shared.host(for: GatewayClient(configuration: configuration))
+                await host.retryConnection()
+            }
+        }
+    }
+
+    private func synchronizeChatConnection() {
+        guard let conversation, !conversation.isDraft else { return }
+        Task {
+            await state.synchronizeAfterConnection(conversation, using: GatewayClient(configuration: configuration))
+        }
     }
 
     private var generatedMediaScope: GeneratedMediaState.Scope? {
@@ -827,12 +894,12 @@ struct AssistantView<Dock: View>: View {
             AssistantStagesView(progress: state.runProgress,
                                 answerStarted: state.messages.contains {
                                     $0.role == "assistant" && $0.turnId == state.runProgress.runID && $0.answerConfirmed && !$0.text.isEmpty
-                                }, paused: state.clarification != nil)
+                                }, paused: state.clarification != nil, connected: canSendOnChatConnection)
                 .id(state.runProgress.runID ?? "sending")
         } else if isPersonalConversation, state.isRunActive, state.errorMessage == nil, state.clarification == nil,
                   !state.messages.contains(where: { $0.role == "assistant" && $0.turnId == state.runID && $0.answerConfirmed && !$0.text.isEmpty })
         {
-            AssistantActivityView()
+            AssistantActivityView(connected: canSendOnChatConnection)
                 .id(state.runID ?? "sending")
         }
         timelineBottomMarker(scroller: scroller, viewportHeight: viewportHeight)
@@ -1211,6 +1278,7 @@ struct AssistantView<Dock: View>: View {
         return AssistantComposer(
             configuration: configuration,
             focusAllowed: !sidebarOpen && !showingPhone && !startingVoice && !state.isLoadingHistory && state.clarification?.kind != "approval",
+            connectionReady: canSendOnChatConnection,
             personalName: isPersonalConversation ? personalAgent?.displayName : nil,
             suggestion: suggestion,
             onAcceptSuggestion: { item in
@@ -1765,6 +1833,16 @@ private struct ErrorBanner: View {
             .background(mobileTheme.danger.opacity(0.08), in: .rect(cornerRadius: mobileTheme.corner(12)))
             .accessibilityLabel(AppLocalization.resolve("错误：\(message)", locale: locale))
     }
+}
+
+private struct ChatConnectionObservationKey: Equatable {
+    let configuration: GatewayConfiguration
+    let active: Bool
+}
+
+private struct ChatConnectionNoticeKey: Equatable {
+    let interrupted: Bool
+    let retry: Int
 }
 
 private struct ConversationLoadKey: Equatable {

@@ -1421,3 +1421,12 @@
 "模拟 · " = "Simulated · ";
 "toggle_off" = "Off";
 "projects_tab" = "Projects";
+
+"手机网络已断开" = "Phone is offline";
+"正在重连…" = "Reconnecting…";
+"网络恢复后会自动重连" = "We’ll reconnect when your network returns";
+"暂时连不上网关" = "Can’t reach the gateway";
+"会继续自动重试" = "We’ll keep trying automatically";
+"立即重连" = "Reconnect now";
+"会话同步中断" = "Chat sync interrupted";
+"重试同步" = "Retry sync";

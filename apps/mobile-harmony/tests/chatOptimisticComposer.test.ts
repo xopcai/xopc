@@ -14,7 +14,7 @@ describe('optimistic composer handoff', () => {
     let finish!: (sent: boolean) => void;
     const view = Object.assign(new Handler(), {
       restoringDraft: false, draft: 'first', attachments: [{ name: 'photo' }], refs: [{ sourceId: 'note' }],
-      chat: { selectedId: 'one', send: vi.fn((_text, _files, _refs, enqueued) => {
+      chat: { selectedId: 'one', connection: 'connected', send: vi.fn((_text, _files, _refs, enqueued) => {
         enqueued(); return new Promise(resolve => { finish = resolve; });
       }) },
       palette: { close: vi.fn() }, followAfterSend: vi.fn(), saveDraft: vi.fn(), setPanel: vi.fn(), visible: true,
@@ -30,16 +30,28 @@ describe('optimistic composer handoff', () => {
   it('leaves the draft intact when the viewmodel refuses to enqueue', async () => {
     const view = Object.assign(new Handler(), {
       restoringDraft: false, draft: 'keep', attachments: [], refs: [],
-      chat: { selectedId: 'one', send: vi.fn(async () => false) },
+      chat: { selectedId: 'one', connection: 'connected', send: vi.fn(async () => false) },
       options: { loading: false, saving: false, modelId: 'provider/model' },
     });
-    await view.send(); expect(view.draft).toBe('keep');
+    await view.send(); expect(view.chat.send).toHaveBeenCalledOnce(); expect(view.draft).toBe('keep');
+  });
+  it('preserves text, attachments and references while reconnecting', async () => {
+    const files = [{ name: 'photo' }];
+    const refs = [{ sourceId: 'note' }];
+    const view = Object.assign(new Handler(), {
+      restoringDraft: false, draft: 'draft', attachments: files, refs,
+      chat: { selectedId: 'one', connection: 'reconnecting', send: vi.fn() },
+      options: { loading: false, saving: false, modelId: 'provider/model' },
+    });
+    await view.send();
+    expect(view.chat.send).not.toHaveBeenCalled();
+    expect(view.draft).toBe('draft'); expect(view.attachments).toBe(files); expect(view.refs).toBe(refs);
   });
   it('steers successive messages while the same reply is active', async () => {
     const send = vi.fn((_text, _files, _refs, enqueued) => { enqueued(); return Promise.resolve(true); });
     const view = Object.assign(new Handler(), {
       personalConversation: true, restoringDraft: false, draft: 'Keep it short', attachments: [], refs: [],
-      chat: { selectedId: 'personal', runId: 'active-run', send },
+      chat: { selectedId: 'personal', connection: 'connected', runId: 'active-run', send },
       palette: { close: vi.fn() }, followAfterSend: vi.fn(), saveDraft: vi.fn(), setPanel: vi.fn(), visible: true,
       options: { loading: false, saving: false, modelId: 'provider/model', refreshPreparation: vi.fn() },
     });
@@ -59,7 +71,7 @@ describe('optimistic composer handoff', () => {
   it('keeps the first message intact until the local draft has a model', async () => {
     const view = Object.assign(new Handler(), {
       restoringDraft: false, draft: 'wait', attachments: [], refs: [],
-      chat: { selectedId: 'one', send: vi.fn(), error: '' },
+      chat: { selectedId: 'one', connection: 'connected', send: vi.fn(), error: '' },
       options: { loading: true, saving: false, modelId: '', error: '' },
     });
     await view.send(); expect(view.chat.send).not.toHaveBeenCalled(); expect(view.draft).toBe('wait');

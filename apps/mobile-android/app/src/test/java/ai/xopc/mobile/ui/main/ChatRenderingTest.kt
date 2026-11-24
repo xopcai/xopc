@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ConversationMessage
 import ai.xopc.mobile.gateway.ConversationNarration
 import ai.xopc.mobile.gateway.GeneratedMediaKind
@@ -10,6 +11,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ChatRenderingTest {
+  @Test fun chatConnectionNoticeDistinguishesShortOutagesAndSyncFailures() {
+    assertNull(chatConnectionNoticeTitle("reconnecting", 0, true))
+    assertEquals(R.string.chat_network_reconnecting, chatConnectionNoticeTitle("reconnecting", 1, false))
+    assertEquals(R.string.chat_gateway_unreachable, chatConnectionNoticeTitle("reconnecting", 2, false))
+    assertEquals(R.string.chat_network_offline, chatConnectionNoticeTitle("network_offline", 2, true))
+    assertEquals(R.string.chat_sync_interrupted, chatConnectionNoticeTitle("connected", 0, true))
+    assertNull(chatConnectionNoticeTitle("connected", 2, false))
+  }
+
   @Test fun workspaceImagesCollapseOnlyMatchingViewLinks() {
     val nodes = projectMarkdown("[查看高清图片](/xopc/workspace/file?path=cat.jpg)\n\n![Cat](xopc://workspace/file?path=cat.jpg)", emptyList())
     assertTrue(redundantMarkdownImageLink(nodes[0].node, nodes[1].node))

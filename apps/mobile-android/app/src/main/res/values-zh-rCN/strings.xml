@@ -873,7 +873,14 @@
     <string name="clarify_more">更多操作</string>
     <string name="clarify_placeholder">输入回答…</string>
     <string name="clarify_confirm">确认</string>
-    <string name="assistant_connection_interrupted">连接中断 · 正在恢复…</string>
+    <string name="chat_network_offline">手机网络已断开</string>
+    <string name="chat_network_reconnecting">正在重连…</string>
+    <string name="chat_network_auto_resume">网络恢复后会自动重连</string>
+    <string name="chat_gateway_unreachable">暂时连不上网关</string>
+    <string name="chat_network_auto_retry">会继续自动重试</string>
+    <string name="chat_reconnect_now">立即重连</string>
+    <string name="chat_sync_interrupted">会话同步中断</string>
+    <string name="chat_retry_sync">重试同步</string>
     <string name="assistant_select_text">选择文本</string>
     <string name="progress_change_log">变更记录</string>
     <string name="phone_open">查看手机</string>

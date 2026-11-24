@@ -44,15 +44,11 @@ import kotlinx.coroutines.delay
 internal fun AssistantWaitingBubble(connected: Boolean) {
   val waitingLabel = stringResource(R.string.assistant_running)
   Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("assistant-waiting")) {
-    if (!connected) Text(stringResource(R.string.assistant_connection_interrupted),
-      style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    else {
-      Row(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.width(72.dp).height(44.dp).background(MaterialTheme.colorScheme.surfaceContainer, CircleShape)
-          .padding(horizontal = 12.dp).semantics { contentDescription = waitingLabel }) {
-        repeat(3) { index ->
-          WaitingReplyDot(index, android.animation.ValueAnimator.areAnimatorsEnabled())
-        }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
+      modifier = Modifier.width(72.dp).height(44.dp).background(MaterialTheme.colorScheme.surfaceContainer, CircleShape)
+        .padding(horizontal = 12.dp).semantics { contentDescription = waitingLabel }) {
+      repeat(3) { index ->
+        WaitingReplyDot(index, connected && android.animation.ValueAnimator.areAnimatorsEnabled())
       }
     }
   }

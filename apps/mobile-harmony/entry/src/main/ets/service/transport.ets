@@ -1,8 +1,19 @@
 import { signedHttpRequest } from './requestProof';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { http } from '@kit.NetworkKit';
 import { secureOrigin } from '../common/protocol';
 
 interface XopcHttpHeaders { 'Content-Type': string; 'Authorization': string; 'Idempotency-Key'?: string; }
+
+const NETWORK_ERROR_CODES: number[] = [2300005, 2300006, 2300007, 2300016, 2300018, 2300028, 2300052, 2300055, 2300056];
+
+class XopcNetworkError extends Error {
+  code: number;
+  constructor(code: number) {
+    super(code === 2300028 ? 'NETWORK_TIMEOUT' : 'NETWORK_UNREACHABLE');
+    this.code = code;
+  }
+}
 
 export class XopcHttpError extends Error {
   status: number;
@@ -40,6 +51,10 @@ export class XopcTransport {
       }
       if (typeof response.result !== 'string') throw new Error('INVALID_HTTP_RESPONSE');
       return response.result;
+    } catch (error) {
+      const code = (error as BusinessError).code;
+      if (NETWORK_ERROR_CODES.includes(code)) throw new XopcNetworkError(code);
+      throw error as Error;
     } finally { connection.destroy(); }
   }
 }

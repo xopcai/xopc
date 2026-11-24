@@ -4,9 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { create: vi.fn(), request: vi.fn(), foreground: true };
+  return { create: vi.fn(), request: vi.fn(), watch: vi.fn(), networkId: 1, foreground: true, origin: '' };
 });
-vi.mock('@kit.NetworkKit', () => ({ webSocket: { createWebSocket: mocks.create } }));
+vi.mock('@kit.NetworkKit', () => ({
+  webSocket: { createWebSocket: mocks.create },
+  connection: { createNetConnection: mocks.watch, getDefaultNetSync: () => ({ netId: mocks.networkId }) },
+}));
 vi.mock('../entry/src/main/ets/service/deviceLocation.ets', () => ({ invokeDeviceLocation: vi.fn(), cancelDeviceLocation: vi.fn(), cancelAllDeviceLocations: vi.fn() }));
 vi.mock('../entry/src/main/ets/service/devicePersonalTools.ets', () => ({ invokeDevicePersonalTool: vi.fn(), cancelDevicePersonalTool: vi.fn(), cancelAllDevicePersonalTools: vi.fn() }));
 vi.mock('@kit.BasicServicesKit', () => ({ batteryInfo: { batterySOC: 0, isBatteryPresent: true, chargingStatus: 0, BatteryChargeState: { NONE: 0, ENABLE: 1, FULL: 2 } } }));
@@ -18,7 +21,7 @@ vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCry
 } }));
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: {
   currentProfile: () => ({ deviceId: 'device-1' }), request: mocks.request,
-  activeOrigin: () => 'https://gateway.example', verifyRoute: async () => {},
+  activeOrigin: () => mocks.origin, verifyRoute: async () => {},
   isForeground: () => mocks.foreground,
 } }));
 vi.mock('../entry/src/main/ets/service/transport.ets', () => ({ XopcHttpError: class extends Error {
@@ -40,10 +43,21 @@ class FakeSocket {
   frames() { return this.send.mock.calls.map(([frame]) => JSON.parse(frame)); }
 }
 
+class FakeNetworkWatch {
+  listeners = new Map<string, (handle: { netId: number }) => void>();
+  on(event: string, callback: (handle: { netId: number }) => void) { this.listeners.set(event, callback); }
+  register(callback: () => void) { callback(); }
+  unregister = vi.fn();
+  emit(event: string, netId: number) { this.listeners.get(event)?.({ netId }); }
+}
+
 describe('Harmony realtime lifecycle', () => {
-  let client: XopcRealtimeClient; let sockets: FakeSocket[];
+  let client: XopcRealtimeClient; let sockets: FakeSocket[]; let network: FakeNetworkWatch;
   beforeEach(() => {
     vi.useFakeTimers(); vi.clearAllMocks(); sockets = []; mocks.foreground = true;
+    mocks.networkId = 1; mocks.origin = 'https://gateway.example';
+    network = new FakeNetworkWatch();
+    mocks.watch.mockReturnValue(network);
     mocks.create.mockImplementation(() => { const socket = new FakeSocket(); sockets.push(socket); return socket; });
     mocks.request.mockImplementation(async (path: string) => path.endsWith('/compatibility')
       ? JSON.stringify({ payload: { deviceStateToolsV1: true } }) : path.endsWith('/tickets')
@@ -85,6 +99,58 @@ describe('Harmony realtime lifecycle', () => {
     socket.listeners.get('close')?.(null, { code: 1006 }); await vi.advanceTimersByTimeAsync(1500);
     expect(sockets).toHaveLength(2); expect(sockets[1]!.frames()[0].payload.subscriptions).toEqual([{ topic: 'run:r1', afterSeq: 1, view: 'compact' }]);
     expect(socket.listeners.size).toBe(0);
+  });
+  it('keeps a healthy socket during a Wi-Fi to cellular handoff', async () => {
+    const socket = await connect(); const states = vi.fn(); client.onState = states;
+    network.emit('netLost', 1);
+    await vi.advanceTimersByTimeAsync(200);
+    mocks.networkId = 2; network.emit('netAvailable', 2);
+    expect(socket.frames().at(-1)?.kind).toBe('realtime.ping');
+    socket.frame('realtime.pong', {});
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(socket.close).not.toHaveBeenCalled();
+    expect(states).not.toHaveBeenCalled();
+  });
+  it('reopens a stale socket on a new network and rediscovers the route before getting a ticket', async () => {
+    const socket = await connect();
+    mocks.request.mockClear();
+    mocks.request.mockImplementationOnce(async () => {
+      mocks.origin = 'https://fallback.example';
+      return '{}';
+    });
+    mocks.networkId = 2; network.emit('netAvailable', 2);
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(socket.close).toHaveBeenCalledOnce();
+    expect(mocks.request.mock.calls[0]?.[0]).toBe('/api/health');
+    expect(mocks.request.mock.calls.at(-1)?.[0]).toBe('/api/realtime/tickets');
+    expect(sockets[1]?.connect).toHaveBeenCalledWith('wss://fallback.example/api/realtime/v1/ws', expect.anything());
+    expect(client.currentState()).toBe('reconnecting');
+    sockets[1]?.ready();
+    expect(client.currentState()).toBe('connected');
+  });
+  it('waits for the phone network then attempts recovery immediately', async () => {
+    mocks.networkId = 0;
+    client.start(); await vi.advanceTimersByTimeAsync(30000);
+    expect(client.currentState()).toBe('network_offline');
+    expect(mocks.request).not.toHaveBeenCalled();
+    mocks.networkId = 2; network.emit('netAvailable', 2);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sockets).toHaveLength(1);
+    sockets[0].ready();
+    mocks.networkId = 0; network.emit('netLost', 2);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(client.currentState()).toBe('network_offline');
+    expect(sockets[0].close).toHaveBeenCalledOnce();
+  });
+  it('makes a manual retry skip the existing backoff without scheduling a second connection', async () => {
+    const socket = await connect();
+    socket.listeners.get('close')?.(null, { code: 1006 });
+    client.reconnect();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sockets).toHaveLength(2);
+    sockets[1].ready();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(sockets).toHaveLength(2);
   });
   it('round-trips endpoint envelopes and cancels location through the same realtime wire', async () => {
     const socket = await connect();
@@ -139,6 +205,7 @@ describe('Harmony realtime lifecycle', () => {
     const socket = await connect(); client.stop(); const requests = mocks.request.mock.calls.length;
     await vi.advanceTimersByTimeAsync(120000);
     expect(socket.listeners.size).toBe(0); expect(socket.close).toHaveBeenCalledOnce(); expect(mocks.request).toHaveBeenCalledTimes(requests);
+    expect(network.unregister).toHaveBeenCalledOnce();
     expect(() => client.turnClaim()).toThrow('REALTIME_NOT_READY');
   });
 });

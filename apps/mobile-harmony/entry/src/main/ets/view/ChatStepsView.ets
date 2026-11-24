@@ -6,7 +6,6 @@ import { chatLiveStages, chatStageStatus } from '../common/chatLiveActivity';
 export struct XopcChatStepsView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param row: XopcChatRow = { id: '', role: 'assistant', text: '' };
-  @Param connection: string = 'connected';
   @Param animateDots: boolean = true;
   @Param staged: boolean = false;
   @Param paused: boolean = false;
@@ -25,9 +24,6 @@ export struct XopcChatStepsView {
         Text(this.stageStatus === 'failed' ? $r('app.string.chat_response_failed')
           : this.stageStatus === 'waiting' ? $r('app.string.chat_response_waiting') : $r('app.string.chat_response_interrupted'))
           .fontSize(13).fontColor(this.stageStatus === 'failed' ? this.colors.danger : this.colors.secondary)
-          .width('100%').textAlign(TextAlign.Start)
-      } else if (this.connection !== 'connected') {
-        Text($r('app.string.chat_activity_reconnecting')).fontSize(13).fontColor(this.colors.secondary)
           .width('100%').textAlign(TextAlign.Start)
       } else {
         Row({ space: 6 }) {

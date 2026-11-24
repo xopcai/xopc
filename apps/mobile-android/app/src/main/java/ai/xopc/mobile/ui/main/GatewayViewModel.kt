@@ -84,9 +84,11 @@ import ai.xopc.mobile.gateway.PersonalSummary
 import ai.xopc.mobile.gateway.PersonalAssertion
 import ai.xopc.mobile.gateway.PersonalProfile
 import ai.xopc.mobile.gateway.RealtimeClient
+import ai.xopc.mobile.gateway.defaultNetworkChanges
 import ai.xopc.mobile.gateway.RealtimeKeepAliveController
 import ai.xopc.mobile.gateway.RunStreamEvent
 import android.app.Application
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.graphics.Bitmap
@@ -108,9 +110,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import java.util.UUID
+import java.io.IOException
+
+private fun Exception.isChatConnectionError(): Boolean = this is IOException ||
+  (this is ai.xopc.mobile.gateway.GatewayHttpException && status in 502..504) || message == "NO_VERIFIED_ROUTE"
 
 data class ProgressUiState(
   val gatewayId: String? = null,
@@ -334,7 +342,9 @@ data class ConnectionUiState(
   val historyLoadingOlder: Boolean = false,
   val historyOlderError: Boolean = false,
   val chatError: Boolean = false,
+  val chatSyncError: Boolean = false,
   val realtimeStatus: String = "offline",
+  val realtimeNoticeStage: Int = 0,
   val sending: Boolean = false,
   val optimisticText: String = "",
   val chatSendSequence: Long = 0,
@@ -534,10 +544,33 @@ class GatewayViewModel internal constructor(application: Application, private va
   private var createTaskSignature = ""
   private var createTaskKey = ""
   private var realtimeJob: Job? = null
-  private var foregroundRecoveryJob: Job? = null
+  private var realtimeRecoveryJob: Job? = null
+  private var realtimeNoticeJob: Job? = null
+  private var realtimeReadyRevision = 0
+  private var realtimeEnabled = false
+  private var phoneOffline = false
   private var returnedFromBackground = false
 
   init {
+    application.getSystemService(ConnectivityManager::class.java)?.let { connectivity ->
+      viewModelScope.launch {
+        var previous = connectivity.activeNetwork
+        phoneOffline = previous == null
+        connectivity.defaultNetworkChanges().catch {
+          phoneOffline = false
+          if (realtimeEnabled && mutableState.value.realtimeStatus == "network_offline") recoverRealtime()
+        }.collectLatest { event ->
+          val network = if (event == null) {
+            delay(400)
+            connectivity.activeNetwork
+          } else event
+          val changed = network != previous
+          previous = network
+          phoneOffline = network == null
+          if (changed && realtimeEnabled) recoverRealtime(probe = network != null)
+        }
+      }
+    }
     viewModelScope.launch {
       var prevActiveRun = false
       mutableState.collect { current ->
@@ -2636,32 +2669,88 @@ class GatewayViewModel internal constructor(application: Application, private va
     RealtimeKeepAliveController.stop(getApplication())
     if (!returnedFromBackground) return
     returnedFromBackground = false
-    if (mutableState.value.profile == null || foregroundRecoveryJob?.isActive == true) return
-    foregroundRecoveryJob = viewModelScope.launch {
-      // Probe the existing socket first so short background trips avoid tearing down a healthy connection.
-      val alive = realtime.probeOrReconnect(1_500L)
-      if (!alive && !ai.xopc.mobile.gateway.DevicePersonalTools.hasActiveInvocation()) {
-        realtimeJob?.cancelAndJoin()
-        realtimeJob = null
+    if (realtimeEnabled) recoverRealtime(probe = true, refreshIfAlive = true)
+  }
+
+  fun retryChatNetwork() {
+    val current = mutableState.value
+    if (current.realtimeStatus == "connected") {
+      current.selectedConversationId?.let(::refreshChatAfterConnection)
+    } else if (!phoneOffline && realtimeEnabled) {
+      showRealtimeNotice(startVisible = true)
+      recoverRealtime()
+    }
+  }
+
+  private fun recoverRealtime(probe: Boolean = false, refreshIfAlive: Boolean = false) {
+    if (!realtimeEnabled) return
+    val previousRecovery = realtimeRecoveryJob
+    previousRecovery?.cancel()
+    realtimeRecoveryJob = viewModelScope.launch {
+      previousRecovery?.join()
+      if (!realtimeEnabled) return@launch
+      if (!phoneOffline && probe && realtime.probeOrReconnect(2_500L, !returnedFromBackground)) {
+        if (refreshIfAlive) mutableState.value.selectedConversationId?.let(::refreshChatAfterConnection)
+        return@launch
       }
-      connectRealtime()
-      mutableState.value.selectedConversationId?.let { id ->
-        refreshSelectedHistory(id)
-        refreshRunState(id)
+      if (refreshIfAlive && ai.xopc.mobile.gateway.DevicePersonalTools.hasActiveInvocation()) return@launch
+      updateRealtimeStatus(if (phoneOffline) "network_offline" else "reconnecting")
+      realtimeJob?.cancelAndJoin()
+      realtimeJob = null
+      if (realtimeEnabled && !phoneOffline) connectRealtime(recovering = true)
+    }
+  }
+
+  private fun updateRealtimeStatus(status: String) {
+    if (status == "connecting" || status == "reconnecting" || status == "network_offline") {
+      val current = mutableState.value
+      val resuming = current.realtimeStatus == "network_offline" && status == "reconnecting" &&
+        current.realtimeNoticeStage > 0
+      mutableState.update { it.copy(realtimeStatus = status,
+        realtimeNoticeStage = if (resuming) 1 else it.realtimeNoticeStage) }
+      if (resuming || realtimeNoticeJob == null) showRealtimeNotice(startVisible = resuming)
+    } else {
+      realtimeNoticeJob?.cancel()
+      realtimeNoticeJob = null
+      mutableState.update {
+        it.copy(realtimeStatus = status, realtimeNoticeStage = 0)
       }
     }
   }
 
-  private fun connectRealtime() {
-    if (realtimeJob?.isActive == true) return
+  private fun showRealtimeNotice(startVisible: Boolean = false) {
+    realtimeNoticeJob?.cancel()
+    realtimeNoticeJob = viewModelScope.launch {
+      if (!startVisible) delay(1_500)
+      mutableState.update { it.copy(realtimeNoticeStage = 1) }
+      delay(if (startVisible) 8_000 else 6_500)
+      mutableState.update { it.copy(realtimeNoticeStage = 2) }
+    }
+  }
+
+  private fun refreshChatAfterConnection(id: String) {
+    val current = mutableState.value
+    if (current.historyLoading || current.draftModelLoading) return
+    if (current.chatSyncError && !current.draftModelReady) {
+      retryConversation(id)
+      return
+    }
+    refreshSelectedHistory(id)
+    refreshRunState(id)
+    refreshClarification()
+  }
+
+  private fun connectRealtime(recovering: Boolean = false) {
+    realtimeEnabled = true
+    if (phoneOffline) { updateRealtimeStatus("network_offline"); return }
+    if (realtimeJob?.isCompleted == false) return
     realtimeJob = viewModelScope.launch {
       realtime.run(
         onState = { status ->
-          mutableState.update { it.copy(realtimeStatus = status) }
-          if (status == "connected") mutableState.value.selectedConversationId?.let { id ->
-            refreshSelectedHistory(id)
-            refreshRunState(id)
-            refreshClarification()
+          updateRealtimeStatus(status)
+          if (status == "connected") {
+            realtimeReadyRevision++
+            mutableState.value.selectedConversationId?.let(::refreshChatAfterConnection)
           }
         },
         onInvalidation = { topic ->
@@ -2690,7 +2779,7 @@ class GatewayViewModel internal constructor(application: Application, private va
         },
         onSuggestionChanged = { conversationId ->
           if (conversationId == null || mutableState.value.selectedConversationId == conversationId) refreshNextTurnSuggestion()
-        })
+        }, recovering = recovering)
     }
   }
 
@@ -2780,6 +2869,7 @@ class GatewayViewModel internal constructor(application: Application, private va
 
   /** Persist visible local input before any connection identity is changed. */
   private suspend fun quiesceGateway() {
+    realtimeEnabled = false
     discardStream()
     draftWriteJob?.cancelAndJoin()
     refWriteJob?.cancelAndJoin()
@@ -2805,8 +2895,8 @@ class GatewayViewModel internal constructor(application: Application, private va
     readers.forEach { it?.cancel() }
     readers.forEach { it?.join() }
     deleteJob = null
-    foregroundRecoveryJob?.cancelAndJoin()
-    foregroundRecoveryJob = null
+    realtimeRecoveryJob?.cancelAndJoin()
+    realtimeRecoveryJob = null
     realtimeJob?.cancelAndJoin()
     realtimeJob = null
     realtime.watchRun(null)
@@ -2819,7 +2909,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     listSearch = ""
     conversationHistoryScope = null
     remoteConversationOffset = 0
-    mutableState.update { it.copy(realtimeStatus = "offline") }
+    updateRealtimeStatus("offline")
   }
 
   private suspend fun adoptGateway(profile: GatewayProfile?, change: GatewayChange? = null) {
@@ -3283,6 +3373,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     referenceRevision++
     realtime.watchRun(null)
     val revision = ++historyRevision
+    val connectionRevision = realtimeReadyRevision
     mutableState.update { it.copy(selectedConversationId = id, desktopChatTarget = null, taskConversationTaskId = taskId, restoringHomeChat = false,
       automationConfigurationChat = automationConfiguration,
       clarification = null, clarificationBusy = false, clarificationError = null,
@@ -3291,7 +3382,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       historyTranscriptId = null, historyLastSeq = null, historyBefore = null, historyLoadingOlder = false,
       historyOlderError = false,
       executionMessageId = null, executionDetail = null, executionLoading = false, executionError = false,
-      draftModelLoading = false, draftModelReady = false, chatError = false, activeRunId = null,
+      draftModelLoading = false, draftModelReady = false, chatError = false, chatSyncError = false, activeRunId = null,
       stoppingRun = false, stopError = false, runError = false, liveMessages = emptyList(),
       runProgress = AssistantRunProgress(),
       pendingInput = null, sendError = false, sendErrorDetail = null, sendRejected = false,
@@ -3352,8 +3443,12 @@ class GatewayViewModel internal constructor(application: Application, private va
         throw error
       } catch (error: Exception) {
         if (revision != historyRevision) return@launch
+        val networkError = error.isChatConnectionError()
         mutableState.update { it.copy(historyLoading = false,
-          draftModelLoading = false, taskScopeLoading = false, chatError = true) }
+          draftModelLoading = false, taskScopeLoading = false, chatError = !networkError, chatSyncError = networkError) }
+        if (networkError && realtimeReadyRevision != connectionRevision && mutableState.value.realtimeStatus == "connected") {
+          refreshChatAfterConnection(id)
+        }
         if (fallbackToPersonal && id != mutableState.value.personal.agent?.conversationId &&
           error is ai.xopc.mobile.gateway.GatewayHttpException && error.status == 404) {
           withContext(Dispatchers.IO) { session.clearMainConversationId(id) }
@@ -3851,7 +3946,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     historyJob?.cancel()
     olderHistoryJob?.cancel()
     val revision = ++historyRevision
-    mutableState.update { it.copy(historyLoadingOlder = false) }
+    mutableState.update { it.copy(historyLoadingOlder = false, chatSyncError = false) }
     historyJob = viewModelScope.launch {
       try {
         val (history, pending) = runInterruptible(Dispatchers.IO) {
@@ -3896,8 +3991,11 @@ class GatewayViewModel internal constructor(application: Application, private va
         }
       } catch (error: CancellationException) {
         throw error
-      } catch (_: Exception) {
-        if (revision == historyRevision) mutableState.update { it.copy(historyLoading = false, chatError = true) }
+      } catch (error: Exception) {
+        if (revision == historyRevision) mutableState.update {
+          val networkError = error.isChatConnectionError()
+          it.copy(historyLoading = false, chatError = !networkError, chatSyncError = networkError)
+        }
       }
     }
   }

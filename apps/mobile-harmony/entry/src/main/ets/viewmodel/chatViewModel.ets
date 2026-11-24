@@ -10,6 +10,10 @@ import { reduceChatStream } from '../common/chatStream';
 import { XopcChatStreamBuffer } from '../common/chatStreamBuffer';
 import { reduceChatSnapshotActivity } from '../common/chatLiveActivity';
 import { XopcInputAttachment } from '../model/sessionCommand';
+import { classifyUserError } from '../common/userErrorClassifier';
+
+const CONNECTION_NOTICE_DELAY_MS = 1500;
+const CONNECTION_RETRY_DELAY_MS = 8000;
 
 interface XopcPendingChatSend {
   conversationId: string;
@@ -45,6 +49,8 @@ export class XopcChatViewModel {
   @Trace sending: boolean = false;
   @Trace error: string = '';
   @Trace connection: string = 'connecting';
+  @Trace connectionNotice: string = '';
+  @Trace connectionError: string = '';
   @Trace runId: string = '';
   @Trace liveReaction?: XopcAgentReaction;
   @Trace animatedReactionEntry: string = '';
@@ -84,6 +90,8 @@ export class XopcChatViewModel {
   private onUnavailable?: (id: string) => void;
   private disposed: boolean = false;
   private recoveryRequest: number = 0;
+  private recoverAfterLoad: boolean = false;
+  private connectionNoticeTimer: number = -1;
   private hasNetworkHistory: boolean = false;
   private completedActivityRunId: string = '';
   private executionInputIds: Set<string> = new Set<string>();
@@ -99,10 +107,7 @@ export class XopcChatViewModel {
     if (this.disposed || XopcChatViewModel.owner === this) return;
     XopcChatViewModel.owner?.deactivate();
     XopcChatViewModel.owner = this;
-    realtimeClient.onState = (state: string): void => {
-      this.connection = state;
-      if (state === 'connected' && this.selectedId && !this.loading) this.recover();
-    };
+    realtimeClient.onState = (state: string): void => { this.updateConnection(state); };
     realtimeClient.onEvent = (event: XopcEvent): void => { this.event(event); };
     realtimeClient.onGap = (topic: string): void => {
       if (topic === 'sessions') {
@@ -111,8 +116,8 @@ export class XopcChatViewModel {
       }
       if (!this.loading) this.recover(topic === 'run:' + this.runId);
     };
-    try { realtimeClient.turnClaim(); this.connection = 'connected'; } catch (_) {}
     realtimeClient.start();
+    this.updateConnection(realtimeClient.currentState(), false);
     realtimeClient.subscribe('gateway'); realtimeClient.subscribe('sessions');
     if (this.selectedId && !this.loading) this.recover();
   }
@@ -121,6 +126,8 @@ export class XopcChatViewModel {
     this.flushStream();
     clearTimeout(this.refreshTimer); this.refreshTimer = -1;
     this.observeNextTurnSuggestion('');
+    this.clearConnectionNotice();
+    this.recoverAfterLoad = false;
     if (XopcChatViewModel.owner !== this) return;
     if (this.runId) realtimeClient.unsubscribe('run:' + this.runId);
     realtimeClient.onState = (_state: string): void => {};
@@ -129,7 +136,63 @@ export class XopcChatViewModel {
     XopcChatViewModel.owner = undefined;
   }
 
-  reconnect(): void { realtimeClient.start(); }
+  reconnect(): void {
+    if (this.connectionNotice === 'retry') this.showConnectionProgress();
+    realtimeClient.reconnect();
+  }
+
+  private updateConnection(state: string, recover: boolean = true): void {
+    const previous = this.connection;
+    this.connection = state;
+    if (state === 'connecting' || state === 'reconnecting' || state === 'network_offline') {
+      if (previous === 'network_offline' && state === 'reconnecting' && this.connectionNotice) {
+        this.showConnectionProgress();
+      } else if (!this.connectionNotice && this.connectionNoticeTimer === -1) {
+        this.connectionNoticeTimer = setTimeout((): void => { this.showConnectionProgress(CONNECTION_NOTICE_DELAY_MS); },
+          CONNECTION_NOTICE_DELAY_MS);
+      }
+      return;
+    }
+    this.clearConnectionNotice();
+    if (recover && state === 'connected' && this.selectedId) {
+      if (this.loading) this.recoverAfterLoad = true;
+      else this.recoverConnection();
+    }
+  }
+
+  private recoverConnection(): void {
+    if (this.error === this.connectionError) this.error = '';
+    this.connectionError = '';
+    void this.recover();
+  }
+
+  private showConnectionProgress(elapsed: number = 0): void {
+    clearTimeout(this.connectionNoticeTimer);
+    this.connectionNotice = 'progress';
+    this.connectionNoticeTimer = setTimeout((): void => {
+      this.connectionNoticeTimer = -1;
+      this.connectionNotice = 'retry';
+    }, CONNECTION_RETRY_DELAY_MS - elapsed);
+  }
+
+  private clearConnectionNotice(): void {
+    clearTimeout(this.connectionNoticeTimer); this.connectionNoticeTimer = -1;
+    this.connectionNotice = '';
+  }
+
+  private setSyncError(raw: string): void {
+    this.connectionError = classifyUserError(raw) === 'offline' || /^HTTP_50[234]$/.test(raw) ? raw : '';
+    this.error = raw;
+  }
+
+  private finishLoading(): void {
+    this.loading = false;
+    const recover = this.recoverAfterLoad;
+    this.recoverAfterLoad = false;
+    if (recover && this.connection === 'connected' && this.connectionError && this.error === this.connectionError) {
+      this.recoverConnection();
+    }
+  }
 
   resume(): void {
     if (this.disposed) return;
@@ -180,7 +243,8 @@ export class XopcChatViewModel {
     this.cachedHistory = false; this.hasNetworkHistory = false; this.localDraft = false;
     this.transcriptId = undefined; this.historyLastSeq = 0;
     this.title = ''; this.agentId = ''; this.projectId = ''; this.status = ''; this.hasOlder = false;
-    this.before = ''; this.error = ''; this.loading = true;
+    this.before = ''; this.error = ''; this.connectionError = ''; this.loading = true;
+    this.recoverAfterLoad = false;
     const selection = this.selection;
     try {
       void this.restoreCachedHistory(id, selection);
@@ -196,11 +260,11 @@ export class XopcChatViewModel {
       await this.recover();
     } catch (error) {
       if (!this.disposed && selection === this.selection) {
-        this.error = (error as Error).message;
+        this.setSyncError((error as Error).message);
         await this.restoreCachedHistory(id, selection);
       }
     } finally {
-      if (!this.disposed && selection === this.selection) this.loading = false;
+      if (!this.disposed && selection === this.selection) this.finishLoading();
     }
   }
 
@@ -249,16 +313,18 @@ export class XopcChatViewModel {
       }
     } catch (error) {
       if (request === this.recoveryRequest && selection === this.selection && !this.disposed) {
-        this.error = (error as Error).message;
+        this.setSyncError((error as Error).message);
       }
     }
   }
 
   async retryHistory(): Promise<void> {
-    if (this.loading || this.disposed) return;
-    this.error = '';
+    if (this.loading || this.disposed || !this.selectedId) return;
+    this.error = ''; this.connectionError = '';
     this.loading = true;
-    try { await this.recover(); } finally { this.loading = false; }
+    const selection = this.selection;
+    try { await this.recover(); }
+    finally { if (!this.disposed && selection === this.selection) this.finishLoading(); }
   }
 
   private async refreshCompletedHistory(runId: string, attempt: number = 0): Promise<void> {
@@ -292,6 +358,7 @@ export class XopcChatViewModel {
     if (older) this.olderPending = true;
     const request = ++this.historyRequest;
     const selection = this.selection; const before = older ? this.before : '';
+    const previousError = this.connectionError;
     try {
       const prefetched = older && this.prefetchKey === this.olderPageKey() ? this.prefetchedHistory : undefined;
       const prepared = prefetched ? await prefetched : undefined;
@@ -304,6 +371,10 @@ export class XopcChatViewModel {
       if (result.session.key !== this.selectedId) throw new Error('INVALID_HISTORY_SESSION');
       if (older) beforePrepend();
       if (!older) {
+        if (previousError && this.connectionError === previousError) {
+          if (this.error === previousError) this.error = '';
+          this.connectionError = '';
+        }
         this.localDraft = result.localDraft === true;
         this.hasNetworkHistory = !this.localDraft;
         this.cachedHistory = false;
@@ -402,7 +473,7 @@ export class XopcChatViewModel {
       }
     } catch (error) {
       if (selection === this.selection && request === this.historyRequest && !this.disposed) {
-        this.error = (error as Error).message;
+        this.setSyncError((error as Error).message);
         if (handleMissing && (error as XopcChatHttpFailure).status === 404) {
           this.onUnavailable?.(this.selectedId);
           throw error as Error;
@@ -612,7 +683,7 @@ export class XopcChatViewModel {
       // A matching history row is authoritative even if the HTTP acknowledgement was lost.
       if (!this.outbox.has(input.row.id)) return true;
       this.executionInputIds.delete(input.row.id);
-      this.error = (error as Error).message;
+      this.setSyncError((error as Error).message);
       this.updateSendState(input, 'failed'); return false;
     }
     finally { this.sending = false; }

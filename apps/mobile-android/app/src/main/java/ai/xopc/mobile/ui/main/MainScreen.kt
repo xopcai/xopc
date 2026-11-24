@@ -378,6 +378,7 @@ internal fun MainScreen(
   onSelectConversation: (String) -> Unit = {},
   onRestoreConversation: (String) -> Unit = onSelectConversation,
   onRetryConversation: (String) -> Unit = onSelectConversation,
+  onRetryChatNetwork: () -> Unit = {},
   onSelectTaskChildConversation: (String, String) -> Unit = { _, _ -> },
   onCreateConversation: () -> Unit = {},
   onSearchExternalConversations: suspend (String) -> List<ConversationSummary> = { emptyList() },
@@ -703,6 +704,7 @@ internal fun MainScreen(
     onSelectConversation = onSelectConversation,
     onRestoreConversation = onRestoreConversation,
     onRetryConversation = onRetryConversation,
+    onRetryChatNetwork = onRetryChatNetwork,
     onSelectTaskChildConversation = onSelectTaskChildConversation,
     onCreateConversation = onCreateConversation,
     onCreateProjectConversation = onCreateProjectConversation,
@@ -915,6 +917,7 @@ internal fun MainContent(
   onSelectConversation: (String) -> Unit = {},
   onRestoreConversation: (String) -> Unit = onSelectConversation,
   onRetryConversation: (String) -> Unit = onSelectConversation,
+  onRetryChatNetwork: () -> Unit = {},
   onSelectTaskChildConversation: (String, String) -> Unit = { _, _ -> },
   onCreateConversation: () -> Unit = {},
   onCreateProjectConversation: suspend (String) -> String = { error("UNAVAILABLE") },
@@ -1653,6 +1656,8 @@ internal fun MainContent(
     onOpenSidebar = openSidebar,
     bottomBar = {
       if (showBottomChrome) Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+          if (conversationId != null) ChatConnectionNotice(
+            connection.realtimeStatus, connection.realtimeNoticeStage, connection.chatSyncError, onRetryChatNetwork)
           if (showMusicMini) MusicMiniPlayer(activeMusic, openMusicPlayer,
             Modifier.padding(horizontal = 12.dp).padding(bottom = 4.dp))
           if (conversationId != null) ConversationMcpAction(conversationId,
