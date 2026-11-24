@@ -102,6 +102,13 @@ export const PersonalOneShotOutreachSummarySchema = z.object({
 });
 export type PersonalOneShotOutreachSummary = z.infer<typeof PersonalOneShotOutreachSummarySchema>;
 
+/**
+ * Personal Agent One-Shot Conditional Follow-Up (`personal_attention_threads` with `follow_up_mode = 'one_shot'`).
+ * Represents a single-check conditional reminder tied to one active `TaskWait` (`user_input | approval`).
+ *
+ * Distinct from Home Intelligence Continuing Goals (`HomeContinuingGoal` / `FollowUp` in `./follow-ups.ts`,
+ * stored in `home_followups`).
+ */
 export const PersonalOneShotFollowUpDtoSchema = z.object({
   followUpId: z.string().uuid(),
   status: z.enum(['candidate', 'active', 'paused', 'completed', 'expired']),

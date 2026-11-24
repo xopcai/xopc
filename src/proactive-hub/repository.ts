@@ -412,29 +412,25 @@ export function retireCoveredProactiveItems(
   });
 }
 
-export function findActiveEntityAnchor(ownerId: string, event: AutomationEventEnvelope): {
+export function findActiveEntityAnchor(_ownerId: string, event: AutomationEventEnvelope): {
   projectId?: string;
-  threadId?: string;
 } {
   const db = getSqliteDatabase();
-  const payloadProjectId = typeof event.payload.projectId === 'string' ? event.payload.projectId : undefined;
+  const payload = event.payload && typeof event.payload === 'object'
+    ? (event.payload as Record<string, unknown>)
+    : {};
+  const payloadProjectId = typeof payload.projectId === 'string' && payload.projectId.trim()
+    ? payload.projectId.trim()
+    : event.subject?.kind === 'project' && typeof event.subject.id === 'string' && event.subject.id.trim()
+      ? event.subject.id.trim()
+      : undefined;
   const matchedProject = payloadProjectId
     ? db.prepare("SELECT project_id FROM projects WHERE project_id = ? AND status NOT IN ('completed','cancelled','archived') LIMIT 1")
       .get(payloadProjectId) as { project_id: string } | undefined
     : undefined;
 
-  const subjectText = String(event.payload.subject ?? event.payload.title ?? event.payload.folderName ?? '').trim();
-  let matchedThreadId: string | undefined;
-  if (subjectText.length >= 3) {
-    const activeThreads = db.prepare("SELECT id, subject FROM personal_attention_threads WHERE owner_id = ? AND follow_up_mode = 'recurring' AND status = 'active' LIMIT 50")
-      .all(ownerId) as Array<{ id: string; subject: string }>;
-    const normalized = subjectText.toLowerCase();
-    const hit = activeThreads.find(t => normalized.includes(t.subject.toLowerCase()) || t.subject.toLowerCase().includes(normalized));
-    matchedThreadId = hit?.id;
-  }
   return {
     ...(matchedProject ? { projectId: matchedProject.project_id } : {}),
-    ...(matchedThreadId ? { threadId: matchedThreadId } : {}),
   };
 }
 
@@ -448,6 +444,7 @@ export interface Gate1AdmissionResult {
 /**
  * Gate 1: Zero-token deterministic preflight filter, bot/noise suppressor,
  * fingerprint deduplicator, and sliding-window coalescer.
+ * Internal product events (tasks / projects / sessions) never enter external signal triage.
  */
 export function admitSignalAtGate1(
   ownerId: string,
@@ -459,9 +456,17 @@ export function admitSignalAtGate1(
     return { outcome: 'dropped_unmatched' };
   }
 
-  const taskWait = extractEventTaskWait(event);
-  if (taskWait.taskId && hasCoveringOneShotFollowUp(ownerId, taskWait.taskId, taskWait.waitId)) {
-    retireCoveredProactiveItems(ownerId, taskWait.taskId, taskWait.waitId, now);
+  // Internal tasks/projects lifecycle events belong exclusively to Personal explicit follow-ups, never Hub Triage/Scout.
+  if (
+    event.source === 'tasks'
+    || event.source === 'projects'
+    || event.type.startsWith('task.')
+    || event.type.startsWith('project.')
+  ) {
+    const taskWait = extractEventTaskWait(event);
+    if (taskWait.taskId && hasCoveringOneShotFollowUp(ownerId, taskWait.taskId, taskWait.waitId)) {
+      retireCoveredProactiveItems(ownerId, taskWait.taskId, taskWait.waitId, now);
+    }
     return { outcome: 'dropped_rule' };
   }
 
@@ -473,7 +478,7 @@ export function admitSignalAtGate1(
     const matchedSub = selectMatchingSubscription(subs, event);
     const anchor = findActiveEntityAnchor(ownerId, event);
 
-    if (!matchedSub && !anchor.projectId && !anchor.threadId) {
+    if (!matchedSub && !anchor.projectId) {
       return { outcome: 'dropped_unmatched' };
     }
 

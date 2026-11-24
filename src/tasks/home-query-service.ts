@@ -29,6 +29,7 @@ import { TaskRunRepository } from './task-run-repository.js';
 import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
 import { AttentionGovernor, compareHomeDecisions } from './attention-governor.js';
 import { listUnreadWorkbenchFollowUps } from '../personal-agent/proactivity/one-shot-follow-up.js';
+import { resolvePersonalOwnerId } from '../personal-agent/repository.js';
 import { stripMarkdown } from '../voice/tts/preprocess.js';
 
 const RECENT_WORK_MS = 7 * 24 * 60 * 60_000;
@@ -513,7 +514,7 @@ export class HomeQueryService {
       scheduled: upcomingAutomations,
       nowMs,
     });
-    const unreadFollowUps = listUnreadWorkbenchFollowUps('local-owner');
+    const unreadFollowUps = listUnreadWorkbenchFollowUps(resolvePersonalOwnerId());
     const unreadByTaskId = new Map(unreadFollowUps.map(alert => [alert.taskId, alert]));
     const attachUnreadAlert = (item: HomeWorkbenchItem): HomeWorkbenchItem => {
       const taskId = item.id.startsWith('task:') ? item.id.split(':')[1] : undefined;

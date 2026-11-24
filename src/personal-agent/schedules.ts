@@ -3,7 +3,7 @@ import { TaskCreateRequestSchema } from '@xopcai/gateway-contract';
 import type { Automation, AutomationAction, AutomationNotificationPolicy, AutomationSchedule } from '../automations/domain/types.js';
 import type { CreateAutomationInput } from '../automations/domain/validation.js';
 import { TaskApplicationService } from '../tasks/task-application-service.js';
-import { getPersonalAgent, type PersonalAgentRecord } from './repository.js';
+import { getPersonalAgent, getPersonalAgentByConversation, resolvePersonalOwnerId, type PersonalAgentRecord } from './repository.js';
 
 type PersonalTaskAction = Extract<AutomationAction, { kind: 'personal_task' }>;
 
@@ -29,7 +29,7 @@ export function isPersonalSchedule(automation: Automation | null, conversationId
 }
 
 export function startScheduledPersonalTask(title: string, action: PersonalTaskAction, runId: string): string {
-  const profile = getPersonalAgent('local-owner');
+  const profile = getPersonalAgentByConversation(action.conversationId) ?? getPersonalAgent(resolvePersonalOwnerId());
   if (profile?.state !== 'ready' || profile.conversationId !== action.conversationId || profile.agentId !== action.agentId) {
     throw new Error('The Personal Agent for this schedule is unavailable');
   }

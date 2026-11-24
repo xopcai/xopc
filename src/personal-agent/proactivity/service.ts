@@ -14,11 +14,15 @@ import { DurableState } from '../../storage/sqlite/durable-state.js';
 import { readCurrentTranscriptId } from '../../storage/sqlite/session-instance-repository.js';
 import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
-import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
 import { createLogger } from '../../utils/logger.js';
 import { personalConversationState } from '../conversation-state.js';
-import { getPersonalAgent, getPersonalAgentByConversation } from '../repository.js';
+import { getPersonalAgent, getPersonalAgentByConversation, resolvePersonalOwnerId } from '../repository.js';
 import { PERSONAL_PERSONA_GUIDANCE } from '../persona.js';
+import {
+  isPersonalConversationDeliverable,
+  isPersonalProactiveAccessible,
+  proactiveDeliveryGovernor,
+} from './delivery-governor.js';
 import { isExplicitOneShotFollowUp } from './follow-up-request.js';
 import {
   evaluateOneShotWakeups,
@@ -26,7 +30,7 @@ import {
   reconcileOneShotForTaskEvent,
   type OneShotStateChange,
 } from './one-shot-follow-up.js';
-import { enqueueDue, enqueueWakeup, getAttention, getAttentionSources, getProactivitySettings, isQuiet, localDay,
+import { enqueueDue, enqueueWakeup, getAttention, getAttentionSources, getProactivitySettings,
   listAttention, preparationStrategy, recordFeedback, reserveModelCall, saveAttention, sourceFingerprint, userText,
   type AttentionThread, type Outreach, type Wakeup } from './repository.js';
 
@@ -68,22 +72,13 @@ export class PersonalProactivityService {
   private controller?: AbortController;
   private readonly stopWaiters: Array<() => void> = [];
   constructor(private readonly deps: ProactivityDeps) {}
-  private ownerId(): string { return this.deps.ownerId ?? 'local-owner'; }
+  private ownerId(): string { return resolvePersonalOwnerId(this.deps.ownerId); }
   private now(): number { return this.deps.now?.() ?? Date.now(); }
   private accessible(conversationId: string): boolean {
-    const config = this.deps.getConfig();
-    const access = resolveUserContextSessionAccess(config, conversationId);
-    const personal = getPersonalAgentByConversation(conversationId);
-    const agent = personal ? new AgentCatalogRepository().get(personal.agentId) : undefined;
-    if (!personal || personal.conversationId !== conversationId || personal.state !== 'ready' || agent?.enabled === false) return false;
-    return access.userModel && config.userContext.userModel.writePolicy !== 'deny'
-      && config.userContext.userModel.processingPolicy !== 'local_only';
+    return isPersonalProactiveAccessible(this.deps.getConfig(), conversationId);
   }
   private available(conversationId: string): boolean {
-    return !this.stopped && this.accessible(conversationId)
-      && personalConversationState(conversationId).idle && this.deps.isAvailable(conversationId)
-      && !getSqliteDatabase().prepare(`SELECT 1 FROM task_result_deliveries WHERE conversation_id = ?
-        AND reply_status IN ('pending','generating','ready') AND reply_attempts < 8 LIMIT 1`).get(conversationId);
+    return isPersonalConversationDeliverable(this.deps.getConfig(), conversationId, this.deps.isAvailable, this.stopped);
   }
   private hasDeliveredTaskResult(thread: AttentionThread): boolean {
     return thread.kind === 'outcome' && Boolean(thread.task_id && getSqliteDatabase().prepare(`SELECT 1 FROM task_result_deliveries d
@@ -154,7 +149,9 @@ export class PersonalProactivityService {
       for (const thread of threads) {
         if (event.type.includes('deleted')) {
           db.prepare("UPDATE personal_attention_threads SET status = 'expired', revision = revision + 1 WHERE id = ?").run(thread.id);
-        } else enqueueWakeup(thread, 'change', event.id, this.now());
+        } else if (thread.authority === 'user_explicit') {
+          enqueueWakeup(thread, 'change', event.id, this.now());
+        }
       }
     });
   }
@@ -289,7 +286,6 @@ export class PersonalProactivityService {
         if (!thread || thread.status !== 'active' || wakeup.thread_revision !== thread.revision) {
           db.prepare("UPDATE personal_wakeups SET status = 'cancelled' WHERE id = ?").run(wakeup.id); continue;
         }
-        const settings = getProactivitySettings(thread.owner_id);
         if (this.hasDeliveredTaskResult(thread)) {
           db.prepare("UPDATE personal_attention_threads SET status = 'completed', revision = revision + 1 WHERE id = ?").run(thread.id);
           db.prepare("UPDATE personal_wakeups SET status = 'done', lease_until = 0 WHERE id = ?").run(wakeup.id);
@@ -300,14 +296,20 @@ export class PersonalProactivityService {
           db.prepare("UPDATE personal_wakeups SET status = 'cancelled' WHERE id = ?").run(wakeup.id);
           continue;
         }
-        if (!this.available(thread.conversation_id) || settings.mode === 'off' || isQuiet(now, settings)
-          || settings.mode === 'follow_up' && thread.authority !== 'user_explicit') continue;
-        if (thread.authority !== 'user_explicit'
-          && (new DurableState<number>('personal-proactivity-messages', thread.owner_id).get(localDay(now, settings.timezone)) ?? 0) >= settings.dailyMessages) continue;
+        const gate = proactiveDeliveryGovernor.check({
+          ownerId: thread.owner_id,
+          conversationId: thread.conversation_id,
+          authority: thread.authority,
+          config: this.deps.getConfig(),
+          isAvailable: this.deps.isAvailable,
+          now,
+          stopped: this.stopped,
+        });
+        if (!gate.allowed) continue;
         wakeup.lease_token = randomUUID();
         db.prepare("UPDATE personal_wakeups SET status = 'evaluating', lease_token = ?, lease_until = ? WHERE id = ?")
           .run(wakeup.lease_token, now + TIMEOUT_MS + 5000, wakeup.id);
-        return { wakeup, thread, settings };
+        return { wakeup, thread, settings: gate.settings };
       }
       return undefined;
     });
@@ -419,16 +421,19 @@ export class PersonalProactivityService {
           if (thread.status === 'active' && thread.revision === row.thread_revision) db.prepare('UPDATE personal_attention_threads SET revision = revision + 1 WHERE id = ?').run(thread.id);
           return false;
         }
-        if (!this.available(row.conversation_id) || settings.mode === 'off' || isQuiet(now, settings)) return false;
         const recent = db.prepare("SELECT published_at FROM personal_outreach WHERE thread_id = ? AND state = 'published' ORDER BY published_at DESC LIMIT 1")
           .get(thread.id) as { published_at: number } | undefined;
-        if (thread.authority !== 'user_explicit') {
-          const budget = new DurableState<number>('personal-proactivity-messages', thread.owner_id);
-          const day = localDay(now, settings.timezone);
-          if ((budget.get(day) ?? 0) >= settings.dailyMessages || recent && recent.published_at > now - 86_400_000) return false;
-          budget.set(day, (budget.get(day) ?? 0) + 1);
-          for (const [old] of budget.entries()) if (old !== day) budget.delete(old);
-        }
+        if (thread.authority !== 'user_explicit' && recent && recent.published_at > now - 86_400_000) return false;
+        const reserved = proactiveDeliveryGovernor.tryReserveSlot({
+          ownerId: thread.owner_id,
+          conversationId: row.conversation_id,
+          authority: thread.authority,
+          config: this.deps.getConfig(),
+          isAvailable: this.deps.isAvailable,
+          now,
+          stopped: this.stopped,
+        });
+        if (!reserved.allowed) return false;
         const message = PersonalProactiveMessageSchema.parse({ version: 1, outreachId: row.id, threadId: thread.id,
           conversationId: row.conversation_id, originTranscriptId: row.origin_transcript_id, text: row.text,
           provenance: provenance.display, createdAt: now });

@@ -7,6 +7,7 @@ import {
 
 import type { AutomationRun } from '../automations/domain/types.js';
 import { hasCoveringOneShotFollowUp } from '../personal-agent/proactivity/one-shot-follow-up.js';
+import { resolvePersonalOwnerId } from '../personal-agent/repository.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/connection.js';
 import { markdownNotificationPreview } from './plain-text.js';
 
@@ -100,7 +101,7 @@ function taskPlan(payload: unknown): NotificationPlan | null {
   if (!type) return null;
   if (type === 'task.needs_input' && isXopcDatabaseOpen()) {
     const waitId = typeof data.waitId === 'string' ? data.waitId : undefined;
-    if (hasCoveringOneShotFollowUp('local-owner', taskId, waitId)) return null;
+    if (hasCoveringOneShotFollowUp(resolvePersonalOwnerId(), taskId, waitId)) return null;
   }
   const taskTitle = typeof data.task?.title === 'string' ? data.task.title.trim().slice(0, 120) : '';
   const title = type === 'task.needs_input'

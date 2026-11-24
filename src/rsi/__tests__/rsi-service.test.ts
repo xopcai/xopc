@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { serve } from '@hono/node-server';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { ConfigSchema } from '../../config/schema.js';
@@ -44,6 +44,8 @@ describe('Capability-first Bounded RSI pipeline and authenticated Gateway routes
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(dir, 'xopc.db') });
     now = Date.parse('2026-11-23T14:00:00+08:00');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
 
     patchProactivitySettings(ownerId, {
       ...getProactivitySettings(ownerId),
@@ -80,6 +82,7 @@ describe('Capability-first Bounded RSI pipeline and authenticated Gateway routes
 
   afterEach(() => {
     hub.stop();
+    vi.useRealTimers();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(dir, { recursive: true, force: true });

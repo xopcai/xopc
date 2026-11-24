@@ -8,7 +8,7 @@ import type {
   HomeOpportunityFeedbackRequest,
   HomeWorkbenchItem,
 } from '@xopcai/gateway-contract';
-import { ArrowRight, CalendarClock, Check, ChevronRight, CircleAlert, CirclePause, ListTodo, MessageSquare, PanelsTopLeft, Plus, Search, Sparkles, X } from 'lucide-react';
+import { ArrowRight, CalendarClock, Check, ChevronRight, CircleAlert, CirclePause, Inbox, ListTodo, MessageSquare, PanelsTopLeft, Plus, Search, Sparkles, X } from 'lucide-react';
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -284,6 +284,7 @@ export function HomePage() {
   const [readDeliveries, setReadDeliveries] = useState(loadReadDeliveries);
   const resultTrigger = useRef<HTMLElement | null>(null);
   const [suggestionOpen, setSuggestionOpen] = useState(false);
+  const [proactiveInboxOpen, setProactiveInboxOpen] = useState(false);
   const [conversationOpen, setConversationOpen] = useState(false);
   const [intent, setIntent] = useState('');
   const actionPendingRef = useRef(false);
@@ -897,21 +898,62 @@ export function HomePage() {
       ) : advisorCard}
     </section>
   ) : null;
-  const proactiveSection = proactiveHasItems ? (
-    <ProactiveInboxCard
-      items={proactive.items}
-      digests={proactive.digests}
-      bufferedCount={proactive.bufferedCount}
-      rsiCandidates={proactive.rsiCandidates}
-      metrics={proactive.metrics}
-      loading={proactive.loading}
-      language={language}
-      onReload={proactive.reload}
-    />
+  const proactiveActionableItems = proactive.items.filter((item) => item.category !== 'pulse_digest');
+  const proactiveLeadText = proactiveActionableItems[0]?.title
+    ?? proactive.digests[0]?.title
+    ?? (proactive.bufferedCount > 0
+      ? (language === 'zh' ? `${proactive.bufferedCount} 项低打扰外部动态待聚合` : `${proactive.bufferedCount} external updates buffered for digest`)
+      : '');
+  const proactiveBadgeCount = proactiveActionableItems.length + proactive.digests.length;
+  const proactiveCompactStrip = proactiveHasItems ? (
+    <div
+      data-proactive-inbox-strip
+      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-edge bg-surface-panel px-3.5 py-2"
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-fg-muted">
+        <Inbox className="size-4 shrink-0 text-accent" aria-hidden />
+        <span className="shrink-0 font-medium text-fg">
+          {language === 'zh' ? '外部信号收件箱' : 'External Signal Inbox'}
+        </span>
+        {proactiveBadgeCount > 0 ? (
+          <span className="rounded-full bg-surface-inset px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-fg-muted">
+            {proactiveBadgeCount}
+          </span>
+        ) : null}
+        {proactiveLeadText ? (
+          <span className="truncate text-fg-muted">· {proactiveLeadText}</span>
+        ) : null}
+      </div>
+      <WorkbenchDialog
+        title={language === 'zh' ? '外部信号收件箱' : 'External Signal Inbox'}
+        subtitle={language === 'zh' ? '连接器、本地目录与日程信号的草稿审阅及脉冲简报' : 'Connector, local folder, and calendar drafts & Pulse digests'}
+        size="wide"
+        open={proactiveInboxOpen}
+        onOpenChange={setProactiveInboxOpen}
+        trigger={(
+          <Button variant="ghost" className="h-8 gap-1 rounded-lg px-2.5 text-xs">
+            {language === 'zh' ? '查看收件箱' : 'Open inbox'}
+            <ChevronRight className="size-3.5" aria-hidden />
+          </Button>
+        )}
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto p-1">
+          <ProactiveInboxCard
+            items={proactive.items}
+            digests={proactive.digests}
+            bufferedCount={proactive.bufferedCount}
+            rsiCandidates={proactive.rsiCandidates}
+            metrics={proactive.metrics}
+            loading={proactive.loading}
+            language={language}
+            onReload={proactive.reload}
+          />
+        </div>
+      </WorkbenchDialog>
+    </div>
   ) : null;
   const cards: WorkbenchCard[] = [
     { id: 'attention', label: work.attention, lane: 'left', content: attentionSection },
-    { id: 'proactive', label: language === 'zh' ? '主动收件箱' : 'Agent Inbox', lane: 'left', content: proactiveSection },
     { id: 'delivery', label: work.progress, lane: 'left', content: deliverySection },
     { id: 'resume', label: work.resume, lane: 'left', content: resumeSection },
     { id: 'background', label: work.background, lane: 'right', content: backgroundSection },
@@ -1098,6 +1140,8 @@ export function HomePage() {
               </div>
             </section>
           ) : null}
+
+          {proactiveCompactStrip}
 
           {visibleCards.length > 0 ? (
             <HomeWorkbenchLayout cards={visibleCards} editing={editingLayout} language={language} />

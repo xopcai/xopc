@@ -468,6 +468,33 @@ describe('conversation communication preferences', () => {
     expect(prompt).toContain('replacing stale settings in conversation, summaries, memory, and profile Markdown');
   });
 
+  it('skips duplicate tone/human sections and unmodified stock AGENTS/TOOLS templates for personal role while keeping custom files', () => {
+    const stockAgents = '# AGENTS.md - Workspace Rules\n\n## Tool Use\n- Prefer narrow file edits over broad rewrites.\n\n## Maintenance\nThis file is a starting point. Update it when workspace-specific rules become clear.';
+    const stockTools = '# TOOLS.md - Local Notes\n\n- home-server → 192.168.1.100, user: admin\n\nAdd whatever helps you do your job. This is your cheat sheet.';
+    const customTools = `${stockTools}\n\n- studio-mic → USB Audio`;
+    const stockPrompt = buildSystemPrompt('/ws', {
+      promptRole: 'personal',
+      toolNames: ['personal_task', 'read_file'],
+      contextFiles: [
+        { path: 'profile/AGENTS.md', content: stockAgents },
+        { path: 'profile/TOOLS.md', content: stockTools },
+        { path: 'profile/SOUL.md', content: '# SOUL.md\nBe warm.' },
+      ],
+    });
+    expect(stockPrompt).toContain('## Tone & Style');
+    expect(stockPrompt).not.toContain('## Human Collaboration');
+    expect(stockPrompt).not.toContain('192.168.1.100');
+    expect(stockPrompt).not.toContain('Prefer narrow file edits over broad rewrites.');
+    expect(stockPrompt).toContain('Be warm.');
+
+    const customPrompt = buildSystemPrompt('/ws', {
+      promptRole: 'personal',
+      toolNames: ['personal_task', 'read_file'],
+      contextFiles: [{ path: 'profile/TOOLS.md', content: customTools }],
+    });
+    expect(customPrompt).toContain('studio-mic → USB Audio');
+  });
+
   it('bounds default instruction size while retaining authorization and verification', () => {
     const full = buildSystemPrompt('/workspace');
     expect(full.length).toBeLessThan(8_000);

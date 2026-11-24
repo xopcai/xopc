@@ -1,3 +1,9 @@
+/**
+ * Personal Agent One-Shot Conditional Follow-Up engine (`personal_attention_threads`, `follow_up_mode = 'one_shot'`).
+ * Evaluates a single `TaskWait` at a user-specified `checkAt` and publishes at most one reminder
+ * to either Personal chat or Workbench unread alerts — distinct from Home Intelligence Continuing Goals
+ * (`src/home-intelligence/follow-ups.ts`, `home_followups`).
+ */
 import { randomUUID } from 'node:crypto';
 
 import {
@@ -25,7 +31,7 @@ import { retireCoveredProactiveItems } from '../../proactive-hub/repository.js';
 import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
 import { createLogger } from '../../utils/logger.js';
 import { personalConversationState } from '../conversation-state.js';
-import { getPersonalAgentByConversation } from '../repository.js';
+import { getPersonalAgentByConversation, resolvePersonalOwnerId } from '../repository.js';
 import {
   isExplicitFollowUp,
   isExplicitOneShotFollowUp,
@@ -239,7 +245,7 @@ export function getOneShotFollowUpDto(
 
 export function listTaskOneShotFollowUps(
   taskId: string,
-  ownerId = 'local-owner',
+  ownerId = resolvePersonalOwnerId(),
   opts?: { canReadTask?: (taskId: string) => boolean },
 ): PersonalOneShotFollowUpDto[] {
   const rows = getSqliteDatabase()
@@ -255,7 +261,7 @@ export function listTaskOneShotFollowUps(
     .filter((item): item is PersonalOneShotFollowUpDto => Boolean(item));
 }
 
-export function listUnreadWorkbenchFollowUps(ownerId = 'local-owner'): PersonalOneShotWorkbenchAlert[] {
+export function listUnreadWorkbenchFollowUps(ownerId = resolvePersonalOwnerId()): PersonalOneShotWorkbenchAlert[] {
   const rows = getSqliteDatabase()
     .prepare(`
       SELECT

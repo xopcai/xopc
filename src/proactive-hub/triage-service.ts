@@ -9,17 +9,19 @@ import type { Config } from '../config/schema.js';
 import { listKnowledgeItems } from '../knowledge-memory/index.js';
 import { personalConversationState } from '../personal-agent/conversation-state.js';
 import {
+  getUsedInferredDailyMessages,
+  proactiveDeliveryGovernor,
+} from '../personal-agent/proactivity/delivery-governor.js';
+import {
   getProactivitySettings,
   isQuiet,
-  localDay,
   reserveModelCall,
 } from '../personal-agent/proactivity/repository.js';
-import { getPersonalAgent } from '../personal-agent/repository.js';
+import { getPersonalAgent, resolvePersonalOwnerId } from '../personal-agent/repository.js';
 import { resolveModel } from '../providers/index.js';
 import { completeWithResolvedCredentials } from '../providers/model-call.js';
 import { extractAssistantText, getAssistantMessageErrorReason, stripCodeFences } from '../providers/model-response.js';
 import { emitSessionTranscriptUpdate } from '../session/transcript-events.js';
-import { DurableState } from '../storage/sqlite/durable-state.js';
 import { readCurrentTranscriptId } from '../storage/sqlite/session-instance-repository.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { appendTranscriptEntry } from '../storage/sqlite/transcript-repository.js';
@@ -30,7 +32,6 @@ import {
   admitSignalAtGate1,
   applyProactiveItemResolution,
   claimDueCoalescedSignals,
-  extractEventTaskWait,
   finalizeCoalescedSignal,
   findActiveEntityAnchor,
   flushPulseDigestBatch,
@@ -107,7 +108,7 @@ export class ProactiveHubService {
   constructor(private readonly deps: ProactiveHubDeps) {}
 
   private ownerId(): string {
-    return this.deps.ownerId ?? 'local-owner';
+    return resolvePersonalOwnerId(this.deps.ownerId);
   }
 
   private now(): number {
@@ -261,9 +262,8 @@ export class ProactiveHubService {
       penalty += 2;
     }
 
-    const dailyChatState = new DurableState<number>('proactive.chat-escalations', ownerId);
-    const usedToday = dailyChatState.get(localDay(now, settings.timezone)) ?? 0;
-    if (usedToday >= Math.max(1, settings.dailyMessages)) {
+    const usedToday = getUsedInferredDailyMessages(ownerId, now, settings);
+    if (settings.mode === 'follow_up' || usedToday >= settings.dailyMessages) {
       penalty += 4;
     }
     return penalty;
@@ -308,12 +308,6 @@ export class ProactiveHubService {
       payload: signal.payload,
     };
     const anchor = findActiveEntityAnchor(ownerId, syntheticEnvelope);
-    const taskWait = extractEventTaskWait(syntheticEnvelope);
-    if (taskWait.taskId && hasCoveringOneShotFollowUp(ownerId, taskWait.taskId, taskWait.waitId)) {
-      retireCoveredProactiveItems(ownerId, taskWait.taskId, taskWait.waitId, now);
-      if (signal.leaseToken) finalizeCoalescedSignal(ownerId, signal.coalesceKey, signal.leaseToken, 'dropped', now);
-      return;
-    }
 
     try {
       // Shortcut: explicit digest_only subscriptions bypass heavy Scout and buffer directly into Pulse Digest.
@@ -336,9 +330,6 @@ export class ProactiveHubService {
             coalescedCount: signal.eventCount,
             ...(signal.subscriptionId ? { subscriptionId: signal.subscriptionId } : {}),
             ...(anchor.projectId ? { matchedProjectId: anchor.projectId } : {}),
-            ...(anchor.threadId ? { matchedThreadId: anchor.threadId } : {}),
-            ...(taskWait.taskId ? { matchedTaskId: taskWait.taskId } : {}),
-            ...(taskWait.waitId ? { matchedWaitId: taskWait.waitId } : {}),
             reason: 'Matched digest-only subscription without interrupting active work',
             evidenceRefs: [`event:${signal.latestEventId}`],
             score: { actionability: 1, urgency: 0, novelty: 1, preparedness: 1, disruptionPenalty: 0, netScore: 3 },
@@ -501,9 +492,6 @@ export class ProactiveHubService {
           coalescedCount: signal.eventCount,
           ...(signal.subscriptionId ? { subscriptionId: signal.subscriptionId } : {}),
           ...(anchor.projectId ? { matchedProjectId: anchor.projectId } : {}),
-          ...(anchor.threadId ? { matchedThreadId: anchor.threadId } : {}),
-          ...(taskWait.taskId ? { matchedTaskId: taskWait.taskId } : {}),
-          ...(taskWait.waitId ? { matchedWaitId: taskWait.waitId } : {}),
           reason: scout.reason,
           evidenceRefs: scout.evidenceRefs,
           score,
@@ -536,11 +524,16 @@ export class ProactiveHubService {
     const personal = getPersonalAgent(ownerId);
     if (!personal || personal.state !== 'ready') return;
 
-    const settings = getProactivitySettings(ownerId);
-    if (settings.mode === 'off' || isQuiet(now, settings)) return;
-    if (!personalConversationState(personal.conversationId).idle || !this.deps.isConversationAvailable(personal.conversationId)) {
-      return;
-    }
+    const preflight = proactiveDeliveryGovernor.check({
+      ownerId,
+      conversationId: personal.conversationId,
+      authority: 'inferred',
+      config: this.deps.getConfig(),
+      isAvailable: this.deps.isConversationAvailable,
+      now,
+      stopped: this.stopped,
+    });
+    if (!preflight.allowed) return;
 
     const dueItems = listProactiveInboxItems(ownerId, { now })
       .filter(item => item.tier === 'tier_s_chat' && item.state === 'ready' && !item.conversationEntryId);
@@ -551,15 +544,24 @@ export class ProactiveHubService {
         retireCoveredProactiveItems(ownerId, item.provenance.matchedTaskId, item.provenance.matchedWaitId, now);
         continue;
       }
-      const dailyBudget = new DurableState<number>('proactive.chat-escalations', ownerId);
-      const dayKey = localDay(now, settings.timezone);
-      if ((dailyBudget.get(dayKey) ?? 0) >= Math.max(1, settings.dailyMessages)) {
-        break;
-      }
 
-      const publishedEntryId = runSqliteWriteTransaction(db => {
+      const txResult = runSqliteWriteTransaction(db => {
+        const reserved = proactiveDeliveryGovernor.tryReserveSlot({
+          ownerId,
+          conversationId: personal.conversationId,
+          authority: 'inferred',
+          config: this.deps.getConfig(),
+          isAvailable: this.deps.isConversationAvailable,
+          now,
+          stopped: this.stopped,
+        });
+        if (!reserved.allowed) {
+          return { entryId: null, stopBatch: true };
+        }
         const transcriptId = readCurrentTranscriptId(db, personal.conversationId);
-        if (!transcriptId) return null;
+        if (!transcriptId) {
+          return { entryId: null, stopBatch: true };
+        }
         const textLines = [
           `**${item.title}**`,
           item.summary,
@@ -591,12 +593,15 @@ export class ProactiveHubService {
           display: true,
           timestamp: now,
         });
-        dailyBudget.set(dayKey, (dailyBudget.get(dayKey) ?? 0) + 1);
-        return entry.entry_id;
+        return { entryId: entry.entry_id, stopBatch: false };
       });
 
-      if (publishedEntryId) {
-        markProactiveConversationDelivered(ownerId, item.id, publishedEntryId, now);
+      if (txResult.stopBatch) {
+        break;
+      }
+
+      if (txResult.entryId) {
+        markProactiveConversationDelivered(ownerId, item.id, txResult.entryId, now);
         emitSessionTranscriptUpdate({ conversationId: personal.conversationId });
         this.deps.onConversationEscalated?.(personal.conversationId, item.id, item);
       }

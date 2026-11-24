@@ -12,6 +12,15 @@ import { getPersonalAgentByConversation } from '../repository.js';
 import { getUserProfileSnapshot } from '../../user-model/profile.js';
 import { isExplicitFollowUp, requestedCheckTime } from './follow-up-request.js';
 import { getOneShotFollowUpDto } from './one-shot-follow-up.js';
+export {
+  getRemainingInferredDailyMessages,
+  getUsedInferredDailyMessages,
+  INFERRED_PROACTIVE_MESSAGES_NAMESPACE,
+  isPersonalConversationDeliverable,
+  isPersonalProactiveAccessible,
+  ProactiveDeliveryGovernor,
+  proactiveDeliveryGovernor,
+} from './delivery-governor.js';
 
 export interface AttentionThread {
   id: string; owner_id: string; agent_id: string; conversation_id: string;

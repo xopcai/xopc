@@ -15,6 +15,7 @@ import { TaskValueMetricsService } from '../task-value-metrics-service.js';
 import { listDeliverables } from '../task-deliverables.js';
 import { listTaskResultVersions } from '../task-result-versions.js';
 import { listTaskOneShotFollowUps } from '../../personal-agent/proactivity/one-shot-follow-up.js';
+import { resolvePersonalOwnerId } from '../../personal-agent/repository.js';
 import { LocalAppTaskOutputSchema, LocalAppTaskListSchema } from '../../local-apps/capabilities/projections.js';
 
 export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): void {
@@ -90,7 +91,7 @@ export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): 
             operationalState: childModel.operationalState,
           };
         }),
-        oneShotFollowUps: listTaskOneShotFollowUps(id, 'local-owner'),
+        oneShotFollowUps: listTaskOneShotFollowUps(id, resolvePersonalOwnerId()),
       };
     },
   }));

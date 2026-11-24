@@ -28,7 +28,7 @@ import {
 
 const COPY = {
   zh: {
-    sectionTitle: '主动收件箱',
+    sectionTitle: '主动收件箱 · 外部信号',
     tierSBadge: '已同步至对话',
     skillBadge: '能力沉淀建议',
     pulseButton: '脉冲简报与能力库',
@@ -62,7 +62,7 @@ const COPY = {
     resolvedToast: '已更新处理状态',
   },
   en: {
-    sectionTitle: 'Agent Inbox',
+    sectionTitle: 'Agent Inbox · External Signals',
     tierSBadge: 'In chat',
     skillBadge: 'Skill candidate',
     pulseButton: 'Pulse & Capabilities',

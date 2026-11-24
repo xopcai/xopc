@@ -1,5 +1,6 @@
 import type { AutomationService } from '../automations/index.js';
 import { getProactivitySettings } from '../personal-agent/proactivity/repository.js';
+import { resolvePersonalOwnerId } from '../personal-agent/repository.js';
 
 const PULSE_AUTOMATIONS = [
   {
@@ -22,7 +23,7 @@ const PULSE_AUTOMATIONS = [
  */
 export async function reconcileProactivePulseAutomations(
   service: AutomationService,
-  ownerId = 'local-owner',
+  ownerId = resolvePersonalOwnerId(),
 ): Promise<void> {
   const tz = getProactivitySettings(ownerId).timezone || 'Asia/Shanghai';
 

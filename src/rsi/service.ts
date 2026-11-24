@@ -12,7 +12,7 @@ import {
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import type { Config } from '../config/schema.js';
 import { resolveSkillsDir } from '../config/paths.js';
-import { getPersonalAgent } from '../personal-agent/repository.js';
+import { getPersonalAgent, resolvePersonalOwnerId } from '../personal-agent/repository.js';
 import {
   createProactiveSubscription,
   patchProactiveSubscription,
@@ -140,7 +140,7 @@ export class RsiCapabilityService {
   constructor(private readonly deps: RsiServiceDeps) {}
 
   private ownerId(): string {
-    return this.deps.ownerId ?? 'local-owner';
+    return resolvePersonalOwnerId(this.deps.ownerId);
   }
 
   private now(): number {
@@ -201,10 +201,10 @@ export class RsiCapabilityService {
       coalesceWindowMs: 300_000,
     };
 
-    // For protected sources, ensure a narrow predicate exists using item title if none supplied.
+    // For protected temporal sources, ensure a narrow predicate exists using item title if none supplied.
     if (
       route === 'drop'
-      && ['temporal:calendar', 'tasks', 'projects'].includes(item.provenance.source)
+      && item.provenance.source === 'temporal:calendar'
       && !filterText
     ) {
       stagedPayload.matchPredicates = { contains: { title: item.title.slice(0, 60) } };

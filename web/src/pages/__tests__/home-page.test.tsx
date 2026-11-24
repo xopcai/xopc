@@ -9,8 +9,18 @@ const mocks = vi.hoisted(() => ({
   load: vi.fn(), retry: vi.fn(), acknowledge: vi.fn(), decision: vi.fn(), fetchTask: vi.fn(),
   getRun: vi.fn(), markRunRead: vi.fn(),
   home: {} as HomeResponse,
+  proactive: {
+    items: [] as Array<Record<string, unknown>>,
+    digests: [] as Array<Record<string, unknown>>,
+    bufferedCount: 0,
+    rsiCandidates: [] as Array<Record<string, unknown>>,
+    metrics: null,
+    loading: false,
+    reload: vi.fn(async () => {}),
+  },
 }));
 vi.mock('@/features/tasks/use-home-snapshot', () => ({ useHomeSnapshot: () => ({ home: mocks.home, loading: false, loadError: null, setLoadError: vi.fn(), load: mocks.load }) }));
+vi.mock('@/features/proactive/use-proactive-inbox', () => ({ useProactiveInbox: () => mocks.proactive }));
 vi.mock('@/features/tasks/home-api', () => ({ retryWorkAttention: mocks.retry, acknowledgeWorkAttention: mocks.acknowledge, respondToWorkDecision: mocks.decision, fetchTask: mocks.fetchTask }));
 vi.mock('@/features/automations/automation-api', () => ({ automationApi: { getRun: mocks.getRun, markRunRead: mocks.markRunRead } }));
 vi.mock('@/features/tasks/home-quick-composer', () => ({ HomeQuickComposer: ({ variant }: { variant: string }) => <div data-composer={variant} /> }));
@@ -44,6 +54,15 @@ describe('home card actions', () => {
     localStorage.clear();
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     useLocaleStore.setState({ language: 'en' });
+    mocks.proactive = {
+      items: [],
+      digests: [],
+      bufferedCount: 0,
+      rsiCandidates: [],
+      metrics: null,
+      loading: false,
+      reload: vi.fn(async () => {}),
+    };
     mocks.home = { needsUser: [], background: [], backgroundCount: 0, runningConversations: [], decisions: [], advisor: { state: 'disabled' } } as unknown as HomeResponse;
     container = document.createElement('div');
     document.body.append(container);
@@ -201,5 +220,45 @@ describe('home card actions', () => {
     }];
     await render();
     expect(container.textContent).toContain('Nothing needs your attention right now');
+  });
+
+  it('converges external proactive signals into a compact summary strip and opens full inbox in a modal without inline button clutter', async () => {
+    mocks.proactive.items = [{
+      id: 'ext-mail-1',
+      ownerId: 'local-owner',
+      agentId: 'personal-local-owner',
+      coalesceKey: 'mail:1',
+      sourceEventIds: ['ev-1'],
+      tier: 'tier_a_inbox',
+      category: 'prepared_draft',
+      title: 'Partner contract payment terms draft',
+      summary: 'Prepared a 45-day payment term reply draft.',
+      provenance: {
+        source: 'composio:gmail',
+        eventType: 'connector.mail.received',
+        trust: 'connector',
+        coalescedCount: 1,
+        reason: 'Partner legal requested confirmation',
+        evidenceRefs: ['event:ev-1'],
+        score: { actionability: 3, urgency: 2, novelty: 2, preparedness: 2, disruptionPenalty: 0, netScore: 9 },
+      },
+      proposedAction: { kind: 'approve_draft', safetyMode: 'ask_before_apply', label: 'Approve' },
+      state: 'ready',
+      validUntil: Date.now() + 86_400_000,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }];
+
+    await render();
+    const strip = container.querySelector('[data-proactive-inbox-strip]');
+    expect(strip?.textContent).toContain('External Signal Inbox');
+    expect(strip?.textContent).toContain('Partner contract payment terms draft');
+    // Main workbench canvas does NOT render inline Review & Edit / Approve / To Digest buttons
+    expect(button('Review & Edit')).toBeUndefined();
+    expect(button('To Digest')).toBeUndefined();
+
+    await act(async () => button('Open inbox').click());
+    expect(dialog().textContent).toContain('Agent Inbox · External Signals');
+    expect(dialog().textContent).toContain('Prepared a 45-day payment term reply draft.');
   });
 });

@@ -2669,8 +2669,11 @@ export class GatewayService {
   }
 
   private projectAutomationEvent(event: AutomationEventEnvelope): void {
-    this.personalProactivity.ingestEvent(event);
-    this.proactiveHub.ingestEvent(event);
+    if (event.source === 'tasks' || event.source === 'projects') {
+      this.personalProactivity.ingestEvent(event);
+    } else {
+      this.proactiveHub.ingestEvent(event);
+    }
     if (event.source === 'local_apps') this.emit(event.type, event.payload);
     if (event.type === 'project.deleted' && typeof event.payload.projectId === 'string') {
       const runIds = event.payload.deletedUnderstandingRunIds;

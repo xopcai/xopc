@@ -141,7 +141,7 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   const sectionOverrides = promptContribution?.sectionOverrides ?? {};
 
   const orderedContextFiles = sortContextFilesForPrompt(
-    contextFiles.filter((file) => file.path.trim().length > 0),
+    contextFiles.filter((file) => file.path.trim().length > 0 && !(isPersonal && isStockPersonalTemplateNoise(file))),
   );
   const hasProfileMemory = orderedContextFiles.some(
     (file) => getContextFileBasename(file.path) === 'memory.md',
@@ -216,7 +216,10 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
       stableSections.push(buildProblemSolvingSection(toolNames));
     }
     if (includeToneSection && !isVoice) {
-      stableSections.push(buildAestheticSection(), buildHumanCollaborationSection(!isPersonal));
+      stableSections.push(buildAestheticSection());
+      if (!isPersonal) {
+        stableSections.push(buildHumanCollaborationSection(true));
+      }
     }
     if (!isPersonal && (normalizedTools.has('xopc_use') || normalizedTools.has('automation'))) {
       stableSections.push(buildWorkContinuitySection());
@@ -303,6 +306,24 @@ function buildCoderHarnessSection(): string {
     '- Protect user work: do not discard or overwrite unrelated changes.',
     '- After edits, inspect the diff and run the smallest meaningful verification; explain any skipped checks.',
   ].join('\n');
+}
+
+function isStockPersonalTemplateNoise(file: EmbeddedContextFile): boolean {
+  const base = getContextFileBasename(file.path);
+  const text = file.content.trim();
+  if (base === 'agents.md') {
+    return text.startsWith('# AGENTS.md - Workspace Rules')
+      && text.includes('Prefer narrow file edits over broad rewrites.')
+      && text.endsWith('This file is a starting point. Update it when workspace-specific rules become clear.')
+      && text.length <= 1650;
+  }
+  if (base === 'tools.md') {
+    return text.startsWith('# TOOLS.md - Local Notes')
+      && text.includes('home-server → 192.168.1.100, user: admin')
+      && text.endsWith('Add whatever helps you do your job. This is your cheat sheet.')
+      && text.length <= 850;
+  }
+  return false;
 }
 
 /** Split a built prompt at the cache boundary (for tests and provider adapters). */

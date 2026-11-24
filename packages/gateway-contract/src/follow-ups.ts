@@ -1,4 +1,12 @@
 import { z } from 'zod';
+
+/**
+ * Continuing Goals (`home_followups` in Home Intelligence): multi-step goal progression
+ * with explicit completion criteria and bounded step budgets.
+ *
+ * Distinct from Personal One-Shot Conditional Follow-Ups (`PersonalOneShotFollowUpDto`
+ * in `./personal-proactivity.ts`, stored in `personal_attention_threads` with `follow_up_mode = 'one_shot'`).
+ */
 const text = z.string().trim().min(1).max(1000);
 export const TaskFollowUpHintSchema = z.discriminatedUnion('state', [
     z.object({ state: z.literal('next_step'), nextStep: text, reason: text }).strict(),
@@ -29,3 +37,9 @@ export const FollowUpCommandSchema = z.object({
 export type FollowUp = z.infer<typeof FollowUpSchema>;
 export type FollowUpCreate = z.infer<typeof FollowUpCreateSchema>;
 export type FollowUpCommand = z.infer<typeof FollowUpCommandSchema>;
+
+/** Explicit aliases disambiguating Home Intelligence Continuing Goals from Personal One-Shot Follow-Ups. */
+export const HomeContinuingGoalSchema = FollowUpSchema;
+export type HomeContinuingGoal = FollowUp;
+export type HomeContinuingGoalCreate = FollowUpCreate;
+export type HomeContinuingGoalCommand = FollowUpCommand;

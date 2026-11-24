@@ -18,11 +18,13 @@ import { LocalEnvironmentSignalProducer } from '../local-signals.js';
 import { reconcileProactivePulseAutomations } from '../pulse-automation.js';
 import { AutomationService } from '../../automations/service/automation-service.js';
 import {
+  createProactiveSubscription,
   getProactiveHubMetrics,
   listBufferedDigestCandidates,
   listProactiveInboxItems,
   listPulseDigests,
 } from '../repository.js';
+import { saveAttention } from '../../personal-agent/proactivity/repository.js';
 import { ProactiveHubService } from '../triage-service.js';
 
 function makeEnvelope(partial: Partial<AutomationEventEnvelope> & { id: string; type: string; source: string }): AutomationEventEnvelope {
@@ -349,5 +351,72 @@ describe('ProactiveHub 4-stage funnel and local signal producers', () => {
       kind: 'schedule',
       schedule: { kind: 'cron', expr: '30 18 * * *', tz: 'Asia/Shanghai' },
     });
+  });
+
+  it('drops internal tasks/projects events at Gate 1 with zero coalesced signals and disables fuzzy thread-subject matching', async () => {
+    const entry1 = appendTranscriptEntry(conversationId, { role: 'user', content: '帮我持续关注合同审批', timestamp: now - 10_000 }).entry_id;
+    saveAttention({
+      conversationId,
+      subject: '合同审批',
+      summary: '关注合同审批进展',
+      kind: 'outcome',
+      entryIds: [entry1],
+      explicit: true,
+      nextCheckAt: now + 3_600_000,
+    }, now);
+
+    // Even if a broad subscription is registered, internal task.*/project.* events never enter Hub Gate 1
+    createProactiveSubscription(ownerId, {
+      scopeType: 'global',
+      sourcePattern: 'tasks',
+      eventTypePattern: 'task.*',
+      matchPredicates: {},
+      defaultRoute: 'triage',
+      coalesceWindowMs: 0,
+      enabled: true,
+    }, 'user_explicit', now);
+
+    for (const internalEvent of [
+      makeEnvelope({
+        id: 'internal-task-changed',
+        source: 'tasks',
+        type: 'task.changed.v2',
+        trust: 'system',
+        subject: { kind: 'task', id: 'task-1' },
+        payload: { taskId: 'task-1', title: '合同审批法务条款' },
+      }),
+      makeEnvelope({
+        id: 'internal-task-attn',
+        source: 'tasks',
+        type: 'task.attention_required.v2',
+        trust: 'system',
+        subject: { kind: 'task', id: 'task-1' },
+        payload: { taskId: 'task-1', title: '合同审批待确认' },
+      }),
+      makeEnvelope({
+        id: 'internal-project-changed',
+        source: 'projects',
+        type: 'project.changed',
+        trust: 'system',
+        subject: { kind: 'project', id: 'proj-1' },
+        payload: { projectId: 'proj-1', title: '合同审批项目' },
+      }),
+    ]) {
+      expect(hub.ingestEvent(internalEvent).outcome).toBe('dropped_rule');
+    }
+
+    // Unsubscribed external noise that merely shares a substring ("合同审批") with an active thread is also dropped
+    expect(hub.ingestEvent(makeEnvelope({
+      id: 'fuzzy-subject-noise',
+      source: 'unknown:webhook',
+      type: 'custom.ping',
+      payload: { subject: '关于合同审批的随机噪音通知' },
+    })).outcome).toBe('dropped_unmatched');
+
+    const signalCount = (getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM proactive_coalesced_signals').get() as { n: number }).n;
+    expect(signalCount).toBe(0);
+
+    await hub.drain();
+    expect(callModel).not.toHaveBeenCalled();
   });
 });

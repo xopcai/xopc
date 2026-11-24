@@ -79,6 +79,42 @@ function toRecord(ownerId: string, agent: StoredAgent, session: PersonalSession 
   };
 }
 
+export const DEFAULT_PERSONAL_OWNER_ID = 'local-owner';
+
+export function resolvePersonalOwnerId(explicitOwnerId?: string): string {
+  if (typeof explicitOwnerId === 'string' && explicitOwnerId.trim()) {
+    return explicitOwnerId.trim();
+  }
+  if (!isXopcDatabaseOpen()) {
+    return DEFAULT_PERSONAL_OWNER_ID;
+  }
+  const db = getSqliteDatabase();
+  const session = db.prepare(`
+    SELECT custom_data_json
+    FROM sessions
+    WHERE json_extract(custom_data_json, '$.personalAgent') = 1
+    ORDER BY created_at ASC
+    LIMIT 1
+  `).get() as { custom_data_json: string | null } | undefined;
+  if (session?.custom_data_json) {
+    try {
+      const parsed = JSON.parse(session.custom_data_json) as { ownerId?: unknown };
+      if (typeof parsed.ownerId === 'string' && parsed.ownerId.trim()) {
+        return parsed.ownerId.trim();
+      }
+    } catch {
+      // Ignore malformed session custom_data_json and continue fallback lookup.
+    }
+  }
+  const threadOwner = db.prepare(`
+    SELECT owner_id FROM personal_attention_threads ORDER BY updated_at DESC LIMIT 1
+  `).get() as { owner_id?: string } | undefined;
+  if (threadOwner?.owner_id?.trim()) {
+    return threadOwner.owner_id.trim();
+  }
+  return DEFAULT_PERSONAL_OWNER_ID;
+}
+
 export function getPersonalAgent(ownerId: string): PersonalAgentRecord | null {
   if (!isXopcDatabaseOpen()) return null;
   const agent = new AgentCatalogRepository().get(personalAgentId(ownerId));
@@ -90,7 +126,7 @@ export function getPersonalAgentByConversation(conversationId: string): Personal
   if (!session) return null;
   const agent = new AgentCatalogRepository().get(session.agent_id);
   if (!agent) return null;
-  let ownerId = 'local-owner';
+  let ownerId = DEFAULT_PERSONAL_OWNER_ID;
   if (session.custom_data_json) {
     try {
       const parsed = JSON.parse(session.custom_data_json) as { ownerId?: unknown };
@@ -102,7 +138,14 @@ export function getPersonalAgentByConversation(conversationId: string): Personal
 
 export function isPersonalConversation(conversationId: string): boolean {
   if (!isXopcDatabaseOpen()) return false;
-  return Boolean(getSqliteDatabase().prepare(`SELECT 1 FROM sessions WHERE conversation_id = ?
-    AND agent_id = ? AND json_extract(custom_data_json, '$.personalAgent') = 1`)
-    .get(conversationId, personalAgentId('local-owner')));
+  const session = personalSession('conversation_id', conversationId);
+  if (!session) return false;
+  let ownerId = DEFAULT_PERSONAL_OWNER_ID;
+  if (session.custom_data_json) {
+    try {
+      const parsed = JSON.parse(session.custom_data_json) as { ownerId?: unknown };
+      if (typeof parsed.ownerId === 'string' && parsed.ownerId.trim()) ownerId = parsed.ownerId.trim();
+    } catch { /* ignore invalid custom_data_json */ }
+  }
+  return session.agent_id === personalAgentId(ownerId);
 }

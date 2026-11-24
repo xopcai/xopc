@@ -1,6 +1,17 @@
+/**
+ * Home Intelligence Continuing Goals (`home_followups` / `home_followup_steps`).
+ * Manages multi-step goal progression with explicit completion criteria — distinct from
+ * Personal Agent One-Shot Conditional Follow-Ups (`src/personal-agent/proactivity/one-shot-follow-up.ts`).
+ */
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import { TaskContractInputSchema, type FollowUp, type FollowUpCreate, type FollowUpCommand } from '@xopcai/gateway-contract';
+import {
+  TaskContractInputSchema,
+  type FollowUp,
+  type FollowUpCreate,
+  type FollowUpCommand,
+  type HomeContinuingGoal,
+} from '@xopcai/gateway-contract';
 import { inferMemorySensitivity } from '../agent/memory/sensitivity.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { TaskApplicationService } from '../tasks/task-application-service.js';
@@ -11,6 +22,8 @@ import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { currentTaskResearchResult } from '../tasks/task-research-result.js';
 import { HomeObservation, ObservationConflictError } from './observation.js';
 import type { HomePrincipal } from './repository.js';
+
+export type { HomeContinuingGoal };
 type Row = {
     id: string;
     owner_id: string;

@@ -69,7 +69,9 @@ describe('SystemPromptBuilder runtime responsibility', () => {
     expect(prompt).toContain('## Safety');
     expect(prompt).toContain('## Action Trust Boundary');
     expect(prompt).toContain('## Response Language');
-    expect(prompt).toContain('## Human Collaboration');
+    expect(prompt).toContain('### Persona, Ownership & Writing Style');
+    expect(prompt).toContain('## Tone & Style');
+    expect(prompt).not.toContain('## Human Collaboration');
     expect(prompt).not.toContain('## Execution Bias');
     expect(prompt).not.toContain('## Problem Solving');
     expect(prompt).not.toContain('### Task Contract');
@@ -82,6 +84,7 @@ describe('SystemPromptBuilder runtime responsibility', () => {
     const fullWorkerPrompt = builder.build([], { conversationId: worker, promptMode: 'full', registeredToolNames: ['read_file'] });
     expect(fullWorkerPrompt).toContain('## Execution Bias');
     expect(fullWorkerPrompt).toContain('## Problem Solving');
+    expect(fullWorkerPrompt).toContain('## Human Collaboration');
     expect(fullWorkerPrompt).toContain('### Task Contract');
     expect(fullWorkerPrompt).toContain('Read named inputs directly. Search only if missing');
     expect(fullWorkerPrompt).not.toContain('## Personal Coordination');
