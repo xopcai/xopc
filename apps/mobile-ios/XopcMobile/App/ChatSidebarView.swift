@@ -11,6 +11,7 @@ struct ChatSidebarView: View {
     let recentLoading: Bool
     let recentError: Bool
     let attention: Int
+    let personalUnread: Int
     let isPresented: Bool
     let onClose: () -> Void
     let onNavigate: (HomeDestination) -> Void
@@ -288,8 +289,8 @@ extension ChatSidebarView {
         } else {
             Text("个人助理")
         }
-        return row(title, loading: openingPersonal, action: onPersonal) {
-            PersonalAgentAvatar(configuration: configuration, agent: personal, size: 24, active: false)
+        return row(title, badge: personalUnread, loading: openingPersonal, unreadBadge: true, action: onPersonal) {
+            PersonalAgentAvatar(configuration: configuration, agent: personal, size: 22, active: false)
                 .accessibilityHidden(true)
         }
         .background(personal?.conversationId == selectedID && personal != nil ? mobileTheme.card : .clear,
@@ -312,26 +313,29 @@ extension ChatSidebarView {
                      action: @escaping () -> Void) -> some View
     {
         row(Text(title), badge: badge, action: action) {
-            Image(systemName: symbol).font(.title3).foregroundStyle(.secondary).frame(width: 24)
+            Image(systemName: symbol).font(.title3).foregroundStyle(.secondary)
         }
     }
 
-    private func row(_ title: Text, badge: Int = 0, loading: Bool = false,
+    private func row(_ title: Text, badge: Int = 0, loading: Bool = false, unreadBadge: Bool = false,
                      action: @escaping () -> Void, @ViewBuilder icon: () -> some View) -> some View
     {
         Button(action: action) {
             HStack(spacing: 12) {
-                icon()
+                icon().frame(width: 24, height: 24)
                 title.lineLimit(1)
                 Spacer()
                 if loading {
                     ProgressView()
-                } else if badge > 0 {
+                }
+                if badge > 0 {
                     Text(badge > 99 ? "99+" : String(badge))
                         .font(.caption.weight(.semibold))
+                        .monospacedDigit()
                         .padding(.horizontal, 8).padding(.vertical, 4)
-                        .foregroundStyle(mobileTheme.onAttention)
-                        .background(mobileTheme.attention, in: Capsule())
+                        .foregroundStyle(unreadBadge ? mobileTheme.action : mobileTheme.onAttention)
+                        .background(unreadBadge ? mobileTheme.action.opacity(0.15) : mobileTheme.attention, in: Capsule())
+                        .accessibilityLabel(unreadBadge ? Text("\(badge) 条未读消息") : Text(badge.formatted()))
                 }
             }
             .frame(minHeight: 46)

@@ -9,6 +9,9 @@ data class PersonalAgentRecord(val agentId: String, val conversationId: String,
 
 data class PersonalVoicePreference(val provider: String, val model: String, val voice: String)
 data class PersonalVoiceOption(val id: String, val name: String, val displayNames: Map<String, String> = emptyMap())
+internal data class PersonalUnreadSnapshot(val conversationId: String, val transcriptId: String,
+  val lastSeq: Long, val unreadCount: Int)
+
 data class PersonalVoiceChoices(val provider: String, val model: String,
   val voices: List<PersonalVoiceOption>)
 
@@ -21,6 +24,23 @@ data class PersonalProactivitySettings(val revision: Int, val mode: String, val 
 
 class PersonalAgentRepository(private val gateway: GatewaySession) {
   fun get(): PersonalAgentRecord? = parse(gateway.request("/api/personal-agent"))
+
+  internal fun unread(gatewayId: String): PersonalUnreadSnapshot? =
+    parseUnread(gateway.request("/api/personal-agent/unread", expectedGatewayId = gatewayId))
+
+  internal fun markRead(gatewayId: String, transcriptId: String, lastSeq: Long): PersonalUnreadSnapshot? {
+    val body = JSONObject().put("transcriptId", transcriptId).put("lastSeq", lastSeq)
+    return parseUnread(gateway.request("/api/personal-agent/read", "POST", body.toString(),
+      expectedGatewayId = gatewayId))
+  }
+
+  private fun parseUnread(raw: String): PersonalUnreadSnapshot? {
+    val response = JSONObject(raw)
+    require(response.optBoolean("ok")) { "PERSONAL_UNREAD_UNAVAILABLE" }
+    val payload = response.optJSONObject("payload") ?: return null
+    return PersonalUnreadSnapshot(payload.getString("conversationId"), payload.getString("transcriptId"),
+      payload.getLong("lastSeq"), payload.getInt("unreadCount"))
+  }
 
   fun avatar(agent: PersonalAgentRecord): ByteArray? {
     if (agent.appearance != "custom") return null

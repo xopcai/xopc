@@ -2620,6 +2620,44 @@ final class MobileLayoutParityUITests: XCTestCase {
         }
     }
 
+    func testPersonalSidebarBadgeClearsAfterOpeningTheConversation() async throws {
+        app.terminate()
+        let base = fixtureBase + "/personal-unread"
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = base
+        app.launch()
+        XCTAssertTrue(app.openHomeSidebar())
+        let ordinary = app.buttons["chat-sidebar-session-11111111-1111-4111-8111-111111111111"]
+        XCTAssertTrue(ordinary.waitForExistence(timeout: 8))
+        ordinary.tap()
+        XCTAssertTrue(app.textFields["assistant-chat-composer"].waitForExistence(timeout: 5))
+
+        var seed = try URLRequest(url: XCTUnwrap(URL(string: base + "/fixture/new-replies")))
+        seed.httpMethod = "POST"
+        let (_, response) = try await URLSession.shared.data(for: seed)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+
+        XCTAssertTrue(app.openHomeSidebar())
+        let withUnread = app.buttons.matching(NSPredicate(
+            format: "identifier == %@ AND label CONTAINS %@", "chat-sidebar-personal", "105"
+        )).firstMatch
+        XCTAssertTrue(withUnread.waitForExistence(timeout: 8))
+        capture("personal-unread-sidebar")
+        withUnread.tap()
+        XCTAssertTrue(app.buttons["chat-header-personal"].waitForExistence(timeout: 8))
+
+        let unreadURL = try XCTUnwrap(URL(string: base + "/api/personal-agent/unread"))
+        var unreadCount = 105
+        for _ in 0 ..< 20 where unreadCount != 0 {
+            let (data, _) = try await URLSession.shared.data(from: unreadURL)
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            unreadCount = try XCTUnwrap((json["payload"] as? [String: Any])?["unreadCount"] as? Int)
+            if unreadCount != 0 { try await Task.sleep(for: .milliseconds(250)) }
+        }
+        XCTAssertEqual(unreadCount, 0)
+        XCTAssertTrue(app.openHomeSidebar())
+        XCTAssertFalse(withUnread.exists)
+    }
+
     func testSidebarSessionLongPressAndBatchDelete() async throws {
         app.terminate()
         let base = fixtureBase + "/sidebar-actions"

@@ -621,6 +621,9 @@
     <string name="progress_discard">放弃</string>
     <string name="personal_default_name">你</string>
     <string name="personal_agent_title">我的助手</string>
+    <plurals name="personal_unread_messages">
+        <item quantity="other">%d 条未读消息</item>
+    </plurals>
     <string name="personal_agent_description">与你的个人助手持续对话。</string>
     <string name="personal_agent_create">开始对话</string>
     <string name="personal_agent_open">继续对话</string>

@@ -20,6 +20,8 @@ struct AssistantView<Dock: View>: View {
     var onOpenProgress: () -> Void = {}
     var onOpenPersonalOverview: (Bool) -> Void = { _ in }
     var onConversationUnavailable: (String) async -> Void = { _ in }
+    var onPersonalReadTargetChanged: (PersonalReadTarget?) -> Void = { _ in }
+    var personalUnread: PersonalUnreadSnapshot?
     var pendingAttention = 0
     var sidebarOpen = false
     var homeChatError: String?
@@ -109,7 +111,28 @@ struct AssistantView<Dock: View>: View {
                 onPhoneVisibilityChanged(showingPhone)
             }
             .onChange(of: conversation?.id) { showingPhone = false }
+            .onChange(of: personalReadTarget, initial: true) { onPersonalReadTargetChanged(personalReadTarget) }
+            .task(id: unreadHistoryToLoad) {
+                guard unreadHistoryToLoad != nil, let conversation else { return }
+                await state.refreshUnreadHistory(conversation, using: GatewayClient(configuration: configuration))
+            }
             .onDisappear { phone.leave(); onPhoneVisibilityChanged(false) }
+    }
+
+    private var personalReadTarget: PersonalReadTarget? {
+        guard isActive, !showingPhone, !showingMessageSearch, let conversation, !conversation.isDraft,
+              personalAgent?.conversationId == conversation.id, state.isCurrentConversation(conversation.id),
+              !state.isLoadingHistory, state.errorMessage == nil,
+              let transcriptID = state.historyTranscriptID(for: conversation) else { return nil }
+        return PersonalReadTarget(conversationID: conversation.id, transcriptID: transcriptID,
+                                  lastSeq: state.loadedHistorySeq ?? 0)
+    }
+
+    private var unreadHistoryToLoad: PersonalUnreadSnapshot? {
+        guard let viewed = personalReadTarget, let personalUnread, personalUnread.unreadCount > 0,
+              personalUnread.conversationId == viewed.conversationID,
+              personalUnread.transcriptId != viewed.transcriptID || personalUnread.lastSeq > viewed.lastSeq else { return nil }
+        return personalUnread
     }
 
     private var desktopTargetObservationKey: String {

@@ -11,6 +11,7 @@ struct AppRootView: View {
     @State private var push = MobilePush.shared
     @State private var realtimeVoiceCall = RealtimeVoiceCall()
     @State private var personalAgent = PersonalAgentState()
+    @State private var personalReadTarget: PersonalReadTarget?
     @State private var settingsPresented = false
     @State private var sidebarOpen = false
     @State private var composerFocused = false
@@ -210,6 +211,14 @@ struct AppRootView: View {
         .modifier(ChatSidebarPresentation(isOpen: sidebarOpen, canOpenBySwipe: canDragSidebar,
                                           onSetOpen: setSidebar) { sidebar })
         .background(mobileTheme.canvas.ignoresSafeArea())
+        .task(id: personalUnreadLoad) {
+            let load = personalUnreadLoad
+            guard load.foreground else { return }
+            while !Task.isCancelled {
+                await personalAgent.refreshUnread(using: load.configuration, viewed: load.viewed)
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+            }
+        }
         .task(id: SidebarAttentionLoad(configuration: appState.gatewayConfiguration, language: language)) {
             let configuration = appState.gatewayConfiguration
             while !Task.isCancelled {
@@ -305,6 +314,8 @@ struct AppRootView: View {
             onOpenProgress: { navigate(.progress) },
             onOpenPersonalOverview: { navigate(.personalOverview(allowsConversationSharing: $0)) },
             onConversationUnavailable: { id in await recoverUnavailableConversation(id, using: configuration) },
+            onPersonalReadTargetChanged: { personalReadTarget = $0 },
+            personalUnread: personalUnreadLoad.viewed == nil ? nil : personalAgent.unread(using: configuration),
             pendingAttention: pendingAttention,
             sidebarOpen: sidebarOpen,
             homeChatError: personalAgent.errorMessage,
@@ -314,6 +325,14 @@ struct AppRootView: View {
             externalIntake: appState.externalIntake,
             onExternalIntakeFinished: appState.externalIntakeFinished
         ) { composer in composer }
+    }
+
+    private var personalUnreadLoad: PersonalUnreadLoad {
+        let canRead = appState.homePath.isEmpty && !sidebarOpen && !settingsPresented && !phoneVisible &&
+            messageLinks.destination == nil && (realtimeVoiceCall.phase == .idle || !realtimeVoiceCall.expanded) && !music.expanded &&
+            personalReadTarget?.conversationID == appState.selectedConversation?.id
+        return PersonalUnreadLoad(configuration: appState.gatewayConfiguration, foreground: scenePhase == .active,
+                                  sidebarOpen: sidebarOpen, viewed: canRead ? personalReadTarget : nil)
     }
 
     private func recoverUnavailableConversation(_ id: String, using configuration: GatewayConfiguration) async {
@@ -426,7 +445,8 @@ struct AppRootView: View {
                                openingPersonal: personalAgent.isOpening, selectedID: appState.selectedConversation?.id,
                                recent: recents ?? [], recentNextOffset: recents == nil ? nil : recentNextOffset,
                                recentLoading: recentLoading || (recents == nil && !recentError), recentError: recentError,
-                               attention: pendingAttention, isPresented: sidebarOpen, onClose: { setSidebar(false) }, onNavigate: navigate,
+                               attention: pendingAttention, personalUnread: personalAgent.unread(using: configuration)?.unreadCount ?? 0,
+                               isPresented: sidebarOpen, onClose: { setSidebar(false) }, onNavigate: navigate,
                                onPersonal: { Task { await openPersonalAgent(remember: true) } },
                                onConversation: selectConversation, onNew: startNew, onRetry: { recentRevision += 1 },
                                onLoadMore: { Task { await loadRecent(using: configuration, more: true) } },
@@ -664,6 +684,13 @@ private struct HomeChatLoad: Hashable {
 private struct SidebarAttentionLoad: Hashable {
     let configuration: GatewayConfiguration
     let language: String
+}
+
+private struct PersonalUnreadLoad: Hashable {
+    let configuration: GatewayConfiguration
+    let foreground: Bool
+    let sidebarOpen: Bool
+    let viewed: PersonalReadTarget?
 }
 
 private struct SidebarLoad: Hashable {

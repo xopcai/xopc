@@ -83,7 +83,34 @@ private struct PersonalVoiceOptions: Decodable, Sendable {
     let voices: [PersonalVoiceOption]
 }
 
+struct PersonalUnreadSnapshot: Decodable, Hashable, Sendable {
+    let conversationId: String
+    let transcriptId: String
+    let lastSeq: Int
+    let unreadCount: Int
+}
+
+private struct PersonalReadRequest: Encodable {
+    let transcriptId: String
+    let lastSeq: Int
+}
+
 extension GatewayClient {
+    func fetchPersonalUnread() async throws -> PersonalUnreadSnapshot? {
+        let response: GatewayEnvelope<PersonalUnreadSnapshot> = try await request(path: "/api/personal-agent/unread")
+        guard response.isSuccessful else { throw GatewayClientError.server(response.error?.message ?? "无法读取未读消息") }
+        return response.payload
+    }
+
+    func markPersonalRead(transcriptID: String, lastSeq: Int) async throws -> PersonalUnreadSnapshot? {
+        let body = try JSONEncoder().encode(PersonalReadRequest(transcriptId: transcriptID, lastSeq: lastSeq))
+        let response: GatewayEnvelope<PersonalUnreadSnapshot> = try await request(
+            path: "/api/personal-agent/read", method: "POST", body: body
+        )
+        guard response.isSuccessful else { throw GatewayClientError.server(response.error?.message ?? "无法标记已读") }
+        return response.payload
+    }
+
     func fetchPersonalAgent() async throws -> PersonalAgentRecord? {
         let response: GatewayEnvelope<PersonalAgentRecord> = try await request(path: "/api/personal-agent")
         guard response.isSuccessful else {

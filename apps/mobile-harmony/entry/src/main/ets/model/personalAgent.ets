@@ -23,6 +23,24 @@ export interface XopcPersonalAgentResponse {
   error?: string;
 }
 
+export interface XopcPersonalReadTarget extends XopcPersonalReadRequest {
+  conversationId: string;
+}
+
+export interface XopcPersonalUnreadSnapshot extends XopcPersonalReadTarget {
+  unreadCount: number;
+}
+
+export interface XopcPersonalUnreadResponse {
+  ok: boolean;
+  payload: XopcPersonalUnreadSnapshot | null;
+}
+
+export interface XopcPersonalReadRequest {
+  transcriptId: string;
+  lastSeq: number;
+}
+
 export interface XopcPersonalVoicePreference { provider: string; model: string; voice: string; }
 export interface XopcPersonalVoiceOption { id: string; name: string; displayNames?: Record<string, string>; }
 export interface XopcPersonalProactivity {

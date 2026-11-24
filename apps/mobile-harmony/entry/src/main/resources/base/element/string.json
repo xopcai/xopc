@@ -488,6 +488,7 @@
     { "name": "chat_recent_conversations", "value": "Recent conversations" },
     { "name": "chat_profile_settings", "value": "Profile and settings" },
     { "name": "chat_personal_agent", "value": "Personal Agent" },
+    { "name": "personal_unread_messages", "value": "%d unread" },
     { "name": "chat_attention_count", "value": "%d awaiting your attention" },
     { "name": "chat_personal_task_allocating", "value": "Assigning" },
     { "name": "chat_personal_task_queued", "value": "Queued" },

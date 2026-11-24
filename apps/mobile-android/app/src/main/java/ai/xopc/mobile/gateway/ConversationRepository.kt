@@ -86,7 +86,7 @@ data class ConversationMessage(val id: String, val role: String, val text: Strin
   val agentReaction: AgentMessageReaction? = null)
 data class ConversationNarration(val id: String, val text: String)
 data class ConversationHistory(val conversationId: String, val transcriptId: String?, val messages: List<ConversationMessage>,
-  val agentId: String? = null, val nextBeforeCursor: String? = null)
+  val agentId: String? = null, val nextBeforeCursor: String? = null, val lastSeq: Long? = null)
 data class ExecutionStep(val id: String, val kind: String, val category: String, val text: String,
   val preview: String, val failure: String, val status: String)
 data class ExecutionDetail(val turnId: String, val steps: List<ExecutionStep>)
@@ -1256,7 +1256,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       }
       return ConversationHistory(conversationId, session.optString("transcriptId").takeIf(String::isNotBlank),
         parseMessages(messages), session.optString("agentId").takeIf(String::isNotBlank),
-        if (hasMore) cursor else null)
+        if (hasMore) cursor else null, pagination?.optLong("revision", -1)?.takeIf { it >= 0 })
     }
 
     fun parseExecutionDetail(turnId: String, raw: String): ExecutionDetail {

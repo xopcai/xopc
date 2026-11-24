@@ -77,6 +77,7 @@ def sidebar_action_rows():
  }
 sidebar_actions = sidebar_action_rows()
 record={'agentId':'personal','conversationId':personal,'state':'ready','displayName':'Ada','appearance':'loopi','revision':1,'preferences':{},'voiceCallPreferences':{'openingGreetingEnabled':True}}
+personal_unread_count = 0
 model={'id':'test/model','name':'Fixture Model','provider':'test','reasoning':True,'vision':False,'thinking':{'mode':'levels','options':['off','low','medium','high'],'initialValue':'medium'}}
 outreach={'revision':1,'mode':'balanced','timezone':'Asia/Shanghai','quietStart':22,'quietEnd':8,'dailyMessages':2,'dailyModelCalls':12}
 config={'model':'test/model','thinkingLevel':'medium','configVersion':1}
@@ -156,6 +157,7 @@ class Handler(BaseHTTPRequestHandler):
  def do_DELETE(self): self.do_GET()
  def do_GET(self):
   global live_music_state, space_item, capability_skill_enabled, global_model_revision, device_file_allowed, sidebar_actions
+  global personal_unread_count
   path=urlparse(self.path).path; query=parse_qs(urlparse(self.path).query)
   workspace_parity = path.startswith('/workspace-parity/')
   project_partial = path.startswith('/project-partial/')
@@ -170,6 +172,7 @@ class Handler(BaseHTTPRequestHandler):
   bubble_fixture = path.startswith('/bubble-width/')
   sidebar_fixture = path.startswith('/sidebar-pagination/')
   sidebar_actions_fixture = path.startswith('/sidebar-actions/')
+  personal_unread_fixture = path.startswith('/personal-unread/')
   music_fixture = path.startswith('/music/')
   slow_capabilities = path.startswith('/slow-capabilities/')
   live_music_fixture = path.startswith('/music-live/')
@@ -184,6 +187,7 @@ class Handler(BaseHTTPRequestHandler):
   if bubble_fixture: path = path.removeprefix('/bubble-width')
   if sidebar_fixture: path = path.removeprefix('/sidebar-pagination')
   if sidebar_actions_fixture: path = path.removeprefix('/sidebar-actions')
+  if personal_unread_fixture: path = path.removeprefix('/personal-unread')
   if music_fixture: path = path.removeprefix('/music')
   if slow_capabilities: path = path.removeprefix('/slow-capabilities')
   if live_music_fixture: path = path.removeprefix('/music-live')
@@ -366,6 +370,17 @@ class Handler(BaseHTTPRequestHandler):
     catalog['plugins'] += [{'id':f'meeting-{i}','name':f'Meeting Plugin {i}','group':'installed'} for i in range(24)]
    data=envelope({'items':catalog[category]})
   elif path=='/api/personal-agent': data=envelope(record)
+  elif personal_unread_fixture and path=='/fixture/new-replies' and self.command=='POST':
+   personal_unread_count=105
+   data=envelope(None)
+  elif path=='/api/personal-agent/unread':
+   data=envelope({'conversationId':personal,'transcriptId':f'transcript-{personal}','lastSeq':105,
+    'unreadCount':personal_unread_count} if personal_unread_fixture else None)
+  elif personal_unread_fixture and path=='/api/personal-agent/read' and self.command=='POST':
+   if json.loads(body)=={'transcriptId':f'transcript-{personal}','lastSeq':105}:
+    personal_unread_count=0
+    data=envelope({'conversationId':personal,'transcriptId':f'transcript-{personal}','lastSeq':105,'unreadCount':0})
+   else: status=400; data={'ok':False,'error':'Wrong read snapshot'}
   elif path=='/api/personal-agent/activity':
    if query.get('view') == ['deliverables']:
     data=envelope({'items':[{'id':'personal-file','task':{'id':'task-header','title':'任务顶部栏检查','conversationId':parent},
@@ -439,6 +454,7 @@ class Handler(BaseHTTPRequestHandler):
      '[打开语言设置](xopc://settings/language)\n\n[打开连接设置](xopc://capabilities/mcp?id=example&url=https%3A%2F%2Fexample.com%2Fmcp)'}]
    if key == personal and (music_fixture or live_music_fixture): history = history + [music_reply]
    data={'session':{'key':key,'transcriptId':f'transcript-{key}','agentId':'main','messages':history},'pagination':{'hasMore':False}}
+   if key==personal and personal_unread_fixture: data['pagination']['revision']=105
   elif suggestion_fixture and path.endswith('/next-turn-suggestion'):
    key=path.split('/')[3]
    data={'status':'ready','suggestion':{'id':'99999999-9999-4999-8999-999999999999',

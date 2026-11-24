@@ -1,5 +1,11 @@
 import Observation
 
+struct PersonalReadTarget: Hashable {
+    let conversationID: String
+    let transcriptID: String
+    let lastSeq: Int
+}
+
 @MainActor
 @Observable
 final class PersonalAgentState {
@@ -9,9 +15,39 @@ final class PersonalAgentState {
     private(set) var errorMessage: String?
     private var generation = 0
     private var accountScope: String?
+    private var unreadScope: String?
+    private var unreadSnapshot: PersonalUnreadSnapshot?
 
     func record(using configuration: GatewayConfiguration) -> PersonalAgentRecord? {
         ComposerDraftStore.accountScope(configuration) == accountScope ? record : nil
+    }
+
+    func unread(using configuration: GatewayConfiguration) -> PersonalUnreadSnapshot? {
+        guard ComposerDraftStore.accountScope(configuration) == unreadScope else { return nil }
+        return unreadSnapshot
+    }
+
+    func refreshUnread(using configuration: GatewayConfiguration, viewed: PersonalReadTarget?) async {
+        let scope = ComposerDraftStore.accountScope(configuration)
+        if scope != unreadScope {
+            unreadScope = scope
+            unreadSnapshot = nil
+        }
+        let gateway = GatewayClient(configuration: configuration)
+        do {
+            let snapshot = try await gateway.fetchPersonalUnread()
+            guard !Task.isCancelled, unreadScope == scope else { return }
+            unreadSnapshot = snapshot
+            guard let snapshot, snapshot.unreadCount > 0, let viewed, viewed.lastSeq > 0,
+                  viewed.conversationID == snapshot.conversationId,
+                  viewed.transcriptID == snapshot.transcriptId else { return }
+            let confirmed = try await gateway.markPersonalRead(transcriptID: snapshot.transcriptId,
+                                                               lastSeq: min(snapshot.lastSeq, viewed.lastSeq))
+            guard !Task.isCancelled, unreadScope == scope else { return }
+            unreadSnapshot = confirmed
+        } catch {
+            // Keep the last server-confirmed count until the next refresh.
+        }
     }
 
     func applyProfile(_ updated: PersonalAgentRecord, using configuration: GatewayConfiguration) {

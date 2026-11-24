@@ -318,6 +318,7 @@
 "接下来" = "Up Next";
 "需要你处理的事，以及正在推进的工作。" = "Items needing your attention and work in progress.";
 "%lld 项待处理 · %lld 项进行中" = "%lld pending · %lld in progress";
+"%lld 条未读消息" = "%lld unread";
 "编辑笔记" = "Edit Note";
 "正在保存…" = "Saving…";
 "保存失败" = "Save Failed";

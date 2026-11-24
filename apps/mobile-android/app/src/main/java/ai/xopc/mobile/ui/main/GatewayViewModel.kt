@@ -246,6 +246,7 @@ data class NotesUiState(
 data class PersonalUiState(val gatewayId: String? = null, val summary: PersonalSummary? = null,
   val agent: PersonalAgentRecord? = null, val agentLoading: Boolean = false,
   val agentCreating: Boolean = false, val agentError: Boolean = false,
+  val unreadCount: Int = 0,
   val agentProfileSaving: Boolean = false, val agentProfileError: Boolean = false,
   val agentVoiceChoices: PersonalVoiceChoices? = null,
   val agentAvatar: Bitmap? = null,
@@ -327,6 +328,7 @@ data class ConnectionUiState(
   val batchConversationRevision: Int = 0,
   val historyLoading: Boolean = false,
   val historyTranscriptId: String? = null,
+  val historyLastSeq: Long? = null,
   val musicJobsRevision: Int = 0,
   val historyBefore: String? = null,
   val historyLoadingOlder: Boolean = false,
@@ -622,6 +624,33 @@ class GatewayViewModel internal constructor(application: Application, private va
   }
 
   fun openPersonalAgent() = openPersonalAgent(remember = true)
+
+  suspend fun refreshPersonalUnread(gatewayId: String, viewedConversationId: String?, viewedTranscriptId: String?) {
+    val profile = mutableState.value.profile ?: return
+    if (profile.gatewayId != gatewayId) return
+    try {
+      val snapshot = runInterruptible(Dispatchers.IO) { personalAgentRepository.unread(gatewayId) }
+      if (mutableState.value.profile != profile) return
+      mutableState.update { it.copy(personal = it.personal.copy(unreadCount = snapshot?.unreadCount ?: 0)) }
+      val current = mutableState.value
+      if (snapshot == null || snapshot.unreadCount == 0 || snapshot.conversationId != viewedConversationId ||
+        snapshot.conversationId != current.selectedConversationId || current.historyLoading || current.chatError) return
+      if (snapshot.transcriptId != current.historyTranscriptId || snapshot.lastSeq > (current.historyLastSeq ?: 0)) {
+        if (historyJob?.isActive != true) refreshSelectedHistory(snapshot.conversationId)
+      }
+      if (snapshot.transcriptId != viewedTranscriptId || snapshot.transcriptId != current.historyTranscriptId) return
+      val lastSeq = minOf(snapshot.lastSeq, current.historyLastSeq ?: return)
+      if (lastSeq <= 0) return
+
+      val result = runInterruptible(Dispatchers.IO) {
+        personalAgentRepository.markRead(gatewayId, snapshot.transcriptId, lastSeq)
+      }
+      if (mutableState.value.profile == profile) mutableState.update {
+        it.copy(personal = it.personal.copy(unreadCount = result?.unreadCount ?: 0))
+      }
+    } catch (error: CancellationException) { throw error }
+    catch (_: Exception) { /* Keep the last server-confirmed count until the next refresh. */ }
+  }
 
   private fun openPersonalAgent(remember: Boolean) {
     val gatewayId = mutableState.value.profile?.gatewayId ?: return
@@ -3259,7 +3288,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       clarification = null, clarificationBusy = false, clarificationError = null,
       taskScopeLoading = taskId == null, messages = emptyList(), draftText = "", draftRefs = emptyList(),
       draftAttachments = emptyList(), attachmentLoading = false, attachmentError = false, historyLoading = true,
-      historyTranscriptId = null, historyBefore = null, historyLoadingOlder = false,
+      historyTranscriptId = null, historyLastSeq = null, historyBefore = null, historyLoadingOlder = false,
       historyOlderError = false,
       executionMessageId = null, executionDetail = null, executionLoading = false, executionError = false,
       draftModelLoading = false, draftModelReady = false, chatError = false, activeRunId = null,
@@ -3309,6 +3338,7 @@ class GatewayViewModel internal constructor(application: Application, private va
           if (revision == historyRevision) mutableState.update { it.copy(messages = history.messages,
             historyLoading = false, draftModelReady = true,
             historyTranscriptId = history.transcriptId,
+            historyLastSeq = history.lastSeq,
             historyBefore = history.nextBeforeCursor?.takeIf { _ -> history.transcriptId != null },
             selectedAgentId = history.agentId ?: it.conversationSummary(id)?.agentId.orEmpty()) }
           if (revision == historyRevision) refreshRunState(id)
@@ -3857,6 +3887,7 @@ class GatewayViewModel internal constructor(application: Application, private va
             optimisticText = if (optimisticConfirmed) "" else state.optimisticText,
             optimisticPreviousUserId = if (optimisticConfirmed) null else state.optimisticPreviousUserId,
             historyTranscriptId = history?.transcriptId ?: state.historyTranscriptId,
+            historyLastSeq = if (history == null) state.historyLastSeq else history.lastSeq,
             historyBefore = when {
               history == null || retainOlder -> state.historyBefore
               else -> history.nextBeforeCursor?.takeIf { _ -> history.transcriptId != null }

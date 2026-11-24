@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -263,8 +264,9 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
             Modifier.clip(MaterialTheme.shapes.medium)
               .background(if (personal != null && personal.conversationId == connection.selectedConversationId)
                 scheme.surfaceContainerHigh else Color.Transparent),
+            badge = connection.personal.unreadCount, unreadBadge = true,
             enabled = shortcutsEnabled && !connection.personal.agentCreating, onClick = onPersonal) {
-            PersonalAgentAvatar(connection.personal.agentAvatar, personal?.appearance ?: "loopi", 22.dp, active = false)
+            PersonalAgentAvatar(connection.personal.agentAvatar, personal?.appearance ?: "loopi", 24.dp, active = false)
           }
         }
         item("workbench") {
@@ -418,18 +420,25 @@ private fun SidebarRow(@StringRes label: Int, @DrawableRes icon: Int, tag: Strin
 
 @Composable
 private fun SidebarRow(label: String, tag: String, modifier: Modifier = Modifier, badge: Int = 0,
-  enabled: Boolean = true, onClick: () -> Unit, icon: @Composable () -> Unit) {
+  enabled: Boolean = true, unreadBadge: Boolean = false, onClick: () -> Unit, icon: @Composable () -> Unit) {
   Row(modifier.fillMaxWidth().heightIn(min = 46.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
     .padding(horizontal = 10.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-    icon()
+    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { icon() }
     Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
       maxLines = 1, overflow = TextOverflow.Ellipsis,
       color = MaterialTheme.colorScheme.onSurface)
-    if (badge > 0) Text(if (badge > 99) "99+" else badge.toString(),
-      Modifier.background(LocalAttentionColors.current.fill, CircleShape)
-        .padding(horizontal = 8.dp, vertical = 4.dp).testTag("progress-attention-badge"),
-      color = LocalAttentionColors.current.foreground,
-      style = MaterialTheme.typography.labelMedium)
+    if (badge > 0) {
+      val fill = if (unreadBadge) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+        else LocalAttentionColors.current.fill
+      val foreground = if (unreadBadge) MaterialTheme.colorScheme.primary else LocalAttentionColors.current.foreground
+      val accessibility = if (unreadBadge) {
+        val unreadLabel = pluralStringResource(R.plurals.personal_unread_messages, badge, badge)
+        Modifier.semantics { contentDescription = unreadLabel }.testTag("personal-unread-badge")
+      } else Modifier.testTag("progress-attention-badge")
+      Text(if (badge > 99) "99+" else badge.toString(),
+        Modifier.background(fill, CircleShape).padding(horizontal = 8.dp, vertical = 4.dp).then(accessibility),
+        color = foreground, style = MaterialTheme.typography.labelMedium)
+    }
   }
 }

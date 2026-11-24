@@ -488,6 +488,7 @@
     { "name": "chat_recent_conversations", "value": "最近对话" },
     { "name": "chat_profile_settings", "value": "我的与设置" },
     { "name": "chat_personal_agent", "value": "个人助手" },
+    { "name": "personal_unread_messages", "value": "%d 条未读消息" },
     { "name": "chat_attention_count", "value": "有 %d 项待你处理" },
     { "name": "chat_personal_task_allocating", "value": "分派中" },
     { "name": "chat_personal_task_queued", "value": "排队中" },

@@ -43,4 +43,22 @@ describe('Personal AI on HarmonyOS', () => {
     expect(await second).toEqual(record);
     expect(mocks.request).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps the badge until the matching, visible transcript can acknowledge a loaded snapshot', async () => {
+    const snapshot = { conversationId: record.conversationId, transcriptId: 'transcript-2', lastSeq: 12, unreadCount: 3 };
+    const envelope = (payload: typeof snapshot) => JSON.stringify({ ok: true, payload });
+    mocks.request.mockResolvedValue(envelope(snapshot));
+    const model = new XopcPersonalAgentViewModel();
+
+    await model.refreshUnread(() => undefined);
+    await model.refreshUnread(() => ({ ...snapshot, transcriptId: 'transcript-1' }));
+    expect(model.unreadSnapshot?.unreadCount).toBe(3);
+    expect(mocks.request.mock.calls).toEqual([['/api/personal-agent/unread'], ['/api/personal-agent/unread']]);
+
+    mocks.request.mockResolvedValueOnce(envelope(snapshot)).mockResolvedValueOnce(envelope({ ...snapshot, unreadCount: 1 }));
+    await model.refreshUnread(() => ({ ...snapshot, lastSeq: 10 }));
+    expect(mocks.request).toHaveBeenLastCalledWith('/api/personal-agent/read', 'POST',
+      JSON.stringify({ transcriptId: 'transcript-2', lastSeq: 10 }));
+    expect(model.unreadSnapshot?.unreadCount).toBe(1);
+  });
 });

@@ -42,6 +42,7 @@ final class AssistantState {
     private(set) var isRespondingToClarification = false
     private var loadedConversationID: String?
     private var loadedTranscriptID: String?
+    private(set) var loadedHistorySeq: Int?
     private struct SendDraft: Equatable {
         let conversationID: String
         let content: String
@@ -89,6 +90,7 @@ final class AssistantState {
         runID = nil
         loadedConversationID = conversation?.id
         loadedTranscriptID = conversation?.transcriptId
+        loadedHistorySeq = nil
         contextGeneration += 1
         messages = []
         failedSend = nil
@@ -142,6 +144,7 @@ final class AssistantState {
             guard generation == historyGeneration, !Task.isCancelled else { return }
             loadedTranscriptID = history.session.transcriptId ?? conversation.transcriptId
             messages = projected
+            loadedHistorySeq = history.pagination.revision
             isLoadingHistory = false
             let run = try await gateway.fetchActiveRun(conversationID: conversation.id)
             guard generation == historyGeneration, !Task.isCancelled else { return }
@@ -173,6 +176,11 @@ final class AssistantState {
 
     func isCurrentConversation(_ id: String) -> Bool {
         loadedConversationID == id
+    }
+
+    func refreshUnreadHistory(_ conversation: ConversationSelection, using gateway: any GatewayServing) async {
+        guard isCurrentConversation(conversation.id), !isLoadingHistory else { return }
+        await refreshHistory(conversation, using: gateway, retainLive: true)
     }
 
     // swiftlint:disable:next function_body_length
@@ -396,6 +404,7 @@ final class AssistantState {
             }
             streamBuffer.confirm(Set(saved.filter { !$0.isPending }.map(\.id)))
             messages = saved + live
+            loadedHistorySeq = history.pagination.revision
             errorMessage = nil
         } catch is CancellationError { return }
         catch {

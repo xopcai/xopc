@@ -1,4 +1,5 @@
-import { XopcPersonalAgentRecord, XopcPersonalAgentResponse } from '../model/personalAgent';
+import { XopcPersonalAgentRecord, XopcPersonalAgentResponse, XopcPersonalReadRequest, XopcPersonalReadTarget,
+  XopcPersonalUnreadResponse, XopcPersonalUnreadSnapshot } from '../model/personalAgent';
 import { gatewaySession } from '../service/gatewaySession';
 
 @ObservedV2
@@ -7,7 +8,10 @@ export class XopcPersonalAgentViewModel {
   @Trace loading: boolean = false;
   @Trace creating: boolean = false;
   @Trace error: string = '';
+  @Trace unreadSnapshot: XopcPersonalUnreadSnapshot | null = null;
   private requestRevision: number = 0;
+  private unreadConnection: number = -1;
+  private unreadRevision: number = 0;
   private pendingCreate?: Promise<XopcPersonalAgentRecord | null>;
 
   async refresh(): Promise<void> {
@@ -35,6 +39,31 @@ export class XopcPersonalAgentViewModel {
     this.pendingCreate = pending;
     try { return await pending; }
     finally { if (this.pendingCreate === pending) this.pendingCreate = undefined; }
+  }
+
+  async refreshUnread(viewed: () => XopcPersonalReadTarget | undefined): Promise<void> {
+    const revision = ++this.unreadRevision;
+    const connection = gatewaySession.connectionRevision();
+    if (connection !== this.unreadConnection) {
+      this.unreadConnection = connection;
+      this.unreadSnapshot = null;
+    }
+    try {
+      const response = JSON.parse(await gatewaySession.request('/api/personal-agent/unread')) as XopcPersonalUnreadResponse;
+      gatewaySession.assertConnection(connection);
+      if (!response.ok || revision !== this.unreadRevision) return;
+      const snapshot = response.payload;
+      this.unreadSnapshot = snapshot;
+      const target = viewed();
+      if (!snapshot || snapshot.unreadCount <= 0 || target?.conversationId !== snapshot.conversationId ||
+        target.transcriptId !== snapshot.transcriptId || target.lastSeq <= 0) return;
+      const body: XopcPersonalReadRequest = { transcriptId: snapshot.transcriptId,
+        lastSeq: Math.min(snapshot.lastSeq, target.lastSeq) };
+      const confirmed = JSON.parse(await gatewaySession.request('/api/personal-agent/read', 'POST',
+        JSON.stringify(body))) as XopcPersonalUnreadResponse;
+      gatewaySession.assertConnection(connection);
+      if (confirmed.ok && revision === this.unreadRevision) this.unreadSnapshot = confirmed.payload;
+    } catch (_) { /* Keep the last server-confirmed count until the next refresh. */ }
   }
 
   private async createPersonalAgent(): Promise<XopcPersonalAgentRecord | null> {

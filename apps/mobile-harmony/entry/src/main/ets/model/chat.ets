@@ -68,7 +68,7 @@ export interface XopcAgentReactionSettings { available: boolean; enabled: boolea
 export interface XopcSessionDetail { key: string; transcriptId?: string; name?: string; status?: string; agentId?: string; projectId?: string; messages: XopcMessage[];
   agentReactions?: XopcAgentReactionSettings;
 }
-export interface XopcHistoryPagination { hasMore: boolean; nextBeforeCursor?: string; }
+export interface XopcHistoryPagination { hasMore: boolean; nextBeforeCursor?: string; revision?: number; }
 export interface XopcHistory { session: XopcSessionDetail; pagination: XopcHistoryPagination; localDraft?: boolean; }
 export interface XopcCreatedSession { session: XopcSessionDetail; }
 export interface XopcCreateSession { channel: string; projectId?: string | null; agentId?: string; executionMode?: string; initialAgentConfig?: XopcAgentConfig; }

@@ -359,6 +359,13 @@ struct ConversationDetail: Decodable, Sendable {
 struct HistoryPagination: Decodable, Sendable {
     let hasMore: Bool
     let nextBeforeCursor: String?
+    let revision: Int?
+
+    init(hasMore: Bool, nextBeforeCursor: String?, revision: Int? = nil) {
+        self.hasMore = hasMore
+        self.nextBeforeCursor = nextBeforeCursor
+        self.revision = revision
+    }
 }
 
 struct SessionAgentConfiguration: Decodable, Sendable {

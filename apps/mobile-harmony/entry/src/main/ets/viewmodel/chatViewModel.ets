@@ -75,6 +75,7 @@ export class XopcChatViewModel {
   private prefetchKey: string = '';
   private prefetchedHistory?: Promise<XopcHistory | undefined>;
   @Trace transcriptId?: string;
+  @Trace historyLastSeq: number = 0;
   private before: string = '';
   private snapshotMode: boolean = false;
   private refreshTimer: number = -1;
@@ -177,7 +178,8 @@ export class XopcChatViewModel {
     this.completedActivityRunId = ''; this.snapshotMode = false;
     this.executionInputIds.clear(); this.executionAssistantIds.clear();
     this.cachedHistory = false; this.hasNetworkHistory = false; this.localDraft = false;
-    this.transcriptId = undefined; this.title = ''; this.agentId = ''; this.projectId = ''; this.status = ''; this.hasOlder = false;
+    this.transcriptId = undefined; this.historyLastSeq = 0;
+    this.title = ''; this.agentId = ''; this.projectId = ''; this.status = ''; this.hasOlder = false;
     this.before = ''; this.error = ''; this.loading = true;
     const selection = this.selection;
     try {
@@ -372,6 +374,7 @@ export class XopcChatViewModel {
         if (row.agentReaction) this.outbox.delete(row.agentReaction.clientMessageId);
       });
       this.rows = this.mergePendingRows(confirmed);
+      if (!older) this.historyLastSeq = result.pagination.revision ?? 0;
       if (!older && this.snapshotMode && !this.completedActivityRunId && !this.runId) {
         this.liveRow = undefined; this.streaming = ''; this.thinking = ''; this.tool = '';
       }

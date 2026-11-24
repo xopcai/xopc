@@ -25,6 +25,7 @@ export struct XopcChatSidebar {
   @Param personalBusy: boolean = false;
   @Param currentId: string = '';
   @Param pendingAttention: number = 0;
+  @Param personalUnread: number = 0;
   @Param reveal: number = 1;
   @Param drawerWidth: number = 0;
   @Param interactive: boolean = false;
@@ -117,19 +118,25 @@ export struct XopcChatSidebar {
   shortcut(label: Resource, icon: Resource | undefined, page: string, count: number = 0) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 12 }) {
-        if (page === 'personal') {
-          Row() {
-            XopcPersonalAgentAvatar({ extent: 24, compact: true, activePage: false,
+        Row() {
+          if (page === 'personal') {
+            XopcPersonalAgentAvatar({ extent: 22, compact: true, activePage: false,
               agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi',
               revision: this.personalAgent?.revision ?? 0 })
-          }.width(28).justifyContent(FlexAlign.Center).accessibilityLevel('no-hide-descendants')
-        } else if (icon) {
-          SymbolGlyph(icon).fontSize(19).fontColor([this.colors.secondary]).width(28)
-        }
+          } else if (icon) {
+            SymbolGlyph(icon).fontSize(19).fontColor([this.colors.secondary])
+          }
+        }.width(28).height(28).justifyContent(FlexAlign.Center).accessibilityLevel('no-hide-descendants')
         Text(page === 'personal' ? this.personalAgent?.displayName || label : label)
           .fontSize(15).fontColor(this.colors.foreground).layoutWeight(1)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        if (count > 0) {
+        if (page === 'personal' && this.personalUnread > 0) {
+          Text(this.personalUnread > 99 ? '99+' : this.personalUnread.toString()).fontSize(12)
+            .fontColor(this.colors.accent)
+            .padding({ left: 8, right: 8 }).height(24).borderRadius(12)
+            .backgroundColor(this.colors.accentSoft)
+            .accessibilityText($r('app.string.personal_unread_messages', this.personalUnread))
+        } else if (count > 0) {
           Text(count > 99 ? '99+' : count.toString()).fontSize(12)
             .fontColor(this.colors.attentionForeground)
             .padding({ left: 8, right: 8 }).height(24).borderRadius(12)

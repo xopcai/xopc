@@ -362,6 +362,7 @@ internal fun MainScreen(
   onFetchConversationExperts: suspend () -> List<ConversationAgent> = { emptyList() },
   onRefreshConversations: () -> Unit = {},
   onRefreshRecentConversations: () -> Unit = {},
+  onRefreshPersonalUnread: suspend (String, String?, String?) -> Unit = { _, _, _ -> },
   onLoadMoreRecentConversations: () -> Unit = {},
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
   onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
@@ -691,6 +692,7 @@ internal fun MainScreen(
     onFetchConversationExperts = onFetchConversationExperts,
     onRefreshConversations = onRefreshConversations,
     onRefreshRecentConversations = onRefreshRecentConversations,
+    onRefreshPersonalUnread = onRefreshPersonalUnread,
     onLoadMoreRecentConversations = onLoadMoreRecentConversations,
     onLoadCapabilities = onLoadCapabilities, onCapabilityPanel = onCapabilityPanel,
     onCapabilitySetupChat = onCapabilitySetupChat,
@@ -897,6 +899,7 @@ internal fun MainContent(
   onFetchConversationExperts: suspend () -> List<ConversationAgent> = { emptyList() },
   onRefreshConversations: () -> Unit = {},
   onRefreshRecentConversations: () -> Unit = {},
+  onRefreshPersonalUnread: suspend (String, String?, String?) -> Unit = { _, _, _ -> },
   onLoadMoreRecentConversations: () -> Unit = {},
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
   onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
@@ -1522,6 +1525,23 @@ internal fun MainContent(
   val layoutDirection = LocalLayoutDirection.current
   val tabStateHolder = rememberSaveableStateHolder()
   val sidebar = remember(gatewayId) { ChatSidebarState() }
+  val refreshPersonalUnread by rememberUpdatedState(onRefreshPersonalUnread)
+  val personalTranscript = connection.historyTranscriptId?.takeIf {
+    selectedTab == HomeTab.Assistant && linkedDetailId == null && !sidebar.open && !phonePage &&
+      !showOverview && !messageSearchOpen && !connection.historyLoading && !connection.chatError &&
+      conversationId == connection.personal.agent?.conversationId
+  }
+  val personalLastSeq = if (personalTranscript != null) connection.historyLastSeq else null
+  LaunchedEffect(connection.profile?.deviceId, gatewayId, sidebar.open, personalTranscript, personalLastSeq,
+    connection.realtimeStatus) {
+    if (gatewayId == null) return@LaunchedEffect
+    lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+      while (true) {
+        refreshPersonalUnread(gatewayId, conversationId.takeIf { personalTranscript != null }, personalTranscript)
+        delay(30_000)
+      }
+    }
+  }
   if (mobilePush != null) {
     val clickRevision by ai.xopc.mobile.gateway.MobilePushInbox.revision.collectAsStateWithLifecycle()
     val tokenRevision by ai.xopc.mobile.gateway.MobilePushInbox.tokenRevision.collectAsStateWithLifecycle()

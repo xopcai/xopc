@@ -1,6 +1,6 @@
 import { XopcCapabilitiesView } from './CapabilitiesView';
 import { XopcCapabilityPanelView } from './CapabilityPanelView';
-import { XopcPersonalAgentRecord } from '../model/personalAgent';
+import { XopcPersonalAgentRecord, XopcPersonalReadTarget } from '../model/personalAgent';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcPersonalAgentSettings } from './PersonalAgentSettings';
 import { XopcPersonalAgentOverview } from './PersonalAgentOverview';
@@ -76,6 +76,13 @@ export struct XopcHomeView {
   @Local attention: XopcProgressViewModel = new XopcProgressViewModel();
   @Computed get pendingAttention(): number { return this.attention.pendingCount; }
   @Local personalAgent: XopcPersonalAgentViewModel = new XopcPersonalAgentViewModel();
+  @Local personalReadTarget: XopcPersonalReadTarget | undefined = undefined;
+  @Computed get viewedPersonal(): XopcPersonalReadTarget | undefined {
+    const target = this.personalReadTarget;
+    if (!this.layout.foreground || this.sidebarMounted || this.detailVisible || this.pendingChatId ||
+      target?.conversationId !== this.activeChatId) return undefined;
+    return target;
+  }
   @Local requestedChatId: string = '';
   @Local activeChatId: string = '';
   @Local requestedChatDraft: string = '';
@@ -125,12 +132,14 @@ export struct XopcHomeView {
     if (this.openSettingsOnMount) this.navigate({ page: 'settings', itemId: '' });
     notificationNavigation.consume();
     void this.attention.refresh();
+    this.refreshPersonalUnread();
     void this.chatRepository.restoreRecent().catch((): void => {});
     void this.chatRepository.refreshRecent().catch((): void => {});
     void this.restoreInitialChat();
     this.attentionTimer = setInterval((): void => {
       if (!this.layout.foreground) return;
       void this.attention.refresh();
+      this.refreshPersonalUnread();
       notificationNavigation.flush();
     }, 15000);
   }
@@ -291,6 +300,13 @@ export struct XopcHomeView {
   @Monitor('layout.foreground')
   refreshOnReturn(): void {
     if (this.layout.foreground) void this.attention.refresh();
+  }
+
+  @Monitor('layout.foreground', 'sidebarMounted', 'detailVisible', 'pendingChatId')
+  refreshPersonalUnread(): void {
+    if (this.disposed || !this.layout.foreground) return;
+    void this.personalAgent.refreshUnread((): XopcPersonalReadTarget | undefined =>
+      this.disposed ? undefined : this.viewedPersonal);
   }
 
   private openSidebar(): void {
@@ -659,6 +675,7 @@ export struct XopcHomeView {
               if (this.chatReady) {
                 XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
                   personalAgent: this.personalAgent.record,
+                  personalUnread: this.viewedPersonal ? this.personalAgent.unreadSnapshot : null,
                   focusRevision: this.chatFocusRevision,
                   intakeRevision: this.intake.chatRevision, intakeText: this.requestedChatDraft,
                   activePage: !this.detailVisible,
@@ -674,6 +691,11 @@ export struct XopcHomeView {
                   onLocalChatCreated: (id: string): void => { this.rememberConversation(id); },
                   onConversationUnavailable: (id: string): void => { this.onConversationUnavailable(id); },
                   onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
+                  onPersonalReadTargetChange: (target?: XopcPersonalReadTarget): void => {
+                    const previous = this.personalReadTarget;
+                    this.personalReadTarget = target;
+                    if (target || previous) this.refreshPersonalUnread();
+                  },
                   onConversationChange: (id: string): void => {
                     this.activeChatId = id;
                     if (this.pendingChatId === id) this.pendingChatId = '';
@@ -703,6 +725,7 @@ export struct XopcHomeView {
               XopcChatSidebar({ personalAgent: this.personalAgent.record, personalBusy: this.personalOpening || this.personalAgent.creating,
                 reveal: this.sidebarProgress, drawerWidth: this.sidebarWidth, interactive: this.sidebarOpen,
                 currentId: this.activeChatId, pendingAttention: this.pendingAttention,
+                personalUnread: this.personalAgent.unreadSnapshot?.unreadCount ?? 0,
                 onClose: (): void => { this.closeSidebar(); },
                 onDismissDrag: (offset: number): void => {
                   if (this.sidebarOpen) this.sidebarProgress = 1 - chatSidebarDragProgress(-offset, this.sidebarWidth);

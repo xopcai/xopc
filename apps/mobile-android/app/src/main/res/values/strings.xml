@@ -621,6 +621,10 @@
     <string name="progress_discard">Discard</string>
     <string name="personal_default_name">You</string>
     <string name="personal_agent_title">My assistant</string>
+    <plurals name="personal_unread_messages">
+        <item quantity="one">%d unread message</item>
+        <item quantity="other">%d unread messages</item>
+    </plurals>
     <string name="personal_agent_description">A lasting conversation with your personal assistant.</string>
     <string name="personal_agent_create">Start conversation</string>
     <string name="personal_agent_open">Continue conversation</string>

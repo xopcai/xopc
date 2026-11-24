@@ -74,7 +74,7 @@ import { CHAT_MESSAGE_MAX_WIDTH, chatPlainAssistantBubbleText, chatTextBubbleWid
 import { CHAT_SIDEBAR_PAN_TAG, canStartChatSidebarPan } from '../common/chatSidebarGesture';
 import { chatPresentationRows } from '../common/chatPresentation';
 import { XopcBrandLoading } from './MobileComponents';
-import { XopcPersonalAgentRecord } from '../model/personalAgent';
+import { XopcPersonalAgentRecord, XopcPersonalReadTarget, XopcPersonalUnreadSnapshot } from '../model/personalAgent';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { XopcPersonalChatActivity } from './PersonalChatActivity';
 
@@ -187,6 +187,9 @@ export struct XopcChatView {
       : this.overlayHeaderHeight;
   }
   @Event onConversationChange: (id: string) => void = (_id: string): void => {};
+  @Param personalUnread: XopcPersonalUnreadSnapshot | null = null;
+  @Event onPersonalReadTargetChange: (target?: XopcPersonalReadTarget) => void =
+    (_target?: XopcPersonalReadTarget): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local chat: XopcChatViewModel = new XopcChatViewModel();
   @Local options: XopcChatOptionsViewModel = new XopcChatOptionsViewModel();
@@ -965,6 +968,28 @@ export struct XopcChatView {
   onSelectedConversation(): void {
     this.observeDesktopTarget();
     if (this.activePage && this.chat.selectedId) this.onConversationChange(this.chat.selectedId);
+  }
+
+  @Monitor('personalConversation', 'chat.transcriptId', 'chat.loading', 'chat.cachedHistory', 'chat.error',
+    'chat.historyLastSeq', 'activePage', 'searchOpen', 'phonePage')
+  onPersonalReadViewChange(): void {
+    this.onPersonalReadTargetChange(this.personalReadTarget());
+  }
+
+  private personalReadTarget(): XopcPersonalReadTarget | undefined {
+    if (!this.activePage || !this.personalConversation || this.chat.loading || this.chat.cachedHistory ||
+      !!this.chat.error || this.phonePage !== 0 || this.searchOpen || !this.chat.transcriptId) return undefined;
+    return { conversationId: this.chat.selectedId, transcriptId: this.chat.transcriptId, lastSeq: this.chat.historyLastSeq };
+  }
+
+  @Monitor('personalUnread')
+  onPersonalUnreadSnapshot(): void {
+    const unread = this.personalUnread;
+    const target = this.personalReadTarget();
+    if (unread && unread.unreadCount > 0 && target?.conversationId === unread.conversationId &&
+      (target.transcriptId !== unread.transcriptId || target.lastSeq < unread.lastSeq)) {
+      void this.chat.loadHistory(false);
+    }
   }
   @Monitor('chat.selectedId', 'chat.transcriptId', 'chat.runId', 'chat.cachedHistory', 'chat.musicJobsRevision',
     'activePage', 'layout.foreground', 'phonePage')
