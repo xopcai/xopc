@@ -180,7 +180,6 @@ export struct XopcClarificationWizard {
         .onClick((): void => { this.collapsed = false; })
     }.width('100%').padding({ left: 14, right: 12, top: 10, bottom: 10 })
       .backgroundColor(p.surface).borderRadius(this.colors.corner(18))
-      .border({ width: 0.5, color: p.border })
   }
 
   @Builder
@@ -237,8 +236,7 @@ export struct XopcClarificationWizard {
 
           if (this.current()?.type === 'single_choice') {
             Column() {
-              ForEach(this.current()?.choices ?? [], (choice: XopcClarificationChoice, idx: number) => {
-                if (idx > 0) { Divider().strokeWidth(0.5).color(p.divider).margin({ left: 14 }) }
+              ForEach(this.current()?.choices ?? [], (choice: XopcClarificationChoice) => {
                 Button({ type: ButtonType.Normal }) {
                   Row({ space: 12 }) {
                     Column({ space: 2 }) {
@@ -260,8 +258,7 @@ export struct XopcClarificationWizard {
                         Text('✓').fontSize(11).fontWeight(FontWeight.Bold).fontColor(p.onAccent)
                       }
                     }.width(20).height(20).borderRadius(10)
-                      .backgroundColor(this.answer()?.choiceId === choice.id ? p.accent : Color.Transparent)
-                      .border({ width: this.answer()?.choiceId === choice.id ? 0 : 1.5, color: p.tertiaryText })
+                      .backgroundColor(this.answer()?.choiceId === choice.id ? p.accent : p.inputFill)
                       .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                   }.width('100%').padding({ left: 14, right: 14, top: 12, bottom: 12 }).alignItems(VerticalAlign.Center)
                 }.width('100%').constraintSize({ minHeight: 48 })
@@ -269,7 +266,6 @@ export struct XopcClarificationWizard {
                   .enabled(!this.locked())
                   .onClick((): void => { this.pickChoice(choice.id); })
               }, (choice: XopcClarificationChoice): string => choice.id)
-              Divider().strokeWidth(0.5).color(p.divider).margin({ left: 14 })
               Button({ type: ButtonType.Normal }) {
                 Row({ space: 10 }) {
                   Text(this.answer()?.choiceId ? $r('app.string.clarify_supplement') : $r('app.string.clarify_custom'))
@@ -304,7 +300,6 @@ export struct XopcClarificationWizard {
                 placeholder: this.answer()?.choiceId ? $r('app.string.clarify_supplement') : $r('app.string.clarify_placeholder'),
               }).constraintSize({ minHeight: 72, maxHeight: 132 }).width('100%').fontSize(14).fontColor(p.primaryText)
                 .backgroundColor(p.inputFill).borderRadius(12)
-                .border({ width: 1, color: (this.answer()?.text?.trim().length ?? 0) > 2000 ? p.danger : p.border })
                 .enabled(!this.locked())
                 .onChange((text: string): void => { this.update(this.answer()?.choiceId ?? '', text); })
               if ((this.answer()?.text?.trim().length ?? 0) >= 1600) {
@@ -331,7 +326,6 @@ export struct XopcClarificationWizard {
       if (this.questions().length > 1 || this.current()?.type !== 'single_choice'
         || this.expandedCustomId === this.current()?.id || !!this.answer()?.text
         || !!this.draft().pendingAction || this.submitting || this.complete()) {
-        Divider().strokeWidth(0.5).color(p.divider)
         Row({ space: 10 }) {
           if (this.questions().length > 1 && this.index() > 0) {
             Button({ type: ButtonType.Normal }) {
@@ -362,6 +356,5 @@ export struct XopcClarificationWizard {
         }.width('100%').padding({ left: 16, right: 16, top: 10, bottom: 10 })
       }
     }.width('100%').backgroundColor(p.surface).borderRadius(this.colors.corner(20))
-      .border({ width: 0.5, color: p.border })
   }
 }

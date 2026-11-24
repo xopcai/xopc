@@ -5,8 +5,6 @@ import { XopcClarification, XopcClarificationChoice, XopcClarificationCommand } 
 export interface ClarifyPalette {
   surface: ResourceColor;
   grouped: ResourceColor;
-  divider: ResourceColor;
-  border: ResourceColor;
   primaryText: ResourceColor;
   secondaryText: ResourceColor;
   tertiaryText: ResourceColor;
@@ -27,13 +25,13 @@ export function resolveClarifyPalette(colors: XopcThemeColors): ClarifyPalette {
   const dark = !colors.light;
   if (isDefault) {
     return dark ? {
-      surface: '#1E222A', grouped: '#262B35', divider: '#12FFFFFF', border: '#17FFFFFF',
+      surface: '#1E222A', grouped: '#262B35',
       primaryText: '#F3F5F8', secondaryText: '#9CA5B4', tertiaryText: '#6C7585',
       accent: '#3A6BFF', onAccent: '#FFFFFF', accentSoft: '#2E4C82FF', accentText: '#96B6FF',
       tonalFill: '#14FFFFFF', tonalText: '#E6EAF0', inputFill: '#161920',
       badgeAmberFill: '#29F59E0B', badgeAmberTint: '#FBBF24', danger: colors.danger,
     } : {
-      surface: '#FFFFFF', grouped: '#F5F6F8', divider: '#0F0F172A', border: '#140F172A',
+      surface: '#FFFFFF', grouped: '#F5F6F8',
       primaryText: '#111318', secondaryText: '#5F6672', tertiaryText: '#8E95A2',
       accent: '#3A6BFF', onAccent: '#FFFFFF', accentSoft: '#EDF3FF', accentText: '#2B5CE6',
       tonalFill: '#EFF1F5', tonalText: '#1D2129', inputFill: '#FFFFFF',
@@ -42,7 +40,6 @@ export function resolveClarifyPalette(colors: XopcThemeColors): ClarifyPalette {
   }
   return {
     surface: colors.panel, grouped: colors.grouped,
-    divider: dark ? '#14FFFFFF' : '#12000000', border: dark ? '#1AFFFFFF' : '#14000000',
     primaryText: colors.foreground, secondaryText: colors.secondary, tertiaryText: colors.tertiary,
     accent: colors.accent, onAccent: colors.onAccent, accentSoft: colors.accentSoft, accentText: colors.accent,
     tonalFill: colors.grouped, tonalText: colors.foreground, inputFill: colors.panel,
@@ -173,7 +170,6 @@ export struct XopcClarificationCard {
         .onClick((): void => { this.collapsed = false; })
     }.width('100%').padding({ left: 14, right: 12, top: 10, bottom: 10 })
       .backgroundColor(p.surface).borderRadius(this.colors.corner(18))
-      .border({ width: 0.5, color: p.border })
   }
 
   @Builder
@@ -211,14 +207,12 @@ export struct XopcClarificationCard {
             }.width('100%').padding({ left: 14, right: 14, top: 10, bottom: 10 }).alignItems(VerticalAlign.Top)
           }
           if (this.prompt.approval.impact) {
-            if (this.prompt.approval.target) { Divider().strokeWidth(0.5).color(p.divider).margin({ left: 14 }) }
             Row({ space: 10 }) {
               Text($r('app.string.clarify_impact')).fontSize(12).fontColor(p.tertiaryText).width(44)
               Text(this.prompt.approval.impact).fontSize(13).fontColor(p.primaryText).layoutWeight(1)
             }.width('100%').padding({ left: 14, right: 14, top: 10, bottom: 10 }).alignItems(VerticalAlign.Top)
           }
           if (this.prompt.approval.argumentsPreview) {
-            if (this.prompt.approval.target || this.prompt.approval.impact) { Divider().strokeWidth(0.5).color(p.divider).margin({ left: 14 }) }
             Button({ type: ButtonType.Normal }) {
               Row({ space: 10 }) {
                 Text($r('app.string.clarify_details')).fontSize(12).fontColor(p.tertiaryText).width(44)
@@ -256,7 +250,6 @@ export struct XopcClarificationCard {
           .onClick((): void => { this.send('answer', '', '', 'approve'); })
       }.width('100%')
     }.padding(16).width('100%').backgroundColor(p.surface).borderRadius(this.colors.corner(20))
-      .border({ width: 0.5, color: p.border })
   }
 
   @Builder
@@ -285,8 +278,7 @@ export struct XopcClarificationCard {
 
           if ((this.prompt.choiceDetails?.length ?? 0) > 0) {
             Column() {
-              ForEach(this.prompt.choiceDetails ?? [], (choice: XopcClarificationChoice, idx: number) => {
-                if (idx > 0) { Divider().strokeWidth(0.5).color(p.divider).margin({ left: 14 }) }
+              ForEach(this.prompt.choiceDetails ?? [], (choice: XopcClarificationChoice) => {
                 Button({ type: ButtonType.Normal }) {
                   Row({ space: 12 }) {
                     Column({ space: 2 }) {
@@ -308,8 +300,7 @@ export struct XopcClarificationCard {
                         Text('✓').fontSize(11).fontWeight(FontWeight.Bold).fontColor(p.onAccent)
                       }
                     }.width(20).height(20).borderRadius(10)
-                      .backgroundColor(this.selectedId === choice.id ? p.accent : Color.Transparent)
-                      .border({ width: this.selectedId === choice.id ? 0 : 1.5, color: p.tertiaryText })
+                      .backgroundColor(this.selectedId === choice.id ? p.accent : p.inputFill)
                       .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
                   }.width('100%').padding({ left: 14, right: 14, top: 12, bottom: 12 }).alignItems(VerticalAlign.Center)
                 }.width('100%').constraintSize({ minHeight: 48 })
@@ -323,7 +314,6 @@ export struct XopcClarificationCard {
                     }
                   })
               }, (choice: XopcClarificationChoice): string => choice.id)
-              Divider().strokeWidth(0.5).color(p.divider).margin({ left: 14 })
               Button({ type: ButtonType.Normal }) {
                 Row({ space: 10 }) {
                   Text(this.selectedId ? $r('app.string.clarify_supplement') : $r('app.string.clarify_custom'))
@@ -352,7 +342,6 @@ export struct XopcClarificationCard {
               TextArea({ text: this.draft, placeholder: this.selectedId ? $r('app.string.clarify_supplement') : $r('app.string.clarify_placeholder') })
                 .constraintSize({ minHeight: 72, maxHeight: 132 }).width('100%').fontSize(14).fontColor(p.primaryText)
                 .backgroundColor(p.inputFill).borderRadius(12)
-                .border({ width: 1, color: this.draft.trim().length > 8000 ? p.danger : p.border })
                 .enabled(!this.disabled())
                 .onChange((text: string): void => { this.draft = text; if (text) this.editing = true; })
               if (this.draft.trim().length >= 6400) {
@@ -367,7 +356,6 @@ export struct XopcClarificationCard {
       }.constraintSize({ maxHeight: 320 }).width('100%')
 
       if (this.editing || (this.prompt.choiceDetails?.length ?? 0) === 0 || this.submitting) {
-        Divider().strokeWidth(0.5).color(p.divider)
         Row() {
           Blank().layoutWeight(1)
           Button({ type: ButtonType.Normal }) {
@@ -380,6 +368,5 @@ export struct XopcClarificationCard {
         }.width('100%').padding({ left: 16, right: 16, top: 10, bottom: 10 })
       }
     }.width('100%').backgroundColor(p.surface).borderRadius(this.colors.corner(20))
-      .border({ width: 0.5, color: p.border })
   }
 }
