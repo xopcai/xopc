@@ -36,7 +36,7 @@ describe('starter conductor Agent', () => {
     expect(catalog.get('conductor')).toMatchObject({
       enabled: true, provisioningState: 'ready', profile: { name: 'Conductor' },
       toolAllowlist: [
-        'xopc_use', 'tool_manual', 'session_recall',
+        'xopc_use', 'tool_manual', 'session_recall', 'session_search',
         'knowledge_search', 'knowledge_get', 'user_context_search', 'user_context_get',
         'find', 'grep', 'read_file',
       ],
@@ -59,7 +59,7 @@ describe('starter conductor Agent', () => {
     expect(catalog.get('conductor')?.profile).toEqual({ name: '我的指挥家', instructions: '我的规则' });
     expect(catalog.get('conductor')).toMatchObject({
       toolAllowlist: [
-        'xopc_use', 'tool_manual', 'session_recall',
+        'xopc_use', 'tool_manual', 'session_recall', 'session_search',
         'knowledge_search', 'knowledge_get', 'user_context_search', 'user_context_get',
         'find', 'grep', 'read_file',
       ],

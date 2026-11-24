@@ -379,7 +379,7 @@ describe('personal Agent identity', () => {
     expect(direct).not.toContain('Joyce');
     expect(direct).toContain('personal_task(command="submit")');
     expect(direct).toContain('requiredSkills=[canonicalName]');
-    expect(direct).toContain('preserve that choice');
+    expect(direct).toMatch(/When the user names a specialist Agent[^\n]*pass its ID in requirements\.requestedAgentId/);
     expect(direct).toContain('The background Task Router selects and starts the executor');
     expect(direct).not.toContain('call delegate_task');
     expect(direct).toContain('Do not invent extra analyses');
