@@ -317,6 +317,12 @@ const STOCK_PERSONAL_TEMPLATE_DIGESTS = new Map([
     '10a4e3df43c3fe19568eaaf7b1f3f96a20182501c8a19f7c1ffe1cbb257d376f',
     'b73357279e8f5d21366a937a7a49d7e9322f5dd7f14a085241683251387657c6',
   ]],
+  ['soul.md', [
+    'a89637ce4be51f9b2ca847df3fe81ef9bfe3ddfb1a233733d4c4a42d31cc00f6',
+    'ff1fe8358a29ad774bd89fe6a2d5a8418cb0982b45e7d8e16b0088b043ba8b37',
+    'c88eca42a33528b880fdc44baefa02f66b5d76ccec69c27e23d537d3f86a0160',
+    '36ea5d9157979ce51cac0730f4fc4402bbe6944ea8f8e30cfca2ea316e7b7e40',
+  ]],
   ['tools.md', ['95b55da7511ac7ee54efe6927d8ceb131919f897d45653ff9bb30b04e9d9592b']],
 ]);
 

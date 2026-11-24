@@ -492,32 +492,30 @@ describe('conversation communication preferences', () => {
   });
 
   it.each(['../../context/workspace-templates', '../../../../docs/reference/templates'])('filters only the unmodified profile bodies from %s', (templateDir) => {
-    const stockFiles = ['AGENTS.md', 'TOOLS.md'].map(name => ({
+    const stockFiles = ['AGENTS.md', 'SOUL.md', 'TOOLS.md'].map(name => ({
       path: `profile/${name}`,
       content: stripFrontMatter(readFileSync(new URL(`${templateDir}/${name}`, import.meta.url), 'utf8')).trimEnd(),
     }));
     const options = { promptRole: 'personal' as const, toolNames: ['personal_task', 'read_file'] };
-    const stockPrompt = buildSystemPrompt('/ws', {
-      ...options,
-      contextFiles: [
-        ...stockFiles.map(file => ({ ...file, content: `${file.content.replace(/\r?\n/g, '\r\n')}\r\n\r\n` })),
-        { path: 'profile/SOUL.md', content: '# SOUL.md\nBe warm.' },
-      ],
-    });
-    expect(stockPrompt).toContain('## Tone & Style');
-    expect(stockPrompt).not.toContain('## Human Collaboration');
-    expect(stockPrompt).not.toContain('192.168.1.100');
-    expect(stockPrompt).not.toContain('Prefer narrow file edits over broad rewrites.');
-    expect(stockPrompt).toContain('Be warm.');
-
+    const stockContext = stockFiles.map(file => ({ ...file, content: `${file.content.replace(/\r?\n/g, '\r\n')}\r\n\r\n` }));
     const customized = stockFiles.map((file, index) => ({
       ...file,
       content: file.content.replace(/\n([^\n]+)$/, `\n\n- Local rule ${index + 1}.\n\n$1`),
     }));
-    const customPrompt = buildSystemPrompt('/ws', { ...options, contextFiles: customized });
-    expect(customPrompt).toContain('Local rule 1.');
-    expect(customPrompt).toContain('Local rule 2.');
+    for (const promptMode of ['full', 'voice'] as const) {
+      const stockPrompt = buildSystemPrompt('/ws', { ...options, promptMode, contextFiles: stockContext });
+      expect(stockPrompt).toBe(buildSystemPrompt('/ws', { ...options, promptMode }));
+      expect(stockPrompt).toContain('### Persona, Ownership & Writing Style');
+      expect(stockPrompt).not.toContain('# Project Context');
+
+      const customPrompt = buildSystemPrompt('/ws', { ...options, promptMode, contextFiles: customized });
+      expect(customPrompt).toContain('## profile/SOUL.md');
+      expect(customPrompt).toContain('Local rule 1.');
+      expect(customPrompt).toContain('Local rule 2.');
+      expect(customPrompt).toContain('Local rule 3.');
+    }
     const executorPrompt = buildSystemPrompt('/ws', { contextFiles: stockFiles });
+    expect(executorPrompt).toContain('## profile/SOUL.md');
     expect(executorPrompt).toContain('192.168.1.100');
     expect(executorPrompt).toContain('Prefer narrow file edits over broad rewrites.');
   });
