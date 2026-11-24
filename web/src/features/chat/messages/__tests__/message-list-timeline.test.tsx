@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
-import { SEEDANCE_VIDEO_MODEL_REF, type MusicGenerationSession, type VideoGenerationDraft, type VideoGenerationJob, type VideoGenerationSession } from '@xopcai/gateway-contract';
+import { SEEDANCE_VIDEO_MODEL_REF, type ImageGenerationSession, type MusicGenerationSession, type VideoGenerationDraft, type VideoGenerationJob, type VideoGenerationSession } from '@xopcai/gateway-contract';
 import { act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message } from '../messages.types';
+import { useChatImageGeneration } from '../../image/chat-image-generation';
 import { useChatMusicGeneration } from '../../music/chat-music-generation';
 import { useChatVideoGeneration } from '../../video/chat-video-generation';
 
-const mediaCache = vi.hoisted(() => ({ data: undefined as MusicGenerationSession | VideoGenerationSession | undefined, mutate: vi.fn() }));
+const mediaCache = vi.hoisted(() => ({ data: undefined as ImageGenerationSession | MusicGenerationSession | VideoGenerationSession | undefined, mutate: vi.fn() }));
 vi.mock('swr', () => ({ default: () => mediaCache }));
 
 vi.mock('@/features/chat/rendering/connected-message-bubble', () => ({
@@ -27,7 +28,7 @@ describe('conversation timeline', () => {
     vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   });
-  afterEach(() => { act(() => root.unmount()); container.remove(); mediaCache.data = undefined; vi.restoreAllMocks(); });
+  afterEach(() => { act(() => root.unmount()); container.remove(); mediaCache.data = undefined; vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
   it('interleaves results by time while retaining transcript action indices', () => {
     const retry = vi.fn();
@@ -144,8 +145,48 @@ describe('conversation timeline', () => {
     expect(order()).toEqual(updatedOrder);
 
     renderTimeline(<VideoConversation data={{ ...session, draft: undefined, jobs: [{ ...job, state: 'completed' }] }} />);
-    expect(container.querySelector('[data-chat-timeline-entry] video')).toBeTruthy();
+    expect(container.querySelector('[data-chat-timeline-entry] video')?.hasAttribute('controls')).toBe(false);
+    act(() => container.querySelector<HTMLButtonElement>('button[aria-label="预览 视频"]')!.click());
+    const videoPreview = document.querySelector('[role="dialog"]')!;
+    expect(videoPreview.querySelector('video')).toBeTruthy();
+    expect(videoPreview.querySelector('a[download]')?.getAttribute('aria-label')).toBe('下载视频');
+    act(() => videoPreview.querySelector<HTMLButtonElement>('button[aria-label="关闭预览"]')!.click());
     expect(order()).toEqual(updatedOrder);
+  });
+
+  it('opens the original images in a gallery without embedding the full images in the timeline', async () => {
+    const fetchImage = vi.fn(async () => new Response(new Blob(['image'], { type: 'image/png' })));
+    const createObjectURL = vi.fn()
+      .mockReturnValueOnce('blob:cover')
+      .mockReturnValueOnce('blob:second-image')
+      .mockReturnValueOnce('blob:gallery-second-image');
+    vi.stubGlobal('fetch', fetchImage);
+    vi.stubGlobal('URL', class extends URL {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = vi.fn();
+    });
+    mediaCache.data = { configured: true, jobs: [{
+      id: 'image', workId: 'image', parentId: null, versionNumber: 1, title: 'Coast', prompt: 'Sunset',
+      modelRef: null, aspectRatio: null, resolution: null, quality: null, count: 2, state: 'completed', error: null, createdAt: 20,
+      images: [0, 1].map(index => ({ index, mediaUri: `media://outbound/image-${index}.png`, mimeType: 'image/png' })),
+    }] };
+    const list: Message[] = [];
+    function ImageConversation() {
+      const entries = useChatImageGeneration('conversation', 'en', false, list);
+      return <MessageList messages={list} timelineEntries={entries}
+        streaming={false} progress={null} reasoningLevel="off" registerListContentRef={() => {}} />;
+    }
+    await act(async () => { renderTimeline(<ImageConversation />); });
+    expect(container.querySelector('article img')?.getAttribute('src')).toBe('blob:cover');
+    expect(fetchImage).toHaveBeenCalledTimes(2);
+    act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Preview Coast · 1 / 2"]')!.click());
+    const gallery = document.querySelector('[role="dialog"]')!;
+    expect(gallery.querySelector('img')?.getAttribute('src')).toBe('blob:cover');
+    const next = gallery.querySelector<HTMLButtonElement>('button[aria-label="Next image"]')!;
+    await act(async () => { next.click(); });
+    expect(gallery.querySelector('[role="status"]')?.textContent).toBe('2 / 2');
+    expect(gallery.querySelector('img')?.getAttribute('src')).toBe('blob:gallery-second-image');
+    expect(gallery.querySelector('a[download]')?.getAttribute('href')).toContain('/images/1?download=1');
   });
 
   it('keeps music playback and download visible while showing lyrics and creation details on demand', () => {
@@ -163,6 +204,11 @@ describe('conversation timeline', () => {
     renderTimeline(<MusicConversation />);
     const card = container.querySelector('article')!;
     const player = card.querySelector('audio');
+    act(() => card.querySelector<HTMLButtonElement>('button[aria-label="预览 Song"]')!.click());
+    const preview = document.querySelector('[role="dialog"]')!;
+    expect(preview.querySelector('button[aria-label="播放"]')).toBeTruthy();
+    expect(document.querySelectorAll('audio')).toHaveLength(1);
+    act(() => preview.querySelector<HTMLButtonElement>('button[aria-label="关闭预览"]')!.click());
     const download = card.querySelector('a[download]');
     const lyrics = card.querySelector<HTMLButtonElement>('[role="group"] button[aria-controls]')!;
     const details = card.querySelector<HTMLButtonElement>('button[aria-label="创作详情"]')!;

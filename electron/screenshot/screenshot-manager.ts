@@ -16,9 +16,11 @@ import {
 } from 'electron';
 
 import { writeTextAtomicSync } from '../../src/infra/write-file-atomic.js';
+import { createLogger } from '../../src/utils/logger.js';
 import { captureDesktopScreenshot } from '../desktop-screenshot.js';
 import type { DesktopGatewayTarget } from '../gateway/desktop-transport.js';
 import { getElectronShellLanguage } from '../ipc/system-settings-ipc.js';
+import { loadPrivateRendererDocument } from '../private-renderer-document.js';
 
 import {
   captureDesktopFrames,
@@ -45,6 +47,7 @@ import type {
 
 const PREFS_FILE = 'screenshot-prefs.json';
 const MAX_HISTORY = 10;
+const log = createLogger('Screenshot');
 
 interface ActiveOverlaySession {
   sessionId: string;
@@ -526,7 +529,7 @@ export class ScreenshotManager {
               }
             }
           });
-          await win.loadFile(join(import.meta.dirname, '../preload/screenshot-overlay.html'));
+          await loadPrivateRendererDocument(win, 'screenshot-overlay');
           if (!win.isDestroyed() && this.active === session) {
             const payload: ScreenshotOverlayPayload = {
               sessionId,
@@ -540,6 +543,7 @@ export class ScreenshotManager {
               language,
               platform: process.platform,
               isWayland: bundle.isWayland,
+              imageBounds: frame.imageBounds,
               initialSelection: frame.initialSelection,
             };
             win.webContents.send('screenshot-overlay:session', payload);
@@ -549,11 +553,14 @@ export class ScreenshotManager {
 
       return { ok: true };
     } catch (error) {
+      const aborted = controller.signal.aborted;
+      this.closeActiveSession(false);
       if (shouldHideMain && wasMainVisible && mainWin && !mainWin.isDestroyed()) {
         mainWin.show();
       }
-      if (!controller.signal.aborted) {
-        console.warn('[Screenshot] Capture failed', error);
+      if (!aborted) {
+        const message = error instanceof Error ? error.message : String(error);
+        log.warn({ err: error }, `Desktop screenshot failed: ${message}`);
         const zh = this.language() === 'zh';
         void dialog.showMessageBox({
           type: 'error',
@@ -854,7 +861,7 @@ export class ScreenshotManager {
     rect: ScreenshotRect,
   ): Promise<ScrollCaptureProgress | null> {
     const overlayEntry = session.overlays.get(displayId);
-    if (!overlayEntry) return null;
+    if (!overlayEntry || overlayEntry.frame.imageBounds || overlayEntry.frame.initialSelection) return null;
 
     // Close other monitor overlays and make this monitor overlay pass mouse wheel events through!
     for (const [id, entry] of session.overlays) {

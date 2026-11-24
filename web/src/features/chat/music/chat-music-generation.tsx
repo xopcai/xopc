@@ -1,10 +1,12 @@
 import { SpaceGeneratedMediaLink } from '@/features/space/space-artifact-link';
 import type { MusicGenerationJob, MusicGenerationSession, MusicJobErrorCode } from '@xopcai/gateway-contract';
-import { Ellipsis, Music2 } from 'lucide-react';
+import { Ellipsis, Maximize2, Music2 } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { GenerationPlaceholder } from '@/features/chat/generation-placeholder';
+import { MediaGenerationPreview } from '@/features/chat/media-generation-card';
 import { findMediaGenerationReplyIndexes } from '@/features/chat/media-generation-replies';
 import type { ChatTimelineEntry } from '@/features/chat/messages/message-list';
 import type { Message } from '@/features/chat/messages/messages.types';
@@ -109,27 +111,42 @@ function MusicJobCard({ job, audioUrl, language }: { job: MusicGenerationJob; au
     : error ?? (failed ? errorLabels[language].provider_failed : undefined);
   const togglePanel = (panel: 'lyrics' | 'details') => setOpenPanel(current => current === panel ? null : panel);
 
+  const heading = <>
+    <span className="relative grid size-11 shrink-0 place-items-center overflow-hidden rounded-lg border border-edge bg-surface-inset text-accent-fg" aria-hidden>
+      <span className="absolute size-9 rounded-full border border-current opacity-15" />
+      <span className="absolute size-6 rounded-full border border-current opacity-20" />
+      <Music2 size={18} className="relative" />
+    </span>
+    <span className="min-w-0 flex-1">
+      <span className="block truncate text-base leading-tight font-semibold tracking-tight text-fg">{job.title}</span>
+      <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
+        <span>{m[job.mode]} · {version}</span>
+        {!completed && <span role="status" className="font-medium">{m.status[job.state]}</span>}
+      </span>
+    </span>
+  </>;
+  const headerClass = 'flex min-w-0 flex-1 items-center gap-2.5 text-start';
+
   return <article className="flex w-full min-w-0 max-w-[26rem] flex-col gap-2 rounded-xl border border-edge bg-surface-panel p-3
     [background-image:radial-gradient(ellipse_at_top_left,var(--color-accent-soft),transparent_72%)] sm:p-3.5">
-    <div className="flex items-center gap-2.5">
-      <div className="relative grid size-11 shrink-0 place-items-center overflow-hidden rounded-lg border border-edge bg-surface-inset text-accent-fg" aria-hidden>
-        <span className="absolute size-9 rounded-full border border-current opacity-15" />
-        <span className="absolute size-6 rounded-full border border-current opacity-20" />
-        <Music2 size={18} className="relative" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <h3 className="wrap-anywhere text-lg leading-tight font-semibold tracking-tight text-fg">{job.title}</h3>
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
-          <span>{m[job.mode]} · {version}</span>
-          {!completed && <span role="status" className="font-medium">{m.status[job.state]}</span>}
-        </p>
-      </div>
+    <div className="flex items-center gap-2">
+      {completed ? <MediaGenerationPreview kind="music" language={language} title={job.title}
+        trigger={<button type="button" aria-label={language === 'zh' ? `预览 ${job.title}` : `Preview ${job.title}`}
+          className={`${headerClass} rounded-lg hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-accent`}>
+          {heading}<Maximize2 size={14} className="shrink-0 text-fg-muted" aria-hidden />
+        </button>}>
+        <MusicGenerationPreview job={job} audioUrl={audioUrl} language={language} />
+      </MediaGenerationPreview> : <div className={headerClass}>{heading}</div>}
       <Button variant="ghost" className="size-11 shrink-0 rounded-full p-0 aria-expanded:bg-surface-active aria-expanded:text-fg"
         aria-label={m.details} title={m.details} aria-controls={`${id}-details`} aria-expanded={openPanel === 'details'}
         onClick={() => togglePanel('details')}>
         <Ellipsis size={20} aria-hidden />
       </Button>
     </div>
+    {!completed && !failed && job.state !== 'submission_unknown' && (
+      <GenerationPlaceholder kind="music" waiting={job.state === 'queued' || job.state === 'submitted'}
+        paused={job.errorCode === 'credentials_missing'} className="h-12" />
+    )}
     {message && <p className={failed ? 'text-xs text-danger' : 'text-xs text-fg-muted'}>{message}</p>}
     {completed && <SpaceGeneratedMediaLink mediaId={`music-${job.id}.mp3`} title={job.title} zh={language === 'zh'} />}
     {completed && <MusicPlayer key={audioUrl} src={audioUrl} title={job.title} durationMs={job.durationMs}
@@ -148,4 +165,18 @@ function MusicJobCard({ job, audioUrl, language }: { job: MusicGenerationJob; au
       </dl>}
     </div>
   </article>;
+}
+
+function MusicGenerationPreview({ job, audioUrl, language }: { job: MusicGenerationJob; audioUrl: string; language: Language }) {
+  const [lyricsOpen, setLyricsOpen] = useState(false);
+  return <div className="p-4">
+    <div className="mb-4 grid h-24 place-items-center rounded-xl bg-accent-soft" aria-hidden>
+      <div className="grid size-14 place-items-center rounded-full border border-accent/15 bg-surface-panel text-accent-fg">
+        <Music2 size={24} />
+      </div>
+    </div>
+    <MusicPlayer src={audioUrl} title={job.title} durationMs={job.durationMs} inPreview
+      lyrics={job.mode === 'song' ? job.lyrics : null} lyricsOpen={lyricsOpen}
+      onToggleLyrics={() => setLyricsOpen(current => !current)} language={language} />
+  </div>;
 }

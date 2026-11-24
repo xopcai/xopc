@@ -261,7 +261,9 @@ struct GeneratedMediaRow: View {
                     .accessibilityLabel(isMusicPlaying ? "暂停" : "播放")
                     .accessibilityIdentifier("generated-\(card.kind.rawValue)-start-\(card.id)")
                 } else if card.active {
-                    ProgressView().controlSize(.small).accessibilityHidden(true)
+                    GeneratedMediaActivity(kind: card.kind,
+                                           waiting: card.item.state == "queued" || card.item.state == "submitted",
+                                           paused: card.item.error != nil)
                 }
             }
             if card.isDraft {
@@ -324,6 +326,49 @@ struct GeneratedMediaRow: View {
             Spacer(minLength: 0)
         }
         .contentShape(.rect)
+    }
+}
+
+private struct GeneratedMediaActivity: View {
+    @Environment(\.mobileTheme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    let kind: GeneratedMediaCard.Kind
+    let waiting: Bool
+    let paused: Bool
+    private static let waveform: [Double] = [6, 10, 16, 22, 17, 12, 7]
+
+    var body: some View {
+        let animate = !paused && !reduceMotion && scenePhase == .active
+        let period = (kind == .music ? 1.65 : 3.0) * (waiting ? 1.5 : 1)
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animate)) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period)
+            let phase = animate ? time / period : nil
+            Canvas { context, size in
+                if kind == .music {
+                    for (index, height) in Self.waveform.enumerated() {
+                        let wave = phase.map { (1 - cos($0 * 2 * .pi - Double(index) * 0.8)) / 2 } ?? 0.68
+                        let barHeight = height * (0.44 + 0.56 * wave)
+                        let bar = CGRect(x: size.width / 2 + Double(index - 3) * 6 - 1.25,
+                                         y: (size.height - barHeight) / 2, width: 2.5, height: barHeight)
+                        context.fill(Path(roundedRect: bar, cornerRadius: 1.25),
+                                     with: .color(theme.action.opacity(0.34 + 0.46 * wave)))
+                    }
+                } else {
+                    for index in 0 ..< 3 {
+                        let light = phase.map { (1 + cos(($0 - Double(index) / 3) * 2 * .pi)) / 2 }
+                            ?? (index == 1 ? 1 : 0)
+                        let frame = CGRect(x: (size.width - 13) / 2 + Double(index - 1) * 16,
+                                           y: (size.height - 10) / 2, width: 13, height: 10)
+                        context.fill(Path(roundedRect: frame, cornerRadius: 2),
+                                     with: .color(theme.action.opacity(0.14 + 0.47 * light)))
+                    }
+                }
+            }
+        }
+        .frame(width: 64, height: 34)
+        .background(theme.action.opacity(0.07), in: .rect(cornerRadius: theme.corner(8)))
+        .accessibilityHidden(true)
     }
 }
 

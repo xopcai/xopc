@@ -9,6 +9,9 @@ import { CuaComputerDriver } from '../../electron/computer/cua-driver.js';
 import { resolveLocalComputerDriver } from '../../electron/computer/local-driver.js';
 import type { ComputerPreviewAuthority } from '../../src/computer/broker.js';
 import { registerComputerPreviewIpc } from '../../electron/computer/preview-ipc.js';
+import { registerPrivateRendererScheme } from '../../electron/private-renderer-document.js';
+
+registerPrivateRendererScheme();
 
 async function main() {
   app.on('window-all-closed', () => {});

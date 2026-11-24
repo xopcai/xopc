@@ -62,7 +62,7 @@ function activate(entry: MediaEntry): void {
 
 function createMedia(source: GeneratedMediaSource): MediaEntry {
   const element = document.createElement(source.kind);
-  element.preload = source.kind === 'audio' ? 'metadata' : 'none';
+  element.preload = 'metadata';
   element.setAttribute('aria-label', source.title);
   if (element instanceof HTMLVideoElement) {
     element.controls = true;

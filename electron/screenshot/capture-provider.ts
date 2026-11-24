@@ -8,6 +8,8 @@ import { promisify } from 'node:util';
 
 import { app, desktopCapturer, nativeImage, screen, type Display, type NativeImage } from 'electron';
 
+import { createLogger } from '../../src/utils/logger.js';
+
 import { openMacosPrivacyPane } from '../ipc/privacy-deep-links.js';
 import { rawMediaAccessStatus } from '../ipc/shell-permission-gates.js';
 import { resolveVoiceInputHotkeyHelperPath } from '../voice-input-hotkey.js';
@@ -26,6 +28,7 @@ import type { DisplayCaptureFrame, ScreenshotOcrBlock, ScreenshotOcrResponse, Sc
 import { queryWindowsSnapList, runWindowsNativeOcr, sendWindowsWheelScroll } from './windows-helper.js';
 
 const execFileAsync = promisify(execFile);
+const log = createLogger('Screenshot');
 
 export interface DesktopCaptureBundle {
   status: 'ok' | 'cancelled' | 'permission_denied';
@@ -241,6 +244,31 @@ function sliceCompositeImageAcrossDisplays(
   return frames;
 }
 
+function linuxFullScreenFrames(image: NativeImage, displays: readonly Display[], wayland: boolean): DisplayCaptureFrame[] {
+  if (!wayland || displays.length < 2) return sliceCompositeImageAcrossDisplays(image, displays);
+
+  // Wayland chooses the output for full-screen windows. Fit the whole image on an output instead of stacking overlays there.
+  const display = screen.getPrimaryDisplay();
+  const pixels = image.getSize();
+  const availableWidth = Math.min(...displays.map(({ bounds }) => bounds.width));
+  const availableHeight = Math.min(...displays.map(({ bounds }) => bounds.height));
+  const scale = Math.min(availableWidth / pixels.width, availableHeight / pixels.height);
+  return [{
+    displayId: display.id,
+    bounds: { ...display.bounds },
+    scaleFactor: display.scaleFactor,
+    pixelWidth: pixels.width,
+    pixelHeight: pixels.height,
+    pngBase64: image.toPNG().toString('base64'),
+    imageBounds: {
+      x: 0,
+      y: 0,
+      width: Math.max(1, Math.round(pixels.width * scale)),
+      height: Math.max(1, Math.round(pixels.height * scale)),
+    },
+  }];
+}
+
 export async function captureDesktopFrames(options: {
   excludePid?: number;
   signal?: AbortSignal;
@@ -292,7 +320,11 @@ export async function captureDesktopFrames(options: {
     const metrics = displays.map((d) => ({ bounds: d.bounds, scaleFactor: d.scaleFactor }));
     const [windows, capturerMap] = await Promise.all([
       queryWindowsSnapList(excludePid, metrics, signal),
-      captureViaDesktopCapturer(displays),
+      captureViaDesktopCapturer(displays).catch((err: unknown) => {
+        signal?.throwIfAborted();
+        log.warn({ err }, 'Opening Snipping Tool after Windows screen capture failed');
+        return new Map<number, NativeImage>();
+      }),
     ]);
     signal?.throwIfAborted();
 
@@ -368,7 +400,7 @@ export async function captureDesktopFrames(options: {
       if (!img.isEmpty()) {
         return {
           status: 'ok',
-          frames: sliceCompositeImageAcrossDisplays(img, displays),
+          frames: linuxFullScreenFrames(img, displays, wayland),
           windows: [],
           isWayland: wayland,
         };
@@ -385,7 +417,7 @@ export async function captureDesktopFrames(options: {
       if (!img.isEmpty()) {
         return {
           status: 'ok',
-          frames: sliceCompositeImageAcrossDisplays(img, displays),
+          frames: linuxFullScreenFrames(img, displays, wayland),
           windows: [],
           isWayland: wayland,
         };

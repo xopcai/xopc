@@ -1,0 +1,185 @@
+.generation-placeholder {
+  --generation-tint: var(--color-accent-fg);
+  --generation-line: color-mix(in srgb, var(--generation-tint) 15%, var(--color-edge));
+  --generation-tile: color-mix(in srgb, var(--generation-tint) 8%, var(--color-surface-panel));
+  --generation-cycle: 3.6s;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--generation-tint) 68%, var(--color-fg-muted));
+  background: radial-gradient(ellipse at 50% 46%, var(--color-accent-soft), transparent 76%), var(--color-surface-inset);
+  box-shadow: inset 0 0 0 1px var(--color-edge);
+}
+
+.generation-placeholder::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: radial-gradient(circle, currentColor 0.75px, transparent 1px) center / 12px 12px;
+  mask-image: radial-gradient(ellipse at center, #000 10%, transparent 78%);
+  opacity: 0.14;
+  content: '';
+}
+
+.generation-placeholder::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 25%, color-mix(in srgb, var(--generation-tint) 15%, transparent) 50%, transparent 75%);
+  transform: translateX(-100%);
+  animation: generation-sweep var(--generation-cycle) ease-in-out infinite;
+  content: '';
+}
+
+.generation-placeholder[data-waiting] {
+  --generation-cycle: 5.4s;
+}
+
+.generation-image-focus {
+  display: grid;
+  width: min(60%, 4.75rem);
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 32%;
+  border: 1px solid var(--generation-line);
+}
+
+.generation-image-frame {
+  display: grid;
+  width: 68%;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1px solid var(--generation-line);
+  border-radius: 28%;
+  background: var(--generation-tile);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--generation-tint) 9%, transparent);
+  animation: generation-breathe var(--generation-cycle) ease-in-out infinite;
+}
+
+.generation-waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(2px, 0.65vw, 4px);
+  width: 72%;
+}
+
+.generation-waveform span {
+  width: 3px;
+  height: var(--bar-height);
+  border-radius: 999px;
+  background-color: currentColor;
+  opacity: 0.64;
+  animation: generation-wave 1.65s ease-in-out infinite alternate;
+  animation-delay: calc(var(--phase) * -155ms);
+}
+
+.generation-filmstrip {
+  display: grid;
+  width: min(70%, 13rem);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: clamp(4px, 1.4vw, 8px);
+}
+
+.generation-filmstrip span {
+  display: grid;
+  aspect-ratio: 16 / 10;
+  place-items: center;
+  border: 1px solid var(--generation-line);
+  border-radius: var(--radius-md);
+  background: var(--generation-tile);
+  opacity: 0.58;
+  animation: generation-frame var(--generation-cycle) ease-in-out infinite;
+  animation-delay: calc(var(--phase) * var(--generation-cycle) / 3 - var(--generation-cycle));
+}
+
+.generation-filmstrip [data-frame='current'] {
+  border-color: color-mix(in srgb, var(--generation-tint) 28%, var(--color-edge));
+  opacity: 1;
+}
+
+.generation-preview-window {
+  width: min(62%, 10rem);
+  overflow: hidden;
+  border: 1px solid var(--generation-line);
+  border-radius: var(--radius-lg);
+  background: var(--generation-tile);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--generation-tint) 10%, transparent);
+  animation: generation-breathe var(--generation-cycle) ease-in-out infinite;
+}
+
+.generation-preview-toolbar {
+  display: flex;
+  gap: 3px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--generation-line);
+}
+
+.generation-preview-toolbar i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+.generation-preview-body {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+}
+
+.generation-preview-body span {
+  width: 78%;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--generation-line);
+}
+
+.generation-preview-body span:first-child {
+  width: 100%;
+  height: 22px;
+  border-radius: var(--radius-sm);
+}
+
+.generation-preview-body span:last-child {
+  width: 48%;
+}
+
+.generation-placeholder[data-waiting] .generation-waveform span {
+  animation-duration: 2.65s;
+}
+
+@keyframes generation-sweep {
+  0%, 12% { transform: translateX(-100%); }
+  86%, 100% { transform: translateX(100%); }
+}
+
+@keyframes generation-breathe {
+  0%, 100% { transform: scale(0.98); }
+  50% { transform: scale(1.035); }
+}
+
+@keyframes generation-wave {
+  0% { transform: scaleY(0.42); opacity: 0.38; }
+  75%, 100% { transform: scaleY(1); opacity: 0.78; }
+}
+
+@keyframes generation-frame {
+  0%, 55%, 100% { opacity: 0.55; }
+  24% { opacity: 1; }
+}
+
+.generation-placeholder[data-paused]::after,
+.generation-placeholder[data-paused] * {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-placeholder::after,
+  .generation-placeholder * {
+    animation: none;
+  }
+}

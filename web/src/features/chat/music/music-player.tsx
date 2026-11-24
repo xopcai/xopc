@@ -17,7 +17,7 @@ const copy = {
   },
 };
 
-export function MusicPlayer({ src, title, durationMs, lyrics, lyricsOpen, onToggleLyrics, language }: {
+export function MusicPlayer({ src, title, durationMs, lyrics, lyricsOpen, onToggleLyrics, language, inPreview = false }: {
   src: string;
   title: string;
   durationMs: number | null;
@@ -25,6 +25,7 @@ export function MusicPlayer({ src, title, durationMs, lyrics, lyricsOpen, onTogg
   lyricsOpen: boolean;
   onToggleLyrics: () => void;
   language: keyof typeof copy;
+  inPreview?: boolean;
 }) {
   const m = copy[language];
   const id = useId();
@@ -77,7 +78,7 @@ export function MusicPlayer({ src, title, durationMs, lyrics, lyricsOpen, onTogg
             </Popover.Trigger>
             <Popover.Portal>
               <Popover.Content side="top" align="end" sideOffset={6} aria-label={m.volume}
-                className="z-50 flex items-center gap-2 rounded-xl border border-edge bg-surface-overlay p-2 shadow-float">
+                className={cn('flex items-center gap-2 rounded-xl border border-edge bg-surface-overlay p-2 shadow-float', inPreview ? 'z-[82]' : 'z-50')}>
                 <Button variant="ghost" className="size-11 rounded-full p-0" aria-label={muted ? m.unmute : m.mute}
                   onClick={() => { if (element) element.muted = !element.muted; }}>
                   <VolumeIcon size={17} aria-hidden />

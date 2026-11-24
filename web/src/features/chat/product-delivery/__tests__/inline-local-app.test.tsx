@@ -89,9 +89,11 @@ describe('InlineLocalApp', () => {
     const iframe = container.querySelector('iframe');
     expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-forms');
     expect(iframe?.getAttribute('src')).toContain(`/api/local-apps/preview/token/snapshots/${'a'.repeat(64)}/ui/index.html`);
+    expect(container.querySelector('[data-generation-placeholder="preview"]')).not.toBeNull();
 
     act(() => onRuntimeMessage({ source: 'xopc-local-app-preview', version: 1, type: 'ready', detail: {} }));
     expect(container.textContent).toContain('Running');
+    expect(container.querySelector('[data-generation-placeholder="preview"]')).toBeNull();
     expect(container.querySelector('[data-inline-local-app="app-1"]')).not.toBeNull();
   });
 
@@ -103,6 +105,7 @@ describe('InlineLocalApp', () => {
     }));
     expect(container.textContent).toContain('Runtime error');
     expect(container.textContent).toContain('Widget crashed');
+    expect(container.querySelector('[data-generation-placeholder="preview"]')).toBeNull();
 
     await act(async () => {
       const button = [...container.querySelectorAll('button')].find((item) => item.textContent?.includes('Ask Coder'));
@@ -151,6 +154,7 @@ describe('InlineLocalApp', () => {
 
     expect(mocks.getLocalAppSnapshot).not.toHaveBeenCalled();
     expect(container.querySelector('iframe')).toBeNull();
+    expect(container.querySelector('[data-generation-placeholder="preview"]')).toBeNull();
 
     await act(async () => {
       const button = [...container.querySelectorAll('button')].find((item) => item.textContent?.includes('Load interactive'));

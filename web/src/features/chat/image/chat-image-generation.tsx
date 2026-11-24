@@ -1,13 +1,16 @@
-import type { ImageGenerationJob, ImageGenerationSession, ImageJobErrorCode } from '@xopcai/gateway-contract';
-import { Download, Ellipsis, ImageIcon } from 'lucide-react';
+import type { ImageGenerationArtifact, ImageGenerationJob, ImageGenerationSession, ImageJobErrorCode } from '@xopcai/gateway-contract';
+import { ChevronLeft, ChevronRight, Download, Ellipsis, ImageIcon } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { GenerationPlaceholder } from '@/features/chat/generation-placeholder';
+import { MediaGenerationPreview } from '@/features/chat/media-generation-card';
 import { findMediaGenerationReplyIndexes } from '@/features/chat/media-generation-replies';
 import type { ChatTimelineEntry } from '@/features/chat/messages/message-list';
 import type { Message } from '@/features/chat/messages/messages.types';
+import { cn } from '@/lib/cn';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -115,81 +118,117 @@ export function useChatImageGeneration(
   }, [data, language, messages, url]);
 }
 
-function AuthenticatedImageTile({
-  src,
-  alt,
-  downloadLabel,
-  loadFailedLabel,
-}: {
-  src: string;
-  alt: string;
-  downloadLabel: string;
-  loadFailedLabel: string;
-}) {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-
+function useGeneratedImage(src: string | undefined) {
+  const [result, setResult] = useState<{ src: string; url: string | null }>();
   useEffect(() => {
-    let active = true;
-    let objectUrl: string | null = null;
-    setFailed(false);
-    apiFetch(src)
-      .then(async res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.blob();
-      })
-      .then(blob => {
-        if (!active) return;
-        objectUrl = URL.createObjectURL(blob);
-        setBlobUrl(objectUrl);
-      })
-      .catch(() => {
-        if (active) setFailed(true);
-      });
+    if (!src) return;
+    const request = new AbortController();
+    let objectUrl: string | undefined;
+    void apiFetch(src, { signal: request.signal }).then(async response => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      if (request.signal.aborted) return;
+      objectUrl = URL.createObjectURL(blob);
+      setResult({ src, url: objectUrl });
+    }).catch(() => {
+      if (!request.signal.aborted) setResult({ src, url: null });
+    });
     return () => {
-      active = false;
+      request.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [src]);
-
-  if (failed) {
-    return (
-      <div className="flex aspect-square items-center justify-center rounded-lg border border-edge bg-surface-inset text-xs text-fg-muted">
-        {loadFailedLabel}
-      </div>
-    );
-  }
-  if (!blobUrl) {
-    return <Skeleton className="aspect-square w-full rounded-lg" />;
-  }
-
-  return (
-    <div className="group relative overflow-hidden rounded-lg border border-edge bg-surface-inset">
-      <a href={blobUrl} target="_blank" rel="noreferrer" className="block">
-        <img
-          src={blobUrl}
-          alt={alt}
-          className="h-auto w-full object-cover transition-transform duration-200 group-hover:scale-[1.01]"
-        />
-      </a>
-      <a
-        href={blobUrl}
-        download="image.png"
-        aria-label={downloadLabel}
-        title={downloadLabel}
-        className="absolute right-2 bottom-2 inline-flex size-8 items-center justify-center rounded-full border border-edge bg-surface-panel/90 text-fg opacity-0 shadow-sm backdrop-blur-xs transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-      >
-        <Download size={15} aria-hidden />
-      </a>
-    </div>
-  );
+  return src && result?.src === src ? result.url : undefined;
 }
 
-function ImageJobCard({
-  job,
-  baseUrl,
-  language,
-}: {
+function GeneratedImageGallery({ job, baseUrl, initialIndex, initialUrl, language }: {
+  job: ImageGenerationJob;
+  baseUrl: string;
+  initialIndex: number;
+  initialUrl: string | null | undefined;
+  language: Language;
+}) {
+  const [index, setIndex] = useState(initialIndex);
+  const position = Math.min(index, job.images.length - 1);
+  const asset = job.images[position];
+  if (!asset) return null;
+  const src = `${baseUrl}/${asset.index}`;
+  const m = labels[language];
+  return <>
+    <GeneratedImagePreview key={asset.index} src={position === initialIndex ? undefined : src}
+      cover={initialUrl} title={job.title} loadFailed={m.loadFailed} />
+    <footer className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-t border-edge px-2">
+      {job.images.length > 1 ? (
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" className="size-11 p-0" disabled={position === 0}
+            aria-label={language === 'zh' ? '上一张' : 'Previous image'} onClick={() => setIndex(position - 1)}>
+            <ChevronLeft size={18} aria-hidden />
+          </Button>
+          <span role="status" className="min-w-11 text-center text-xs tabular-nums text-fg-muted">{position + 1} / {job.images.length}</span>
+          <Button variant="ghost" className="size-11 p-0" disabled={position === job.images.length - 1}
+            aria-label={language === 'zh' ? '下一张' : 'Next image'} onClick={() => setIndex(position + 1)}>
+            <ChevronRight size={18} aria-hidden />
+          </Button>
+        </div>
+      ) : <span />}
+      <Button asChild variant="ghost" className="size-11 p-0">
+        <a href={`${src}?download=1`} download aria-label={m.download} title={m.download}><Download size={18} aria-hidden /></a>
+      </Button>
+    </footer>
+  </>;
+}
+
+function GeneratedImagePreview({ src, cover, title, loadFailed }: {
+  src?: string;
+  cover: string | null | undefined;
+  title: string;
+  loadFailed: string;
+}) {
+  const image = useGeneratedImage(src);
+  const url = src ? image : cover;
+  return <div className="flex min-h-0 flex-1 items-center justify-center bg-surface-inset p-3 sm:p-4">
+    {url === null ? <p role="alert" className="text-sm text-fg-muted">{loadFailed}</p>
+      : url ? <img src={url} alt={title} className="block max-h-full max-w-full rounded-lg object-contain" />
+        : <Skeleton className="h-full w-full rounded-lg" />}
+  </div>;
+}
+
+function imageFrameStyle(aspectRatio: string | null, multiple: boolean) {
+  const [width, height] = aspectRatio?.split(':').map(Number) ?? [];
+  const candidate = width / height;
+  const ratio = Number.isFinite(candidate) && candidate > 0 ? candidate : 1;
+  const maxHeight = multiple ? 6 : 11;
+  return { aspectRatio: ratio, width: `min(100%, 22rem, ${maxHeight * ratio}rem)` };
+}
+
+function GeneratedImageTile({ job, asset, index, baseUrl, language, multiple }: {
+  job: ImageGenerationJob;
+  asset: ImageGenerationArtifact;
+  index: number;
+  baseUrl: string;
+  language: Language;
+  multiple: boolean;
+}) {
+  const src = `${baseUrl}/${asset.index}`;
+  const url = useGeneratedImage(src);
+  const zh = language === 'zh';
+  const frameStyle = imageFrameStyle(asset.width && asset.height ? `${asset.width}:${asset.height}` : job.aspectRatio, multiple);
+  const title = multiple ? `${job.title} · ${index + 1} / ${job.images.length}` : job.title;
+  return <MediaGenerationPreview kind="image" language={language} title={job.title}
+    trigger={<button type="button" aria-label={zh ? `预览 ${title}` : `Preview ${title}`}
+      className={cn('inline-flex max-w-[min(100%,22rem)] cursor-zoom-in items-center justify-center overflow-hidden rounded-lg bg-surface-inset',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent', !url && 'min-h-11')}
+      style={url ? undefined : frameStyle}>
+      {url === null ? <span className="p-2 text-xs text-fg-muted">{labels[language].loadFailed}</span>
+        : url ? <img src={url} alt="" width={asset.width} height={asset.height}
+          className={cn('block h-auto w-auto max-w-full object-contain', multiple ? 'max-h-24' : 'max-h-44')} />
+          : <Skeleton className="h-full w-full rounded-none" />}
+    </button>}>
+    <GeneratedImageGallery job={job} baseUrl={baseUrl} initialIndex={index} initialUrl={url} language={language} />
+  </MediaGenerationPreview>;
+}
+
+function ImageJobCard({ job, baseUrl, language }: {
   job: ImageGenerationJob;
   baseUrl: string;
   language: Language;
@@ -201,75 +240,54 @@ function ImageJobCard({
   const failed = job.state === 'failed';
   const pending = !completed && !failed;
   const version = language === 'zh' ? `第 ${job.versionNumber} 版` : `Version ${job.versionNumber}`;
+  const count = completed ? job.images.length : job.count;
+  const multiple = count > 1;
   const error = job.errorCode ? errorLabels[language][job.errorCode] : undefined;
   const message = error ?? (failed ? job.error || errorLabels[language].provider_failed : undefined);
+  const framesClass = cn('max-w-full', multiple ? 'grid w-full max-w-[24rem] grid-cols-2 items-start justify-items-start gap-2' : 'w-fit');
 
-  return (
-    <article className="flex w-full min-w-0 max-w-[26rem] flex-col gap-2.5 rounded-xl border border-edge bg-surface-panel p-3 sm:p-3.5">
-      <div className="flex items-center gap-2.5">
-        <div className="grid size-10 shrink-0 place-items-center rounded-lg border border-edge bg-surface-inset text-accent-fg" aria-hidden>
-          <ImageIcon size={18} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="wrap-anywhere text-sm leading-tight font-semibold tracking-tight text-fg">{job.title}</h3>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
-            <span>{m.image} · {version}</span>
-            {!completed && <span role="status" className="font-medium">{m.status[job.state]}</span>}
-          </p>
-        </div>
-        <Button
-          variant="ghost"
-          className="size-9 shrink-0 rounded-full p-0 aria-expanded:bg-surface-active aria-expanded:text-fg"
-          aria-label={m.details}
-          title={m.details}
-          aria-controls={`${id}-details`}
-          aria-expanded={detailsOpen}
-          onClick={() => setDetailsOpen(prev => !prev)}
-        >
-          <Ellipsis size={18} aria-hidden />
-        </Button>
+  return <article className="flex w-full max-w-[24rem] min-w-0 flex-col gap-2.5 rounded-xl border border-edge bg-surface-panel p-3">
+    <div className="flex min-w-0 items-center gap-2.5">
+      <div className="grid size-10 shrink-0 place-items-center rounded-lg border border-edge bg-surface-inset text-accent-fg" aria-hidden>
+        <ImageIcon size={18} />
       </div>
-
-      {pending && (
-        <div className={job.count > 1 ? 'grid grid-cols-2 gap-2' : 'block'}>
-          {Array.from({ length: Math.min(job.count, 4) }).map((_, idx) => (
-            <Skeleton key={idx} className="aspect-square w-full rounded-lg" />
-          ))}
-        </div>
-      )}
-
-      {message && <p className={failed ? 'text-xs text-danger' : 'text-xs text-fg-muted'}>{message}</p>}
-
-      {completed && job.images.length > 0 && (
-        <div className={job.images.length > 1 ? 'grid grid-cols-2 gap-2' : 'block'}>
-          {job.images.map(img => (
-            <AuthenticatedImageTile
-              key={img.index}
-              src={`${baseUrl}/${img.index}`}
-              alt={job.title}
-              downloadLabel={m.download}
-              loadFailedLabel={m.loadFailed}
-            />
-          ))}
-        </div>
-      )}
-
-      <div id={`${id}-details`} hidden={!detailsOpen} className="border-t border-edge pt-2.5">
-        {detailsOpen && (
-          <dl className="space-y-2 text-xs">
-            <div>
-              <dt className="font-medium text-fg-muted">{m.prompt}</dt>
-              <dd className="mt-0.5 whitespace-pre-wrap break-words text-fg">{job.prompt}</dd>
-            </div>
-            {job.modelRef && (
-              <div>
-                <dt className="font-medium text-fg-muted">{m.model}</dt>
-                <dd className="mt-0.5 font-mono text-fg">{job.modelRef}</dd>
-              </div>
-            )}
-          </dl>
-        )}
+      <div className="min-w-0 flex-1">
+        <h3 className="line-clamp-2 wrap-anywhere text-sm leading-tight font-semibold text-fg">{job.title}</h3>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
+          <span>{m.image} · {version}</span>
+          {!completed && <span role="status" className="font-medium">{m.status[job.state]}</span>}
+        </p>
       </div>
-    </article>
-  );
+      <Button variant="ghost" className="size-11 shrink-0 rounded-full p-0 aria-expanded:bg-surface-active"
+        aria-label={m.details} title={m.details} aria-controls={id} aria-expanded={detailsOpen}
+        onClick={() => setDetailsOpen(current => !current)}>
+        <Ellipsis size={18} aria-hidden />
+      </Button>
+    </div>
+
+    {pending && <div className={cn(framesClass, !multiple && 'w-full')}>
+      {Array.from({ length: Math.min(job.count, 4) }).map((_, index) => (
+        <GenerationPlaceholder key={index} kind="image" waiting={job.state === 'queued'}
+          style={imageFrameStyle(job.aspectRatio, multiple)} />
+      ))}
+    </div>}
+    {completed && job.images.length > 0 && <div className={framesClass}>
+      {job.images.slice(0, 4).map((asset, index) => (
+        <GeneratedImageTile key={asset.index} job={job} asset={asset} index={index} baseUrl={baseUrl} language={language} multiple={multiple} />
+      ))}
+    </div>}
+    {message && <p className={failed ? 'text-xs text-danger' : 'text-xs text-fg-muted'}>{message}</p>}
+    <div id={id} hidden={!detailsOpen} className="border-t border-edge pt-2.5">
+      {detailsOpen && <dl className="space-y-2 text-xs text-fg-muted">
+        <div>
+          <dt className="font-medium">{m.prompt}</dt>
+          <dd className="mt-0.5 whitespace-pre-wrap wrap-anywhere text-fg">{job.prompt}</dd>
+        </div>
+        {job.modelRef && <div>
+          <dt className="font-medium">{m.model}</dt>
+          <dd className="mt-0.5 font-mono wrap-anywhere text-fg">{job.modelRef}</dd>
+        </div>}
+      </dl>}
+    </div>
+  </article>;
 }

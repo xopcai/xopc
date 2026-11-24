@@ -9,6 +9,8 @@ import {
   type IpcMainInvokeEvent,
 } from 'electron';
 
+import { loadPrivateRendererDocument } from '../private-renderer-document.js';
+
 import type { PinWindowPayload, ScreenshotLanguage, ScreenshotRect } from './types.js';
 
 interface ManagedPin {
@@ -256,7 +258,12 @@ export class ScreenshotPinManager {
       this.pins.delete(pinId);
     });
 
-    await win.loadFile(join(import.meta.dirname, '../preload/screenshot-pin.html'));
+    try {
+      await loadPrivateRendererDocument(win, 'screenshot-pin');
+    } catch (error) {
+      if (!win.isDestroyed()) win.destroy();
+      throw error;
+    }
     if (!win.isDestroyed()) {
       const payload: PinWindowPayload = {
         pinId,

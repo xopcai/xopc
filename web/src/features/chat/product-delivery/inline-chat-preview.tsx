@@ -5,9 +5,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import '@/components/ui/content-block-actions.css';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
+import { GenerationPlaceholder } from '@/features/chat/generation-placeholder';
 import {
   getChatPreviewFixGuidance,
   getChatPreviewRevision,
@@ -113,19 +113,22 @@ export function InlineChatPreview({
   };
 
   const shell = 'content-block-action-scope mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel';
+  const loadingLabel = language === 'zh' ? '正在加载预览' : 'Loading preview';
   if (!lease.active) {
+    const queued = lease.state === 'queued';
     return (
       <section ref={lease.containerRef} className={shell} data-inline-chat-preview={reference.id}>
         <header className="border-b border-edge-subtle px-4 py-3">
           <h3 className="truncate text-sm font-semibold text-fg">{reference.title}</h3>
-          <p className="mt-0.5 text-xs text-fg-muted">
-            {lease.state === 'queued'
+          <p role="status" className="mt-0.5 text-xs text-fg-muted">
+            {queued
               ? (language === 'zh' ? '正在等待预览资源' : 'Waiting for a preview slot')
               : (language === 'zh' ? '预览尚未加载' : 'Preview not loaded')}
           </p>
         </header>
-        <div className="grid place-items-center bg-surface-base" style={{ height }}>
-          <Button variant="secondary" className="min-h-11" onClick={lease.activate}>
+        <div className="relative grid place-items-center bg-surface-base" style={{ height }}>
+          {queued && <GenerationPlaceholder kind="preview" waiting className="absolute inset-0 rounded-none pb-14" />}
+          <Button variant="secondary" className={cn('relative min-h-11', queued && 'translate-y-12')} onClick={lease.activate}>
             {language === 'zh' ? '加载交互预览' : 'Load interactive preview'}
           </Button>
         </div>
@@ -135,9 +138,12 @@ export function InlineChatPreview({
 
   if (revisionQuery.isLoading) {
     return (
-      <section ref={lease.containerRef} className={shell} aria-busy="true" aria-label={language === 'zh' ? '正在加载预览' : 'Loading preview'}>
-        <div className="border-b border-edge-subtle px-4 py-3"><Skeleton className="h-5 w-40" /></div>
-        <Skeleton className="m-3 w-[calc(100%-1.5rem)]" style={{ height }} />
+      <section ref={lease.containerRef} className={shell} data-inline-chat-preview={reference.id}>
+        <header className="border-b border-edge-subtle px-4 py-3">
+          <h3 className="truncate text-sm font-semibold text-fg">{reference.title}</h3>
+          <p role="status" className="mt-0.5 text-xs text-fg-muted">{loadingLabel}</p>
+        </header>
+        <div aria-busy="true"><GenerationPlaceholder kind="preview" className="rounded-none" style={{ height }} /></div>
       </section>
     );
   }
@@ -153,10 +159,11 @@ export function InlineChatPreview({
     );
   }
 
+  const booting = runtimeState === 'booting';
   const failed = runtimeState === 'failed' || runtimeState === 'timeout';
   const status = runtimeState === 'healthy'
     ? (language === 'zh' ? '运行正常' : 'Running')
-    : runtimeState === 'booting'
+    : booting
       ? (language === 'zh' ? '正在启动' : 'Starting')
       : runtimeState === 'timeout'
         ? (language === 'zh' ? '启动超时' : 'Start timed out')
@@ -180,21 +187,17 @@ export function InlineChatPreview({
           <Save className={cn('size-4', action === 'promote' && 'motion-safe:animate-pulse')} aria-hidden />
         </Button>
       </header>
-      <div className="relative bg-surface-base" style={{ minHeight: height }}>
+      <div className="relative bg-surface-base" style={{ minHeight: height }} aria-busy={booting || undefined}>
         <iframe
           key={reloadKey}
           ref={iframeRef}
           title={language === 'zh' ? `${reference.title} 交互预览` : `${reference.title} interactive preview`}
           srcDoc={srcDoc}
           sandbox="allow-scripts allow-forms"
-          className="block w-full border-0 bg-white"
+          className={cn('block w-full border-0 bg-white', booting && 'invisible')}
           style={{ height }}
         />
-        {runtimeState === 'booting' ? (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center bg-surface-base/75">
-            <Skeleton className="h-10 w-40" />
-          </div>
-        ) : null}
+        {booting && <GenerationPlaceholder kind="preview" className="pointer-events-none absolute inset-0 rounded-none" />}
       </div>
       {failed ? (
         <footer className="border-t border-danger/20 bg-danger-soft/60 px-4 py-3">

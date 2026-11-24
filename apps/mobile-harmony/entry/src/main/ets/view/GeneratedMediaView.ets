@@ -1,9 +1,9 @@
 import { XopcPreviewVideo } from './ChatMediaView';
 import { fileIo as fs, picker } from '@kit.CoreFileKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { generatedMediaTime } from '../common/generatedMedia';
+import { generatedMediaTime, isGeneratedMediaInProgress } from '../common/generatedMedia';
 import { parseVideoAspectRatio } from '../common/videoPreview';
-import { XopcGeneratedMediaCard } from '../model/generatedMedia';
+import { XopcGeneratedMediaCard, XopcGeneratedMediaKind } from '../model/generatedMedia';
 import { downloadGeneratedMedia, gatewayMediaPlaybackUrl, generatedMediaContentPath, removeGeneratedMediaFile } from '../service/generatedMediaFile';
 import { XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
 import { XopcMusicPlayButton, XopcPreviewHeader } from './MusicPlaybackView';
@@ -27,12 +27,52 @@ function mediaStatus(card: XopcGeneratedMediaCard, zh: boolean): string {
   }
 }
 
+const GENERATION_WAVEFORM: number[] = [6, 10, 16, 22, 17, 12, 7];
+const GENERATION_FRAMES: number[] = [0, 1, 2];
+
+@ComponentV2
+struct XopcGeneratedMediaActivity {
+  @Require @Param kind: XopcGeneratedMediaKind;
+  @Param waiting: boolean = false;
+  @Param animate: boolean = false;
+  @Local colors: XopcThemeColors = appThemeColors;
+  @Local highlighted: boolean = false;
+
+  @Monitor('animate')
+  syncMotion(): void { this.highlighted = this.animate; }
+
+  build() {
+    Row({ space: this.kind === 'music' ? 3.5 : 3 }) {
+      if (this.kind === 'music') {
+        ForEach(GENERATION_WAVEFORM, (barHeight: number, index: number) => {
+          Column().width(2.5).height(barHeight).borderRadius(2).backgroundColor(this.colors.chat.action)
+            .scale({ x: 1, y: !this.animate ? 0.82 : this.highlighted ? 1 : 0.44 })
+            .opacity(!this.animate ? 0.65 : this.highlighted ? 0.8 : 0.34)
+            .animation({ duration: !this.animate ? 0 : this.waiting ? 1250 : 825, delay: this.animate ? index * 105 : 0,
+              iterations: this.animate ? -1 : 1, playMode: PlayMode.Alternate, curve: Curve.EaseInOut })
+        }, (barHeight: number): string => barHeight.toString())
+      } else {
+        ForEach(GENERATION_FRAMES, (frame: number) => {
+          Column().width(13).height(10).borderRadius(2).backgroundColor(this.colors.chat.action)
+            .opacity(!this.animate ? (frame === 1 ? 0.61 : 0.14) : this.highlighted ? 0.61 : 0.14)
+            .animation({ duration: !this.animate ? 0 : this.waiting ? 2250 : 1500, delay: this.animate ? frame * 480 : 0,
+              iterations: this.animate ? -1 : 1, playMode: PlayMode.Alternate, curve: Curve.EaseInOut })
+        }, (frame: number): string => frame.toString())
+      }
+    }.width(64).height(34).flexShrink(0).alignItems(VerticalAlign.Center).justifyContent(FlexAlign.Center)
+      .borderRadius(this.colors.corner(8)).backgroundColor(this.colors.chat.canvas)
+      .hitTestBehavior(HitTestMode.None).accessibilityLevel('no-hide-descendants')
+      .onAppear((): void => { this.syncMotion(); })
+  }
+}
+
 @ComponentV2
 export struct XopcGeneratedMediaRow {
   @Require @Param card: XopcGeneratedMediaCard;
   @Param submitting: boolean = false;
   @Param confirmationFailed: boolean = false;
   @Param zh: boolean = false;
+  @Param animateActivity: boolean = false;
   @Require @Param music: XopcGeneratedMusicPlayback;
   @Param conversationId: string = '';
   @Local colors: XopcThemeColors = appThemeColors;
@@ -102,6 +142,10 @@ export struct XopcGeneratedMediaRow {
               .accessibilityText($r('app.string.chat_media_play'))
               .onClick((): void => { this.onPlay(); })
           }
+        } else if (isGeneratedMediaInProgress(this.card.item)) {
+          XopcGeneratedMediaActivity({ kind: this.card.kind,
+            waiting: this.card.item.state === 'queued' || this.card.item.state === 'submitted',
+            animate: this.animateActivity && !this.card.item.error })
         }
       }.width('100%').alignItems(VerticalAlign.Center)
       if (this.card.draft) {

@@ -117,6 +117,7 @@ import {
 import { createTray, destroyTray, hasSystemTray, updateTrayLanguage } from './tray.js';
 import { ScreenshotManager } from './screenshot/screenshot-manager.js';
 import { registerScreenshotShortcut } from './screenshot-shortcut.js';
+import { registerPrivateRendererScheme } from './private-renderer-document.js';
 import {
   startVoiceInputHotkey,
   stopVoiceInputHotkey,
@@ -135,6 +136,8 @@ import {
   shouldAutoOpenDevTools,
   toggleMainWindowDevTools,
 } from './devtools.js';
+
+registerPrivateRendererScheme();
 
 /** Track the main window for gateway exit notifications. */
 let mainWindow: BrowserWindow | null = null;

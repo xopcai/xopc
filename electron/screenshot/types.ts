@@ -24,6 +24,8 @@ export interface DisplayCaptureFrame {
   pixelHeight: number;
   /** PNG data URL or base64 payload representing the frozen display frame. */
   pngBase64: string;
+  /** Viewport bounds of an aspect-fitted multi-display capture, anchored at (0, 0). */
+  imageBounds?: ScreenshotRect;
   /** Optional pre-selected region (e.g. Wayland interactive portal fallback). */
   initialSelection?: ScreenshotRect;
 }
@@ -110,6 +112,7 @@ export interface ScreenshotOverlayPayload {
   language: ScreenshotLanguage;
   platform: NodeJS.Platform;
   isWayland: boolean;
+  imageBounds?: ScreenshotRect;
   initialSelection?: ScreenshotRect;
 }
 

@@ -3,6 +3,7 @@ import { BrowserWindow, desktopCapturer, MessageChannelMain } from 'electron';
 import type { ComputerPreviewAuthority } from '../../src/computer/broker.js';
 import type { PreviewCapture, PreviewPixels } from './preview-manager.js';
 import { createLogger } from '../../src/utils/logger.js';
+import { loadPrivateRendererDocument } from '../private-renderer-document.js';
 
 const log = createLogger('ComputerPreview');
 
@@ -86,7 +87,7 @@ export async function startPreviewCapture(authority: ComputerPreviewAuthority, p
   });
   port1.start();
   try {
-    await worker.loadFile(join(import.meta.dirname, '../preload/computer-preview.html'));
+    await loadPrivateRendererDocument(worker, 'computer-preview');
     if (closed) throw new Error('COMPUTER_PREVIEW_REVOKED');
     worker.webContents.postMessage('computer-preview:worker', { sourceId, preset }, [port2]);
   } catch (error) { close(); throw error; }

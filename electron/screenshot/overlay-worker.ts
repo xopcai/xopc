@@ -261,7 +261,7 @@ function bootOverlay(): void {
       session.pixelWidth,
       session.pixelHeight,
       blockSize,
-      session.scaleFactor,
+      session.imageBounds ? session.pixelWidth / session.imageBounds.width : session.scaleFactor,
     );
     mosaicCache.set(blockSize, built);
     return built;
@@ -269,6 +269,10 @@ function bootOverlay(): void {
 
   function viewportSize(): { width: number; height: number } {
     return { width: window.innerWidth, height: window.innerHeight };
+  }
+
+  function selectionBounds(): { width: number; height: number } {
+    return session?.imageBounds ?? viewportSize();
   }
 
   function commitPendingTextEditor(): void {
@@ -372,15 +376,16 @@ function bootOverlay(): void {
     }
 
     if (bgImage) {
-      if (session.initialSelection) {
+      const imageBounds = session.imageBounds ?? session.initialSelection;
+      if (imageBounds) {
         mainCtx.fillStyle = '#0f1115';
         mainCtx.fillRect(0, 0, vw, vh);
         mainCtx.drawImage(
           bgImage,
-          session.initialSelection.x,
-          session.initialSelection.y,
-          session.initialSelection.width,
-          session.initialSelection.height,
+          imageBounds.x,
+          imageBounds.y,
+          imageBounds.width,
+          imageBounds.height,
         );
       } else {
         mainCtx.drawImage(bgImage, 0, 0, vw, vh);
@@ -420,6 +425,7 @@ function bootOverlay(): void {
           editingTextId: editingTextState?.id ?? null,
           scaleFactor: dpr,
           getMosaicSource,
+          mosaicBounds: session.imageBounds,
         });
         mainCtx.restore();
       }
@@ -479,18 +485,21 @@ function bootOverlay(): void {
       return;
     }
 
+    const imageBounds = session.imageBounds ?? session.initialSelection;
+    const sampleX = localX - (imageBounds?.x ?? 0);
+    const sampleY = localY - (imageBounds?.y ?? 0);
     const physX = Math.max(
       0,
       Math.min(
         pixelSamplerCanvas.width - 1,
-        Math.round((localX / Math.max(1, window.innerWidth)) * pixelSamplerCanvas.width),
+        Math.round((sampleX / Math.max(1, imageBounds?.width ?? window.innerWidth)) * pixelSamplerCanvas.width),
       ),
     );
     const physY = Math.max(
       0,
       Math.min(
         pixelSamplerCanvas.height - 1,
-        Math.round((localY / Math.max(1, window.innerHeight)) * pixelSamplerCanvas.height),
+        Math.round((sampleY / Math.max(1, imageBounds?.height ?? window.innerHeight)) * pixelSamplerCanvas.height),
       ),
     );
 
@@ -584,7 +593,7 @@ function bootOverlay(): void {
       });
       ctx.restore();
     } else {
-      const phys = logicalToPhysicalRect(selection, viewportSize(), {
+      const phys = logicalToPhysicalRect(selection, selectionBounds(), {
         width: session.pixelWidth,
         height: session.pixelHeight,
       });
@@ -688,7 +697,7 @@ function bootOverlay(): void {
 
     addBtn('ocr', 'ocr', t.ocr, () => void triggerOcr(false));
     addBtn('translate', 'translate', t.translate, () => void triggerTranslate('auto'));
-    if (!session?.initialSelection) {
+    if (!session?.initialSelection && !session?.imageBounds) {
       addBtn('scroll', 'scroll', t.scroll, () => void startScrollCapture());
     }
 
@@ -1235,7 +1244,7 @@ function bootOverlay(): void {
           endX = drag.startX + Math.sign(endX - drag.startX || 1) * size;
           endY = drag.startY + Math.sign(endY - drag.startY || 1) * size;
         }
-        selection = clampRectToBounds(normalizeRect(drag.startX, drag.startY, endX, endY), viewportSize());
+        selection = clampRectToBounds(normalizeRect(drag.startX, drag.startY, endX, endY), selectionBounds());
         render();
       }
       updateLoupe(e.clientX, e.clientY);
@@ -1247,7 +1256,7 @@ function bootOverlay(): void {
         drag.initial,
         e.clientX - drag.startX,
         e.clientY - drag.startY,
-        viewportSize(),
+        selectionBounds(),
       );
       render();
       return;
@@ -1259,7 +1268,7 @@ function bootOverlay(): void {
         drag.handle,
         e.clientX - drag.startX,
         e.clientY - drag.startY,
-        viewportSize(),
+        selectionBounds(),
         e.shiftKey,
       );
       render();
@@ -1434,7 +1443,7 @@ function bootOverlay(): void {
     if (currentDrag.kind === 'creating') {
       if (!currentDrag.moved) {
         // Single click without drag -> snap to hovered window or full display!
-        selection = hoveredSnap?.localRect ?? { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
+        selection = hoveredSnap?.localRect ?? { x: 0, y: 0, ...selectionBounds() };
       } else if (selection && (selection.width < MIN_SELECTION_SIZE || selection.height < MIN_SELECTION_SIZE)) {
         selection = hoveredSnap?.localRect ?? null;
       }
@@ -1594,7 +1603,7 @@ function bootOverlay(): void {
       (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')
     ) {
       e.preventDefault();
-      selection = nudgeRect(selection, e.key, e.shiftKey ? 10 : 1, viewportSize());
+      selection = nudgeRect(selection, e.key, e.shiftKey ? 10 : 1, selectionBounds());
       positionFloatingPanels();
       render();
     }

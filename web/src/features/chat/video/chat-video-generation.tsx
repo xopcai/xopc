@@ -1,11 +1,12 @@
 import { SpaceGeneratedMediaLink } from '@/features/space/space-artifact-link';
 import { creditDecimal, VIDEO_AUTO_DURATION, VIDEO_MODELS, WAN_VIDEO_MODEL_REF, type VideoGenerationDraft, type VideoGenerationJob, type VideoGenerationSession } from '@xopcai/gateway-contract';
-import { Download, Video } from 'lucide-react';
+import { Download, Play, Video } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
-import { MediaGenerationCard, MediaGenerationDetails } from '@/features/chat/media-generation-card';
+import { GenerationPlaceholder } from '@/features/chat/generation-placeholder';
+import { MediaGenerationCard, MediaGenerationDetails, MediaGenerationPreview } from '@/features/chat/media-generation-card';
 import { findMediaGenerationReplyIndexes } from '@/features/chat/media-generation-replies';
 import type { ChatTimelineEntry } from '@/features/chat/messages/message-list';
 import type { Message } from '@/features/chat/messages/messages.types';
@@ -217,22 +218,48 @@ function VideoJobCard({ job, url, language }: {
   job: VideoGenerationJob; url: string; language: Language;
 }) {
   const m = labels[language];
+  const title = job.summary || m.title;
   return (
-    <MediaGenerationCard>
-      <div className="flex items-center justify-between gap-3 text-sm">
-        <h3 className="flex items-center gap-2 font-medium text-fg"><Video size={16} aria-hidden />{m.title}</h3>
-        <span role="status" className="text-xs text-fg-muted">{m.status[job.state]}</span>
+    <MediaGenerationCard className="max-w-[26rem] space-y-2 sm:p-3">
+      <div className="flex min-w-0 items-center gap-2 text-sm">
+        <Video size={17} className="shrink-0 text-accent-fg" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-medium text-fg" title={title}>{title}</h3>
+          <p className="text-xs text-fg-muted">{videoSpecs(job, language)}</p>
+        </div>
+        <span role="status" className="shrink-0 text-xs text-fg-muted">{m.status[job.state]}</span>
       </div>
-      <p className="text-xs text-fg-muted">{videoSpecs(job, language)}</p>
+      {isActive(job) && (
+        <GenerationPlaceholder kind="video" waiting={job.state === 'queued' || job.state === 'submitted'}
+          className={job.ratio === '9:16' ? 'aspect-[9/16] w-full max-w-24' : 'aspect-video w-full max-w-[19.5rem]'} />
+      )}
       {job.error && <p className="text-xs text-danger">{job.error}</p>}
       {job.state === 'completed' && <>
-        <GeneratedVideo src={url} title={job.summary || m.title} />
-        <a href={`${url}?download=1`} download="generated-video.mp4" className="inline-flex items-center gap-2 text-sm text-accent-fg hover:underline">
-          <Download size={15} aria-hidden />{m.download}
-        </a>
-        <SpaceGeneratedMediaLink mediaId={`wan-${job.id}.mp4`} title={job.summary || m.title} zh={language === 'zh'} />
+        <div>
+          <MediaGenerationPreview kind="video" language={language} title={title}
+            trigger={<button type="button" aria-label={language === 'zh' ? `预览 ${title}` : `Preview ${title}`}
+              className="group relative inline-grid max-w-[min(100%,22rem)] cursor-pointer place-items-center overflow-hidden rounded-lg bg-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+              <video src={url} preload="metadata" muted playsInline aria-hidden
+                className="pointer-events-none block h-auto max-h-44 w-auto max-w-full object-contain" />
+              <span className="absolute inset-0 grid place-items-center">
+                <span className="grid size-11 place-items-center rounded-full bg-black/65 text-white group-hover:bg-black/85">
+                  <Play size={18} aria-hidden />
+                </span>
+              </span>
+            </button>}>
+            <GeneratedVideo src={url} title={title}
+              className="flex min-h-0 flex-1 items-center justify-center bg-black [&>video]:max-h-full [&>video]:max-w-full [&>video]:w-auto" />
+            <footer className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-t border-edge px-2">
+              <SpaceGeneratedMediaLink mediaId={`wan-${job.id}.mp4`} title={title} zh={language === 'zh'} />
+              <Button asChild variant="ghost" className="size-11 p-0">
+                <a href={`${url}?download=1`} download="generated-video.mp4" aria-label={m.download} title={m.download}>
+                  <Download size={18} aria-hidden />
+                </a>
+              </Button>
+            </footer>
+          </MediaGenerationPreview>
+        </div>
       </>}
-      {job.summary && <p className="line-clamp-3 wrap-anywhere text-sm leading-relaxed text-fg">{job.summary}</p>}
       <VideoPromptDetails video={job} language={language}>
         {job.imageName && <span className="wrap-anywhere">{m.reference} · {job.imageName}</span>}
       </VideoPromptDetails>

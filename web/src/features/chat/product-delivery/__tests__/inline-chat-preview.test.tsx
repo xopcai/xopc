@@ -82,8 +82,12 @@ describe('InlineChatPreview', () => {
     const iframe = container.querySelector('iframe');
     expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-forms');
     expect(iframe?.getAttribute('srcdoc')).toContain('<main>Login</main>');
+    expect(container.querySelector('[data-generation-placeholder="preview"]')).not.toBeNull();
+    expect(iframe?.classList.contains('invisible')).toBe(true);
     act(() => runtimeMessage({ type: 'ready' }));
     expect(container.textContent).toContain('Running');
+    expect(container.querySelector('[data-generation-placeholder="preview"]')).toBeNull();
+    expect(iframe?.classList.contains('invisible')).toBe(false);
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[aria-label="Save as app"]')?.click();
@@ -96,6 +100,7 @@ describe('InlineChatPreview', () => {
     await render();
     act(() => runtimeMessage({ type: 'error', diagnostic: { kind: 'script_error', message: 'boom' } }));
     expect(container.textContent).toContain('boom');
+    expect(container.querySelector('[data-generation-placeholder="preview"]')).toBeNull();
     await act(async () => {
       [...container.querySelectorAll('button')].find(button => button.textContent?.includes('Ask AI'))?.click();
       await Promise.resolve();

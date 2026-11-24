@@ -19,6 +19,12 @@ import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.theme.LocalChatColors
 import ai.xopc.mobile.theme.themedCorners
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -57,7 +63,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -75,6 +84,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.PI
+import kotlin.math.cos
 
 @Composable
 internal fun GeneratedMediaCard(
@@ -133,6 +144,8 @@ internal fun GeneratedMediaCard(
           FilledTonalIconButton(onClick = onPlay,
             colors = IconButtonDefaults.filledTonalIconButtonColors(contentColor = LocalChatColors.current.action), modifier = Modifier.testTag("generated-media-play-${item.id}")
             .semantics { contentDescription = play }) { Text("▶") }
+        } else if (item.active) {
+          GeneratedMediaActivity(item.kind, item.state == "queued" || item.state == "submitted", item.error != null)
         }
       }
       if (item.isDraft) {
@@ -155,6 +168,46 @@ internal fun GeneratedMediaCard(
       val error = if (confirmationFailed) label(zh, "提交未完成，请检查当前草稿后重试。",
         "Submission failed. Review the current draft and try again.") else item.error
       error?.let { Text(it, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+    }
+  }
+}
+
+private val generationWaveform = listOf(6, 10, 16, 22, 17, 12, 7)
+
+@Composable
+private fun GeneratedMediaActivity(kind: GeneratedMediaKind, waiting: Boolean, paused: Boolean) {
+  val motionAllowed = rememberMotionAllowed()
+  val cycle = if (motionAllowed && !paused) {
+    val period = if (kind == GeneratedMediaKind.Music) 1650 else 3000
+    rememberInfiniteTransition(label = "media generation").animateFloat(
+      initialValue = 0f, targetValue = 1f,
+      animationSpec = infiniteRepeatable(tween(if (waiting) period * 3 / 2 else period, easing = LinearEasing)),
+      label = "generation phase",
+    )
+  } else null
+  val palette = LocalChatColors.current
+  Canvas(Modifier.size(width = 64.dp, height = 34.dp)) {
+    drawRoundRect(palette.action.copy(alpha = 0.07f), cornerRadius = CornerRadius(8.dp.toPx()))
+    val phase = cycle?.value
+    if (kind == GeneratedMediaKind.Music) {
+      val spacing = 6.dp.toPx()
+      val barWidth = 2.5.dp.toPx()
+      generationWaveform.forEachIndexed { index, height ->
+        val wave = phase?.let { (1f - cos(it * 2 * PI - index * 0.8).toFloat()) / 2 } ?: 0.68f
+        val barHeight = height.dp.toPx() * (0.44f + 0.56f * wave)
+        drawRoundRect(palette.action.copy(alpha = 0.34f + 0.46f * wave),
+          topLeft = Offset(center.x + (index - 3) * spacing - barWidth / 2, center.y - barHeight / 2),
+          size = Size(barWidth, barHeight), cornerRadius = CornerRadius(barWidth / 2))
+      }
+    } else {
+      val frameWidth = 13.dp.toPx()
+      val frameHeight = 10.dp.toPx()
+      repeat(3) { index ->
+        val light = phase?.let { (1f + cos((it - index / 3f) * 2 * PI).toFloat()) / 2 } ?: if (index == 1) 1f else 0f
+        drawRoundRect(palette.action.copy(alpha = 0.14f + 0.47f * light),
+          topLeft = Offset(center.x + (index - 1) * 16.dp.toPx() - frameWidth / 2, center.y - frameHeight / 2),
+          size = Size(frameWidth, frameHeight), cornerRadius = CornerRadius(2.dp.toPx()))
+      }
     }
   }
 }

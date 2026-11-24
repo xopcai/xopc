@@ -1,5 +1,5 @@
 import { fontPixelSize, mosaicBlockSize, strokePixelWidth } from './annotations.js';
-import type { AnnotationItem, PenAnnotationItem } from './types.js';
+import type { AnnotationItem, PenAnnotationItem, ScreenshotRect } from './types.js';
 
 function drawTaperedArrow(
   ctx: CanvasRenderingContext2D,
@@ -86,6 +86,7 @@ export function renderAnnotationsToContext(options: {
   scaleFactor: number;
   offsetX?: number;
   offsetY?: number;
+  mosaicBounds?: ScreenshotRect;
   getMosaicSource: (blockSize: number) => HTMLCanvasElement;
 }): void {
   const {
@@ -96,6 +97,7 @@ export function renderAnnotationsToContext(options: {
     scaleFactor,
     offsetX = 0,
     offsetY = 0,
+    mosaicBounds,
     getMosaicSource,
   } = options;
 
@@ -144,7 +146,17 @@ export function renderAnnotationsToContext(options: {
         maskCtx.restore();
 
         maskCtx.globalCompositeOperation = 'source-in';
-        maskCtx.drawImage(pixelated, 0, 0, maskCanvas.width, maskCanvas.height);
+        if (mosaicBounds) {
+          maskCtx.drawImage(
+            pixelated,
+            mosaicBounds.x * scaleFactor,
+            mosaicBounds.y * scaleFactor,
+            mosaicBounds.width * scaleFactor,
+            mosaicBounds.height * scaleFactor,
+          );
+        } else {
+          maskCtx.drawImage(pixelated, 0, 0, maskCanvas.width, maskCanvas.height);
+        }
 
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);

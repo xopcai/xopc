@@ -1449,6 +1449,7 @@ export struct XopcChatView {
             Column() {
               XopcGeneratedMediaRow({ card: entry.item, zh: this.generatedMediaChinese, submitting: this.generatedMedia.submitting,
                 confirmationFailed: entry.item.draft && this.generatedMedia.failedDraftId === entry.item.item.id,
+                animateActivity: this.activePage && this.layout.foreground && !this.layout.reduceMotion,
                 conversationId: this.chat.selectedId, music: this.generatedMusic,
                 onPlay: (): void => { this.playGeneratedMedia(entry.item); },
                 onOpen: (): void => { this.playGeneratedMedia(entry.item, true); },

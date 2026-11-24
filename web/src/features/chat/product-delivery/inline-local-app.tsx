@@ -6,8 +6,7 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import '@/components/ui/content-block-actions.css';
-import { Skeleton } from '@/components/ui/skeleton';
-import { localAppConversationUrl } from '@/features/local-apps/conversation';
+import { GenerationPlaceholder } from '@/features/chat/generation-placeholder';
 import { useInlinePreviewLease } from '@/features/chat/product-delivery/inline-preview-scheduler';
 import {
   getLocalAppFixGuidance,
@@ -15,6 +14,7 @@ import {
   getLocalAppSnapshot,
   type LocalAppDiagnostic,
 } from '@/features/local-apps/api';
+import { localAppConversationUrl } from '@/features/local-apps/conversation';
 import { attachLocalAppPreviewChannel } from '@/features/local-apps/preview-channel';
 import {
   formatLocalAppRuntimeIssue,
@@ -123,13 +123,14 @@ export function InlineLocalApp({
   };
 
   if (!lease.active) {
+    const queued = lease.state === 'queued';
     return (
       <section ref={lease.containerRef} className="content-block-action-scope mt-3 overflow-hidden rounded-2xl bg-surface-inset" data-inline-local-app={reference.id}>
         <header className="flex min-w-0 flex-wrap items-center gap-3 border-b border-edge-subtle px-4 py-3">
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-sm font-semibold text-fg" title={reference.title}>{reference.title}</h3>
-            <p className="mt-0.5 text-xs text-fg-muted">
-              {lease.state === 'queued'
+            <p role="status" className="mt-0.5 text-xs text-fg-muted">
+              {queued
                 ? (language === 'zh' ? '正在等待预览资源' : 'Waiting for a preview slot')
                 : (language === 'zh' ? '预览尚未加载' : 'Preview not loaded')}
             </p>
@@ -139,8 +140,9 @@ export function InlineLocalApp({
             <ExternalLink className="size-4" aria-hidden />
           </Button>
         </header>
-        <div className="grid place-items-center bg-surface-base" style={{ height }}>
-          <Button variant="secondary" onClick={lease.activate}>
+        <div className="relative grid place-items-center bg-surface-base" style={{ height }}>
+          {queued && <GenerationPlaceholder kind="preview" waiting className="absolute inset-0 rounded-none pb-14" />}
+          <Button variant="secondary" className={cn('relative min-h-11', queued && 'translate-y-12')} onClick={lease.activate}>
             {language === 'zh' ? '加载交互预览' : 'Load interactive preview'}
           </Button>
         </div>
@@ -150,12 +152,12 @@ export function InlineLocalApp({
 
   if (snapshotQuery.isLoading) {
     return (
-      <section ref={lease.containerRef} className="mt-3 overflow-hidden rounded-2xl bg-surface-inset" aria-label={messages(language).chat.productDelivery.loadingAppPreview}>
-        <div className="flex items-center justify-between gap-3 border-b border-edge-subtle px-4 py-3">
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="h-9 w-24" />
-        </div>
-        <Skeleton className="m-3 w-[calc(100%-1.5rem)]" style={{ height }} />
+      <section ref={lease.containerRef} className="mt-3 overflow-hidden rounded-2xl bg-surface-inset" data-inline-local-app={reference.id}>
+        <header className="border-b border-edge-subtle px-4 py-3">
+          <h3 className="truncate text-sm font-semibold text-fg" title={reference.title}>{reference.title}</h3>
+          <p role="status" className="mt-0.5 text-xs text-fg-muted">{messages(language).chat.productDelivery.loadingAppPreview}</p>
+        </header>
+        <div aria-busy="true"><GenerationPlaceholder kind="preview" className="rounded-none" style={{ height }} /></div>
       </section>
     );
   }
@@ -180,6 +182,7 @@ export function InlineLocalApp({
   const diagnostics = [...staticDiagnostics, ...runtimeDiagnostics, ...timeoutDiagnostics];
   const validationFailed = snapshot.status === 'invalid' || snapshot.validation.status === 'failed';
   const hasFailure = validationFailed || runtimeHealth === 'failed' || runtimeHealth === 'timeout';
+  const booting = !validationFailed && Boolean(snapshot.previewUrl) && runtimeHealth === 'booting';
   const statusLabel = validationFailed
     ? (language === 'zh' ? '校验失败' : 'Validation failed')
     : runtimeHealth === 'healthy'
@@ -233,7 +236,7 @@ export function InlineLocalApp({
           <ExternalLink className="size-4" aria-hidden />
         </Button>
       </header>
-      <div className="relative bg-surface-base" style={{ height }}>
+      <div className="relative bg-surface-base" style={{ height }} aria-busy={booting || undefined}>
         {snapshot.previewUrl ? (
           <iframe
             key={previewKey}
@@ -241,14 +244,10 @@ export function InlineLocalApp({
             title={language === 'zh' ? `${reference.title} 交互预览` : `${reference.title} interactive preview`}
             src={apiUrl(snapshot.previewUrl)}
             sandbox="allow-scripts allow-forms"
-            className="h-full w-full border-0 bg-white"
+            className={cn('block h-full w-full border-0 bg-white', booting && 'invisible')}
           />
         ) : null}
-        {snapshot.previewUrl && runtimeHealth === 'booting' ? (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center bg-surface-base/75">
-            <Skeleton className="h-10 w-40" />
-          </div>
-        ) : null}
+        {booting && <GenerationPlaceholder kind="preview" className="pointer-events-none absolute inset-0 rounded-none" />}
       </div>
       {hasFailure ? (
         <footer className="border-t border-danger/20 bg-danger-soft/60 px-4 py-3">
