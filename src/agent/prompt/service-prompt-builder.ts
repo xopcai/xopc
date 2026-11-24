@@ -92,6 +92,7 @@ export class SystemPromptBuilder {
     const agentSetup = options.conversationId && isXopcDatabaseOpen()
       && getSessionMetadata(options.conversationId)?.customData?.agentSetup === true;
 
+    const configGuide = getConversationalConfigurationGuide(reg);
     const resolved = resolveSystemPromptBuildParams(this.config, {
       workspaceDir: ws,
       conversationId: options.conversationId,
@@ -102,7 +103,6 @@ export class SystemPromptBuilder {
       ttsSystemHint,
       extraSystemPrompt: [
         options.extraSystemPrompt,
-        getConversationalConfigurationGuide(reg),
         agentSetup
           ? 'This conversation is for creating a new expert. Treat the user’s description of responsibilities and expected deliverables as requirements. Ask about missing details when needed, and give the expert a short profile description of its responsibilities. Unless the user explicitly asks for a formal or template-heavy style, set the new expert’s style and instructions to sound natural, human-like, and easy to read—plain everyday phrasing rather than stiff bureaucratic prose, scattered bolding, or mandatory bullet walls. Follow Response Language for every question and reply. A language requested for the new Agent configures that Agent only. Keep the current conversation language unless the user asks to switch it.'
           : undefined,
@@ -151,9 +151,14 @@ export class SystemPromptBuilder {
             reg,
           );
 
+    const withConfigGuide =
+      resolved.promptMode !== 'none' && configGuide.trim()
+        ? appendStablePromptSection(basePrompt, configGuide.trim())
+        : basePrompt;
+
     const fullPrompt = skillPrompt
-      ? appendStablePromptSection(basePrompt, skillPrompt)
-      : basePrompt;
+      ? appendStablePromptSection(withConfigGuide, skillPrompt)
+      : withConfigGuide;
 
     log.debug(
       {

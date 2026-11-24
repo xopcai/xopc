@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { compactGuide } from '../../../../scripts/conversational-setup-evaluation/compact-guidance.js';
+import { splitPromptCacheBoundary } from '../cache-boundary.js';
 import { conversationalConfigurationGuide } from '../conversational-configuration-guide.js';
 import { SystemPromptBuilder } from '../service-prompt-builder.js';
 
@@ -40,6 +41,18 @@ describe('Tool-gated conversational configuration guidance', () => {
     expect(prompt).toContain('Never bypass a denial');
     expect(prompt).toContain('No tool_manual is registered');
     expect(prompt).not.toContain('tool_manual({tool:"xopc_use"');
+  });
+
+  it('places static conversational configuration guidance in the cacheable stable prefix without a Group Chat Context wrapper', () => {
+    const prompt = builder().build([], {
+      agentId: 'main',
+      registeredToolNames: ['xopc_use', 'tool_manual'],
+      agentProfile: { name: 'Smart Assistant' },
+    });
+    const split = splitPromptCacheBoundary(prompt);
+    expect(split?.stablePrefix).toContain(conversationalConfigurationGuide.trim());
+    expect(split?.dynamicSuffix).not.toContain(conversationalConfigurationGuide.trim());
+    expect(prompt).not.toContain('## Group Chat Context');
   });
 
   it('respects the explicitly disabled system prompt', () => {

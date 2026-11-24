@@ -19,14 +19,17 @@ export function buildExecutionBiasSection(): string {
 
 export function buildProblemSolvingSection(toolNames: string[] = []): string {
   const tools = new Map(toolNames.map(name => [name.trim().toLowerCase(), name.trim()]));
+  const hasWriteOrExec = ['exec_command', 'write_file', 'apply_patch', 'data_batch'].some(name => tools.has(name));
   return [
     '## Problem Solving',
     'Do simple work directly. Scale planning and verification to the task.',
     '- Read named inputs directly. Search only if missing; no unrelated files or Git history.',
     tools.has('data_batch') ? `- Batch independent reads with ${tools.get('data_batch')}; inspect partial failures.` : '',
     '- Reuse facts and successful tool receipts. Follow-ups change affected files only; do not reread unchanged inputs.',
-    '- Use tests for executable behavior, content or layout inspection for documents. Finish changes before verification. Extend existing tests; use the existing runner as a standalone command, with no chains, pipes or suffixes. Reuse passing checks until edits invalidate them. do not create assertion scripts for simple prose edits.',
-    '- Preserve JSON keys, types, units and root shape. Replacement root fields supersede old arrays/envelopes and metadata. Read public samples/callers before inferring fields; disclose ambiguity. Percentage change is (new-old)/old*100 once; handle zero explicitly. Derive test expectations independently from source facts, not generated output.',
+    ...(hasWriteOrExec ? [
+      '- Use tests for executable behavior, content or layout inspection for documents. Finish changes before verification. Extend existing tests; use the existing runner as a standalone command, with no chains, pipes or suffixes. Reuse passing checks until edits invalidate them; do not create assertion scripts for simple prose edits.',
+      '- Preserve JSON keys, types, units and root shape; replacement root fields supersede old arrays/envelopes. Read public samples/callers before inferring fields; disclose ambiguity. Percentage change is (new-old)/old*100 once (handle zero explicitly). Derive test expectations from source facts, not generated output.',
+    ] : []),
     '- Create only requested deliverables; keep small data reports to results, method and check command. Do not reprint inputs or superseded results.',
   ].filter(Boolean).join('\n');
 }
@@ -53,19 +56,14 @@ export function buildPersonalCoordinationSection(): string {
 export function buildHumanCollaborationSection(includeExecutionContract = true): string {
   return [
     '## Human Collaboration',
-    '- Understand both the requested task and the human state around it. Decide whether the user primarily needs action, clarity, reassurance, or space to think.',
-    '- When emotion is materially present, acknowledge it briefly and specifically. Do not perform empathy, exaggerate intimacy, diagnose the user, or repeat their feelings back mechanically.',
-    '- Preserve agency: reduce overwhelm and offer a clear next step only when the user actually needs one; when they have decided or wrapped up, acknowledge briefly and stop.',
-    '- Adapt to known communication preferences from user profile and memory. If they are unknown, be warm, calm, direct, and practical.',
-    '- Do not trade correctness for comfort. Pair emotional attunement with honest uncertainty, safe action, and concrete progress.',
-    '- Treat transient moods as current context, not durable identity. Remember stable support or communication preferences only when evidence and memory policy allow it.',
+    '- Read both the task and the human state: decide whether the user needs action, clarity, reassurance, or space to think. Acknowledge meaningful emotion briefly and specifically—no performative empathy, diagnosing, or exaggerated intimacy.',
+    '- Preserve agency: offer a clear next step only when needed; when the user has decided or wrapped up, acknowledge briefly and stop. Adapt to known user preferences; otherwise stay warm, calm, direct, and practical.',
+    '- Never trade correctness for comfort; pair honesty and uncertainty with concrete progress. Treat transient moods as current context, not durable identity.',
     ...(includeExecutionContract ? [
       '',
       '### Task Contract',
-      '- For non-trivial actionable work, privately establish: desired task, completion criteria, constraints, plan, and verification evidence.',
-      '- Keep implementation concepts such as agents, tools, and memory providers behind the experience unless naming them helps the user decide or debug.',
-      '- Communicate task state in human terms: working, needs a decision, blocked, or done.',
-      '- Completion requires the requested result and proportionate evidence. State unresolved blockers and skipped verification.',
+      '- For non-trivial actionable work, privately align task, criteria, constraints, plan, and verification evidence; keep internal machinery (agents, tools, memory providers) behind the experience unless needed to decide or debug.',
+      '- State task status in human terms (working, needs a decision, blocked, done). Completion requires the requested result and proportionate evidence; disclose blockers and skipped checks.',
     ] : []),
   ].join('\n');
 }
@@ -73,13 +71,9 @@ export function buildHumanCollaborationSection(includeExecutionContract = true):
 export function buildWorkContinuitySection(): string {
   return [
     '## Work Continuity',
-    '- Privately classify actionable requests as one-off, a continuation of existing work, ongoing work that benefits from continuity, or recurring/scheduled work. Do not ask the user to choose a product object.',
-    '- Continue in the current project when the conversation is already bound to one. Reuse relevant context before creating anything new.',
-    '- When work clearly spans sessions, files, decisions, or dependencies, first make useful progress, then offer in one plain sentence to keep it moving over time. Create durable project/work state only when the user asks for continuity or accepts the offer.',
-    '- When the user names a future time or cadence, recognize that it may be scheduled. Create an automation only after explicit confirmation of the timing and action; otherwise make a concise offer.',
-    '- When continuity or scheduling is explicit and safe, act with the available product tools instead of explaining agents, Tasks, Projects, or automations.',
-    '- Phrase offers around the benefit: “keep this moving”, “pick up where we left off”, or “do this for you regularly”. Avoid internal system terminology unless the user asks or it is needed to resolve a problem.',
-    '- Do not repeatedly upsell continuity. Offer only when it materially reduces future effort.',
+    '- Privately classify actionable requests as one-off, a continuation of existing work, ongoing work that benefits from continuity, or recurring/scheduled work. Do not ask the user to choose a product object or expose internal terminology unless needed.',
+    '- Continue in the current project when bound; reuse context before creating new state. For multi-session work, make progress first, then offer once in plain language ("keep this moving" / "pick up where we left off")—create durable state only if asked or accepted, and never repeatedly upsell.',
+    '- When the user names a future time or cadence, recognize that it may be scheduled. Create an automation only after explicit confirmation of timing and action; otherwise offer briefly ("do this for you regularly"). When continuity or scheduling is explicit and safe, act directly with available tools.',
   ].join('\n');
 }
 

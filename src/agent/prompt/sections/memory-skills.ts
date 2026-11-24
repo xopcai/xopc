@@ -14,33 +14,26 @@ export function buildMemorySection(params: {
 
   const lines = [
     '## Context and memory',
-    '',
-    'Confirmed user context, labeled working assumptions, goals, priorities, collaboration rules, and task knowledge are selected for each turn.',
-    'Before relying on prior decisions, commitments, dates, people, or preferences, check the relevant evidence already in context. If missing, ambiguous, or summarized without the needed detail, retrieve it with the available memory or history tools. Do not reconstruct past events from plausibility or a new inference.',
-    'When explaining or correcting a memory, inspect its source and distinguish explicit user statements from working assumptions. Current user corrections take precedence. If evidence cannot be recovered, say what remains uncertain; do not claim a memory was saved, corrected, or forgotten without a successful operation.',
-    'When exact or additional context is needed:',
+    'Before relying on prior decisions, commitments, dates, people, or preferences, check the evidence in context or retrieve missing detail with memory/history tools—never reconstruct past events by guessing.',
+    'Distinguish explicit user statements from working assumptions; current user corrections win. State uncertainty if evidence is missing, and never claim a memory was saved, corrected, or forgotten without a successful tool result.',
   ];
-  if (names.has('user_context_read')) lines.push('- Use `user_context_read` for user facts and preferences.');
-  if (names.has('knowledge_read')) lines.push('- Use `knowledge_read` for scoped project decisions and knowledge.');
+  if (names.has('user_context_read')) lines.push('- `user_context_read`: user facts and preferences.');
+  if (names.has('knowledge_read')) lines.push('- `knowledge_read`: scoped project decisions and knowledge.');
   if (names.has('user_context_search')) {
-    lines.push('- Use `user_context_search` for user identity, preferences, routines, and current state.');
+    lines.push('- `user_context_search`: user identity, preferences, routines, and current state.');
   }
   if (names.has('user_context_update')) {
-    lines.push('- When the current user explicitly corrects, confirms, rejects, or asks to forget an existing user assertion, use `user_context_update` immediately and include an exact quote as evidence. Never use it for an inference of your own.');
+    lines.push('- `user_context_update`: use immediately when the user explicitly corrects, confirms, rejects, or forgets an assertion (quote exact evidence; never for your own inference).');
   }
   if (names.has('knowledge_search')) {
-    lines.push('- Use `knowledge_search` for project facts, decisions, lessons, commitments, and open questions.');
+    lines.push('- `knowledge_search`: project facts, decisions, lessons, commitments, and open questions.');
   }
-  if (names.has('session_recall')) lines.push('- Use `session_recall` for exact raw content from the current session.');
-  if (names.has('session_search')) lines.push('- Use `session_search` for other conversations across agents and projects (filter by `since`/`until`/`agentId`/`projectId`, search by keyword, or read/summarize by `conversationId`).');
+  if (names.has('session_recall')) lines.push('- `session_recall` for exact raw content from the current session.');
+  if (names.has('session_search')) lines.push('- `session_search` for other conversations across agents and projects (`since`/`until`/`agentId`/`projectId`, keyword, or `conversationId`).');
   if (names.has('knowledge_write')) {
-    lines.push('- Use `knowledge_write` for reusable task knowledge; it is stored as a reviewable candidate with provenance.');
+    lines.push('- `knowledge_write`: reusable task knowledge (stored as a reviewable candidate with provenance).');
   }
-  lines.push(
-    '',
-    'User facts are declarative. Reusable procedures belong in skills.',
-    'Do not infer importance from confidence: confidence measures truth likelihood; importance measures execution value.',
-  );
+  lines.push('User facts are declarative; reusable procedures belong in skills. Confidence = truth likelihood, importance = execution value.');
   return lines.join('\n');
 }
 
