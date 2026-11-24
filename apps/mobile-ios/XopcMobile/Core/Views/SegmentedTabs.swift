@@ -206,6 +206,49 @@ extension View {
     }
 }
 
+@Observable
+final class PageScrollProgress {
+    var page: CGFloat?
+}
+
+struct MobilePagePager<Value: Hashable, Page: View>: View {
+    let pages: [Value]
+    @Binding var selection: Value
+    let progress: PageScrollProgress
+    @ViewBuilder let page: (Value) -> Page
+
+    @Environment(\.layoutDirection) private var direction
+    @Namespace private var scrollSpace
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView(.horizontal) {
+                HStack(spacing: 0) {
+                    ForEach(pages, id: \.self) { value in
+                        page(value)
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .accessibilityHidden(value != selection)
+                            .id(value)
+                    }
+                }
+                .scrollTargetLayout()
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    let frame = proxy.frame(in: .named(scrollSpace))
+                    let offset = direction == .rightToLeft ? frame.maxX - geometry.size.width : -frame.minX
+                    return offset / max(1, geometry.size.width)
+                } action: { progress.page = $0 }
+            }
+            .scrollIndicators(.hidden, axes: .horizontal)
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: Binding<Value?>(get: { selection }, set: { value in
+                if let value, value != selection { selection = value }
+            }), anchor: .center)
+            .coordinateSpace(name: scrollSpace)
+        }
+    }
+}
+
 struct SegmentedTabs<Value: Hashable>: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let options: [SegmentOption<Value>]
@@ -213,6 +256,7 @@ struct SegmentedTabs<Value: Hashable>: View {
     let label: LocalizedStringKey
     var minimumSegmentWidth: CGFloat = 64
     var swipeToSelect = false
+    var pagerProgress: PageScrollProgress?
     let onSelect: (Value) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -220,7 +264,6 @@ struct SegmentedTabs<Value: Hashable>: View {
     @Environment(\.layoutDirection) private var direction
     @ScaledMetric(relativeTo: .subheadline) private var height = 46
     @ScaledMetric(relativeTo: .subheadline) private var scale = 1.0
-    @Namespace private var indicator
     @State private var trackWidth: CGFloat = 0
 
     var body: some View {
@@ -228,7 +271,14 @@ struct SegmentedTabs<Value: Hashable>: View {
             let canSwipe = swipeToSelect && trackWidth > 0 && trackWidth <= geometry.size.width + 0.5
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
-                    SegmentTrack(viewportWidth: geometry.size.width, height: height, direction: direction) {
+                    let selectedIndex = options.firstIndex { $0.id == selected }
+                    let page = pagerProgress?.page ?? selectedIndex.map { CGFloat($0) } ?? -1
+                    SegmentTrack(viewportWidth: geometry.size.width, height: height, direction: direction, page: page) {
+                        RoundedRectangle(cornerRadius: mobileTheme.corner(18) * scale)
+                            .fill(colorScheme == .dark ? mobileTheme.active : mobileTheme.panel)
+                            .opacity(selectedIndex == nil ? 0 : 1)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                         ForEach(options) { option in
                             button(for: option)
                                 .id(option.id)
@@ -238,7 +288,7 @@ struct SegmentedTabs<Value: Hashable>: View {
                     .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { trackWidth = $0 }
                     .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(18) * scale))
                     .clipShape(.rect(cornerRadius: mobileTheme.corner(18) * scale))
-                    .animation(reduceMotion ? nil : .timingCurve(0.32, 0.72, 0, 1, duration: 0.25), value: selected)
+                    .animation(reduceMotion || pagerProgress != nil ? nil : .timingCurve(0.32, 0.72, 0, 1, duration: 0.25), value: selected)
                 }
                 .scrollDisabled(canSwipe)
                 .pageSelectionSwipe(options.map(\.id), selected: selected, enabled: canSwipe,
@@ -281,14 +331,6 @@ struct SegmentedTabs<Value: Hashable>: View {
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 6)
             .frame(maxWidth: .infinity, minHeight: height)
-            .background {
-                if active {
-                    RoundedRectangle(cornerRadius: mobileTheme.corner(18) * scale)
-                        .fill(colorScheme == .dark ? mobileTheme.active : mobileTheme.panel)
-                        .matchedGeometryEffect(id: "selected", in: indicator)
-                        .accessibilityHidden(true)
-                }
-            }
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -307,10 +349,16 @@ private struct SegmentTrack: Layout {
     let viewportWidth: CGFloat
     let height: CGFloat
     let direction: LayoutDirection
+    var page: CGFloat
+
+    var animatableData: CGFloat {
+        get { page }
+        set { page = newValue }
+    }
 
     private func widths(_ subviews: Subviews) -> [CGFloat] {
-        let naturalWidths = subviews.map { max($0[SegmentMinimumWidth.self], $0.sizeThatFits(.unspecified).width) }
-        let extra = max(0, viewportWidth - naturalWidths.reduce(0, +)) / CGFloat(max(subviews.count, 1))
+        let naturalWidths = subviews.dropFirst().map { max($0[SegmentMinimumWidth.self], $0.sizeThatFits(.unspecified).width) }
+        let extra = max(0, viewportWidth - naturalWidths.reduce(0, +)) / CGFloat(max(naturalWidths.count, 1))
         return naturalWidths.map { $0 + extra }
     }
 
@@ -319,12 +367,27 @@ private struct SegmentTrack: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
-        var offset: CGFloat = 0
-        for (subview, width) in zip(subviews, widths(subviews)) {
-            let center = offset + width / 2
+        let widths = widths(subviews)
+        guard let indicator = subviews.first, !widths.isEmpty else { return }
+
+        func place(_ subview: LayoutSubview, start: CGFloat, width: CGFloat) {
+            let center = start + width / 2
             subview.place(at: CGPoint(x: direction == .rightToLeft ? bounds.maxX - center : bounds.minX + center,
                                       y: bounds.midY),
                           anchor: .center, proposal: ProposedViewSize(width: width, height: height))
+        }
+
+        let clampedPage = min(max(0, page), CGFloat(widths.count - 1))
+        let left = Int(clampedPage)
+        let right = min(left + 1, widths.count - 1)
+        let fraction = clampedPage - CGFloat(left)
+        let indicatorStart = widths.prefix(left).reduce(0, +) + widths[left] * fraction
+        let indicatorWidth = widths[left] + (widths[right] - widths[left]) * fraction
+        place(indicator, start: indicatorStart, width: indicatorWidth)
+
+        var offset: CGFloat = 0
+        for (subview, width) in zip(subviews.dropFirst(), widths) {
+            place(subview, start: offset, width: width)
             offset += width
         }
     }

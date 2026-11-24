@@ -138,6 +138,7 @@ struct PersonalAgentOverview: View {
     @State private var showingEdit = false
     @State private var setupPrompt: String?
     @State private var tab = SectionTab.tasks
+    @State private var pagerProgress = PageScrollProgress()
     @State private var collapse: CGFloat = 0
     @State private var current: [PersonalOverviewWork] = []
     @State private var history: [PersonalOverviewWork] = []
@@ -160,33 +161,10 @@ struct PersonalAgentOverview: View {
     var body: some View {
         VStack(spacing: 0) {
             top
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    Color.clear.frame(height: 1)
-                        .onGeometryChange(for: CGFloat.self) {
-                            min(1, max(0, -$0.frame(in: .named("personal-overview")).minY / 108))
-                        } action: { collapse = $0 }
-                    if tab == .tasks {
-                        tasks
-                    } else {
-                        library
-                    }
-                }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 22)
+            MobilePagePager(pages: SectionTab.allCases, selection: $tab, progress: pagerProgress) { page in
+                overviewPage(page)
             }
-            .pageSelectionSwipe(SectionTab.allCases, selected: tab, enabled: !showingEdit && setupPrompt == nil) {
-                tab = $0
-            }
-            .coordinateSpace(name: "personal-overview")
-            .accessibilityIdentifier("personal-overview-scroll")
-            .refreshable {
-                if tab == .tasks {
-                    await refreshTasks()
-                } else {
-                    await loadDeliveries(reset: true)
-                }
-            }
+            .accessibilityIdentifier("personal-overview-pager")
         }
         .background(mobileTheme.canvas)
         .toolbar(.hidden, for: .navigationBar)
@@ -211,6 +189,34 @@ struct PersonalAgentOverview: View {
         }
     }
 
+    private func overviewPage(_ page: SectionTab) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                Color.clear.frame(height: 1)
+                    .onGeometryChange(for: CGFloat?.self) { proxy in
+                        guard page == tab else { return nil }
+                        return min(1, max(0, -proxy.frame(in: .named(page)).minY / 108))
+                    } action: { if let amount = $0 { collapse = amount } }
+                if page == .tasks {
+                    tasks
+                } else {
+                    library
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 22)
+        }
+        .coordinateSpace(name: page)
+        .accessibilityIdentifier("personal-overview-scroll")
+        .refreshable {
+            if page == .tasks {
+                await refreshTasks()
+            } else {
+                await loadDeliveries(reset: true)
+            }
+        }
+    }
+
     private var top: some View {
         VStack(spacing: 8) {
             Button("关闭", systemImage: "xmark", action: { dismiss() })
@@ -218,14 +224,12 @@ struct PersonalAgentOverview: View {
                 .frame(width: 44, height: 44)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .accessibilityIdentifier("personal-overview-close")
-            ZStack(alignment: .bottomTrailing) {
+            Button { showingEdit = true } label: {
                 PersonalAgentAvatar(configuration: configuration, agent: agent, size: 112 - 48 * collapse, active: !reduceMotion)
-                    .accessibilityIdentifier("personal-overview-avatar")
-                Button("编辑助手", systemImage: "pencil") { showingEdit = true }
-                    .labelStyle(.iconOnly).frame(width: 44, height: 44)
-                    .background(.regularMaterial, in: .circle)
-                    .accessibilityIdentifier("personal-overview-edit")
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("编辑助手")
+            .accessibilityIdentifier("personal-overview-avatar")
             Text(agent.displayName).font(.title2.weight(.semibold)).lineLimit(1)
             let count = workLoaded ? current.filter(\.requiresAttention).count : attention
             if count > 0 {
@@ -235,7 +239,9 @@ struct PersonalAgentOverview: View {
             SegmentedTabs(options: [
                 SegmentOption(id: SectionTab.tasks, title: "任务", icon: "checklist", count: count > 0 ? count : nil, accessibilityID: "personal-overview-tasks-tab"),
                 SegmentOption(id: .library, title: "资料库", icon: "doc.on.doc", accessibilityID: "personal-overview-library-tab")
-            ], selected: tab, label: "助理概览", swipeToSelect: !showingEdit && setupPrompt == nil) { tab = $0 }
+            ], selected: tab, label: "助理概览", swipeToSelect: !showingEdit && setupPrompt == nil, pagerProgress: pagerProgress) { next in
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.23)) { tab = next }
+            }
                 .accessibilityIdentifier("personal-overview-tabs")
                 .padding(.top, 8)
         }

@@ -12,9 +12,14 @@ import ai.xopc.mobile.gateway.PersonalWork
 import ai.xopc.mobile.gateway.PersonalWorkPage
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -22,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -30,13 +36,16 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import java.text.DateFormat
 import java.time.Instant
@@ -113,6 +122,12 @@ internal fun PersonalOverviewContent(agent: PersonalAgentRecord, avatar: Bitmap?
   onClose: () -> Unit, onEdit: () -> Unit, onTask: (String) -> Unit, onSchedule: (String) -> Unit,
   onOpenSchedule: (String) -> Unit, onDelivery: (PersonalDelivery) -> Unit,
   onWorkMore: () -> Unit, onScheduleRetry: () -> Unit, onDeliveryMore: () -> Unit, modifier: Modifier) {
+  val pager = key(agent.conversationId) { rememberPagerState(initialPage = if (library) 1 else 0) { 2 } }
+  val scope = rememberCoroutineScope()
+  val commitTab by rememberUpdatedState(onTab)
+  LaunchedEffect(pager) {
+    snapshotFlow { pager.settledPage }.collect { commitTab(it == 1) }
+  }
   val density = LocalDensity.current
   val maxCollapse = with(density) { 60.dp.toPx() }
   val collapse = rememberSaveable(agent.conversationId) { mutableFloatStateOf(0f) }
@@ -134,13 +149,18 @@ internal fun PersonalOverviewContent(agent: PersonalAgentRecord, avatar: Bitmap?
   Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
     .padding(horizontal = 16.dp).testTag("personal-overview")) {
-    PersonalOverviewHeader(agent, avatar, attention, running, library, collapse, maxCollapse, onTab, onClose, onEdit)
-    key(library) {
-      LazyColumn(Modifier.fillMaxWidth().weight(1f).nestedScroll(scroll)
-        .swipePageSelection(listOf(false, true), library, onSelect = onTab)
-        .testTag(if (library) "personal-overview-library-list" else "personal-overview-task-list"),
+    PersonalOverviewHeader(agent, avatar, attention, running, pager, collapse, maxCollapse, { selected ->
+      scope.launch { pager.animateScrollToPage(if (selected) 1 else 0) }
+    }, onClose, onEdit)
+    HorizontalPager(pager, modifier = Modifier.fillMaxWidth().weight(1f).testTag("personal-overview-pager"),
+      flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.33f),
+    ) { index ->
+      val libraryPage = index == 1
+      val accessibility = if (index == pager.settledPage) Modifier else Modifier.semantics { hideFromAccessibility() }
+      LazyColumn(Modifier.fillMaxSize().nestedScroll(scroll).then(accessibility)
+        .testTag(if (libraryPage) "personal-overview-library-list" else "personal-overview-task-list"),
         contentPadding = PaddingValues(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        if (library) {
+        if (libraryPage) {
           if (deliveries.loading && deliveries.value == null) item { DeliveryListSkeleton() }
           items(deliveries.value?.items.orEmpty(), key = { it.id }) { delivery ->
             OverviewRow(delivery.title, delivery.taskTitle ?: stringResource(R.string.personal_overview_source),
@@ -221,18 +241,17 @@ internal fun PersonalOverviewContent(agent: PersonalAgentRecord, avatar: Bitmap?
 
 @Composable
 private fun PersonalOverviewHeader(agent: PersonalAgentRecord, avatar: Bitmap?, attention: Int, running: Int,
-  library: Boolean, collapse: FloatState, maxCollapse: Float, onTab: (Boolean) -> Unit, onClose: () -> Unit, onEdit: () -> Unit) {
+  pager: PagerState, collapse: FloatState, maxCollapse: Float, onTab: (Boolean) -> Unit, onClose: () -> Unit, onEdit: () -> Unit) {
   val extent = (116 - 48 * (collapse.floatValue / maxCollapse).coerceIn(0f, 1f)).dp
   Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
     IconButton(onClick = onClose, modifier = Modifier.align(Alignment.End).testTag("personal-overview-close")) {
       Icon(painterResource(R.drawable.action_close), stringResource(R.string.assistant_close))
     }
-    Box(Modifier.size(extent).testTag("personal-overview-avatar")) {
+    val editLabel = stringResource(R.string.personal_overview_edit)
+    Box(Modifier.size(extent).clip(CircleShape).testTag("personal-overview-avatar")
+      .clickable(role = Role.Button, onClick = onEdit)
+      .semantics { contentDescription = editLabel }) {
       PersonalAgentAvatar(avatar, agent.appearance, extent, active = true)
-      FilledTonalIconButton(onClick = onEdit, modifier = Modifier.align(Alignment.BottomEnd)
-        .size(40.dp).testTag("personal-overview-edit")) {
-        Icon(painterResource(R.drawable.action_new_chat), stringResource(R.string.personal_overview_edit), Modifier.size(18.dp))
-      }
     }
     Text(agent.displayName, Modifier.padding(top = 5.dp), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall,
       maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -247,7 +266,7 @@ private fun PersonalOverviewHeader(agent: PersonalAgentRecord, avatar: Bitmap?, 
       listOf(
         SegmentOption(false, stringResource(R.string.progress_tasks), "personal-overview-tasks-tab", icon = R.drawable.action_task_list, count = attention.takeIf { it > 0 }),
         SegmentOption(true, stringResource(R.string.personal_overview_library), "personal-overview-library-tab", icon = R.drawable.tab_notes),
-      ), library, onTab, Modifier.padding(top = 12.dp, bottom = 8.dp), swipeToSelect = true,
+      ), pager.settledPage == 1, onTab, Modifier.padding(top = 12.dp, bottom = 8.dp), swipeToSelect = true, pager = pager,
     )
   }
 }

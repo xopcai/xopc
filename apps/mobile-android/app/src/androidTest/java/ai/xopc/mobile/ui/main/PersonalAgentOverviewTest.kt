@@ -9,15 +9,20 @@ import androidx.activity.ComponentActivity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -49,7 +54,17 @@ class PersonalAgentOverviewTest {
     portrait.assertWidthIsEqualTo(68.dp)
     tasks.performTouchInput { swipeDown() }
     portrait.assertWidthIsEqualTo(116.dp)
-    compose.onNodeWithTag("personal-overview-library-tab").performClick()
+    val indicator = compose.onNodeWithTag("segmented-tab-indicator")
+    val taskEdge = indicator.getUnclippedBoundsInRoot().left
+    tasks.performTouchInput {
+      down(center)
+      moveBy(Offset(-width * 0.22f, 0f))
+    }
+    assertTrue(indicator.getUnclippedBoundsInRoot().left > taskEdge)
+    tasks.performTouchInput { cancel() }
+    compose.onNodeWithTag("personal-overview-tasks-tab").assertIsSelected()
+    tasks.performTouchInput { swipeLeft() }
+    compose.onNodeWithTag("personal-overview-library-tab").assertIsSelected()
     val skeleton = compose.onNodeWithTag("personal-overview-library-loading")
     skeleton.assertExists()
     val item = compose.onNodeWithTag("personal-overview-delivery-delivery")

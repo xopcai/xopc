@@ -110,6 +110,8 @@ private struct ShareCenterView: View {
     let configuration: GatewayConfiguration
     @State private var shares: [MobileShare] = []
     @State private var activeOnly = false
+    @State private var pagerProgress = PageScrollProgress()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var loaded = false
     @State private var busy = false
     @State private var failed = false
@@ -120,16 +122,36 @@ private struct ShareCenterView: View {
         SegmentOption(id: true, title: "仅有效", accessibilityID: "share-filter-active")
     ]
 
-    private var visibleShares: [MobileShare] {
-        activeOnly ? shares.filter(\.isActive) : shares
+    var body: some View {
+        VStack(spacing: 0) {
+            SegmentedTabs(options: filters, selected: activeOnly, label: "筛选", pagerProgress: pagerProgress) { next in
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.23)) { activeOnly = next }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+            MobilePagePager(pages: filters.map(\.id), selection: $activeOnly, progress: pagerProgress) { page in
+                shareList(activeOnly: page)
+            }
+        }
+        .navigationTitle("分享记录")
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: configuration) { await load() }
+        .confirmationDialog("撤销链接", isPresented: Binding(get: { revokeTarget != nil }, set: {
+            if !$0 {
+                revokeTarget = nil
+            }
+        }), titleVisibility: .visible, presenting: revokeTarget) { share in
+            Button("撤销", role: .destructive) {
+                Task { await update(share) { client in try await client.revokeShare(id: share.id) } }
+            }
+        } message: { _ in
+            Text("该链接将立即停止访问。")
+        }
     }
 
-    var body: some View {
-        List {
-            Section {
-                SegmentedTabs(options: filters, selected: activeOnly, label: "筛选") { activeOnly = $0 }
-            }
-
+    private func shareList(activeOnly: Bool) -> some View {
+        let visibleShares = activeOnly ? shares.filter(\.isActive) : shares
+        return List {
             if failed {
                 Section {
                     Text("暂时无法读取分享记录。").foregroundStyle(.secondary)
@@ -148,26 +170,9 @@ private struct ShareCenterView: View {
                 }
             }
         }
-        .pageSelectionSwipe(filters.map(\.id), selected: activeOnly, enabled: !busy && revokeTarget == nil) {
-            activeOnly = $0
-        }
         .listStyle(.insetGrouped)
         .listSectionSpacing(12)
-        .navigationTitle("分享记录")
-        .navigationBarTitleDisplayMode(.inline)
-        .task(id: configuration) { await load() }
         .refreshable { await load() }
-        .confirmationDialog("撤销链接", isPresented: Binding(get: { revokeTarget != nil }, set: {
-            if !$0 {
-                revokeTarget = nil
-            }
-        }), titleVisibility: .visible, presenting: revokeTarget) { share in
-            Button("撤销", role: .destructive) {
-                Task { await update(share) { client in try await client.revokeShare(id: share.id) } }
-            }
-        } message: { _ in
-            Text("该链接将立即停止访问。")
-        }
     }
 
     private func shareRow(_ share: MobileShare) -> some View {

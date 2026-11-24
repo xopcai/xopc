@@ -50,7 +50,7 @@ class PersonalAgentSettingsTest {
     compose.onNodeWithTag("chat-header-voice-call").assertIsDisplayed()
     compose.onNodeWithTag("assistant-options").assertDoesNotExist()
     compose.onNodeWithTag("chat-personal-overview").performClick()
-    compose.onNodeWithTag("personal-overview-edit").performClick()
+    compose.onNodeWithTag("personal-overview-avatar").performClick()
     compose.onNodeWithTag("personal-agent-profile-sheet").assertIsDisplayed()
     compose.onNodeWithText(compose.activity.getString(R.string.personal_agent_address)).assertDoesNotExist()
     compose.onNodeWithText(compose.activity.getString(R.string.personal_agent_humor)).assertDoesNotExist()

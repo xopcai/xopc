@@ -956,6 +956,23 @@ html.dark {
   animation: xopc-focus-stage-in 320ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
+.xopc-apple-stage {
+  animation: xopc-apple-stage-in 280ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-apple-card {
+  animation: xopc-apple-card-in 340ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-check-pop {
+  animation: xopc-check-pop 220ms cubic-bezier(.34, 1.56, .64, 1) both;
+}
+
+.xopc-segmented-thumb {
+  transition: transform 300ms cubic-bezier(.22, 1, .36, 1);
+  will-change: transform;
+}
+
 .xopc-clue-card {
   animation: xopc-clue-card-in 280ms cubic-bezier(.22, 1, .36, 1) both;
 }
@@ -988,6 +1005,22 @@ html.dark {
 @keyframes xopc-focus-stage-in {
   from { opacity: 0; transform: translateY(10px) scale(0.99); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes xopc-apple-stage-in {
+  from { opacity: 0; transform: translate3d(0, 8px, 0) scale(0.994); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes xopc-apple-card-in {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes xopc-check-pop {
+  0% { opacity: 0.4; transform: scale(0.65); }
+  65% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 @keyframes xopc-clue-card-in {
@@ -1044,6 +1077,9 @@ html.dark {
   .xopc-onboarding-provider-options,
   .xopc-work-discovery-stage,
   .xopc-focus-stage,
+  .xopc-apple-stage,
+  .xopc-apple-card,
+  .xopc-check-pop,
   .xopc-clue-card,
   .xopc-signal-chip,
   .xopc-trait-chip,
@@ -1073,6 +1109,10 @@ html.dark {
   .xopc-source-convergence-progress {
     width: 100%;
     transform: none;
+  }
+
+  .xopc-segmented-thumb {
+    transition: none;
   }
 
   .xopc-loop-logo--stream .xopc-loop-logo__ambient,

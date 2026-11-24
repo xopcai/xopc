@@ -13,8 +13,8 @@ export class XopcShareViewModel {
   private generation: number = 0;
 
   dispose(): void { this.generation++; this.loading = false; this.busyId = ''; }
-  visibleItems(): XopcShareItem[] {
-    return this.activeOnly ? this.items.filter((item: XopcShareItem): boolean => !item.revoked && !item.expired) : this.items;
+  visibleItems(activeOnly: boolean = this.activeOnly): XopcShareItem[] {
+    return activeOnly ? this.items.filter((item: XopcShareItem): boolean => !item.revoked && !item.expired) : this.items;
   }
   async load(): Promise<void> {
     if (this.loading || this.busyId) return;

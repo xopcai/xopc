@@ -2298,6 +2298,26 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertLessThan(row.frame.minY, app.frame.height * 0.35)
     }
 
+    func testReferencePickerSwipesBetweenNotesAndTasks() {
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-personal"].tap()
+        app.buttons["添加附件或引用"].tap()
+        app.buttons["引用笔记"].tap()
+
+        let note = app.buttons["reference-item-note-note-1"]
+        let task = app.buttons["reference-item-task-task-header"]
+        XCTAssertTrue(note.waitForExistence(timeout: 6))
+        note.swipeLeft()
+        XCTAssertTrue(task.waitForExistence(timeout: 6))
+        XCTAssertTrue(app.buttons["reference-tab-task"].isSelected)
+        XCTAssertFalse(note.exists)
+
+        task.swipeRight()
+        XCTAssertTrue(note.waitForExistence(timeout: 6))
+        XCTAssertTrue(app.buttons["reference-tab-note"].isSelected)
+        XCTAssertFalse(task.exists)
+    }
+
     func testPersonalOverviewScrollTasksAndScheduleDraft() {
         XCTAssertTrue(app.openHomeSidebar())
         app.buttons["chat-sidebar-personal"].tap()
@@ -2326,9 +2346,19 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(scroll.waitForExistence(timeout: 6))
         let library = app.buttons["personal-overview-library-tab"]
         XCTAssertTrue(library.waitForExistence(timeout: 5))
+        let tasksTab = app.buttons["personal-overview-tasks-tab"]
+        XCTAssertGreaterThan(library.frame.maxX - tasksTab.frame.minX, app.frame.width * 0.8)
+        scroll.swipeLeft()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "selected == true"), object: library
+        )], timeout: 5), .completed)
+        scroll.swipeRight()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "selected == true"), object: tasksTab
+        )], timeout: 5), .completed)
         library.tap()
         XCTAssertTrue(library.isSelected)
-        XCTAssertFalse(app.buttons["personal-overview-tasks-tab"].isSelected)
+        XCTAssertFalse(tasksTab.isSelected)
         let attachment = app.buttons["chat-attachment-preview-fixture-file"]
         XCTAssertTrue(attachment.waitForExistence(timeout: 6))
         capture("ios-personal-overview-library")
@@ -3384,7 +3414,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(avatar.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["assistant-options"].exists)
         avatar.tap()
-        let edit = app.buttons["personal-overview-edit"]
+        let edit = app.buttons["personal-overview-avatar"]
         XCTAssertTrue(edit.waitForExistence(timeout: 5))
         edit.tap()
     }
@@ -3405,7 +3435,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(model.label.contains("Second Fixture Model"))
         XCTAssertFalse(app.buttons["personal-setting-thinking"].exists)
         app.buttons["personal-setting-close"].tap()
-        let edit = app.buttons["personal-overview-edit"]
+        let edit = app.buttons["personal-overview-avatar"]
         XCTAssertTrue(edit.waitForExistence(timeout: 5))
         edit.tap()
         XCTAssertTrue(model.waitForExistence(timeout: 5))
@@ -3437,7 +3467,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
         close.tap()
         XCTAssertTrue(mode.waitForNonExistence(timeout: 5))
-        app.buttons["personal-overview-edit"].tap()
+        app.buttons["personal-overview-avatar"].tap()
         XCTAssertTrue(form.waitForExistence(timeout: 5))
         XCTAssertTrue(mode.waitForExistence(timeout: 5))
         if !mode.isHittable || mode.frame.maxY > form.frame.maxY - 20 {

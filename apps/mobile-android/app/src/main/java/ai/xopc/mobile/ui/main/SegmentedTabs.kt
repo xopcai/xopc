@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -38,6 +40,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
+import kotlin.math.floor
 
 internal data class SegmentOption<T>(
   val value: T,
@@ -59,6 +63,7 @@ internal fun <T> SegmentedTabs(
   minimumSegmentWidth: Dp = 64.dp,
   enabled: Boolean = true,
   swipeToSelect: Boolean = false,
+  pager: PagerState? = null,
 ) {
   if (options.isEmpty()) return
   val density = LocalDensity.current
@@ -88,7 +93,8 @@ internal fun <T> SegmentedTabs(
     val trackWidth = minimumWidths.fold(0.dp, Dp::plus)
     val extra = (maxWidth - trackWidth).coerceAtLeast(0.dp) / options.size
     val widths = minimumWidths.map { it + extra }
-    val selectedStart = widths.take(selection.coerceAtLeast(0)).fold(0.dp, Dp::plus)
+    val starts = widths.runningFold(0.dp, Dp::plus)
+    val selectedStart = starts[selection.coerceAtLeast(0)]
     val selectedWidth = widths[selection.coerceAtLeast(0)]
     val thumb by animateDpAsState(selectedStart,
       tween(250, easing = segmentEasing), label = "Segment position")
@@ -113,8 +119,23 @@ internal fun <T> SegmentedTabs(
     Box(swipe.horizontalScroll(scroll, enabled = !fits)) {
       Box(Modifier.clip(shape).background(scheme.surfaceContainer)) {
         if (selection >= 0) {
-          Box(Modifier.matchParentSize().offset { IntOffset(thumb.roundToPx(), 0) }) {
-            Box(Modifier.align(Alignment.CenterStart).width(thumbWidth)
+          val indicator = if (pager == null) {
+            Modifier.offset { IntOffset(thumb.roundToPx(), 0) }.width(thumbWidth)
+          } else {
+            Modifier.layout { measurable, constraints ->
+              val page = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, widths.lastIndex.toFloat())
+              val left = floor(page).toInt()
+              val right = (left + 1).coerceAtMost(widths.lastIndex)
+              val fraction = page - left
+              val width = lerp(widths[left], widths[right], fraction).roundToPx()
+              val child = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+              layout(constraints.maxWidth, child.height) {
+                child.placeRelative(lerp(starts[left], starts[right], fraction).roundToPx(), 0)
+              }
+            }
+          }
+          Box(Modifier.matchParentSize()) {
+            Box(Modifier.align(Alignment.CenterStart).then(indicator)
               .heightIn(min = 48.dp * fontScale).background(selectedFill, shape)
               .testTag("segmented-tab-indicator"))
           }

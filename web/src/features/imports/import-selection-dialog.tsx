@@ -23,17 +23,32 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { importRequest, type ImportInventory, type InventoryItem } from './import-api';
 import { selectable, selectionState, toggleItem, toggleItems } from './selection';
 
-export function ImportSelectionDialog({ open, sourceName, inventory, selected, onSelected, busy, locked, error, onClose, onRefresh, onSubmit }: {
+export function ImportSelectionDialog({
+  open,
+  sourceName,
+  inventory,
+  selected,
+  onSelected,
+  busy,
+  locked,
+  error,
+  onClose,
+  onRefresh,
+  onSubmit,
+  defaultProjectsOpen = false,
+  nested = false,
+}: {
   open: boolean; sourceName: string; inventory?: ImportInventory; selected: Set<string>; onSelected: (ids: Set<string>) => void;
   busy: boolean; locked: boolean; error: string; onClose: () => void; onRefresh: () => void; onSubmit: () => void;
+  defaultProjectsOpen?: boolean; nested?: boolean;
 }) {
   const t = messages(useLocaleStore(state => state.language)).imports;
-  const [personalOpen, setPersonalOpen] = useState(true);
-  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [personalOpen, setPersonalOpen] = useState(!defaultProjectsOpen);
+  const [projectsOpen, setProjectsOpen] = useState(defaultProjectsOpen);
   useEffect(() => {
-    setPersonalOpen(true);
-    setProjectsOpen(false);
-  }, [inventory?.id]);
+    setPersonalOpen(!defaultProjectsOpen);
+    setProjectsOpen(defaultProjectsOpen);
+  }, [defaultProjectsOpen, inventory?.id]);
 
   const personal = inventory?.candidates.filter(item => !item.parentId && (item.kind === 'skill' || item.kind === 'context')) ?? [];
   const projects = inventory?.candidates.filter(item => item.kind === 'project') ?? [];
@@ -61,11 +76,11 @@ export function ImportSelectionDialog({ open, sourceName, inventory, selected, o
   };
 
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}><Dialog.Portal>
-    <Dialog.Overlay className={`xopc-dialog-overlay fixed inset-0 bg-scrim ${SETTINGS_SHELL_OVERLAY_Z}`} />
+    <Dialog.Overlay className={`xopc-dialog-overlay fixed inset-0 bg-scrim ${nested ? 'z-[85]' : SETTINGS_SHELL_OVERLAY_Z}`} />
     <Dialog.Content className={cn(
       'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(calc(100dvh-2rem),760px)] w-[min(calc(100%-2rem),720px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay outline-none',
       'max-sm:bottom-0 max-sm:left-0 max-sm:top-auto max-sm:h-[min(92dvh,760px)] max-sm:w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none',
-      SETTINGS_SHELL_CONTENT_Z,
+      nested ? 'z-[86]' : SETTINGS_SHELL_CONTENT_Z,
     )}>
       <header className="shrink-0 space-y-2 border-b border-edge p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3">

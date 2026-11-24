@@ -1,5 +1,6 @@
-import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcPageSwipe, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcPagerProgress, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcUserGoal } from '../model/userUnderstanding';
 import { XopcPersonalViewModel } from '../viewmodel/homeViewModel';
 import { XopcListSkeleton, XopcPageHeader } from './MobileComponents';
@@ -12,12 +13,20 @@ export struct XopcPersonalGoalsView {
     { key: 'achieved', label: $r('app.string.personal_goal_achieved'), testId: 'personal-goals-achieved' }
   ];
 
-  @Computed get visibleGoals(): XopcUserGoal[] {
+  private pager: SwiperController = new SwiperController();
+  private pagerProgress: XopcPagerProgress = new XopcPagerProgress();
+  @Local layout: XopcLayoutState = layoutState;
+
+  private visibleGoals(key: string): XopcUserGoal[] {
     return this.model.goals.filter((goal: XopcUserGoal): boolean =>
-      (goal.status === 'achieved') === (this.selectedGoalTab === 'achieved'));
+      (goal.status === 'achieved') === (key === 'achieved'));
   }
 
-  private selectGoalTab(key: string): void { this.selectedGoalTab = key; }
+  private selectGoalTab(key: string): void {
+    if (key !== this.selectedGoalTab && !this.goalEditorOpen) {
+      this.pager.changeIndex(key === 'achieved' ? 1 : 0, !this.layout.reduceMotion);
+    }
+  }
 
   @Local colors: XopcThemeColors = appThemeColors;
   @Local model: XopcPersonalViewModel = new XopcPersonalViewModel();
@@ -141,31 +150,46 @@ export struct XopcPersonalGoalsView {
     }.width('100%').scrollBar(BarState.Off).backgroundColor(this.colors.panel)
   }
 
+  @Builder
+  private goalsPage(key: string) {
+    Scroll() {
+      Column() {
+        if (this.model.loading) XopcListSkeleton()
+        else if (!this.visibleGoals(key).length) {
+          Text($r('app.string.personal_goal_empty')).fontSize(14).fontColor(this.colors.secondary).width('100%')
+        }
+        ForEach(this.visibleGoals(key), (goal: XopcUserGoal) => { this.goalRow(goal) },
+          (goal: XopcUserGoal): string => goal.id)
+        if (this.model.error) {
+          Text($r('app.string.personal_profile_unavailable')).fontSize(12).fontColor(this.colors.tertiary).margin({ top: 12 })
+        }
+      }.width('100%').padding({ left: 20, right: 20 }).alignItems(HorizontalAlign.Start)
+    }.id('personal-goals-list').height('100%').width('100%').align(Alignment.Top).scrollBar(BarState.Off)
+      .accessibilityLevel(this.selectedGoalTab === key ? 'auto' : 'no-hide-descendants')
+  }
+
   build() {
     Column() {
       XopcPageHeader({ heading: $r('app.string.personal_goals'), showStaticTitle: true, backVisible: true,
         onBack: this.onExit, actionLabel: $r('app.string.personal_goal_add'),
         actionIcon: $r('sys.symbol.plus'), onAction: (): void => { this.openGoalEditor(); } })
       Column() {
-        XopcSegmentedTabs({ options: this.goalTabs, selectedKey: this.selectedGoalTab,
+        XopcSegmentedTabs({ options: this.goalTabs, selectedKey: this.selectedGoalTab, pagerProgress: this.pagerProgress,
           swipeToSelect: !this.goalEditorOpen,
           onSelect: (key: string): void => { this.selectGoalTab(key); } })
       }.width('100%').padding({ left: 20, right: 20 }).margin({ top: 8, bottom: 16 })
-      Scroll() {
-        Column() {
-          if (this.model.loading) XopcListSkeleton()
-          else if (!this.visibleGoals.length) {
-            Text($r('app.string.personal_goal_empty')).fontSize(14).fontColor(this.colors.secondary).width('100%')
-          }
-          ForEach(this.visibleGoals, (goal: XopcUserGoal) => { this.goalRow(goal) },
-            (goal: XopcUserGoal): string => goal.id)
-          if (this.model.error) {
-            Text($r('app.string.personal_profile_unavailable')).fontSize(12).fontColor(this.colors.tertiary).margin({ top: 12 })
-          }
-        }.width('100%').padding({ left: 20, right: 20 }).alignItems(HorizontalAlign.Start)
-      }.id('personal-goals-list').layoutWeight(1).width('100%').align(Alignment.Top).scrollBar(BarState.Off)
-        .gestureModifier(new XopcPageSwipe(this.goalTabs.map((option: XopcSegmentOption): string => option.key),
-          this.selectedGoalTab, (key: string): void => { this.selectGoalTab(key); }, !this.goalEditorOpen))
+      Swiper(this.pager) {
+        this.goalsPage('ongoing')
+        this.goalsPage('achieved')
+      }.id('personal-goals-pager').index(this.selectedGoalTab === 'achieved' ? 1 : 0)
+        .loop(false).indicator(false).cachedCount(1).disableSwipe(this.goalEditorOpen)
+        .duration(this.layout.reduceMotion ? 0 : 230)
+        .onContentDidScroll((_selected: number, index: number, position: number, length: number): void => {
+          this.pagerProgress.update(index, position, length);
+        })
+        .onAnimationEnd((): void => { this.pagerProgress.reset(); })
+        .onChange((index: number): void => { this.selectedGoalTab = this.goalTabs[index].key; })
+        .width('100%').layoutWeight(1)
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.goalEditorOpen, this.goalEditor, {
         height: SheetSize.LARGE, dragBar: true, backgroundColor: this.colors.panel

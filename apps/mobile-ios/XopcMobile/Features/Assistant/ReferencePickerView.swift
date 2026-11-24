@@ -8,11 +8,16 @@ struct ReferencePickerView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var kind: ContextReferenceKind
+    @State private var pagerProgress = PageScrollProgress()
     @State private var query = ""
-    @State private var items: [ReferenceItem] = []
-    @State private var isLoading = false
-    @State private var errorMessage: String?
+    @State private var results: [SearchKey: ReferenceResults] = [:]
+
+    private enum ReferenceResults {
+        case loaded([ReferenceItem])
+        case failed
+    }
 
     init(
         gateway: any GatewayServing,
@@ -30,42 +35,18 @@ struct ReferencePickerView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading, items.isEmpty {
-                    ProgressView("正在读取引用…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let errorMessage, items.isEmpty {
-                    ContentUnavailableView {
-                        Label("无法读取引用", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(errorMessage)
-                    } actions: {
-                        Button("重试") { reload() }
-                    }
-                } else if items.isEmpty {
-                    ContentUnavailableView.search(text: query)
-                } else {
-                    List(items) { item in
-                        Button {
-                            onSelect(item.reference)
-                            dismiss()
-                        } label: {
-                            ReferenceRow(item: item, isSelected: selectedIDs.contains(item.reference.id))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(selectedIDs.contains(item.reference.id))
-                    }
-                    .listStyle(.plain)
-                }
+            MobilePagePager(pages: availableKinds, selection: $kind, progress: pagerProgress) { page in
+                referenceList(page)
             }
-            .pageSelectionSwipe(availableKinds, selected: kind) { kind = $0 }
             .navigationTitle("添加引用")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: searchPrompt)
             .safeAreaInset(edge: .top) {
                 SegmentedTabs(options: availableKinds.map { item in
                     SegmentOption(id: item, title: item.title, accessibilityID: "reference-tab-\(item.rawValue)")
-                }, selected: kind, label: "引用类型", swipeToSelect: true) { kind = $0 }
+                }, selected: kind, label: "引用类型", swipeToSelect: true, pagerProgress: pagerProgress) { next in
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.23)) { kind = next }
+                }
                     .accessibilityIdentifier("reference-tabs")
                     .padding(.horizontal)
                     .padding(.vertical, 8)
@@ -77,11 +58,13 @@ struct ReferencePickerView: View {
                 }
             }
             .task(id: SearchKey(kind: kind, query: query)) {
-                if !query.isEmpty {
+                let key = SearchKey(kind: kind, query: query)
+                results = results.filter { $0.key.query == key.query }
+                if !key.query.isEmpty {
                     try? await Task.sleep(for: .milliseconds(250))
                     guard !Task.isCancelled else { return }
                 }
-                await load()
+                await load(key)
             }
         }
     }
@@ -100,25 +83,46 @@ struct ReferencePickerView: View {
         conversationID == nil ? [.note, .task] : ContextReferenceKind.allCases
     }
 
-    private func reload() {
-        Task { await load() }
+    @ViewBuilder private func referenceList(_ page: ContextReferenceKind) -> some View {
+        let key = SearchKey(kind: page, query: query)
+        switch results[key] {
+        case nil:
+            ProgressView("正在读取引用…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed:
+            ContentUnavailableView {
+                Label("无法读取引用", systemImage: "exclamationmark.triangle")
+            } actions: {
+                Button("重试") { Task { await load(key) } }
+            }
+        case let .loaded(items) where items.isEmpty:
+            ContentUnavailableView.search(text: query)
+        case let .loaded(items):
+            List(items) { item in
+                Button {
+                    onSelect(item.reference)
+                    dismiss()
+                } label: {
+                    ReferenceRow(item: item, isSelected: selectedIDs.contains(item.reference.id))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("reference-item-\(item.kind.rawValue)-\(item.id)")
+                .disabled(selectedIDs.contains(item.reference.id))
+            }
+            .listStyle(.plain)
+        }
     }
 
-    private func load() async {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
+    private func load(_ key: SearchKey) async {
         do {
-            items = try await gateway.searchReferences(
-                kind: kind,
-                query: query,
-                conversationID: conversationID
-            )
+            let items = try await gateway.searchReferences(kind: key.kind, query: key.query, conversationID: conversationID)
+            guard !Task.isCancelled, key.query == query else { return }
+            results[key] = .loaded(items)
         } catch is CancellationError {
             return
         } catch {
-            errorMessage = error.localizedDescription
-            items = []
+            guard !Task.isCancelled, key.query == query else { return }
+            results[key] = .failed
         }
     }
 }
@@ -156,7 +160,7 @@ private struct ReferenceRow: View {
     }
 }
 
-private struct SearchKey: Equatable {
+private struct SearchKey: Hashable {
     let kind: ContextReferenceKind
     let query: String
 }

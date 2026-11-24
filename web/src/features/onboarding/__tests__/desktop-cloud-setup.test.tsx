@@ -14,7 +14,7 @@ const api = vi.hoisted(() => ({
   prefetch: vi.fn(),
 }));
 vi.mock('@/lib/electron-env', () => ({ isElectron: () => api.desktop }));
-vi.mock('@/lib/electron-window-chrome', () => ({ isElectronDarwin: () => false }));
+vi.mock('@/lib/electron-window-chrome', () => ({ isElectronDarwin: () => false, isElectronWin32: () => false }));
 vi.mock('@/components/brand/loopi', () => ({ Loopi: () => null }));
 vi.mock('@/features/onboarding/desktop-onboarding-bootstrap', () => ({
   ensureDefaultPersonalAgent: api.ensurePersonal,

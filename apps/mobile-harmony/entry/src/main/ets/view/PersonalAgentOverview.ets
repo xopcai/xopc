@@ -1,4 +1,4 @@
-import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcPagerProgress, XopcSegmentedTabs } from './SegmentedTabs';
 import { artifactMedia, chatProductCapability } from '../common/chatRichContent';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcHistoryMedia, XopcProductReference } from '../model/chat';
@@ -56,6 +56,7 @@ export struct XopcPersonalAgentOverview {
   @Local headerTravel: number = 0;
   @Local deliveryPreview?: XopcPersonalDeliveryPreview;
   private pager: SwiperController = new SwiperController();
+  private pagerProgress: XopcPagerProgress = new XopcPagerProgress();
   @Computed get headerProgress(): number { return this.headerTravel / PERSONAL_HEADER_TRAVEL; }
   @Computed get avatarExtent(): number {
     return PERSONAL_AVATAR_EXPANDED - (PERSONAL_AVATAR_EXPANDED - PERSONAL_AVATAR_COMPACT) * this.headerProgress;
@@ -386,19 +387,12 @@ export struct XopcPersonalAgentOverview {
   build() {
     Column() {
       Row() {
-        Button($r('app.string.personal_overview_edit'), { type: ButtonType.Normal, buttonStyle: ButtonStyleMode.TEXTUAL })
-          .id('personal-overview-edit').constraintSize({ minHeight: 44 })
-          .padding({ left: 4, right: 12 }).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
-          .backgroundColor(Color.Transparent)
-          .onClick((): void => {
-            this.onNavigate({ page: 'personal-agent-profile', itemId: '', canShareConversation: this.canShareConversation });
-          })
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.xmark')).fontSize(22).fontColor([this.colors.secondary])
         }.id('personal-overview-close').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
           .accessibilityText($r('app.string.close')).onClick((): void => { this.onClose(); })
-      }.width('100%').justifyContent(FlexAlign.SpaceBetween)
-      Stack({ alignContent: Alignment.Center }) {
+      }.width('100%').justifyContent(FlexAlign.End)
+      Button({ type: ButtonType.Circle }) {
         Stack() {
           XopcPersonalAgentAvatar({ agentId: this.record?.agentId ?? '', revision: this.record?.revision ?? 0,
             appearance: this.record?.appearance ?? 'loopi', extent: 110, activePage: this.activePage,
@@ -406,6 +400,10 @@ export struct XopcPersonalAgentOverview {
         }.width(PERSONAL_AVATAR_EXPANDED).height(PERSONAL_AVATAR_EXPANDED).borderRadius(PERSONAL_AVATAR_EXPANDED / 2)
           .backgroundColor(this.colors.grouped).scale({ x: this.avatarScale, y: this.avatarScale })
       }.id('personal-overview-avatar').width(this.avatarExtent).height(this.avatarExtent)
+        .padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.personal_overview_edit'))
+        .onClick((): void => {
+          this.onNavigate({ page: 'personal-agent-profile', itemId: '', canShareConversation: this.canShareConversation });
+        }, SEGMENTED_PAGE_TAP_SLOP_VP)
       Text(this.record?.displayName ?? '').fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
         .textAlign(TextAlign.Center).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         .width('100%').padding({ left: 16, right: 16, top: 8 - 4 * this.headerProgress })
@@ -425,7 +423,7 @@ export struct XopcPersonalAgentOverview {
         XopcSegmentedTabs({ options: [
           { key: 'tasks', label: $r('app.string.tasks'), icon: $r('sys.symbol.checkmark_circle'), count: this.model.attentionCount || undefined, testId: 'personal-overview-tasks-tab' },
           { key: 'library', label: $r('app.string.personal_overview_library'), icon: $r('sys.symbol.doc_text'), testId: 'personal-overview-library-tab' }
-        ], selectedKey: this.librarySelected ? 'library' : 'tasks',
+        ], selectedKey: this.librarySelected ? 'library' : 'tasks', pagerProgress: this.pagerProgress,
           swipeToSelect: true, onSelect: (key: string): void => {
             const library = key === 'library';
             if (library !== this.librarySelected && !this.deliveryPreview) {
@@ -444,6 +442,10 @@ export struct XopcPersonalAgentOverview {
             this.scrollHeader(x, y, source, true))
       }.id('personal-overview-pager').index(this.librarySelected ? 1 : 0).loop(false).indicator(false).cachedCount(1)
         .duration(this.layout.reduceMotion ? 0 : 230).disableSwipe(!this.activePage || !!this.deliveryPreview)
+        .onContentDidScroll((_selected: number, index: number, position: number, length: number): void => {
+          this.pagerProgress.update(index, position, length);
+        })
+        .onAnimationEnd((): void => { this.pagerProgress.reset(); })
         .onChange((index: number): void => { this.selectLibrary(index === 1); })
         .width('100%').layoutWeight(1).clip(true)
       if (this.deliveryPreview) {

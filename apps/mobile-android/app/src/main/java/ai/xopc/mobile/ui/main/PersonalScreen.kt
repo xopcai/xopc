@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -38,7 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
@@ -58,6 +63,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -69,7 +75,8 @@ import java.time.format.DateTimeParseException
 @Composable
 internal fun PersonalGoalsScreen(state: PersonalUiState, insets: PaddingValues, onRefresh: () -> Unit,
   onSaveGoal: (String?, String, String, String, Long?) -> Unit, onBack: () -> Unit = {}) {
-  var completed by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  val pager = key(state.gatewayId) { rememberPagerState { 2 } }
+  val scope = rememberCoroutineScope()
   var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var editingId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var title by rememberSaveable(state.gatewayId) { mutableStateOf("") }
@@ -95,7 +102,7 @@ internal fun PersonalGoalsScreen(state: PersonalUiState, insets: PaddingValues, 
     SegmentOption(false, stringResource(R.string.personal_active), "personal-goals-ongoing"),
     SegmentOption(true, stringResource(R.string.personal_achieved), "personal-goals-achieved"),
   )
-  fun selectGoalTab(value: Boolean) { completed = value }
+  fun selectGoalTab(value: Boolean) { scope.launch { pager.animateScrollToPage(if (value) 1 else 0) } }
   Column(Modifier.fillMaxSize().padding(insets).testTag("personal-goals-screen")) {
     Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp),
       verticalAlignment = Alignment.CenterVertically) {
@@ -107,17 +114,22 @@ internal fun PersonalGoalsScreen(state: PersonalUiState, insets: PaddingValues, 
         ActionIcon(R.drawable.action_add, contentDescription = stringResource(R.string.personal_goal_add))
       }
     }
-    SegmentedTabs(goalTabs, completed, ::selectGoalTab,
-      modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), swipeToSelect = true)
-    Column(Modifier.weight(1f).fillMaxWidth()
-      .swipePageSelection(goalTabs.map { it.value }, completed, !editorOpen, ::selectGoalTab)
-      .verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)
-      .testTag("personal-goals-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      if (state.loading && state.summary == null) BrandLoadingPanel()
-      state.summary?.let { PersonalGoals(it, completed, ::openEditor) }
-      if (state.error) {
-        Text(stringResource(R.string.personal_unavailable), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(onClick = onRefresh) { Text(stringResource(R.string.personal_retry)) }
+    SegmentedTabs(goalTabs, pager.settledPage == 1, ::selectGoalTab,
+      modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), enabled = !editorOpen,
+      swipeToSelect = true, pager = pager)
+    HorizontalPager(pager, modifier = Modifier.weight(1f).fillMaxWidth().testTag("personal-goals-pager"),
+      userScrollEnabled = !editorOpen,
+      flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.33f),
+    ) { index ->
+      Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+        .padding(horizontal = 20.dp, vertical = 8.dp).testTag("personal-goals-list"),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (state.loading && state.summary == null) BrandLoadingPanel()
+        state.summary?.let { PersonalGoals(it, index == 1, ::openEditor) }
+        if (state.error) {
+          Text(stringResource(R.string.personal_unavailable), color = MaterialTheme.colorScheme.onSurfaceVariant)
+          TextButton(onClick = onRefresh) { Text(stringResource(R.string.personal_retry)) }
+        }
       }
     }
   }

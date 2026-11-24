@@ -57,6 +57,8 @@ struct PersonalGoalsView: View {
     @State private var selectedGoal: MobileUserGoal?
     @State private var editing = false
     @State private var completed = false
+    @State private var pagerProgress = PageScrollProgress()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let goalTabs = [
         SegmentOption(id: false, title: "进行中", accessibilityID: "personal-goals-ongoing"),
@@ -65,39 +67,15 @@ struct PersonalGoalsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SegmentedTabs(options: goalTabs, selected: completed, label: "状态", swipeToSelect: !editing) {
-                completed = $0
+            SegmentedTabs(options: goalTabs, selected: completed, label: "状态", swipeToSelect: !editing, pagerProgress: pagerProgress) { next in
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.23)) { completed = next }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 8)
-            List {
-                if let summary {
-                    let goals = summary.goals.filter { ($0.status == "achieved") == completed }
-                    ForEach(goals) { goal in
-                        Button {
-                            selectedGoal = goal
-                            editing = true
-                        } label: {
-                            goalRow(goal.title, outcome: goal.desiredOutcome)
-                        }
-                        .accessibilityIdentifier("goal-\(goal.id)")
-                    }
-                    if goals.isEmpty {
-                        if !completed, summary.goals.isEmpty, let focus = summary.primaryFocus {
-                            goalRow(focus.title, outcome: focus.desiredOutcome)
-                        } else {
-                            Text("暂无目标").foregroundStyle(.secondary)
-                        }
-                    }
-                } else if error {
-                    Button("重试") { Task { await load() } }
-                } else {
-                    ProfileSkeleton()
-                }
+            MobilePagePager(pages: goalTabs.map(\.id), selection: $completed, progress: pagerProgress) { page in
+                goalList(completed: page)
             }
-            .accessibilityIdentifier("personal-goals-list")
-            .pageSelectionSwipe(goalTabs.map(\.id), selected: completed, enabled: !editing) { completed = $0 }
-            .refreshable { await load() }
+            .accessibilityIdentifier("personal-goals-pager")
         }
         .navigationTitle("目标")
         .navigationBarTitleDisplayMode(.inline)
@@ -112,6 +90,36 @@ struct PersonalGoalsView: View {
         .sheet(isPresented: $editing) {
             GoalEditorView(configuration: configuration, goal: selectedGoal) { await load() }
         }
+    }
+
+    private func goalList(completed: Bool) -> some View {
+        List {
+            if let summary {
+                let goals = summary.goals.filter { ($0.status == "achieved") == completed }
+                ForEach(goals) { goal in
+                    Button {
+                        selectedGoal = goal
+                        editing = true
+                    } label: {
+                        goalRow(goal.title, outcome: goal.desiredOutcome)
+                    }
+                    .accessibilityIdentifier("goal-\(goal.id)")
+                }
+                if goals.isEmpty {
+                    if !completed, summary.goals.isEmpty, let focus = summary.primaryFocus {
+                        goalRow(focus.title, outcome: focus.desiredOutcome)
+                    } else {
+                        Text("暂无目标").foregroundStyle(.secondary)
+                    }
+                }
+            } else if error {
+                Button("重试") { Task { await load() } }
+            } else {
+                ProfileSkeleton()
+            }
+        }
+        .accessibilityIdentifier("personal-goals-list")
+        .refreshable { await load() }
     }
 
     private func goalRow(_ title: String, outcome: String?) -> some View {

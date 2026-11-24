@@ -12,10 +12,12 @@ const mocks = vi.hoisted(() => ({
   confirmDeepUnderstandingRun: vi.fn(),
   dismissWorkDiscoveryOnboarding: vi.fn(),
   resolveWorkspaceProject: vi.fn(),
+  fetchProject: vi.fn(),
   startProjectUnderstanding: vi.fn(),
   fetchProjectUnderstanding: vi.fn(),
   fetchConnectorInstances: vi.fn(),
   fetchComposioConnectorCatalog: vi.fn(),
+  importRequest: vi.fn(),
 }));
 
 vi.mock('@/features/work-discovery/api', () => ({
@@ -30,6 +32,30 @@ vi.mock('@/features/work-discovery/api', () => ({
 
 vi.mock('@/features/projects/api', () => ({
   resolveWorkspaceProject: mocks.resolveWorkspaceProject,
+  fetchProject: mocks.fetchProject,
+}));
+
+vi.mock('@/features/imports/import-api', () => ({
+  importRequest: mocks.importRequest,
+}));
+
+vi.mock('@/features/imports/import-selection-dialog', () => ({
+  ImportSelectionDialog: ({
+    open,
+    sourceName,
+    selected,
+    onSubmit,
+  }: {
+    open: boolean;
+    sourceName: string;
+    selected: Set<string>;
+    onSubmit: () => void;
+  }) => (open ? (
+    <div data-testid="import-selection-dialog">
+      <span>{`Import from ${sourceName} (${selected.size})`}</span>
+      <button type="button" onClick={onSubmit}>Confirm tool import</button>
+    </div>
+  ) : null),
 }));
 
 vi.mock('@/features/projects/project-understanding-api', () => ({
@@ -127,6 +153,32 @@ describe('DeepUnderstandingOnboarding (Parallel User Understanding + Multi-Proje
     });
     mocks.fetchConnectorInstances.mockResolvedValue([]);
     mocks.fetchComposioConnectorCatalog.mockResolvedValue({ connectors: [] });
+    mocks.importRequest.mockImplementation(async (path: string) => {
+      if (path === '/sources') {
+        return {
+          sources: [
+            { id: 'codex', name: 'Codex', detected: true },
+            { id: 'claude-code', name: 'Claude Code', detected: true },
+          ],
+        };
+      }
+      return {};
+    });
+    mocks.fetchProject.mockImplementation(async (id: string) => ({
+      id,
+      name: id.replace(/^proj-/, ''),
+      slug: id.replace(/^proj-/, ''),
+      status: 'active',
+      workspaceRoot: `/Users/demo/develop/${id.replace(/^proj-/, '')}`,
+      executionMode: 'local_checkout',
+      successCriteria: [],
+      scope: {},
+      nonGoals: [],
+      health: 'unknown',
+      version: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
     mocks.dismissWorkDiscoveryOnboarding.mockResolvedValue(undefined);
     mocks.confirmDeepUnderstandingRun.mockResolvedValue({
       ok: true,
@@ -204,13 +256,13 @@ describe('DeepUnderstandingOnboarding (Parallel User Understanding + Multi-Proje
 
     // Immediately switch to Page 2 while Page 1 start is STILL pending!
     const continueBgBtn = [...container.querySelectorAll('button')]
-      .find((btn) => btn.textContent?.includes('Continue in background'))!;
+      .find((btn) => btn.textContent?.includes('Next: Projects'))!;
     await act(async () => {
       continueBgBtn.click();
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('Choose your projects');
+    expect(container.textContent).toContain('Choose one or more folders.');
     expect(container.textContent).toContain('Learning about you in background');
 
     // Multi-select the second folder (`docs`) in addition to the pre-selected first folder (`xopc`).
@@ -368,7 +420,7 @@ describe('DeepUnderstandingOnboarding (Parallel User Understanding + Multi-Proje
     );
 
     const createBtn = [...container.querySelectorAll('button')]
-      .find((btn) => btn.textContent?.includes('Create project & analyze'))!;
+      .find((btn) => btn.textContent?.includes('Create project'))!;
     await act(async () => {
       createBtn.click();
       await Promise.resolve();
@@ -406,7 +458,130 @@ describe('DeepUnderstandingOnboarding (Parallel User Understanding + Multi-Proje
     });
 
     expect(container.textContent).toContain('Documents · OneDrive · 15');
-    expect(container.textContent).toContain('Add local notes or Obsidian vault (OneDrive / custom drive)');
+    expect(container.textContent).toContain('Add notes or Obsidian vault');
+    expect(container.textContent).toContain('OneDrive · Custom drive');
     expect(container.textContent).not.toContain('Apple');
+  });
+
+  it('imports projects from Codex / Claude Code on Page 2, starts async understanding, and allows direct chat entry', async () => {
+    mocks.importRequest.mockImplementation(async (path: string) => {
+      if (path === '/sources') {
+        return {
+          sources: [
+            { id: 'codex', name: 'Codex', detected: true },
+            { id: 'claude-code', name: 'Claude Code', detected: true },
+          ],
+        };
+      }
+      if (path === '/sources/claude-code/scan') {
+        return {
+          id: 'inv-1',
+          source: 'claude-code',
+          createdAt: Date.now(),
+          expiresAt: Date.now() + 60_000,
+          complete: true,
+          notices: [],
+          candidates: [
+            {
+              id: 'cand-proj-1',
+              kind: 'project',
+              name: 'apollo',
+              description: '',
+              displayPath: '/Users/demo/develop/apollo',
+              scope: 'project',
+              status: 'ready',
+              suggested: false,
+            },
+            {
+              id: 'cand-skill-1',
+              kind: 'skill',
+              parentId: 'cand-proj-1',
+              name: 'deploy',
+              description: '',
+              displayPath: '/Users/demo/develop/apollo/.claude/skills/deploy',
+              scope: 'project',
+              status: 'ready',
+              suggested: true,
+            },
+          ],
+        };
+      }
+      if (path === '/runs') {
+        return {
+          id: 'run-import-1',
+          source: 'claude-code',
+          createdAt: Date.now(),
+          status: 'completed',
+          skills: 1,
+          context: 0,
+          projects: 1,
+          skipped: 0,
+          issues: [],
+          inventoryId: 'inv-1',
+          selectionHash: 'hash',
+          items: [
+            { candidateId: 'cand-proj-1', kind: 'project', name: 'apollo', status: 'imported', targetId: 'proj-apollo' },
+          ],
+        };
+      }
+      return {};
+    });
+
+    const onNavigateAway = vi.fn();
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <DeepUnderstandingOnboarding onNavigateAway={onNavigateAway} />
+          <LocationProbe />
+        </MemoryRouter>,
+      );
+      await Promise.resolve();
+    });
+
+    // Switch straight to Page 2 (Projects).
+    const workspaceTab = [...container.querySelectorAll('button')]
+      .find((btn) => btn.textContent?.includes('Projects'))!;
+    await act(async () => {
+      workspaceTab.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Import from');
+    expect(container.textContent).toContain('Codex');
+    expect(container.textContent).toContain('Claude Code');
+
+    // Click Claude Code to scan & open ImportSelectionDialog.
+    const claudeBtn = [...container.querySelectorAll('button')]
+      .find((btn) => btn.textContent?.includes('Claude Code'))!;
+    await act(async () => {
+      claudeBtn.click();
+      await Promise.resolve();
+    });
+
+    expect(mocks.importRequest).toHaveBeenCalledWith('/sources/claude-code/scan', {}, expect.any(AbortSignal));
+    expect(container.textContent).toContain('Import from Claude Code (2)');
+
+    // Confirm import -> imports project + starts background understanding -> allows immediate chat entry!
+    const confirmImportBtn = [...container.querySelectorAll('button')]
+      .find((btn) => btn.textContent?.includes('Confirm tool import'))!;
+    await act(async () => {
+      confirmImportBtn.click();
+      await Promise.resolve();
+    });
+
+    expect(mocks.fetchProject).toHaveBeenCalledWith('proj-apollo');
+    expect(mocks.startProjectUnderstanding).toHaveBeenCalledWith('proj-apollo');
+    expect(container.textContent).toContain('apollo');
+    expect(container.textContent).toContain('Analyzing…');
+
+    const openNowBtn = [...container.querySelectorAll('button')]
+      .find((btn) => btn.textContent?.includes('Open apollo'))!;
+    await act(async () => {
+      openNowBtn.click();
+      await Promise.resolve();
+    });
+
+    expect(onNavigateAway).toHaveBeenCalledOnce();
+    expect(container.querySelector('[data-testid="route"]')?.textContent).toBe('/chat/new?projectId=proj-apollo');
   });
 });

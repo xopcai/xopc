@@ -14,7 +14,7 @@ import { OnboardingLanguageSwitch } from '@/features/onboarding/onboarding-langu
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
 import { cn } from '@/lib/cn';
 import { isElectron } from '@/lib/electron-env';
-import { isElectronDarwin } from '@/lib/electron-window-chrome';
+import { isElectronDarwin, isElectronWin32 } from '@/lib/electron-window-chrome';
 import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 import { applyModelSetup, previewModelSetup } from '@/features/settings/models-hub/provider-setup-api';
 import { AddProviderDialog } from '@/features/settings/models-hub/add-provider-dialog';
@@ -231,8 +231,8 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
       <div className="xopc-onboarding-experience relative flex h-full min-h-0 w-full flex-col overflow-hidden" data-step="desktop-connect">
         <header className={cn(
           'relative z-20 flex h-14 shrink-0 items-center justify-end gap-2 px-5 sm:px-8',
-          isElectronDarwin() && APP_CHROME_BAR_CLASS,
-          isElectronDarwin() && APP_CHROME_DRAG_CLASS,
+          isElectronDarwin() && `${APP_CHROME_BAR_CLASS} ${APP_CHROME_DRAG_CLASS} pl-[88px]`,
+          isElectronWin32() && `${APP_CHROME_BAR_CLASS} ${APP_CHROME_DRAG_CLASS} pr-[144px]`,
         )}>
           <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <OnboardingLanguageSwitch
@@ -304,10 +304,10 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
             <h1 className="text-[1.875rem] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-[2.25rem]">
               {zh ? '配置模型' : 'Set up models'}
             </h1>
-            <p className="mt-3 max-w-[26rem] text-sm leading-6 text-fg-muted">
+            <p className="mt-2.5 max-w-[24rem] text-sm leading-6 text-fg-muted">
               {zh
-                ? '连接后自动配置模型。电脑操作默认关闭。'
-                : 'Connect to set up models automatically. Computer control is off by default.'}
+                ? '连接即可使用，电脑操作默认关闭。'
+                : 'Ready once connected. Computer control stays off.'}
             </p>
 
             <div className="mt-8 w-full text-left">
