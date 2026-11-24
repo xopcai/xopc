@@ -198,7 +198,7 @@ function imageFrameStyle(aspectRatio: string | null, multiple: boolean) {
   const candidate = width / height;
   const ratio = Number.isFinite(candidate) && candidate > 0 ? candidate : 1;
   const maxHeight = multiple ? 6 : 11;
-  return { aspectRatio: ratio, width: `min(100%, 22rem, ${maxHeight * ratio}rem)` };
+  return { aspectRatio: ratio, width: `min(22rem, ${maxHeight * ratio}rem)` };
 }
 
 function GeneratedImageTile({ job, asset, index, baseUrl, language, multiple }: {
@@ -244,15 +244,16 @@ function ImageJobCard({ job, baseUrl, language }: {
   const multiple = count > 1;
   const error = job.errorCode ? errorLabels[language][job.errorCode] : undefined;
   const message = error ?? (failed ? job.error || errorLabels[language].provider_failed : undefined);
-  const framesClass = cn('max-w-full', multiple ? 'grid w-full max-w-[24rem] grid-cols-2 items-start justify-items-start gap-2' : 'w-fit');
+  const framesClass = cn('w-fit max-w-full self-center',
+    multiple && 'grid grid-cols-[repeat(2,minmax(0,max-content))] items-center justify-items-center gap-2');
 
-  return <article className="flex w-full max-w-[24rem] min-w-0 flex-col gap-2.5 rounded-xl border border-edge bg-surface-panel p-3">
-    <div className="flex min-w-0 items-center gap-2.5">
+  return <article className="flex w-fit max-w-[min(100%,24rem)] min-w-[min(100%,13rem)] flex-col gap-2.5 rounded-xl border border-edge bg-surface-panel p-3">
+    <div className="flex min-w-0 items-center gap-2.5 [contain:inline-size]">
       <div className="grid size-10 shrink-0 place-items-center rounded-lg border border-edge bg-surface-inset text-accent-fg" aria-hidden>
         <ImageIcon size={18} />
       </div>
       <div className="min-w-0 flex-1">
-        <h3 className="line-clamp-2 wrap-anywhere text-sm leading-tight font-semibold text-fg">{job.title}</h3>
+        <h3 className="line-clamp-2 wrap-anywhere text-sm leading-tight font-semibold text-fg" title={job.title}>{job.title}</h3>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
           <span>{m.image} · {version}</span>
           {!completed && <span role="status" className="font-medium">{m.status[job.state]}</span>}
@@ -265,10 +266,10 @@ function ImageJobCard({ job, baseUrl, language }: {
       </Button>
     </div>
 
-    {pending && <div className={cn(framesClass, !multiple && 'w-full')}>
+    {pending && <div className={framesClass}>
       {Array.from({ length: Math.min(job.count, 4) }).map((_, index) => (
         <GenerationPlaceholder key={index} kind="image" waiting={job.state === 'queued'}
-          style={imageFrameStyle(job.aspectRatio, multiple)} />
+          className="max-w-full" style={imageFrameStyle(job.aspectRatio, multiple)} />
       ))}
     </div>}
     {completed && job.images.length > 0 && <div className={framesClass}>
@@ -276,8 +277,8 @@ function ImageJobCard({ job, baseUrl, language }: {
         <GeneratedImageTile key={asset.index} job={job} asset={asset} index={index} baseUrl={baseUrl} language={language} multiple={multiple} />
       ))}
     </div>}
-    {message && <p className={failed ? 'text-xs text-danger' : 'text-xs text-fg-muted'}>{message}</p>}
-    <div id={id} hidden={!detailsOpen} className="border-t border-edge pt-2.5">
+    {message && <p className={cn('wrap-anywhere text-xs [contain:inline-size]', failed ? 'text-danger' : 'text-fg-muted')}>{message}</p>}
+    <div id={id} hidden={!detailsOpen} className="border-t border-edge pt-2.5 [contain:inline-size]">
       {detailsOpen && <dl className="space-y-2 text-xs text-fg-muted">
         <div>
           <dt className="font-medium">{m.prompt}</dt>
