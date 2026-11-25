@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ChatPreviewSourceHashSchema } from './chat-previews.js';
 import { LocalAppSourceHashSchema } from './local-apps.js';
+import { projectComparisonSchema } from './project-comparison.js';
 
 export const PRODUCT_DELIVERY_VERSION = 2 as const;
 
@@ -112,6 +113,7 @@ export const ProductDeliveryEnvelopeSchema = z.object({
   primary: ProductReferenceSchema.optional(),
   related: z.array(ProductReferenceSchema).optional(),
   presentation: ProductDeliveryPresentationSchema.optional(),
+  projectComparison: projectComparisonSchema.optional(),
 });
 
 export type ProductDeliveryEnvelope = z.infer<typeof ProductDeliveryEnvelopeSchema>;
@@ -130,7 +132,7 @@ export function appendProductDeliveryText(
   if (!delivery) return text;
   const openableItems = delivery.presentation?.kind === 'table'
     ? delivery.presentation.items.filter(item => productReferenceRoute(item) !== null)
-    : [];
+    : (delivery.projectComparison ? delivery.related ?? [] : []).filter(item => productReferenceRoute(item) !== null);
   const accessLink = delivery.primary && productReferenceRoute(delivery.primary) !== null
     ? `\nOpen in xopc: [Open](${productReferenceDeepLink(delivery.primary)})`
     : openableItems.length

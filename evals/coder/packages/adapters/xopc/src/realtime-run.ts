@@ -4,6 +4,17 @@ import { endpointHelloSigningPayload, type EndpointHelloPayload, type EndpointTu
 import { RealtimeClient, type RealtimeTicket, type RealtimeWebSocket } from '@xopcai/realtime-client';
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 
+async function retrySessionInputOnReset<T>(request: () => Promise<T>, signal: AbortSignal): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    const cause = error instanceof Error ? error.cause : undefined;
+    const code = cause && typeof cause === 'object' && 'code' in cause ? cause.code : undefined;
+    if (signal.aborted || (code !== 'ECONNRESET' && code !== 'UND_ERR_SOCKET')) throw error;
+    return request();
+  }
+}
+
 export async function runRealtimeInput(input: {
   baseUrl: string;
   headers: Record<string, string>;
@@ -96,10 +107,16 @@ export async function runRealtimeInput(input: {
     client.connect();
     const origin = await ready;
     const clientMessageId = randomUUID();
-    const response = await json<{ inputState: Record<string, any> }>(`/api/sessions/${encodeURIComponent(input.conversationId)}/inputs`, {
+    const sessionPath = `/api/sessions/${encodeURIComponent(input.conversationId)}`;
+    const message = {
       kind: 'append', clientMessageId, expectedTranscriptId: input.transcriptId,
       configVersion: input.configVersion, delivery: 'next', input: { content: input.message }, origin,
-    });
+    };
+    // The Gateway deduplicates retries by clientMessageId even if the original reply was lost.
+    const response = await retrySessionInputOnReset(
+      () => json<{ inputState: Record<string, any> }>(`${sessionPath}/inputs`, message),
+      input.signal,
+    );
     let state = response.payload.inputState;
     const startedRunId = (snapshot: typeof state): string | undefined => {
       const ownInput = snapshot?.inputs?.find((row: { clientMessageId: string }) => row.clientMessageId === clientMessageId);
@@ -109,11 +126,13 @@ export async function runRealtimeInput(input: {
     while (!runId) {
       input.signal.throwIfAborted();
       await new Promise(resolve => setTimeout(resolve, 100));
-      const status = await fetch(`${input.baseUrl}/api/sessions/${encodeURIComponent(input.conversationId)}/input-state`, {
-        headers: input.headers, signal: input.signal,
-      });
-      if (!status.ok) throw new Error(`xopc session input state returned HTTP ${status.status}`);
-      state = (await status.json() as { payload: typeof state }).payload;
+      state = await retrySessionInputOnReset(async () => {
+        const status = await fetch(`${input.baseUrl}${sessionPath}/input-state`, {
+          headers: input.headers, signal: input.signal,
+        });
+        if (!status.ok) throw new Error(`xopc session input state returned HTTP ${status.status}`);
+        return (await status.json() as { payload: typeof state }).payload;
+      }, input.signal);
       runId = startedRunId(state);
       const ownInput = state?.inputs?.find((row: { clientMessageId: string }) => row.clientMessageId === clientMessageId);
       if (!runId && ownInput?.status === 'interrupted') throw new Error('Evaluation input was interrupted before starting a run');

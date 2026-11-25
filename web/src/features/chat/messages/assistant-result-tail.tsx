@@ -1,4 +1,4 @@
-import { useContext } from 'react';
+import { lazy, Suspense, useContext } from 'react';
 import { AutomationConfigurationContext } from '@/features/automations/automation-configuration-context';
 import type { TurnOutcome } from '@xopcai/gateway-contract';
 import {
@@ -36,12 +36,17 @@ import { ProductDeliveryDiffPreview } from '@/features/chat/product-delivery/pro
 import { InlineLocalApp } from '@/features/chat/product-delivery/inline-local-app';
 import { InlineChatPreview } from '@/features/chat/product-delivery/inline-chat-preview';
 import { TurnTail } from '@/features/chat/product-delivery/turn-tail';
+import { PartErrorBoundary } from '@/features/chat/rendering/part-error-boundary';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { AssistantCapsuleContent, assistantCapsuleClassName, assistantCapsuleDetailClassName, assistantCapsuleListClassName } from './assistant-capsule';
 import type { AssistantTurnViewModel } from './assistant-turn-view-model';
+
+const ProjectComparisonPanel = lazy(() => import('@/features/chat/product-delivery/project-comparison-panel')
+  .then(module => ({ default: module.ProjectComparisonPanel })));
 
 type ResultAttachment = {
   key: string;
@@ -278,6 +283,14 @@ export function AssistantResultTail({
       ) : null}
       {diffPresentations.map(({ key, presentation }) => (
         <ProductDeliveryDiffPreview key={key} presentation={presentation} />
+      ))}
+      {visibleDeliveries.map(({ delivery }) => delivery.projectComparison && (
+        <PartErrorBoundary key={delivery.projectComparison.surfaceId} content={language === 'zh'
+          ? '无法显示项目对比。' : 'Could not display the project comparison.'}>
+          <Suspense fallback={<Skeleton className="h-32 w-full" />}>
+            <ProjectComparisonPanel comparison={delivery.projectComparison} language={language} />
+          </Suspense>
+        </PartErrorBoundary>
       ))}
       {inlineApps.map(({ key, presentation }) => (
         <InlineLocalApp

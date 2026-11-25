@@ -22,7 +22,7 @@ if (releaseRequested && missingReleaseSigningKeys.isNotEmpty()) {
 
 android {
     namespace = "ai.xopc.mobile"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
         applicationId = "ai.xopc.xopc"
         minSdk = 26
@@ -104,6 +104,11 @@ dependencies {
   implementation(libs.androidx.compose.animation)
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.compose.material3)
+  implementation(libs.androidx.a2ui.model)
+  implementation(libs.androidx.a2ui.engine)
+  implementation(libs.androidx.a2ui.runtime)
+  implementation(libs.androidx.a2ui.compose)
+  implementation(libs.androidx.a2ui.material3)
   // Tooling
   debugImplementation(libs.androidx.compose.ui.tooling)
   // Instrumented tests

@@ -35,4 +35,10 @@ describe('assistant message bubble width', () => {
     expect(chatPlainAssistantBubbleText({ ...reply, text: '1. Item' })).toBe('');
     expect(chatPlainAssistantBubbleText({ ...reply, refs: [{ kind: 'note', sourceId: 'note', expectedVersion: '1' }] })).toBe('');
   });
+
+  it('reserves the reading width for a project comparison during and after streaming', () => {
+    const deliveries = [{ version: 2, operation: 'opened', projectComparison: { surfaceId: 'comparison_test', messages: [] } }];
+    expect(chatPlainAssistantBubbleText({ ...reply, deliveries, live: true })).toBe('');
+    expect(chatPlainAssistantBubbleText({ ...reply, deliveries })).toBe('');
+  });
 });

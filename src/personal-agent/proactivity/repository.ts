@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import { PersonalFeedbackSchema, PersonalProactivitySettingsSchema, type PersonalFeedback,
-  PersonalStrategyRollbackSchema, type PersonalProactivitySettings, type PersonalProvenanceDetail,
+  PersonalStrategyRollbackSchema, type PersonalProactivitySettings,
   type PersonalOneShotDestination, type PersonalOneShotTerminalReason } from '@xopcai/gateway-contract';
 
 import { DurableState } from '../../storage/sqlite/durable-state.js';
@@ -11,16 +11,6 @@ import { readCurrentTranscriptId } from '../../storage/sqlite/session-instance-r
 import { getPersonalAgentByConversation } from '../repository.js';
 import { getUserProfileSnapshot } from '../../user-model/profile.js';
 import { isExplicitFollowUp, requestedCheckTime } from './follow-up-request.js';
-import { getOneShotFollowUpDto } from './one-shot-follow-up.js';
-export {
-  getRemainingInferredDailyMessages,
-  getUsedInferredDailyMessages,
-  INFERRED_PROACTIVE_MESSAGES_NAMESPACE,
-  isPersonalConversationDeliverable,
-  isPersonalProactiveAccessible,
-  ProactiveDeliveryGovernor,
-  proactiveDeliveryGovernor,
-} from './delivery-governor.js';
 
 export interface AttentionThread {
   id: string; owner_id: string; agent_id: string; conversation_id: string;
@@ -251,22 +241,6 @@ export function getOutreach(id: string, ownerId?: string): Outreach | undefined 
   const row = getSqliteDatabase().prepare(`SELECT o.* FROM personal_outreach o JOIN personal_attention_threads t ON t.id = o.thread_id
     WHERE o.id = ? AND (? IS NULL OR t.owner_id = ?)`).get(id, ownerId ?? null, ownerId ?? null) as unknown as Outreach | undefined;
   return row;
-}
-export function provenanceDetail(ownerId: string, id: string): PersonalProvenanceDetail | undefined {
-  const outreach = getOutreach(id, ownerId);
-  if (!outreach || outreach.state !== 'published') return undefined;
-  const thread = getAttention(outreach.thread_id, ownerId)!;
-  const snapshot = JSON.parse(outreach.provenance_json);
-  const currentSources = getAttentionSources(thread.id, snapshot.sourceIds);
-  const sources = sourceFingerprint(currentSources) === snapshot.fingerprint ? currentSources : [];
-  const oneShot = thread.follow_up_mode === 'one_shot' ? getOneShotFollowUpDto(thread.id, ownerId) : undefined;
-  return { provenance: snapshot.display,
-    thread: { id: thread.id, subject: sources.length ? thread.subject : '', status: thread.status,
-      revision: thread.revision, nextCheckAt: thread.next_check_at },
-    whyNow: sources.length ? outreach.reason : '', sourcesAvailable: sources.length > 0,
-    sources: sources.map(({ processingPolicy: _policy, version: _version, ...source }) => source),
-    strategy: strategyState(thread.id),
-    ...(oneShot ? { oneShotFollowUp: oneShot } : {}) };
 }
 export function recordFeedback(ownerId: string, id: string, raw: PersonalFeedback, now = Date.now()): void {
   const input = PersonalFeedbackSchema.parse(raw);

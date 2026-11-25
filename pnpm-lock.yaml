@@ -1057,6 +1057,9 @@ importers:
       xlsx:
         specifier: file:./vendor/xlsx-0.20.3.tgz
         version: file:web/vendor/xlsx-0.20.3.tgz
+      zod:
+        specifier: 4.6.6
+        version: 4.6.6
       zustand:
         specifier: ^5.0.12
         version: 5.0.14(@types/react@19.2.15)(immer@11.1.21)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))

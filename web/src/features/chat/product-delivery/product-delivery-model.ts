@@ -27,7 +27,7 @@ function normalizedTaskTitle(title: string): string {
 
 export function isProductDeliveryVisibleResult(delivery: ProductDeliveryEnvelope): boolean {
   if (delivery.operation !== 'opened') return true;
-  return delivery.presentation?.kind === 'diff'
+  return Boolean(delivery.projectComparison) || delivery.presentation?.kind === 'diff'
     || delivery.presentation?.kind === 'inline_app'
     || delivery.presentation?.kind === 'inline_preview'
     || delivery.presentation?.kind === 'config_change';

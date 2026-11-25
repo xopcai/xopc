@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		00EDAADE5D5868F956B7132B /* MessageDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18359BD966C6EB92C033C1D4 /* MessageDetailView.swift */; };
 		01C28E1C17A0053B04FA7E9B /* NoteEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980992CAF7FCC3FB252A3D26 /* NoteEditorView.swift */; };
+		020B02128615E5E42F520FF4 /* A2UISwiftCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4CEF22723F05C264CBF8E5BA /* A2UISwiftCore */; };
 		0302993FD1FDB80B9B34E311 /* GatewayConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 486026F4BCD826EBF74D01A3 /* GatewayConfigurationStore.swift */; };
 		0314242628382AB63367715D /* FilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58CC94202B1957EB28AC9543 /* FilesView.swift */; };
 		034C48EEE4D6F98E5A10378A /* ModelSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CAC1A41887453C464DCB56B /* ModelSettingsView.swift */; };
@@ -46,6 +47,7 @@
 		2A855B7F7DB0CD1387C96F8C /* DeviceToolCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F84248ED419B36DD8608455 /* DeviceToolCatalog.swift */; };
 		2CFC93707DB58FC6F2A706B4 /* ChatReadAloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DCA230B1EC5EF582311498C /* ChatReadAloud.swift */; };
 		2D25D1677E287B5BFCF6D8E2 /* CapabilityLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38FB27EE6DE5358EA2365AE1 /* CapabilityLogo.swift */; };
+		2FA20E48A3AE8BE85270124B /* ProjectComparisonUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A76D1C85BDD3510FF6DD74D /* ProjectComparisonUITests.swift */; };
 		33C2311208481B3D941883C1 /* AssistantActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FC117EC86A36C635A1735DC /* AssistantActivityView.swift */; };
 		34EC48C13A11B1773B1D4140 /* UIArchitectureGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF8D8F502A6E34E6EC3849BE /* UIArchitectureGuardTests.swift */; };
 		35492C7001E41295356CEABB /* GatewayClient+Messaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC3AE6C51A0F9DED9CB7E227 /* GatewayClient+Messaging.swift */; };
@@ -53,6 +55,7 @@
 		3A25E4796A05A1313991EDB5 /* RealtimeVoiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F2CD24074A4CECF834AE1E5 /* RealtimeVoiceProtocol.swift */; };
 		3C3DBB0B45F85FDA8DD8B7E5 /* ClarificationV2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D68CBBC1C602DFC7544A836B /* ClarificationV2Tests.swift */; };
 		3D2F3C0A1D6B7BE2B85D8A80 /* MobileMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34FE058A29BF7215F8DFDC06 /* MobileMotion.swift */; };
+		421E51BE267CD4A971D12718 /* BasicCatalogSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 977749C098B01EA7A55CBA54 /* BasicCatalogSwiftUI */; };
 		4416BED8B387A95EF294F516 /* TestFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F5FD7365B0BBD37C7E7A261 /* TestFixtures.swift */; };
 		488823A91EA8A914959BF43B /* ClarificationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31C5D70365C99DEF35E7660F /* ClarificationModels.swift */; };
 		4973633F8EEDFAB618DFAF2D /* NoteAudioPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C831947C000F1C4E91EAED5 /* NoteAudioPlayerView.swift */; };
@@ -135,6 +138,7 @@
 		A72C2C6F9AE30E9813D40BA2 /* RealtimeRunSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E5F7ECF0D5276CA41446DC4 /* RealtimeRunSocket.swift */; };
 		A747670376F034EF3F378114 /* AutomationRunEventCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45EC092975CF5102AC5ED508 /* AutomationRunEventCopy.swift */; };
 		A7CFEC867F093436CF828A56 /* VoiceNoteFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2297D611B2485DA143F613E /* VoiceNoteFlowView.swift */; };
+		A8C1A6DEA1C568C63CA18ADA /* OrderedJSON in Frameworks */ = {isa = PBXBuildFile; productRef = DAC29F2C7D83914EFF58A83A /* OrderedJSON */; };
 		A94A844BC3FF498E2443BCB0 /* ChatReadAloudTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CA8346AD8995A5CB9631366 /* ChatReadAloudTests.swift */; };
 		AA0A94A5BE96374D7301CAC0 /* GatewayClient+Products.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF04AD3268C6808CA568CBAB /* GatewayClient+Products.swift */; };
 		ACF5F723B5279A4BD198D9AA /* CapabilitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14DE1EFFCF18D007025A0626 /* CapabilitiesView.swift */; };
@@ -144,6 +148,7 @@
 		AF20A7AD80F58974B5B82CEA /* RealtimeVoiceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD13446795B87ABD58F6150 /* RealtimeVoiceModels.swift */; };
 		AFCE8BBA2E3F11AE93B4C251 /* MobileListCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E633A6CCBDFE97CCEF69DD4 /* MobileListCache.swift */; };
 		B3158C82ED24CA1B9FD56E1F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 522631A59FE71F4BD8629CB2 /* PrivacyInfo.xcprivacy */; };
+		B381EE3DC385792FA19D7210 /* A2UISwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 22267AA2C6CDECA67216D4E2 /* A2UISwiftUI */; };
 		B52B3A0A6DDB742874936DEF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2E483924E1299ADE5E857534 /* LaunchScreen.storyboard */; };
 		B658A434395174633E571E78 /* ChartMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00C897ADD980B1BE67B5C8D2 /* ChartMarkdownView.swift */; };
 		B6C27DE51E933C5FD7B7AF32 /* DiscussionStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 457889229CBE48819BBACCCB /* DiscussionStatusTests.swift */; };
@@ -160,6 +165,7 @@
 		C9947C87AE5057F15DC51FB7 /* AssistantOptionsState.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0255B2AC32A3E02B25D4469 /* AssistantOptionsState.swift */; };
 		CAD676D4CEFE82EAB66BC2C9 /* ChatResultCapsuleLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF0931AC253CD2A261E78D7B /* ChatResultCapsuleLabel.swift */; };
 		D1AC366C652CBF7C398A77F7 /* RealtimeVoiceCall.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011E551E82084F5A029CEABC /* RealtimeVoiceCall.swift */; };
+		D1BF0627C8631AF1F81D2CD2 /* ProjectComparisonPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39EC59599BB3FB361F0A1345 /* ProjectComparisonPanel.swift */; };
 		D1FDC69D2A43C3BD75C1FA16 /* ProjectManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D23702EE31DB8F887C088F2F /* ProjectManageView.swift */; };
 		D32024AC92F728079D7A4EF3 /* AssistantState+RunLookup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70704AB00AC699933B3594B2 /* AssistantState+RunLookup.swift */; };
 		D3ABAF2AEEAE08456E44B863 /* FeatureStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 390E698F139D6E95B996C88A /* FeatureStateTests.swift */; };
@@ -298,7 +304,9 @@
 		38FB27EE6DE5358EA2365AE1 /* CapabilityLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapabilityLogo.swift; sourceTree = "<group>"; };
 		390E698F139D6E95B996C88A /* FeatureStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureStateTests.swift; sourceTree = "<group>"; };
 		3949218C78B0D653998C39DE /* MobileStates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileStates.swift; sourceTree = "<group>"; };
+		39EC59599BB3FB361F0A1345 /* ProjectComparisonPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectComparisonPanel.swift; sourceTree = "<group>"; };
 		3A2DFD3FEE245285A0EB8A7E /* XopcMobile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = XopcMobile.entitlements; sourceTree = "<group>"; };
+		3A76D1C85BDD3510FF6DD74D /* ProjectComparisonUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectComparisonUITests.swift; sourceTree = "<group>"; };
 		3B5399156DB80FDFA0CC9CDF /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
 		3CD13446795B87ABD58F6150 /* RealtimeVoiceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceModels.swift; sourceTree = "<group>"; };
 		3D00F5B1AC3954D6C80EB6A9 /* XopcMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = XopcMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -445,6 +453,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				EE9CE2E50E27939C0B4B2BF8 /* SwiftDraw in Frameworks */,
+				020B02128615E5E42F520FF4 /* A2UISwiftCore in Frameworks */,
+				B381EE3DC385792FA19D7210 /* A2UISwiftUI in Frameworks */,
+				421E51BE267CD4A971D12718 /* BasicCatalogSwiftUI in Frameworks */,
+				A8C1A6DEA1C568C63CA18ADA /* OrderedJSON in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -496,6 +508,7 @@
 				18359BD966C6EB92C033C1D4 /* MessageDetailView.swift */,
 				F01D9DD109BB37799192FCCE /* PersonalAgentAvatar.swift */,
 				87AFFC731003CDBDAF75F823 /* PersonalAgentOverview.swift */,
+				39EC59599BB3FB361F0A1345 /* ProjectComparisonPanel.swift */,
 				3E0EBB6C3755BDF0256201CB /* RealtimeVoiceAudio.swift */,
 				011E551E82084F5A029CEABC /* RealtimeVoiceCall.swift */,
 				2C60A2CB1866CC9F7F23E108 /* RealtimeVoiceCallView.swift */,
@@ -633,6 +646,7 @@
 				8D6F01B616406DFB58C80DA4 /* NoteEditorDiscardUITests.swift */,
 				07951C88BA92367C46247DD4 /* ParityAcceptanceUITests.swift */,
 				6BA5E76E6D4EECA1632EF970 /* PhoneWorkspaceUITests.swift */,
+				3A76D1C85BDD3510FF6DD74D /* ProjectComparisonUITests.swift */,
 				605A9AB9937FE45A97DB7F1B /* ProjectTaskRoundTripUITests.swift */,
 				86396613790F083C70E92374 /* ToolApprovalUITests.swift */,
 				B77774BD21464B10E3A9EC2D /* VoiceRecoveryUITests.swift */,
@@ -868,6 +882,10 @@
 			name = XopcMobile;
 			packageProductDependencies = (
 				C16107E32DF8E2F1C1737DD4 /* SwiftDraw */,
+				4CEF22723F05C264CBF8E5BA /* A2UISwiftCore */,
+				22267AA2C6CDECA67216D4E2 /* A2UISwiftUI */,
+				977749C098B01EA7A55CBA54 /* BasicCatalogSwiftUI */,
+				DAC29F2C7D83914EFF58A83A /* OrderedJSON */,
 			);
 			productName = XopcMobile;
 			productReference = 83A517E377063C2B77AE832B /* XopcMobile.app */;
@@ -933,6 +951,8 @@
 			mainGroup = D628FD55C45701525812E2AE;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				1E06E272230077CC8D4A1945 /* XCRemoteSwiftPackageReference "a2ui" */,
+				763FBD82836D7C00C2E6C2E9 /* XCRemoteSwiftPackageReference "swift-json-schema" */,
 				364E1AB21F24AD58AFE73254 /* XCRemoteSwiftPackageReference "SwiftDraw" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -1100,6 +1120,7 @@
 				55B7DD1306B5B77297E1CE34 /* ProfileView.swift in Sources */,
 				70A51C553D3BD1A9B6328751 /* ProgressRow.swift in Sources */,
 				5D920CCBB7A84AD1D36DE686 /* ProgressView.swift in Sources */,
+				D1BF0627C8631AF1F81D2CD2 /* ProjectComparisonPanel.swift in Sources */,
 				89CA9F4A07F760665A7EA923 /* ProjectDetailView.swift in Sources */,
 				D1FDC69D2A43C3BD75C1FA16 /* ProjectManageView.swift in Sources */,
 				124B70EBED2EFABA81F75A48 /* ProjectTaskEditorView.swift in Sources */,
@@ -1135,6 +1156,7 @@
 				118AA826F5939736ADFE54B0 /* NoteEditorDiscardUITests.swift in Sources */,
 				2173016DCD4D634A7750BB32 /* ParityAcceptanceUITests.swift in Sources */,
 				18DACAA3332042001AD33001 /* PhoneWorkspaceUITests.swift in Sources */,
+				2FA20E48A3AE8BE85270124B /* ProjectComparisonUITests.swift in Sources */,
 				A6A69590BE314D5487153752 /* ProjectTaskRoundTripUITests.swift in Sources */,
 				F567A3D8263D2CA2F82AE02E /* ToolApprovalUITests.swift in Sources */,
 				5A4EF5B7B5331BCDB79D1CD5 /* VoiceRecoveryUITests.swift in Sources */,
@@ -1573,6 +1595,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		1E06E272230077CC8D4A1945 /* XCRemoteSwiftPackageReference "a2ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/a2ui-project/a2ui.git";
+			requirement = {
+				kind = revision;
+				revision = b4f91c26fcf62abc0720c21a65840220941d0a3f;
+			};
+		};
 		364E1AB21F24AD58AFE73254 /* XCRemoteSwiftPackageReference "SwiftDraw" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/swhitty/SwiftDraw.git";
@@ -1581,13 +1611,41 @@
 				version = 0.9.6;
 			};
 		};
+		763FBD82836D7C00C2E6C2E9 /* XCRemoteSwiftPackageReference "swift-json-schema" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ajevans99/swift-json-schema";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 0.13.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		22267AA2C6CDECA67216D4E2 /* A2UISwiftUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1E06E272230077CC8D4A1945 /* XCRemoteSwiftPackageReference "a2ui" */;
+			productName = A2UISwiftUI;
+		};
+		4CEF22723F05C264CBF8E5BA /* A2UISwiftCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1E06E272230077CC8D4A1945 /* XCRemoteSwiftPackageReference "a2ui" */;
+			productName = A2UISwiftCore;
+		};
+		977749C098B01EA7A55CBA54 /* BasicCatalogSwiftUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1E06E272230077CC8D4A1945 /* XCRemoteSwiftPackageReference "a2ui" */;
+			productName = BasicCatalogSwiftUI;
+		};
 		C16107E32DF8E2F1C1737DD4 /* SwiftDraw */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 364E1AB21F24AD58AFE73254 /* XCRemoteSwiftPackageReference "SwiftDraw" */;
 			productName = SwiftDraw;
+		};
+		DAC29F2C7D83914EFF58A83A /* OrderedJSON */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 763FBD82836D7C00C2E6C2E9 /* XCRemoteSwiftPackageReference "swift-json-schema" */;
+			productName = OrderedJSON;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

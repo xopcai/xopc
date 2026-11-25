@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.navigation3.runtime.entryProvider
@@ -13,6 +14,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import ai.xopc.mobile.ui.main.MainScreen
 import ai.xopc.mobile.ui.main.GatewayViewModel
+import ai.xopc.mobile.ui.main.LocalProjectComparisonAction
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.getValue
@@ -37,7 +39,8 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
           val catalogLocale = LocalConfiguration.current.locales[0].toLanguageTag()
           LaunchedEffect(gateway) { gateway.restore() }
           GatewayForegroundRecovery(onForeground = gateway::onForeground, onBackground = gateway::onBackground)
-          MainScreen(phoneRepository = gateway.phoneRepository, browserPreviewAccess = gateway.browserPreview, mobilePush = gateway.mobilePush,connection = connection, onPair = gateway::pair,
+          CompositionLocalProvider(LocalProjectComparisonAction provides gateway::inspectProjectComparison) {
+          MainScreen(phoneRepository = gateway.phoneRepository, browserPreviewAccess = gateway.browserPreview, mobilePush = gateway.mobilePush, connection = connection, onPair = gateway::pair,
             onCancelPairing = gateway::cancelPairing,
             onSearchExternalConversations = gateway::searchExternalConversations,
             onAppendExternalFiles = gateway::appendExternalFiles,
@@ -211,6 +214,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onSendVoiceRecording = gateway::sendVoiceRecording,
             onMessageNoteFeedbackHandled = gateway::messageNoteFeedbackHandled,
             modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)))
+          }
         }
       },
   )

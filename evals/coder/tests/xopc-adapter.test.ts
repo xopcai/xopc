@@ -17,12 +17,13 @@ async function readJson(request: IncomingMessage): Promise<Record<string, any>> 
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
-async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' = 'success') {
+async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' | 'reset-input' = 'success') {
   const requests: Array<{ method: string; url: string; body: Record<string, any> }> = [];
   let sessionKey = '';
   const turnToken = 't'.repeat(40);
   let registered: Record<string, any>;
   let signatureValid = false;
+  let acceptedInputId: string | undefined;
   const server = createServer(async (req, res) => {
     const method = req.method ?? '';
     const url = req.url ?? '';
@@ -55,7 +56,19 @@ async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' = 'success'
     }
     if (url.endsWith('/inputs')) {
       if (!signatureValid || !endpointTurnClaimSchema.safeParse(body.origin).success || body.origin?.token !== turnToken) { res.statusCode = 401; return res.end('{}'); }
+      if (mode === 'reset-input') {
+        if (acceptedInputId === undefined) {
+          acceptedInputId = body.clientMessageId;
+          return res.destroy();
+        }
+        expect(body.clientMessageId).toBe(acceptedInputId);
+        return res.end(JSON.stringify({ payload: { inputState: { inputs: [] } } }));
+      }
       return res.end(JSON.stringify({ payload: { inputState: { activeRunId: 'xopc-run', activeInputId: 'input', inputs: [{ id: 'input', clientMessageId: body.clientMessageId, runId: 'xopc-run' }] } } }));
+    }
+    if (mode === 'reset-input' && url.endsWith('/input-state')) {
+      if (requests.filter(request => request.url === url).length === 1) return res.destroy();
+      return res.end(JSON.stringify({ payload: { inputs: [{ id: 'input', clientMessageId: acceptedInputId, runId: 'xopc-run' }] } }));
     }
     if (method === 'DELETE' || url === '/api/agent/abort') return res.end('{"ok":true}');
     res.statusCode = 404;
@@ -119,6 +132,19 @@ it('submits signed session input and captures ordered realtime replay without du
     expect(f.requests.some(r => r.url === '/api/agent')).toBe(false);
     expect(f.requests.filter(r => r.method === 'DELETE')).toHaveLength(2);
   } finally { await f.close(); }
+});
+
+it('recovers from socket resets while submitting and polling the same input', async () => {
+  const f = await fixture('reset-input');
+  const adapter = new XopcGatewayAdapter();
+  try {
+    const result = await adapter.run(f.request, () => {}, AbortSignal.timeout(5_000));
+    expect(result).toMatchObject({ status: 'completed', finalText: 'done' });
+    const inputs = f.requests.filter(request => request.url.endsWith('/inputs'));
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0]?.body).toEqual(inputs[1]?.body);
+    expect(f.requests.filter(request => request.url.endsWith('/input-state')).length).toBeGreaterThan(0);
+  } finally { await adapter.cleanup(f.request.runId); await f.close(); }
 });
 
 it.each(['gap', 'error'] as const)('does not report success after a realtime %s', async mode => {

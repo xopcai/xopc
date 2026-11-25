@@ -704,6 +704,11 @@ it('keeps purpose-authenticated stop receipts outside owner/device-token lazy ro
   expect(findAuthenticatedLazyRouteBundle('/api/desktop-host/execution')?.id).toBe('desktop-host');
 });
 
+it('routes only the project comparison action to its bundle', () => {
+  expect(findAuthenticatedLazyRouteBundle('/api/project-comparison/action')?.id).toBe('project-comparison');
+  expect(findAuthenticatedLazyRouteBundle('/api/project-comparison/actions')).toBeUndefined();
+});
+
 it('matches the authenticated Space routes without taking neighboring paths', () => {
   for (const path of ['/api/spaces/items', '/api/spaces/items/item', '/api/spaces/items/item/restore',
     '/api/spaces/items/item/purge', '/api/spaces/items/budget-demo', '/api/spaces/items/workbooks', '/api/spaces/items/item/workbook', '/api/spaces/items/item/workbook-actions',

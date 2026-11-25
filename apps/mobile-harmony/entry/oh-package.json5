@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "xopc mobile",
   "dependencies": {
+    "@arkui-genius/genui": "1.1.0",
     "libphonevideo.so": "file:./src/main/cpp/types/libphonevideo"
   }
 }

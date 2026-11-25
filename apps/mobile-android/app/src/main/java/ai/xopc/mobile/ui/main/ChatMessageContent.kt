@@ -153,6 +153,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
     val maxBubbleWidth = (maxWidth - 24.dp).coerceIn(0.dp, 680.dp) * CHAT_MESSAGE_WIDTH
     val textWidthAllowance = horizontalPadding * 2 + 2.dp
     val contentCount = message.media.size + message.references.size + message.targets.size +
+      message.projectComparisons.size +
       message.outcome?.artifacts.orEmpty().size
     val hasWideSyntax = remember(isUser, message.text) { !isUser && assistantWideText.containsMatchIn(message.text) }
     val wideAssistant = !isUser && (showPreview || contentCount > 0 || message.outcome?.status == "failed" || hasWideSyntax)
@@ -224,6 +225,11 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
         Text(stringResource(R.string.assistant_view_more), color = chat.action)
       }
       if (isUser) MessageReferences(message.references, onOpenTarget)
+      message.projectComparisons.forEach { comparison ->
+        androidx.compose.runtime.key(comparison.surfaceId) {
+          ProjectComparisonPanel(comparison)
+        }
+      }
       if (message.media.isNotEmpty()) MessageMedia(message.id, message.media, isUser,
         message.text.isNotBlank(), onMore, loadMedia) { item, gallery ->
         if (mediaPreviewKind(item) == "image") onOpenPreview(item, messageImages)

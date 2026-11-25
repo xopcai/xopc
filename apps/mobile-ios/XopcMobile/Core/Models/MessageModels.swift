@@ -1,4 +1,5 @@
 import Foundation
+import OrderedJSON
 
 struct AgentMessageReaction: Decodable, Equatable, Sendable {
     let emoji: String
@@ -191,6 +192,7 @@ struct TimelineMessage: Equatable, Identifiable, Sendable {
     var resultLinks: [HistoryResultLink] = []
     var unavailableOutputs: [String] = []
     var taskReceipts: [HistoryTaskReceipt] = []
+    var projectComparisons: [ChatProjectComparison] = []
     var generatedMediaIds: [String] = []
     var agentReaction: AgentMessageReaction?
     var clientMessageID: String?
@@ -210,6 +212,27 @@ struct TimelineDetail: Equatable, Identifiable, Sendable {
 struct HistoryProductDelivery: Decodable, Sendable {
     let operation: String
     let primary: HistoryProductReference?
+    let projectComparison: ChatProjectComparison?
+
+    enum CodingKeys: CodingKey {
+        case operation, primary, projectComparison
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        operation = try values.decode(String.self, forKey: .operation)
+        primary = try values.decodeIfPresent(HistoryProductReference.self, forKey: .primary)
+        projectComparison = try? values.decode(ChatProjectComparison.self, forKey: .projectComparison)
+    }
+}
+
+struct ChatProjectComparison: Decodable, Equatable, Identifiable, Sendable {
+    let surfaceId: String
+    let messages: [JSONValue]
+    let messagesV1: [JSONValue]?
+    var id: String {
+        surfaceId
+    }
 }
 
 struct HistoryProductReference: Decodable, Sendable {

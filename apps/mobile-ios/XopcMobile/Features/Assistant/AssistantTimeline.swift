@@ -42,7 +42,10 @@ extension AssistantState {
             let unavailableOutputs = message.metadata?.turnOutcome?.deliverables
                 .filter { $0.availability != "available" }.map(\.title) ?? []
             let receipts = taskReceipts(from: message.deliveries)
+            let comparisons = (message.deliveries ?? []).compactMap(\.projectComparison)
+            var seenComparisons = Set<String>()
             guard !text.isEmpty || !attachments.isEmpty || !references.isEmpty || !receipts.isEmpty
+                || !comparisons.isEmpty
                 || !resultLinks.isEmpty || !unavailableOutputs.isEmpty || message.generatedMediaIds?.isEmpty == false,
                 message.role == "user" || message.role == "assistant"
             else {
@@ -65,6 +68,7 @@ extension AssistantState {
                 resultLinks: resultLinks,
                 unavailableOutputs: unavailableOutputs,
                 taskReceipts: receipts,
+                projectComparisons: comparisons.filter { seenComparisons.insert($0.id).inserted },
                 generatedMediaIds: message.generatedMediaIds ?? [],
                 agentReaction: message.role == "user" ? message.agentReaction : nil,
                 clientMessageID: message.role == "user" ? message.metadata?.clientMessageId : nil

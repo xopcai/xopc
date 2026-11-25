@@ -137,6 +137,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path === '/api/knowledge-memory' || path.startsWith('/api/knowledge-memory/')) {
     return methodScope(method, 'workspace.read', 'workspace.write');
   }
+  if (method === 'POST' && path === '/api/project-comparison/action') return 'workspace.read';
   if (
     path === '/api/discussions' || path.startsWith('/api/discussions/') || path === '/api/discussion-capture/settings'
     || path.startsWith('/api/workspace')

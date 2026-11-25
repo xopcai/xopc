@@ -10,6 +10,10 @@ import { expect, it } from 'vitest';
 
 import { gatewayConfig, prepareEvalAgentCatalog, waitForGateway } from '../scripts/run-github-eval.mjs';
 
+const gatewayReadyTimeoutMs = 45_000;
+// The real Gateway loads parts of the agent runtime on the first turn.
+const runBudgetMs = 60_000;
+
 it('runs the evaluator through the real Gateway with a local scripted model service', async () => {
   const root = mkdtempSync(join(tmpdir(), 'gateway-adapter-contract-'));
   const repo = fileURLToPath(new URL('../../../', import.meta.url));
@@ -67,13 +71,13 @@ it('runs the evaluator through the real Gateway with a local scripted model serv
   const adapter = new XopcGatewayAdapter();
   const events = [];
   try {
-    await waitForGateway(`http://127.0.0.1:${port}`, token, child, 45000);
+    await waitForGateway(`http://127.0.0.1:${port}`, token, child, gatewayReadyTimeoutMs);
     const result = await adapter.run({
       runId: 'gateway-smoke', experimentId: 'contract',
-      evalCase: { id: 'contract', repo: { source: 'local', path: workspace, commit: 'HEAD' }, task: 'Reply with Gateway smoke passed.', budget: { timeoutMs: 20000 }, graders: [], tags: [] },
+      evalCase: { id: 'contract', repo: { source: 'local', path: workspace, commit: 'HEAD' }, task: 'Reply with Gateway smoke passed.', budget: { timeoutMs: runBudgetMs }, graders: [], tags: [] },
       variant: { id: 'smoke', adapter: 'xopc', agentId: 'coder', model, reasoning: 'off', config: { baseUrl: `http://127.0.0.1:${port}`, token } },
       environment: { workspace, sourceCommit: 'head', fixtureCommit: 'fixture', metadata: {} },
-    }, event => { events.push(event); }, AbortSignal.timeout(20000));
+    }, event => { events.push(event); }, AbortSignal.timeout(runBudgetMs));
     expect(result, logs).toMatchObject({ status: 'completed', finalText: 'Gateway smoke passed.' });
     expect(result.usage).toMatchObject({ input: 20, output: 8, total: 28 });
     expect(modelRequests).toBe(2);
@@ -92,4 +96,4 @@ it('runs the evaluator through the real Gateway with a local scripted model serv
     await new Promise(resolve => provider.close(resolve));
     rmSync(root, { recursive: true, force: true });
   }
-}, 75000);
+}, gatewayReadyTimeoutMs + runBudgetMs + 15_000);

@@ -1,7 +1,7 @@
 import { xopcConfirmDialog, xopcToast } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { common } from '@kit.AbilityKit';
-import { XopcArtifact, XopcHistoryMedia, XopcChatRow, XopcProductDelivery, XopcProductReference } from '../model/chat';
+import { XopcArtifact, XopcHistoryMedia, XopcChatRow, XopcProductDelivery, XopcProductReference, XopcProjectComparison } from '../model/chat';
 import { XopcMobileRoute } from '../model/home';
 import { artifactMedia, chatDeliveries, chatProductCapability } from '../common/chatRichContent';
 import { markdownLink } from '../common/markdown';
@@ -10,6 +10,7 @@ import { XopcChatImageGrid } from './ChatImageGrid';
 import { XopcChatMediaView } from './ChatMediaView';
 import { appSettings } from '../service/settings';
 import { hiddenResultCount, previewArtifacts, previewDeliveries } from '../common/chatResultPreview';
+import { ProjectComparisonPanel } from './ProjectComparisonPanel';
 
 @ComponentV2
 export struct XopcChatResultTail {
@@ -20,6 +21,14 @@ export struct XopcChatResultTail {
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onFillDraft: (text: string) => void = (_text: string): void => {};
   @Computed get deliveries(): XopcProductDelivery[] { return chatDeliveries(this.row); }
+  @Computed get comparisons(): XopcProjectComparison[] {
+    const panels = new Map<string, XopcProjectComparison>();
+    for (const delivery of this.row.deliveries || []) {
+      const panel = delivery.projectComparison;
+      if (panel?.surfaceId && panel.messages?.length === 3) panels.set(panel.surfaceId, panel);
+    }
+    return Array.from(panels.values());
+  }
   @Computed get artifacts(): XopcArtifact[] { return this.row.outcome?.deliverables || []; }
   @Local expanded: boolean = false;
   @Computed get visibleArtifacts(): XopcArtifact[] { return previewArtifacts(this.nonImageArtifacts, this.expanded); }
@@ -96,8 +105,11 @@ export struct XopcChatResultTail {
     }
   }
   build() {
-    if (!this.row.live && (this.artifacts.length || this.deliveries.length)) {
+    if (this.comparisons.length || (!this.row.live && (this.artifacts.length || this.deliveries.length))) {
       Column({ space: 12 }) {
+          ForEach(this.comparisons, (comparison: XopcProjectComparison): void => {
+            ProjectComparisonPanel({ comparison })
+          }, (comparison: XopcProjectComparison): string => comparison.surfaceId)
           if (this.imageArtifacts.length) {
             XopcChatImageGrid({ files: this.imageArtifacts.map((artifact: XopcArtifact): XopcHistoryMedia => artifactMedia(artifact)),
               gallery: this.imageGallery, conversationId: this.conversationId })

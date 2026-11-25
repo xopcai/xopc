@@ -85,9 +85,12 @@ preserves a patchable field; an empty array intentionally clears it. Prefer expl
 
 ## Projects
 
-Commands: \`list\`, \`get\`, \`create\`, \`update\`, \`resolve_workspace\`,
+Commands: \`list\`, \`get\`, \`compare\`, \`create\`, \`update\`, \`resolve_workspace\`,
 \`list_milestones\`, \`create_milestone\`, \`update_milestone\`, \`list_updates\`,
 and \`create_update\`.
+
+Use \`compare\` with \`{projectIds: [id1, id2]}\` (two to four distinct IDs)
+when the user asks to compare projects in chat. It returns an interactive panel and project links.
 
 Project statuses: \`planned\`, \`active\`, \`paused\`, \`completed\`, \`cancelled\`,
 \`archived\`. Health values: \`unknown\`, \`on_track\`, \`at_risk\`, \`off_track\`.

@@ -1,5 +1,6 @@
 [versions]
-androidGradlePlugin = "9.0.1"
+androidGradlePlugin = "9.1.1"
+androidxA2ui = "1.0.0-alpha02"
 androidxCore = "1.18.0"
 androidxLifecycle = "2.10.0"
 androidxActivity = "1.13.0"
@@ -25,6 +26,11 @@ firebaseMessaging = "25.0.1"
 
 [libraries]
 firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebaseMessaging" }
+androidx-a2ui-model = { module = "androidx.a2ui:a2ui-model", version.ref = "androidxA2ui" }
+androidx-a2ui-engine = { module = "androidx.a2ui:a2ui-engine", version.ref = "androidxA2ui" }
+androidx-a2ui-runtime = { module = "androidx.a2ui.compose:compose-runtime", version.ref = "androidxA2ui" }
+androidx-a2ui-compose = { module = "androidx.a2ui.compose:compose-ui", version.ref = "androidxA2ui" }
+androidx-a2ui-material3 = { module = "androidx.compose.material3:material3-a2ui", version.ref = "androidxA2ui" }
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "androidxWebkit" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
 androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "androidxFragment" }

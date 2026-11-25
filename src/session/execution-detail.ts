@@ -33,7 +33,7 @@ function toolCategory(name: string, args?: unknown): string {
       ? input as Record<string, unknown> : {};
     const mode = typeof record.mode === 'string' ? record.mode : 'work';
     const command = typeof record.command === 'string' ? record.command : '';
-    const inspect = ['list', 'get', 'get_card', 'history', 'list_milestones', 'list_updates',
+    const inspect = ['list', 'get', 'compare', 'get_card', 'history', 'list_milestones', 'list_updates',
       'mail_sources', 'preview_edit', 'resolve_workspace'].includes(command);
     const target = mode === 'task_run' ? 'tasks'
       : ['note', 'task', 'project', 'automation'].includes(mode) ? `${mode}s` : 'work';

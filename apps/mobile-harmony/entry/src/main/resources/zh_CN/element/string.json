@@ -347,6 +347,7 @@
     { "name": "chat_product_updated", "value": "已更新" },
     { "name": "chat_product_started", "value": "已启动" },
     { "name": "chat_product_ready", "value": "已就绪" },
+    { "name": "chat_project_comparison_failed", "value": "无法更新项目对比，请重试。" },
     { "name": "chat_product_inbox", "value": "收件箱" },
     { "name": "chat_more_results", "value": "另有 %d 项结果，可缩小查询范围" },
     { "name": "chat_continue", "value": "在对话中继续" },

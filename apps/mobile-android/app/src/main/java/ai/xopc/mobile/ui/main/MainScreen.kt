@@ -891,6 +891,18 @@ internal fun MainScreen(
   )
 }
 
+private class WorkbenchProjectActions(
+  val load: () -> Unit,
+  val open: (String) -> Unit,
+  val write: suspend (ai.xopc.mobile.gateway.ProjectMutation) -> ai.xopc.mobile.gateway.ProgressProject,
+  val createNote: (String) -> Unit,
+  val createTask: (ProgressTaskEdit) -> Unit,
+  val openTaskChat: (String) -> Unit,
+  val saveTask: (String, Int, ProgressTaskEdit) -> Unit,
+  val changeTaskSearch: (String) -> Unit,
+  val submitTaskSearch: () -> Unit,
+)
+
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun MainContent(
@@ -1655,6 +1667,12 @@ internal fun MainContent(
   BackHandler(enabled = showOverview) { personalOverviewOpen = false }
   BackHandler(enabled = assistantActionsOpen) { assistantActionsOpen = false }
   BackHandler(enabled = selectedTab == HomeTab.Me) { leavePersonalPage() }
+  // Keep the large destination lambda within the DEX argument-register limit.
+  val projectActions = WorkbenchProjectActions(
+    onLoadProgressProjects, onOpenProgressProject, onWriteProgressProject, onCreateProjectNote,
+    onCreateProgressTask, onOpenTaskChat, onSaveProgressTask,
+    onProgressTaskSearchChange, onSubmitProgressTaskSearch,
+  )
   MainScaffoldLayout(
     modifier = modifier,
     sidebar = sidebar,
@@ -1795,7 +1813,7 @@ internal fun MainContent(
             when (target.kind) {
               "note" -> openLinkedDetail(HomeTab.Notes, target.id)
               "progress" -> onSelectTab(HomeTab.Progress)
-              "task" -> taskNavigation.open(target.id, connection, onOpen = onOpenTaskChat)
+              "task" -> taskNavigation.open(target.id, connection, onOpen = projectActions.openTaskChat)
               "project" -> openLinkedDetail(HomeTab.Projects, target.id)
               "automation" -> openLinkedDetail(HomeTab.Automations, target.id)
               "automation-run" -> openLinkedDetail(HomeTab.Automations, "run:${target.id}")
@@ -1847,8 +1865,8 @@ internal fun MainContent(
           onExpandMusic = openMusicPlayer,
           taskChrome = { search, options ->
             TaskConversationChrome(connection, taskNavigation, onRestoreConversation, onSelectTab,
-              onOpenProgressTask, onProgressTaskCommand, onStartProgressTask, onSaveProgressTask,
-              onLoadProgressProjects, search, options, taskDetailsOpen, { taskDetailsOpen = false })
+              onOpenProgressTask, onProgressTaskCommand, onStartProgressTask, projectActions.saveTask,
+              projectActions.load, search, options, taskDetailsOpen, { taskDetailsOpen = false })
           })
         }
         else ConversationsScreen(connection, rootInsets,
@@ -1867,7 +1885,7 @@ internal fun MainContent(
         }, onBeginRename,
           onTogglePin, onToggleArchive, onBatchConversations,
           onBeginConversationShare, onScheduleDelete, onUndoDelete, exitDestination, startConversationSearch,
-          onConversationScope, onLoadProgressProjects, onFetchConversationExperts)
+          onConversationScope, projectActions.load, onFetchConversationExperts)
       }
       HomeTab.Progress, HomeTab.Projects, HomeTab.Automations -> if (!isPaired) PairingScreen(
         stringResource(R.string.tab_progress), connection, onPair, onCancelPairing, onScanPairing,
@@ -1876,17 +1894,17 @@ internal fun MainContent(
         ProgressScreen(connection.progress.takeIf { it.gatewayId == gatewayId }
           ?: ProgressUiState(gatewayId = gatewayId, loading = true),
           rootInsets, onRefreshProgressHome, onRefreshProgressTasks, onLoadMoreProgressTasks,
-          onOpenProgressTask, onProgressTaskSearchChange, onSubmitProgressTaskSearch,
+          onOpenProgressTask, projectActions.changeTaskSearch, projectActions.submitTaskSearch,
           onProgressTaskCommand, onStartProgressTask, onCreateTaskWithChat,
-          onLoadProgressProjects, onOpenProgressProject, onCreateProgressTask,
+          projectActions.load, projectActions.open, projectActions.createTask,
           ::openTaskConversation,
-          onSaveProgressTask, onHomeAction = onProgressHomeAction,
+          projectActions.saveTask, onHomeAction = onProgressHomeAction,
           onLoadAutomations = onLoadAutomations, onOpenAutomation = onOpenAutomation,
           onOpenAutomationRun = onOpenAutomationRun, onAutomationAction = onAutomationAction,
           onArrangeAutomation = { id, prompt -> arrangeAutomation(id, false, prompt) },
-          onWriteProject = onWriteProgressProject,
+          onWriteProject = projectActions.write,
           onCreateProjectNote = { projectId ->
-            onCreateProjectNote(projectId)
+            projectActions.createNote(projectId)
             openLinkedDetail(HomeTab.Notes, "project-note-$projectId")
           },
           onUpdateAutomation = onUpdateAutomation,
@@ -1993,7 +2011,7 @@ internal fun MainContent(
         initialProjectDraft = detailId?.startsWith("project-note-") == true,
         onExit = {
           detailId?.takeIf { it.startsWith("project-note-") }?.removePrefix("project-note-")
-            ?.takeIf { it == connection.progress.projectId }?.let(onOpenProgressProject)
+            ?.takeIf { it == connection.progress.projectId }?.let(projectActions.open)
           tabStateHolder.removeState(destination.stateKey)
           exitDestination()
         })

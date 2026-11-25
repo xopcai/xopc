@@ -77,13 +77,15 @@ data class ConversationArtifact(val artifactId: String, val title: String, val k
 data class ConversationOutcome(val status: String, val summary: String?,
   val artifacts: List<ConversationArtifact>)
 data class AgentMessageReaction(val emoji: String, val actorName: String)
+data class ChatProjectComparison(val surfaceId: String, val messages: List<String>)
 data class ConversationMessage(val id: String, val role: String, val text: String, val turnId: String? = null,
   val hasNonTextContent: Boolean = false, val media: List<ConversationMedia> = emptyList(),
   val references: List<ConversationReference> = emptyList(),
   val targets: List<ConversationTarget> = emptyList(), val outcome: ConversationOutcome? = null,
   val sourceIds: Set<String> = setOf(id), val renderId: String = id, val answerConfirmed: Boolean = true,
   val narrations: List<ConversationNarration> = emptyList(), val generatedMediaIds: List<String> = emptyList(),
-  val agentReaction: AgentMessageReaction? = null)
+  val agentReaction: AgentMessageReaction? = null,
+  val projectComparisons: List<ChatProjectComparison> = emptyList())
 data class ConversationNarration(val id: String, val text: String)
 data class ConversationHistory(val conversationId: String, val transcriptId: String?, val messages: List<ConversationMessage>,
   val agentId: String? = null, val nextBeforeCursor: String? = null, val lastSeq: Long? = null)
@@ -1308,12 +1310,14 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         val metadata = item.optJSONObject("metadata")
         val references = parseMessageReferences(metadata?.optJSONArray("sourceContexts"))
         val outcome = parseMessageOutcome(metadata?.optJSONObject("turnOutcome"))
-        val targets = parseMessageTargets(item.optJSONArray("deliveries"))
+        val deliveries = item.optJSONArray("deliveries")
+        val targets = parseMessageTargets(deliveries)
+        val comparisons = parseProjectComparisons(deliveries)
         val ids = item.optJSONArray("generatedMediaIds")
         val generatedMediaIds = (0 until (ids?.length() ?: 0)).mapNotNull { part -> ids?.optString(part)?.takeIf(String::isNotBlank) }
         val hasNonTextContent = narration || hasToolCall || generatedMediaIds.isNotEmpty() || (item.optJSONArray("media")?.length() ?: 0) > 0 ||
           (metadata?.optJSONArray("sourceContexts")?.length() ?: 0) > 0 ||
-          outcome != null || targets.isNotEmpty() ||
+          outcome != null || targets.isNotEmpty() || comparisons.isNotEmpty() ||
           (raw != null && (0 until raw.length()).any { part ->
             raw.optJSONObject(part)?.optString("type")?.let { it != "text" } == true
           })
@@ -1329,6 +1333,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
             item.optString("turnId").takeIf(String::isNotBlank), hasNonTextContent, media, references, targets, outcome,
             renderId = metadata?.optString("clientMessageId")?.takeIf { role == "user" && it.isNotBlank() } ?: messageId,
             narrations = narrations, generatedMediaIds = generatedMediaIds,
+            projectComparisons = comparisons,
             agentReaction = item.optJSONObject("agentReaction")?.takeIf { role == "user" &&
               it.optString("entryId") == item.optString("transcriptEntryId") }?.let {
               val emoji = it.optString("emoji")
@@ -1352,6 +1357,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
             media = (previous.media + message.media).distinctBy { it.id to it.uri },
             references = (previous.references + message.references).distinctBy { it.kind to it.sourceId },
             targets = (previous.targets + message.targets).distinctBy { it.kind to it.id },
+            projectComparisons = (previous.projectComparisons + message.projectComparisons).distinctBy { it.surfaceId },
             outcome = message.outcome ?: previous.outcome,
             narrations = (previous.narrations + message.narrations).distinctBy { it.id },
             generatedMediaIds = (previous.generatedMediaIds + message.generatedMediaIds).distinct(),
@@ -1392,6 +1398,15 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
           row.optString("url").takeIf { it.startsWith("https://") }?.take(4_096))
       }.distinctBy { "${it.kind}:${it.sourceId}" }
     }
+
+    private fun parseProjectComparisons(deliveries: JSONArray?): List<ChatProjectComparison> =
+      (0 until minOf(deliveries?.length() ?: 0, 20)).mapNotNull { index ->
+        val panel = deliveries?.optJSONObject(index)?.optJSONObject("projectComparison") ?: return@mapNotNull null
+        val surfaceId = panel.optString("surfaceId").takeIf { it.matches(Regex("comparison_[a-f0-9-]{36}")) } ?: return@mapNotNull null
+        val payloads = panel.optJSONArray("messages")?.takeIf { it.length() == 3 } ?: return@mapNotNull null
+        val messages = (0 until payloads.length()).mapNotNull { payloads.optJSONObject(it)?.toString() }
+        ChatProjectComparison(surfaceId, messages).takeIf { messages.size == 3 }
+      }.distinctBy { it.surfaceId }
 
     private fun parseMessageTargets(deliveries: JSONArray?): List<ConversationTarget> {
       if (deliveries == null) return emptyList()

@@ -5,6 +5,7 @@ export * from './tasks.js';
 export * from './task-lifecycle.js';
 export * from './task-runs.js';
 export * from './product-delivery.js';
+export * from './project-comparison.js';
 export * from './project-operating.js';
 export * from './sessions.js';
 export * from './session-identity.js';
