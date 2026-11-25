@@ -398,9 +398,9 @@ it('discovers and calls real device services through pi, keeps confirmation and 
   const read = native.find(tool => getXopcToolMetadata(tool)?.external?.readOnly)!;
   const write = native.find(tool => getXopcToolMetadata(tool)?.external?.readOnly === false)!;
   params.tools.push(...native);
-  // Native device discovery works without the MCP pilot configuration.
+  // Source device tools are visible immediately without the MCP pilot configuration.
   const found = await runScript(params, '', 'tool_search', { query: 'phone device information', limit: 1 });
-  expect(JSON.stringify(found.calls[0])).not.toContain(read.name);
+  expect(JSON.stringify(found.calls[0])).toContain(read.name);
   expect(JSON.stringify(found.calls[1])).toContain(read.name);
   expect(sent).toHaveLength(0);
   const direct = await runScript({ ...params, runId: crypto.randomUUID() }, '', read.name, {});
@@ -425,10 +425,13 @@ it('discovers and calls real device services through pi, keeps confirmation and 
   registry.register({ ...hello, connectionInstanceId: crypto.randomUUID() }, 'connection-2', socket);
   expect(getEmbeddedSessionRunnerStats().evictions).toBe(evictions + 1);
   const replacement = await materializeNativeExternalTools({ conversationId: params.conversationId, tools: gateway });
+  const reboundRead = replacement.find(tool => tool.name === read.name)!;
+  expect(getXopcToolMetadata(reboundRead)?.external?.revision).not.toBe(getXopcToolMetadata(read)?.external?.revision);
   params.tools = params.tools.filter(tool => !native.includes(tool)).concat(replacement);
-  const reloaded = await runScript({ ...params, runId: crypto.randomUUID() }, '', 'tool_search', { query: 'device information', limit: 1 });
-  expect(JSON.stringify(reloaded.calls[0])).not.toContain(read.name);
-  expect(JSON.stringify(reloaded.calls[1])).toContain(read.name);
+  invalidOutput = false;
+  const rebound = await runScript({ ...params, runId: crypto.randomUUID() }, '', reboundRead.name, {});
+  expect(JSON.stringify(rebound.calls[0])).toContain(read.name);
+  expect(JSON.stringify(rebound.result)).toContain('Device SDK evidence');
   const reboundEvictions = getEmbeddedSessionRunnerStats().evictions;
   bindings.select(params.conversationId, 'phone');
   expect(getEmbeddedSessionRunnerStats().evictions).toBe(reboundEvictions);

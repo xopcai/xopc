@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { submitSessionInput, replaceLatestSessionTurn } from '../session-input-handler.js';
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 import { CapabilityError } from '../../../../capabilities/runtime/dispatcher.js';
+import type { EndpointConnectionSnapshot } from '../../../../endpoint-tools/registry.js';
 import { useTestDatabase } from '../../../../storage/sqlite/__tests__/test-database.js';
 
 useTestDatabase();
@@ -14,7 +15,8 @@ function fixture() {
     endpointTools: { registry: { verifyTurnClaim: () => true, get: () => ({
       endpointId: 'tab', principalId: 'authenticated-owner', displayName: 'Browser tab',
       platform: 'chrome', kind: 'browser', connectionId: 'connection',
-    }) } },
+      appVersion: '1', availability: 'foreground', lastHeartbeatAt: Date.now(), tools: [],
+    } satisfies EndpointConnectionSnapshot) } },
     prepareSessionAppContext: vi.fn(async () => source),
     submitSessionInput: vi.fn(async () => ({ ok: true, state: {} })),
     replaceLatestSessionTurn: vi.fn(),

@@ -36,7 +36,7 @@ describe('personal tool instruction projection', () => {
   it('preserves registered tools and does not reinterpret custom instructions', () => {
     const full = personalInstructions();
     const all = ['personal_task', 'personal_result', 'knowledge_read', 'session_recall', 'session_search',
-      'personal_capability', 'personal_attention', 'personal_memory'];
+      'personal_capability', 'personal_attention', 'personal_memory', 'personal_inbox'];
     expect(projectPersonalInstructions(full, all)).toBe(full);
     expect(projectPersonalInstructions(full, [...all, 'video_draft'])).toContain('use video_draft directly');
     const custom = 'Quoted policy: personal_task(command="submit"). Keep this exact text.';
@@ -53,7 +53,8 @@ describe('personal tool instruction projection', () => {
     ['session_search', 'Use session_search to find other chats', ['personal_result', 'personal_task']],
     ['personal_task', 'Set requirements.requestedAgentId only when the user explicitly names', ['session_recall', 'personal_result']],
     ['personal_capability', 'Use personal_capability to check supported apps', ['personal_task']],
-    ['personal_attention', 'Follow-ups (personal_attention)', ['personal_schedule']],
+    ['personal_attention', 'Follow-Up Matters (personal_attention)', ['personal_schedule', 'personal_inbox']],
+    ['personal_inbox', 'Proactive Inbox (personal_inbox)', ['personal_attention', 'personal_task']],
     ['personal_schedule', 'Schedules (personal_schedule)', ['personal_attention', 'personal_task']],
     ['personal_note', 'Notes (personal_note)', ['personal_read', 'personal_memory', 'personal_task']],
     ['personal_memory', 'call personal_memory directly', ['personal_note']],

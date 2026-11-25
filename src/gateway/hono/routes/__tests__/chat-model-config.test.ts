@@ -5,6 +5,7 @@ vi.mock('../../../../providers/index.js', () => ({ resolveModel: () => ({ provid
 import { patchChatModelConfig } from '../chat-model-config.js';
 import { submitSessionInput } from '../session-input-handler.js';
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
+import type { EndpointConnectionSnapshot } from '../../../../endpoint-tools/registry.js';
 import { useTestDatabase } from '../../../../storage/sqlite/__tests__/test-database.js';
 
 useTestDatabase();
@@ -16,7 +17,8 @@ function fixture(active = false) {
     endpointTools: { registry: { verifyTurnClaim: () => true, get: () => ({
       endpointId: 'tab-1', principalId: 'owner', displayName: 'Browser tab',
       platform: 'chrome', kind: 'browser', connectionId: 'connection',
-    }) } },
+      appVersion: '1', availability: 'foreground', lastHeartbeatAt: Date.now(), tools: [],
+    } satisfies EndpointConnectionSnapshot) } },
     sessions: {
       getAgentConfig: vi.fn(async () => config),
       getActiveRun: () => ({ active }),
