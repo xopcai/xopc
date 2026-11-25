@@ -30,6 +30,7 @@ private struct VoiceNoteCaptureView: View {
     private let draftStore: PendingVoiceNoteStore
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.mobileTheme) private var mobileTheme
     @State private var recorder = VoiceRecorder()
     @State private var draft: PendingVoiceNote?
     @State private var unsavedAudio: RecordedAudio?
@@ -51,26 +52,14 @@ private struct VoiceNoteCaptureView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    Image(systemName: recorder.isRecording || draft != nil ? "waveform.circle.fill" : "mic.circle")
-                        .font(.system(size: 76))
-                        .foregroundStyle(recorder.isRecording ? .red : .blue)
-                        .accessibilityHidden(true)
+                    if draft == nil {
+                        Image(systemName: recorder.isRecording ? "waveform.circle.fill" : "mic.circle")
+                            .font(.system(size: 56))
+                            .foregroundStyle(recorder.isRecording ? mobileTheme.danger : mobileTheme.action)
+                            .accessibilityHidden(true)
+                    }
                     if let draft {
-                        Text(draft.duration, format: .number.precision(.fractionLength(1))) + Text(" 秒")
-                            .font(.title.monospacedDigit())
-                        Text(draft.noteID == nil
-                            ? LocalizedStringKey("录音已保存在此设备，等待上传")
-                            : LocalizedStringKey("录音仍保存在此设备，等待服务器确认保存"))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Button(draft.noteID == nil ? LocalizedStringKey("继续保存") : LocalizedStringKey("继续处理"), systemImage: "arrow.clockwise") {
-                            Task { await save() }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(isSaving)
-                        Button("丢弃这段录音", role: .destructive) { showingDiscardConfirmation = true }
-                            .disabled(isSaving)
+                        recoveryCard(draft)
                     } else if unsavedAudio != nil {
                         Text("录音尚未写入本地存储，请重试")
                             .foregroundStyle(.secondary)
@@ -141,10 +130,11 @@ private struct VoiceNoteCaptureView: View {
                     }
                 }
                 .padding()
-                .frame(maxWidth: .infinity, minHeight: 360)
+                .frame(maxWidth: .infinity, minHeight: draft == nil ? 360 : 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("语音笔记")
+            .background(mobileTheme.canvas)
+            .navigationTitle(draft == nil ? LocalizedStringKey("语音笔记") : "待恢复录音")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -192,6 +182,53 @@ private struct VoiceNoteCaptureView: View {
         } message: {
             Text("请先重试保存。现在关闭将丢失这段录音。")
         }
+    }
+
+    private func recoveryCard(_ draft: PendingVoiceNote) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "waveform")
+                    .foregroundStyle(.tint)
+                    .frame(width: 36, height: 36)
+                    .background(Color.accentColor.opacity(0.14), in: .rect(cornerRadius: 10))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(draft.recordedAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
+                        .mobileTextStyle(.rowTitle)
+                    Text(voiceNoteTime(draft.duration))
+                        .mobileTextStyle(.secondary)
+                        .monospacedDigit()
+                }
+                Spacer(minLength: 8)
+                Menu("更多", systemImage: "ellipsis.circle") {
+                    Button("丢弃这段录音", systemImage: "trash", role: .destructive) { showingDiscardConfirmation = true }
+                }
+                .labelStyle(.iconOnly)
+                .frame(width: 44, height: 44)
+                .disabled(isSaving)
+            }
+            Text(draft.noteID == nil
+                ? LocalizedStringKey("录音已保存在此设备，等待上传")
+                : LocalizedStringKey("录音仍保存在此设备，等待服务器确认保存"))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                Task { await save() }
+            } label: {
+                Label(draft.noteID == nil ? LocalizedStringKey("继续保存") : "继续处理", systemImage: "arrow.clockwise")
+                    .mobileTextStyle(.rowTitle)
+                    .foregroundStyle(mobileTheme.onAction)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 44)
+                    .background(mobileTheme.action, in: .rect(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .opacity(isSaving ? 0.5 : 1)
+            .disabled(isSaving)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(mobileTheme.panel, in: .rect(cornerRadius: 16))
     }
 
     private var consentBinding: Binding<Bool> {
@@ -291,45 +328,14 @@ struct DiscussionProcessingSection: View {
     let retryUsesLocalAudio: Bool
     let onRetry: () -> Void
 
+    @Environment(\.mobileTheme) private var mobileTheme
+    @State private var statusExpanded = false
     @State private var transcriptExpanded = true
     @State private var visibleSegments = 20
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("语音记录", systemImage: "waveform")
-                .font(.headline)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 10) {
-                    if detail.isProcessing {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Image(systemName: detail.discussion.status == "needs_attention" ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                            .foregroundStyle(detail.discussion.status == "needs_attention" ? .orange : .green)
-                    }
-                    Text(detail.statusTitle)
-                        .font(.headline)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Text(detail.statusDetail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if detail.discussion.status == "needs_attention" {
-                    Button(action: onRetry) {
-                        Text(retryUsesLocalAudio
-                            ? LocalizedStringResource("重新上传本地录音")
-                            : LocalizedStringResource("重试"))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(isRetrying)
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.blue.opacity(0.09), in: .rect(cornerRadius: 14))
+            processingCard
             if let organization = detail.organization?.organization {
                 DiscussionSummarySection(organization: organization)
             }
@@ -394,6 +400,53 @@ struct DiscussionProcessingSection: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var processingCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if detail.discussion.status == "completed" || detail.discussion.status == "cancelled" {
+                statusHeading.frame(minHeight: 44, alignment: .leading)
+            } else {
+                DisclosureGroup(isExpanded: $statusExpanded) {
+                    Text(detail.statusDetail)
+                        .mobileTextStyle(.secondary)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } label: {
+                    statusHeading.frame(minHeight: 44, alignment: .leading)
+                }
+            }
+            if detail.discussion.status == "needs_attention" {
+                Button(action: onRetry) {
+                    Text(retryUsesLocalAudio ? LocalizedStringResource("重新上传本地录音") : "重试")
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .disabled(isRetrying)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(mobileTheme.panel, in: .rect(cornerRadius: 14))
+    }
+
+    private var statusHeading: some View {
+        HStack(spacing: 8) {
+            if detail.isProcessing {
+                ProgressView().controlSize(.small).accessibilityHidden(true)
+            } else {
+                Image(systemName: detail.discussion.status == "completed" ? "checkmark.circle" : "doc.text")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            Text(detail.statusTitle)
+                .mobileTextStyle(.rowTitle)
+                .foregroundStyle(mobileTheme.foreground)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private var showsTranscriptSection: Bool {
@@ -474,7 +527,12 @@ extension DiscussionDetail {
         case "stopping": discussion.audioAttachmentId == nil ? "正在保存录音" : "正在生成转写"
         case "sealing": "正在生成转写"
         case "organizing": "正在整理笔记"
-        case "needs_attention": discussion.failureStage == "audio_upload" ? "录音上传需要重试" : "转写需要重试"
+        case "needs_attention":
+            switch discussion.failureStage {
+            case "audio_upload": "录音上传需要重试"
+            case "organization": "笔记整理未完成"
+            default: "转写需要重试"
+            }
         case "completed": "转写已完成"
         case "cancelled": "录音已取消"
         default: "正在处理语音笔记"

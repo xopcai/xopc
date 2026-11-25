@@ -8,7 +8,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { xopcFormatCaptureTime } from '../common/discussionAudio';
 import { XopcDiscussionActionItem, XopcDiscussionFact, XopcDiscussionTranscriptSegment } from '../model/discussionCapture';
 import { XopcDiscussionNoteViewModel, discussionStillProcessing } from '../viewmodel/discussionNoteViewModel';
-import { XopcPaginationFooter } from './MobileComponents';
+import { XopcPageSearchButton, XopcPageSearchField, XopcPaginationFooter } from './MobileComponents';
 
 /** Readable recording status, summary and transcript for a voice note. */
 @ComponentV2
@@ -22,7 +22,6 @@ export struct XopcDiscussionNoteView {
   @Local annotationKind: string = 'highlight';
   @Local toolsMode: boolean = false;
   @Local searchOpen: boolean = false;
-  @Local coverageOpen: boolean = false;
   @Local chaptersOpen: boolean = false;
   @Local transcriptExpanded: boolean = true;
   @Local visibleSegments: number = 20;
@@ -32,7 +31,7 @@ export struct XopcDiscussionNoteView {
 
   @Monitor('noteId')
   onNoteIdChanged(): void {
-    this.editingAnnotation = undefined; this.annotationText = ''; this.evidenceOpen = false; this.toolsMode = false; this.searchOpen = false; this.coverageOpen = false; this.chaptersOpen = false;
+    this.editingAnnotation = undefined; this.annotationText = ''; this.evidenceOpen = false; this.toolsMode = false; this.searchOpen = false; this.chaptersOpen = false;
     this.transcriptExpanded = true;
     this.visibleSegments = 20;
     this.model.start(this.noteId, (): void => { this.onNoteUpdated(); });
@@ -117,6 +116,27 @@ export struct XopcDiscussionNoteView {
       if (this.model.detail?.discussion.audioAttachmentId && !this.model.detail.discussion.audioDeletedAt && (this.model.detail.discussion.status === 'completed' || this.model.detail.discussion.status === 'needs_attention')) Button($r('app.string.discussion_regenerate_audio')).width('100%').height(48).fontSize(15).enabled(!this.model.retrying)
         .onClick((): void => { void this.model.retry(true); this.evidenceOpen = false; })
       Text($r('app.string.discussion_regenerate_retained')).fontSize(13).lineHeight(21).fontColor(this.colors.secondary).width('100%')
+      if (this.model.review) {
+        Column({ space: 6 }) {
+          Text($r('app.string.note_ui_coverage')).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+          Text(this.model.review.coverage.audioAvailable ? $r('app.string.discussion_audio_saved_review')
+            : $r('app.string.discussion_audio_unavailable')).fontSize(12).fontColor(this.colors.secondary)
+          Text($r('app.string.discussion_processed_coverage', xopcFormatCaptureTime(this.model.review.coverage.processedMs),
+            xopcFormatCaptureTime(this.model.review.coverage.durationMs), xopcFormatCaptureTime(this.model.review.coverage.continuousThroughMs)))
+            .fontSize(12).fontColor(this.colors.secondary)
+          Text(this.model.review.coverage.complete ? $r('app.string.discussion_run_complete')
+            : $r('app.string.discussion_partial_content')).fontSize(12).fontColor(this.colors.secondary)
+          Text($r('app.string.discussion_analysis_coverage')).fontSize(12).fontColor(this.colors.secondary)
+          ForEach(this.model.review.coverage.analysisRanges, (range: XopcPlaybackRange) => {
+            Text(xopcFormatCaptureTime(range.startedAtMs) + '–' + xopcFormatCaptureTime(range.endedAtMs))
+              .fontSize(12).fontColor(this.colors.secondary)
+          }, (range: XopcPlaybackRange): string => range.startedAtMs.toString())
+          if (!this.model.review.coverage.analysisRanges.length) {
+            Text($r('app.string.discussion_chapters_pending')).fontSize(12).fontColor(this.colors.secondary)
+          }
+        }.width('100%').padding(12).alignItems(HorizontalAlign.Start)
+          .borderRadius(this.colors.corner(12)).backgroundColor(this.colors.panel)
+      }
     }.width('100%').padding(20).alignItems(HorizontalAlign.Start)
   }
   @Builder
@@ -140,18 +160,6 @@ export struct XopcDiscussionNoteView {
   reviewContent() {
     Column({ space: 12 }) {
         if (this.model.review) {
-          Button($r('app.string.note_ui_coverage')).height(44).fontSize(13).fontColor(this.colors.secondary).backgroundColor(Color.Transparent)
-            .onClick((): void => { this.coverageOpen = !this.coverageOpen; })
-          if (this.coverageOpen) {
-          Text(this.model.review.coverage.audioAvailable ? $r('app.string.discussion_audio_saved_review') : $r('app.string.discussion_audio_unavailable')).fontSize(12).fontColor(this.colors.secondary)
-          Text($r('app.string.discussion_processed_coverage',xopcFormatCaptureTime(this.model.review.coverage.processedMs),xopcFormatCaptureTime(this.model.review.coverage.durationMs),xopcFormatCaptureTime(this.model.review.coverage.continuousThroughMs))).fontSize(12).fontColor(this.colors.secondary)
-          Text(this.model.review.coverage.complete ? $r('app.string.discussion_run_complete') : $r('app.string.discussion_partial_content')).fontSize(12).fontColor(this.colors.secondary)
-          Text($r('app.string.discussion_analysis_coverage')).fontSize(12).fontColor(this.colors.secondary)
-          ForEach(this.model.review.coverage.analysisRanges,(range: XopcPlaybackRange) => {
-            Text(xopcFormatCaptureTime(range.startedAtMs) + '–' + xopcFormatCaptureTime(range.endedAtMs)).fontSize(12).fontColor(this.colors.secondary)
-          },(range: XopcPlaybackRange): string => range.startedAtMs.toString())
-          if (!this.model.review.coverage.analysisRanges.length) Text($r('app.string.discussion_chapters_pending')).fontSize(12).fontColor(this.colors.secondary)
-          }
           if (this.model.reviewQuery.trim()) {
             Text($r('app.string.discussion_search_count',this.model.review.total)).fontSize(14).fontColor(this.colors.foreground)
             Button($r('app.string.discussion_refresh_search')).enabled(!this.model.reviewLoading).onClick((): void => { void this.model.refreshReview(); })
@@ -175,40 +183,49 @@ export struct XopcDiscussionNoteView {
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
   build() {
-    Column({ space: 16 }) {
+    Column({ space: 12 }) {
       if (this.model.loading && !this.model.detail) {
         Row({ space: 9 }) {
           LoadingProgress().width(18).height(18).color(this.colors.accent)
           Text($r('app.string.discussion_loading')).fontSize(14).fontColor(this.colors.secondary)
         }.width('100%')
       } else if (this.model.detail) {
-        Row({ space: 10 }) {
-          SymbolGlyph($r('sys.symbol.waveform')).fontSize(20).fontColor([this.colors.accent])
-          Text($r('app.string.discussion_recording')).fontSize(17).fontWeight(FontWeight.Medium)
-            .fontColor(this.colors.foreground).layoutWeight(1)
-          Button() { SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(19).fontColor([this.colors.secondary]) }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.discussion_search_note')).onClick((): void => { this.searchOpen = !this.searchOpen; })
-          Button() { Row({ space: 3 }) { ForEach([0,1,2],(dot: number) => { Row() {}.width(3).height(3).borderRadius(2).backgroundColor(this.colors.secondary) },(dot: number): string => dot.toString()) } }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.note_ui_tools')).onClick((): void => { this.toolsMode = true; this.evidenceOpen = true; })
-          if (this.model.detail.discussion.durationMs) {
-            Text(xopcFormatCaptureTime(this.model.detail.discussion.durationMs as number))
-              .fontSize(13).fontColor(this.colors.secondary)
-          }
-        }.width('100%')
         if (this.model.detail.discussion.status !== 'recording' || this.model.detail.recordingJob) {
           RecordingOutcomeCard({ input: this.model.outcome(),noteContext: true,busy: this.model.retrying,
             onRetry: (mode: string): void => { void this.model.retryOutcome(mode); } })
         }
         if (this.model.resumePositionMs > 0 && !this.model.detail.discussion.audioDeletedAt) Button($r('app.string.discussion_resume_position',xopcFormatCaptureTime(this.model.resumePositionMs))).onClick((): void => { void this.model.resumePlayback(); })
-        XopcSegmentedTabs({ options: [
-          { key: 'summary', label: $r('app.string.note_ui_overview'), testId: 'discussion-tab-summary' },
-          { key: 'transcript', label: $r('app.string.note_ui_transcript'), testId: 'discussion-tab-transcript' },
-          { key: 'marks', label: $r('app.string.note_ui_marks'), testId: 'discussion-tab-marks' }
-        ], selectedKey: this.model.tab, swipeToSelect: true,
-          onSelect: (key: string): void => { this.model.tab = key; if (key === 'marks') void this.model.refreshAnnotations(); } })
-        if (this.searchOpen || this.model.reviewQuery.trim()) {
-        TextInput({ text: this.model.reviewQuery,placeholder: $r('app.string.discussion_search_note') }).maxLength(200)
-          .onChange((text: string): void => { this.model.setReviewQuery(text); })
-          Button($r('app.string.note_ui_close_search')).height(44).onClick((): void => { this.model.setReviewQuery(''); this.searchOpen = false; })
-        }
+        Column({ space: 4 }) {
+          Row() {
+            Text($r('app.string.note_recording_content')).fontSize(16).fontWeight(FontWeight.Medium)
+              .fontColor(this.colors.foreground).layoutWeight(1)
+            XopcPageSearchButton({ searchId: 'discussion-search-toggle', open: this.searchOpen,
+              label: $r('app.string.discussion_search_note'), onToggle: (): void => {
+                this.searchOpen = !this.searchOpen;
+                if (!this.searchOpen) {
+                  this.getUIContext().getFocusController().clearFocus();
+                  this.model.setReviewQuery('');
+                }
+              } })
+            Button({ type: ButtonType.Circle }) {
+              SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(20).fontColor([this.colors.secondary])
+            }.id('discussion-note-tools').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+              .accessibilityText($r('app.string.note_ui_tools'))
+              .onClick((): void => { this.toolsMode = true; this.evidenceOpen = true; })
+          }.width('100%')
+          if (this.searchOpen) {
+            XopcPageSearchField({ searchId: 'discussion-search', text: this.model.reviewQuery,
+              placeholder: $r('app.string.discussion_search_note'),
+              onChange: (text: string): void => { this.model.setReviewQuery(text.slice(0, 200)); },
+              onSubmit: (): void => { this.getUIContext().getFocusController().clearFocus(); } })
+          }
+          XopcSegmentedTabs({ options: [
+            { key: 'summary', label: $r('app.string.note_ui_overview'), testId: 'discussion-tab-summary' },
+            { key: 'transcript', label: $r('app.string.note_ui_transcript'), testId: 'discussion-tab-transcript' },
+            { key: 'marks', label: $r('app.string.note_ui_marks'), testId: 'discussion-tab-marks' }
+          ], selectedKey: this.model.tab, swipeToSelect: true,
+            onSelect: (key: string): void => { this.model.tab = key; if (key === 'marks') void this.model.refreshAnnotations(); } })
+        }.width('100%')
         if (this.model.reviewQuery.trim()) this.reviewContent()
         if (!this.model.reviewQuery.trim() && this.model.tab === 'summary' && this.model.detail.organization?.organization) {
           Column({ space: 15 }) {
@@ -283,7 +300,7 @@ export struct XopcDiscussionNoteView {
             .fontColor(this.colors.secondary).width('100%')
         }
       }
-      if (!this.model.reviewQuery.trim() && this.model.tab === 'marks') {
+      if (this.model.detail && !this.model.reviewQuery.trim() && this.model.tab === 'marks') {
         Column({ space: 12 }) {
           ForEach(this.model.visibleAnnotations(), (annotation: XopcDiscussionAnnotation) => {
             Column({ space: 6 }) {
@@ -302,7 +319,8 @@ export struct XopcDiscussionNoteView {
               }
             }.width('100%').padding(12).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input).alignItems(HorizontalAlign.Start)
           }, (annotation: XopcDiscussionAnnotation): string => annotation.id)
-          Text($r('app.string.discussion_mark_unavailable')).fontSize(12).fontColor(this.colors.secondary)
+          Text(this.model.visibleAnnotations().length ? $r('app.string.discussion_mark_unavailable')
+            : $r('app.string.note_recording_no_marks')).fontSize(13).fontColor(this.colors.secondary).width('100%')
           if (this.model.annotationError) {
             Text(userErrorMessage(this.model.annotationError,'save')).fontSize(12).fontColor(this.colors.danger)
             Button($r('app.string.retry')).onClick((): void => { void this.model.refreshAnnotations(); })

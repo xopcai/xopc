@@ -1188,7 +1188,14 @@
     <string name="voice_note_retry">Retry</string>
     <string name="voice_note_consent">Make sure everyone agrees to be recorded. The recording goes to your Gateway for transcription and a summary.</string>
     <string name="voice_note_agree">Agree and continue</string>
-    <string name="voice_note_pending">Recordings waiting to upload</string>
+    <string name="voice_note_pending">Recordings to recover</string>
+    <string name="voice_note_recover">Recover recording</string>
+    <string name="voice_note_local_copy">Saved on this device</string>
+    <string name="voice_note_discard_action">Discard recording</string>
+    <string name="voice_note_discard_local_message">This cancels any unfinished upload and permanently removes the recording from this device.</string>
+    <string name="voice_note_no_pending">No recordings to recover.</string>
+    <string name="voice_note_summary_attention">Summary incomplete</string>
+    <string name="voice_note_upload_attention">Audio upload incomplete</string>
     <string name="voice_note_completed">Transcript and summary ready</string>
     <string name="voice_note_cancelled">Recording cancelled</string>
     <string name="voice_note_attention">Processing needs attention</string>

@@ -72,7 +72,8 @@ class VoiceNoteJourneyTest {
     rule.waitUntil(8_000) { rule.onAllNodesWithTag("voice-note-upload-retry").fetchSemanticsNodes().isNotEmpty() }
     rule.onNodeWithTag("voice-note-error").assertExists()
     rule.onNodeWithTag("voice-note-back").performClick()
-    rule.onNodeWithTag("notes-new-voice").performClick()
+    rule.waitUntil(5_000) { rule.onAllNodesWithTag("notes-recover-voice").fetchSemanticsNodes().isNotEmpty() }
+    rule.onNodeWithTag("notes-recover-voice").performClick()
     rule.onNodeWithTag("voice-note-upload-retry").performClick()
     rule.waitUntil(6_000) { rule.onAllNodesWithTag("voice-note-result-retry").fetchSemanticsNodes().isNotEmpty() }
     val playback = rule.onNodeWithTag("voice-note-playback")

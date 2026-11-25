@@ -16,6 +16,8 @@ import { XopcChatMediaView } from './ChatMediaView';
 import { XopcDiscussionReviewPlayer } from './DiscussionReviewPlayer';
 import { XopcDiscussionNoteView } from './DiscussionNoteView';
 import { userErrorMessage } from '../common/userError';
+import { formatNoteTimestamp } from '../common/notePresentation';
+import { appSettings } from '../service/settings';
 
 type XopcNoteSheet = 'history' | 'ai' | 'share' | 'tags' | 'more' | 'attachment' | 'voice' | 'reading';
 
@@ -174,10 +176,27 @@ export struct XopcNotesView {
     return note.markdown.includes(target);
   }
 
+  private visibleAttachments(note: XopcNote): XopcNoteAttachment[] {
+    return (note.attachments ?? []).filter((attachment: XopcNoteAttachment): boolean => {
+      if (this.attachmentInBody(note, attachment)) return false;
+      // Recording recovery manifests are kept by Gateway for repair, outside the note content.
+      return note.kind !== 'voice' || attachment.mimeType !== 'application/json' ||
+        !/^recording-(events|sources)-[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}\.json$/i.test(attachment.fileName);
+    });
+  }
+
+  private recordingLabel(note: XopcNote, attachment: XopcNoteAttachment): ResourceStr {
+    if (this.visibleAttachments(note).filter((item: XopcNoteAttachment): boolean => item.type === 'audio').length > 1) {
+      return attachment.fileName || $r('app.string.note_recording_audio');
+    }
+    return $r('app.string.note_recording_audio');
+  }
+
   @Builder
   noteAttachment(note: XopcNote, attachment: XopcNoteAttachment, editing: boolean = false) {
     if (attachment.type === 'audio') {
-      XopcChatMediaView({ file: this.attachmentMedia(note, attachment), conversationId: note.id, inlineVoice: true })
+      XopcChatMediaView({ file: this.attachmentMedia(note, attachment), conversationId: note.id, inlineVoice: true,
+        noteRecordingLabel: note.kind === 'voice' && !editing ? this.recordingLabel(note, attachment) : '' })
         .padding({ left: 8, right: 8 }).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
     } else if (attachment.type === 'image') {
       XopcChatMediaView({ file: this.attachmentMedia(note, attachment), conversationId: note.id,
@@ -191,6 +210,12 @@ export struct XopcNotesView {
   @Builder
   header() {
     Row({ space: 8 }) {
+      if (!this.embedded) {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.arrow_left')).fontSize(22).fontColor([this.colors.foreground])
+        }.id('note-back').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
+          .accessibilityText($r('app.string.back')).onClick((): void => { this.back(); })
+      }
       Blank().layoutWeight(1)
       if (this.model.draft) {
         Text(this.syncText()).fontSize(12).fontColor(this.model.draft.syncState === 'conflict' ? this.colors.danger : this.colors.secondary)
@@ -205,7 +230,7 @@ export struct XopcNotesView {
           .id('note-more').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
           .accessibilityText($r('app.string.more')).onClick((): void => { this.openSheet('more'); })
       }
-    }.width('100%').padding({ left: 12, right: 16, top: 10, bottom: 8 })
+    }.width('100%').padding({ left: 16, right: 16, top: 4, bottom: 4 })
   }
 
   @Builder
@@ -250,12 +275,10 @@ export struct XopcNotesView {
         XopcChatMediaView({ file: this.editorPreview, conversationId: this.model.selected.id, previewOnly: true,
           onPreviewClosed: (): void => { this.editorPreview = undefined; } }).height(0)
       }
-      if (this.model.selected?.attachments?.some((attachment: XopcNoteAttachment): boolean =>
-        !this.attachmentInBody(this.model.selected as XopcNote, attachment))) {
+      if (this.model.selected && this.visibleAttachments(this.model.selected).length) {
         Scroll() {
           Column({ space: 8 }) {
-            ForEach(this.model.selected.attachments.filter((attachment: XopcNoteAttachment): boolean =>
-              !this.attachmentInBody(this.model.selected as XopcNote, attachment)), (attachment: XopcNoteAttachment) => {
+            ForEach(this.visibleAttachments(this.model.selected), (attachment: XopcNoteAttachment) => {
               this.noteAttachment(this.model.selected as XopcNote, attachment, true)
             }, (attachment: XopcNoteAttachment): string => attachment.id)
           }.width('100%')
@@ -272,33 +295,52 @@ export struct XopcNotesView {
 
   @Builder
   detailToolbar() {
-    Button($r('app.string.edit_note')).id('note-edit').width('100%').constraintSize({ minHeight: 49, maxWidth: 480 })
-      .fontColor(this.colors.chat.onAction).backgroundColor(this.colors.chat.action)
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 8 }) {
+        SymbolGlyph($r('sys.symbol.square_and_pencil')).fontSize(17).fontColor([this.colors.accent])
+        Text($r('app.string.edit_note')).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
+      }
+    }.id('note-edit').constraintSize({ minHeight: 44 }).padding({ left: 18, right: 18 })
+      .borderRadius(this.colors.corner(14)).backgroundColor(this.colors.accentSoft)
       .onClick((): void => {
         this.restoreDetailOffset = this.detailScroller.currentOffset().yOffset;
         this.model.editing = true;
       })
-      .margin({ left: 20, right: 20, bottom: 12 })
+  }
+
+  @Builder
+  tagsButton() {
+    Button({ type: ButtonType.Circle }) {
+      SymbolGlyph($r('sys.symbol.flag')).fontSize(17).fontColor([this.colors.secondary])
+    }.width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+      .accessibilityText($r('app.string.note_manage_tags')).onClick((): void => {
+        this.tagsText = this.model.selected?.tags?.join(', ') ?? '';
+        this.openSheet('tags');
+      })
   }
 
   @Builder
   detail() {
     if (this.model.selected) {
-      Stack({ alignContent: Alignment.Bottom }) {
+      Column() {
         List({ space: 0, scroller: this.detailScroller }) {
           ListItem() {
             Column({ space: 16 }) {
-              Column({ space: 7 }) {
-                Text(this.model.selected.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(this.model.selected.title) ? $r('app.string.note_voice_option') : this.model.selected.title || $r('app.string.untitled')).fontSize(27).lineHeight(34).fontWeight(FontWeight.Bold)
+              Column() {
+                Text(this.model.selected.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(this.model.selected.title) ? $r('app.string.note_voice_option') : this.model.selected.title || $r('app.string.untitled')).fontSize(26).lineHeight(34).fontWeight(FontWeight.Bold)
                   .fontColor(this.colors.foreground).width('100%')
                 Row({ space: 8 }) {
-                  Text(new Date(this.model.selected.updatedAt).toLocaleString()).fontSize(12).fontColor(this.colors.tertiary)
+                  Text(formatNoteTimestamp(this.model.selected.updatedAt, appSettings.effectiveLanguage()))
+                    .fontSize(12).fontColor(this.colors.tertiary).layoutWeight(1)
                   Text(this.statusLabel(this.model.selected.status)).fontSize(12).fontColor(this.colors.secondary)
+                    .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+                    .borderRadius(this.colors.corner(6)).backgroundColor(this.colors.panel)
+                  if (!this.model.selected.tags?.length) this.tagsButton()
                 }.width('100%')
               }.width('100%').alignItems(HorizontalAlign.Start)
 
-              Row({ space: 8 }) {
-                if (this.model.selected.tags?.length) {
+              if (this.model.selected.tags?.length) {
+                Row({ space: 8 }) {
                   Scroll() {
                     Row({ space: 6 }) {
                       ForEach(this.model.selected.tags, (tag: string) => {
@@ -309,17 +351,15 @@ export struct XopcNotesView {
                       }, (tag: string): string => tag)
                     }
                   }.layoutWeight(1).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-                } else {
-                  Text($r('app.string.note_manage_tags')).layoutWeight(1).fontSize(13).fontColor(this.colors.tertiary)
-                }
-                Button() { SymbolGlyph($r('sys.symbol.flag')).fontSize(18).fontColor([this.colors.secondary]) }
-                  .width(38).height(38).padding(0).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(this.colors.input)
-                  .accessibilityText($r('app.string.note_manage_tags')).onClick((): void => {
-                    this.tagsText = this.model.selected?.tags?.join(', ') ?? ''; this.openSheet('tags');
-                  })
-              }.width('100%').alignItems(VerticalAlign.Center)
+                  this.tagsButton()
+                }.width('100%')
+              }
 
               if (this.model.selected.kind === 'voice') {
+                ForEach(this.visibleAttachments(this.model.selected).filter((attachment: XopcNoteAttachment): boolean =>
+                  attachment.type === 'audio'), (attachment: XopcNoteAttachment) => {
+                  this.noteAttachment(this.model.selected as XopcNote, attachment)
+                }, (attachment: XopcNoteAttachment): string => attachment.id)
                 XopcDiscussionNoteView({ noteId: this.model.selected.id,
                   onNoteUpdated: (): void => { void this.model.refreshSelected(); } })
               }
@@ -328,20 +368,15 @@ export struct XopcNotesView {
                   inlineNoteImages: true, noteReaderPrefix: 'note-block-' + this.model.selected.id + '-',
                   noteReaderTarget: this.readingTarget })
               }
-              if (this.model.selected.attachments?.some((attachment: XopcNoteAttachment): boolean =>
-                !this.attachmentInBody(this.model.selected as XopcNote, attachment))) {
-                Column({ space: 8 }) {
-                  ForEach(this.model.selected.attachments.filter((attachment: XopcNoteAttachment): boolean =>
-                    !this.attachmentInBody(this.model.selected as XopcNote, attachment)), (attachment: XopcNoteAttachment) => {
-                    this.noteAttachment(this.model.selected as XopcNote, attachment)
-                  }, (attachment: XopcNoteAttachment): string => attachment.id)
-                }.width('100%')
-              }
+              ForEach(this.visibleAttachments(this.model.selected).filter((attachment: XopcNoteAttachment): boolean =>
+                this.model.selected?.kind !== 'voice' || attachment.type !== 'audio'), (attachment: XopcNoteAttachment) => {
+                this.noteAttachment(this.model.selected as XopcNote, attachment)
+              }, (attachment: XopcNoteAttachment): string => attachment.id)
 
-            }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 30 }).alignItems(HorizontalAlign.Start)
+            }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 16 }).alignItems(HorizontalAlign.Start)
           }
-        }.id('note-detail-content').height('100%').width('100%').scrollBar(BarState.Off)
-          .contentEndOffset(this.model.selected.kind === 'voice' ? 210 : 92).edgeEffect(EdgeEffect.Spring)
+        }.id('note-detail-content').layoutWeight(1).width('100%').scrollBar(BarState.Off)
+          .edgeEffect(EdgeEffect.Spring)
           .onAreaChange((_previous: Area, current: Area): void => {
             if (this.restoreDetailOffset <= 0 || Number(current.height) <= 0) return;
             const offset = this.restoreDetailOffset;
@@ -351,7 +386,7 @@ export struct XopcNotesView {
         Column({ space: 8 }) {
           if (this.model.selected.kind === 'voice') XopcDiscussionReviewPlayer({ noteId: this.model.selected.id })
           this.detailToolbar()
-        }.width('100%')
+        }.width('100%').alignItems(HorizontalAlign.End).padding({ left: 20, right: 20, top: 8, bottom: 12 })
       }.layoutWeight(1).width('100%').clip(true)
     }
   }

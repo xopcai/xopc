@@ -5,6 +5,7 @@ struct NoteAttachmentsSection: View {
     let configuration: GatewayConfiguration
     let noteID: String
     let attachments: [NoteAttachment]
+    var showsHeading = true
 
     @State private var previewURL: URL?
     @State private var previewFileURL: URL?
@@ -13,13 +14,14 @@ struct NoteAttachmentsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("附件").font(.headline)
+            if showsHeading { Text("附件").font(.headline) }
             ForEach(attachments) { attachment in
                 if attachment.mimeType.hasPrefix("audio/") {
                     NoteAudioPlayerView(
                         configuration: configuration,
                         noteID: noteID,
-                        attachment: attachment
+                        attachment: attachment,
+                        showsFileName: showsHeading
                     )
                 } else {
                     Button {

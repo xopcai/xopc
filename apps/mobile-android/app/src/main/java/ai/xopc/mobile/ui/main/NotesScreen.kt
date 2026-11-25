@@ -58,11 +58,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -209,6 +211,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   }
   var selectedId by rememberSaveable(state.gatewayId) { mutableStateOf(initialNoteId) }
   var voiceCapture by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  var recoveryOnly by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var openedVoice by remember(state.gatewayId) { mutableStateOf<VoiceNoteDetail?>(null) }
   var voiceRevision by remember(state.gatewayId, selectedId) { mutableStateOf(0) }
   var voiceBusy by remember(state.gatewayId, selectedId) { mutableStateOf(false) }
@@ -218,6 +221,18 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     (state.detail?.id == id && state.detail.kind == "voice") ||
     state.items.any { it.id == id && it.kind == "voice" } }
   val voiceScope = state.gatewayId
+  val pendingVoiceCount by key(voiceScope, voiceNotes) {
+    produceState(0, voiceCapture, selectedId) {
+      if (voiceCapture || selectedId != null || voiceScope == null || voiceNotes == null) return@produceState
+      value = try {
+        voiceNotes.pending(voiceScope).size
+      } catch (error: kotlinx.coroutines.CancellationException) {
+        throw error
+      } catch (_: Exception) {
+        0
+      }
+    }
+  }
   var discussion by remember(voiceScope, voiceId) {
     mutableStateOf(openedVoice?.takeIf { it.noteId == voiceId })
   }
@@ -421,7 +436,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     onDismissShare()
   }
   if (voiceCapture && voiceNotes != null && voiceScope != null) {
-    VoiceNoteCapture(voiceScope, voiceNotes, insets, onClose = { voiceCapture = false }) { result ->
+    VoiceNoteCapture(voiceScope, voiceNotes, insets, recoveryOnly = recoveryOnly, onClose = { voiceCapture = false }) { result ->
       openedVoice = result
       selectedId = result.noteId
       voiceCapture = false
@@ -519,14 +534,23 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           { onSearch(query.trim(), state.status) }, { status -> onSearch(query.trim(), status) },
           { id -> selectedId = id; onOpen(id) }, onLoadMore, Modifier.fillMaxSize(),
           { id -> editorOpen = true; onOpenDraft(id) }, searchOpen = searchOpen,
-          listState = notesListState, filtersOpen = filtersOpen, bottomContentPadding = 76.dp)
+          listState = notesListState, filtersOpen = filtersOpen, bottomContentPadding = 76.dp,
+          pendingVoiceCount = pendingVoiceCount, onRecoverVoice = {
+            focusManager.clearFocus(force = true)
+            recoveryOnly = true
+            voiceCapture = true
+          })
         Surface(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp)
           .testTag("notes-capture-actions"), shape = CircleShape,
           color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 4.dp) {
           Row(Modifier.padding(5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             if (voiceNotes != null && voiceScope != null) {
-              TextButton(onClick = { focusManager.clearFocus(force = true); voiceCapture = true },
+              TextButton(onClick = {
+                focusManager.clearFocus(force = true)
+                recoveryOnly = false
+                voiceCapture = true
+              },
                 modifier = Modifier.heightIn(min = 46.dp).testTag("notes-new-voice"),
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -565,7 +589,24 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           catch (_: Exception) { voiceError = true }
           finally { voiceBusy = false }
         }
-      }, busy = voiceBusy, retryError = voiceError, modifier = Modifier.weight(1f))
+      }, busy = voiceBusy, retryError = voiceError, modifier = Modifier.weight(1f),
+        note = state.detail?.takeIf { it.id == note.noteId })
+      state.detail?.takeIf { it.id == note.noteId }?.let { saved ->
+        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+          verticalAlignment = Alignment.CenterVertically) {
+          IconButton(onClick = { moreOpen = true }, modifier = Modifier.testTag("note-detail-more")) {
+            Icon(painterResource(R.drawable.action_more_horizontal), stringResource(R.string.notes_more))
+          }
+          FilledTonalButton(onClick = { editorOpen = true; onEditNote() },
+            enabled = saved.remoteVersion != null && !state.metadataBusy && !state.deleteBusy,
+            colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer,
+              contentColor = MaterialTheme.colorScheme.primary),
+            modifier = Modifier.testTag("note-detail-edit")) {
+            Text(stringResource(R.string.notes_edit))
+          }
+        }
+      }
     } else if (voiceId != null && voiceNotes != null && !voiceLookupDone) {
       if (voiceError) OutlinedButton(onClick = { voiceError = false; voiceRevision++ },
         modifier = Modifier.testTag("voice-note-detail-retry")) { Text(stringResource(R.string.voice_note_load_error)) }
@@ -1187,7 +1228,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
   onLoadMore: () -> Unit, modifier: Modifier = Modifier, onOpenDraft: (String) -> Unit = {},
   searchOpen: Boolean = false, listState: LazyListState = rememberLazyListState(),
   filtersOpen: MutableState<Boolean> = rememberSaveable { mutableStateOf(false) },
-  bottomContentPadding: Dp = 20.dp) {
+  bottomContentPadding: Dp = 20.dp, pendingVoiceCount: Int = 0, onRecoverVoice: () -> Unit = {}) {
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (searchOpen) Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
       .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14)),
@@ -1225,6 +1266,26 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
     LazyColumn(state = listState, modifier = Modifier.weight(1f).testTag("notes-list"),
       verticalArrangement = Arrangement.spacedBy(8.dp),
       contentPadding = PaddingValues(bottom = bottomContentPadding)) {
+      if (pendingVoiceCount > 0) item(key = "voice-recovery") {
+        Surface(onClick = onRecoverVoice, modifier = Modifier.fillMaxWidth().testTag("notes-recover-voice"),
+          shape = themedCorners(14), color = MaterialTheme.colorScheme.surfaceContainer) {
+          Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = themedCorners(8), color = MaterialTheme.colorScheme.primaryContainer) {
+              Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                Icon(painterResource(R.drawable.action_microphone), contentDescription = null,
+                  tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
+              }
+            }
+            Text(stringResource(R.string.voice_note_pending), style = MaterialTheme.typography.titleSmall,
+              modifier = Modifier.weight(1f))
+            Text(pendingVoiceCount.toString(), style = MaterialTheme.typography.labelMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(painterResource(R.drawable.action_chevron_right), contentDescription = null,
+              tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+          }
+        }
+      }
       if (state.loading && state.items.isEmpty()) item {
         BrandLoadingPanel(modifier = Modifier.testTag("notes-loading"))
       }
@@ -1365,18 +1426,29 @@ private fun NoteDraftCard(draft: NoteDraft, onOpen: (String) -> Unit) {
 
 @Composable
 private fun NoteCard(note: NoteSummary, onOpen: (String) -> Unit) {
-  Card(onClick = { onOpen(note.id) }, modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp)
-    .testTag("note-${note.id}")) {
+  val voice = note.kind == "voice"
+  Card(onClick = { onOpen(note.id) }, modifier = Modifier.fillMaxWidth().heightIn(min = if (voice) 72.dp else 96.dp)
+    .testTag("note-${note.id}"), colors = if (voice)
+      CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+      else CardDefaults.cardColors()) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
       horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+      if (voice) Surface(shape = themedCorners(8), color = MaterialTheme.colorScheme.surfaceContainer) {
+        Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+          Icon(painterResource(R.drawable.action_microphone), contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        }
+      }
       Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text((if (note.pinned) "⌖ " else "") + note.title.ifBlank { stringResource(R.string.notes_untitled) },
+        val title = if (voice) voiceRecordingTitle(note.title) else note.title.ifBlank { stringResource(R.string.notes_untitled) }
+        Text((if (note.pinned) "⌖ " else "") + title,
           style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (note.snippet.isNotBlank()) Text(note.snippet, maxLines = 2,
           overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
           color = MaterialTheme.colorScheme.onSurfaceVariant)
         val statusLabel = noteStatusLabel(note.status)
-        Text("${DateFormat.getDateInstance().format(Date(note.updatedAt))} · $statusLabel",
+        val date = if (voice) recordingDate(note.updatedAt) else DateFormat.getDateInstance().format(Date(note.updatedAt))
+        Text("$date · $statusLabel",
           style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (note.projectNames.isNotEmpty()) Text(note.projectNames.joinToString(" · "),
           style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1537,7 +1609,7 @@ private fun NoteReadingDialog(reader: MarkdownNoteReadingState, onDismiss: () ->
 }
 
 @Composable
-private fun noteStatusLabel(status: String): String = stringResource(when (status) {
+internal fun noteStatusLabel(status: String): String = stringResource(when (status) {
   "inbox" -> R.string.notes_inbox
   "processed" -> R.string.notes_processed
   "archived" -> R.string.notes_archived

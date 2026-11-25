@@ -25,12 +25,17 @@ export struct RecordingOutcomeCard {
     }.margin({ right: 12,bottom: 4 })
   }
   build() {
-    Column({ space: 10 }) {
+    Column({ space: this.noteContext ? 4 : 10 }) {
       if (!this.noteContext) Text(recordingOutcomePhrase('leave_' + projectRecordingOutcome(this.input).leave))
         .fontSize(13).lineHeight(20).fontColor(this.colors.secondary).width('100%')
       Button({ type: ButtonType.Normal }) {
         Row({ space: 8 }) {
-          Text(recordingOutcomeStageCopy(projectRecordingOutcome(this.input).stage).title).fontSize(14).fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
+          if (this.noteContext) {
+            SymbolGlyph(projectRecordingOutcome(this.input).stage === 'ready' ? $r('sys.symbol.checkmark_circle_fill')
+              : $r('sys.symbol.doc')).fontSize(16).fontColor([this.colors.secondary])
+          }
+          Text(recordingOutcomeStageCopy(projectRecordingOutcome(this.input).stage).title)
+            .fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
           SymbolGlyph(this.detailsOpen ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(12).fontColor([this.colors.secondary])
         }.width('100%')
       }.id('recording-outcome-details').width('100%').constraintSize({ minHeight: 44 }).padding(0).backgroundColor(Color.Transparent)
@@ -49,8 +54,13 @@ export struct RecordingOutcomeCard {
         }.width('100%')
       }
       }
-      if (projectRecordingOutcome(this.input).retry !== 'none') Button(this.retryLabel()).id('recording-outcome-retry').height(44).fontSize(13).fontColor(this.colors.accent).backgroundColor(this.colors.input).enabled(!this.busy)
+      if (projectRecordingOutcome(this.input).retry !== 'none') Button(this.retryLabel(), { type: ButtonType.Normal })
+        .id('recording-outcome-retry').constraintSize({ minHeight: 44 }).fontSize(13).fontWeight(FontWeight.Medium)
+        .padding({ left: 12, right: 12 }).borderRadius(this.colors.corner(10))
+        .fontColor(this.colors.accent).backgroundColor(this.noteContext ? this.colors.accentSoft : this.colors.input).enabled(!this.busy)
         .onClick((): void => { this.onRetry(projectRecordingOutcome(this.input).retry); })
-    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.noteContext ? 0 : 12).borderRadius(this.colors.corner(12)).backgroundColor(this.noteContext ? Color.Transparent : this.colors.input)
+    }.width('100%').alignItems(HorizontalAlign.Start)
+      .padding({ left: 12, right: 12, top: this.noteContext ? 4 : 12, bottom: 12 })
+      .borderRadius(this.colors.corner(14)).backgroundColor(this.noteContext ? this.colors.panel : this.colors.input)
   }
 }

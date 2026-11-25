@@ -37,25 +37,14 @@ struct NotesView: View {
                 .padding(.vertical, 8)
             }
             List {
-                if pendingVoiceNote != nil || pendingVoiceNoteLoadFailed {
-                    Button {
-                        presentedSheet = .voice
-                    } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(pendingVoiceTitle).mobileTextStyle(.rowTitle)
-                                Text(pendingVoiceDetail)
-                                    .mobileTextStyle(.secondary).foregroundStyle(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "waveform")
-                        }
-                    }
-                    .accessibilityHint("打开本地待上传录音")
-                }
                 statusPicker
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+                if pendingVoiceNote != nil || pendingVoiceNoteLoadFailed {
+                    recordingRecoveryRow
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
                 if matchingNotes.isEmpty, isLoading || loadedQuery != currentQuery && error == nil {
                     loadingRows
                 } else if matchingNotes.isEmpty, error == nil {
@@ -71,6 +60,8 @@ struct NotesView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .listRowBackground(note.kind == "voice" ? Color.clear : nil)
+                    .listRowSeparator(note.kind == "voice" ? .hidden : .automatic)
                     .accessibilityIdentifier("note-row-\(note.id)")
                 }
                 if loadedQuery == currentQuery, nextOffset != nil {
@@ -154,20 +145,62 @@ struct NotesView: View {
         search.isEmpty ? "暂无笔记" : "没有匹配的笔记"
     }
 
+    private var recordingRecoveryRow: some View {
+        Button {
+            isSearchFocused = false
+            presentedSheet = .voice
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "mic.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.tint)
+                    .frame(width: 34, height: 34)
+                    .background(Color.accentColor.opacity(0.14), in: .rect(cornerRadius: 9))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(pendingVoiceNoteLoadFailed ? LocalizedStringKey("检查本地录音") : "待恢复录音")
+                        .mobileTextStyle(.rowTitle)
+                    if let pendingVoiceNote, !pendingVoiceNoteLoadFailed {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 6) { recoveryMetadata(pendingVoiceNote) }
+                            VStack(alignment: .leading, spacing: 4) { recoveryMetadata(pendingVoiceNote) }
+                        }
+                        .mobileTextStyle(.secondary)
+                        .foregroundStyle(mobileTheme.secondary)
+                    } else {
+                        Text("本地录音状态暂不可读，点此重试。")
+                            .mobileTextStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(mobileTheme.foreground)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(mobileTheme.panel, in: .rect(cornerRadius: 14))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(pendingVoiceTitle)
+        .accessibilityHint("打开本地待上传录音")
+        .accessibilityIdentifier("notes-recover-voice")
+    }
+
+    @ViewBuilder
+    private func recoveryMetadata(_ draft: PendingVoiceNote) -> some View {
+        Text(draft.recordedAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
+        Text(voiceNoteTime(draft.duration)).monospacedDigit()
+    }
+
     private var pendingVoiceTitle: LocalizedStringKey {
         if pendingVoiceNoteLoadFailed {
             return "检查本地录音"
         }
         return pendingVoiceNote?.noteID == nil ? "继续保存语音笔记" : "继续处理语音笔记"
-    }
-
-    private var pendingVoiceDetail: LocalizedStringKey {
-        if pendingVoiceNoteLoadFailed {
-            return "本地录音状态暂不可读，点此重试。"
-        }
-        return pendingVoiceNote?.noteID == nil
-            ? "录音已保存在此设备，点此重试上传。"
-            : "录音仍保存在此设备，点此继续上传或确认保存。"
     }
 
     private var loadingRows: some View {
@@ -320,6 +353,7 @@ private struct NotesCaptureActions: View {
 struct NoteRow: View {
     let note: NoteSummary
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -328,7 +362,9 @@ struct NoteRow: View {
                 Image(systemName: note.pinned == true ? "pin" : note.kind == "voice" ? "waveform" : "note.text")
                     .foregroundStyle(.tint)
                     .accessibilityHidden(true)
-                Text(note.displayTitle)
+                Text(isDefaultVoiceNoteTitle(note.title, kind: note.kind)
+                    ? AppLocalization.string("语音记录", locale: AppLocalization.selectedLocale)
+                    : note.displayTitle)
                     .mobileTextStyle(.rowTitle)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()
@@ -350,7 +386,7 @@ struct NoteRow: View {
                 }
             }
             .mobileTextStyle(.caption)
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(note.kind == "voice" ? mobileTheme.secondary : Color.secondary)
             if let projects = note.projects, !projects.isEmpty {
                 Text(projects.map(\.name).joined(separator: " · "))
                     .mobileTextStyle(.caption)
@@ -365,6 +401,8 @@ struct NoteRow: View {
             }
         }
         .padding(.vertical, 5)
+        .padding(note.kind == "voice" ? 12 : 0)
+        .background(note.kind == "voice" ? mobileTheme.panel : Color.clear, in: .rect(cornerRadius: 14))
         .accessibilityElement(children: .combine)
     }
 
@@ -373,7 +411,7 @@ struct NoteRow: View {
         Text(note.updatedAt.millisecondsDate, format: .dateTime.month().day().hour().minute())
         Text(note.status.noteStatusLabel)
         if let duration = note.voiceDurationSec {
-            Text(duration, format: .number.precision(.fractionLength(0))) + Text(" 秒")
+            Text(voiceNoteTime(duration)).monospacedDigit()
         }
     }
 }

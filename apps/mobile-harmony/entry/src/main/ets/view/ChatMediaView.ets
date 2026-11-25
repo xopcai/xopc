@@ -20,6 +20,7 @@ import { XopcMarkdownView } from './MarkdownView';
 import { filePreviewKind, htmlPreviewTextLimit, normalizedFileMimeType, previewTextLimit, safeHtmlPreview, XopcFilePreviewKind } from '../common/filePreview';
 import { chatMediaSource } from '../common/chatMediaSource';
 import { generatedMediaTime } from '../common/generatedMedia';
+import { xopcFormatCaptureTime } from '../common/discussionAudio';
 import { clampVideoTime, fittedVideoFrame, XopcVideoFrameSize } from '../common/videoPreview';
 import { gatewayMediaPlaybackUrl } from '../service/generatedMediaFile';
 
@@ -216,6 +217,7 @@ export struct XopcChatMediaView {
   @Param compactThumbnailHeight: number = 0;
   @Param compactThumbnailContain: boolean = false;
   @Param inlineVoice: boolean = false;
+  @Param noteRecordingLabel: ResourceStr = '';
   @Param previewOnly: boolean = false;
   @Param inlinePreview: boolean = false;
   @Event onPreviewClosed: () => void = (): void => {};
@@ -464,12 +466,17 @@ export struct XopcChatMediaView {
   private inlineAudioDuration(): number { return this.audioPlayer.duration || this.activeFile().duration || 0; }
   private async toggleInlineAudio(): Promise<void> {
     if (this.busy) return;
-    if (this.playbackPath) { await this.audioPlayer.toggle(); return; }
+    if (this.playbackPath && !(this.noteRecordingLabel && this.audioPlayer.error)) {
+      await this.audioPlayer.toggle();
+      return;
+    }
     const context = this.getUIContext().getHostContext();
     if (!context || !this.previewable()) return;
     const generation = ++this.generation;
     this.busy = true; this.error = ''; this.sourceIdentity = this.sourceKey();
     try {
+      if (this.playbackPath) await this.clearPlayback();
+      if (generation !== this.generation) return;
       const bytes = await readChatMedia(this.activeFile(), this.conversationId, context);
       if (generation !== this.generation) return;
       const path = context.cacheDir + '/chat-voice-' + util.generateRandomUUID() + '.audio';
@@ -568,29 +575,62 @@ export struct XopcChatMediaView {
     return this.conversationCard ? this.colors.chat.secondary : this.colors.secondary;
   }
 
+  @Builder
+  noteRecordingContent() {
+    Row({ space: 10 }) {
+      Row() {
+        if (this.busy || this.audioPlayer.state === 'loading') {
+          LoadingProgress().width(17).height(17).color(this.colors.accent)
+        } else {
+          SymbolGlyph(this.error || this.audioPlayer.error ? $r('sys.symbol.arrow_clockwise') :
+            this.audioPlayer.state === 'playing' ? $r('sys.symbol.pause_fill') : $r('sys.symbol.play_fill'))
+            .fontSize(17).fontColor([this.colors.accent])
+        }
+      }.width(36).height(36).justifyContent(FlexAlign.Center)
+        .borderRadius(this.colors.corner(18)).backgroundColor(this.colors.accentSoft)
+      Column({ space: 4 }) {
+        Text(this.noteRecordingLabel).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+          .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+        if (this.error || this.audioPlayer.error) {
+          Text($r('app.string.chat_media_failed')).fontSize(12).fontColor(this.colors.danger).width('100%')
+        }
+      }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+      if (this.inlineAudioDuration() > 0) {
+        Text((this.audioPlayer.position > 0 ? xopcFormatCaptureTime(this.audioPlayer.position * 1000) + ' / ' : '') +
+          xopcFormatCaptureTime(this.inlineAudioDuration() * 1000)).fontSize(12).fontFamily('monospace')
+          .fontColor(this.colors.secondary)
+      }
+    }.width('100%').padding({ left: 4, right: 6, top: 10, bottom: 10 })
+  }
+
   build() {
     Column({ space: 8 }) {
       if (this.inlinePreview) { this.preview() }
       else if (!this.previewOnly) {
       if (this.inlineVoice && this.previewKind() === 'audio') {
         Button({ type: ButtonType.Normal }) {
-          Row({ space: 8 }) {
-            if (this.busy || this.audioPlayer.state === 'loading') {
-              LoadingProgress().width(20).height(20).color(this.colors.foreground)
-            } else {
-              SymbolGlyph(this.audioPlayer.state === 'playing' ? $r('sys.symbol.stop_circle_fill') : $r('sys.symbol.speaker_wave_2'))
-                .fontSize(24).fontColor([this.error || this.audioPlayer.error ? this.colors.danger : this.colors.foreground])
-            }
-            SymbolGlyph($r('sys.symbol.waveform')).fontSize(30).fontColor([this.mediaSecondaryColor]).layoutWeight(1)
-            if (this.inlineAudioDuration() > 0) {
-              Text(Math.max(1, Math.ceil(this.inlineAudioDuration())).toString() + '″')
-                .fontSize(13).fontColor(this.mediaSecondaryColor)
-            }
-          }.width('100%').height(48).padding({ left: 10, right: 10 }).justifyContent(FlexAlign.Start)
-            .alignItems(VerticalAlign.Center)
-        }.id('chat-inline-voice-' + this.file.id).width('100%').height(48).padding(0)
+          if (this.noteRecordingLabel) {
+            this.noteRecordingContent()
+          } else {
+            Row({ space: 8 }) {
+              if (this.busy || this.audioPlayer.state === 'loading') {
+                LoadingProgress().width(20).height(20).color(this.colors.foreground)
+              } else {
+                SymbolGlyph(this.audioPlayer.state === 'playing' ? $r('sys.symbol.stop_circle_fill') : $r('sys.symbol.speaker_wave_2'))
+                  .fontSize(24).fontColor([this.error || this.audioPlayer.error ? this.colors.danger : this.colors.foreground])
+              }
+              SymbolGlyph($r('sys.symbol.waveform')).fontSize(30).fontColor([this.mediaSecondaryColor]).layoutWeight(1)
+              if (this.inlineAudioDuration() > 0) {
+                Text(Math.max(1, Math.ceil(this.inlineAudioDuration())).toString() + '″')
+                  .fontSize(13).fontColor(this.mediaSecondaryColor)
+              }
+            }.width('100%').height(48).padding({ left: 10, right: 10 }).justifyContent(FlexAlign.Start)
+              .alignItems(VerticalAlign.Center)
+          }
+        }.id('chat-inline-voice-' + this.file.id).width('100%').constraintSize({ minHeight: 48 }).padding(0)
           .backgroundColor(Color.Transparent).enabled(!this.busy && this.previewable())
-          .accessibilityText(this.audioPlayer.state === 'playing' ? $r('app.string.stop') : $r('app.string.chat_media_play'))
+          .accessibilityText(this.noteRecordingLabel && (this.error || this.audioPlayer.error) ? $r('app.string.retry') :
+            this.audioPlayer.state === 'playing' ? $r('app.string.pause') : $r('app.string.chat_media_play'))
           .onClick((): void => { this.toggleInlineAudio(); })
       } else if (this.compact && this.resultCapsule) {
         if (this.showLibraryActions && this.document.resource?.kind === 'file') {

@@ -5,59 +5,95 @@ struct NoteAudioPlayerView: View {
     let configuration: GatewayConfiguration
     let noteID: String
     let attachment: NoteAttachment
+    var showsFileName = true
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @State private var player: AVAudioPlayer?
+    @State private var isPlaying = false
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var loadTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button(action: togglePlayback) {
-                Label {
-                    Text(player?.isPlaying == true
-                        ? LocalizedStringResource("暂停播放")
-                        : LocalizedStringResource("播放录音"))
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: player?.isPlaying == true ? "pause.circle.fill" : "play.circle.fill")
+        Button(action: togglePlayback) {
+            HStack(spacing: 10) {
+                Group {
+                    if isLoading {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.tint)
+                    }
                 }
-                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-            }
-            .buttonStyle(.bordered)
-            .disabled(isLoading)
-            HStack(spacing: 8) {
-                Text(displayFileName)
+                .frame(width: 36, height: 36)
+                .background(Color.accentColor.opacity(0.14), in: .circle)
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(isPlaying ? LocalizedStringResource("暂停播放") : "播放录音")
+                        .mobileTextStyle(.rowTitle)
+                    if let errorMessage {
+                        Text(errorMessage).font(.caption).foregroundStyle(mobileTheme.danger)
+                    } else if showsFileName {
+                        Text(displayFileName).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
                 if let duration = attachment.duration {
-                    Text(duration, format: .number.precision(.fractionLength(0))) + Text(" 秒")
+                    Text(voiceNoteTime(duration)).font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
                 }
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            if let errorMessage {
-                Text(errorMessage).font(.caption).foregroundStyle(.red)
+            .foregroundStyle(mobileTheme.foreground)
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            .background(mobileTheme.panel, in: .rect(cornerRadius: 14))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+        .accessibilityLabel(isPlaying ? Text("暂停播放") : Text("播放录音"))
+        .accessibilityIdentifier("voice-note-playback-\(attachment.id)")
+        .task(id: isPlaying) {
+            guard isPlaying, let player else { return }
+            while player.isPlaying {
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
             }
+            if !Task.isCancelled { isPlaying = false }
+        }
+        .onDisappear {
+            loadTask?.cancel()
+            player?.pause()
+            isPlaying = false
         }
     }
 
     private var displayFileName: String {
-        if attachment.fileName == "语音消息.wav" {
-            return AppLocalization.string("语音记录", locale: AppLocalization.selectedLocale)
-        }
+        let fallback = AppLocalization.string("语音记录", locale: AppLocalization.selectedLocale)
+        if attachment.fileName == "语音消息.wav" { return fallback }
         let name = URL(fileURLWithPath: attachment.fileName).deletingPathExtension().lastPathComponent
-        return name.isEmpty ? AppLocalization.string("语音记录", locale: AppLocalization.selectedLocale) : name
+        return name.isEmpty ? fallback : name
     }
 
     private func togglePlayback() {
-        if player?.isPlaying == true {
-            player?.pause()
-            return
-        }
         if let player {
-            GeneratedMusicPlayback.shared.yieldAudioSession()
-            player.play()
-            return
+            if player.isPlaying {
+                player.pause()
+                isPlaying = false
+            } else {
+                start(player)
+            }
+        } else {
+            loadTask = Task { await loadAndPlay() }
         }
-        Task { await loadAndPlay() }
+    }
+
+    private func start(_ player: AVAudioPlayer) {
+        GeneratedMusicPlayback.shared.yieldAudioSession()
+        isPlaying = player.play()
+        errorMessage = isPlaying ? nil : AppLocalization.string("无法播放录音", locale: AppLocalization.selectedLocale)
     }
 
     @MainActor
@@ -66,17 +102,24 @@ struct NoteAudioPlayerView: View {
         defer { isLoading = false }
         do {
             let data = try await GatewayClient(configuration: configuration).fetchNoteAttachment(
-                noteID: noteID,
-                attachmentID: attachment.id
+                noteID: noteID, attachmentID: attachment.id
             )
-            GeneratedMusicPlayback.shared.yieldAudioSession()
+            try Task.checkCancellation()
             let player = try AVAudioPlayer(data: data)
             player.prepareToPlay()
-            player.play()
             self.player = player
-            errorMessage = nil
+            start(player)
         } catch {
-            errorMessage = error.localizedDescription
+            if !Task.isCancelled { errorMessage = error.localizedDescription }
         }
     }
+}
+
+func voiceNoteTime(_ duration: Double) -> String {
+    let seconds = duration.isFinite && duration >= 0 && duration < Double(Int64.max) ? Int64(duration) : 0
+    return String(format: "%02lld:%02lld", seconds / 60, seconds % 60)
+}
+
+func isDefaultVoiceNoteTitle(_ title: String?, kind: String) -> Bool {
+    kind == "voice" && (title?.wholeMatch(of: /Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}/) != nil)
 }

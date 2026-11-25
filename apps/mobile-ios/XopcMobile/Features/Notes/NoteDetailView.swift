@@ -9,6 +9,7 @@ struct NoteDetailView: View {
     var showsCloseButton = false
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.mobileTheme) private var mobileTheme
     @State private var note: NoteDetail?
     @State private var isLoading = true
     @State private var error: String?
@@ -32,33 +33,12 @@ struct NoteDetailView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
-                            if let title = note.title, !title.isEmpty {
-                                Text(verbatim: title).font(.title.bold())
-                            } else {
-                                Text("未命名笔记").font(.title.bold())
-                            }
-                            if note.pinned == true {
-                                Label("已置顶", systemImage: "pin.fill")
-                                    .mobileTextStyle(.caption)
-                                    .foregroundStyle(.tint)
-                            }
-                            HStack {
-                                Label(note.status.noteStatusLabel, systemImage: "circle.fill")
-                                Text(note.updatedAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
-                            }
-                            .mobileTextStyle(.caption).foregroundStyle(.secondary)
-                            if !note.markdown.isEmpty || note.kind != "voice" {
-                                Group {
-                                    if note.markdown.isEmpty {
-                                        Text("暂无正文")
-                                    } else {
-                                        MarkdownBodyView(parts: readingParts, configuration: configuration, conversationID: nil,
-                                                         highlightedPart: readingTarget)
-                                            .environment(\.chatTextSelectionEnabled, true)
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
+                            noteHeader(note)
+                            if let original = originalRecording(in: note) {
+                                NoteAttachmentsSection(
+                                    configuration: configuration, noteID: note.id,
+                                    attachments: [original], showsHeading: false
+                                )
                             }
                             if let discussion {
                                 DiscussionProcessingSection(
@@ -76,12 +56,22 @@ struct NoteDetailView: View {
                                     }
                                 )
                             }
-                            if let attachments = note.attachments, !attachments.isEmpty {
-                                NoteAttachmentsSection(
-                                    configuration: configuration,
-                                    noteID: note.id,
-                                    attachments: attachments
-                                )
+                            if !note.markdown.isEmpty || note.kind != "voice" {
+                                Group {
+                                    if note.markdown.isEmpty {
+                                        Text("暂无正文")
+                                    } else {
+                                        MarkdownBodyView(parts: readingParts, configuration: configuration, conversationID: nil,
+                                                         highlightedPart: readingTarget)
+                                            .environment(\.chatTextSelectionEnabled, true)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                            }
+                            let attachments = remainingAttachments(in: note)
+                            if !attachments.isEmpty {
+                                NoteAttachmentsSection(configuration: configuration, noteID: note.id, attachments: attachments)
                             }
                         }
                         .padding()
@@ -104,7 +94,20 @@ struct NoteDetailView: View {
                 }
             }
         }
+        .background(mobileTheme.canvas)
         .mobilePageTitle(Text("笔记"))
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let note, note.kind == "voice" {
+                Button("编辑笔记", systemImage: "square.and.pencil") { editingNote = note }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .accessibilityIdentifier("voice-note-edit")
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(mobileTheme.canvas)
+            }
+        }
         .toolbar {
             if showsCloseButton {
                 ToolbarItem(placement: .topBarLeading) {
@@ -120,39 +123,24 @@ struct NoteDetailView: View {
                     .accessibilityIdentifier("note-reading-tools")
                 }
             }
-            ToolbarItemGroup(placement: .bottomBar) {
-                if let note {
-                    Button("编辑", systemImage: "pencil") { editingNote = note }
-                    Button("添加附件", systemImage: "paperclip") { isImportingFile = true }
-                        .disabled(isUploadingFile)
+            if let note, note.kind == "voice" {
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu("更多", systemImage: "ellipsis.circle") {
-                        Button {
-                            Task { await mutate(note, pinned: note.pinned != true) }
-                        } label: {
-                            Label {
-                                Text(note.pinned == true
-                                    ? LocalizedStringResource("取消置顶")
-                                    : LocalizedStringResource("置顶"))
-                            } icon: {
-                                Image(systemName: "pin")
-                            }
-                        }
-                        Button {
-                            Task {
-                                await mutate(note, status: note.status == "archived" ? "inbox" : "archived")
-                            }
-                        } label: {
-                            Label {
-                                Text(note.status == "archived"
-                                    ? LocalizedStringResource("移回收件箱")
-                                    : LocalizedStringResource("归档"))
-                            } icon: {
-                                Image(systemName: note.status == "archived" ? "tray.and.arrow.up" : "archivebox")
-                            }
-                        }
-                        Button("删除", systemImage: "trash", role: .destructive) { confirmsDelete = true }
+                        Button("添加附件", systemImage: "paperclip") { isImportingFile = true }
+                            .disabled(isUploadingFile)
+                        Button("继续对话", systemImage: "bubble.left") { Task { await openConversation(note) } }
+                        noteStateActions(note)
                     }
-                    Button("继续对话", systemImage: "bubble.left") { Task { await openConversation(note) } }
+                }
+            } else {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    if let note {
+                        Button("编辑", systemImage: "pencil") { editingNote = note }
+                        Button("添加附件", systemImage: "paperclip") { isImportingFile = true }
+                            .disabled(isUploadingFile)
+                        Menu("更多", systemImage: "ellipsis.circle") { noteStateActions(note) }
+                        Button("继续对话", systemImage: "bubble.left") { Task { await openConversation(note) } }
+                    }
                 }
             }
         }
@@ -197,6 +185,87 @@ struct NoteDetailView: View {
             await load()
             await monitorDiscussion()
         }
+    }
+
+    private func noteHeader(_ note: NoteDetail) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if isDefaultVoiceNoteTitle(note.title, kind: note.kind) {
+                Text("语音记录").font(.title.bold())
+            } else if let title = note.title, !title.isEmpty {
+                Text(verbatim: title).font(.title.bold())
+            } else {
+                Text("未命名笔记").font(.title.bold())
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { noteMetadata(note) }
+                VStack(alignment: .leading, spacing: 4) { noteMetadata(note) }
+            }
+            .mobileTextStyle(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func noteMetadata(_ note: NoteDetail) -> some View {
+        Text(note.updatedAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
+        Text(note.status.noteStatusLabel)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(mobileTheme.panel, in: .rect(cornerRadius: 6))
+        if note.pinned == true {
+            Label("已置顶", systemImage: "pin.fill").foregroundStyle(.tint)
+        }
+    }
+
+    @ViewBuilder
+    private func noteStateActions(_ note: NoteDetail) -> some View {
+        Button {
+            Task { await mutate(note, pinned: note.pinned != true) }
+        } label: {
+            Label {
+                Text(note.pinned == true ? LocalizedStringResource("取消置顶") : "置顶")
+            } icon: {
+                Image(systemName: "pin")
+            }
+        }
+        Button {
+            Task { await mutate(note, status: note.status == "archived" ? "inbox" : "archived") }
+        } label: {
+            Label {
+                Text(note.status == "archived" ? LocalizedStringResource("移回收件箱") : "归档")
+            } icon: {
+                Image(systemName: note.status == "archived" ? "tray.and.arrow.up" : "archivebox")
+            }
+        }
+        Button("删除", systemImage: "trash", role: .destructive) { confirmsDelete = true }
+    }
+
+    private func originalRecording(in note: NoteDetail) -> NoteAttachment? {
+        guard note.kind == "voice" else { return nil }
+        let audio = note.attachments?.filter { $0.mimeType.hasPrefix("audio/") } ?? []
+        if let originalID = discussion?.discussion.audioAttachmentId {
+            return audio.first(where: { $0.id == originalID })
+        }
+        return audio.first
+    }
+
+    private func remainingAttachments(in note: NoteDetail) -> [NoteAttachment] {
+        let originalID = originalRecording(in: note)?.id
+        return (note.attachments ?? []).filter { attachment in
+            guard attachment.id != originalID else { return false }
+            guard note.kind == "voice", attachment.mimeType == "application/json" else { return true }
+            let link = "xopc-attachment://notes/\(note.id)/\(attachment.id)"
+            if note.markdown.contains(link) { return true }
+            return !isRecordingManifest(attachment.fileName)
+        }
+    }
+
+    private func isRecordingManifest(_ name: String) -> Bool {
+        guard name.hasSuffix(".json"),
+              let prefix = ["recording-events-", "recording-sources-"].first(where: { name.hasPrefix($0) })
+        else { return false }
+        return UUID(uuidString: String(name.dropFirst(prefix.count).dropLast(5))) != nil
     }
 
     @MainActor

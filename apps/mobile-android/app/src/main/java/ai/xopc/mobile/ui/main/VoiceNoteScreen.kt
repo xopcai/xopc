@@ -1,7 +1,9 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
+import ai.xopc.mobile.gateway.NoteDetail
 import ai.xopc.mobile.gateway.PendingVoiceNote
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.gateway.VoiceNoteConsent
 import ai.xopc.mobile.gateway.VoiceNoteDetail
 import ai.xopc.mobile.gateway.VoiceNotesGateway
@@ -19,19 +21,21 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
-import java.text.DateFormat
-import java.util.Date
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -41,7 +45,7 @@ import kotlinx.coroutines.withContext
 
 @Composable
 internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, insets: PaddingValues,
-  onClose: () -> Unit, onOpen: (VoiceNoteDetail) -> Unit) {
+  recoveryOnly: Boolean = false, onClose: () -> Unit, onOpen: (VoiceNoteDetail) -> Unit) {
   val context = LocalContext.current
   val view = LocalView.current
   val owner = LocalLifecycleOwner.current
@@ -59,6 +63,8 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
   var issue by remember { mutableIntStateOf(0) }
   var revision by remember { mutableIntStateOf(0) }
   var confirmClose by remember { mutableStateOf(false) }
+  var pendingDiscard by remember(gatewayId) { mutableStateOf<PendingVoiceNote?>(null) }
+  var pendingLoaded by remember(gatewayId) { mutableStateOf(false) }
   val active = recorder.phase == "recording" || recorder.phase == "paused"
   val finishing = recorder.phase == "finishing" || recorder.phase == "discarding"
   val close: () -> Unit = {
@@ -99,6 +105,7 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
   LaunchedEffect(gatewayId, revision) {
     try {
       pending = access.pending(gatewayId)
+      pendingLoaded = true
       settings = access.settings(gatewayId)
       if (issue == R.string.voice_note_load_error) issue = 0
       val previous = pending
@@ -159,9 +166,10 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
   }
   Column(Modifier.fillMaxSize().padding(insets).padding(20.dp).testTag("voice-note-capture"),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
       PageBackButton("voice-note-back", close, enabled = !busy && !finishing)
-      Text(stringResource(R.string.voice_note_title), style = MaterialTheme.typography.headlineSmall)
+      Text(stringResource(if (recoveryOnly) R.string.voice_note_pending else R.string.voice_note_title),
+        style = MaterialTheme.typography.headlineSmall)
     }
     if (confirmClose) AlertDialog(onDismissRequest = { if (!busy && !finishing) confirmClose = false },
       title = { Text(stringResource(R.string.voice_note_discard)) },
@@ -183,6 +191,31 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
         }
       }) { Text(stringResource(R.string.progress_confirm)) } },
       dismissButton = { TextButton(enabled = !busy && !finishing, onClick = { confirmClose = false }) { Text(stringResource(R.string.progress_cancel)) } })
+    pendingDiscard?.let { saved ->
+      AlertDialog(onDismissRequest = { pendingDiscard = null },
+        title = { Text(stringResource(R.string.voice_note_discard)) },
+        text = { Text(stringResource(R.string.voice_note_discard_local_message)) },
+        confirmButton = {
+          TextButton(onClick = {
+            pendingDiscard = null
+            busy = true
+            issue = 0
+            scope.launch {
+              try {
+                access.discard(gatewayId, saved)
+                pending = pending.filterNot { it.id == saved.id }
+              } catch (error: CancellationException) { throw error }
+              catch (_: Exception) { issue = R.string.voice_note_discard_error }
+              finally { busy = false }
+            }
+          }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+            Text(stringResource(R.string.voice_note_discard_action))
+          }
+        },
+        dismissButton = { TextButton(onClick = { pendingDiscard = null }) {
+          Text(stringResource(R.string.progress_cancel))
+        } })
+    }
     if (issue != 0) Text(stringResource(issue), color = MaterialTheme.colorScheme.error,
       modifier = Modifier.testTag("voice-note-error"))
     if (busy || finishing) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("voice-note-saving"))
@@ -229,7 +262,7 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
           }
         }, modifier = Modifier.testTag("voice-note-consent")) { Text(stringResource(R.string.voice_note_agree)) }
       }
-      settings?.acknowledged == true -> {
+      settings?.acknowledged == true && !recoveryOnly -> {
         Text(stringResource(R.string.voice_note_record_limit), style = MaterialTheme.typography.bodySmall)
         if (recorder.phase == "error") {
           Text(stringResource(if (recorder.saveFailed) R.string.voice_note_save_error else R.string.voice_record_error))
@@ -239,15 +272,54 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
           else permission.launch(Manifest.permission.RECORD_AUDIO)
         }, modifier = Modifier.testTag("voice-note-record")) { Text(stringResource(R.string.voice_note_record)) }
       }
-      issue != 0 -> TextButton(onClick = { revision++ }) { Text(stringResource(R.string.voice_note_retry)) }
+      issue == R.string.voice_note_load_error -> TextButton(onClick = { revision++ }) {
+        Text(stringResource(R.string.voice_note_retry))
+      }
+      recoveryOnly && pendingLoaded -> if (pending.isEmpty()) {
+        Text(stringResource(R.string.voice_note_no_pending), color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
       else -> LinearProgressIndicator(Modifier.fillMaxWidth())
     }
-    if (!active && pending.isNotEmpty()) LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      item { Text(stringResource(R.string.voice_note_pending), style = MaterialTheme.typography.titleMedium) }
-      items(pending, key = { it.id }) { draft ->
-        OutlinedButton(enabled = !busy && settings?.acknowledged == true, onClick = { submit(draft) },
+    if (!active && !finishing && pending.isNotEmpty()) LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      if (!recoveryOnly) item {
+        Text(stringResource(R.string.voice_note_pending), style = MaterialTheme.typography.titleMedium)
+      }
+      items(pending, key = { it.id }) { saved ->
+        PendingRecordingCard(saved, !busy && settings?.acknowledged == true, !busy,
+          onRecover = { submit(saved) }, onDiscard = { pendingDiscard = saved })
+      }
+    }
+  }
+}
+
+@Composable
+private fun PendingRecordingCard(recording: PendingVoiceNote, canRecover: Boolean, canDiscard: Boolean,
+  onRecover: () -> Unit, onDiscard: () -> Unit) {
+  var menuOpen by remember { mutableStateOf(false) }
+  Surface(Modifier.fillMaxWidth(), shape = themedCorners(14), color = MaterialTheme.colorScheme.surfaceContainer) {
+    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      Text(recordingDate(recording.recordedAt), style = MaterialTheme.typography.titleSmall)
+      Text(stringResource(R.string.voice_note_local_copy), style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        FilledTonalButton(onClick = onRecover, enabled = canRecover,
+          colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.primary),
           modifier = Modifier.testTag("voice-note-upload-retry")) {
-          Text(DateFormat.getDateTimeInstance().format(Date(draft.recordedAt)))
+          Text(stringResource(R.string.voice_note_recover))
+        }
+        Spacer(Modifier.weight(1f))
+        Box {
+          IconButton(onClick = { menuOpen = true }, enabled = canDiscard) {
+            Icon(painterResource(R.drawable.action_more_horizontal), stringResource(R.string.notes_more))
+          }
+          DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(text = { Text(stringResource(R.string.voice_note_discard_action),
+              color = MaterialTheme.colorScheme.error) }, onClick = {
+              menuOpen = false
+              onDiscard()
+            })
+          }
         }
       }
     }
@@ -256,31 +328,28 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
 
 @Composable
 internal fun VoiceNoteResult(detail: VoiceNoteDetail, loadAudio: suspend (File) -> Unit,
-  onRetry: () -> Unit, busy: Boolean, retryError: Boolean, modifier: Modifier = Modifier) {
+  onRetry: () -> Unit, busy: Boolean, retryError: Boolean, modifier: Modifier = Modifier, note: NoteDetail? = null) {
   var tab by rememberSaveable(detail.id) { mutableStateOf("summary") }
-  val status = when {
-    detail.status == "completed" -> R.string.voice_note_completed
-    detail.status == "cancelled" -> R.string.voice_note_cancelled
-    detail.canRetry -> R.string.voice_note_attention
-    detail.status == "recording" -> R.string.voice_note_remote_recording
-    !detail.audioSaved -> R.string.voice_note_saving
-    detail.status == "organizing" -> R.string.voice_note_organizing
-    else -> R.string.voice_note_transcribing
-  }
-  LazyColumn(modifier.testTag("voice-note-detail"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+  LazyColumn(modifier.testTag("voice-note-detail"),
+    contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp)) {
     item {
-      Text(detail.title, style = MaterialTheme.typography.headlineSmall)
-      Text(stringResource(status), Modifier.testTag("voice-note-status"))
-      if (detail.processing) LinearProgressIndicator(Modifier.fillMaxWidth())
-      if (detail.audioSaved) VoiceNotePlayback(detail.id, loadAudio)
-      if (detail.canRetry || retryError) {
-        Text(stringResource(if (detail.audioSaved) R.string.voice_note_retry_saved else R.string.voice_note_upload_error),
-          color = MaterialTheme.colorScheme.error)
-        OutlinedButton(onClick = onRetry, enabled = !busy, modifier = Modifier.testTag("voice-note-result-retry")) {
-          Text(stringResource(R.string.voice_note_retry))
+      Text(voiceRecordingTitle(note?.title?.takeIf { it.isNotBlank() } ?: detail.title),
+        style = MaterialTheme.typography.headlineSmall)
+      if (note != null) {
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalAlignment = Alignment.CenterVertically) {
+          Text(recordingDate(note.updatedAt), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+          Surface(shape = themedCorners(6), color = MaterialTheme.colorScheme.surfaceContainer) {
+            Text(noteStatusLabel(note.status), Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+              style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
         }
       }
     }
+    if (detail.audioSaved) item(key = "playback") { VoiceNotePlayback(detail.id, detail.durationMs, loadAudio) }
+    item { VoiceNoteStatus(detail, busy, retryError, onRetry) }
     item {
       SegmentedTabs(listOf(
         SegmentOption("summary", stringResource(R.string.voice_note_overview), "voice-note-tab-summary"),
@@ -293,19 +362,22 @@ internal fun VoiceNoteResult(detail: VoiceNoteDetail, loadAudio: suspend (File) 
         else Text(stringResource(R.string.voice_note_empty_transcript), color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
       items(detail.segments, key = { it.index }) { segment ->
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-          val seconds = segment.startedAt / 1000
-          Text("%d:%02d".format(seconds / 60, seconds % 60) + segment.speaker?.let { " · $it" }.orEmpty(),
-            style = MaterialTheme.typography.labelMedium)
-          SelectionContainer { Text(segment.text) }
+        Surface(shape = themedCorners(12), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+          Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(recordingTime(segment.startedAt) + segment.speaker?.let { " · $it" }.orEmpty(),
+              style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            SelectionContainer { Text(segment.text) }
+          }
         }
       }
     } else if (detail.summary.isNotBlank() || detail.keyPoints.isNotEmpty()) item {
-      Text(stringResource(R.string.voice_note_summary), style = MaterialTheme.typography.titleMedium)
-      SelectionContainer {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          if (detail.summary.isNotBlank()) Text(detail.summary, Modifier.testTag("voice-note-summary"))
-          detail.keyPoints.forEach { Text("• $it") }
+      Surface(shape = themedCorners(14), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        SelectionContainer {
+          Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.voice_note_summary), style = MaterialTheme.typography.titleMedium)
+            if (detail.summary.isNotBlank()) Text(detail.summary, Modifier.testTag("voice-note-summary"))
+            detail.keyPoints.forEach { Text("• $it") }
+          }
         }
       }
     } else if (detail.transcript.isNotBlank()) item {
@@ -315,8 +387,76 @@ internal fun VoiceNoteResult(detail: VoiceNoteDetail, loadAudio: suspend (File) 
   }
 }
 
+private val GENERATED_RECORDING_TITLE = Regex("""Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}""")
+
 @Composable
-private fun VoiceNotePlayback(id: String, loadAudio: suspend (File) -> Unit) {
+internal fun voiceRecordingTitle(title: String): String =
+  if (title.isBlank() || GENERATED_RECORDING_TITLE.matches(title)) stringResource(R.string.notes_create_voice) else title
+
+@Composable
+internal fun recordingDate(timestamp: Long): String {
+  val context = LocalContext.current
+  return android.text.format.DateUtils.formatDateTime(context, timestamp,
+    android.text.format.DateUtils.FORMAT_SHOW_DATE or android.text.format.DateUtils.FORMAT_SHOW_YEAR or
+      android.text.format.DateUtils.FORMAT_SHOW_TIME)
+}
+
+private fun recordingTime(milliseconds: Long): String {
+  val seconds = milliseconds.coerceAtLeast(0) / 1000
+  return "%02d:%02d".format(seconds / 60, seconds % 60)
+}
+
+@Composable
+private fun VoiceNoteStatus(detail: VoiceNoteDetail, busy: Boolean, retryError: Boolean, onRetry: () -> Unit) {
+  var expanded by rememberSaveable(detail.id) { mutableStateOf(false) }
+  val status = when {
+    detail.status == "completed" -> R.string.voice_note_completed
+    detail.status == "cancelled" -> R.string.voice_note_cancelled
+    detail.canRetry && !detail.audioSaved -> R.string.voice_note_upload_attention
+    detail.canRetry && detail.failureStage == "organization" -> R.string.voice_note_summary_attention
+    detail.canRetry -> R.string.voice_note_attention
+    detail.status == "recording" -> R.string.voice_note_remote_recording
+    !detail.audioSaved -> R.string.voice_note_saving
+    detail.status == "organizing" -> R.string.voice_note_organizing
+    else -> R.string.voice_note_transcribing
+  }
+  Surface(shape = themedCorners(14), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+      if (detail.canRetry) {
+        Surface(onClick = { expanded = !expanded }, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+          Row(Modifier.fillMaxWidth().heightIn(min = 44.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(status), modifier = Modifier.weight(1f).testTag("voice-note-status"),
+              style = MaterialTheme.typography.titleSmall)
+            Icon(painterResource(R.drawable.action_chevron_down), null, Modifier.size(16.dp).rotate(if (expanded) 180f else 0f),
+              tint = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+        }
+        if (expanded) {
+          Text(stringResource(if (detail.audioSaved) R.string.voice_note_retry_saved else R.string.voice_note_upload_error),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+      } else {
+        Text(stringResource(status), Modifier.padding(vertical = 8.dp).testTag("voice-note-status"),
+          style = MaterialTheme.typography.titleSmall)
+      }
+      if (detail.processing || busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(bottom = 8.dp))
+      if (retryError) Text(stringResource(R.string.voice_note_load_error), color = MaterialTheme.colorScheme.error,
+        style = MaterialTheme.typography.bodySmall)
+      if (detail.canRetry || retryError) {
+        FilledTonalButton(onClick = onRetry, enabled = !busy,
+          colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.primary),
+          modifier = Modifier.testTag("voice-note-result-retry")) {
+          Text(stringResource(R.string.voice_note_retry))
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun VoiceNotePlayback(id: String, durationMs: Long, loadAudio: suspend (File) -> Unit) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
   var player by remember(id) { mutableStateOf<MediaPlayer?>(null) }
@@ -324,7 +464,7 @@ private fun VoiceNotePlayback(id: String, loadAudio: suspend (File) -> Unit) {
   var loading by remember(id) { mutableStateOf(false) }
   var failed by remember(id) { mutableStateOf(false) }
   DisposableEffect(id) { onDispose { player?.release() } }
-  OutlinedButton(enabled = !loading, onClick = {
+  Surface(enabled = !loading, onClick = {
     val current = player
     if (current != null) {
       if (playing) current.pause() else current.start()
@@ -355,8 +495,26 @@ private fun VoiceNotePlayback(id: String, loadAudio: suspend (File) -> Unit) {
       catch (_: Exception) { failed = true }
       finally { preparing?.release(); loading = false }
     }
-  }, modifier = Modifier.testTag("voice-note-playback")) {
-    Text(stringResource(if (playing) R.string.voice_note_pause else R.string.voice_note_play))
+  }, modifier = Modifier.fillMaxWidth().testTag("voice-note-playback"),
+    shape = themedCorners(14), color = MaterialTheme.colorScheme.surfaceContainer) {
+    Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
+      verticalAlignment = Alignment.CenterVertically) {
+      Surface(shape = themedCorners(18), color = MaterialTheme.colorScheme.primaryContainer) {
+        Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+          if (loading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+          else Icon(painterResource(if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play),
+            contentDescription = null, modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onPrimaryContainer)
+        }
+      }
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(if (playing) R.string.voice_note_pause else R.string.voice_note_play),
+          style = MaterialTheme.typography.titleSmall)
+        if (failed) Text(stringResource(R.string.voice_note_play_error), color = MaterialTheme.colorScheme.error,
+          style = MaterialTheme.typography.bodySmall)
+      }
+      if (durationMs > 0) Text(recordingTime(durationMs), style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = FontFamily.Monospace)
+    }
   }
-  if (failed) Text(stringResource(R.string.voice_note_play_error), color = MaterialTheme.colorScheme.error)
 }

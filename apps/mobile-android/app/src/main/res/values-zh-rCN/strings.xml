@@ -1187,7 +1187,14 @@
     <string name="voice_note_retry">重试</string>
     <string name="voice_note_consent">请确认参与者同意录音。录音将发送到你的网关生成逐字稿和纪要。</string>
     <string name="voice_note_agree">同意并继续</string>
-    <string name="voice_note_pending">待上传录音</string>
+    <string name="voice_note_pending">待恢复录音</string>
+    <string name="voice_note_recover">恢复录音</string>
+    <string name="voice_note_local_copy">已保存在此设备</string>
+    <string name="voice_note_discard_action">放弃录音</string>
+    <string name="voice_note_discard_local_message">尚未完成的上传将取消，本机保存的录音将被永久删除。</string>
+    <string name="voice_note_no_pending">暂无待恢复的录音。</string>
+    <string name="voice_note_summary_attention">笔记整理未完成</string>
+    <string name="voice_note_upload_attention">录音上传未完成</string>
     <string name="voice_note_completed">逐字稿和纪要已生成</string>
     <string name="voice_note_cancelled">录音已取消</string>
     <string name="voice_note_attention">处理需要重试</string>

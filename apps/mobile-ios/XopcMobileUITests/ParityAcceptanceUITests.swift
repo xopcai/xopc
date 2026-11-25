@@ -2325,6 +2325,37 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertFalse(task.exists)
     }
 
+    func testPersonalOverviewKeepsAvatarCenteredAndTappableWhenScrolling() {
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-personal"].tap()
+        app.buttons["chat-header-personal"].tap()
+        let scroll = app.scrollViews["personal-overview-scroll"]
+        XCTAssertTrue(scroll.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["personal-overview-task-task-header"].waitForExistence(timeout: 6))
+        let avatar = app.buttons["personal-overview-avatar"]
+        let name = app.staticTexts["Ada"].firstMatch
+        XCTAssertTrue(avatar.exists)
+        XCTAssertTrue(name.exists)
+
+        func assertAvatar(width: CGFloat) {
+            XCTAssertEqual(avatar.frame.width, width, accuracy: 1)
+            XCTAssertEqual(avatar.frame.midX, name.frame.midX, accuracy: 1)
+            XCTAssertLessThanOrEqual(avatar.frame.maxY, name.frame.minY)
+        }
+
+        assertAvatar(width: 112)
+        capture("ios-personal-overview-avatar-expanded")
+        scroll.swipeUp()
+        assertAvatar(width: 64)
+        capture("ios-personal-overview-avatar-collapsed")
+        scroll.swipeDown()
+        assertAvatar(width: 112)
+        scroll.swipeUp()
+        assertAvatar(width: 64)
+        avatar.tap()
+        XCTAssertTrue(app.buttons["personal-setting-close"].waitForExistence(timeout: 5))
+    }
+
     func testPersonalOverviewScrollTasksAndScheduleDraft() {
         XCTAssertTrue(app.openHomeSidebar())
         app.buttons["chat-sidebar-personal"].tap()

@@ -13,8 +13,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
@@ -37,6 +39,7 @@ class PersonalAgentOverviewTest {
     val library = mutableStateOf(false)
     val deliveries = mutableStateOf(PersonalOverviewList<PersonalDeliveryPage>())
     var opened = ""
+    var editOpened = false
     compose.setContent {
       MaterialTheme {
         PersonalOverviewContent(PersonalAgentRecord("ada", "personal", "ready", "Ada", "loopi", null),
@@ -44,16 +47,30 @@ class PersonalAgentOverviewTest {
           PersonalOverviewList(PersonalWorkPage(work, emptyList(), 0), loading = false),
           PersonalOverviewList(emptyList(), loading = false),
           deliveries.value,
-          {}, {}, {}, {}, {}, { opened = it.id }, {}, {}, {}, Modifier)
+          {}, { editOpened = true }, {}, {}, {}, { opened = it.id }, {}, {}, {}, Modifier)
       }
     }
     val portrait = compose.onNodeWithTag("personal-overview-avatar")
+    val name = compose.onNodeWithText("Ada")
+    fun assertAvatarAboveName() {
+      val avatarBounds = portrait.getUnclippedBoundsInRoot()
+      val nameBounds = name.getUnclippedBoundsInRoot()
+      val avatarCenter = (avatarBounds.left.value + avatarBounds.right.value) / 2
+      val nameCenter = (nameBounds.left.value + nameBounds.right.value) / 2
+      assertEquals(nameCenter, avatarCenter, 1f)
+      assertTrue(avatarBounds.bottom <= nameBounds.top)
+    }
     portrait.assertWidthIsEqualTo(116.dp)
+    assertAvatarAboveName()
     val tasks = compose.onNodeWithTag("personal-overview-task-list")
     tasks.performTouchInput { swipeUp() }
     portrait.assertWidthIsEqualTo(68.dp)
+    assertAvatarAboveName()
+    portrait.performTouchInput { click() }
+    compose.runOnIdle { assertTrue(editOpened) }
     tasks.performTouchInput { swipeDown() }
     portrait.assertWidthIsEqualTo(116.dp)
+    assertAvatarAboveName()
     val indicator = compose.onNodeWithTag("segmented-tab-indicator")
     val taskEdge = indicator.getUnclippedBoundsInRoot().left
     tasks.performTouchInput {

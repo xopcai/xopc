@@ -1430,3 +1430,7 @@
 "立即重连" = "Reconnect now";
 "会话同步中断" = "Chat sync interrupted";
 "重试同步" = "Retry sync";
+
+"待恢复录音" = "Recordings to Recover";
+"笔记整理未完成" = "Summary Incomplete";
+"无法播放录音" = "Could not play the recording";

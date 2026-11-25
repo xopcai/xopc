@@ -12,6 +12,8 @@ import { XopcNotesView } from './NotesView';
 import { userErrorMessage } from '../common/userError';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
 import { xopcFormatCaptureTime } from '../common/discussionAudio';
+import { formatNoteTimestamp } from '../common/notePresentation';
+import { appSettings } from '../service/settings';
 
 @ComponentV2
 export struct XopcNotesTabView {
@@ -130,7 +132,81 @@ export struct XopcNotesTabView {
     const noteId = await this.capture.recoverRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, id);
     if (!noteId || this.capture.phase === 'error') return;
     this.capture.reset();
-    void this.model.list(); this.onNavigate({ page: 'notes', itemId: noteId });
+    void this.model.list();
+    this.onNavigate({ page: 'notes', itemId: noteId });
+  }
+
+  private async confirmRecordingDiscard(id: string): Promise<void> {
+    try {
+      const result = await this.getUIContext().getPromptAction().showDialog({
+        title: $r('app.string.capture_discard_title'), message: $r('app.string.capture_discard_message'),
+        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
+          { text: $r('app.string.capture_discard'), color: this.colors.danger }]
+      });
+      if (result.index === 1) {
+        await this.capture.discardRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, id);
+      }
+    } catch (error) { this.model.error = (error as Error).message; }
+  }
+
+  private recoveryMenu(recording: XopcLocalRecording): MenuElement[] {
+    return [
+      { value: $r('app.string.capture_continue'), enabled: !recording.sealRequested,
+        action: (): void => {
+          void this.capture.continueRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, recording.id);
+        } },
+      { value: $r('app.string.capture_export'), action: (): void => {
+        void this.capture.exportRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, recording.id);
+      } },
+      { value: $r('app.string.capture_discard'), action: (): void => { void this.confirmRecordingDiscard(recording.id); } }
+    ];
+  }
+
+  @Builder
+  recoveryHeader() {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 10 }) {
+        Row() {
+          SymbolGlyph($r('sys.symbol.mic')).fontSize(17).fontColor([this.colors.accent])
+        }.width(32).height(32).justifyContent(FlexAlign.Center)
+          .borderRadius(this.colors.corner(8)).backgroundColor(this.colors.accentSoft)
+        Text($r('app.string.capture_recovery_list')).fontSize(14).fontWeight(FontWeight.Medium)
+          .fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
+        Text(this.capture.pendingRecordings.length.toString()).fontSize(12).fontColor(this.colors.secondary)
+        SymbolGlyph(this.recoveriesOpen ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
+          .fontSize(12).fontColor([this.colors.secondary])
+      }.width('100%')
+    }.id('notes-recovery-toggle').width('100%').constraintSize({ minHeight: 52 })
+      .padding({ left: 12, right: 14, top: 6, bottom: 6 })
+      .borderRadius(this.colors.corner(14)).backgroundColor(this.colors.panel)
+      .onClick((): void => { this.recoveriesOpen = !this.recoveriesOpen; })
+  }
+
+  @Builder
+  recoveryRow(recording: XopcLocalRecording) {
+    Column({ space: 4 }) {
+      Text(formatNoteTimestamp(recording.recordedAt, appSettings.effectiveLanguage()))
+        .fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
+      Text($r('app.string.capture_local_saved', xopcFormatCaptureTime(recording.savedDurationMs ?? 0)))
+        .fontSize(12).fontColor(this.colors.secondary).width('100%')
+      if (recording.recoveryError) {
+        Text($r('app.string.capture_storage_failed')).fontSize(12).fontColor(this.colors.danger).width('100%')
+      }
+      Row({ space: 8 }) {
+        Button($r('app.string.capture_recover_action'), { type: ButtonType.Normal })
+          .id('notes-recovery-restore-' + recording.id).constraintSize({ minHeight: 44 }).fontSize(13)
+          .fontWeight(FontWeight.Medium).fontColor(this.colors.accent).backgroundColor(this.colors.accentSoft)
+          .padding({ left: 14, right: 14 }).borderRadius(this.colors.corner(10)).enabled(!this.capture.recoveryBusy)
+          .onClick((): void => { void this.restoreRecording(recording.id); })
+        Blank().layoutWeight(1)
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(20).fontColor([this.colors.secondary])
+        }.id('notes-recovery-more-' + recording.id).width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          .enabled(!this.capture.recoveryBusy).accessibilityText($r('app.string.more'))
+          .bindMenu(this.recoveryMenu(recording), { placement: Placement.BottomRight })
+      }.width('100%').margin({ top: 4 })
+    }.width('100%').padding(12).alignItems(HorizontalAlign.Start)
+      .borderRadius(this.colors.corner(14)).backgroundColor(this.colors.panel)
   }
 
   private async confirmBatchDelete(): Promise<void> {
@@ -167,41 +243,6 @@ export struct XopcNotesTabView {
           void this.model.list(false, true);
         } }).layoutWeight(1)
       }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
-      if (this.capture.pendingRecordings.length && this.capture.phase !== 'recording' && this.capture.phase !== 'paused') {
-        Button({ type: ButtonType.Normal }) {
-          Row({ space: 8 }) {
-            Text($r('app.string.capture_recovery_list')).fontSize(14).fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
-            Text(this.capture.pendingRecordings.length.toString()).fontSize(13).fontColor(this.colors.secondary)
-            SymbolGlyph(this.recoveriesOpen ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(13).fontColor([this.colors.secondary])
-          }.width('100%')
-        }.width('100%').height(48).padding({ left: 20,right: 20 }).backgroundColor(this.colors.input).onClick((): void => { this.recoveriesOpen = !this.recoveriesOpen; })
-        if (this.recoveriesOpen) {
-        Scroll() {
-        Column({ space: 8 }) {
-          Text($r('app.string.capture_recovery_list')).fontSize(16).fontColor(this.colors.foreground)
-          ForEach(this.capture.pendingRecordings, (recording: XopcLocalRecording) => {
-            Column({ space: 4 }) {
-              Text(new Date(recording.recordedAt).toLocaleString()).fontSize(13).fontColor(this.colors.foreground)
-              Text(recording.gatewayId + ' · ' + recording.id).fontSize(11).fontColor(this.colors.secondary)
-              Text(recording.recoveryError ? $r('app.string.capture_storage_failed') : $r('app.string.capture_local_saved', xopcFormatCaptureTime(recording.savedDurationMs ?? 0))).fontSize(12).fontColor(this.colors.secondary)
-              Row({ space: 8 }) {
-                Button($r('app.string.retry')).enabled(!this.capture.recoveryBusy)
-                  .onClick((): void => { void this.restoreRecording(recording.id); })
-                Button($r('app.string.capture_continue')).enabled(!this.capture.recoveryBusy && !recording.sealRequested)
-                  .onClick((): void => { void this.capture.continueRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, recording.id); })
-              }
-              Row({ space: 8 }) {
-                Button($r('app.string.capture_export')).enabled(!this.capture.recoveryBusy)
-                  .onClick((): void => { void this.capture.exportRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, recording.id); })
-                Button($r('app.string.capture_discard')).enabled(!this.capture.recoveryBusy)
-                  .onClick((): void => { void this.capture.discardRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, recording.id); })
-              }
-            }.width('100%').alignItems(HorizontalAlign.Start)
-          }, (recording: XopcLocalRecording): string => recording.id)
-        }.width('100%').padding(16)
-        }.width('100%').height(260)
-        }
-      }
       if (this.model.error) {
         Row({ space: 12 }) {
           Text(userErrorMessage(this.model.error, 'collection')).fontSize(13).fontColor(this.colors.secondary)
@@ -213,6 +254,15 @@ export struct XopcNotesTabView {
       }
       Stack({ alignContent: Alignment.Bottom }) {
         List({ space: 8 }) {
+          if (this.capture.pendingRecordings.length && this.capture.phase !== 'recording' && this.capture.phase !== 'paused') {
+            ListItem() { this.recoveryHeader() }
+            if (this.recoveriesOpen) {
+              ForEach(this.capture.pendingRecordings, (recording: XopcLocalRecording) => {
+                ListItem() { this.recoveryRow(recording) }
+              }, (recording: XopcLocalRecording): string => recording.id + ':' + (recording.savedDurationMs ?? 0) +
+                ':' + (recording.sealRequested ?? false) + ':' + (recording.recoveryError ?? ''))
+            }
+          }
           if (this.model.loading && !this.model.items.length) {
             ListItem() { XopcListSkeleton() }
           } else if (!this.model.items.length && !this.model.error) {
@@ -222,15 +272,24 @@ export struct XopcNotesTabView {
             ListItem() {
               Button({ type: ButtonType.Normal }) {
                 Row({ space: 12 }) {
+                  if (item.kind === 'voice') {
+                    Row() {
+                      SymbolGlyph($r('sys.symbol.mic')).fontSize(17).fontColor([this.colors.secondary])
+                    }.width(32).height(32).justifyContent(FlexAlign.Center)
+                      .borderRadius(this.colors.corner(8)).backgroundColor(this.colors.input)
+                  }
                   Column({ space: 5 }) {
                     Row({ space: 6 }) {
                       if (item.pinned) { SymbolGlyph($r('sys.symbol.pin')).fontSize(13).fontColor([this.colors.accent]) }
                       Text(item.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(item.title) ? $r('app.string.note_voice_option') : item.title || $r('app.string.untitled')).fontSize(17).fontWeight(FontWeight.Medium)
                         .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     }.width('100%')
-                    Text(item.snippet ?? '').fontSize(14).lineHeight(20).fontColor(this.colors.secondary)
-                      .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                    Text(new Date(item.updatedAt).toLocaleString()).fontSize(12).fontColor(this.colors.tertiary).width('100%')
+                    if (item.snippet) {
+                      Text(item.snippet).fontSize(14).lineHeight(20).fontColor(this.colors.secondary)
+                        .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                    }
+                    Text(formatNoteTimestamp(item.updatedAt, appSettings.effectiveLanguage()))
+                      .fontSize(12).fontColor(this.colors.tertiary).width('100%')
                     if (item.projects?.length) {
                       Text(item.projects.map((project: XopcNoteProjectReference): string => project.name).join(' · '))
                         .fontSize(12).fontColor(this.colors.secondary).maxLines(1)
@@ -248,7 +307,7 @@ export struct XopcNotesTabView {
                       : $r('sys.symbol.circle')).fontSize(21).fontColor([this.colors.accent])
                   }
                 }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
-              }.width('100%').constraintSize({ minHeight: 96 }).padding(0)
+              }.width('100%').constraintSize({ minHeight: item.kind === 'voice' ? 72 : 96 }).padding(0)
                 .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
                 .onClick((): void => {
                   if (this.model.selecting) this.model.toggleSelection(item.id);

@@ -41,6 +41,7 @@ interface XopcOverviewWorkSection {
 const PERSONAL_HEADER_TRAVEL: number = 60;
 const PERSONAL_AVATAR_EXPANDED: number = 116;
 const PERSONAL_AVATAR_COMPACT: number = 68;
+const PERSONAL_AVATAR_IMAGE_EXPANDED: number = 110;
 
 @ComponentV2
 export struct XopcPersonalAgentOverview {
@@ -61,7 +62,6 @@ export struct XopcPersonalAgentOverview {
   @Computed get avatarExtent(): number {
     return PERSONAL_AVATAR_EXPANDED - (PERSONAL_AVATAR_EXPANDED - PERSONAL_AVATAR_COMPACT) * this.headerProgress;
   }
-  @Computed get avatarScale(): number { return this.avatarExtent / PERSONAL_AVATAR_EXPANDED; }
 
   aboutToAppear(): void { this.refresh(); }
   aboutToDisappear(): void { this.model.dispose(); }
@@ -393,14 +393,12 @@ export struct XopcPersonalAgentOverview {
           .accessibilityText($r('app.string.close')).onClick((): void => { this.onClose(); })
       }.width('100%').justifyContent(FlexAlign.End)
       Button({ type: ButtonType.Circle }) {
-        Stack() {
-          XopcPersonalAgentAvatar({ agentId: this.record?.agentId ?? '', revision: this.record?.revision ?? 0,
-            appearance: this.record?.appearance ?? 'loopi', extent: 110, activePage: this.activePage,
-            moodOverride: this.model.attentionCount ? 'care' : this.model.runningCount ? 'work' : undefined })
-        }.width(PERSONAL_AVATAR_EXPANDED).height(PERSONAL_AVATAR_EXPANDED).borderRadius(PERSONAL_AVATAR_EXPANDED / 2)
-          .backgroundColor(this.colors.grouped).scale({ x: this.avatarScale, y: this.avatarScale })
+        XopcPersonalAgentAvatar({ agentId: this.record?.agentId ?? '', revision: this.record?.revision ?? 0,
+          appearance: this.record?.appearance ?? 'loopi', activePage: this.activePage,
+          extent: this.avatarExtent * PERSONAL_AVATAR_IMAGE_EXPANDED / PERSONAL_AVATAR_EXPANDED,
+          moodOverride: this.model.attentionCount ? 'care' : this.model.runningCount ? 'work' : undefined })
       }.id('personal-overview-avatar').width(this.avatarExtent).height(this.avatarExtent)
-        .padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.personal_overview_edit'))
+        .padding(0).backgroundColor(this.colors.grouped).accessibilityText($r('app.string.personal_overview_edit'))
         .onClick((): void => {
           this.onNavigate({ page: 'personal-agent-profile', itemId: '', canShareConversation: this.canShareConversation });
         }, SEGMENTED_PAGE_TAP_SLOP_VP)
