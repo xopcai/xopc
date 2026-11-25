@@ -19,6 +19,7 @@ import {
   type ProactiveAuthority,
   type ProactiveCategory,
   type ProactiveHubMetrics,
+  type ProactiveExecutedActionReceipt,
   type ProactiveHumanResolution,
   type ProactiveItem,
   type ProactiveItemResolutionInput,
@@ -924,6 +925,32 @@ export function applyProactiveItemResolution(
       ownerId,
     );
 
+    const updated = db.prepare('SELECT * FROM proactive_items WHERE id = ?').get(itemId) as unknown as ItemRow;
+    return mapItem(updated);
+  });
+}
+
+export function recordProactiveExecutedAction(
+  ownerId: string,
+  itemId: string,
+  executedAction: ProactiveExecutedActionReceipt,
+  now = Date.now(),
+): ProactiveItem | undefined {
+  return runSqliteWriteTransaction(db => {
+    const row = db.prepare('SELECT * FROM proactive_items WHERE id = ? AND owner_id = ?')
+      .get(itemId, ownerId) as unknown as ItemRow | undefined;
+    if (!row) return undefined;
+    const current = mapItem(row);
+    if (!current.humanResolution) return current;
+    const nextResolution: ProactiveHumanResolution = {
+      ...current.humanResolution,
+      executedAction,
+    };
+    db.prepare(`
+      UPDATE proactive_items
+      SET human_resolution_json = ?, updated_at = ?
+      WHERE id = ? AND owner_id = ?
+    `).run(JSON.stringify(nextResolution), now, itemId, ownerId);
     const updated = db.prepare('SELECT * FROM proactive_items WHERE id = ?').get(itemId) as unknown as ItemRow;
     return mapItem(updated);
   });

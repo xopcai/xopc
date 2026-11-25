@@ -1,6 +1,6 @@
 export const PERSONAL_MAIN_TOOL_IDS = [
   'workbook_read', 'workbook_edit',
-  'personal_task', 'personal_attention', 'personal_schedule', 'personal_note', 'personal_self_config', 'session_recall',
+  'personal_task', 'personal_attention', 'personal_inbox', 'personal_schedule', 'personal_note', 'personal_self_config', 'session_recall',
   'read_media', 'read_file', 'list_dir', 'web_search', 'web_fetch', 'session_search', 'personal_read', 'personal_result',
   'user_context_read', 'knowledge_read', 'personal_memory', 'video_draft', 'music_generation', 'image_generation',
   'create_share', 'skills_list',

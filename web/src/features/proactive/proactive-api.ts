@@ -36,6 +36,26 @@ export interface PreparedScoutPackage {
   proposedAction?: ProactiveProposedAction;
 }
 
+export interface ProactiveExecutedActionReceipt {
+  kind: 'create_task' | 'approve_draft' | 'adopt_rsi_candidate';
+  taskId?: string;
+  candidateId?: string;
+  summary: string;
+  executedAt: number;
+}
+
+export interface ProactiveHumanResolution {
+  action: 'approve' | 'edit_and_approve' | 'move_to_digest' | 'snooze' | 'mute_rule';
+  idempotencyKey: string;
+  resolvedAt: number;
+  originalDraft?: string;
+  editedDraft?: string;
+  muteMode?: 'drop' | 'digest_only';
+  senderOrSubjectFilter?: string;
+  note?: string;
+  executedAction?: ProactiveExecutedActionReceipt;
+}
+
 export interface ProactiveItem {
   id: string;
   ownerId: string;
@@ -70,6 +90,7 @@ export interface ProactiveItem {
   state: ProactiveItemState;
   digestBatchId?: string;
   conversationEntryId?: string;
+  humanResolution?: ProactiveHumanResolution;
   validUntil: number;
   createdAt: number;
   updatedAt: number;

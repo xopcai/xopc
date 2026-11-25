@@ -1,3 +1,4 @@
+import * as Dialog from '@radix-ui/react-dialog';
 import { AudioLines, Mic, StickyNote } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -51,11 +52,6 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
   } = voice;
 
   useEffect(() => {
-    const id = window.setTimeout(() => textareaRef.current?.focus(), 50);
-    return () => window.clearTimeout(id);
-  }, []);
-
-  useEffect(() => {
     const toggleVoiceInput = (event: Event) => {
       const target = (event as CustomEvent<{ target?: VoiceInputShortcutTarget }>).detail?.target;
       if (target !== 'note') return;
@@ -105,11 +101,7 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-        return;
-      }
+      if (e.nativeEvent.isComposing) return;
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         void handleSave(true);
@@ -120,25 +112,31 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
         void handleSave(false);
       }
     },
-    [handleSave, onClose],
+    [handleSave],
   );
 
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-start justify-center bg-black/40 p-4 pt-[min(18vh,7rem)]"
-      role="dialog"
-      aria-modal="true"
-      data-voice-input-scope="note"
-      aria-label={n.quickCapturePlaceholder}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-elevated">
-        <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
-          <StickyNote className="size-4 text-accent" />
-          <span className="text-sm font-medium text-fg">{n.quickCapturePlaceholder}</span>
-        </div>
+    <Dialog.Root open onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[240] bg-black/40" />
+        <Dialog.Content
+          aria-modal="true"
+          data-voice-input-scope="note"
+          aria-label={n.quickCapturePlaceholder}
+          aria-describedby={undefined}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            textareaRef.current?.focus();
+          }}
+          onEscapeKeyDown={(event) => {
+            if (voiceActive) event.preventDefault();
+          }}
+          className="fixed left-1/2 top-[min(18vh,7rem)] z-[241] flex w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-elevated outline-none"
+        >
+          <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
+            <StickyNote className="size-4 text-accent" />
+            <Dialog.Title className="text-sm font-medium text-fg">{n.quickCapturePlaceholder}</Dialog.Title>
+          </div>
 
         {voice.voiceActive ? (
           <div className="px-4 py-3">
@@ -224,8 +222,9 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
             <div className="size-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           )}
         </div>
-      </div>
-    </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

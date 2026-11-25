@@ -15,9 +15,12 @@ import { stopPersonalResultPreparations } from '../personal-agent/result-reader.
 import { PersonalProactivityService } from '../personal-agent/proactivity/service.js';
 import { reconcilePersonalProactivityAutomation } from '../personal-agent/proactivity/automation.js';
 import {
+  collectSignalReadOnlyContext,
   LocalEnvironmentSignalProducer,
+  MatterInvestigatorService,
   ProactiveHubService,
   reconcileProactivePulseAutomations,
+  WebWatchSignalProducer,
 } from '../proactive-hub/index.js';
 import { RsiCapabilityService } from '../rsi/index.js';
 import { onRsiQualityAlert } from '../rsi/telemetry.js';
@@ -184,7 +187,7 @@ import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/
 import { TaskCollaborationDelivery } from '../tasks/task-collaboration-delivery.js';
 import { TaskMainUpdateDelivery } from '../tasks/task-main-update-delivery.js';
 import { allowsPersonalTaskNotification, personalReplyNotification, personalRunDelegated } from '../personal-agent/notifications.js';
-import { getPersonalAgentByConversation } from '../personal-agent/repository.js';
+import { getPersonalAgent, getPersonalAgentByConversation, resolvePersonalOwnerId } from '../personal-agent/repository.js';
 import { PersonalReplyComposer } from '../personal-agent/reply-composer.js';
 import { enqueueTaskDelayNotices } from '../tasks/task-delay-notice.js';
 import { TaskMainUpdateDecisionService } from '../tasks/task-main-update-decision-service.js';
@@ -877,6 +880,16 @@ export class GatewayService {
       extensionRegistry: this.extensionLoader?.getRegistry(),
       endpointTools: this.endpointTools,
       getAutomationService: () => this.automationService,
+      getProactiveHubService: () => this.proactiveHub,
+      getMatterInvestigator: () => this.matterInvestigator,
+      onMatterMutated: (info) => {
+        this.emit('personal.follow_up.updated', info);
+        if (info.kind === 'created') {
+          void this.matterInvestigator.investigate(info.matterId, { triggerReason: 'initial_check' }).catch(err => {
+            log.debug({ err, matterId: info.matterId, phase: 'matter_initial_check' }, 'Initial matter investigation deferred');
+          });
+        }
+      },
       getBrowserSetupService: () => this.browserSetup,
       getMcpSetupService: () => this.mcpSetup,
       getSelfConfigService: () => this.selfConfig,
@@ -1158,8 +1171,76 @@ export class GatewayService {
         log.debug({ err, itemId, phase: 'proactive_weixin_escalation' }, 'Skipped companion Weixin escalation');
       });
     },
+    readAuthorizedContext: signal => collectSignalReadOnlyContext({
+      ownerId: signal.ownerId || resolvePersonalOwnerId(),
+      signal,
+      config: this.config,
+    }),
     adoptRsiCandidate: (ownerId, candidateId) => {
       this.rsiCapability.adoptCandidate(ownerId, candidateId);
+    },
+    executeApprovedAction: async (item, resolution) => {
+      const personal = getPersonalAgent(item.ownerId);
+      const agentId = personal?.agentId ?? getDefaultAgentId();
+      const conversationId = personal?.conversationId ?? resolveAgentMainConversationId({ agentId });
+      const finalizedDraft = resolution.action === 'edit_and_approve'
+        ? resolution.editedDraft
+        : item.preparedPayload?.preparedDraft;
+      const isDraftApproval = item.proposedAction?.kind === 'approve_draft'
+        || resolution.action === 'edit_and_approve'
+        || Boolean(finalizedDraft);
+      const objective = item.proposedAction?.label
+        ? `${item.proposedAction.label}: ${item.title}`
+        : item.title;
+      const bodyParts = [
+        `Approved proactive item (${item.provenance.source} / ${item.provenance.eventType}):`,
+        item.summary,
+        item.preparedPayload?.verifiedFacts?.length
+          ? `Verified facts:\n${item.preparedPayload.verifiedFacts.map(fact => `- ${fact}`).join('\n')}`
+          : '',
+        finalizedDraft
+          ? `User-approved draft/plan:\n${finalizedDraft}`
+          : '',
+        resolution.action === 'approve' || resolution.action === 'edit_and_approve'
+          ? (resolution.note ? `Owner note: ${resolution.note}` : '')
+          : '',
+      ].filter(Boolean);
+      const created = new TaskApplicationService().create({
+        idempotencyKey: `proactive-approve:${item.id}:${resolution.idempotencyKey}`,
+        title: item.title.slice(0, 500),
+        locale: /[\u4e00-\u9fff]/u.test(`${item.title} ${item.summary}`) ? 'zh' : 'en',
+        originConversationId: conversationId,
+        ...(item.provenance.matchedProjectId ? { projectId: item.provenance.matchedProjectId } : {}),
+        priority: item.tier === 'tier_s_chat' ? 'high' : 'normal',
+        contract: {
+          objective: objective.slice(0, 2000),
+          expectedOutputs: [item.proposedAction?.label || item.title],
+          acceptanceCriteria: ['Execute the approved follow-up step accurately and report verified results back to the owner.'],
+          constraints: ['Act strictly within the user-approved scope and existing permissions.'],
+          approvalRequired: [],
+          assumptions: [],
+          risks: [],
+          acceptancePolicy: 'verified_auto',
+          outputDestinations: [],
+        },
+        dependencies: [],
+        context: [],
+        authorityGrants: [],
+        body: bodyParts.join('\n\n').slice(0, 32_000),
+        activation: { mode: 'start', executor: { kind: 'agent', agentId } },
+      }, { kind: 'user' });
+      if (created.ok === false) {
+        log.warn({ itemId: item.id, reason: created.reason, phase: 'proactive_approve_task' }, 'Could not create task for approved proactive item');
+        return undefined;
+      }
+      this.dispatchTaskRuns();
+      this.emit('task.changed', { taskId: created.model.task.id });
+      return {
+        kind: isDraftApproval ? 'approve_draft' : 'create_task',
+        taskId: created.model.task.id,
+        summary: created.model.task.title,
+        executedAt: Date.now(),
+      };
     },
     onItemResolved: async item => {
       await this.rsiCapability.handleProactiveItemResolved(item);
@@ -1169,6 +1250,25 @@ export class GatewayService {
   private readonly localSignalProducer = new LocalEnvironmentSignalProducer({
     ingestEvent: event => {
       this.ingestAutomationEvent(event);
+    },
+  });
+
+  private readonly webWatchProducer = new WebWatchSignalProducer({
+    getConfig: () => this.config,
+    ingestEvent: event => {
+      this.ingestAutomationEvent(event);
+    },
+  });
+
+  private readonly matterInvestigator = new MatterInvestigatorService({
+    getConfig: () => this.config,
+    isConversationAvailable: conversationId => !this.stopping && !this.agentRunner.hasActiveRun(conversationId)
+      && !this.agentRunner.inputs.isAcceptingInput(conversationId)
+      && (!this.voiceRealtime.hasConversation(conversationId) || this.voiceRealtime.canPublishReply(conversationId)),
+    webWatchProducer: this.webWatchProducer,
+    onPublishEvent: (type, payload) => this.emit(type, payload),
+    onChatMessageDelivered: (conversationId, outreachId) => {
+      this.emit('session.transcript_updated', { key: conversationId, outreachId });
     },
   });
 
@@ -2542,6 +2642,12 @@ export class GatewayService {
   }): { summary: string } {
     if (input.capability === 'personal.proactivity.tick') {
       this.localSignalProducer.scanOnce();
+      void this.webWatchProducer.scanDue().catch(err => {
+        log.debug({ err, phase: 'web_watch_scan' }, 'Deferred web watch scan');
+      });
+      void this.matterInvestigator.scanDue().catch(err => {
+        log.debug({ err, phase: 'matter_scan' }, 'Deferred matter investigation scan');
+      });
       this.personalProactivity.tick();
       this.proactiveHub.tick();
       void this.rsiCapability.scanRecoveredTaskFailures().catch(err => {
@@ -2584,6 +2690,10 @@ export class GatewayService {
 
   get proactiveHubInstance(): ProactiveHubService {
     return this.proactiveHub;
+  }
+
+  get matterInvestigatorInstance(): MatterInvestigatorService {
+    return this.matterInvestigator;
   }
 
   get rsiCapabilityInstance(): RsiCapabilityService {
@@ -2695,6 +2805,7 @@ export class GatewayService {
     } else {
       this.proactiveHub.ingestEvent(event);
     }
+    this.matterInvestigator.wakeByEvent(event);
     if (event.source === 'local_apps') this.emit(event.type, event.payload);
     if (event.type === 'project.deleted' && typeof event.payload.projectId === 'string') {
       const runIds = event.payload.deletedUnderstandingRunIds;

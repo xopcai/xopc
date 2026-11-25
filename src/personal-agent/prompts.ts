@@ -52,9 +52,12 @@ const PERSONAL_MEMORY_RULE = [
 ].join('\n');
 
 const PERSONAL_ATTENTION_RULE = [
-  '- Follow-ups (personal_attention): use for explicit vague or event-driven follow-ups without a fixed schedule (even without the word "follow-up"). The running Gateway checks automatically while away and posts in chat. Do not ask the user to return or create a separate scheduler. Prefer nextCheckLocal in the configured timezone (for a vague tomorrow afternoon, use 15:00 and state that check time). Stay silent when there is no useful development. A check gives no guarantee of notification and grants no action authority.',
-  '- Verification & growth: check active follow-ups via personal_attention(command="list") and proactive settings via command="settings"—never rely on prior claims or substitute memory/notes. Claim saved only after success; on failure state the actual error. Never duplicate existing automations or create attention from your own suggestions. Topic feedback (e.g. prepare fully next time) updates only that thread via list → feedback, never global style (clarify if ambiguous; rollback only on explicit undo with latest version ID; silence != rejection). interests returns silent candidates—never activate without explicit follow-up; keep growth state in durable storage, not personality files.',
+  '- Follow-Up Matters (personal_attention): prefer command="matter_create" whenever the user asks to follow up on an ongoing matter or goal (e.g. waiting for a reply, tracking project/release blockers, watching a webpage or topic with search queries, or combining multiple sources until done). Provide title, goal, notifyWhen, optional doneCriteria/deadlineLocal, and attach relevant urls, eventSources (gmail/calendar/github/linear/local_folder/local_git/browser/desktop), searchQueries, taskId, or projectId. Use command="matter_check" to investigate live progress on demand, command="matter_update" to add sources/notes or pause/resume, and command="matter_resolve" when done. Use command="follow" with oneShot=true specifically for a single conditional reminder tied to an active Task pending item.',
+  '- Verification & growth: check active follow-up matters and reminders via personal_attention(command="list") and proactive settings via command="settings"—never rely on prior claims or substitute memory/notes. Claim saved only after success; on failure state the actual error. Never duplicate existing automations or create attention from your own suggestions. Topic feedback updates only that thread via list → feedback, never global style (clarify if ambiguous; rollback only on explicit undo with latest version ID; silence != rejection). interests returns silent candidates—never activate without explicit follow-up.',
 ].join('\n');
+
+const PERSONAL_INBOX_RULE =
+  '- Proactive Inbox (personal_inbox): use command="list" to inspect pending external alerts, prepared drafts, Pulse digests, and RSI skill candidates. When the user explicitly asks in chat/voice/IM to approve, revise & approve, defer to digest, snooze, or mute an inbox item, call personal_inbox with the matching command (never guess when multiple items match—ask one short clarifying question; report the actual executedAction receipt/taskId after approval).';
 
 function promptSection(heading: string, rules: readonly (string | false | undefined)[]): string {
   const applicableRules = rules.filter(Boolean);
@@ -84,6 +87,7 @@ function renderPersonalInstructions(tools?: ReadonlySet<string>, fixedEnglish = 
       has('session_recall') && SESSION_RECALL_EXAMPLE,
       has('personal_memory') && PERSONAL_MEMORY_RULE,
       has('personal_attention') && PERSONAL_ATTENTION_RULE,
+      has('personal_inbox') && PERSONAL_INBOX_RULE,
       tools?.has('personal_schedule') && '- Schedules (personal_schedule): use for explicit timed or recurring personal work, such as fixed-time reminders and daily briefs. Claim saved only after success and report actual nextRunAt.',
       tools?.has('personal_schedule') && has('personal_attention') && '- Use personal_schedule for fixed times or cadences and personal_attention for vague follow-ups. Use only one for the same request.',
       tools?.has('personal_note') && '- Notes (personal_note): use for quick notes, memos, appending or light edits. Do not substitute notes for a failed or unavailable memory write.',

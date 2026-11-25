@@ -20,6 +20,7 @@ import {
 import {
   getAttention,
   getProactivitySettings,
+  listAttention,
   listInterestCandidates,
   patchAttention,
   patchProactivitySettings,
@@ -28,6 +29,13 @@ import {
   rollbackStrategy,
   strategyState,
 } from './repository.js';
+import { getProactiveHubMetrics } from '../../proactive-hub/repository.js';
+import {
+  deleteMatter,
+  getMatter,
+  listMatters,
+  patchMatter,
+} from '../../proactive-hub/matters.js';
 
 const AttentionPatch = z.object({ revision: z.number().int().positive(), status: z.enum(['active', 'paused', 'completed']).optional(),
   nextCheckAt: z.number().int().positive().optional() }).strict();
@@ -47,6 +55,114 @@ export function registerProactivityRoutes(app: Hono, deps: AuthenticatedRouteDep
       : false;
     return contextAccess && hasGatewayScope(principal.scopes, 'tasks.read');
   };
+
+  app.get('/api/personal-agent/following', c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const personal = getPersonalAgent(ownerId);
+    const readable = canReadTasks(c);
+    const threads = personal ? listAttention(personal.conversationId) : [];
+    const oneShot = threads
+      .filter(thread => thread.follow_up_mode === 'one_shot' && thread.status === 'active')
+      .map(thread => getOneShotFollowUpDto(thread.id, ownerId, { canReadTask: () => readable }))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+    const recurring = threads
+      .filter(thread => thread.follow_up_mode === 'recurring' && thread.kind !== 'interest' && (thread.status === 'active' || thread.status === 'paused'))
+      .map(thread => ({
+        id: thread.id,
+        subject: readable ? thread.subject : '',
+        summary: readable ? thread.summary : '',
+        status: thread.status as 'active' | 'paused',
+        authority: thread.authority,
+        taskId: thread.task_id,
+        projectId: thread.project_id,
+        nextCheckAt: thread.next_check_at,
+        lastCheckedAt: thread.last_checked_at,
+        lastMeaningfulAt: thread.last_meaningful_at,
+        expiresAt: thread.expires_at,
+        revision: thread.revision,
+        strategy: strategyState(thread.id),
+      }));
+    const matters = listMatters(ownerId, { includeClosed: false });
+    const hubMetrics = getProactiveHubMetrics(ownerId);
+    const waitingMatterCount = matters.filter(m => m.status === 'waiting_user').length;
+    const activeCount = matters.filter(m => m.status === 'active' || m.status === 'waiting_user').length
+      + oneShot.length
+      + recurring.filter(item => item.status === 'active').length;
+    return c.json({
+      ok: true,
+      payload: {
+        matters,
+        oneShot,
+        recurring,
+        waitingMatterCount,
+        inboxPendingCount: hubMetrics.inboxPendingCount,
+        digestBufferedCount: hubMetrics.digestBufferedCount,
+        activeCount,
+      },
+    });
+  });
+
+  app.get('/api/personal-agent/matters/:matterId', c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const matter = getMatter(ownerId, c.req.param('matterId'));
+    return matter ? c.json({ ok: true, payload: matter }) : c.json({ ok: false, error: 'Follow-up matter not found' }, 404);
+  });
+
+  app.patch('/api/personal-agent/matters/:matterId', deps.strictRateLimitMiddleware, async c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const body = z.object({
+      expectedRevision: z.number().int().positive().optional(),
+      title: z.string().trim().min(1).max(140).optional(),
+      goal: z.string().trim().min(1).max(800).optional(),
+      notifyWhen: z.string().trim().min(1).max(400).optional(),
+      doneCriteria: z.string().trim().max(400).optional(),
+      status: z.enum(['active', 'paused', 'resolved']).optional(),
+      deliveryPreference: z.enum(['auto', 'chat', 'inbox']).optional(),
+      deadlineAt: z.number().int().positive().nullable().optional(),
+      checkIntervalMs: z.number().int().min(15 * 60_000).max(7 * 86_400_000).optional(),
+      userNote: z.string().trim().min(1).max(600).optional(),
+      addUrls: z.array(z.string().max(2000)).max(4).optional(),
+      addSearchQueries: z.array(z.string().max(200)).max(3).optional(),
+    }).strict().safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ ok: false, error: 'Invalid follow-up matter update' }, 400);
+    try {
+      const { matter } = patchMatter(ownerId, c.req.param('matterId'), {
+        ...body.data,
+        blocklist: deps.service.currentConfig.tools?.web?.blocklist,
+      });
+      deps.service.emit?.('personal.follow_up.updated', { matterId: matter.id, status: matter.status });
+      return c.json({ ok: true, payload: matter });
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : 'Follow-up matter update failed' }, 409);
+    }
+  });
+
+  app.post('/api/personal-agent/matters/:matterId/check', deps.strictRateLimitMiddleware, async c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const matterId = c.req.param('matterId');
+    const investigator = deps.service.matterInvestigatorInstance;
+    if (!investigator) return c.json({ ok: false, error: 'Matter investigator is unavailable' }, 503);
+    try {
+      const updated = await investigator.checkNow(matterId, ownerId);
+      return c.json({ ok: true, payload: updated });
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : 'Matter check failed' }, 409);
+    }
+  });
+
+  app.delete('/api/personal-agent/matters/:matterId', deps.strictRateLimitMiddleware, c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const matterId = c.req.param('matterId');
+    const deleted = deleteMatter(ownerId, matterId);
+    if (!deleted) return c.json({ ok: false, error: 'Follow-up matter not found' }, 404);
+    deps.service.emit?.('personal.follow_up.updated', { matterId, deleted: true });
+    return c.json({ ok: true });
+  });
 
   app.get('/api/personal-agent/proactivity', c => {
     const ownerId = owner(c);

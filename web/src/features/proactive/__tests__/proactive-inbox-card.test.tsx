@@ -115,8 +115,22 @@ describe('ProactiveInboxCard inline draft editing, Pulse digest flush, and RSI r
     container.remove();
   });
 
-  it('opens the fixed-size review modal, submits edit_and_approve when draft changes, and manages Pulse + RSI rollback', async () => {
-    apiMocks.actOnProactiveItem.mockResolvedValue({ ...SAMPLE_ITEM, state: 'acted' });
+  it('opens the fixed-size review modal, submits edit_and_approve when draft changes, shows executed task receipt, and manages Pulse + RSI rollback', async () => {
+    apiMocks.actOnProactiveItem.mockResolvedValue({
+      ...SAMPLE_ITEM,
+      state: 'acted',
+      humanResolution: {
+        action: 'edit_and_approve',
+        idempotencyKey: 'ui-edit:item-draft-1',
+        resolvedAt: Date.now(),
+        executedAction: {
+          kind: 'approve_draft',
+          taskId: 'task-created-1',
+          summary: 'Q4 合同条款确认草稿',
+          executedAt: Date.now(),
+        },
+      },
+    });
     apiMocks.flushProactiveDigest.mockResolvedValue({
       ...SAMPLE_ITEM,
       id: 'pulse-1',
@@ -173,6 +187,8 @@ describe('ProactiveInboxCard inline draft editing, Pulse digest flush, and RSI r
       }),
     );
     expect(reload).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain('已批准并启动执行任务');
+    expect(container.querySelector('a[href="#/tasks/task-created-1"]')).toBeTruthy();
 
     // Open Pulse & RSI drawer -> flush digest + rollback RSI skill
     const pulseBtn = [...container.querySelectorAll('button')].find(b => b.textContent?.includes('脉冲简报与能力库'))!;

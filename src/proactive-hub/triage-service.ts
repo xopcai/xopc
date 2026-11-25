@@ -37,6 +37,7 @@ import {
   flushPulseDigestBatch,
   listProactiveInboxItems,
   markProactiveConversationDelivered,
+  recordProactiveExecutedAction,
   retireCoveredProactiveItems,
   saveProactiveItem,
   type Gate1AdmissionResult,
@@ -46,6 +47,7 @@ import type {
   CoalescedSignal,
   PreparedScoutPackage,
   ProactiveCategory,
+  ProactiveExecutedActionReceipt,
   ProactiveItem,
   ProactiveItemResolutionInput,
   ProactiveProposedAction,
@@ -95,6 +97,10 @@ export interface ProactiveHubDeps {
   onPublishEvent?: (type: string, payload: unknown) => void;
   onConversationEscalated?: (conversationId: string, itemId: string, item: ProactiveItem) => void;
   adoptRsiCandidate?: (ownerId: string, candidateId: string) => void;
+  executeApprovedAction?: (
+    item: ProactiveItem,
+    resolution: ProactiveItemResolutionInput,
+  ) => Promise<ProactiveExecutedActionReceipt | undefined> | ProactiveExecutedActionReceipt | undefined;
   onItemResolved?: (item: ProactiveItem) => void | Promise<void>;
   readAuthorizedContext?: (signal: CoalescedSignal) => Promise<ScoutReadOnlyContext[]> | ScoutReadOnlyContext[];
   callModel?: (operation: 'proactive.fast_triage' | 'proactive.readonly_scout', prompt: string, abortSignal: AbortSignal) => Promise<string>;
@@ -171,22 +177,56 @@ export class ProactiveHubService {
     resolution: ProactiveItemResolutionInput,
     ownerId = this.ownerId(),
   ): Promise<ProactiveItem> {
-    const resolved = runSqliteWriteTransaction(() => {
-      const item = applyProactiveItemResolution(ownerId, itemId, resolution, this.now());
+    const now = this.now();
+    let resolved = runSqliteWriteTransaction(() => {
+      const item = applyProactiveItemResolution(ownerId, itemId, resolution, now);
       if (resolution.action === 'approve' && item.proposedAction?.kind === 'adopt_rsi_candidate') {
         if (!item.proposedAction.targetRef || !this.deps.adoptRsiCandidate) {
           throw new Error('RSI capability adoption is unavailable');
         }
-        this.deps.adoptRsiCandidate(ownerId, item.proposedAction.targetRef);
+        if (!item.humanResolution?.executedAction) {
+          this.deps.adoptRsiCandidate(ownerId, item.proposedAction.targetRef);
+          return recordProactiveExecutedAction(ownerId, item.id, {
+            kind: 'adopt_rsi_candidate',
+            candidateId: item.proposedAction.targetRef,
+            summary: item.proposedAction.label,
+            executedAt: now,
+          }, now) ?? item;
+        }
       }
       return item;
     });
+
+    const shouldExecuteAction =
+      (resolution.action === 'approve' || resolution.action === 'edit_and_approve')
+      && !resolved.humanResolution?.executedAction
+      && resolved.proposedAction?.kind !== 'adopt_rsi_candidate'
+      && resolved.proposedAction?.kind !== 'acknowledge'
+      && Boolean(
+        resolved.proposedAction?.kind === 'create_task'
+        || resolved.proposedAction?.kind === 'approve_draft'
+        || resolution.action === 'edit_and_approve'
+        || resolved.preparedPayload?.preparedDraft,
+      );
+
+    if (shouldExecuteAction && this.deps.executeApprovedAction) {
+      try {
+        const receipt = await this.deps.executeApprovedAction(resolved, resolution);
+        if (receipt) {
+          resolved = recordProactiveExecutedAction(ownerId, resolved.id, receipt, this.now()) ?? resolved;
+        }
+      } catch (err) {
+        log.warn({ err, itemId: resolved.id, phase: 'proactive_execute_approved_action' }, 'Approved proactive action execution failed');
+      }
+    }
+
     this.deps.onPublishEvent?.('proactive.inbox.updated', { itemId: resolved.id, state: resolved.state });
     this.deps.onPublishEvent?.('proactive.item.resolved', {
       itemId: resolved.id,
       action: resolution.action,
       state: resolved.state,
       conversationEntryId: resolved.conversationEntryId,
+      executedAction: resolved.humanResolution?.executedAction,
     });
     await this.deps.onItemResolved?.(resolved);
     return resolved;

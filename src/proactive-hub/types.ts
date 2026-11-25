@@ -177,6 +177,14 @@ export const ProactiveItemResolutionSchema = z.discriminatedUnion('action', [
 ]);
 export type ProactiveItemResolutionInput = z.infer<typeof ProactiveItemResolutionSchema>;
 
+export interface ProactiveExecutedActionReceipt {
+  kind: 'create_task' | 'approve_draft' | 'adopt_rsi_candidate';
+  taskId?: string;
+  candidateId?: string;
+  summary: string;
+  executedAt: number;
+}
+
 export interface ProactiveHumanResolution {
   action: ProactiveItemResolutionInput['action'];
   idempotencyKey: string;
@@ -186,6 +194,7 @@ export interface ProactiveHumanResolution {
   muteMode?: 'drop' | 'digest_only';
   senderOrSubjectFilter?: string;
   note?: string;
+  executedAction?: ProactiveExecutedActionReceipt;
 }
 
 export interface ProactiveItem {

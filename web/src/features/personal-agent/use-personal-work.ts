@@ -10,6 +10,7 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 import type { PersonalAvatarActivity } from './personal-avatar';
+import { usePersonalFollowing } from './personal-following';
 
 export type PersonalWorkItem = {
   id: string;
@@ -102,7 +103,15 @@ export function useRefreshPersonalWork(conversationId: string | undefined, refre
         void Promise.allSettled([refreshWork(), refreshPrompt?.()]);
       }, 120);
     };
-    const events = ['task-changed-v2', 'task-updated', 'clarification-updated', 'gateway-realtime-connected'];
+    const events = [
+      'task-changed-v2',
+      'task-updated',
+      'clarification-updated',
+      'personal-follow-up-updated',
+      'proactive-inbox-updated',
+      'proactive-item-resolved',
+      'gateway-realtime-connected',
+    ];
     const onTranscriptUpdated = (event: Event) => {
       if ((event as CustomEvent<{ key?: string }>).detail?.key === conversationId) refresh();
     };
@@ -149,9 +158,14 @@ export function usePersonalWorkOverview(conversationId: string | undefined, zh: 
   const run = useChatRunPresenceStore(state => conversationId ? state.runs[conversationId] : undefined);
   const { data: work, mutate: refreshWork, error: workError } = usePersonalWork(conversationId);
   const { data: prompt, mutate: refreshPrompt, error: promptError } = usePersonalPrompt(conversationId);
+  const { data: following } = usePersonalFollowing(Boolean(conversationId));
   const current = work?.current ?? [];
   const pending = current.filter(needsPersonalWorkAttention);
-  const attentionCount = pending.length + Number(isOpenPersonalPrompt(prompt) && !pending.some(item => item.prompt?.id === prompt.id));
+  const taskAttentionCount = pending.length + Number(isOpenPersonalPrompt(prompt) && !pending.some(item => item.prompt?.id === prompt.id));
+  const inboxPendingCount = typeof following?.inboxPendingCount === 'number' ? following.inboxPendingCount : 0;
+  const waitingMatterCount = typeof following?.waitingMatterCount === 'number' ? following.waitingMatterCount : 0;
+  const activeFollowingCount = typeof following?.activeCount === 'number' ? following.activeCount : 0;
+  const attentionCount = taskAttentionCount + inboxPendingCount + waitingMatterCount;
   const running = current.filter(item => item.operationalState === 'running' || item.operationalState === 'verifying');
   const queued = current.filter(item => item.operationalState === 'queued' || item.operationalState === 'allocating');
   const recentDeliveryAt = work?.items.find(item => item.resolution === 'done')?.updatedAt;
@@ -175,6 +189,7 @@ export function usePersonalWorkOverview(conversationId: string | undefined, zh: 
   else if (queued.length) summary = zh ? `有 ${queued.length} 项等待开始` : `${queued.length} queued`;
   else if (run?.status === 'waiting') summary = zh ? '等待继续' : 'Waiting to resume';
   else if (delivered) summary = zh ? '刚刚完成交付' : 'Just delivered';
+  else if (activeFollowingCount > 0) summary = zh ? `正在替你跟进 ${activeFollowingCount} 件事` : `Watching ${activeFollowingCount} ${activeFollowingCount === 1 ? 'item' : 'items'}`;
   else if (workError || promptError) summary = zh ? '暂时无法更新状态' : 'Status unavailable';
-  return { work, workError, prompt, avatarState, summary, attentionCount, refreshWork, refreshPrompt };
+  return { work, workError, prompt, following, avatarState, summary, attentionCount, activeFollowingCount, refreshWork, refreshPrompt };
 }

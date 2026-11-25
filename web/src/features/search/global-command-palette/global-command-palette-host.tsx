@@ -1,3 +1,4 @@
+import * as Dialog from '@radix-ui/react-dialog';
 import { Cable, CheckSquare, File, FolderKanban, FolderOpen, Puzzle, Settings, Sparkles, Terminal, Zap } from 'lucide-react';
 import {
   useCallback,
@@ -590,20 +591,11 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
   }
 
   useEffect(() => {
-    const id = window.setTimeout(() => inputRef.current?.focus(), 50);
-    return () => window.clearTimeout(id);
-  }, []);
+    inputRef.current?.focus();
+  }, [paletteLayer]);
 
   const handlePaletteKey = useEffectEvent((event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      if (paletteLayer !== 'main') {
-        dispatchUi({ type: 'resetMain' });
-        return;
-      }
-      onClose();
-      return;
-    }
+    if (event.isComposing) return;
 
     const maxIdx =
       paletteLayer === 'main'
@@ -672,197 +664,204 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
   }, [selectedIndex, hits, paletteLayer, displayedLayerRows.length]);
 
   const subBackLabel = language === 'zh' ? '返回' : 'Back';
-
-  if (paletteLayer === 'models' || paletteLayer === 'agents') {
-    const rows = displayedLayerRows;
-    const layerLoading = layerRowsResource.loading;
-    return (
-      <div
-        className="fixed inset-0 z-[120] flex items-start justify-center bg-black/40 p-4 pt-[min(18vh,7rem)]"
-        role="dialog"
-        aria-modal="true"
-        aria-label={language === 'zh' ? '选择模型或智能体' : 'Model or agent picker'}
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) onClose();
-        }}
-      >
-        <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-elevated">
-          <input
-            ref={inputRef}
-            type="search"
-            value={query}
-            onChange={(e) => dispatchUi({ type: 'setQuery', value: e.target.value })}
-            placeholder={
-              paletteLayer === 'models'
-                ? language === 'zh'
-                  ? '搜索模型…'
-                  : 'Search models…'
-                : language === 'zh'
-                  ? '搜索智能体…'
-                  : 'Search agents…'
-            }
-            className="border-b border-edge bg-transparent px-4 py-3 text-sm text-fg outline-none placeholder:text-fg-muted"
-            autoComplete="off"
-            autoCorrect="off"
-          />
-          <ul
-            ref={listRef}
-            className="max-h-[min(60vh,26rem)] overflow-y-auto p-2 text-sm [scrollbar-gutter:stable]"
-            role="listbox"
-          >
-            <li>
-              <button
-                type="button"
-                data-global-palette-index={0}
-                className={[
-                  'flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-fg-muted',
-                  selectedIndex === 0 ? 'bg-surface-hover' : 'hover:bg-surface-inset',
-                ].join(' ')}
-                onMouseEnter={() => dispatchUi({ type: 'setSelectedIndex', value: 0 })}
-                onClick={() => dispatchUi({ type: 'resetMain' })}
-              >
-                ← {subBackLabel}
-              </button>
-            </li>
-            {layerLoading ? (
-              <li className="rounded-lg px-3 py-6 text-center text-fg-muted">
-                {language === 'zh' ? '加载中…' : 'Loading…'}
-              </li>
-            ) : rows.length === 0 ? (
-              <li className="rounded-lg px-3 py-6 text-center text-fg-muted">
-                {language === 'zh' ? '无结果' : 'No results'}
-              </li>
-            ) : (
-              rows.map((row, i) => {
-                const idx = i + 1;
-                return (
-                  <li key={row.id}>
-                    <button
-                      type="button"
-                      data-global-palette-index={idx}
-                      className={[
-                        'flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left',
-                        selectedIndex === idx ? 'bg-surface-hover text-fg' : 'text-fg hover:bg-surface-inset',
-                      ].join(' ')}
-                      onMouseEnter={() => dispatchUi({ type: 'setSelectedIndex', value: idx })}
-                      onClick={() => {
-                        if (paletteLayer === 'models') {
-                          void (async () => {
-                            await setGlobalDefaultModel(row.id);
-                            void revalidateGatewayConfig();
-                            dispatchConfigReload();
-                            onClose();
-                            dispatchUi({ type: 'resetMain' });
-                          })();
-                        } else {
-                          selectChatAgentFromPalette(row.id, pathname, navigate, onClose);
-                          dispatchUi({ type: 'resetMain' });
-                        }
-                      }}
-                    >
-                      <span className="min-w-0 flex-1">
-                        <div className="min-w-0 truncate font-medium">{row.title}</div>
-                        {row.subtitle ? (
-                          <div className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{row.subtitle}</div>
-                        ) : null}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })
-            )}
-          </ul>
-        </div>
-      </div>
-    );
-  }
+  const isSubLayer = paletteLayer === 'models' || paletteLayer === 'agents';
+  const dialogLabel = isSubLayer
+    ? language === 'zh'
+      ? '选择模型或智能体'
+      : 'Model or agent picker'
+    : language === 'zh'
+      ? '全局搜索'
+      : 'Global search';
 
   let lastGroup = '';
 
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-start justify-center bg-black/40 p-4 pt-[min(18vh,7rem)]"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Global search"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-elevated">
-        <input
-          ref={inputRef}
-          type="search"
-          value={query}
-          onChange={(e) => dispatchUi({ type: 'setQuery', value: e.target.value })}
-          placeholder={
-            language === 'zh'
-              ? '搜索…（会话 / 文件 / 连接 / 设置 / 命令）'
-              : 'Search… (sessions, files, connectors, settings, commands)'
-          }
-          className="border-b border-edge bg-transparent px-4 py-3 text-sm text-fg outline-none placeholder:text-fg-muted"
-          autoComplete="off"
-          autoCorrect="off"
-        />
-        <ul
-          ref={listRef}
-          className="max-h-[min(60vh,26rem)] overflow-y-auto p-2 text-sm [scrollbar-gutter:stable]"
-          role="listbox"
-          aria-activedescendant={
-            hits[selectedIndex] ? `global-hit-${hits[selectedIndex].id}` : undefined
-          }
+    <Dialog.Root open onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[240] bg-black/40" />
+        <Dialog.Content
+          aria-modal="true"
+          aria-label={dialogLabel}
+          aria-describedby={undefined}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            inputRef.current?.focus();
+          }}
+          onEscapeKeyDown={(event) => {
+            if (paletteLayer !== 'main') {
+              event.preventDefault();
+              dispatchUi({ type: 'resetMain' });
+            }
+          }}
+          className="fixed left-1/2 top-[min(18vh,7rem)] z-[241] flex w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-elevated outline-none"
         >
-          {hits.length === 0 ? (
-            <li className="rounded-lg px-3 py-6 text-center text-fg-muted">
-              {hitsLoading
-                ? language === 'zh'
-                  ? '搜索中…'
-                  : 'Searching…'
-                : hitsError
-                  ? hitsError instanceof Error
-                    ? hitsError.message
-                    : String(hitsError)
-                  : language === 'zh'
-                    ? '无结果'
-                    : 'No results'}
-            </li>
-          ) : (
-            hits.map((h, idx) => {
-              const header = h.groupLabel !== lastGroup ? h.groupLabel : '';
-              lastGroup = h.groupLabel;
-              return (
-                <li key={h.id}>
-                  {header ? (
-                    <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
-                      {header}
-                    </div>
-                  ) : null}
+          <Dialog.Title className="sr-only">{dialogLabel}</Dialog.Title>
+          {isSubLayer ? (
+            <>
+              <input
+                ref={inputRef}
+                type="search"
+                value={query}
+                onChange={(e) => dispatchUi({ type: 'setQuery', value: e.target.value })}
+                placeholder={
+                  paletteLayer === 'models'
+                    ? language === 'zh'
+                      ? '搜索模型…'
+                      : 'Search models…'
+                    : language === 'zh'
+                      ? '搜索智能体…'
+                      : 'Search agents…'
+                }
+                className="border-b border-edge bg-transparent px-4 py-3 text-sm text-fg outline-none placeholder:text-fg-muted"
+                autoComplete="off"
+                autoCorrect="off"
+              />
+              <ul
+                ref={listRef}
+                className="max-h-[min(60vh,26rem)] overflow-y-auto p-2 text-sm [scrollbar-gutter:stable]"
+                role="listbox"
+              >
+                <li>
                   <button
-                    id={`global-hit-${h.id}`}
-                    data-global-palette-index={idx}
                     type="button"
+                    data-global-palette-index={0}
                     className={[
-                      'flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left',
-                      idx === selectedIndex ? 'bg-surface-hover text-fg' : 'text-fg hover:bg-surface-inset',
+                      'flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-fg-muted',
+                      selectedIndex === 0 ? 'bg-surface-hover' : 'hover:bg-surface-inset',
                     ].join(' ')}
-                    onMouseEnter={() => dispatchUi({ type: 'setSelectedIndex', value: idx })}
-                    onClick={() => h.run()}
+                    onMouseEnter={() => dispatchUi({ type: 'setSelectedIndex', value: 0 })}
+                    onClick={() => dispatchUi({ type: 'resetMain' })}
                   >
-                    <span className="mt-0.5">{iconFor(h)}</span>
-                    <span className="min-w-0 flex-1">
-                      <div className="min-w-0 truncate font-medium">{h.title}</div>
-                      {h.subtitle ? (
-                        <div className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{h.subtitle}</div>
-                      ) : null}
-                    </span>
+                    ← {subBackLabel}
                   </button>
                 </li>
-              );
-            })
+                {layerRowsResource.loading ? (
+                  <li className="rounded-lg px-3 py-6 text-center text-fg-muted">
+                    {language === 'zh' ? '加载中…' : 'Loading…'}
+                  </li>
+                ) : displayedLayerRows.length === 0 ? (
+                  <li className="rounded-lg px-3 py-6 text-center text-fg-muted">
+                    {language === 'zh' ? '无结果' : 'No results'}
+                  </li>
+                ) : (
+                  displayedLayerRows.map((row, i) => {
+                    const idx = i + 1;
+                    return (
+                      <li key={row.id}>
+                        <button
+                          type="button"
+                          data-global-palette-index={idx}
+                          className={[
+                            'flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left',
+                            selectedIndex === idx ? 'bg-surface-hover text-fg' : 'text-fg hover:bg-surface-inset',
+                          ].join(' ')}
+                          onMouseEnter={() => dispatchUi({ type: 'setSelectedIndex', value: idx })}
+                          onClick={() => {
+                            if (paletteLayer === 'models') {
+                              void (async () => {
+                                await setGlobalDefaultModel(row.id);
+                                void revalidateGatewayConfig();
+                                dispatchConfigReload();
+                                onClose();
+                                dispatchUi({ type: 'resetMain' });
+                              })();
+                            } else {
+                              selectChatAgentFromPalette(row.id, pathname, navigate, onClose);
+                              dispatchUi({ type: 'resetMain' });
+                            }
+                          }}
+                        >
+                          <span className="min-w-0 flex-1">
+                            <div className="min-w-0 truncate font-medium">{row.title}</div>
+                            {row.subtitle ? (
+                              <div className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{row.subtitle}</div>
+                            ) : null}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            </>
+          ) : (
+            <>
+              <input
+                ref={inputRef}
+                type="search"
+                value={query}
+                onChange={(e) => dispatchUi({ type: 'setQuery', value: e.target.value })}
+                placeholder={
+                  language === 'zh'
+                    ? '搜索…（会话 / 文件 / 连接 / 设置 / 命令）'
+                    : 'Search… (sessions, files, connectors, settings, commands)'
+                }
+                className="border-b border-edge bg-transparent px-4 py-3 text-sm text-fg outline-none placeholder:text-fg-muted"
+                autoComplete="off"
+                autoCorrect="off"
+              />
+              <ul
+                ref={listRef}
+                className="max-h-[min(60vh,26rem)] overflow-y-auto p-2 text-sm [scrollbar-gutter:stable]"
+                role="listbox"
+                aria-activedescendant={
+                  hits[selectedIndex] ? `global-hit-${hits[selectedIndex].id}` : undefined
+                }
+              >
+                {hits.length === 0 ? (
+                  <li className="rounded-lg px-3 py-6 text-center text-fg-muted">
+                    {hitsLoading
+                      ? language === 'zh'
+                        ? '搜索中…'
+                        : 'Searching…'
+                      : hitsError
+                        ? hitsError instanceof Error
+                          ? hitsError.message
+                          : String(hitsError)
+                        : language === 'zh'
+                          ? '无结果'
+                          : 'No results'}
+                  </li>
+                ) : (
+                  hits.map((h, idx) => {
+                    const header = h.groupLabel !== lastGroup ? h.groupLabel : '';
+                    lastGroup = h.groupLabel;
+                    return (
+                      <li key={h.id}>
+                        {header ? (
+                          <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
+                            {header}
+                          </div>
+                        ) : null}
+                        <button
+                          id={`global-hit-${h.id}`}
+                          data-global-palette-index={idx}
+                          type="button"
+                          className={[
+                            'flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left',
+                            idx === selectedIndex ? 'bg-surface-hover text-fg' : 'text-fg hover:bg-surface-inset',
+                          ].join(' ')}
+                          onMouseEnter={() => dispatchUi({ type: 'setSelectedIndex', value: idx })}
+                          onClick={() => h.run()}
+                        >
+                          <span className="mt-0.5">{iconFor(h)}</span>
+                          <span className="min-w-0 flex-1">
+                            <div className="min-w-0 truncate font-medium">{h.title}</div>
+                            {h.subtitle ? (
+                              <div className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{h.subtitle}</div>
+                            ) : null}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            </>
           )}
-        </ul>
-      </div>
-    </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

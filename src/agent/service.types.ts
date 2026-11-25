@@ -32,6 +32,9 @@ export interface AgentServiceConfig {
     requestClarification: GatewayClarifyRequestFn;
   };
   getAutomationService?: () => AutomationService | undefined;
+  getProactiveHubService?: () => import('../proactive-hub/triage-service.js').ProactiveHubService | undefined;
+  getMatterInvestigator?: () => import('../proactive-hub/matter-investigator.js').MatterInvestigatorService | undefined;
+  onMatterMutated?: (info: { matterId: string; kind: 'created' | 'updated' | 'resolved' }) => void;
   canConfigureEndpoint?: (endpointId: string) => boolean;
   /** Gateway: direct verified outbound delivery for proactive cross-channel sends. */
   deliverOutbound?: (msg: OutboundMessage) => Promise<void>;

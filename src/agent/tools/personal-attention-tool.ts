@@ -36,6 +36,14 @@ import {
   strategyState,
   userText,
 } from '../../personal-agent/proactivity/repository.js';
+import type { MatterInvestigatorService } from '../../proactive-hub/matter-investigator.js';
+import {
+  createOrReuseMatter,
+  getMatter,
+  listMatters,
+  patchMatter,
+  type FollowUpMatter,
+} from '../../proactive-hub/matters.js';
 import { getSessionInputById, getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
 import { readCurrentTranscriptId } from '../../storage/sqlite/session-instance-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
@@ -43,9 +51,30 @@ import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
 
+const EXPLICIT_MATTER_RE = /跟进|盯|监控|监听|关注|留意|帮我.*(?:看|查|追|催|了解|注意)|(?:有|出现|如果|要是).*(?:变动|变化|进展|新|补位|名额|降价|回复|更新|阻塞|消息).*(?:告诉|通知|提醒|起草|放工作台|找我)|follow[ -]up|keep (?:an eye|track|watching)|watch|monitor|track|let me know|notify me/iu;
+
+const EventSourceSchema = Type.Object({
+  source: Type.Union([
+    Type.Literal('gmail'),
+    Type.Literal('calendar'),
+    Type.Literal('github'),
+    Type.Literal('linear'),
+    Type.Literal('local_folder'),
+    Type.Literal('local_git'),
+    Type.Literal('browser'),
+    Type.Literal('desktop'),
+  ]),
+  keyword: Type.Optional(Type.String({ maxLength: 200 })),
+  sender: Type.Optional(Type.String({ maxLength: 200 })),
+}, { additionalProperties: false });
+
 const schema = Type.Object({
   command: Type.Union([
     Type.Literal('list'),
+    Type.Literal('matter_create'),
+    Type.Literal('matter_update'),
+    Type.Literal('matter_check'),
+    Type.Literal('matter_resolve'),
     Type.Literal('follow'),
     Type.Literal('stop'),
     Type.Literal('pause'),
@@ -59,6 +88,18 @@ const schema = Type.Object({
   offset: Type.Optional(Type.Integer({ minimum: 0 })),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
   id: Type.Optional(Type.String()),
+  title: Type.Optional(Type.String({ maxLength: 140, description: 'Concise title of the follow-up matter.' })),
+  goal: Type.Optional(Type.String({ maxLength: 800, description: 'What the user wants tracked or followed up on.' })),
+  notifyWhen: Type.Optional(Type.String({ maxLength: 400, description: 'What change, milestone, or deadline deserves contacting the user.' })),
+  doneCriteria: Type.Optional(Type.String({ maxLength: 400, description: 'Optional condition that marks the matter resolved and stops follow-up.' })),
+  deadlineLocal: Type.Optional(Type.String({ description: 'Optional deadline YYYY-MM-DDTHH:mm in the user configured timezone.' })),
+  deliveryPreference: Type.Optional(Type.Union([Type.Literal('auto'), Type.Literal('chat'), Type.Literal('inbox')])),
+  checkIntervalMinutes: Type.Optional(Type.Integer({ minimum: 15, maximum: 10080, description: 'Check interval in minutes (min 15).' })),
+  urls: Type.Optional(Type.Array(Type.String({ maxLength: 2000 }), { maxItems: 4, description: 'Optional public http/https URLs to bind and monitor for this matter.' })),
+  eventSources: Type.Optional(Type.Array(EventSourceSchema, { maxItems: 4, description: 'Optional external/local event sources (gmail, github, calendar, linear, local_folder, etc.) to bind to this matter.' })),
+  searchQueries: Type.Optional(Type.Array(Type.String({ maxLength: 200 }), { maxItems: 3, description: 'Optional read-only web search queries to run on periodic checks for this matter.' })),
+  matterStatus: Type.Optional(Type.Union([Type.Literal('active'), Type.Literal('paused'), Type.Literal('resolved')])),
+  userNote: Type.Optional(Type.String({ maxLength: 600, description: 'Optional supplemental user note or context update for the matter timeline.' })),
   subject: Type.Optional(Type.String({ maxLength: 160 })),
   summary: Type.Optional(Type.String({ maxLength: 1600 })),
   nextCheckAt: Type.Optional(Type.Number()),
@@ -76,7 +117,7 @@ const schema = Type.Object({
   preparation: Type.Optional(Type.Union([Type.Literal('brief'), Type.Literal('thorough')])),
   versionId: Type.Optional(Type.String({ description: 'Latest strategy version ID returned by list; required for rollback.' })),
 }, { additionalProperties: false, anyOf: [
-  { properties: { command: { enum: ['list', 'settings', 'interests', 'stop'] } } },
+  { properties: { command: { enum: ['list', 'settings', 'interests', 'stop', 'matter_create', 'matter_update', 'matter_check', 'matter_resolve'] } } },
   { properties: { command: { const: 'follow' } } },
   { properties: { command: { enum: ['pause', 'end', 'resume'] } }, required: ['id'] },
   { properties: { command: { const: 'feedback' } }, required: ['id', 'feedback'] },
@@ -205,24 +246,44 @@ function matchByUtterance<T>(items: T[], text: string, labelOf: (item: T) => str
   return hits.length > 0 ? hits : items;
 }
 
+function resolveTargetMatter(
+  ownerId: string,
+  id: string | undefined,
+  utterance: string,
+): { matter?: FollowUpMatter; ambiguous?: FollowUpMatter[] } {
+  const active = listMatters(ownerId, { includeClosed: false });
+  if (id) {
+    return { matter: getMatter(ownerId, id) };
+  }
+  if (active.length === 0) return {};
+  if (active.length === 1) return { matter: active[0] };
+  const narrowed = matchByUtterance(active, utterance, m => `${m.title} ${m.goal}`);
+  if (narrowed.length === 1) return { matter: narrowed[0] };
+  return { ambiguous: narrowed };
+}
+
 export function createPersonalAttentionTool(deps: {
   getConversationId: () => string | undefined;
   getConfig: () => Config | undefined;
   canReadTask?: (taskId: string) => boolean;
   onFollowUpUpdated?: (info: { followUpId: string; taskId: string; conversationId: string }) => void;
+  getMatterInvestigator?: () => MatterInvestigatorService | undefined;
+  onMatterMutated?: (info: { matterId: string; kind: 'created' | 'updated' | 'resolved' }) => void;
 }): AgentTool<typeof schema, Record<string, unknown>> {
   return {
     name: 'personal_attention',
     label: 'Personal follow-up',
-    description: 'Persist or inspect attention and one-shot conditional follow-ups in this personal conversation. For a one-shot conditional reminder tied to a Task pending item (e.g. "周五 16:00 如果还需要我定范围就告诉我" or "放工作台提醒我"), call command="follow" with oneShot=true (and taskId/waitId/destination/nextCheckLocal/validUntilLocal when known). Only claim a follow-up is active after a successful saved receipt; if clarification_needed or unsupported_condition is returned, ask the single clarifying question or explain the limitation honestly without claiming it was enabled. Use command="stop" (or "end" with id) to stop a follow-up.',
+    description: 'Create, inspect, check, update, or resolve user Follow-Up Matters and conditional follow-ups. Prefer command="matter_create" whenever the user asks to follow up on an ongoing matter/thing (e.g. waiting for a reply, tracking release blockers, monitoring a webpage or topic with search queries, or combining multiple sources until done). Use command="matter_check" to investigate current progress immediately, command="matter_update" to add sources/notes/pause/resume, and command="matter_resolve" or "stop" when finished. Use command="follow" with oneShot=true specifically for a one-shot reminder tied to an active Task pending item.',
     parameters: schema,
     async execute(_toolId, input: Static<typeof schema>) {
       const conversationId = deps.getConversationId();
       const personal = conversationId ? getPersonalAgentByConversation(conversationId) : null;
       const config = deps.getConfig();
       if (!personal || !conversationId || !config) throw new Error('Personal attention is unavailable');
-      if ((input.command === 'follow' || input.command === 'resume') && (!resolveUserContextSessionAccess(config, conversationId).userModel
-        || config.userContext.userModel.writePolicy === 'deny')) throw new Error('Personal attention is unavailable');
+      if ((input.command === 'follow' || input.command === 'matter_create' || input.command === 'matter_update' || input.command === 'resume')
+        && (!resolveUserContextSessionAccess(config, conversationId).userModel || config.userContext.userModel.writePolicy === 'deny')) {
+        throw new Error('Personal attention is unavailable');
+      }
       if (input.command === 'settings' && !input.mode) return { content: [{ type: 'text', text: JSON.stringify(getProactivitySettings(personal.ownerId)) }], details: {} };
       if (input.command === 'interests' || input.command === 'list') {
         if (input.command === 'interests' && !resolveUserContextSessionAccess(config, conversationId).userModel) throw new Error('Interest access is unavailable');
@@ -252,13 +313,35 @@ export function createPersonalAttentionTool(deps: {
                 subject: thread.subject,
                 status: thread.status,
                 nextCheckAt: thread.next_check_at,
+                lastCheckedAt: thread.last_checked_at,
                 revision: thread.revision,
                 strategy: strategyState(thread.id),
               };
             });
         const offset = input.offset ?? 0;
+        const matters = input.command === 'list'
+          ? listMatters(personal.ownerId, { includeClosed: false }).map(m => ({
+              matterId: m.id,
+              title: m.title,
+              goal: m.goal,
+              notifyWhen: m.notifyWhen,
+              doneCriteria: m.doneCriteria,
+              status: m.status,
+              lastSummary: m.lastSummary,
+              lastCheckedAt: m.lastCheckedAt,
+              nextCheckAt: m.nextCheckAt,
+              deadlineAt: m.deadlineAt,
+              bindings: m.bindings,
+              recentProgress: m.progressLog.slice(0, 3),
+              revision: m.revision,
+            }))
+          : undefined;
         return { content: [{ type: 'text', text: JSON.stringify(boundedPersonalResult({
-          items: rows.slice(offset, offset + (input.limit ?? 10)), total: rows.length, offset })) }], details: {} };
+          ...(matters && matters.length > 0 ? { matters } : {}),
+          items: rows.slice(offset, offset + (input.limit ?? 10)),
+          total: rows.length,
+          offset,
+        })) }], details: {} };
       }
 
       const source = resolveCurrentUserTurnSource(conversationId);
@@ -276,7 +359,235 @@ export function createPersonalAttentionTool(deps: {
         return { content: [{ type: 'text', text: JSON.stringify(updatedSettings) }], details: {} };
       }
 
-      // Explicit stop branch for one-shot follow-ups (supports explicit id or context-disambiguated active follow-up)
+      if (input.command === 'matter_create') {
+        if (!EXPLICIT_MATTER_RE.test(sourceText)) {
+          throw new Error('An explicit follow-up instruction from the user is required');
+        }
+        const title = input.title?.trim() || input.subject?.trim();
+        const goal = input.goal?.trim() || input.summary?.trim() || sourceText.slice(0, 400);
+        const notifyWhen = input.notifyWhen?.trim() || goal.slice(0, 300);
+        if (!title) {
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                saved: false,
+                status: 'clarification_needed',
+                reason: 'missing_matter_title',
+                message: '请给出简短明确的事项标题以便持续跟进。',
+              }),
+            }],
+            details: {},
+          };
+        }
+        try {
+          const deadlineAt = input.deadlineLocal ? parseLocalCheckTime(input.deadlineLocal, settings.timezone) : null;
+          const created = createOrReuseMatter({
+            ownerId: personal.ownerId,
+            conversationId,
+            title,
+            goal,
+            notifyWhen,
+            doneCriteria: input.doneCriteria,
+            deliveryPreference: input.deliveryPreference ?? 'auto',
+            deadlineAt,
+            checkIntervalMs: input.checkIntervalMinutes !== undefined ? input.checkIntervalMinutes * 60_000 : undefined,
+            projectId: input.projectId,
+            taskId: input.taskId,
+            urls: input.urls,
+            eventSources: input.eventSources,
+            searchQueries: input.searchQueries,
+            blocklist: config.tools?.web?.blocklist,
+          });
+          if (created.outcome === 'created') {
+            deps.onMatterMutated?.({ matterId: created.matter.id, kind: 'created' });
+          }
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                saved: true,
+                outcome: created.outcome,
+                matterId: created.matter.id,
+                title: created.matter.title,
+                goal: created.matter.goal,
+                notifyWhen: created.matter.notifyWhen,
+                doneCriteria: created.matter.doneCriteria,
+                status: created.matter.status,
+                deadlineAt: created.matter.deadlineAt,
+                checkIntervalMinutes: Math.round(created.matter.checkIntervalMs / 60_000),
+                bindings: created.matter.bindings,
+                revision: created.matter.revision,
+                note: 'Follow-up matter is active. The Gateway will periodically investigate bound sources (read-only), update the matter timeline silently when nothing changed, and contact you with concrete findings or drafts when action is needed.',
+              }),
+            }],
+            details: { matter: created.matter },
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                saved: false,
+                status: 'invalid_matter',
+                message: error instanceof Error ? error.message : String(error),
+              }),
+            }],
+            details: {},
+          };
+        }
+      }
+
+      if (input.command === 'matter_update') {
+        const resolved = resolveTargetMatter(personal.ownerId, input.id, sourceText);
+        if (resolved.ambiguous) {
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                saved: false,
+                status: 'clarification_needed',
+                reason: 'ambiguous_matter',
+                candidates: resolved.ambiguous.map(m => ({ matterId: m.id, title: m.title, status: m.status })),
+                message: '存在多个正在跟进的事项，请只问一句确认要调整哪一件。',
+              }),
+            }],
+            details: {},
+          };
+        }
+        if (!resolved.matter) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ saved: false, status: 'not_found', message: '未找到对应的跟进事项。' }) }],
+            details: {},
+          };
+        }
+        const deadlineAt = input.deadlineLocal ? parseLocalCheckTime(input.deadlineLocal, settings.timezone) : undefined;
+        const { matter } = patchMatter(personal.ownerId, resolved.matter.id, {
+          title: input.title,
+          goal: input.goal,
+          notifyWhen: input.notifyWhen,
+          doneCriteria: input.doneCriteria,
+          status: input.matterStatus,
+          deliveryPreference: input.deliveryPreference,
+          deadlineAt,
+          checkIntervalMs: input.checkIntervalMinutes !== undefined ? input.checkIntervalMinutes * 60_000 : undefined,
+          userNote: input.userNote,
+          addUrls: input.urls,
+          addEventSources: input.eventSources,
+          addSearchQueries: input.searchQueries,
+          blocklist: config.tools?.web?.blocklist,
+        });
+        deps.onMatterMutated?.({ matterId: matter.id, kind: matter.status === 'resolved' ? 'resolved' : 'updated' });
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              saved: true,
+              matterId: matter.id,
+              title: matter.title,
+              status: matter.status,
+              lastSummary: matter.lastSummary,
+              bindings: matter.bindings,
+              revision: matter.revision,
+            }),
+          }],
+          details: { matter },
+        };
+      }
+
+      if (input.command === 'matter_check') {
+        const resolved = resolveTargetMatter(personal.ownerId, input.id, sourceText);
+        if (resolved.ambiguous) {
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                checked: false,
+                status: 'clarification_needed',
+                reason: 'ambiguous_matter',
+                candidates: resolved.ambiguous.map(m => ({ matterId: m.id, title: m.title, status: m.status })),
+                message: '存在多个正在跟进的事项，请确认要立刻检查哪一件。',
+              }),
+            }],
+            details: {},
+          };
+        }
+        if (!resolved.matter) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ checked: false, status: 'not_found', message: '未找到对应的跟进事项。' }) }],
+            details: {},
+          };
+        }
+        const investigator = deps.getMatterInvestigator?.();
+        const checked = investigator
+          ? await investigator.checkNow(resolved.matter.id, personal.ownerId)
+          : resolved.matter;
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              checked: Boolean(investigator),
+              matterId: checked.id,
+              title: checked.title,
+              status: checked.status,
+              lastSummary: checked.lastSummary,
+              lastCheckedAt: checked.lastCheckedAt,
+              nextCheckAt: checked.nextCheckAt,
+              lastError: checked.lastError,
+              recentProgress: checked.progressLog.slice(0, 4),
+            }),
+          }],
+          details: { matter: checked },
+        };
+      }
+
+      if (input.command === 'matter_resolve') {
+        if (!isExplicitStopFollowUp(sourceText) && !/搞定|完成|解决|结束|报上了|已确认|done|resolved|finished|completed/iu.test(sourceText)) {
+          throw new Error('An explicit completion or stop instruction from the user is required');
+        }
+        const resolved = resolveTargetMatter(personal.ownerId, input.id, sourceText);
+        if (resolved.ambiguous) {
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                resolved: false,
+                status: 'clarification_needed',
+                reason: 'ambiguous_matter',
+                candidates: resolved.ambiguous.map(m => ({ matterId: m.id, title: m.title })),
+                message: '存在多个正在跟进的事项，请确认要结束哪一件。',
+              }),
+            }],
+            details: {},
+          };
+        }
+        if (!resolved.matter) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ resolved: false, status: 'not_found', message: '当前没有匹配的活动跟进事项。' }) }],
+            details: {},
+          };
+        }
+        const { matter } = patchMatter(personal.ownerId, resolved.matter.id, {
+          status: 'resolved',
+          userNote: input.userNote,
+        });
+        deps.onMatterMutated?.({ matterId: matter.id, kind: 'resolved' });
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              resolved: true,
+              matterId: matter.id,
+              title: matter.title,
+              status: matter.status,
+              message: `已结束跟进「${matter.title}」，并停止名下所有监控来源。`,
+            }),
+          }],
+          details: { matter },
+        };
+      }
+
+      // Explicit stop branch for one-shot follow-ups or follow-up matters
       if (input.command === 'stop') {
         if (!isExplicitStopFollowUp(sourceText)) {
           throw new Error('An explicit stop instruction from the user is required');
@@ -297,8 +608,40 @@ export function createPersonalAttentionTool(deps: {
             ? matchByUtterance(scopedByContext, sourceText, item => item.subject)
             : scopedByContext;
           if (narrowed.length === 0) {
+            const matterMatch = resolveTargetMatter(personal.ownerId, input.id, sourceText);
+            if (matterMatch.ambiguous) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify({
+                    status: 'clarification_needed',
+                    reason: 'ambiguous_matter',
+                    candidates: matterMatch.ambiguous.map(m => ({ matterId: m.id, title: m.title })),
+                    message: '存在多条正在跟进的事项，请确认要停止哪一件。',
+                  }),
+                }],
+                details: {},
+              };
+            }
+            if (matterMatch.matter) {
+              const { matter } = patchMatter(personal.ownerId, matterMatch.matter.id, { status: 'resolved' });
+              deps.onMatterMutated?.({ matterId: matter.id, kind: 'resolved' });
+              return {
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify({
+                    outcome: 'stopped',
+                    matterId: matter.id,
+                    title: matter.title,
+                    status: matter.status,
+                    message: `已停止跟进「${matter.title}」。`,
+                  }),
+                }],
+                details: { matter },
+              };
+            }
             return {
-              content: [{ type: 'text', text: JSON.stringify({ status: 'not_found', message: '当前没有正在进行的一次性条件跟进。' }) }],
+              content: [{ type: 'text', text: JSON.stringify({ status: 'not_found', message: '当前没有正在进行的跟进事项。' }) }],
               details: {},
             };
           }

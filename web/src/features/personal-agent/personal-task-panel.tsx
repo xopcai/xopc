@@ -18,6 +18,7 @@ import {
   usePersonalAvatarFlightStore,
 } from './personal-avatar-flight';
 import { PersonalDeliverablesPanel } from './personal-deliverables-panel';
+import { PersonalFollowingSection } from './personal-following';
 import { PersonalSchedules } from './personal-schedules';
 import { formatPersonalTaskTime } from './personal-task-time';
 import { PersonalAvatar } from './personal-avatar';
@@ -123,7 +124,7 @@ export function PersonalTaskPanel({ scope, zh, closeOnNavigate = false, visible 
   if (closeOnNavigate) search.delete('workspaceTab');
   const query = search.toString();
   const personalHref = query ? `${location.pathname}?${query}` : location.pathname;
-  const { work: data, workError: error, prompt, refreshWork: mutate, avatarState, summary, attentionCount } = usePersonalWorkOverview(scope, zh);
+  const { work: data, workError: error, prompt, following, refreshWork: mutate, avatarState, summary, attentionCount } = usePersonalWorkOverview(scope, zh);
   const tasksVisible = tab === 'tasks';
   const { items: historyItems, error: historyError, loading, hasMore, loadMore, retry } = usePersonalWorkHistory(scope, data, tasksVisible);
   const { listRef, loadMoreRef } = usePersonalListPagination(visible && hasMore && !loading && !historyError, loadMore);
@@ -173,7 +174,15 @@ export function PersonalTaskPanel({ scope, zh, closeOnNavigate = false, visible 
     { id: 'tasks', label: zh ? '任务' : 'Tasks', Icon: ListTodo },
     { id: 'deliverables', label: spaceLabel, Icon: Files },
   ] as const;
-  const empty = !current.length && !data?.total && !mainPrompt;
+  const hasFollowing = Boolean(
+    following && (
+      (following.matters?.length ?? 0) > 0
+      || (following.oneShot?.length ?? 0) > 0
+      || (following.recurring?.length ?? 0) > 0
+      || (following.inboxPendingCount ?? 0) > 0
+    ),
+  );
+  const empty = !current.length && !data?.total && !mainPrompt && !hasFollowing;
   return <div className="flex min-h-0 flex-1 flex-col overflow-hidden" aria-label={zh ? '派发的任务' : 'Delegated tasks'}>
     <header data-personal-task-identity className="flex shrink-0 flex-col items-center px-4 pb-7 pt-1 text-center sm:px-6">
       <div className="relative size-[7.5rem] sm:size-32">
@@ -237,6 +246,7 @@ export function PersonalTaskPanel({ scope, zh, closeOnNavigate = false, visible 
           {attention.map(item => row(item))}
         </WorkGroup> : null}
         {active.length ? <WorkGroup title={zh ? '当前任务' : 'Current tasks'}>{active.map(item => row(item))}</WorkGroup> : null}
+        <PersonalFollowingSection scope={scope} visible={visible && tasksVisible} zh={zh} onNavigate={closePanel} />
         <PersonalSchedules scope={scope} visible={visible && tasksVisible} zh={zh} />
         {groups.map(({ title, items, dateInHeading }) => <WorkGroup key={title} title={title}>{items.map(item => row(item, dateInHeading))}</WorkGroup>)}
         {historyError ? <p role="alert" className="px-2 text-sm text-fg-muted">

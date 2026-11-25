@@ -2,10 +2,12 @@ import * as Dialog from '@radix-ui/react-dialog';
 import {
   BellOff,
   Check,
+  ExternalLink,
   FileEdit,
   Inbox,
   Layers,
   LoaderCircle,
+  MessageSquare,
   RotateCcw,
   Sparkles,
   X,
@@ -15,6 +17,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PopoverSelect, type PopoverSelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 
 import {
@@ -61,6 +64,9 @@ const COPY = {
     adoptBtn: '采纳启用',
     rollbackBtn: '一键回滚',
     resolvedToast: '已更新处理状态',
+    discussBtn: '和助手讨论',
+    taskStartedNotice: '已批准并启动执行任务',
+    openTaskBtn: '查看任务',
   },
   en: {
     sectionTitle: 'Agent Inbox · External Signals',
@@ -95,6 +101,9 @@ const COPY = {
     adoptBtn: 'Adopt',
     rollbackBtn: 'Rollback',
     resolvedToast: 'Action applied',
+    discussBtn: 'Discuss',
+    taskStartedNotice: 'Approved and started execution task',
+    openTaskBtn: 'Open task',
   },
 } as const;
 
@@ -139,12 +148,14 @@ export function ProactiveInboxCard({
   const [drawerTab, setDrawerTab] = useState<'pulse' | 'rsi'>('pulse');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [executedNotice, setExecutedNotice] = useState<{ taskId?: string; summary: string } | null>(null);
 
   const visibleInboxItems = items.filter((item) => item.category !== 'pulse_digest');
   const hasVisibleContent =
     visibleInboxItems.length > 0
     || bufferedCount > 0
     || digests.length > 0
+    || executedNotice !== null
     || rsiCandidates.some((cand) => cand.status === 'adopted' || cand.status === 'inbox_pending');
 
   if (loading && items.length === 0 && digests.length === 0) {
@@ -168,14 +179,31 @@ export function ProactiveInboxCard({
     { value: 'digest_only', label: c.muteModeDigest },
   ];
 
+  const handleDiscussInPersonal = (item: ProactiveItem) => {
+    const prompt = language === 'zh'
+      ? `关于「${item.title}」：${item.summary.slice(0, 200)}，帮我一起看看下一步怎么处理。`
+      : `Regarding "${item.title}": ${item.summary.slice(0, 200)} — let's review the next step together.`;
+    setSelectedItem(null);
+    window.location.hash = '#/personal';
+    window.setTimeout(() => {
+      dispatchFillChatComposer(prompt);
+    }, 60);
+  };
+
   const handleQuickApprove = async (item: ProactiveItem) => {
     setBusyId(item.id);
     setErrorMsg(null);
     try {
-      await actOnProactiveItem(item.id, {
+      const resolved = await actOnProactiveItem(item.id, {
         action: 'approve',
         idempotencyKey: `ui-approve:${item.id}`,
       });
+      if (resolved.humanResolution?.executedAction) {
+        setExecutedNotice({
+          taskId: resolved.humanResolution.executedAction.taskId,
+          summary: resolved.humanResolution.executedAction.summary,
+        });
+      }
       if (selectedItem?.id === item.id) setSelectedItem(null);
       await onReload();
     } catch (err) {
@@ -192,16 +220,20 @@ export function ProactiveInboxCard({
     try {
       const original = selectedItem.preparedPayload?.preparedDraft ?? '';
       const trimmed = draftText.trim();
-      if (trimmed && trimmed !== original.trim()) {
-        await actOnProactiveItem(selectedItem.id, {
-          action: 'edit_and_approve',
-          idempotencyKey: `ui-edit:${selectedItem.id}:${trimmed.length}`,
-          editedDraft: trimmed,
-        });
-      } else {
-        await actOnProactiveItem(selectedItem.id, {
-          action: 'approve',
-          idempotencyKey: `ui-approve:${selectedItem.id}`,
+      const resolved = trimmed && trimmed !== original.trim()
+        ? await actOnProactiveItem(selectedItem.id, {
+            action: 'edit_and_approve',
+            idempotencyKey: `ui-edit:${selectedItem.id}:${trimmed.length}`,
+            editedDraft: trimmed,
+          })
+        : await actOnProactiveItem(selectedItem.id, {
+            action: 'approve',
+            idempotencyKey: `ui-approve:${selectedItem.id}`,
+          });
+      if (resolved.humanResolution?.executedAction) {
+        setExecutedNotice({
+          taskId: resolved.humanResolution.executedAction.taskId,
+          summary: resolved.humanResolution.executedAction.summary,
         });
       }
       setSelectedItem(null);
@@ -318,6 +350,33 @@ export function ProactiveInboxCard({
         </p>
       ) : null}
 
+      {executedNotice ? (
+        <div role="status" className="mx-4 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-edge bg-surface-inset px-3 py-2 text-xs text-fg sm:mx-5">
+          <span className="min-w-0 truncate">
+            {c.taskStartedNotice}：{executedNotice.summary}
+          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            {executedNotice.taskId ? (
+              <a
+                href={`#/tasks/${encodeURIComponent(executedNotice.taskId)}`}
+                className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
+              >
+                {c.openTaskBtn}
+                <ExternalLink className="size-3" aria-hidden />
+              </a>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setExecutedNotice(null)}
+              aria-label={c.cancel}
+              className="rounded p-0.5 text-fg-muted hover:text-fg"
+            >
+              <X className="size-3.5" aria-hidden />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {visibleInboxItems.length > 0 ? (
         <div className="space-y-1.5 px-3 pb-3 sm:px-4">
           {visibleInboxItems.slice(0, 4).map((item) => (
@@ -343,6 +402,15 @@ export function ProactiveInboxCard({
                 <p className="line-clamp-2 text-xs leading-5 text-fg-muted">{item.summary}</p>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                <Button
+                  variant="ghost"
+                  className="h-8 rounded-lg px-2 text-xs"
+                  disabled={busyId !== null}
+                  onClick={() => handleDiscussInPersonal(item)}
+                >
+                  <MessageSquare className="size-3.5" aria-hidden />
+                  {c.discussBtn}
+                </Button>
                 <Button
                   variant="secondary"
                   className="h-8 rounded-lg px-2.5 text-xs"

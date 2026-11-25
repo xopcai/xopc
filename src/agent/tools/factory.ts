@@ -2,6 +2,7 @@ import { getPhoneRuntime, phoneExecutionContext } from '../../phone/runtime.js';
 import { createPhoneUseTool } from './phone-use-tool.js';
 import { createWorkbookEditTool, createWorkbookReadTool } from './workbook-tools.js';
 import { createPersonalAttentionTool } from './personal-attention-tool.js';
+import { createPersonalInboxTool } from './personal-inbox-tool.js';
 import { createPersonalMemoryTool } from './personal-memory-tool.js';
 import { withCoreToolExposure } from './toolExposure.js';
 import { markCodemodeCoreRead } from './codemode-permissions.js';
@@ -180,6 +181,9 @@ export interface ToolFactoryDeps {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: enables the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
+  getProactiveHubService?: () => import('../../proactive-hub/triage-service.js').ProactiveHubService | undefined;
+  getMatterInvestigator?: () => import('../../proactive-hub/matter-investigator.js').MatterInvestigatorService | undefined;
+  onMatterMutated?: (info: { matterId: string; kind: 'created' | 'updated' | 'resolved' }) => void;
   canConfigureEndpoint?: (endpointId: string) => boolean;
   deliverOutbound?: (msg: import('../../infra/bus/index.js').OutboundMessage) => Promise<void>;
   getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
@@ -944,7 +948,17 @@ export class AgentToolsFactory {
                 getCurrentConversationId: currentConversationId,
                 getConfig: () => this.deps.getConfig?.(),
               })] : []),
-              createPersonalAttentionTool({ getConversationId: () => this.deps.getCurrentContext()?.conversationId, getConfig: () => this.deps.getConfig?.() }),
+              createPersonalAttentionTool({
+                getConversationId: () => this.deps.getCurrentContext()?.conversationId,
+                getConfig: () => this.deps.getConfig?.(),
+                getMatterInvestigator: this.deps.getMatterInvestigator,
+                onMatterMutated: this.deps.onMatterMutated,
+              }),
+              ...(this.deps.getProactiveHubService ? [createPersonalInboxTool({
+                getConversationId: () => this.deps.getCurrentContext()?.conversationId,
+                getConfig: () => this.deps.getConfig?.(),
+                getProactiveHubService: this.deps.getProactiveHubService,
+              })] : []),
             ] : []),
           ]
         : []),

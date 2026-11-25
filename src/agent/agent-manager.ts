@@ -198,6 +198,9 @@ export interface AgentManagerConfig {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: exposes AutomationService for the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
+  getProactiveHubService?: () => import('../proactive-hub/triage-service.js').ProactiveHubService | undefined;
+  getMatterInvestigator?: () => import('../proactive-hub/matter-investigator.js').MatterInvestigatorService | undefined;
+  onMatterMutated?: (info: { matterId: string; kind: 'created' | 'updated' | 'resolved' }) => void;
   canConfigureEndpoint?: (endpointId: string) => boolean;
   deliverOutbound?: (msg: import('../infra/bus/index.js').OutboundMessage) => Promise<void>;
   getPhoneSetupService?: () => import('../phone/setup/service.js').PhoneSetupService | undefined;
@@ -516,6 +519,9 @@ export class AgentManager implements AgentInstanceGateway {
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
       getAutomationService: this.config.getAutomationService,
+      getProactiveHubService: this.config.getProactiveHubService,
+      getMatterInvestigator: this.config.getMatterInvestigator,
+      onMatterMutated: this.config.onMatterMutated,
       getBrowserSetupService: this.config.getBrowserSetupService,
       getMcpSetupService: this.config.getMcpSetupService,
       getSelfConfigService: this.config.getSelfConfigService,
