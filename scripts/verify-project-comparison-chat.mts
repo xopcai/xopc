@@ -185,6 +185,11 @@ try {
       headers: { ...headers, Origin: base, 'Sec-Fetch-Site': 'same-origin' },
     });
     assert(auth.ok(), `Browser auth: ${auth.status()}`);
+    const dismissal = await context.request.patch(base + '/api/onboarding/work-discovery', {
+      headers: { Origin: base, 'Sec-Fetch-Site': 'same-origin' },
+      data: { status: 'dismissed' },
+    });
+    assert(dismissal.ok(), `Work discovery dismissal: ${dismissal.status()}`);
     const page = await context.newPage();
     page.setDefaultTimeout(20000);
     try {
