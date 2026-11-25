@@ -7,6 +7,7 @@ struct NoteEditorView: View {
     let projectID: String?
     let draftNoteID: String?
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.locale) private var locale
@@ -80,6 +81,7 @@ struct NoteEditorView: View {
             .padding(.horizontal, 20)
             .frame(maxWidth: 720, maxHeight: .infinity)
             .frame(maxWidth: .infinity)
+            .background(mobileTheme.panel.ignoresSafeArea())
             .disabled(!restored || isSaving)
             .navigationTitle(existing == nil && draftNoteID == nil
                 ? LocalizedStringResource("新建笔记")

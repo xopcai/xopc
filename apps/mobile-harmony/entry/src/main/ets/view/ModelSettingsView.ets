@@ -1,3 +1,4 @@
+import { xopcSheetOptions } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcHttpError } from '../service/transport';
@@ -315,8 +316,10 @@ export struct XopcModelSettingsView {
         }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 16, right: 16, bottom: 20 })
       }.layoutWeight(1).width('100%').align(Alignment.Top)
     }.id('model-settings').width('100%').height('100%').backgroundColor(this.colors.surface)
-      .bindSheet($$this.showingSheet, this.sheetBody, { height: this.sheetHeight(), dragBar: true, backgroundColor: this.colors.panel,
-        shouldDismiss: (action: SheetDismiss): void => { if (!this.saving) action.dismiss(); } })
+      .bindSheet($$this.showingSheet, this.sheetBody, xopcSheetOptions('medium', {
+        height: this.sheetHeight(),
+        shouldDismiss: (action: SheetDismiss): void => { if (!this.saving) action.dismiss(); },
+      }))
     }.hideTitleBar(true).onBackPressed((): boolean => this.saving)
   }
 }

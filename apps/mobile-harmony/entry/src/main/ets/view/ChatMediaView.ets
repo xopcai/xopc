@@ -1,3 +1,4 @@
+import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
 import { XopcPreviewHeader } from './MusicPlaybackView';
 import { XopcChatResultCapsule } from './ChatResultCapsule';
 import { XopcChatImagePager } from './ChatImagePager';
@@ -392,12 +393,10 @@ export struct XopcChatMediaView {
   private async canLeaveEditor(): Promise<boolean> {
     if (this.document.busy) return false;
     if (!this.document.dirty()) return true;
-    try {
-      const result = await this.getUIContext().getPromptAction().showDialog({ message: $r('app.string.discard_changes'),
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-          { text: $r('app.string.confirm'), color: this.colors.danger }] });
-      return result.index === 1;
-    } catch (_) { return false; }
+    return await xopcConfirmDialog(this.getUIContext(), {
+      message: $r('app.string.discard_changes'),
+      destructive: true,
+    });
   }
   private async closePreview(): Promise<void> {
     if (await this.canLeaveEditor()) { this.document.cancelEdit(); this.expanded = false; }
@@ -746,8 +745,9 @@ export struct XopcChatMediaView {
       if (this.compact && this.previewKind() === 'html') this.prefetchHtml();
       else if (!this.compact || this.compactThumbnail) this.load();
     })
-      .bindSheet($$this.expanded, this.preview, { height: '95%', dragBar: true,
-        showClose: false, backgroundColor: this.colors.chat.canvas,
+      .bindSheet($$this.expanded, this.preview, xopcSheetOptions('immersive', {
+        height: '95%',
+        dragBar: true,
         onWillDismiss: (action: DismissSheetAction): void => { this.dismissPreview(action); },
         onDisappear: (): void => {
           try { this.webController.stop(); } catch (_) {}
@@ -756,7 +756,8 @@ export struct XopcChatMediaView {
           this.restoreOriginalFile();
           if (!this.resultCapsule || !this.showLibraryActions) this.document.reset();
           this.onPreviewClosed();
-        } })
+        },
+      }))
   }
   private previewActions(): MenuElement[] {
     const actions: MenuElement[] = [];

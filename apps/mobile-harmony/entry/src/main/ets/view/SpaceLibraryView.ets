@@ -1,6 +1,9 @@
 import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 import { fileIo as fs, picker } from '@kit.CoreFileKit';
+import { XOPC_PAGE_PADDING_X } from '../common/designTokens';
+import { xopcConfirmDialog, xopcSheetOptions, xopcToast } from '../common/dialogActions';
+import { xopcPagerAnimated, xopcPagerDuration } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { chatMediaSource } from '../common/chatMediaSource';
 import { MAX_ATTACHMENT_BYTES } from '../common/attachments';
@@ -16,7 +19,15 @@ import { downloadGatewayMediaFile, removeGeneratedMediaFile } from '../service/g
 import { gatewaySession } from '../service/gatewaySession';
 import { activeListScope, XopcListSnapshots } from '../service/listSnapshots';
 import { XopcChatMediaView } from './ChatMediaView';
-import { XopcListSkeleton, XopcPageHeader, XopcPaginationFooter } from './MobileComponents';
+import {
+  XopcEmptyHint,
+  XopcErrorState,
+  XopcInlineBanner,
+  XopcListSkeleton,
+  XopcPageHeader,
+  XopcPaginationFooter,
+  XopcUndoBar,
+} from './MobileComponents';
 import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
 
 interface XopcLibraryVersion {
@@ -206,7 +217,7 @@ export struct XopcSpaceLibraryView {
     const index = LIBRARY_SCOPES.indexOf(scope);
     const current = LIBRARY_SCOPES.indexOf(this.scope);
     if (index < 0 || index === current || this.busy || this.detailOpen) return;
-    this.pager.changeIndex(index, !this.layout.reduceMotion && Math.abs(index - current) === 1);
+    this.pager.changeIndex(index, xopcPagerAnimated(this.layout.reduceMotion, index - current));
   }
 
   private commitScope(index: number): void {
@@ -312,14 +323,12 @@ export struct XopcSpaceLibraryView {
   }
 
   private async confirmPurge(item: XopcLibraryItem): Promise<void> {
-    try {
-      const confirmation = await this.getUIContext().getPromptAction().showDialog({
-        message: this.t('永久删除「' + item.title + '」？', 'Delete “' + item.title + '” permanently?'),
-        buttons: [{ text: this.t('取消', 'Cancel'), color: this.colors.secondary },
-          { text: this.t('删除', 'Delete'), color: this.colors.danger }]
-      });
-      if (confirmation.index === 1 && this.selected?.id === item.id) await this.change('purge', item.id, { revision: item.revision });
-    } catch (_) {}
+    const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+      message: this.t('永久删除「' + item.title + '」？', 'Delete “' + item.title + '” permanently?'),
+      confirmLabel: $r('app.string.delete'),
+      destructive: true,
+    });
+    if (confirmed && this.selected?.id === item.id) await this.change('purge', item.id, { revision: item.revision });
   }
 
   private async transfer(item: XopcLibraryItem, version: XopcLibraryVersion, reuse: boolean): Promise<void> {
@@ -437,7 +446,7 @@ export struct XopcSpaceLibraryView {
       gatewaySession.assertConnection(revision);
       if (result.index === 1) {
         await copyChatMessage(payload.share.shareUrl);
-        ui.getPromptAction().showToast({ message: $r('app.string.chat_link_copied') });
+        xopcToast(ui, $r('app.string.chat_link_copied'));
       } else if (result.index === 2) await shareChatLink(context, payload.share);
     } catch (_) {
       this.error = this.t('无法创建分享链接，请重试', 'Could not share. Try again.');
@@ -533,29 +542,36 @@ export struct XopcSpaceLibraryView {
 
   @Builder
   fileList(page: XopcLibraryScopeState) {
-    List({ space: 8 }) {
-      if (page.loading && !page.items.length) {
-        ListItem() { XopcListSkeleton() }
-      } else if (page.listFailed) {
-        ListItem() { Button(this.t('加载失败，重试', 'Could not load. Retry')).onClick((): void => { void this.load(); }) }
-      } else if (!page.items.length) {
-        ListItem() {
-          Text(this.query ? this.t('没有匹配的资料', 'No matching results')
-            : page.scope === 'favorites' ? this.t('暂无收藏', 'No favorites')
-              : page.scope === 'trash' ? this.t('回收站为空', 'Trash is empty') : this.t('暂无资料', 'No results yet'))
-            .width('100%').textAlign(TextAlign.Center).padding(24).fontColor(this.colors.secondary)
+    Refresh({ refreshing: page.loading && page.items.length > 0 }) {
+      List({ space: 8 }) {
+        if (page.loading && !page.items.length) {
+          ListItem() { XopcListSkeleton() }
+        } else if (page.listFailed) {
+          ListItem() {
+            XopcErrorState({ error: 'LOAD_FAILED', context: 'collection',
+              actionLabel: $r('app.string.retry'), onAction: (): void => { void this.load(); } })
+          }
+        } else if (!page.items.length) {
+          ListItem() {
+            XopcEmptyHint({
+              message: this.query ? this.t('没有匹配的资料', 'No matching results')
+                : page.scope === 'favorites' ? this.t('暂无收藏', 'No favorites')
+                  : page.scope === 'trash' ? this.t('回收站为空', 'Trash is empty') : this.t('暂无资料', 'No results yet'),
+              centered: true,
+            })
+          }
         }
-      }
-      Repeat<XopcLibraryItem>(page.items).each((entry: RepeatItem<XopcLibraryItem>) => {
-        ListItem() { this.fileRow(entry.item, page.scope) }
-      }).key((entry: XopcLibraryItem): string => entry.id).virtualScroll({ totalCount: page.items.length })
-      if (page.cursor && !page.listFailed) {
-        ListItem() {
-          XopcPaginationFooter({ loadingPage: page.loading, failedPage: page.moreFailed,
-            onLoad: (): void => { if (page.scope === this.scope) void this.load(page.cursor); } })
+        Repeat<XopcLibraryItem>(page.items).each((entry: RepeatItem<XopcLibraryItem>) => {
+          ListItem() { this.fileRow(entry.item, page.scope) }
+        }).key((entry: XopcLibraryItem): string => entry.id).virtualScroll({ totalCount: page.items.length })
+        if (page.cursor && !page.listFailed) {
+          ListItem() {
+            XopcPaginationFooter({ loadingPage: page.loading, failedPage: page.moreFailed,
+              onLoad: (): void => { if (page.scope === this.scope) void this.load(page.cursor); } })
+          }
         }
-      }
-    }.id('space-list-' + page.scope).layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).cachedCount(5)
+      }.id('space-list-' + page.scope).height('100%').width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).cachedCount(5)
+    }.layoutWeight(1).width('100%').pullToRefresh(!page.loading && !this.busy).onRefreshing((): void => { void this.load(); })
   }
 
   build() {
@@ -568,23 +584,31 @@ export struct XopcSpaceLibraryView {
           }.width('100%').height('100%').accessibilityLevel(page.scope === this.scope ? 'auto' : 'no-hide-descendants')
         }, (page: XopcLibraryScopeState): string => page.scope)
       }.id('space-library-pager').index(this.scopeIndex).loop(false).indicator(false).cachedCount(2)
-        .duration(this.layout.reduceMotion ? 0 : 230).disableSwipe(this.detailOpen || this.busy)
+        .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(this.detailOpen || this.busy)
         .onChange((index: number): void => { this.commitScope(index); })
         .width('100%').layoutWeight(1).clip(true)
-      if ((!this.detailOpen && this.error) || this.undo) {
-        Row({ space: 8 }) {
-          Text(this.error || this.t('已移到回收站', 'Moved to Trash')).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1)
-          if (this.undo) {
-            Button(this.t('撤销', 'Undo')).enabled(!this.busy).onClick((): void => {
+      if (this.undo) {
+        Column() {
+          XopcUndoBar({
+            message: this.t('已移到回收站', 'Moved to Trash'),
+            actionLabel: $r('app.string.sessions_undo'),
+            busy: this.busy,
+            onUndo: (): void => {
               if (this.undo) void this.change('restore', this.undo.id, { revision: this.undo.revision });
-            })
-          }
-        }.width('100%').padding(12)
+            },
+          })
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
+      } else if (!this.detailOpen && this.error) {
+        Column() {
+          XopcInlineBanner({ message: this.error })
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
       }
     }.id('space-library').width('100%').height('100%').backgroundColor(this.colors.surface)
-      .bindSheet($$this.detailOpen, this.previewSheet, { height: '95%', dragBar: true, showClose: false,
-        backgroundColor: this.colors.chat.canvas,
+      .bindSheet($$this.detailOpen, this.previewSheet, xopcSheetOptions('immersive', {
+        height: '95%',
+        dragBar: true,
         onWillDismiss: (action: DismissSheetAction): void => { if (!this.busy) action.dismiss(); },
-        onDisappear: (): void => { this.finishPreview(); } })
+        onDisappear: (): void => { this.finishPreview(); },
+      }))
   }
 }

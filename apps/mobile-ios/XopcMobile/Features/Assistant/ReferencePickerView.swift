@@ -6,6 +6,7 @@ struct ReferencePickerView: View {
     let conversationID: String?
     let onSelect: (ContextReference) -> Void
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -45,7 +46,7 @@ struct ReferencePickerView: View {
                 SegmentedTabs(options: availableKinds.map { item in
                     SegmentOption(id: item, title: item.title, accessibilityID: "reference-tab-\(item.rawValue)")
                 }, selected: kind, label: "引用类型", swipeToSelect: true, pagerProgress: pagerProgress) { next in
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.23)) { kind = next }
+                    MobileMotion.perform(MobileMotion.pagerDuration, reduceMotion: reduceMotion) { kind = next }
                 }
                 .accessibilityIdentifier("reference-tabs")
                 .padding(.horizontal)
@@ -67,6 +68,8 @@ struct ReferencePickerView: View {
                 await load(key)
             }
         }
+        .background(mobileTheme.panel.ignoresSafeArea())
+        .mobileSheetPreset(.large)
     }
 
     private var selectedIDs: Set<String> {

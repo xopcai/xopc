@@ -1,5 +1,7 @@
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI';
 
+import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
+import { xopcClickEffect } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
 import { XopcSessionItem } from '../model/chat';
@@ -74,14 +76,16 @@ export struct XopcChatSidebar {
     }
   }
 
-  private confirmDelete(items: XopcSessionItem[]): void {
+  private async confirmDelete(items: XopcSessionItem[]): Promise<void> {
     if (!items.length || this.sessions.busy) return;
-    this.getUIContext().showAlertDialog({ title: $r('app.string.delete'),
+    const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+      title: $r('app.string.delete'),
       message: items.length === 1 ? $r('app.string.sessions_delete_one_confirm')
         : $r('app.string.sessions_delete_confirm', items.length),
-      primaryButton: { value: $r('app.string.cancel'), action: (): void => {} },
-      secondaryButton: { value: $r('app.string.delete'), fontColor: this.colors.danger,
-        action: (): void => { void this.sessions.act(items, 'delete', this.onDelete); } } });
+      confirmLabel: $r('app.string.delete'),
+      destructive: true,
+    });
+    if (confirmed) void this.sessions.act(items, 'delete', this.onDelete);
   }
 
   private go(page: string): void { this.onNavigate({ page, itemId: '' }); }
@@ -154,7 +158,7 @@ export struct XopcChatSidebar {
 
   build() {
     Stack({ alignContent: Alignment.Start }) {
-      Column().width('100%').height('100%').backgroundColor('#66000000')
+      Column().width('100%').height('100%').backgroundColor(this.colors.scrim)
         .opacity(this.reveal)
         .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
         .accessibilityLevel('no').onClick((): void => { if (!this.sessions.busy) this.onClose(); })
@@ -170,6 +174,7 @@ export struct XopcChatSidebar {
           Button({ type: ButtonType.Circle }) {
             SymbolGlyph($r('sys.symbol.xmark')).fontSize(18).fontColor([this.colors.foreground])
           }.id('chat-sidebar-close').width(44).height(44).padding(0).backgroundColor(this.colors.input)
+            .clickEffect(xopcClickEffect())
             .enabled(!this.sessions.busy)
             .accessibilityText(this.sessions.selecting ? $r('app.string.cancel') : $r('app.string.chat_close_drawer'))
             .onClick((): void => {
@@ -291,7 +296,7 @@ export struct XopcChatSidebar {
           }.width('100%').padding({ top: 8, bottom: 8 })
         }
         Column().width('100%').height(0)
-          .bindSheet($$this.renameOpen, this.renameSheet, { height: '45%', dragBar: true, backgroundColor: this.colors.panel })
+          .bindSheet($$this.renameOpen, this.renameSheet, xopcSheetOptions('compact'))
       }.id('chat-sidebar').width('84%').constraintSize({ maxWidth: 350 }).height('100%')
         .padding({ left: 14, right: 14, top: this.getUIContext().px2vp(this.layout.systemTopInsetPx) + 8 })
         .alignItems(HorizontalAlign.Start).backgroundColor(this.colors.panel)

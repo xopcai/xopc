@@ -7,6 +7,7 @@ struct AutomationRunDetailView: View {
     let initialRun: AutomationRunRecord?
     let onOpenConversation: (String, String, String) -> Void
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -119,6 +120,8 @@ struct AutomationRunDetailView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(mobileTheme.canvas.ignoresSafeArea())
         .mobilePageTitle(Text("运行详情"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: "\(runID):\(pollRevision)") { await poll() }

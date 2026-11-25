@@ -24,11 +24,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -110,18 +108,18 @@ internal fun FilePreviewContent(name: String, mimeType: String, bytes: ByteArray
   }
   pendingExternalUrl?.let { url ->
     val externalLinkFailure = stringResource(R.string.message_open_link_failed)
-    AlertDialog(onDismissRequest = { pendingExternalUrl = null },
-      title = { Text(stringResource(R.string.message_open_external_title)) },
-      text = { Text(url, maxLines = 4, overflow = TextOverflow.Ellipsis) },
-      confirmButton = { TextButton(onClick = {
+    XopcConfirmDialog(
+      onDismiss = { pendingExternalUrl = null },
+      onConfirm = {
         pendingExternalUrl = null
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.onFailure {
-          android.widget.Toast.makeText(context, externalLinkFailure, android.widget.Toast.LENGTH_SHORT).show()
+          xopcShowToast(context, externalLinkFailure)
         }
-      }) { Text(stringResource(R.string.message_open_external)) } },
-      dismissButton = { TextButton(onClick = { pendingExternalUrl = null }) {
-        Text(stringResource(R.string.progress_cancel))
-      } })
+      },
+      title = stringResource(R.string.message_open_external_title),
+      message = url,
+      confirmLabel = stringResource(R.string.message_open_external),
+    )
   }
 }
 

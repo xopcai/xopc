@@ -60,8 +60,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
+import androidx.compose.ui.draw.alpha
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -230,6 +232,14 @@ import kotlinx.coroutines.Job
 
 internal enum class HomeTab { Assistant, Conversations, Progress, Projects, Automations, Notes, Library, Capabilities, Me }
 private data class LinkedDetail(val source: HomeTab, val destination: HomeTab, val id: String)
+private data class MainPageDestination(
+  val stateKey: String,
+  val tab: HomeTab,
+  val detailId: String?,
+  val libraryDelivery: String?,
+) {
+  val contentTab: HomeTab get() = if (libraryDelivery != null) HomeTab.Progress else tab
+}
 
 private data class WelcomeRecommendation(val title: String, val reason: String, val prompt: String)
 
@@ -339,7 +349,8 @@ private fun AssistantWelcome(viewportHeight: androidx.compose.ui.unit.Dp,
 
 @Composable
 private fun AssistantHistorySkeleton() {
-  Column(modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("assistant-history-skeleton"),
+  val skeletonAlpha = rememberSkeletonAlpha()
+  Column(modifier = Modifier.fillMaxWidth().padding(16.dp).alpha(skeletonAlpha).testTag("assistant-history-skeleton"),
     verticalArrangement = Arrangement.spacedBy(16.dp)) {
     repeat(4) { index ->
       Box(modifier = Modifier.fillMaxWidth(if (index % 2 == 0) 0.9f else 0.7f)
@@ -857,30 +868,28 @@ internal fun MainScreen(
     pairingScannerOpen = false
     pairingScanError = true
   })
-  if (pairingPermissionRationale) AlertDialog(
-    onDismissRequest = { pairingPermissionRationale = false },
-    title = { Text(stringResource(R.string.pairing_camera_permission_title)) },
-    text = { Text(stringResource(R.string.pairing_camera_permission_message)) },
-    confirmButton = { TextButton(onClick = {
+  if (pairingPermissionRationale) XopcConfirmDialog(
+    onDismiss = { pairingPermissionRationale = false },
+    onConfirm = {
       pairingPermissionRationale = false
       pairingPermissionRequesting = true
       pairingCameraPermission.launch(Manifest.permission.CAMERA)
-    }) { Text(stringResource(R.string.pairing_camera_permission_continue)) } },
-    dismissButton = { TextButton(onClick = { pairingPermissionRationale = false }) {
-      Text(stringResource(R.string.progress_cancel))
-    } })
-  if (pairingPermissionPermanentlyDenied) AlertDialog(
-    onDismissRequest = { pairingPermissionPermanentlyDenied = false },
-    title = { Text(stringResource(R.string.pairing_camera_permission_title)) },
-    text = { Text(stringResource(R.string.pairing_camera_permission_settings_message)) },
-    confirmButton = { TextButton(onClick = {
+    },
+    title = stringResource(R.string.pairing_camera_permission_title),
+    message = stringResource(R.string.pairing_camera_permission_message),
+    confirmLabel = stringResource(R.string.pairing_camera_permission_continue),
+  )
+  if (pairingPermissionPermanentlyDenied) XopcConfirmDialog(
+    onDismiss = { pairingPermissionPermanentlyDenied = false },
+    onConfirm = {
       pairingPermissionPermanentlyDenied = false
       context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
         Uri.fromParts("package", context.packageName, null)))
-    }) { Text(stringResource(R.string.pairing_camera_permission_settings)) } },
-    dismissButton = { TextButton(onClick = { pairingPermissionPermanentlyDenied = false }) {
-      Text(stringResource(R.string.progress_cancel))
-    } })
+    },
+    title = stringResource(R.string.pairing_camera_permission_title),
+    message = stringResource(R.string.pairing_camera_permission_settings_message),
+    confirmLabel = stringResource(R.string.pairing_camera_permission_settings),
+  )
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -1228,6 +1237,7 @@ internal fun MainContent(
   var projectChatTitle by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
   var projectChatReturnTab by rememberSaveable(gatewayId) { mutableStateOf(HomeTab.Projects) }
   var projectChatReturnConversation by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
+  var projectChatReturnProject by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
   var openingProjectChat by remember(gatewayId) { mutableStateOf(false) }
   val showingProjectChat = projectChatId != null && projectChatId == conversationId &&
     selectedTab == HomeTab.Assistant
@@ -1237,6 +1247,7 @@ internal fun MainContent(
     projectChatTitle = title
     projectChatReturnTab = selectedTab
     projectChatReturnConversation = conversationId
+    projectChatReturnProject = connection.progress.projectId
     onRestoreConversation(id)
     onSelectTab(HomeTab.Assistant)
   }
@@ -1244,7 +1255,7 @@ internal fun MainContent(
     projectChatId = null
     projectChatTitle = null
     projectChatReturnConversation?.let(onRestoreConversation) ?: onOpenPersonalAgent()
-    connection.progress.projectId?.let(onOpenProgressProject)
+    projectChatReturnProject?.let(onOpenProgressProject)
     onSelectTab(projectChatReturnTab)
   }
   val automationLocale = LocalConfiguration.current.locales[0].toLanguageTag()
@@ -1695,11 +1706,10 @@ internal fun MainContent(
               onObserveSuggestion = onObserveSuggestion, onAcceptSuggestion = onAcceptSuggestion,
               onLoadComposerPalette = onLoadComposerPalette,
               projectChatTitle = projectChatTitle.takeIf { showingProjectChat })
+            val panelMotionAllowed = rememberMotionAllowed()
             AnimatedVisibility(visible = assistantActionsOpen,
-              enter = expandVertically(animationSpec = tween(220), expandFrom = Alignment.Bottom) +
-                fadeIn(animationSpec = tween(220)),
-              exit = shrinkVertically(animationSpec = tween(180), shrinkTowards = Alignment.Bottom) +
-                fadeOut(animationSpec = tween(180)), label = "assistant-actions") {
+              enter = xopcExpandPanelEnter(panelMotionAllowed, Alignment.Bottom),
+              exit = xopcExpandPanelExit(panelMotionAllowed, Alignment.Bottom), label = "assistant-actions") {
               AssistantActionPanel(
                 canSwitchAgent = !showingProjectChat && !connection.automationConfigurationChat &&
                   !isTaskChat(connection) && connection.personal.agent?.let {
@@ -1748,21 +1758,28 @@ internal fun MainContent(
         })
     } else {
     val showLibraryDelivery = selectedTab == HomeTab.Library && libraryDeliveryId.isNotEmpty()
-    val contentTab = if (showLibraryDelivery) HomeTab.Progress else selectedTab
     val tabStateKey = when {
       showLibraryDelivery -> "library-delivery-${gatewayId}-$libraryDeliveryKind-$libraryDeliveryId"
       selectedTab == HomeTab.Library -> "library-root-${gatewayId}"
-      linkedDetailId != null -> "linked-detail-$gatewayId-${contentTab.name}-$linkedDetailId"
+      linkedDetailId != null -> "linked-detail-$gatewayId-${selectedTab.name}-$linkedDetailId"
       else -> "${gatewayId}:${selectedTab.name}"
     }
-    tabStateHolder.SaveableStateProvider(tabStateKey) {
-    when (contentTab) {
+    val pageMotionAllowed = rememberMotionAllowed()
+    AnimatedContent(
+      targetState = MainPageDestination(tabStateKey, selectedTab, linkedDetailId, deliveryRoute.takeIf { showLibraryDelivery }),
+      transitionSpec = { xopcScreenTransition(pageMotionAllowed) },
+      contentKey = { it.stateKey },
+      label = "main-destination",
+    ) { destination ->
+    val detailId = destination.detailId
+    tabStateHolder.SaveableStateProvider(destination.stateKey) {
+    when (destination.contentTab) {
       HomeTab.Assistant, HomeTab.Conversations -> {
         val title = stringResource(R.string.pairing_title)
         if (!isPaired) PairingScreen(title, connection, onPair, onCancelPairing,
           onScanPairing,
           pairingScanning, pairingScanError, insets)
-        else if (selectedTab == HomeTab.Assistant) PhoneConversationPager(phoneController, phonePage, { phonePage = it }) {
+        else if (destination.tab == HomeTab.Assistant) PhoneConversationPager(phoneController, phonePage, { phonePage = it }) {
           AssistantScreen(connection, readingPosition,
           rootInsets, insets, onRetryConversation,
           onCreateConversation, onLoadOlderHistory, onLoadReferences, onAddDraftRef,
@@ -1901,24 +1918,24 @@ internal fun MainContent(
             }
           }
         }, chatBusy = connection.creatingConversation || openingProjectChat,
-          initialPage = when (selectedTab) {
-            HomeTab.Projects -> if (linkedDetailId == null) "projects" else "project"
+          initialPage = when (destination.tab) {
+            HomeTab.Projects -> if (detailId == null) "projects" else "project"
             HomeTab.Automations -> when {
-              linkedDetailId == null -> "automations"
-              linkedDetailId.startsWith("run:") -> "automation-run"
+              detailId == null -> "automations"
+              detailId.startsWith("run:") -> "automation-run"
               else -> "automation"
             }
-            else -> if (linkedDetailId == null) "overview" else "detail"
+            else -> if (detailId == null) "overview" else "detail"
           },
-          initialItemId = linkedDetailId?.removePrefix("run:"),
+          initialItemId = detailId?.removePrefix("run:"),
           onExit = {
-            if (linkedDetailId != null) tabStateHolder.removeState(tabStateKey)
+            if (detailId != null) tabStateHolder.removeState(destination.stateKey)
             exitDestination()
           },
-          initialDeliveryKind = libraryDeliveryKind.takeIf { showLibraryDelivery },
-          initialDeliveryId = libraryDeliveryId.takeIf { showLibraryDelivery },
+          initialDeliveryKind = destination.libraryDelivery?.substringBefore(':'),
+          initialDeliveryId = destination.libraryDelivery?.substringAfter(':'),
           onCloseDelivery = {
-            tabStateHolder.removeState(tabStateKey)
+            tabStateHolder.removeState(destination.stateKey)
             libraryDelivery.value = ""
           },
           onOpenLibrary = { openLinkedDetail(HomeTab.Library, "workbench-library") },
@@ -1973,12 +1990,12 @@ internal fun MainContent(
         onNoteFileSpaces = onNoteFileSpaces,
         onNoteFiles = onNoteFiles,
         onNoteFileContent = onNoteFileContent, onUploadSpaceFile = onUploadSpaceFile, voiceNotes = voiceNotes,
-        initialNoteId = linkedDetailId?.takeUnless { it.startsWith("project-note-") },
-        initialProjectDraft = linkedDetailId?.startsWith("project-note-") == true,
+        initialNoteId = detailId?.takeUnless { it.startsWith("project-note-") },
+        initialProjectDraft = detailId?.startsWith("project-note-") == true,
         onExit = {
-          linkedDetailId?.takeIf { it.startsWith("project-note-") }?.removePrefix("project-note-")
+          detailId?.takeIf { it.startsWith("project-note-") }?.removePrefix("project-note-")
             ?.takeIf { it == connection.progress.projectId }?.let(onOpenProgressProject)
-          tabStateHolder.removeState(tabStateKey)
+          tabStateHolder.removeState(destination.stateKey)
           exitDestination()
         })
       }
@@ -2051,6 +2068,7 @@ internal fun MainContent(
           onStartChat = onStartUnderstandingChat,
           chatBusy = connection.creatingConversation)
       }
+    }
     }
     }
     }
@@ -2440,7 +2458,7 @@ private fun DraftAttachmentStrip(items: List<ChatAttachment>, scopeKey: String?,
     }
   }
   if (previewItem != null) {
-    ModalBottomSheet(onDismissRequest = { previewId = null },
+    XopcBottomSheet(XopcSheetPreset.Large, onDismissRequest = { previewId = null },
       modifier = Modifier.testTag("$tagPrefix-attachment-preview")) {
       val loaded by produceState<Pair<Boolean, Bitmap?>>(false to null,
         scopeKey, previewItem.id, previewItem.size) {
@@ -2462,7 +2480,7 @@ private fun DraftAttachmentStrip(items: List<ChatAttachment>, scopeKey: String?,
     }
   }
   if (previewFile != null) {
-    ModalBottomSheet(onDismissRequest = { previewId = null },
+    XopcBottomSheet(XopcSheetPreset.Large, onDismissRequest = { previewId = null },
       modifier = Modifier.testTag("$tagPrefix-file-preview")) {
       val loaded by produceState<Pair<Boolean, ByteArray?>>(false to null, scopeKey, previewFile.id) {
         value = true to runCatching { onPreviewFile(previewFile) }.getOrNull()
@@ -3630,7 +3648,8 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   if (presentedVideo != null && mediaScope != null && generatedMediaAccess != null) {
     GeneratedVideoSheet(presentedVideo, mediaScope.conversationId, generatedMediaAccess) { generatedMedia.presentedVideo = null }
   }
-  if (referenceKind != null) ModalBottomSheet(onDismissRequest = { if (!referenceFileSaving) onReferenceKindChange(null) },
+  if (referenceKind != null) XopcBottomSheet(XopcSheetPreset.Large,
+    onDismissRequest = { if (!referenceFileSaving) onReferenceKindChange(null) },
     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,
       confirmValueChange = { it != androidx.compose.material3.SheetValue.Hidden || !referenceFileSaving })) {
     var filePath by remember(connection.selectedConversationId) { mutableStateOf("") }
@@ -3748,8 +3767,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
     connection.historyLoadingOlder, onLoadOlderHistory, onClose = { onMessageSearchOpenChange(false) },
     onSelect = { id -> onMessageSearchOpenChange(false); messageDetailId = id })
   if (optionsOpen || contextOpen || modelPickerOpen || thinkingPickerOpen || agentPickerOpen)
-    ModalBottomSheet(onDismissRequest = closeOptions,
-      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    XopcBottomSheet(XopcSheetPreset.Large, onDismissRequest = closeOptions) {
     if (modelPickerOpen) {
       ChatOptionsPanel(stringResource(R.string.assistant_model), 620.dp, closeOptions) {
         OutlinedTextField(modelQuery, { modelQuery = it }, modifier = Modifier.fillMaxWidth(),
@@ -3923,8 +3941,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
     }
   }
   val detailMessage = connection.messages.firstOrNull { it.id == messageDetailId }
-  if (detailMessage != null) ModalBottomSheet(onDismissRequest = { messageDetailId = null },
-    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+  if (detailMessage != null) XopcBottomSheet(XopcSheetPreset.Large, onDismissRequest = { messageDetailId = null }) {
     Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f)
       .padding(start = 12.dp, end = 12.dp, bottom = 16.dp).testTag("message-detail-panel")) {
       Column(modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(messageDetailScroll)
@@ -3938,8 +3955,8 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
       }
     }
   }
-  if (connection.executionMessageId != null) ModalBottomSheet(onDismissRequest = onCloseExecution,
-    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), dragHandle = null) {
+  if (connection.executionMessageId != null) XopcBottomSheet(XopcSheetPreset.Immersive,
+    onDismissRequest = onCloseExecution, dragHandle = null) {
     Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f).testTag("execution-sheet")) {
       Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -3967,31 +3984,35 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
     }
   }
   externalUrl?.let { url ->
-    AlertDialog(onDismissRequest = { externalUrl = null },
-      title = { Text(stringResource(R.string.message_open_external_title)) },
-      text = { Text(url, maxLines = 4, overflow = TextOverflow.Ellipsis) },
-      confirmButton = { TextButton(onClick = {
+    XopcConfirmDialog(
+      onDismiss = { externalUrl = null },
+      onConfirm = {
         externalUrl = null
         runCatching { uriHandler.openUri(url) }.onFailure {
-          android.widget.Toast.makeText(context, externalLinkFailure, android.widget.Toast.LENGTH_SHORT).show()
+          xopcShowToast(context, externalLinkFailure)
         }
-      }) { Text(stringResource(R.string.message_open_external)) } },
-      dismissButton = { TextButton(onClick = { externalUrl = null }) {
-        Text(stringResource(R.string.progress_cancel))
-      } })
+      },
+      title = stringResource(R.string.message_open_external_title),
+      message = url,
+      confirmLabel = stringResource(R.string.message_open_external),
+    )
   }
-  if (sessionFilesOpen) ModalBottomSheet(onDismissRequest = { sessionFilesOpen = false }) {
+  if (sessionFilesOpen) XopcBottomSheet(XopcSheetPreset.Large, onDismissRequest = { sessionFilesOpen = false }) {
     SessionFilesDetails(connection.contextPanel, onLoadContextPanel, onSessionFileContent) {
       sessionFilesOpen = false
     }
   }
   pendingAgentId?.let { agentId ->
-    AlertDialog(onDismissRequest = { pendingAgentId = null },
-      title = { Text(stringResource(R.string.assistant_discard_draft_title)) },
-      text = { Text(stringResource(R.string.assistant_discard_draft_message)) },
-      confirmButton = { TextButton(onClick = { pendingAgentId = null; closeOptions(); onSwitchAgent(agentId, true) },
-        modifier = Modifier.testTag("agent-discard-confirm")) { Text(stringResource(R.string.assistant_discard_draft_confirm)) } },
-      dismissButton = { TextButton(onClick = { pendingAgentId = null }) { Text(stringResource(R.string.assistant_discard_draft_cancel)) } })
+    XopcConfirmDialog(
+      onDismiss = { pendingAgentId = null },
+      onConfirm = { pendingAgentId = null; closeOptions(); onSwitchAgent(agentId, true) },
+      title = stringResource(R.string.assistant_discard_draft_title),
+      message = stringResource(R.string.assistant_discard_draft_message),
+      confirmLabel = stringResource(R.string.assistant_discard_draft_confirm),
+      cancelLabel = stringResource(R.string.assistant_discard_draft_cancel),
+      destructive = true,
+      confirmTag = "agent-discard-confirm",
+    )
   }
 }
 
@@ -4208,7 +4229,7 @@ private fun ConversationsScreen(
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val menuConversation = connection.conversations.firstOrNull { it.id == menuConversationId && !it.isLocalDraft }
-  if (menuConversation != null) ModalBottomSheet(onDismissRequest = { menuConversationId = null }) {
+  if (menuConversation != null) XopcBottomSheet(XopcSheetPreset.Compact, onDismissRequest = { menuConversationId = null }) {
     val managementEnabled = !connection.renamingConversation && connection.pinningConversationId == null &&
       connection.archivingConversationId == null && !connection.conversationShareBusy
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -4259,18 +4280,19 @@ private fun ConversationsScreen(
       }
     }
   }
-  if (confirmBatchDelete) AlertDialog(onDismissRequest = { confirmBatchDelete = false },
-    title = { Text(stringResource(R.string.conversations_delete)) },
-    text = { Text(stringResource(R.string.conversations_batch_delete_confirm, selectedIds.size)) },
-    confirmButton = { TextButton(onClick = {
+  if (confirmBatchDelete) XopcConfirmDialog(
+    onDismiss = { confirmBatchDelete = false },
+    onConfirm = {
       confirmBatchDelete = false
       onBatchConversations(selectedIds, "delete")
-    }, modifier = Modifier.testTag("conversations-batch-delete-confirm")) {
-      Text(stringResource(R.string.conversations_delete), color = MaterialTheme.colorScheme.error)
-    } },
-    dismissButton = { TextButton(onClick = { confirmBatchDelete = false }) {
-      Text(stringResource(R.string.conversations_cancel))
-    } })
+    },
+    title = stringResource(R.string.conversations_delete),
+    message = stringResource(R.string.conversations_batch_delete_confirm, selectedIds.size),
+    confirmLabel = stringResource(R.string.conversations_delete),
+    cancelLabel = stringResource(R.string.conversations_cancel),
+    destructive = true,
+    confirmTag = "conversations-batch-delete-confirm",
+  )
   fun closeSearch() {
     if (connection.conversationSearch.isNotEmpty()) onSearchChange("")
     groupQuery = ""
@@ -4306,40 +4328,40 @@ private fun ConversationsScreen(
     browsingGroups -> R.string.conversations_search_experts
     else -> R.string.conversations_search
   })
-  Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically) {
-        if (!selecting) PageBackButton("conversations-back", { if (groupId.isNotEmpty()) clearGroup() else onExit() })
-        if (selecting) Text(stringResource(R.string.conversations_selected, selectedIds.size),
-          style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f),
-          maxLines = 1, overflow = TextOverflow.Ellipsis)
-        else Spacer(Modifier.weight(1f))
-        if (selecting) TextButton(onClick = { selecting = false; selectedIds = emptyList() },
+  Column(modifier = Modifier.fillMaxSize().padding(insets),
+    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    XopcPageHeader(
+      backTag = "conversations-back",
+      onBack = { if (groupId.isNotEmpty()) clearGroup() else onExit() },
+      showBack = !selecting,
+      title = if (selecting) stringResource(R.string.conversations_selected, selectedIds.size) else null,
+      titleContent = if (!selecting) ({ PageTitleMenu(historyModes, mode, "sessions-mode-menu", Modifier.fillMaxWidth(), ::selectMode) }) else null,
+    ) {
+      if (selecting) {
+        TextButton(onClick = { selecting = false; selectedIds = emptyList() },
           enabled = !connection.batchConversationBusy,
           modifier = Modifier.testTag("conversations-selection-cancel")) {
           Text(stringResource(R.string.conversations_cancel))
         }
-        if (!selecting && !searchOpen) IconButton(onClick = { searchOpen = true },
-          modifier = Modifier.size(48.dp).semantics { contentDescription = searchLabel }
-            .testTag("conversations-open-search")) {
-          Icon(painterResource(R.drawable.action_search), contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(24.dp).testTag("conversations-search-icon"))
-        }
-        if (!selecting && mode == "recent") IconButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
-          modifier = Modifier.size(48.dp).semantics {
-            contentDescription = newConversationLabel
-          }.testTag("chats-new")) {
-          Icon(painterResource(R.drawable.action_add), contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(24.dp).testTag("conversations-new-icon"))
-        }
       }
-      if (!selecting) PageTitleMenu(historyModes, mode, "sessions-mode-menu",
-        Modifier.fillMaxWidth(0.45f), ::selectMode)
+      if (!selecting && !searchOpen) IconButton(onClick = { searchOpen = true },
+        modifier = Modifier.size(48.dp).semantics { contentDescription = searchLabel }
+          .testTag("conversations-open-search")) {
+        Icon(painterResource(R.drawable.action_search), contentDescription = null,
+          tint = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(24.dp).testTag("conversations-search-icon"))
+      }
+      if (!selecting && mode == "recent") IconButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
+        modifier = Modifier.size(48.dp).semantics {
+          contentDescription = newConversationLabel
+        }.testTag("chats-new")) {
+        Icon(painterResource(R.drawable.action_add), contentDescription = null,
+          tint = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(24.dp).testTag("conversations-new-icon"))
+      }
     }
+    Column(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.PagePaddingX),
+      verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (groupId.isNotEmpty()) TextButton(onClick = ::clearGroup, modifier = Modifier.testTag("sessions-clear-group")) {
       Text("$groupName ×", maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -4400,64 +4422,65 @@ private fun ConversationsScreen(
         return@page
       }
       if (connection.conversationsLoading && connection.conversations.isEmpty()) BrandLoadingPanel()
-      if (connection.conversationsError) Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(R.string.chat_load_error), color = MaterialTheme.colorScheme.error,
-          modifier = Modifier.weight(1f))
-        TextButton(onClick = onRefresh, enabled = !connection.conversationsLoading,
-          modifier = Modifier.testTag("conversations-retry")) {
-          Text(stringResource(R.string.progress_refresh))
-        }
-      }
-      if (connection.pinActionError) Text(stringResource(R.string.conversations_pin_error),
-        color = MaterialTheme.colorScheme.error)
-      if (connection.archiveActionError) Text(stringResource(R.string.conversations_archive_error),
-        color = MaterialTheme.colorScheme.error)
-      if (connection.deleteActionError) Text(stringResource(R.string.conversations_delete_error),
-        color = MaterialTheme.colorScheme.error)
-      if (connection.batchConversationFailedIds.isNotEmpty()) Text(
+      if (connection.conversationsError) XopcInlineBanner(
+        message = stringResource(R.string.chat_load_error),
+        tone = XopcBannerTone.Danger,
+        actionLabel = stringResource(R.string.progress_refresh),
+        onAction = onRefresh,
+        actionEnabled = !connection.conversationsLoading,
+        actionTag = "conversations-retry",
+      )
+      if (connection.pinActionError) XopcInlineBanner(stringResource(R.string.conversations_pin_error), tone = XopcBannerTone.Danger)
+      if (connection.archiveActionError) XopcInlineBanner(stringResource(R.string.conversations_archive_error), tone = XopcBannerTone.Danger)
+      if (connection.deleteActionError) XopcInlineBanner(stringResource(R.string.conversations_delete_error), tone = XopcBannerTone.Danger)
+      if (connection.batchConversationFailedIds.isNotEmpty()) XopcInlineBanner(
         stringResource(R.string.conversations_batch_failed, connection.batchConversationFailedIds.size),
-        color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("conversations-batch-error"))
-      if (connection.discardDraftError) Text(stringResource(R.string.conversations_discard_error),
-        color = MaterialTheme.colorScheme.error)
-      if (connection.pendingDeleteId != null) Row(modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(R.string.conversations_pending_delete))
-        TextButton(onClick = onUndoDelete, enabled = !connection.deleteCommitting,
-          modifier = Modifier.testTag("conversations-undo-delete")) {
-          Text(stringResource(R.string.conversations_undo))
-        }
-      }
-      if (selecting) Row(modifier = Modifier.fillMaxWidth().testTag("conversations-batch-bar"),
-        horizontalArrangement = Arrangement.SpaceEvenly) {
-        TextButton(onClick = { onBatchConversations(selectedIds, "archive") },
-          enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
-          modifier = Modifier.testTag("conversations-batch-archive")) {
-          Text(stringResource(R.string.conversations_archive))
-        }
-        TextButton(onClick = { onBatchConversations(selectedIds, "pin") },
-          enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
-          modifier = Modifier.testTag("conversations-batch-pin")) {
-          Text(stringResource(R.string.conversations_pin))
-        }
-        TextButton(onClick = {
-          selectedIds.singleOrNull()?.let(onBeginRename)
-        }, enabled = selectedIds.size == 1 && !connection.batchConversationBusy,
-          modifier = Modifier.testTag("conversations-batch-rename")) {
-          Text(stringResource(R.string.conversations_rename))
-        }
-        TextButton(onClick = { confirmBatchDelete = true },
-          enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
-          modifier = Modifier.testTag("conversations-batch-delete")) {
-          Text(stringResource(R.string.conversations_delete), color = MaterialTheme.colorScheme.error)
-        }
-      }
-      PullToRefreshBox(isRefreshing = connection.conversationsLoading && connection.conversations.isNotEmpty(),
+        tone = XopcBannerTone.Danger,
+        modifier = Modifier.testTag("conversations-batch-error"),
+      )
+      if (connection.discardDraftError) XopcInlineBanner(stringResource(R.string.conversations_discard_error), tone = XopcBannerTone.Danger)
+      if (connection.pendingDeleteId != null) XopcUndoBar(
+        message = stringResource(R.string.conversations_pending_delete),
+        undoLabel = stringResource(R.string.conversations_undo),
+        onUndo = onUndoDelete,
+        enabled = !connection.deleteCommitting,
+        undoTag = "conversations-undo-delete",
+      )
+      if (selecting) XopcBatchActionBar(
+        actions = listOf(
+          XopcBatchAction(
+            label = stringResource(R.string.conversations_archive),
+            onClick = { onBatchConversations(selectedIds, "archive") },
+            enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
+            tag = "conversations-batch-archive",
+          ),
+          XopcBatchAction(
+            label = stringResource(R.string.conversations_pin),
+            onClick = { onBatchConversations(selectedIds, "pin") },
+            enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
+            tag = "conversations-batch-pin",
+          ),
+          XopcBatchAction(
+            label = stringResource(R.string.conversations_rename),
+            onClick = { selectedIds.singleOrNull()?.let(onBeginRename) },
+            enabled = selectedIds.size == 1 && !connection.batchConversationBusy,
+            tag = "conversations-batch-rename",
+          ),
+          XopcBatchAction(
+            label = stringResource(R.string.conversations_delete),
+            onClick = { confirmBatchDelete = true },
+            enabled = selectedIds.isNotEmpty() && !connection.batchConversationBusy,
+            destructive = true,
+            tag = "conversations-batch-delete",
+          ),
+        ),
+        modifier = Modifier.testTag("conversations-batch-bar"),
+      )
+      XopcPullToRefreshBox(
+        isRefreshing = connection.conversationsLoading && connection.conversations.isNotEmpty(),
         onRefresh = { if (!connection.conversationsLoading && !connection.conversationsLoadingMore) onRefresh() },
         modifier = Modifier.fillMaxSize().testTag("conversations-refresh-gesture"),
-        indicator = {
-          if (connection.conversationsLoading && connection.conversations.isNotEmpty()) BrandLoadingIndicator(
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp), extent = 32.dp)
-        }) {
+      ) {
       LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("conversations-list"),
         contentPadding = PaddingValues(bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -4519,6 +4542,7 @@ private fun ConversationsScreen(
         }
       }
       }
+    }
     }
   }
 }

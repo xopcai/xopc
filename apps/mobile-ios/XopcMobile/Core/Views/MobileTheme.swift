@@ -25,7 +25,7 @@ enum MobileThemePreset: String, CaseIterable, Identifiable {
     }
 }
 
-struct MobileTheme {
+struct MobileTheme: Sendable {
     let preset: MobileThemePreset
     let canvas: Color
     let panel: Color
@@ -35,14 +35,21 @@ struct MobileTheme {
     let input: Color
     let active: Color
     let danger: Color
+    let dangerSoft: Color
     let attention: Color
     let onAttention: Color
+    let success: Color
+    let successSoft: Color
+    let scrim: Color
     let assistantBubble: Color
     let reaction: Color
     let action: Color
     let onAction: Color
     let bubble: Color
     let card: Color
+
+    var warningFill: Color { attention }
+    var warningForeground: Color { onAttention }
 
     init(preset: MobileThemePreset = .default, dark: Bool = false) {
         self.preset = preset
@@ -55,8 +62,12 @@ struct MobileTheme {
         input = Self.color(values.input)
         active = Self.color(values.active)
         danger = Self.color(values.danger)
+        dangerSoft = dark ? Self.color(0x382124) : Self.color(values.danger).opacity(0.12)
         attention = Self.color(dark ? 0x352C22 : 0xFFF2D2)
         onAttention = Self.color(dark ? 0xFFBC63 : 0x734600)
+        success = Self.color(dark ? 0x66D89A : 0x187B49)
+        successSoft = Self.color(dark ? 0x1A2F24 : 0xE6F5EC)
+        scrim = Color.black.opacity(dark ? 0.45 : 0.40)
         assistantBubble = dark ? input : panel
         reaction = dark ? active : panel
         action = Self.color(values.action)

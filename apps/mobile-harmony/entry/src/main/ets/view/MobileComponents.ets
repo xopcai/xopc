@@ -1,7 +1,18 @@
+import { XOPC_ICON_HEADER, XOPC_PAGE_PADDING_X, xopcBackIcon } from '../common/designTokens';
+import {
+  XOPC_MOTION_SKELETON_MS,
+  xopcClickEffect,
+  xopcRevealTransition,
+} from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage, userErrorTitle } from '../common/userError';
 import { XopcUserErrorContext } from '../common/userErrorClassifier';
+import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcLoopi } from './Loopi';
+
+export { XopcButton, XopcButtonSize, XopcButtonVariant, XopcIconButton, XopcIconButtonTone } from './ui/XopcButton';
+export { XopcBadge, XopcBadgeTone, XopcCard, XopcCardSurface } from './ui/XopcSurface';
+export { XopcBannerTone, XopcBatchActionBar, XopcInlineBanner, XopcSheetHeader, XopcUndoBar } from './ui/XopcOverlays';
 
 @ComponentV2
 export struct XopcPaginationFooter {
@@ -17,7 +28,7 @@ export struct XopcPaginationFooter {
           .accessibilityText($r('app.string.loading'))
       } else if (this.failedPage) {
         Button($r('app.string.retry')).height(44).backgroundColor(Color.Transparent)
-          .fontColor(this.colors.accent).onClick(this.onLoad)
+          .fontColor(this.colors.accent).clickEffect(xopcClickEffect()).onClick(this.onLoad)
       } else {
         Blank().width('100%').height(32).accessibilityLevel('no')
           .onVisibleAreaChange([0.25], (visible: boolean, ratio: number): void => {
@@ -81,6 +92,7 @@ export struct XopcPageTitleMenu {
       }.constraintSize({ maxWidth: '100%' }).justifyContent(FlexAlign.Center)
     }.id(this.menuId).height(44).padding({ left: 8, right: 8 }).backgroundColor(Color.Transparent)
       .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
+      .clickEffect(xopcClickEffect())
       .bindMenu(this.menu, { placement: Placement.Bottom })
   }
 }
@@ -96,24 +108,44 @@ export struct XopcPageHeader {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param heading: ResourceStr = '';
   @Param showStaticTitle: boolean = false;
+  @Param selectionTitle: ResourceStr = '';
   @Param titleOptions: XopcPageTitleOption[] = [];
   @Param selectedTitle: string = '';
   @Param titleMenuId: string = '';
   @Event onSelectTitle: (key: string) => void = (_key: string): void => {};
   @Param backVisible: boolean = false;
   @Param backId: string = '';
+  @Param backEnabled: boolean = true;
   @Event onBack: () => void = (): void => {};
   @Param searchId: string = '';
   @Param searchOpen: boolean = false;
   @Param searchLabel: Resource = $r('app.string.search');
   @Event onSearch: () => void = (): void => {};
+  @Param secondaryActionLabel: ResourceStr = '';
+  @Param secondaryActionIcon: Resource = $r('sys.symbol.plus');
+  @Param secondaryActionId: string = '';
+  @Param secondaryActionTone: 'default' | 'accent' = 'default';
+  @Param secondaryActionEnabled: boolean = true;
+  @Event onSecondaryAction: () => void = (): void => {};
   @Param actionLabel: ResourceStr = '';
   @Param actionIcon: Resource = $r('sys.symbol.arrow_clockwise');
+  @Param actionId: string = '';
+  @Param actionTone: 'default' | 'accent' = 'default';
+  @Param actionEnabled: boolean = true;
   @Event onAction: () => void = (): void => {};
 
-  private actionText(): string {
-    if (typeof this.actionLabel === 'string') return this.actionLabel;
-    return this.getUIContext().getHostContext()?.resourceManager.getStringSync(this.actionLabel.id) ?? '';
+  private resolveText(value: ResourceStr): string {
+    if (typeof value === 'string') return value;
+    return this.getUIContext().getHostContext()?.resourceManager.getStringSync(value.id) ?? '';
+  }
+
+  private actionFill(tone: 'default' | 'accent'): ResourceColor {
+    if (tone === 'accent') return this.colors.accentSoft;
+    return this.colors.light ? this.colors.panel : Color.Transparent;
+  }
+
+  private actionTint(tone: 'default' | 'accent'): Resource {
+    return tone === 'accent' ? this.colors.accent : this.colors.foreground;
   }
 
   build() {
@@ -121,32 +153,50 @@ export struct XopcPageHeader {
      Row({ space: 8 }) {
       if (this.backVisible) {
         Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.arrow_left')).fontSize(21).fontColor([this.colors.foreground])
+          SymbolGlyph(xopcBackIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
         }.id(this.backId).width(44).height(44).padding(0)
-          .backgroundColor(this.colors.panel)
+          .backgroundColor(this.colors.panel).enabled(this.backEnabled)
+          .clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.back')).onClick((): void => { this.onBack(); })
       }
-      Blank().layoutWeight(1)
-      if (this.searchId) {
+      if (this.selectionTitle !== '') {
+        Text(this.selectionTitle).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+      } else {
+        Blank().layoutWeight(1)
+      }
+      if (this.selectionTitle === '' && this.searchId) {
         XopcPageSearchButton({ searchId: this.searchId, open: this.searchOpen, label: this.searchLabel, onToggle: this.onSearch })
       }
-      if (this.actionLabel !== '') {
-        Button() { SymbolGlyph(this.actionIcon).fontSize(22).fontColor([this.colors.foreground]) }
-          .width(44).height(44)
-          .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent)
-          .accessibilityText(this.actionText()).onClick((): void => { this.onAction(); })
+      if (this.selectionTitle === '' && this.secondaryActionLabel !== '') {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph(this.secondaryActionIcon).fontSize(XOPC_ICON_HEADER).fontColor([this.actionTint(this.secondaryActionTone)])
+        }
+          .id(this.secondaryActionId).width(44).height(44).padding(0)
+          .backgroundColor(this.actionFill(this.secondaryActionTone)).enabled(this.secondaryActionEnabled)
+          .clickEffect(xopcClickEffect())
+          .accessibilityText(this.resolveText(this.secondaryActionLabel)).onClick((): void => { this.onSecondaryAction(); })
+      }
+      if (this.selectionTitle === '' && this.actionLabel !== '') {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph(this.actionIcon).fontSize(XOPC_ICON_HEADER).fontColor([this.actionTint(this.actionTone)])
+        }
+          .id(this.actionId).width(44).height(44).padding(0)
+          .backgroundColor(this.actionFill(this.actionTone)).enabled(this.actionEnabled)
+          .clickEffect(xopcClickEffect())
+          .accessibilityText(this.resolveText(this.actionLabel)).onClick((): void => { this.onAction(); })
       }
      }.width('100%').height(44)
-      if (this.titleOptions.length) {
+      if (this.selectionTitle === '' && this.titleOptions.length) {
         XopcPageTitleMenu({ heading: this.heading, options: this.titleOptions,
           selected: this.selectedTitle, menuId: this.titleMenuId, onSelect: this.onSelectTitle })
-          .constraintSize({ maxWidth: '57%' })
-      } else if (this.showStaticTitle) {
+          .constraintSize({ maxWidth: '54%' })
+      } else if (this.selectionTitle === '' && this.showStaticTitle) {
         Text(this.heading).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '57%' })
           .accessibilityGroup(true).hitTestBehavior(HitTestMode.None)
       }
-    }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
+    }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: 8, bottom: 8 })
   }
 }
 
@@ -161,10 +211,11 @@ export struct XopcPageSearchButton {
   build() {
     Button({ type: ButtonType.Circle }) {
       SymbolGlyph(this.open ? $r('sys.symbol.xmark') : $r('sys.symbol.magnifyingglass'))
-        .fontSize(21).fontColor([this.colors.foreground])
+        .fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
     }.id(this.open ? this.searchId + '-close' : this.searchId)
       .width(44).height(44).padding(0)
       .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent)
+      .clickEffect(xopcClickEffect())
       .accessibilityText(this.open ? $r('app.string.close') : this.label).onClick((): void => { this.onToggle(); })
   }
 }
@@ -172,6 +223,7 @@ export struct XopcPageSearchButton {
 @ComponentV2
 export struct XopcPageSearchField {
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local layout: XopcLayoutState = layoutState;
   @Param searchId: string = '';
   @Param text: string = '';
   @Param placeholder: ResourceStr = $r('app.string.search');
@@ -184,6 +236,7 @@ export struct XopcPageSearchField {
       .backgroundColor(this.colors.input)
       .borderRadius(this.colors.corner(23)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
       .enterKeyType(EnterKeyType.Search).defaultFocus(true)
+      .transition(xopcRevealTransition(TransitionEdge.TOP, this.layout.reduceMotion))
       .onChange(this.onChange).onSubmit(this.onSubmit)
       .onAppear((): void => {
         this.focusTimer = setTimeout((): void => { this.getUIContext().getFocusController().requestFocus(this.searchId); }, 50);
@@ -234,6 +287,7 @@ export struct XopcHubRow {
       .borderRadius(this.colors.corner(this.compact ? 12 : 16)).clipShape(this.colors.cornerClip(this.compact ? 12 : 16))
       .margin({ bottom: 8 })
       .hoverEffect(this.navigable ? HoverEffect.Auto : HoverEffect.None)
+      .clickEffect(this.navigable ? xopcClickEffect() : null)
       .onClick((): void => { if (this.navigable) this.onOpen(); })
   }
 }
@@ -244,7 +298,7 @@ export struct XopcSectionLabel {
   @Param heading: ResourceStr = '';
   build() {
     Text(this.heading).fontSize(13).lineHeight(18).fontWeight(FontWeight.Medium)
-      .fontColor(this.colors.secondary).width('100%').margin({ top: 28, bottom: 8 })
+      .fontColor(this.colors.secondary).width('100%').margin({ top: 24, bottom: 8 })
   }
 }
 
@@ -252,9 +306,31 @@ export struct XopcSectionLabel {
 export struct XopcEmptyHint {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param message: ResourceStr = '';
+  @Param detail: ResourceStr = '';
+  @Param actionLabel: ResourceStr = '';
+  @Param centered: boolean = false;
+  @Event onAction: () => void = (): void => {};
+
   build() {
-    Text(this.message).fontSize(16).lineHeight(23).fontColor(this.colors.secondary)
-      .width('100%').padding({ top: 12, bottom: 12 })
+    Column({ space: 8 }) {
+      Text(this.message).fontSize(15).lineHeight(22).fontColor(this.colors.secondary)
+        .textAlign(this.centered ? TextAlign.Center : TextAlign.Start).width('100%')
+      if (this.detail !== '') {
+        Text(this.detail).fontSize(13).lineHeight(19).fontColor(this.colors.tertiary)
+          .textAlign(this.centered ? TextAlign.Center : TextAlign.Start).width('100%')
+      }
+      if (this.actionLabel !== '') {
+        Button(this.actionLabel, { type: ButtonType.Normal })
+          .height(44).padding({ left: 18, right: 18 }).fontSize(14).fontWeight(FontWeight.Medium)
+          .fontColor(this.colors.accent).backgroundColor(this.colors.accentSoft)
+          .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
+          .clickEffect(xopcClickEffect()).margin({ top: 4 })
+          .onClick((): void => { this.onAction(); })
+      }
+    }
+      .width('100%')
+      .padding({ top: this.centered ? 28 : 12, bottom: this.centered ? 28 : 12 })
+      .alignItems(this.centered ? HorizontalAlign.Center : HorizontalAlign.Start)
   }
 }
 
@@ -276,24 +352,59 @@ export struct XopcErrorState {
       Text(userErrorMessage(this.error, this.context)).fontSize(13).lineHeight(19).fontColor(this.colors.secondary)
         .textAlign(TextAlign.Center).constraintSize({ maxWidth: 320 })
       Button(this.actionLabel).height(44).fontSize(14).fontColor(this.colors.foreground)
-        .backgroundColor(this.colors.input).margin({ top: 2 }).onClick((): void => { this.onAction(); })
+        .backgroundColor(this.colors.input).clickEffect(xopcClickEffect()).margin({ top: 2 })
+        .onClick((): void => { this.onAction(); })
     }.width('100%').constraintSize({ minHeight: this.compact ? 120 : 220 })
       .justifyContent(FlexAlign.Center).padding(this.compact ? 12 : 24)
       .accessibilityGroup(true)
   }
 }
 
-@Builder
-export function XopcListSkeleton() {
+@ComponentV2
+struct XopcAnimatedListSkeleton {
+  @Local colors: XopcThemeColors = appThemeColors;
+  @Local layout: XopcLayoutState = layoutState;
+  @Local pulsed: boolean = false;
+
+  @Computed get shouldAnimate(): boolean {
+    return this.layout.foreground && !this.layout.reduceMotion;
+  }
+
+  aboutToAppear(): void {
+    if (this.shouldAnimate) this.pulsed = true;
+  }
+
+  @Monitor('layout.foreground', 'layout.reduceMotion')
+  onMotionChanged(): void {
+    this.pulsed = this.shouldAnimate;
+  }
+
+  build() {
     Column({ space: 18 }) {
       ForEach(['first', 'second', 'third'], (key: string) => {
         Row({ space: 12 }) {
-          Column().width(28).height(28).borderRadius(appThemeColors.corner(6)).backgroundColor(appThemeColors.input)
+          Column().width(28).height(28).borderRadius(this.colors.corner(6)).backgroundColor(this.colors.input)
           Column({ space: 8 }) {
-            Column().width('75%').height(16).borderRadius(4).backgroundColor(appThemeColors.input)
-            Column().width('50%').height(12).borderRadius(4).backgroundColor(appThemeColors.input)
+            Column().width('75%').height(16).borderRadius(4).backgroundColor(this.colors.input)
+            Column().width('50%').height(12).borderRadius(4).backgroundColor(this.colors.input)
           }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         }.width('100%')
       }, (key: string): string => key)
-    }.width('100%').padding({ top: 12, bottom: 12 }).accessibilityText($r('app.string.loading'))
+    }
+      .width('100%')
+      .padding({ top: 12, bottom: 12 })
+      .opacity(this.shouldAnimate && this.pulsed ? 0.5 : 0.92)
+      .animation({
+        duration: this.shouldAnimate ? XOPC_MOTION_SKELETON_MS : 0,
+        curve: Curve.EaseInOut,
+        iterations: this.shouldAnimate ? -1 : 1,
+        playMode: PlayMode.Alternate,
+      })
+      .accessibilityText($r('app.string.loading'))
+  }
+}
+
+@Builder
+export function XopcListSkeleton() {
+  XopcAnimatedListSkeleton()
 }

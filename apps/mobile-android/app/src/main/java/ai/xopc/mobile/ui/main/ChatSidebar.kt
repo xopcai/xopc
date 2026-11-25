@@ -110,10 +110,14 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
   onDestination: (HomeTab) -> Unit, onPersonal: () -> Unit,
   onNew: () -> Unit, onConversation: (String) -> Unit, onSearch: () -> Unit,
   onRename: (String) -> Unit, onTogglePin: (String) -> Unit, onDelete: (List<String>) -> Unit) {
-  LaunchedEffect(state.open, state.dragFraction != null) {
+  val motionAllowed = rememberMotionAllowed()
+  LaunchedEffect(state.open, state.dragFraction != null, motionAllowed) {
     val fraction = state.dragFraction
     if (fraction != null) return@LaunchedEffect
-    state.settled.animateTo(if (state.open) 1f else 0f, tween(210))
+    val target = if (state.open) 1f else 0f
+    val duration = xopcMotionDuration(XopcMotionTokens.StandardMs, motionAllowed)
+    if (duration == 0) state.settled.snapTo(target)
+    else state.settled.animateTo(target, tween(duration, easing = XopcMotionTokens.StandardEasing))
   }
   if (!state.visible) return
   var menuId by remember { mutableStateOf<String?>(null) }
@@ -156,25 +160,23 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
     }
   }
   BackHandler(enabled = state.open, onBack = close)
-  if (deleteTargets.isNotEmpty()) AlertDialog(
-    onDismissRequest = { deleteTargets = emptyList() },
-    title = { Text(stringResource(R.string.conversations_delete)) },
-    text = { Text(if (deleteTargets.size == 1) stringResource(R.string.conversations_delete_one_confirm)
-      else stringResource(R.string.conversations_batch_delete_confirm, deleteTargets.size)) },
-    confirmButton = {
-      TextButton(enabled = canDelete(deleteTargets), onClick = {
-        val targets = deleteTargets
-        deleteTargets = emptyList()
-        deleteFailureCount = 0
-        submittedRevision = connection.batchConversationRevision
-        onDelete(targets)
-      }, modifier = Modifier.testTag("chat-sidebar-delete-confirm")) {
-        Text(stringResource(R.string.conversations_delete), color = MaterialTheme.colorScheme.error)
-      }
+  if (deleteTargets.isNotEmpty()) XopcConfirmDialog(
+    onDismiss = { deleteTargets = emptyList() },
+    onConfirm = {
+      val targets = deleteTargets
+      deleteTargets = emptyList()
+      deleteFailureCount = 0
+      submittedRevision = connection.batchConversationRevision
+      onDelete(targets)
     },
-    dismissButton = { TextButton(onClick = { deleteTargets = emptyList() }) {
-      Text(stringResource(R.string.conversations_cancel))
-    } },
+    title = stringResource(R.string.conversations_delete),
+    message = if (deleteTargets.size == 1) stringResource(R.string.conversations_delete_one_confirm)
+      else stringResource(R.string.conversations_batch_delete_confirm, deleteTargets.size),
+    confirmLabel = stringResource(R.string.conversations_delete),
+    cancelLabel = stringResource(R.string.conversations_cancel),
+    destructive = true,
+    confirmEnabled = canDelete(deleteTargets),
+    confirmTag = "chat-sidebar-delete-confirm",
   )
   val scheme = MaterialTheme.colorScheme
   val dismissLabel = stringResource(R.string.assistant_close)

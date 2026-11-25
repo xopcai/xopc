@@ -1596,8 +1596,11 @@ class MainScreenTest {
     val openTasks = composeTestRule.onNodeWithTag("progress-filter-open")
     openTasks.performClick()
     openTasks.assertIsSelected()
-    composeTestRule.onNodeWithTag("progress-task-filter-strip").performTouchInput { swipeLeft() }
-    composeTestRule.onNodeWithTag("progress-filter-attention").assertIsSelected()
+    val taskFilters = composeTestRule.onNodeWithTag("progress-task-filter-strip")
+    taskFilters.performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithTag("progress-filter-attention").assertIsDisplayed().assertIsSelected()
+    taskFilters.performTouchInput { swipeRight() }
+    openTasks.assertIsDisplayed().assertIsSelected()
     composeTestRule.onNodeWithTag("projects-open-search").assertDoesNotExist()
     composeTestRule.onNodeWithTag("work-page-pager").performTouchInput { swipeLeft() }
     composeTestRule.onNodeWithTag("projects-open-search").assertIsDisplayed()
@@ -1752,15 +1755,33 @@ class MainScreenTest {
   @Test fun progressTaskSearchAndFiltersKeepTheirSeparateState() {
     val open = ProgressTask("task-open", "Open work", "", "active", null, 10, null, null)
     val closed = ProgressTask("task-closed", "Closed work", "", "closed", "done", 11, 11, null)
-    val state = mutableStateOf(ProgressUiState(tasks = listOf(open, closed), taskTotal = 2))
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val mainConversation = "11111111-2222-3333-4444-555555555555"
+    val taskConversation = "22222222-3333-4444-5555-666666666666"
+    var connection by mutableStateOf(ConnectionUiState(profile = profile,
+      selectedConversationId = mainConversation,
+      progress = ProgressUiState(gatewayId = profile.gatewayId, tasks = listOf(open, closed), taskTotal = 2)))
     var submitted = ""
     composeTestRule.setContent {
-      ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, {},
-        { state.value = state.value.copy(taskSearchText = it) },
-        { submitted = state.value.taskSearchText; state.value = state.value.copy(taskSearch = submitted.trim()) },
-        {}, {}, {}, {}, {}, {},
-        {}, { _, _, _ -> }, {})
+      MainScreen(connection = connection,
+        onOpenTaskChat = { id ->
+          connection = connection.copy(selectedConversationId = taskConversation,
+            taskConversationTaskId = id, chatNavigationId = taskConversation)
+        },
+        onChatNavigationHandled = { connection = connection.copy(chatNavigationId = null) },
+        onRestoreConversation = { id ->
+          connection = connection.copy(selectedConversationId = id, taskConversationTaskId = null)
+        },
+        onProgressTaskSearchChange = {
+          connection = connection.copy(progress = connection.progress.copy(taskSearchText = it))
+        },
+        onSubmitProgressTaskSearch = {
+          submitted = connection.progress.taskSearchText
+          connection = connection.copy(progress = connection.progress.copy(taskSearch = submitted.trim()))
+        })
     }
+    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar-workbench").performClick()
     composeTestRule.onNodeWithTag("work-page-menu").performClick()
     composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-workflows").assertDoesNotExist()
@@ -1774,12 +1795,13 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-task-task-open").assertDoesNotExist()
     composeTestRule.onNodeWithTag("progress-task-task-closed").assertExists()
     composeTestRule.onNodeWithTag("progress-task-task-closed").performClick()
-    composeTestRule.onNodeWithTag("progress-back").assertExists()
-    androidx.test.espresso.Espresso.closeSoftKeyboard()
-    androidx.test.espresso.Espresso.pressBack()
+    composeTestRule.onNodeWithTag("task-chat-close").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("work-page-pager").assertDoesNotExist()
+    Espresso.closeSoftKeyboard()
+    Espresso.pressBack()
     composeTestRule.onNodeWithTag("progress-task-task-open").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("progress-task-task-closed").assertExists()
-    composeTestRule.onNodeWithTag("progress-open-search").performClick()
+    composeTestRule.onNodeWithTag("progress-task-task-closed").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("progress-open-search").assertIsDisplayed().performClick()
     composeTestRule.onNodeWithTag("progress-task-search").performTextInput("release")
     composeTestRule.waitUntil(5_000) { submitted == "release" }
     composeTestRule.onNodeWithTag("progress-task-refresh").assertDoesNotExist()
@@ -1788,9 +1810,30 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-open-search").assertIsDisplayed()
     composeTestRule.onNodeWithTag("progress-filter-closed").assertIsSelected()
     composeTestRule.runOnIdle {
-      assertEquals("", state.value.taskSearchText)
+      assertEquals(mainConversation, connection.selectedConversationId)
+      assertEquals("", connection.progress.taskSearchText)
       assertEquals("", submitted)
     }
+  }
+
+  @Test fun workbenchBackKeepsOverviewAndTasksInSync() {
+    composeTestRule.setContent {
+      ProgressScreen(ProgressUiState(), androidx.compose.foundation.layout.PaddingValues(),
+        onRefreshHome = {}, onRefreshTasks = {}, onLoadMore = {}, onOpenTask = {},
+        onSearchChange = {}, onSubmitSearch = {}, onTaskCommand = {}, onStartTask = {},
+        onCreateTaskWithChat = {}, onLoadProjects = {}, onOpenProject = {}, onCreateTask = {},
+        onOpenTaskChat = {}, onSaveTask = { _, _, _ -> }, onOpenChat = {}, initialPage = "tasks")
+    }
+
+    composeTestRule.onNodeWithTag("progress-open-search").assertIsDisplayed()
+    Espresso.pressBack()
+    composeTestRule.onNodeWithTag("progress-overview-list").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("progress-open-search").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-progress").assertIsSelected()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
+    composeTestRule.onNodeWithTag("progress-open-search").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("progress-create-task-chat").assertIsDisplayed()
   }
 
   @Test fun progressNewTaskOpensCreationChatWithoutSubmitting() {
@@ -1921,12 +1964,18 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
     composeTestRule.onNodeWithTag("progress-project-tab-sessions").performClick()
     composeTestRule.onNodeWithTag("progress-project-session-${existing.id}").performClick()
-    composeTestRule.onNodeWithTag("project-chat-close").assertExists().performClick()
-    composeTestRule.onNodeWithTag("progress-project-session-${existing.id}").assertExists()
+    composeTestRule.onNodeWithTag("project-chat-close").assertIsDisplayed()
+    composeTestRule.runOnIdle {
+      assertEquals(existing.id, connection.selectedConversationId)
+      connection = connection.copy(progress = progress)
+    }
+    composeTestRule.onNodeWithTag("project-chat-close").performClick()
+    composeTestRule.onNodeWithTag("progress-project-session-${existing.id}").assertIsDisplayed()
     composeTestRule.runOnIdle { assertEquals("main-chat", connection.selectedConversationId) }
     composeTestRule.onNodeWithTag("progress-project-new-chat").performClick()
-    composeTestRule.onNodeWithTag("project-chat-close").assertExists().performClick()
-    composeTestRule.onNodeWithTag("progress-project-detail").assertExists()
+    composeTestRule.onNodeWithTag("project-chat-close").assertIsDisplayed()
+    Espresso.pressBack()
+    composeTestRule.onNodeWithTag("progress-project-session-${existing.id}").assertIsDisplayed()
     composeTestRule.runOnIdle {
       assertEquals(project.id, createdFor)
       assertEquals("main-chat", connection.selectedConversationId)

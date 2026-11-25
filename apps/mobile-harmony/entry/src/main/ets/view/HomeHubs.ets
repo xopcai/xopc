@@ -1,3 +1,4 @@
+import { xopcConfirmDialog } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
 import { XopcHubRow, XopcListSkeleton, XopcEmptyHint, XopcPageTitleOption } from './MobileComponents';
@@ -41,12 +42,10 @@ export struct XopcProgressView {
       await dispatchHomeAction(action, {
         navigate: (route: XopcMobileRoute): void => { this.onNavigate(route); },
         confirm: async (command: XopcHomeAction): Promise<boolean> => {
-          const result = await this.getUIContext().getPromptAction().showDialog({
-            title: command.label, message: $r('app.string.confirm_action_help'),
-            buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-              { text: $r('app.string.confirm'), color: this.colors.accent }]
+          return await xopcConfirmDialog(this.getUIContext(), {
+            title: command.label,
+            message: $r('app.string.confirm_action_help'),
           });
-          return result.index === 1;
         },
         mutate: async (command: XopcHomeAction): Promise<void> => { await this.model.act(command); }
       });

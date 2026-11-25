@@ -1,3 +1,6 @@
+import { XOPC_ICON_HEADER, XOPC_PAGE_PADDING_X, xopcBackIcon, xopcMoreIcon } from '../common/designTokens';
+import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
+import { xopcClickEffect } from '../common/motionTokens';
 import { markdownBlocks, XopcMarkdownCell, XopcMarkdownTableRow } from '../common/markdown';
 import { markdownReadingBlocks } from '../common/markdownLayout';
 import { common } from '@kit.AbilityKit';
@@ -8,7 +11,14 @@ import { XopcShareResult } from '../model/share';
 import { shareService } from '../service/shareService';
 import { XopcNoteViewModel } from '../viewmodel/noteViewModel';
 import { XopcMarkdownView } from './MarkdownView';
-import { XopcBrandLoading, XopcEmptyHint, XopcHubRow, XopcListSkeleton } from './MobileComponents';
+import {
+  XopcBrandLoading,
+  XopcEmptyHint,
+  XopcErrorState,
+  XopcHubRow,
+  XopcInlineBanner,
+  XopcListSkeleton,
+} from './MobileComponents';
 import { XopcNativeNoteEditor } from './NativeNoteEditor';
 import { XopcShareResultView } from './ShareResultView';
 import { XopcVoiceCapture } from '../service/voiceCapture';
@@ -129,12 +139,13 @@ export struct XopcNotesView {
 
   private async confirmDelete(): Promise<void> {
     try {
-      const result = await this.getUIContext().getPromptAction().showDialog({
-        title: $r('app.string.delete'), message: $r('app.string.note_delete_confirm'),
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-          { text: $r('app.string.delete'), color: this.colors.danger }]
+      const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+        title: $r('app.string.delete'),
+        message: $r('app.string.note_delete_confirm'),
+        confirmLabel: $r('app.string.delete'),
+        destructive: true,
       });
-      if (result.index === 1) {
+      if (confirmed) {
         await this.model.remove();
         if ((this.embedded || this.initialId || this.createOnAppear) && !this.model.selected) this.onExit();
       }
@@ -212,8 +223,9 @@ export struct XopcNotesView {
     Row({ space: 8 }) {
       if (!this.embedded) {
         Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.arrow_left')).fontSize(22).fontColor([this.colors.foreground])
+          SymbolGlyph(xopcBackIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
         }.id('note-back').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
+          .clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.back')).onClick((): void => { this.back(); })
       }
       Blank().layoutWeight(1)
@@ -221,16 +233,18 @@ export struct XopcNotesView {
         Text(this.syncText()).fontSize(12).fontColor(this.model.draft.syncState === 'conflict' ? this.colors.danger : this.colors.secondary)
       }
       if (this.model.selected?.markdown && !this.model.editing) {
-        Button() { SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(22).fontColor([this.colors.secondary]) }
+        Button({ type: ButtonType.Circle }) { SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.secondary]) }
           .id('note-reading-tools').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          .clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.note_reading_tools')).onClick((): void => { this.openSheet('reading'); })
       }
       if (this.model.selected && !this.model.editing) {
-        Button() { SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(22).fontColor([this.colors.secondary]) }
+        Button({ type: ButtonType.Circle }) { SymbolGlyph(xopcMoreIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.secondary]) }
           .id('note-more').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          .clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.more')).onClick((): void => { this.openSheet('more'); })
       }
-    }.width('100%').padding({ left: 16, right: 16, top: 4, bottom: 4 })
+    }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: 8, bottom: 8 })
   }
 
   @Builder
@@ -639,31 +653,34 @@ export struct XopcNotesView {
   page() {
     Column() {
         this.header()
-        if (this.model.error) {
-          Text(userErrorMessage(this.model.error, 'collection')).fontSize(13).fontColor(this.colors.secondary)
-            .width('100%').padding({ left: 20, right: 20, bottom: 8 })
-          if (!this.model.loading && !this.model.openingId && !this.model.editing && !this.model.selected
-            && this.initialId) {
-            Button($r('app.string.retry')).onClick((): void => { void this.model.open(this.initialId); })
-          }
+        if (this.model.error && this.model.selected) {
+          Column() {
+            XopcInlineBanner({ message: userErrorMessage(this.model.error, 'collection') })
+          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
         }
         if (this.model.openingId) {
           XopcBrandLoading()
+        } else if (this.model.error && !this.model.selected && !this.model.editing) {
+          XopcErrorState({
+            error: this.model.error,
+            context: 'collection',
+            onAction: (): void => { if (this.initialId) void this.model.open(this.initialId); },
+          })
         } else if (this.model.editing && this.model.draft) {
           this.editor()
         } else if (this.model.selected) {
           this.detail()
-        } else if (!this.model.error) {
+        } else {
           XopcListSkeleton()
         }
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
-      .bindSheet($$this.sheetOpen, this.activeSheetContent, {
-        height: this.sheetHeight(), dragBar: true,
+      .bindSheet($$this.sheetOpen, this.activeSheetContent, xopcSheetOptions('medium', {
+        height: this.sheetHeight(),
         onDisappear: (): void => {
           if (this.activeSheet === 'voice') void this.voice.cancel();
           if (this.activeSheet === 'reading') this.jumpToReadingResult();
-        }
-      })
+        },
+      }))
   }
 
   build() {

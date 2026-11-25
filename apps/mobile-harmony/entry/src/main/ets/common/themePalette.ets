@@ -106,6 +106,26 @@ export class XopcThemeColors {
     return this.light ? $r('app.color.theme_success_light') : this.accent;
   }
 
+  get scrim(): Resource {
+    return this.light ? $r('app.color.theme_scrim_light') : $r('app.color.theme_scrim_dark');
+  }
+
+  get warningFill(): Resource {
+    return this.light ? $r('app.color.theme_warning_fill_light') : $r('app.color.theme_warning_fill_dark');
+  }
+
+  get warningForeground(): Resource {
+    return this.light ? $r('app.color.theme_warning_foreground_light') : $r('app.color.theme_warning_foreground_dark');
+  }
+
+  get dangerSoft(): Resource {
+    return this.light ? $r('app.color.theme_danger_soft_light') : $r('app.color.theme_danger_soft_dark');
+  }
+
+  get cardShadow(): Resource {
+    return this.light ? $r('app.color.theme_shadow_light') : $r('app.color.theme_shadow_dark');
+  }
+
   constructor(tokens: XopcThemeTokens) {
     this.surface = tokens.surface;
     this.panel = tokens.panel;

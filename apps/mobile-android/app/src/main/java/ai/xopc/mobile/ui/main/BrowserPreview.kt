@@ -395,7 +395,7 @@ private fun AndroidManagedBrowserPreview(
       }
     }
     if (textOpen) {
-      ModalBottomSheet(onDismissRequest = { textOpen = false; draft = "" }) {
+      XopcBottomSheet(XopcSheetPreset.Compact, onDismissRequest = { textOpen = false; draft = "" }) {
         Column(Modifier.fillMaxWidth().imePadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
           Text(stringResource(R.string.browser_preview_type_text), style = MaterialTheme.typography.titleLarge)
           OutlinedTextField(

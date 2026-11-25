@@ -55,7 +55,7 @@ export struct XopcFloatingAudioCard {
       Row({ space: 4 }) { this.content() }
         .id(this.cardId).width(this.cardWidth).height(AUDIO_CARD_HEIGHT).padding({ left: 4, right: 4 })
         .backgroundColor(this.colors.panel).borderRadius(26)
-        .shadow({ radius: 12, color: this.colors.light ? '#1A101828' : '#33000000', offsetY: 3 })
+        .shadow({ radius: 12, color: this.colors.cardShadow, offsetY: 3 })
         .position({ x: this.cardX, y: this.cardY })
         .priorityGesture(PanGesture({ fingers: 1, direction: PanDirection.All, distance: 6 })
           .onActionStart((): void => {

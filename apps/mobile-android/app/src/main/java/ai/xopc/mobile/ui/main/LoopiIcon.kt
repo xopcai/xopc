@@ -1,11 +1,6 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
-import android.animation.ValueAnimator
-import android.database.ContentObserver
-import android.os.Handler
-import android.os.Looper
-import android.provider.Settings
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Animatable
@@ -23,7 +18,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,7 +31,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -46,32 +39,6 @@ import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-@Composable
-internal fun rememberMotionAllowed(): Boolean {
-  val context = LocalContext.current
-  val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
-  var resumed by remember(lifecycle) { mutableStateOf(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
-  DisposableEffect(lifecycle) {
-    val observer = androidx.lifecycle.LifecycleEventObserver { _, _ ->
-      resumed = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
-    }
-    lifecycle.addObserver(observer)
-    onDispose { lifecycle.removeObserver(observer) }
-  }
-  var allowed by remember(context) { mutableStateOf(ValueAnimator.areAnimatorsEnabled()) }
-  DisposableEffect(context) {
-    val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
-      override fun onChange(selfChange: Boolean) {
-        allowed = ValueAnimator.areAnimatorsEnabled()
-      }
-    }
-    context.contentResolver.registerContentObserver(
-      Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer)
-    onDispose { context.contentResolver.unregisterContentObserver(observer) }
-  }
-  return allowed && resumed
-}
 
 /** The ring keeps its idle motion while greetings animate only the face. */
 @Composable

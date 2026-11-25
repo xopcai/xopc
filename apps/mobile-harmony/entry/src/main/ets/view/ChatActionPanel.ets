@@ -1,7 +1,8 @@
+import { XOPC_MOTION_EXIT_MS, XOPC_MOTION_STANDARD_MS, xopcClickEffect } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 
-export const CHAT_ACTION_PANEL_OPEN_MS: number = 220;
-export const CHAT_ACTION_PANEL_CLOSE_MS: number = 180;
+export const CHAT_ACTION_PANEL_OPEN_MS: number = XOPC_MOTION_STANDARD_MS;
+export const CHAT_ACTION_PANEL_CLOSE_MS: number = XOPC_MOTION_EXIT_MS;
 const CHAT_ACTION_GRID_HEIGHT: number = 184;
 
 @ComponentV2
@@ -36,6 +37,7 @@ export struct XopcChatActionPanel {
         else if (this.hoveredId === id) this.hoveredId = '';
       })
       .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
+      .clickEffect(xopcClickEffect())
       .accessibilityText(label).enabled(!this.disabledIds.includes(id))
       .onClick((): void => { this.onSelect(id); })
   }

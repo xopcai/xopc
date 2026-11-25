@@ -154,7 +154,7 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
     }
   }
   val closePicker = { if (!modelSaving) modelPickerOpen = false }
-  ModalBottomSheet(onDismissRequest = closeProfile, sheetState = sheetState,
+  XopcBottomSheet(XopcSheetPreset.Large, onDismissRequest = closeProfile, sheetState = sheetState,
     modifier = Modifier.testTag("personal-agent-profile-sheet")) {
     val modelLanguage = LocalConfiguration.current.locales[0].language
     val selection = modelSelection

@@ -109,13 +109,8 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
   LaunchedEffect(gatewayId) { load() }
   BackHandler(enabled = saving) {}
   Column(Modifier.fillMaxSize().padding(insets).testTag("model-settings")) {
-    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
-      Box(Modifier.align(Alignment.CenterStart)) {
-        PageBackButton("model-settings-back", onBack, !saving)
-      }
-      Text(stringResource(R.string.ms_title), Modifier.widthIn(max = 240.dp).padding(horizontal = 8.dp),
-        style = MaterialTheme.typography.titleMedium)
-    }
+    XopcPageHeader("model-settings-back", onBack, backEnabled = !saving,
+      title = stringResource(R.string.ms_title))
     val snapshot = data
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
       if (error != null) item {
@@ -171,8 +166,8 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
 
   val snapshot = data
   if ((showFallbacks || picker != null) && snapshot != null) {
-    ModalBottomSheet(onDismissRequest = { if (!saving) { picker = null; showFallbacks = false } },
-      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    XopcBottomSheet(XopcSheetPreset.Large,
+      onDismissRequest = { if (!saving) { picker = null; showFallbacks = false } }) {
       val route = picker?.route
       val isTask = picker?.isTask == true
       val fallbackList = showFallbacks && route == null

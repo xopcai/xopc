@@ -81,7 +81,7 @@ fun ConnectionWaitCard(state: ConnectionWaitUiState, onRetry: () -> Unit,
       Text(stringResource(R.string.assistant_retry))
     }
   }
-  if (detailOpen) ModalBottomSheet(onDismissRequest = { detailOpen = false }) {
+  if (detailOpen) XopcBottomSheet(XopcSheetPreset.Medium, onDismissRequest = { detailOpen = false }) {
     Column(modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)
       .verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
       Text(stringResource(R.string.connection_wait_title), style = MaterialTheme.typography.titleLarge)

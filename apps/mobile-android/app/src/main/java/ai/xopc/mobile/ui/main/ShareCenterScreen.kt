@@ -31,13 +31,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -87,10 +84,7 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
   val extendItem = state.items.firstOrNull { it.id == extendId }
   val revokeItem = state.items.firstOrNull { it.id == revokeId }
   Column(Modifier.fillMaxSize().padding(insets).testTag("share-center")) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-      verticalAlignment = Alignment.CenterVertically) {
-      PageBackButton("shares-back", onBack)
-      Spacer(Modifier.weight(1f))
+    XopcPageHeader("shares-back", onBack, title = stringResource(R.string.share_center)) {
       TextButton(onClick = { showInactive = !showInactive },
         modifier = Modifier.testTag("shares-toggle-inactive")) {
         Text(stringResource(if (showInactive) R.string.share_hide_inactive else R.string.share_show_inactive))
@@ -103,33 +97,32 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
       }
       return@Column
     }
-    if (state.error) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-      verticalAlignment = Alignment.CenterVertically) {
-      Text(stringResource(R.string.share_load_error), modifier = Modifier.weight(1f),
-        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
-        maxLines = 2)
-      TextButton(onClick = onRefresh, enabled = !state.loading && state.busyId == null) {
-        Text(stringResource(R.string.progress_refresh))
-      }
-    }
+    if (state.error) XopcInlineBanner(
+      message = stringResource(R.string.share_load_error),
+      tone = XopcBannerTone.Danger,
+      actionLabel = stringResource(R.string.progress_refresh),
+      onAction = onRefresh,
+      actionEnabled = !state.loading && state.busyId == null,
+      modifier = Modifier.padding(horizontal = XopcDesignTokens.PagePaddingX, vertical = 4.dp),
+    )
     if (state.loading && state.items.isEmpty()) {
-      Box(Modifier.fillMaxSize().testTag("shares-loading"), contentAlignment = Alignment.Center) {
-        BrandLoadingPanel(modifier = Modifier.fillMaxSize())
+      Box(Modifier.fillMaxSize().padding(horizontal = XopcDesignTokens.PagePaddingX).testTag("shares-loading")) {
+        XopcListSkeleton(rows = 4)
       }
     } else {
-      PullToRefreshBox(isRefreshing = state.loading,
+      XopcPullToRefreshBox(
+        isRefreshing = state.loading,
         onRefresh = { if (state.busyId == null) onRefresh() },
         modifier = Modifier.fillMaxSize().testTag("shares-refresh-gesture"),
-        indicator = {
-          if (state.loading) BrandLoadingIndicator(
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp), extent = 32.dp)
-        }) {
+      ) {
       LazyColumn(modifier = Modifier.fillMaxSize().testTag("shares-list"),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp),
+        contentPadding = PaddingValues(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (visible.isEmpty() && !state.loading) item {
-          Text(stringResource(R.string.share_empty), modifier = Modifier.fillMaxWidth().padding(32.dp)
-            .testTag("shares-empty"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+          XopcEmptyState(
+            message = stringResource(R.string.share_empty),
+            modifier = Modifier.testTag("shares-empty"),
+          )
         }
         items(visible, key = ShareItem::id) { item ->
           Row(Modifier.fillMaxWidth().clip(themedCorners(16))
@@ -159,7 +152,8 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
             IconButton(onClick = { menuId = item.id },
               enabled = state.busyId == null,
               modifier = Modifier.testTag("share-menu-${item.id}")) {
-              Text("•••", color = MaterialTheme.colorScheme.onSurfaceVariant)
+              ActionIcon(R.drawable.action_more_horizontal, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                size = XopcDesignTokens.IconRow)
             }
           }
         }
@@ -167,7 +161,7 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
       }
     }
   }
-  if (menuItem != null) ModalBottomSheet(onDismissRequest = { menuId = null },
+  if (menuItem != null) XopcBottomSheet(XopcSheetPreset.Compact, onDismissRequest = { menuId = null },
     modifier = Modifier.testTag("share-menu-sheet")) {
     Column(Modifier.fillMaxWidth().padding(20.dp)) {
       Text(menuItem.title, style = MaterialTheme.typography.titleMedium)
@@ -188,7 +182,7 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
       }
     }
   }
-  if (extendItem != null) ModalBottomSheet(onDismissRequest = { extendId = null },
+  if (extendItem != null) XopcBottomSheet(XopcSheetPreset.Compact, onDismissRequest = { extendId = null },
     modifier = Modifier.testTag("share-extend-sheet")) {
     Column(Modifier.fillMaxWidth().padding(20.dp)) {
       Text(stringResource(R.string.share_extend), style = MaterialTheme.typography.titleMedium)
@@ -202,16 +196,16 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
       }
     }
   }
-  if (revokeItem != null) AlertDialog(onDismissRequest = { revokeId = null },
-    title = { Text(stringResource(R.string.share_revoke)) },
-    text = { Text(stringResource(R.string.share_revoke_confirm)) },
-    confirmButton = { TextButton(onClick = { onRevoke(revokeItem.id); revokeId = null },
-      enabled = state.busyId == null, modifier = Modifier.testTag("share-revoke-confirm")) {
-      Text(stringResource(R.string.share_revoke), color = MaterialTheme.colorScheme.error)
-    } },
-    dismissButton = { TextButton(onClick = { revokeId = null }) {
-      Text(stringResource(R.string.progress_cancel))
-    } })
+  if (revokeItem != null) XopcConfirmDialog(
+    onDismiss = { revokeId = null },
+    onConfirm = { onRevoke(revokeItem.id); revokeId = null },
+    title = stringResource(R.string.share_revoke),
+    message = stringResource(R.string.share_revoke_confirm),
+    confirmLabel = stringResource(R.string.share_revoke),
+    destructive = true,
+    confirmEnabled = state.busyId == null,
+    confirmTag = "share-revoke-confirm",
+  )
   if (previewItem != null) SharePreviewSheet(previewItem, onClose = { previewId = null })
 }
 
@@ -221,16 +215,17 @@ private fun SharePreviewSheet(item: ShareItem, onClose: () -> Unit) {
   val context = LocalContext.current
   var copied by remember(item.id) { mutableStateOf(false) }
   var mode by remember(item.id) { mutableStateOf("summary") }
-  ModalBottomSheet(onDismissRequest = onClose, modifier = Modifier.fillMaxHeight(0.92f)
-    .testTag("share-preview-sheet")) {
+  XopcBottomSheet(XopcSheetPreset.Immersive, onDismissRequest = onClose,
+    modifier = Modifier.testTag("share-preview-sheet")) {
     BackHandler(enabled = mode != "summary") { mode = "summary" }
-    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(item.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-        TextButton(onClick = onClose, modifier = Modifier.testTag("share-preview-close")) {
-          Text(stringResource(R.string.assistant_close))
-        }
-      }
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      XopcSheetHeader(
+        title = item.title,
+        onClose = onClose,
+        closeTag = "share-preview-close",
+      )
+      Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.SheetPaddingX, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
       when (mode) {
         "qr" -> Box(Modifier.fillMaxSize().testTag("share-qr-view"), contentAlignment = Alignment.Center) {
           Column(horizontalAlignment = Alignment.CenterHorizontally,
@@ -285,6 +280,7 @@ private fun SharePreviewSheet(item: ShareItem, onClose: () -> Unit) {
             }
           }
         }
+      }
       }
     }
   }

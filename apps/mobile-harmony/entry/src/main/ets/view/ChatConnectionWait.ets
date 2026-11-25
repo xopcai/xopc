@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import { xopcSheetOptions } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcConnectionAccount, XopcConnectionNeed } from '../model/connectionWait';
 import { XopcConnectionWaitViewModel } from '../viewmodel/connectionWaitViewModel';
@@ -131,7 +132,6 @@ export struct XopcChatConnectionWait {
         if (this.model.error) { Text(this.model.error).fontSize(12).fontColor(this.colors.danger).width('100%') }
       }
     }.width('calc(100% - 24vp)').margin({ bottom: this.model.snapshot?.wait ? 8 : 0 })
-      .bindSheet($$this.detailOpen, this.detailSheet, { height: '78%', dragBar: true, showClose: false,
-        backgroundColor: this.colors.panel })
+      .bindSheet($$this.detailOpen, this.detailSheet, xopcSheetOptions('medium', { height: '78%' }))
   }
 }

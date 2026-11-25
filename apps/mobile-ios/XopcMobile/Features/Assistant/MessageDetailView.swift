@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MessageDetailView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let message: TimelineMessage
     let configuration: GatewayConfiguration
     let conversationID: String?
@@ -66,14 +67,14 @@ struct MessageDetailView: View {
             .padding(.bottom, 28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(Color(.systemBackground))
+        .background(mobileTheme.panel)
         .accessibilityIdentifier("message-detail-content")
-        .presentationDetents([.fraction(0.85)])
-        .presentationDragIndicator(.visible)
+        .mobileSheetPreset(.large)
     }
 }
 
 struct ExecutionProcessView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let conversationID: String
     let turnID: String
@@ -155,6 +156,7 @@ struct ExecutionProcessView: View {
             .padding(.bottom, 32)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(mobileTheme.canvas.ignoresSafeArea())
         .navigationTitle("执行过程")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: "\(conversationID):\(turnID)") { await poll() }

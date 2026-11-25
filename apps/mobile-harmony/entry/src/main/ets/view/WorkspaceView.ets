@@ -1,3 +1,6 @@
+import { XOPC_ICON_HEADER, XOPC_PAGE_PADDING_X, xopcBackIcon } from '../common/designTokens';
+import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
+import { xopcClickEffect } from '../common/motionTokens';
 import { appSettings } from '../service/settings';
 import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
@@ -12,8 +15,16 @@ import { taskActiveRootRun, taskCompletionBlock, taskCriterionState, taskPausedW
 import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
 import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
-import { XopcBrandLoading, XopcHubRow, XopcListSkeleton, XopcPageSearchButton, XopcPageSearchField,
-  XopcPaginationFooter } from './MobileComponents';
+import {
+  XopcBrandLoading,
+  XopcErrorState,
+  XopcHubRow,
+  XopcInlineBanner,
+  XopcListSkeleton,
+  XopcPageSearchButton,
+  XopcPageSearchField,
+  XopcPaginationFooter,
+} from './MobileComponents';
 import { automationCronLabel } from '../common/workspaceProtocol';
 import { XopcMobileRoute } from '../model/home';
 import { userErrorMessage } from '../common/userError';
@@ -220,13 +231,12 @@ export struct XopcWorkspaceView {
     if (this.model.editing) {
       const selected = this.model.selected;
       if (selected && (this.model.title !== selected.title || this.model.body !== selected.body || this.model.cron !== (selected.cron ?? '') || this.model.automationTimeZone !== (selected.automationTimeZone ?? '') || this.model.projectId !== (selected.projectId ?? '') || this.model.priority !== (selected.priority || 'normal') || this.model.dueAt !== selected.dueAt)) {
-        try {
-          const result = await this.getUIContext().getPromptAction().showDialog({
-            title: $r('app.string.back'), message: $r('app.string.discard_changes'),
-            buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary }, { text: $r('app.string.confirm'), color: this.colors.danger }]
-          });
-          if (result.index !== 1) return;
-        } catch (_error) { return; }
+        const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+          title: $r('app.string.back'),
+          message: $r('app.string.discard_changes'),
+          destructive: true,
+        });
+        if (!confirmed) return;
       }
     }
     if (this.initialTaskAction) { this.onExit(); return; }
@@ -402,16 +412,16 @@ export struct XopcWorkspaceView {
   private async action(action: string, listItem?: XopcWorkspaceItem): Promise<void> {
     if (this.model.busy || !action) return;
     if (['delete', 'archive', 'cancel_task', 'stop_run', 'run', 'start'].includes(action)) {
-      try {
-        const result = await this.getUIContext().getPromptAction().showDialog({
-          title: this.label(action), message: action === 'cancel_task' ? $r('app.string.task_cancel_help')
-            : action === 'stop_run' ? $r('app.string.task_stop_run_help')
-              : $r('app.string.confirm_action_help'),
-          buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-            { text: $r('app.string.confirm'), color: this.colors.accent }]
-        });
-        if (result.index !== 1) return;
-      } catch (error) { this.model.error = (error as Error).message; return; }
+      const destructive = ['delete', 'cancel_task', 'stop_run'].includes(action);
+      const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+        title: this.label(action),
+        message: action === 'cancel_task' ? $r('app.string.task_cancel_help')
+          : action === 'stop_run' ? $r('app.string.task_stop_run_help')
+            : $r('app.string.confirm_action_help'),
+        confirmLabel: this.label(action),
+        destructive,
+      });
+      if (!confirmed) return;
     }
     if (listItem) {
       await this.model.automationListAction(listItem, action);
@@ -1459,8 +1469,8 @@ export struct XopcWorkspaceView {
     Stack({ alignContent: Alignment.Center }) {
       Row({ space: 12 }) {
         Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.arrow_left')).fontSize(20).fontColor([this.colors.foreground])
-        }.width(44).height(44).padding(0).backgroundColor(this.colors.panel)
+          SymbolGlyph(xopcBackIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
+        }.width(44).height(44).padding(0).backgroundColor(this.colors.panel).clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.back')).enabled(!this.model.busy || !!this.model.openingId || (!this.model.selected && this.searchOpen))
           .onClick((): void => { this.goBack(); })
         Blank().layoutWeight(1)
@@ -1501,13 +1511,15 @@ export struct XopcWorkspaceView {
   workspaceContent() {
     Column() {
       if (!this.embeddedInWorkbench) { this.header() }
-      if (this.model.error) {
-        Text(userErrorMessage(this.model.error, 'collection')).fontColor(this.colors.secondary).padding(12)
-        if (!(this.section === 'tasks' && this.initialId) && !this.model.busy && !this.model.selected && !this.model.openingId && !this.model.hasMore) {
-          Button($r('app.string.retry')).onClick((): void => {
-            void this.model.list(this.section === 'tasks' ? this.search : '');
+      if (this.model.error && (this.model.items.length > 0 || !!this.model.selected)) {
+        Column() {
+          XopcInlineBanner({
+            message: userErrorMessage(this.model.error, 'collection'),
+            actionLabel: !(this.section === 'tasks' && this.initialId) && !this.model.busy && !this.model.selected && !this.model.openingId && !this.model.hasMore ? $r('app.string.retry') : '',
+            busy: this.model.busy,
+            onAction: (): void => { void this.model.list(this.section === 'tasks' ? this.search : ''); },
           })
-        }
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
       }
       if (this.model.selected) {
         if (this.initialTaskAction === 'status') { this.taskStatusSheet(this.model.selected) }
@@ -1517,8 +1529,18 @@ export struct XopcWorkspaceView {
         }
       }
       else if (this.model.openingId) { XopcBrandLoading() }
+      else if (this.model.error && !this.model.items.length) {
+        XopcErrorState({
+          error: this.model.error,
+          context: 'collection',
+          onAction: (): void => {
+            if (this.section === 'tasks' && this.initialId) void this.openTaskAction();
+            else void this.model.list(this.section === 'tasks' ? this.search : '');
+          },
+        })
+      }
       else if (this.section === 'tasks' && this.initialId) {
-        Button($r('app.string.retry')).height(44).enabled(!this.model.busy)
+        Button($r('app.string.retry')).height(44).enabled(!this.model.busy).clickEffect(xopcClickEffect())
           .onClick((): void => { void this.openTaskAction(); })
       }
       else {
@@ -1527,15 +1549,16 @@ export struct XopcWorkspaceView {
           Column() {
             Button(this.createLabel()).id('automation-create').width('100%').height(48)
               .borderRadius(this.colors.corner(24)).clipShape(this.colors.cornerClip(24)).backgroundColor(this.colors.chat.action).fontColor(this.colors.chat.onAction)
+              .clickEffect(xopcClickEffect())
               .enabled(!this.model.busy).onClick((): void => { this.openCreate(); })
-          }.width('100%').padding({ left: 20, right: 20, top: 4, bottom: 10 })
+          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: 4, bottom: 10 })
         }
       }
     }.height('100%').width('100%').backgroundColor(this.colors.surface)
-      .bindSheet($$this.sheetOpen, this.workspaceSheet, {
-        height: '70%', dragBar: true, showClose: true, backgroundColor: this.colors.panel,
-        onDisappear: (): void => { this.agentQuery = ''; this.projectQuery = ''; }
-      })
+      .bindSheet($$this.sheetOpen, this.workspaceSheet, xopcSheetOptions('medium', {
+        showClose: true,
+        onDisappear: (): void => { this.agentQuery = ''; this.projectQuery = ''; },
+      }))
   }
 
   build() {

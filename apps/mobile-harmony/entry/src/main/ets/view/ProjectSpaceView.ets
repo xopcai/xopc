@@ -1,6 +1,9 @@
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { appSettings } from '../service/settings';
 import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
+import { XOPC_PAGE_PADDING_X } from '../common/designTokens';
+import { xopcSheetOptions } from '../common/dialogActions';
+import { xopcClickEffect, xopcPagerAnimated, xopcPagerDuration } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcHomeDelivery, XopcHomeItem, XopcMobileRoute } from '../model/home';
 import { mobileRoute } from '../common/homeProtocol';
@@ -8,7 +11,16 @@ import { XopcNoteIndexEntry } from '../model/note';
 import { XopcWorkspaceItem } from '../model/workspace';
 import { XopcSessionItem } from '../model/chat';
 import { XopcProjectSpaceViewModel } from '../viewmodel/projectSpaceViewModel';
-import { XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcPageTitleOption, XopcPaginationFooter, XopcSectionLabel } from './MobileComponents';
+import {
+  XopcEmptyHint,
+  XopcHubRow,
+  XopcInlineBanner,
+  XopcListSkeleton,
+  XopcPageHeader,
+  XopcPageTitleOption,
+  XopcPaginationFooter,
+  XopcSectionLabel,
+} from './MobileComponents';
 import { XopcAutomationIdeas } from './AutomationIdeas';
 
 @ComponentV2
@@ -165,7 +177,7 @@ export struct XopcProjectSpaceView {
     const current = this.tabOptions.findIndex((option: XopcPageTitleOption): boolean => option.key === this.tab);
     const target = this.tabOptions.findIndex((option: XopcPageTitleOption): boolean => option.key === key);
     if (target < 0 || current === target) return;
-    this.pager.changeIndex(target, !this.layout.reduceMotion && Math.abs(current - target) === 1);
+    this.pager.changeIndex(target, xopcPagerAnimated(this.layout.reduceMotion, current - target));
   }
 
   private commitTab(index: number): void {
@@ -188,8 +200,9 @@ export struct XopcProjectSpaceView {
     Column() {
       if (section === 'overview' && (this.model.project?.brief || this.model.project?.description)) {
         Text(this.model.project?.brief || this.model.project?.description || '').fontSize(14).lineHeight(21)
-          .fontColor(this.colors.secondary).width('100%').padding({ left: 20, right: 20, bottom: 10 })
+          .fontColor(this.colors.secondary).width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 10 })
       }
+      Refresh({ refreshing: this.model.loading && !!this.model.project }) {
       List({ space: 12 }) {
         if (this.model.loading && !this.model.project) {
           ListItem() { XopcListSkeleton() }
@@ -220,11 +233,11 @@ export struct XopcProjectSpaceView {
         }
         if (section === 'sessions') {
           if (this.model.sessionsError) {
-            ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
+            ListItem() { XopcInlineBanner({ message: $r('app.string.project_section_error'), actionLabel: $r('app.string.retry'), onAction: (): void => { void this.model.load(this.projectId); } }) }
           } else if (this.model.loading && !this.model.sessions.length) {
             ListItem() { XopcListSkeleton() }
           } else if (!this.model.sessions.length) {
-            ListItem() { Text($r('app.string.project_no_sessions')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
+            ListItem() { XopcEmptyHint({ message: $r('app.string.project_no_sessions'), centered: true }) }
           }
           ForEach(this.model.sessions, (item: XopcSessionItem) => {
             ListItem() { this.sessionCard(item) }
@@ -235,11 +248,11 @@ export struct XopcProjectSpaceView {
             ListItem() { XopcSectionLabel({ heading: $r('app.string.project_continue_work') }) }
           }
           if (this.model.tasksError) {
-            ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
+            ListItem() { XopcInlineBanner({ message: $r('app.string.project_section_error'), actionLabel: $r('app.string.retry'), onAction: (): void => { void this.model.load(this.projectId); } }) }
           } else if (this.model.loading && !this.model.tasks.length) {
             ListItem() { XopcListSkeleton() }
           } else if (section === 'tasks' && !this.model.tasks.length) {
-            ListItem() { Text($r('app.string.project_no_tasks')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
+            ListItem() { XopcEmptyHint({ message: $r('app.string.project_no_tasks'), centered: true }) }
           }
           ForEach(section === 'overview' ? this.continuingTasks : this.model.tasks, (item: XopcWorkspaceItem) => {
             ListItem() { this.taskCard(item) }
@@ -253,11 +266,11 @@ export struct XopcProjectSpaceView {
         }
         if (section === 'notes') {
           if (this.model.notesError) {
-            ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
+            ListItem() { XopcInlineBanner({ message: $r('app.string.project_section_error'), actionLabel: $r('app.string.retry'), onAction: (): void => { void this.model.load(this.projectId); } }) }
           } else if (this.model.loading && !this.model.notes.length) {
             ListItem() { XopcListSkeleton() }
           } else if (!this.model.notes.length) {
-            ListItem() { Text($r('app.string.project_no_notes')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
+            ListItem() { XopcEmptyHint({ message: $r('app.string.project_no_notes'), centered: true }) }
           }
           ForEach(this.model.notes, (item: XopcNoteIndexEntry) => {
             ListItem() { this.noteCard(item) }
@@ -271,7 +284,7 @@ export struct XopcProjectSpaceView {
         }
         if (section === 'automations') {
           if (this.model.automationsError) {
-            ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
+            ListItem() { XopcInlineBanner({ message: $r('app.string.project_section_error'), actionLabel: $r('app.string.retry'), onAction: (): void => { void this.model.load(this.projectId); } }) }
           } else if (this.model.loading && !this.model.automations.length) {
             ListItem() { XopcListSkeleton() }
           } else if (this.model.project && !this.model.automations.length) {
@@ -285,11 +298,13 @@ export struct XopcProjectSpaceView {
             ListItem() { this.automationCard(item) }
           }, (item: XopcWorkspaceItem): string => item.id)
         }
-      }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
+      }.height('100%').width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).scrollBar(BarState.Off)
+      }.layoutWeight(1).width('100%').pullToRefresh(!this.model.loading).onRefreshing((): void => { void this.model.load(this.projectId); })
       if (this.model.project && (section === 'overview' || section === 'sessions')) {
         Button(section === 'overview' ? $r('app.string.project_chat_cta') : $r('app.string.project_new_chat'))
-          .id('project-start-chat').width('100%').height(50).fontColor(this.colors.chat.onAction)
-          .backgroundColor(this.colors.chat.action).onClick((): void => { this.go('project-new-chat'); })
+          .id('project-start-chat').width('100%').height(48).fontColor(this.colors.chat.onAction)
+          .backgroundColor(this.colors.chat.action).clickEffect(xopcClickEffect())
+          .onClick((): void => { this.go('project-new-chat'); })
       }
     }.width('100%').height('100%')
       .accessibilityLevel(section === this.tab ? 'auto' : 'no-hide-descendants')
@@ -302,17 +317,20 @@ export struct XopcProjectSpaceView {
           ?? $r('app.string.project_overview'), selectedTitle: this.tab, titleOptions: this.tabOptions,
           titleMenuId: 'project-tabs', onSelectTitle: (key: string): void => { this.selectTab(key); },
           backVisible: true, onBack: this.onExit, actionLabel: $r('app.string.project_add_item'), actionIcon: $r('sys.symbol.plus'),
-          onAction: (): void => { this.menuOpen = true; } })
+          actionTone: 'accent', onAction: (): void => { this.menuOpen = true; } })
         if (this.model.project) {
           Text(this.model.project.name).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-            .width('100%').padding({ left: 20, right: 20, bottom: 8 })
+            .width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
         }
         if (this.model.error) {
-          Row({ space: 8 }) {
-            Text($r('app.string.project_load_error')).fontSize(13).fontColor(this.colors.danger).layoutWeight(1)
-            Button($r('app.string.refresh')).height(40).fontColor(this.colors.accent).backgroundColor(this.colors.accentSoft)
-              .onClick((): void => { void this.model.load(this.projectId); })
-          }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 8 })
+          Column() {
+            XopcInlineBanner({
+              message: $r('app.string.project_load_error'),
+              actionLabel: $r('app.string.refresh'),
+              busy: this.model.loading,
+              onAction: (): void => { void this.model.load(this.projectId); },
+            })
+          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: 4, bottom: 8 })
         }
         Swiper(this.pager) {
           ForEach(this.tabOptions, (option: XopcPageTitleOption) => {
@@ -321,15 +339,17 @@ export struct XopcProjectSpaceView {
         }.id('project-pager')
           .index(Math.max(0, this.tabOptions.findIndex((option: XopcPageTitleOption): boolean => option.key === this.tab)))
           .loop(false).indicator(false).cachedCount(1).disableSwipe(this.menuOpen)
-          .duration(this.layout.reduceMotion ? 0 : 230)
+          .duration(xopcPagerDuration(this.layout.reduceMotion))
           .onChange((index: number): void => { this.commitTab(index); })
           .width('100%').layoutWeight(1)
       }.height('100%').width('100%').backgroundColor(this.colors.surface)
-        .bindSheet($$this.menuOpen, this.projectMenu, { height: 455, dragBar: true, showClose: false,
+        .bindSheet($$this.menuOpen, this.projectMenu, xopcSheetOptions('medium', {
+          height: 455,
           onDisappear: (): void => {
             const page = this.menuDestination; this.menuDestination = '';
             if (page) this.go(page, page === 'project-settings' ? this.projectId : '');
-          } })
+          },
+        }))
     }.hideTitleBar(true)
       .onShown((): void => {
         if (this.shownOnce) void this.model.load(this.projectId);

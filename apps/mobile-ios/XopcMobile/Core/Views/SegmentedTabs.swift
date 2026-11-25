@@ -314,14 +314,14 @@ struct SegmentedTabs<Value: Hashable>: View {
                     .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { trackWidth = $0 }
                     .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(18) * scale))
                     .clipShape(.rect(cornerRadius: mobileTheme.corner(18) * scale))
-                    .animation(reduceMotion || pagerProgress != nil ? nil : .timingCurve(0.32, 0.72, 0, 1, duration: 0.25), value: selected)
+                    .animation(reduceMotion || pagerProgress != nil ? nil : MobileMotion.standardCurve(duration: MobileMotion.pagerDuration), value: selected)
                 }
                 .scrollDisabled(canSwipe)
                 .pageSelectionSwipe(options.map(\.id), selected: selected, enabled: canSwipe,
                                     prioritizeSelection: true, onSelect: onSelect)
                 .scrollIndicators(.hidden)
                 .onChange(of: selected, initial: true) {
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo(selected) }
+                    MobileMotion.perform(MobileMotion.standardDuration, reduceMotion: reduceMotion) { proxy.scrollTo(selected) }
                 }
                 .onChange(of: geometry.size.width) { proxy.scrollTo(selected) }
             }
@@ -353,7 +353,7 @@ struct SegmentedTabs<Value: Hashable>: View {
             }
             .font(.subheadline.weight(.medium))
             .foregroundStyle(active ? (colorScheme == .dark ? mobileTheme.foreground : mobileTheme.action) : mobileTheme.secondary)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: active)
+            .animation(MobileMotion.animation(MobileMotion.microDuration, reduceMotion: reduceMotion), value: active)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 6)
             .frame(maxWidth: .infinity, minHeight: height)

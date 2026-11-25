@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import { xopcSheetOptions } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
 import { appSettings } from '../service/settings';
@@ -238,6 +239,6 @@ export struct XopcPersonalAgentSettings {
         }
       }
     }.id('personal-agent-profile-sheet').width('100%').height('100%').backgroundColor(this.colors.panel)
-      .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
+      .bindSheet($$this.shareOpen, this.shareSheet, xopcSheetOptions('immersive', { backgroundColor: this.colors.panel }))
   }
 }

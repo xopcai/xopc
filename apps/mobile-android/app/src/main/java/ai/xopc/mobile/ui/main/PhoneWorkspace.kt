@@ -352,7 +352,7 @@ internal fun PhoneWorkspaceContent(ui: PhoneUiState, onReturn: () -> Unit, onCom
     if (ui.canControl && ui.live?.ownControl != true && ui.live?.assistanceId != null) TextButton(onClick = { onCommand("handback", null) }, enabled = !ui.busy) { Text(stringResource(R.string.phone_already_done)) }
 
   }
-  if (textOpen && ui.live?.ownControl == true) ModalBottomSheet(onDismissRequest = { textOpen = false; draft = "" }) {
+  if (textOpen && ui.live?.ownControl == true) XopcBottomSheet(XopcSheetPreset.Compact, onDismissRequest = { textOpen = false; draft = "" }) {
     Column(Modifier.fillMaxWidth().imePadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
       Text(stringResource(R.string.phone_text), style = MaterialTheme.typography.titleLarge)
       OutlinedTextField(draft, { draft = it }, Modifier.fillMaxWidth().testTag("phone-text-input"), placeholder = { Text(stringResource(R.string.phone_text_placeholder)) })
@@ -360,7 +360,12 @@ internal fun PhoneWorkspaceContent(ui: PhoneUiState, onReturn: () -> Unit, onCom
         enabled = draft.isNotBlank() && !ui.busy, modifier = Modifier.fillMaxWidth().testTag("phone-text-send")) { Text(stringResource(R.string.phone_send)) }
     }
   }
-  if (stopOpen) AlertDialog(onDismissRequest = { stopOpen = false }, text = { Text(stringResource(R.string.phone_stop_confirm)) },
-    confirmButton = { TextButton(onClick = { stopOpen = false; if (stopSession == ui.live?.sessionId) onCommand("cancel", null) }) { Text(stringResource(R.string.phone_stop), color = MaterialTheme.colorScheme.error) } },
-    dismissButton = { TextButton(onClick = { stopOpen = false }) { Text(stringResource(R.string.phone_cancel)) } })
+  if (stopOpen) XopcConfirmDialog(
+    onDismiss = { stopOpen = false },
+    onConfirm = { stopOpen = false; if (stopSession == ui.live?.sessionId) onCommand("cancel", null) },
+    message = stringResource(R.string.phone_stop_confirm),
+    confirmLabel = stringResource(R.string.phone_stop),
+    cancelLabel = stringResource(R.string.phone_cancel),
+    destructive = true,
+  )
 }

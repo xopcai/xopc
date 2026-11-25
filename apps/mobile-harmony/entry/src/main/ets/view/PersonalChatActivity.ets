@@ -1,3 +1,4 @@
+import { xopcPagerDuration } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { personalPromptNeedsAttention, XopcPersonalWorkItem } from '../model/personalOverview';
 import { XopcPersonalChatActivityViewModel } from '../viewmodel/personalChatActivityViewModel';
@@ -92,7 +93,7 @@ export struct XopcPersonalChatActivity {
           .borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
           .responseRegion({ x: 0, y: -PERSONAL_WORK_TOUCH_INSET, width: '100%', height: PERSONAL_WORK_TOUCH_HEIGHT })
           .index(this.taskIndex).indicator(false).loop(true).cachedCount(1).interval(5000)
-          .duration(this.reduceMotion ? 0 : 240).autoPlay(this.activePage && !this.reduceMotion)
+          .duration(xopcPagerDuration(this.reduceMotion)).autoPlay(this.activePage && !this.reduceMotion)
           .nestedScroll(SwiperNestedScrollMode.SELF_ONLY)
           .onChange((index: number): void => { this.visibleTaskId = this.model.working[index]?.id ?? ''; })
       }

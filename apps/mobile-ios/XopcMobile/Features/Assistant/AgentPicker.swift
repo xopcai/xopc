@@ -47,6 +47,7 @@ struct AgentPicker: View {
     let personal: PersonalAgentRecord?
     let select: (String) -> Void
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.locale) private var locale
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
@@ -93,6 +94,8 @@ struct AgentPicker: View {
                     .accessibilityIdentifier("agent-picker-\(agent.id)")
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(mobileTheme.panel.ignoresSafeArea())
             .searchable(text: $search, prompt: "搜索")
             .navigationTitle("切换 Agent").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -100,6 +103,7 @@ struct AgentPicker: View {
             }
             .task { await refresh() }
         }
+        .mobileSheetPreset(.medium)
     }
 
     private func refresh() async {

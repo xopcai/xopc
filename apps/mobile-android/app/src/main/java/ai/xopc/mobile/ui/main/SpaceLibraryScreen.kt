@@ -132,10 +132,11 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
   }
   val activeID = selected
   Column(Modifier.fillMaxSize().padding(insets).testTag("space-library")) {
-    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-      PageBackButton("library-back", onExit)
-      PageTitleMenu(scopes, view, "space-scope-menu", Modifier.align(Alignment.Center), ::selectScope)
-    }
+    XopcPageHeader(
+      backTag = "library-back",
+      onBack = onExit,
+      titleContent = { PageTitleMenu(scopes, view, "space-scope-menu", onSelect = ::selectScope) },
+    )
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
       OutlinedTextField(query, { query = it.take(160) }, Modifier.weight(1f).testTag("space-search"),
         singleLine = true, placeholder = { Text(t("搜索资料", "Search files")) },
@@ -158,21 +159,31 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
         }
       }
     }
-    LazyColumn(Modifier.weight(1f).fillMaxWidth()
+    XopcPullToRefreshBox(
+      isRefreshing = loading && items.isNotEmpty(),
+      onRefresh = { refresh++ },
+      modifier = Modifier.weight(1f).fillMaxWidth(),
+    ) {
+    LazyColumn(Modifier.fillMaxSize()
       .swipePageSelection(scopes.map { it.value }, view, activeID == null, ::selectScope), contentPadding = PaddingValues(horizontal = 16.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      if (loading && items.isEmpty()) items(5) {
-        Box(Modifier.fillMaxWidth().height(55.dp).background(MaterialTheme.colorScheme.surfaceContainer,
-          MaterialTheme.shapes.medium))
+      if (loading && items.isEmpty()) item {
+        XopcListSkeleton(rows = 5)
       } else if (failed) item {
-        TextButton(onClick = { refresh++ }) { Text(t("加载失败，重试", "Could not load. Retry")) }
+        XopcErrorState(
+          message = t("加载失败", "Could not load"),
+          retryLabel = t("重试", "Retry"),
+          onRetry = { refresh++ },
+        )
       } else if (items.isEmpty()) item {
-        Text(when {
-          query.isNotBlank() -> t("没有匹配的资料", "No matching results")
-          view == "favorites" -> t("暂无收藏", "No favorites")
-          view == "trash" -> t("回收站为空", "Trash is empty")
-          else -> t("暂无资料", "No results yet")
-        }, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        XopcEmptyState(
+          message = when {
+            query.isNotBlank() -> t("没有匹配的资料", "No matching results")
+            view == "favorites" -> t("暂无收藏", "No favorites")
+            view == "trash" -> t("回收站为空", "Trash is empty")
+            else -> t("暂无资料", "No results yet")
+          },
+        )
       }
       items(items, key = { it.id }) { file ->
         LibraryRow(file, date = formatter.format(Date(file.updatedAt)), zh = zh, onOpen = { selected = file.id })
@@ -195,11 +206,13 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
         }, enabled = !loading) { Text(t("加载更多", "Load more")) }
       } }
     }
+    }
     undo?.let { (id, revision) ->
-      Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(if (undoFailed) t("操作未完成，请重试", "Could not complete the action. Try again.")
-          else t("已移到回收站", "Moved to Trash"), Modifier.weight(1f))
-        TextButton(onClick = {
+      XopcUndoBar(
+        message = if (undoFailed) t("操作未完成，请重试", "Could not complete the action. Try again.")
+          else t("已移到回收站", "Moved to Trash"),
+        undoLabel = t("撤销", "Undo"),
+        onUndo = {
           undoBusy = true
           coroutine.launch {
             try {
@@ -209,8 +222,10 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
             catch (_: Exception) { undoFailed = true }
             finally { undoBusy = false }
           }
-        }, enabled = !undoBusy) { Text(t("撤销", "Undo")) }
-      }
+        },
+        enabled = !undoBusy,
+        modifier = Modifier.padding(horizontal = XopcDesignTokens.PagePaddingX, vertical = 8.dp),
+      )
     }
   }
   if (activeID != null) {
@@ -416,10 +431,14 @@ private fun ColumnScope.LibraryDetail(id: String, summary: LibraryItem?, profile
       }) { Text(t("分享", "Share")) } },
       dismissButton = { TextButton(onClick = { sharedLink = null }) { Text(t("关闭", "Close")) } })
   }
-  if (purge) AlertDialog(onDismissRequest = { purge = false },
-    title = { Text(t("永久删除「${file.title}」？", "Delete “${file.title}” permanently?")) },
-    confirmButton = { TextButton(onClick = { purge = false; mutate("purge") }) { Text(t("删除", "Delete")) } },
-    dismissButton = { TextButton(onClick = { purge = false }) { Text(t("取消", "Cancel")) } })
+  if (purge) XopcConfirmDialog(
+    onDismiss = { purge = false },
+    onConfirm = { purge = false; mutate("purge") },
+    title = t("永久删除「${file.title}」？", "Delete “${file.title}” permanently?"),
+    confirmLabel = t("删除", "Delete"),
+    cancelLabel = t("取消", "Cancel"),
+    destructive = true,
+  )
 }
 
 @Composable

@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import { xopcConfirmDialog } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcSessionShareAttachment, XopcSessionShareMessage, XopcSessionSharePreview, XopcShareResult } from '../model/share';
 import { shareService } from '../service/shareService';
@@ -95,12 +96,13 @@ export struct XopcConversationShare {
     const result = this.result;
     const id = this.conversationId;
     if (this.busy || !result || !this.isCurrent(id)) return;
-    const choice = await this.getUIContext().getPromptAction().showDialog({
-      title: $r('app.string.share_revoke'), message: $r('app.string.share_revoke_confirm'),
-      buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-        { text: $r('app.string.share_revoke'), color: this.colors.danger }]
-    }).catch(() => undefined);
-    if (choice?.index !== 1 || !this.isCurrent(id) || this.busy) return;
+    const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+      title: $r('app.string.share_revoke'),
+      message: $r('app.string.share_revoke_confirm'),
+      confirmLabel: $r('app.string.share_revoke'),
+      destructive: true,
+    });
+    if (!confirmed || !this.isCurrent(id) || this.busy) return;
     this.busy = true;
     this.failed = false;
     try {

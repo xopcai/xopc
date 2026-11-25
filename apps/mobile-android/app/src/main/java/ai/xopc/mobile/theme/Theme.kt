@@ -67,6 +67,8 @@ fun XopcTheme(
     LocalCornerScale provides factor,
     LocalChatColors provides chatColors(preset, darkTheme, palette),
     LocalAttentionColors provides attentionColors(darkTheme),
+    LocalStatusColors provides statusColors(darkTheme, palette),
+    LocalClarificationThemeColors provides clarificationThemeColors(preset, darkTheme, palette, colors),
   ) {
     MaterialTheme(colorScheme = colors, typography = Typography, shapes = shapes, content = content)
   }
@@ -100,6 +102,130 @@ private fun attentionColors(dark: Boolean): AttentionColors = if (dark) {
   AttentionColors(Color(0xFF352C22), Color(0xFFFFBC63))
 } else {
   AttentionColors(Color(0xFFFFF2D2), Color(0xFF734600))
+}
+
+internal data class StatusColors(
+  val success: Color,
+  val successSoft: Color,
+  val dangerSoft: Color,
+  val scrim: Color,
+)
+
+internal val LocalStatusColors = staticCompositionLocalOf {
+  statusColors(false, xopcPalette("default", false))
+}
+
+private fun statusColors(dark: Boolean, palette: XopcPalette): StatusColors = if (dark) {
+  StatusColors(
+    success = Color(0xFF66D89A),
+    successSoft = Color(0xFF1A2F24),
+    dangerSoft = Color(0xFF382124),
+    scrim = Color(0x73000000),
+  )
+} else {
+  StatusColors(
+    success = Color(0xFF187B49),
+    successSoft = Color(0xFFE6F5EC),
+    dangerSoft = palette.danger.copy(alpha = 0.12f),
+    scrim = Color(0x66000000),
+  )
+}
+
+internal data class ClarificationThemeColors(
+  val surface: Color,
+  val grouped: Color,
+  val divider: Color,
+  val border: Color,
+  val primaryText: Color,
+  val secondaryText: Color,
+  val tertiaryText: Color,
+  val accent: Color,
+  val onAccent: Color,
+  val accentSoft: Color,
+  val accentText: Color,
+  val tonalFill: Color,
+  val tonalText: Color,
+  val inputFill: Color,
+  val badgeAmberFill: Color,
+  val badgeAmberTint: Color,
+  val danger: Color,
+)
+
+internal val LocalClarificationThemeColors = staticCompositionLocalOf {
+  val p = xopcPalette("default", false)
+  clarificationThemeColors("default", false, p, lightColorScheme(primary = p.accent, error = p.danger))
+}
+
+private fun clarificationThemeColors(
+  scheme: String,
+  dark: Boolean,
+  palette: XopcPalette,
+  colors: androidx.compose.material3.ColorScheme,
+): ClarificationThemeColors {
+  val badgeAmberFill = if (dark) Color(0x29F59E0B) else Color(0xFFFEF3E2)
+  val badgeAmberTint = if (dark) Color(0xFFFBBF24) else Color(0xFFB45309)
+  if (scheme == "default") {
+    return if (dark) {
+      ClarificationThemeColors(
+        surface = Color(0xFF1E222A),
+        grouped = Color(0xFF262B35),
+        divider = Color(0x12FFFFFF),
+        border = Color(0x17FFFFFF),
+        primaryText = Color(0xFFF3F5F8),
+        secondaryText = Color(0xFF9CA5B4),
+        tertiaryText = Color(0xFF6C7585),
+        accent = Color(0xFF3A6BFF),
+        onAccent = Color.White,
+        accentSoft = Color(0x2E4C82FF),
+        accentText = Color(0xFF96B6FF),
+        tonalFill = Color(0x14FFFFFF),
+        tonalText = Color(0xFFE6EAF0),
+        inputFill = Color(0xFF161920),
+        badgeAmberFill = badgeAmberFill,
+        badgeAmberTint = badgeAmberTint,
+        danger = colors.error,
+      )
+    } else {
+      ClarificationThemeColors(
+        surface = Color.White,
+        grouped = Color(0xFFF5F6F8),
+        divider = Color(0x0F0F172A),
+        border = Color(0x140F172A),
+        primaryText = Color(0xFF111318),
+        secondaryText = Color(0xFF5F6672),
+        tertiaryText = Color(0xFF8E95A2),
+        accent = Color(0xFF3A6BFF),
+        onAccent = Color.White,
+        accentSoft = Color(0xFFEDF3FF),
+        accentText = Color(0xFF2B5CE6),
+        tonalFill = Color(0xFFEFF1F5),
+        tonalText = Color(0xFF1D2129),
+        inputFill = Color.White,
+        badgeAmberFill = badgeAmberFill,
+        badgeAmberTint = badgeAmberTint,
+        danger = colors.error,
+      )
+    }
+  }
+  return ClarificationThemeColors(
+    surface = palette.panel,
+    grouped = palette.grouped,
+    divider = if (dark) Color(0x14FFFFFF) else Color(0x12000000),
+    border = if (dark) Color(0x1AFFFFFF) else Color(0x14000000),
+    primaryText = palette.foreground,
+    secondaryText = palette.secondary,
+    tertiaryText = palette.secondary.copy(alpha = 0.72f),
+    accent = colors.primary,
+    onAccent = colors.onPrimary,
+    accentSoft = colors.primaryContainer,
+    accentText = colors.primary,
+    tonalFill = palette.grouped,
+    tonalText = palette.foreground,
+    inputFill = palette.panel,
+    badgeAmberFill = badgeAmberFill,
+    badgeAmberTint = badgeAmberTint,
+    danger = colors.error,
+  )
 }
 
 // Keep reply surfaces and chat actions in sync with HarmonyOS.

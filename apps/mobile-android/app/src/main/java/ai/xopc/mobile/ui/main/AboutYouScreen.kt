@@ -145,22 +145,21 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
   }
   BackHandler(page == "about" && searchOpen, ::closeSearch)
   Column(Modifier.fillMaxSize().padding(insets).testTag("about-you-screen")) {
-    Box(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-      Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        PageBackButton("about-you-back", { if (page == "about" && searchOpen) closeSearch() else onBack() })
-        Spacer(Modifier.weight(1f))
-        if (page == "about" && section == "understanding") {
-          PageSearchButton(searchOpen, R.string.about_you_search, "about-you-search-toggle") {
-            if (searchOpen) closeSearch() else searchOpen = true
-          }
-        }
-      }
-      if (page == "about") {
+    XopcPageHeader(
+      backTag = "about-you-back",
+      onBack = { if (page == "about" && searchOpen) closeSearch() else onBack() },
+      titleContent = if (page == "about") ({
         PageTitleMenu(listOf(
           SegmentOption("overview", stringResource(R.string.about_you_overview), "about-you-tab-overview"),
           SegmentOption("understanding", stringResource(R.string.about_you_memories), "about-you-tab-understanding"),
           SegmentOption("work", stringResource(R.string.about_you_work_memory), "about-you-tab-work"),
-        ), section, "about-you-menu", Modifier.fillMaxWidth(0.62f), ::showSection)
+        ), section, "about-you-menu", Modifier.fillMaxWidth(), ::showSection)
+      }) else null,
+    ) {
+      if (page == "about" && section == "understanding") {
+        PageSearchButton(searchOpen, R.string.about_you_search, "about-you-search-toggle") {
+          if (searchOpen) closeSearch() else searchOpen = true
+        }
       }
     }
     if (page == "detail") {
@@ -200,10 +199,11 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
       }
     }
   }
-  if (profileEditorOpen) ModalBottomSheet(sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-    onDismissRequest = {
-    if (!state.savingProfile) profileEditorOpen = false
-  }, modifier = Modifier.testTag("about-you-profile-sheet")) {
+  if (profileEditorOpen) XopcBottomSheet(
+    preset = XopcSheetPreset.Large,
+    onDismissRequest = { if (!state.savingProfile) profileEditorOpen = false },
+    modifier = Modifier.testTag("about-you-profile-sheet"),
+  ) {
     Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())
       .padding(horizontal = 20.dp).padding(bottom = 24.dp).testTag("profile-editor-scroll"),
       verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -347,6 +347,11 @@ private fun WorkMemoryList(gatewayId: String?, active: Boolean,
       loading = false
     }
   }
+  XopcPullToRefreshBox(
+    isRefreshing = loading && page != null,
+    onRefresh = { cursor = null; request++ },
+    modifier = Modifier.fillMaxSize(),
+  ) {
   LazyColumn(Modifier.fillMaxSize().testTag("work-memory-list"),
     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
     verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -372,13 +377,19 @@ private fun WorkMemoryList(gatewayId: String?, active: Boolean,
       }
     }
   }
+  }
 }
 
 @Composable
 private fun AssertionList(state: PersonalUiState, filter: String, query: String,
   onOpenDetail: (String) -> Unit, onLoadMore: () -> Unit, onRetry: () -> Unit,
   modifier: Modifier = Modifier) {
-  Column(modifier.verticalScroll(rememberScrollState())
+  XopcPullToRefreshBox(
+    isRefreshing = state.assertionsLoading && state.assertions.isNotEmpty(),
+    onRefresh = onRetry,
+    modifier = modifier.fillMaxWidth(),
+  ) {
+  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
     .padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     if (state.assertionsLoading) BrandLoadingPanel(Modifier.padding(top = 24.dp))
     else if (state.assertions.isEmpty() && !state.assertionsError) {
@@ -403,6 +414,7 @@ private fun AssertionList(state: PersonalUiState, filter: String, query: String,
       BrandLoadingIndicator()
     }
     Spacer(Modifier.height(24.dp))
+  }
   }
 }
 
@@ -511,15 +523,15 @@ private fun AssertionDetail(state: PersonalUiState, onRetry: () -> Unit,
       }
     }
   }
-  if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false },
-    title = { Text(stringResource(R.string.about_you_delete_title)) },
-    text = { Text(stringResource(R.string.about_you_delete_help)) },
-    confirmButton = { TextButton(onClick = { confirmDelete = false; onDeleteAssertion() },
-      modifier = Modifier.testTag("about-you-confirm-delete")) {
-      Text(stringResource(R.string.about_you_delete), color = MaterialTheme.colorScheme.error)
-    } }, dismissButton = { TextButton(onClick = { confirmDelete = false }) {
-      Text(stringResource(R.string.progress_cancel))
-    } })
+  if (confirmDelete) XopcConfirmDialog(
+    onDismiss = { confirmDelete = false },
+    onConfirm = { confirmDelete = false; onDeleteAssertion() },
+    title = stringResource(R.string.about_you_delete_title),
+    message = stringResource(R.string.about_you_delete_help),
+    confirmLabel = stringResource(R.string.about_you_delete),
+    destructive = true,
+    confirmTag = "about-you-confirm-delete",
+  )
 }
 
 @Composable private fun AboutDetailRow(label: String, value: String) {

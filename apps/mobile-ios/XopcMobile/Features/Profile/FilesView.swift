@@ -18,6 +18,7 @@ struct FilesView: View {
     let configuration: GatewayConfiguration
     var initialSpace: FileSpace?
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @State private var spaces: [FileSpace] = []
     @State private var items: [FileResource] = []
     @State private var search = ""
@@ -71,6 +72,8 @@ struct FilesView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(mobileTheme.canvas.ignoresSafeArea())
         .mobilePageTitle(Text(verbatim: initialSpace?.title ?? AppLocalization.string("文件", locale: AppLocalization.selectedLocale)))
         .toolbar {
             if let initialSpace, initialSpace.writable {
@@ -143,6 +146,7 @@ struct FileFolderView: View {
     let title: String
     let writable: Bool
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @State private var items: [FileResource] = []
     @State private var error: String?
     @State private var isLoading = true
@@ -174,6 +178,8 @@ struct FileFolderView: View {
                 ProgressView()
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(mobileTheme.canvas.ignoresSafeArea())
         .mobilePageTitle(Text(verbatim: title))
         .toolbar {
             if writable {
@@ -225,6 +231,7 @@ private struct FileRow: View {
 struct FilePreviewView: View {
     let configuration: GatewayConfiguration
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @State private var file: FileResource
     @State private var text: String?
     @State private var error: String?
@@ -262,6 +269,7 @@ struct FilePreviewView: View {
                 ProgressView("正在读取文件…")
             }
         }
+        .background(mobileTheme.canvas.ignoresSafeArea())
         .mobilePageTitle(Text(verbatim: file.name))
         .toolbar {
             Button("下载", systemImage: "arrow.down.to.line") { Task { await download() } }
@@ -282,6 +290,7 @@ struct FilePreviewView: View {
                         file = resource
                     }
                 )
+                .mobileSheetPreset(.large)
             }
         }
         .sheet(item: $shareItem, onDismiss: {

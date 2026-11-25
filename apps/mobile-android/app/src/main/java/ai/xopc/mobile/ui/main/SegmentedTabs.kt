@@ -52,7 +52,7 @@ internal data class SegmentOption<T>(
   val minimumWidth: Dp? = null,
 )
 
-private val segmentEasing = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
+private val segmentEasing = XopcMotionTokens.StandardEasing
 
 @Composable
 internal fun <T> SegmentedTabs(
@@ -66,6 +66,7 @@ internal fun <T> SegmentedTabs(
   pager: PagerState? = null,
 ) {
   if (options.isEmpty()) return
+  val motionAllowed = rememberMotionAllowed()
   val density = LocalDensity.current
   val fontScale = density.fontScale.coerceAtLeast(1f)
   val textMeasurer = rememberTextMeasurer(cacheSize = options.size * 2)
@@ -96,9 +97,10 @@ internal fun <T> SegmentedTabs(
     val starts = widths.runningFold(0.dp, Dp::plus)
     val selectedStart = starts[selection.coerceAtLeast(0)]
     val selectedWidth = widths[selection.coerceAtLeast(0)]
+    val segmentMs = xopcMotionDuration(XopcMotionTokens.EmphasisMs, motionAllowed)
     val thumb by animateDpAsState(selectedStart,
-      tween(250, easing = segmentEasing), label = "Segment position")
-    val thumbWidth by animateDpAsState(selectedWidth, tween(250, easing = segmentEasing),
+      tween(segmentMs, easing = segmentEasing), label = "Segment position")
+    val thumbWidth by animateDpAsState(selectedWidth, tween(segmentMs, easing = segmentEasing),
       label = "Segment width")
     val viewport = maxWidth
     LaunchedEffect(selected, selectedStart, selectedWidth, viewport) {
@@ -116,7 +118,7 @@ internal fun <T> SegmentedTabs(
     val fits = trackWidth <= viewport
     val swipe = if (swipeToSelect && enabled && fits && selected != null)
       Modifier.swipePageSelection(options.map { it.value }, selected, onSelect = onSelect) else Modifier
-    Box(swipe.horizontalScroll(scroll, enabled = !fits)) {
+    Box(Modifier.fillMaxWidth().then(swipe).horizontalScroll(scroll, enabled = !fits)) {
       Box(Modifier.clip(shape).background(scheme.surfaceContainer)) {
         if (selection >= 0) {
           val indicator = if (pager == null) {
@@ -144,7 +146,7 @@ internal fun <T> SegmentedTabs(
           options.forEachIndexed { index, option ->
             val active = selected == option.value
             val tint by animateColorAsState(if (active) selectedLabel else scheme.onSurfaceVariant,
-              tween(150), label = "Segment label color")
+              tween(xopcMotionDuration(XopcMotionTokens.MicroMs, motionAllowed)), label = "Segment label color")
             Row(
               Modifier.width(widths[index]).heightIn(min = 48.dp * fontScale).clip(shape)
                 .testTag(option.tag).selectable(active, enabled = enabled, role = Role.Tab) { onSelect(option.value) }

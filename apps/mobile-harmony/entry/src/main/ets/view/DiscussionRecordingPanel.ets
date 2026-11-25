@@ -3,6 +3,7 @@ import { recordingOutcomePhrase } from '../common/recordingOutcomeResources';
 import { XopcRecordingOutcomeInput } from '../common/recordingOutcome';
 import { XopcDiscussionNoteViewModel } from '../viewmodel/discussionNoteViewModel';
 import { common } from '@kit.AbilityKit';
+import { xopcRevealTransition } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { xopcFormatCaptureTime } from '../common/discussionAudio';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
@@ -391,8 +392,8 @@ export struct XopcDiscussionRecordingPanelView {
         x: this.docked ? (this.viewportWidth - this.panel.cardWidth) / 2 : this.panel.panelX,
         y: this.docked ? this.viewportHeight - this.panelHeight - 8 : this.panel.panelY
       }).translate({ y: this.docked ? this.sheetDragOffset : 0 })
-      .transition(this.docked && !this.layout.reduceMotion
-        ? TransitionEffect.move(TransitionEdge.BOTTOM).animation({ duration: 220, curve: Curve.EaseOut })
+      .transition(this.docked
+        ? xopcRevealTransition(TransitionEdge.BOTTOM, this.layout.reduceMotion)
         : TransitionEffect.OPACITY.animation({ duration: 0 }))
       .zIndex(50)
   }

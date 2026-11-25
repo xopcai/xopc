@@ -4,6 +4,7 @@ import { util } from '@kit.ArkTS';
 import { fileIo as fs, fileUri } from '@kit.CoreFileKit';
 import { uniformTypeDescriptor as utd } from '@kit.ArkData';
 import { systemShare } from '@kit.ShareKit';
+import { xopcSheetOptions, xopcToast } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 
 @ObservedV2
@@ -89,7 +90,7 @@ export struct XopcChartMarkdownView {
       await new systemShare.ShareController(data).show(context,
         { selectionMode: systemShare.SelectionMode.SINGLE, previewMode: systemShare.SharePreviewMode.DEFAULT });
     } catch (_) {
-      try { this.getUIContext().getPromptAction().showToast({ message: '图表分享失败' }); } catch (_) {}
+      xopcToast(this.getUIContext(), '图表分享失败');
     }
   }
 
@@ -133,7 +134,7 @@ export struct XopcChartMarkdownView {
       else { Text('图表已在预览中打开。').padding(16).fontColor(this.colors.secondary) }
     }.width('100%').borderRadius(this.colors.corner(10)).backgroundColor(this.colors.grouped).id('markdown-chart')
       .onVisibleAreaChange([0, 0.1], (visible: boolean, ratio: number): void => { this.visible = visible && ratio > 0; })
-      .bindSheet($$this.expanded, this.preview, { height: SheetSize.LARGE, showClose: true, dragBar: true })
+      .bindSheet($$this.expanded, this.preview, xopcSheetOptions('large', { showClose: true }))
   }
 }
 

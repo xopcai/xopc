@@ -1,6 +1,9 @@
-import { XopcClarificationWizard } from './ClarificationWizard';
+import { xopcMoreIcon } from '../common/designTokens';
+import { xopcClickEffect, xopcRevealTransition } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcClarification, XopcClarificationChoice, XopcClarificationCommand } from '../model/clarification';
+import { layoutState, XopcLayoutState } from '../service/layoutState';
+import { XopcClarificationWizard } from './ClarificationWizard';
 
 export interface ClarifyPalette {
   surface: ResourceColor;
@@ -18,33 +21,27 @@ export interface ClarifyPalette {
   badgeAmberFill: ResourceColor;
   badgeAmberTint: ResourceColor;
   danger: ResourceColor;
+  dangerSoft: ResourceColor;
 }
 
 export function resolveClarifyPalette(colors: XopcThemeColors): ClarifyPalette {
-  const isDefault = colors.scheme === 'default';
-  const dark = !colors.light;
-  if (isDefault) {
-    return dark ? {
-      surface: '#1E222A', grouped: '#262B35',
-      primaryText: '#F3F5F8', secondaryText: '#9CA5B4', tertiaryText: '#6C7585',
-      accent: '#3A6BFF', onAccent: '#FFFFFF', accentSoft: '#2E4C82FF', accentText: '#96B6FF',
-      tonalFill: '#14FFFFFF', tonalText: '#E6EAF0', inputFill: '#161920',
-      badgeAmberFill: '#29F59E0B', badgeAmberTint: '#FBBF24', danger: colors.danger,
-    } : {
-      surface: '#FFFFFF', grouped: '#F5F6F8',
-      primaryText: '#111318', secondaryText: '#5F6672', tertiaryText: '#8E95A2',
-      accent: '#3A6BFF', onAccent: '#FFFFFF', accentSoft: '#EDF3FF', accentText: '#2B5CE6',
-      tonalFill: '#EFF1F5', tonalText: '#1D2129', inputFill: '#FFFFFF',
-      badgeAmberFill: '#FEF3E2', badgeAmberTint: '#B45309', danger: colors.danger,
-    };
-  }
   return {
-    surface: colors.panel, grouped: colors.grouped,
-    primaryText: colors.foreground, secondaryText: colors.secondary, tertiaryText: colors.tertiary,
-    accent: colors.accent, onAccent: colors.onAccent, accentSoft: colors.accentSoft, accentText: colors.accent,
-    tonalFill: colors.grouped, tonalText: colors.foreground, inputFill: colors.panel,
-    badgeAmberFill: dark ? '#29F59E0B' : '#FEF3E2', badgeAmberTint: dark ? '#FBBF24' : '#B45309',
+    surface: colors.panel,
+    grouped: colors.grouped,
+    primaryText: colors.foreground,
+    secondaryText: colors.secondary,
+    tertiaryText: colors.tertiary,
+    accent: colors.accent,
+    onAccent: colors.onAccent,
+    accentSoft: colors.accentSoft,
+    accentText: colors.accent,
+    tonalFill: colors.grouped,
+    tonalText: colors.foreground,
+    inputFill: colors.input,
+    badgeAmberFill: colors.warningFill,
+    badgeAmberTint: colors.warningForeground,
     danger: colors.danger,
+    dangerSoft: colors.dangerSoft,
   };
 }
 
@@ -58,6 +55,7 @@ export function formatClarifyCountdown(seconds: number): string {
 @ComponentV2
 export struct XopcClarificationCard {
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local layout: XopcLayoutState = layoutState;
   @Require @Param prompt: XopcClarification;
   @Param submitting: boolean = false;
   @Param errorMessage: string = '';
@@ -190,7 +188,7 @@ export struct XopcClarificationCard {
             .fontSize(12).fontWeight(FontWeight.Medium)
             .fontColor(this.expired() ? p.danger : ((this.remainingSeconds() ?? 999) <= 60 ? p.badgeAmberTint : p.secondaryText))
             .padding({ left: 9, right: 9, top: 4, bottom: 4 }).borderRadius(999)
-            .backgroundColor(this.expired() ? '#1FFF5D5D' : ((this.remainingSeconds() ?? 999) <= 60 ? p.badgeAmberFill : p.grouped))
+            .backgroundColor(this.expired() ? p.dangerSoft : ((this.remainingSeconds() ?? 999) <= 60 ? p.badgeAmberFill : p.grouped))
         }
       }.width('100%').alignItems(VerticalAlign.Center)
 
@@ -228,6 +226,7 @@ export struct XopcClarificationCard {
                 Text(JSON.stringify(this.prompt.approval.argumentsPreview, null, 2))
                   .fontSize(11).fontColor(p.secondaryText).width('100%')
               }.constraintSize({ maxHeight: 130 }).padding({ left: 14, right: 14, bottom: 10 }).width('100%')
+                .transition(xopcRevealTransition(TransitionEdge.TOP, this.layout.reduceMotion))
             }
           }
         }.width('100%').backgroundColor(p.grouped).borderRadius(14).clip(true)
@@ -262,8 +261,9 @@ export struct XopcClarificationCard {
         }
         Blank().layoutWeight(1)
         Button({ type: ButtonType.Normal }) {
-          SymbolGlyph($r('sys.symbol.dot_grid_1x2')).fontSize(15).fontColor([p.secondaryText])
-        }.width(32).height(32).borderRadius(8).backgroundColor(Color.Transparent).enabled(!this.disabled())
+          SymbolGlyph(xopcMoreIcon()).fontSize(18).fontColor([p.secondaryText])
+        }.width(36).height(36).borderRadius(10).backgroundColor(Color.Transparent).enabled(!this.disabled())
+          .clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.clarify_more')).bindMenu(this.overflowMenu)
         Button({ type: ButtonType.Normal }) {
           SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(14).fontColor([p.secondaryText])

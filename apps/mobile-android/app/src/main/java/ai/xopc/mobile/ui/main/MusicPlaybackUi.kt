@@ -86,8 +86,8 @@ internal fun MusicMiniPlayer(track: MusicTrack, onExpand: () -> Unit, modifier: 
 @Composable
 internal fun MobilePreviewSheet(onClose: () -> Unit, modifier: Modifier = Modifier,
   heightFraction: Float = 0.88f, content: @Composable ColumnScope.() -> Unit) {
-  ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-    modifier = modifier, shape = themedCorners(28), containerColor = MaterialTheme.colorScheme.background) {
+  XopcBottomSheet(XopcSheetPreset.Large, onDismissRequest = onClose,
+    modifier = modifier, containerColor = MaterialTheme.colorScheme.background) {
     Column(Modifier.fillMaxWidth().fillMaxHeight(heightFraction), content = content)
   }
 }

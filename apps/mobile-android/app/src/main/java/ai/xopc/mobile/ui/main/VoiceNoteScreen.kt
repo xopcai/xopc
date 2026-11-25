@@ -164,16 +164,19 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
       revision++
     }
   }
-  Column(Modifier.fillMaxSize().padding(insets).padding(20.dp).testTag("voice-note-capture"),
+  Column(Modifier.fillMaxSize().padding(insets).testTag("voice-note-capture"),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-      PageBackButton("voice-note-back", close, enabled = !busy && !finishing)
-      Text(stringResource(if (recoveryOnly) R.string.voice_note_pending else R.string.voice_note_title),
-        style = MaterialTheme.typography.headlineSmall)
-    }
-    if (confirmClose) AlertDialog(onDismissRequest = { if (!busy && !finishing) confirmClose = false },
-      title = { Text(stringResource(R.string.voice_note_discard)) },
-      confirmButton = { TextButton(enabled = !busy && !finishing, onClick = {
+    XopcPageHeader(
+      backTag = "voice-note-back",
+      onBack = close,
+      backEnabled = !busy && !finishing,
+      title = stringResource(if (recoveryOnly) R.string.voice_note_pending else R.string.voice_note_title),
+    )
+    Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.PagePaddingX),
+      verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    if (confirmClose) XopcConfirmDialog(
+      onDismiss = { if (!busy && !finishing) confirmClose = false },
+      onConfirm = {
         confirmClose = false
         scope.launch {
           val current = draft
@@ -189,32 +192,33 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
             revision++
           } finally { busy = false }
         }
-      }) { Text(stringResource(R.string.progress_confirm)) } },
-      dismissButton = { TextButton(enabled = !busy && !finishing, onClick = { confirmClose = false }) { Text(stringResource(R.string.progress_cancel)) } })
+      },
+      title = stringResource(R.string.voice_note_discard),
+      confirmLabel = stringResource(R.string.progress_confirm),
+      destructive = true,
+      confirmEnabled = !busy && !finishing,
+    )
     pendingDiscard?.let { saved ->
-      AlertDialog(onDismissRequest = { pendingDiscard = null },
-        title = { Text(stringResource(R.string.voice_note_discard)) },
-        text = { Text(stringResource(R.string.voice_note_discard_local_message)) },
-        confirmButton = {
-          TextButton(onClick = {
-            pendingDiscard = null
-            busy = true
-            issue = 0
-            scope.launch {
-              try {
-                access.discard(gatewayId, saved)
-                pending = pending.filterNot { it.id == saved.id }
-              } catch (error: CancellationException) { throw error }
-              catch (_: Exception) { issue = R.string.voice_note_discard_error }
-              finally { busy = false }
-            }
-          }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-            Text(stringResource(R.string.voice_note_discard_action))
+      XopcConfirmDialog(
+        onDismiss = { pendingDiscard = null },
+        onConfirm = {
+          pendingDiscard = null
+          busy = true
+          issue = 0
+          scope.launch {
+            try {
+              access.discard(gatewayId, saved)
+              pending = pending.filterNot { it.id == saved.id }
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { issue = R.string.voice_note_discard_error }
+            finally { busy = false }
           }
         },
-        dismissButton = { TextButton(onClick = { pendingDiscard = null }) {
-          Text(stringResource(R.string.progress_cancel))
-        } })
+        title = stringResource(R.string.voice_note_discard),
+        message = stringResource(R.string.voice_note_discard_local_message),
+        confirmLabel = stringResource(R.string.voice_note_discard_action),
+        destructive = true,
+      )
     }
     if (issue != 0) Text(stringResource(issue), color = MaterialTheme.colorScheme.error,
       modifier = Modifier.testTag("voice-note-error"))
@@ -288,6 +292,7 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
         PendingRecordingCard(saved, !busy && settings?.acknowledged == true, !busy,
           onRecover = { submit(saved) }, onDiscard = { pendingDiscard = saved })
       }
+    }
     }
   }
 }

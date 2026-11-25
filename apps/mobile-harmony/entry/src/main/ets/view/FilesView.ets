@@ -1,13 +1,23 @@
+import { XOPC_PAGE_PADDING_X } from '../common/designTokens';
+import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { XopcFilesViewModel } from '../viewmodel/filesViewModel';
-import { XopcFile, XopcFileSpace } from '../model/files';
-import { XopcBrandLoading, XopcHubRow } from './MobileComponents';
-import { createManagedShare } from '../service/chatMediaShare';
-import { XopcShareResult } from '../model/share';
-import { XopcShareResultView } from './ShareResultView';
-import { XopcChatMediaView } from './ChatMediaView';
-import { managedFileMedia } from '../viewmodel/fileDocumentViewModel';
 import { userErrorMessage } from '../common/userError';
+import { XopcFile, XopcFileSpace } from '../model/files';
+import { XopcShareResult } from '../model/share';
+import { createManagedShare } from '../service/chatMediaShare';
+import { managedFileMedia } from '../viewmodel/fileDocumentViewModel';
+import { XopcFilesViewModel } from '../viewmodel/filesViewModel';
+import { XopcChatMediaView } from './ChatMediaView';
+import {
+  XopcBrandLoading,
+  XopcEmptyHint,
+  XopcErrorState,
+  XopcHubRow,
+  XopcInlineBanner,
+  XopcPageHeader,
+  XopcPageSearchField,
+} from './MobileComponents';
+import { XopcShareResultView } from './ShareResultView';
 
 @ComponentV2
 export struct XopcFilesView {
@@ -18,6 +28,7 @@ export struct XopcFilesView {
   @Event onExit: () => void = (): void => {};
   @Local model: XopcFilesViewModel = new XopcFilesViewModel();
   @Local search: string = '';
+  @Local searchOpen: boolean = false;
   @Local shareResult?: XopcShareResult;
   @Local shareOpen: boolean = false;
 
@@ -32,25 +43,39 @@ export struct XopcFilesView {
   }
   aboutToDisappear(): void { this.model.dispose(); }
 
+  private closeSearch(): void {
+    if (!this.model.clearSearch()) return;
+    this.getUIContext().getFocusController().clearFocus();
+    this.searchOpen = false;
+    this.search = '';
+  }
+
+  private toggleSearch(): void {
+    if (this.searchOpen) this.closeSearch();
+    else this.searchOpen = true;
+  }
+
   private async goBack(): Promise<void> {
+    if (this.searchOpen) { this.closeSearch(); return; }
     if (this.model.busy) return;
     try {
       if (this.conversationId && !this.model.directory && !this.model.selected) this.onExit();
-      else if (!this.initialId && (this.model.space || this.model.selected)) this.model.parent(); else this.onExit();
+      else if (!this.initialId && (this.model.space || this.model.selected)) this.model.parent();
+      else this.onExit();
     } catch (error) { this.model.error = (error as Error).message; }
   }
 
   private async remove(file: XopcFile): Promise<void> {
     try {
-      const result = await this.getUIContext().getPromptAction().showDialog({
-        title: $r('app.string.delete'), message: $r('app.string.confirm_action_help'),
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-          { text: $r('app.string.confirm'), color: this.colors.danger }]
+      const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+        title: $r('app.string.delete'),
+        message: $r('app.string.confirm_action_help'),
+        confirmLabel: $r('app.string.delete'),
+        destructive: true,
       });
-      if (result.index === 1) await this.model.remove(file);
+      if (confirmed) await this.model.remove(file);
     } catch (error) { this.model.error = (error as Error).message; }
   }
-
 
   private async shareDirectory(file: XopcFile, zipOnly: boolean): Promise<void> {
     if (this.model.busy) return;
@@ -60,17 +85,6 @@ export struct XopcFilesView {
       this.shareResult = payload.share; this.shareOpen = true;
     } catch (error) { this.model.error = (error as Error).message; }
     finally { this.model.busy = false; }
-  }
-
-  private confirmDirectoryShare(file: XopcFile): void {
-    this.getUIContext().showActionSheet({ title: $r('app.string.share_directory_title'), message: $r('app.string.share_directory_confirm'), sheets: [
-      { title: this.text($r('app.string.share_directory_browse')), action: (): void => { this.shareDirectory(file, false); } },
-      { title: this.text($r('app.string.share_directory_zip')), action: (): void => { this.shareDirectory(file, true); } }
-    ] });
-  }
-
-  private text(resource: Resource): string {
-    return this.getUIContext().getHostContext()?.resourceManager.getStringSync(resource.id) ?? '';
   }
 
   private formatSize(bytes: number): string {
@@ -86,27 +100,30 @@ export struct XopcFilesView {
     return file.relativePath ? file.relativePath + ' · ' + metadata : metadata;
   }
 
-  @Builder
-  shareSheet() {
-    if (this.shareResult) { XopcShareResultView({ share: this.shareResult, onClose: (): void => { this.shareOpen = false; } }) }
+  private hasContextActions(file: XopcFile): boolean {
+    return (file.kind === 'directory' && file.capabilities.includes('share')) || file.capabilities.includes('delete');
   }
 
   @Builder
-  header() {
-    Row({ space: 8 }) {
-      Blank().layoutWeight(1)
-      if (this.model.space?.writable && !this.model.selected) {
-        Button() {
-          Row({ space: 5 }) {
-            SymbolGlyph($r('sys.symbol.plus')).fontSize(17).fontColor([this.colors.accent])
-            Text($r('app.string.upload')).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
-          }
-        }.height(40).padding({ left: 13, right: 13 }).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(this.colors.accentSoft)
-          .enabled(!this.model.busy).onClick((): void => {
-            const context = this.getUIContext().getHostContext(); if (context) this.model.upload(context);
-          })
+  fileContextMenu(file: XopcFile) {
+    Menu() {
+      if (file.kind === 'directory' && file.capabilities.includes('share')) {
+        MenuItem({ content: $r('app.string.share_directory_browse') })
+          .onClick((): void => { void this.shareDirectory(file, false); })
+        MenuItem({ content: $r('app.string.share_directory_zip') })
+          .onClick((): void => { void this.shareDirectory(file, true); })
       }
-    }.width('100%').padding({ left: 12, right: 16, top: 10, bottom: 8 })
+      if (file.capabilities.includes('delete')) {
+        MenuItem({ content: $r('app.string.delete') })
+          .contentFontColor(this.colors.danger)
+          .onClick((): void => { void this.remove(file); })
+      }
+    }
+  }
+
+  @Builder
+  shareSheet() {
+    if (this.shareResult) { XopcShareResultView({ share: this.shareResult, onClose: (): void => { this.shareOpen = false; } }) }
   }
 
   @Builder
@@ -114,19 +131,20 @@ export struct XopcFilesView {
     XopcChatMediaView({ file: managedFileMedia(file), conversationId: this.conversationId, previewOnly: true,
       onPreviewClosed: (): void => {
         this.model.selected = undefined;
-        if (this.initialId) this.onExit(); else this.model.load(this.search);
+        if (this.initialId) this.onExit(); else void this.model.load(this.search);
       } })
   }
 
   @Builder
   fileList() {
     Column({ space: 0 }) {
-      Row({ space: 8 }) {
-        TextInput({ text: this.search, placeholder: $r('app.string.search') }).layoutWeight(1).height(44)
-          .backgroundColor(this.colors.input)
-          .borderRadius(this.colors.corner(14)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
-          .onChange((query: string): void => { this.search = query; }).onSubmit((): void => { this.model.load(this.search); })
-      }.width('100%').padding({ left: 20, right: 20, top: 6, bottom: 16 })
+      if (this.searchOpen) {
+        Column() {
+          XopcPageSearchField({ searchId: 'files-search', text: this.search, placeholder: $r('app.string.search'),
+            onChange: (query: string): void => { this.search = query; },
+            onSubmit: (): void => { void this.model.load(this.search); } })
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 10 })
+      }
 
       Row({ space: 6 }) {
         if (this.model.space) {
@@ -135,34 +153,43 @@ export struct XopcFilesView {
         Text(this.model.space ? this.model.space.title + (this.model.directory ? ' / ' + this.model.directory : '') : $r('app.string.recent_files'))
           .fontColor(this.colors.secondary).fontSize(13).fontWeight(FontWeight.Medium)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.width('100%').padding({ left: 20, right: 20, bottom: 10 })
+      }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 10 })
 
-      List({ space: 0 }) {
-        if (!this.model.space && !this.search.trim()) {
-          ForEach(this.model.spaces, (space: XopcFileSpace) => {
+      Refresh({ refreshing: this.model.busy && (this.model.items.length > 0 || this.model.spaces.length > 0) }) {
+        List({ space: 0 }) {
+          if (!this.model.busy && this.model.error && !this.model.items.length && !this.model.spaces.length) {
             ListItem() {
-              XopcHubRow({ heading: space.title, symbol: $r('sys.symbol.folder'),
+              XopcErrorState({ error: this.model.error, context: 'collection',
+                onAction: (): void => { void this.model.load(this.search); } })
+            }
+          }
+          if (!this.model.space && !this.search.trim()) {
+            ForEach(this.model.spaces, (space: XopcFileSpace) => {
+              ListItem() {
+                XopcHubRow({ heading: space.title, symbol: $r('sys.symbol.folder'),
+                  compact: true,
+                  onOpen: (): void => { void this.model.choose(space); } })
+              }
+            }, (space: XopcFileSpace): string => space.id)
+          }
+          ForEach(this.model.items, (file: XopcFile) => {
+            ListItem() {
+              XopcHubRow({ heading: file.name, summary: this.fileSummary(file),
                 compact: true,
-                onOpen: (): void => { this.model.choose(space); } })
+                symbol: file.kind === 'directory' ? $r('sys.symbol.folder') : $r('sys.symbol.doc'),
+                onOpen: (): void => { void this.model.open(file); } })
+            }.bindContextMenu(this.hasContextActions(file) ? this.fileContextMenu(file) : undefined, ResponseType.LongPress, {
+              hapticFeedbackMode: HapticFeedbackMode.ENABLED,
+            })
+          }, (file: XopcFile): string => file.id)
+          if (!this.model.busy && !this.model.error && !this.model.items.length && (!!this.model.space || !!this.search.trim() || !this.model.spaces.length)) {
+            ListItem() {
+              XopcEmptyHint({ message: $r('app.string.no_files'), centered: true })
             }
-          }, (space: XopcFileSpace): string => space.id)
-        }
-        ForEach(this.model.items, (file: XopcFile) => {
-          ListItem() {
-            XopcHubRow({ heading: file.name, summary: this.fileSummary(file),
-              compact: true,
-              symbol: file.kind === 'directory' ? $r('sys.symbol.folder') : $r('sys.symbol.doc'),
-              onOpen: (): void => { this.model.open(file); } })
-          }.gesture(LongPressGesture({ duration: 350, repeat: false }).onAction((): void => {
-            if (file.kind === 'directory' && file.capabilities.includes('share')) this.confirmDirectoryShare(file);
-            else if (file.capabilities.includes('delete')) {
-              this.getUIContext().showActionSheet({ title: file.name, message: '', sheets: [
-                { title: this.text($r('app.string.delete')), action: (): void => { this.remove(file); } }
-              ] });
-            }
-          }))
-        }, (file: XopcFile): string => file.id)
-      }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
+          }
+        }.layoutWeight(1).width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).scrollBar(BarState.Off)
+      }.layoutWeight(1).width('100%').pullToRefresh(!this.model.busy)
+        .onRefreshing((): void => { void this.model.load(this.search); })
 
       Row({ space: 6 }) {
         SymbolGlyph($r('sys.symbol.info_circle')).fontSize(13).fontColor([this.colors.tertiary])
@@ -175,22 +202,42 @@ export struct XopcFilesView {
   build() {
     NavDestination() {
       Column() {
-        this.header()
-        if (this.model.error) {
-          Text(userErrorMessage(this.model.error, this.model.items.length ? 'generic' : 'collection')).fontSize(13)
-            .fontColor(this.colors.secondary).width('100%')
-            .padding({ left: 20, right: 20, bottom: 8 })
-          if (!this.model.busy && !this.model.selected) {
-            Button($r('app.string.retry')).onClick((): void => { this.model.load(this.search); })
-          }
+        XopcPageHeader({
+          heading: this.model.space ? this.model.space.title : $r('app.string.files'),
+          showStaticTitle: true,
+          backVisible: true,
+          backId: 'files-back',
+          backEnabled: this.searchOpen || !this.model.busy,
+          onBack: (): void => { void this.goBack(); },
+          searchId: !this.model.selected ? 'files-open-search' : '',
+          searchOpen: this.searchOpen,
+          onSearch: (): void => { this.toggleSearch(); },
+          actionLabel: this.model.space?.writable && !this.model.selected ? $r('app.string.upload') : '',
+          actionIcon: $r('sys.symbol.plus'),
+          actionTone: 'accent',
+          actionEnabled: !this.model.busy,
+          onAction: (): void => {
+            const context = this.getUIContext().getHostContext();
+            if (context) void this.model.upload(context);
+          },
+        })
+        if (this.model.error && (this.model.items.length > 0 || this.model.spaces.length > 0)) {
+          Column() {
+            XopcInlineBanner({
+              message: userErrorMessage(this.model.error, 'generic'),
+              actionLabel: !this.model.busy && !this.model.selected ? $r('app.string.retry') : '',
+              busy: this.model.busy,
+              onAction: (): void => { void this.model.load(this.search); },
+            })
+          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
         }
         if (this.model.busy && !!this.initialId && !this.model.selected) { XopcBrandLoading() }
         else { this.fileList() }
         if (this.model.selected) { this.fileDetail(this.model.selected) }
       }.height('100%').width('100%').backgroundColor(this.colors.surface)
-        .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
+        .bindSheet($$this.shareOpen, this.shareSheet, xopcSheetOptions('immersive', { backgroundColor: this.colors.panel }))
     }.hideTitleBar(true).onBackPressed((): boolean => {
-      this.goBack(); return true;
+      void this.goBack(); return true;
     })
   }
 }

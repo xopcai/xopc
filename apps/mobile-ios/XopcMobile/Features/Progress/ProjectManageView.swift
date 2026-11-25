@@ -42,6 +42,7 @@ struct ProjectManageView: View {
     let project: ProjectRecord?
     let onSaved: (ProjectRecord) -> Void
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
     @State private var description: String
@@ -80,6 +81,8 @@ struct ProjectManageView: View {
                     Text(error).foregroundStyle(.red)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(mobileTheme.panel.ignoresSafeArea())
             .disabled(busy)
             .navigationTitle(project == nil ? "新建项目" : "项目设置")
             .navigationBarTitleDisplayMode(.inline)
@@ -99,6 +102,7 @@ struct ProjectManageView: View {
             }
         }
         .interactiveDismissDisabled(busy)
+        .mobileSheetPreset(.medium)
     }
 
     private func perform(_ operation: @escaping (GatewayClient) async throws -> ProjectRecord) {

@@ -4,6 +4,7 @@ import { RecordingOutcomeCard } from './RecordingOutcomeCard';
 import { XopcReviewEntry } from '../model/discussionCapture';
 import { common } from '@kit.AbilityKit';
 import { XopcDiscussionAnnotation, XopcEvidenceSegment, XopcPlaybackRange, XopcResolvedAnnotation } from '../model/discussionCapture';
+import { xopcSheetOptions } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { xopcFormatCaptureTime } from '../common/discussionAudio';
 import { XopcDiscussionActionItem, XopcDiscussionFact, XopcDiscussionTranscriptSegment } from '../model/discussionCapture';
@@ -346,6 +347,9 @@ export struct XopcDiscussionNoteView {
           .onClick((): void => { void this.model.refresh(); })
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
-      .bindSheet($$this.evidenceOpen,this.evidenceSheet,{ height: '70%',dragBar: true,showClose: true,onDisappear: (): void => { this.model.evidence = undefined; } })
+      .bindSheet($$this.evidenceOpen, this.evidenceSheet, xopcSheetOptions('medium', {
+        showClose: true,
+        onDisappear: (): void => { this.model.evidence = undefined; },
+      }))
   }
 }

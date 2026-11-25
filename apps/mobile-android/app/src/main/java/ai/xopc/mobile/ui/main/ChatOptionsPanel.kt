@@ -39,9 +39,10 @@ internal fun ChatOptionsPanel(title: String, height: Dp = 448.dp, onClose: () ->
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
       Text(title, Modifier.weight(1f), fontSize = 20.sp, fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.onSurface)
-      IconButton(onClick = onClose, modifier = Modifier.size(44.dp)
+      IconButton(onClick = onClose, modifier = Modifier.size(XopcDesignTokens.ButtonHeightMd)
         .semantics { contentDescription = closeLabel }.testTag("chat-options-close")) {
-        Text("×", fontSize = 28.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ActionIcon(R.drawable.action_close, size = XopcDesignTokens.IconRow,
+          color = MaterialTheme.colorScheme.onSurfaceVariant, contentDescription = closeLabel)
       }
     }
     content()
@@ -50,11 +51,5 @@ internal fun ChatOptionsPanel(title: String, height: Dp = 448.dp, onClose: () ->
 
 @Composable
 internal fun ChatOptionsSkeleton() {
-  Column(Modifier.fillMaxWidth().testTag("chat-options-loading"),
-    verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    repeat(4) {
-      Box(Modifier.fillMaxWidth().height(52.dp)
-        .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(12)))
-    }
-  }
+  XopcListSkeleton(modifier = Modifier.testTag("chat-options-loading"), rows = 4)
 }

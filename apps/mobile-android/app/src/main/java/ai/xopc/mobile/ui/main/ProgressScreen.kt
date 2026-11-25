@@ -247,9 +247,16 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   val workPager = rememberPagerState(initialPage = workPageIndex.coerceAtLeast(0)) { workPages.size }
   val workPageStates = rememberSaveableStateHolder()
   val workScope = rememberCoroutineScope()
+  fun returnToPage(target: String) {
+    val index = workPages.indexOfFirst { it.value == target }
+    if (index >= 0 && (index != workPager.settledPage || workPager.isScrollInProgress)) {
+      workPager.requestScrollToPage(index)
+    }
+    page = target
+  }
   val selectWorkPage by rememberUpdatedState<(Int) -> Unit>({ index ->
     val target = workPages[index].value
-    if (workPageIndex >= 0 && page != target) {
+    if (index == workPager.settledPage && workPages.any { it.value == page } && page != target) {
       focusManager.clearFocus(force = true)
       keyboardController?.hide()
       page = target
@@ -286,25 +293,25 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       "edit" -> if (editDirty) discardEditOpen = true else page = "detail"
       "create" -> if (createTitle.isNotBlank() || createBody.isNotBlank() ||
         createProjectId != createSourceProjectId.orEmpty() || createPriority != "normal" || createDueAt != null) discardCreateOpen = true
-        else page = if (createSourceProjectId == null) "tasks" else "project"
+        else returnToPage(if (createSourceProjectId == null) "tasks" else "project")
       "detail" -> when {
         detailReturnPage == "delivery" -> onCloseDelivery()
         initialPage == "detail" && selectedTaskId == initialItemId -> onExit?.invoke()
-        else -> page = detailReturnPage
+        else -> returnToPage(detailReturnPage)
       }
-      "project" -> if (initialPage == "project" && selectedProjectId == initialItemId) onExit?.invoke() else page = "projects"
+      "project" -> if (initialPage == "project" && selectedProjectId == initialItemId) onExit?.invoke() else returnToPage("projects")
       "automations" -> {
         val parent = automationListReturnPage
         if (parent != null) {
           automationListReturnPage = null
-          page = parent
+          returnToPage(parent)
         } else if (onExit != null) onExit()
-        else page = "overview"
+        else returnToPage("overview")
       }
       "overview", "tasks", "projects" -> {
         if (onExit != null) {
           onExit()
-        } else page = "overview"
+        } else returnToPage("overview")
       }
       "automation-run" -> when {
         runReturnPage == "delivery" -> onCloseDelivery()
@@ -312,7 +319,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         else -> page = runReturnPage
       }
       "automation" -> if (initialPage == "automation" && selectedAutomationId == initialItemId &&
-        automationReturnPage == "automations") onExit?.invoke() else page = automationReturnPage
+        automationReturnPage == "automations") onExit?.invoke() else returnToPage(automationReturnPage)
       "automation-edit" -> if (automationEditDirty) discardAutomationEditOpen = true else page = "automation"
       else -> onExit?.invoke()
     }
@@ -362,7 +369,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         page = "project"
       } else {
         val createdId = state.createdTaskId
-        if (createdId == null) page = "tasks"
+        if (createdId == null) returnToPage("tasks")
         else {
           selectedTaskId = createdId
           detailReturnPage = "tasks"
@@ -472,64 +479,63 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         }, ::openRun, onOpenLibrary)
     }
   }
-  Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp)) {
-    Box(Modifier.fillMaxWidth().padding(bottom = if (page == "overview") 12.dp else 0.dp)
-      .testTag("progress-header"), contentAlignment = Alignment.Center) {
-      Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        if (page != "overview" || onExit != null) PageBackButton("progress-back", ::goBack,
-          enabled = !state.commandBusy && !state.editBusy)
-        Spacer(Modifier.weight(1f))
-        if (page == "automations") {
-          PageSearchButton(automationSearchOpen, R.string.progress_search, "automation-open-search") {
-            automationSearchOpen = !automationSearchOpen
+  val motionAllowed = rememberMotionAllowed()
+  Column(modifier = Modifier.fillMaxSize().padding(insets)) {
+    val automationName = state.automations.detail?.takeIf { page == "automation" && it.id == selectedAutomationId }?.name
+    XopcPageHeader(
+      backTag = "progress-back",
+      onBack = ::goBack,
+      backEnabled = !state.commandBusy && !state.editBusy,
+      showBack = page != "overview" || onExit != null,
+      title = if (page == "automations" || page == "automation") (automationName ?: stringResource(R.string.progress_automations)) else null,
+      titleContent = when {
+        workPageIndex >= 0 -> ({ PageTitleMenu(workPages, page, "work-page-menu", Modifier.fillMaxWidth(), ::scrollToWorkPage) })
+        page == "project" && selectedProjectId != null -> ({
+          PageTitleMenu(projectSections, projectSection, "progress-project-tabs", Modifier.fillMaxWidth()) { target ->
+            val index = projectSections.indexOfFirst { it.value == target }
+            projectPagerScope.launch {
+              val distance = index - projectPager.currentPage
+              if (xopcPagerAnimated(motionAllowed, distance)) projectPager.animateScrollToPage(index)
+              else projectPager.scrollToPage(index)
+            }
           }
-          AutomationFilterButton(automationFilter) {
-            automationFilter = it
-            navigation.rememberSelection("automation-filter", it)
-          }
+        })
+        else -> null
+      },
+      modifier = Modifier.padding(bottom = if (page == "overview") 4.dp else 0.dp).testTag("progress-header"),
+    ) {
+      if (page == "automations") {
+        PageSearchButton(automationSearchOpen, R.string.progress_search, "automation-open-search") {
+          automationSearchOpen = !automationSearchOpen
         }
-        else if (page == "projects") {
-          PageSearchButton(projectSearchOpen, R.string.progress_search_projects, "projects-open-search") {
-            projectSearchOpen = !projectSearchOpen
-          }
-          IconButton(onClick = { openProjectEditor("create") }, modifier = Modifier.testTag("project-create")) {
-            Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_new))
-          }
+        AutomationFilterButton(automationFilter) {
+          automationFilter = it
+          navigation.rememberSelection("automation-filter", it)
         }
-        else if (page == "project") IconButton(onClick = { projectMenuOpen = true },
-          enabled = state.project?.id == selectedProjectId && selectedProjectId != null,
-          modifier = Modifier.testTag("project-open-actions")) {
-          Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_add_item))
+      } else if (page == "projects") {
+        PageSearchButton(projectSearchOpen, R.string.progress_search_projects, "projects-open-search") {
+          projectSearchOpen = !projectSearchOpen
         }
-        else if (page == "tasks") Row {
-          if (!taskSearchOpen) IconButton(onClick = { taskSearchOpen = true },
-            modifier = Modifier.size(48.dp).testTag("progress-open-search")) {
-            Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.progress_search),
-              modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
-          }
-          IconButton(onClick = { createTask(null) }, modifier = Modifier.size(48.dp).testTag("progress-create-task")) {
-            Icon(painterResource(R.drawable.action_add), contentDescription = stringResource(R.string.progress_new_task),
-              modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
-          }
+        IconButton(onClick = { openProjectEditor("create") }, modifier = Modifier.testTag("project-create")) {
+          Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_new))
         }
-      }
-      if (workPageIndex >= 0) {
-        PageTitleMenu(workPages, page, "work-page-menu", Modifier.fillMaxWidth(0.44f), ::scrollToWorkPage)
-      } else if (page == "automations" || page == "automation") {
-        val automationName = state.automations.detail?.takeIf { page == "automation" && it.id == selectedAutomationId }?.name
-        Text(automationName ?: stringResource(R.string.progress_automations),
-          modifier = Modifier.fillMaxWidth(0.65f), textAlign = TextAlign.Center,
-          style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-      } else if (page == "project" && selectedProjectId != null) {
-        PageTitleMenu(projectSections, projectSection, "progress-project-tabs", Modifier.fillMaxWidth(0.55f)) { target ->
-          val index = projectSections.indexOfFirst { it.value == target }
-          projectPagerScope.launch {
-            if (kotlin.math.abs(index - projectPager.currentPage) == 1) projectPager.animateScrollToPage(index)
-            else projectPager.scrollToPage(index)
-          }
+      } else if (page == "project") IconButton(onClick = { projectMenuOpen = true },
+        enabled = state.project?.id == selectedProjectId && selectedProjectId != null,
+        modifier = Modifier.testTag("project-open-actions")) {
+        Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_add_item))
+      } else if (page == "tasks") Row {
+        if (!taskSearchOpen) IconButton(onClick = { taskSearchOpen = true },
+          modifier = Modifier.size(48.dp).testTag("progress-open-search")) {
+          Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.progress_search),
+            modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
+        }
+        IconButton(onClick = { createTask(null) }, modifier = Modifier.size(48.dp).testTag("progress-create-task")) {
+          Icon(painterResource(R.drawable.action_add), contentDescription = stringResource(R.string.progress_new_task),
+            modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
         }
       }
     }
+    Column(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.PagePaddingX)) {
     if (state.createTaskChatError && page == "tasks") Text(
       stringResource(R.string.progress_create_chat_error), color = MaterialTheme.colorScheme.error,
       modifier = Modifier.testTag("progress-create-task-error"))
@@ -657,9 +663,10 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         { action -> selectedRunId?.let { onAutomationRunAction(it, action) } })
 
     }
+    }
   }
   val activeProject = state.project?.takeIf { it.id == selectedProjectId }
-  if (projectMenuOpen && activeProject != null) ModalBottomSheet(onDismissRequest = { projectMenuOpen = false }) {
+  if (projectMenuOpen && activeProject != null) XopcBottomSheet(XopcSheetPreset.Compact, onDismissRequest = { projectMenuOpen = false }) {
     ProjectActions(activeProject.name, onChat = {
       projectMenuOpen = false
       onCreateProjectChat(activeProject.id)
@@ -678,63 +685,57 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     })
   }
   if (projectEditorMode == "create" || projectEditorMode == "edit" && activeProject != null)
-    ModalBottomSheet(onDismissRequest = { if (!projectWriteBusy) projectEditorMode = null }) {
+    XopcBottomSheet(XopcSheetPreset.Large, onDismissRequest = { if (!projectWriteBusy) projectEditorMode = null }) {
       ProjectEditor(activeProject.takeIf { projectEditorMode == "edit" }, projectWriteBusy,
         projectWriteError, ::writeProject)
     }
-  if (discardAutomationEditOpen) AlertDialog(onDismissRequest = { discardAutomationEditOpen = false },
-    title = { Text(stringResource(R.string.progress_discard_title)) },
-    text = { Text(stringResource(R.string.automation_discard_edit_message)) },
-    confirmButton = { TextButton(onClick = {
+  if (discardAutomationEditOpen) XopcConfirmDialog(
+    onDismiss = { discardAutomationEditOpen = false },
+    onConfirm = {
       discardAutomationEditOpen = false
       page = "automation"
       selectedAutomationId?.let(onOpenAutomation)
-    }, modifier = Modifier.testTag("automation-edit-discard-confirm")) {
-      Text(stringResource(R.string.progress_discard))
-    } }, dismissButton = { TextButton(onClick = { discardAutomationEditOpen = false }) {
-      Text(stringResource(R.string.progress_cancel))
-    } })
-  if (discardEditOpen) AlertDialog(onDismissRequest = { discardEditOpen = false },
-    title = { Text(stringResource(R.string.progress_discard_title)) },
-    text = { Text(stringResource(R.string.progress_discard_message)) },
-    confirmButton = {
-      TextButton(onClick = {
-        discardEditOpen = false
-        page = "detail"
-        selectedTaskId?.let(onOpenTask)
-      },
-        modifier = Modifier.testTag("progress-discard-confirm")) {
-        Text(stringResource(R.string.progress_discard))
-      }
-    }, dismissButton = {
-      TextButton(onClick = { discardEditOpen = false }) { Text(stringResource(R.string.progress_cancel)) }
-    })
-  if (discardCreateOpen) AlertDialog(onDismissRequest = { discardCreateOpen = false },
-    title = { Text(stringResource(R.string.progress_discard_title)) },
-    text = { Text(stringResource(R.string.progress_discard_message)) },
-    confirmButton = {
-      TextButton(onClick = {
-        discardCreateOpen = false
-        page = if (createSourceProjectId == null) "tasks" else "project"
-      },
-        modifier = Modifier.testTag("progress-create-discard-confirm")) {
-        Text(stringResource(R.string.progress_discard))
-      }
-    }, dismissButton = {
-      TextButton(onClick = { discardCreateOpen = false }) { Text(stringResource(R.string.progress_cancel)) }
-    })
+    },
+    title = stringResource(R.string.progress_discard_title),
+    message = stringResource(R.string.automation_discard_edit_message),
+    confirmLabel = stringResource(R.string.progress_discard),
+    destructive = true,
+    confirmTag = "automation-edit-discard-confirm",
+  )
+  if (discardEditOpen) XopcConfirmDialog(
+    onDismiss = { discardEditOpen = false },
+    onConfirm = {
+      discardEditOpen = false
+      page = "detail"
+      selectedTaskId?.let(onOpenTask)
+    },
+    title = stringResource(R.string.progress_discard_title),
+    message = stringResource(R.string.progress_discard_message),
+    confirmLabel = stringResource(R.string.progress_discard),
+    destructive = true,
+    confirmTag = "progress-discard-confirm",
+  )
+  if (discardCreateOpen) XopcConfirmDialog(
+    onDismiss = { discardCreateOpen = false },
+    onConfirm = {
+      discardCreateOpen = false
+      returnToPage(if (createSourceProjectId == null) "tasks" else "project")
+    },
+    title = stringResource(R.string.progress_discard_title),
+    message = stringResource(R.string.progress_discard_message),
+    confirmLabel = stringResource(R.string.progress_discard),
+    destructive = true,
+    confirmTag = "progress-create-discard-confirm",
+  )
   pendingHomeAction?.let { action ->
-    AlertDialog(onDismissRequest = { pendingHomeAction = null },
-      title = { Text(action.label) },
-      text = { Text(stringResource(R.string.progress_home_action_confirm)) },
-      confirmButton = {
-        TextButton(onClick = { pendingHomeAction = null; onHomeAction(action) },
-          modifier = Modifier.testTag("progress-home-action-confirm")) {
-          Text(stringResource(R.string.progress_confirm))
-        }
-      }, dismissButton = {
-        TextButton(onClick = { pendingHomeAction = null }) { Text(stringResource(R.string.progress_cancel)) }
-      })
+    XopcConfirmDialog(
+      onDismiss = { pendingHomeAction = null },
+      onConfirm = { pendingHomeAction = null; onHomeAction(action) },
+      title = action.label,
+      message = stringResource(R.string.progress_home_action_confirm),
+      confirmLabel = stringResource(R.string.progress_confirm),
+      confirmTag = "progress-home-action-confirm",
+    )
   }
 }
 
@@ -1182,8 +1183,8 @@ internal fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError:
       modifier = Modifier.weight(1f).testTag("progress-task-chat")) { Text(stringResource(R.string.progress_task_chat_short)) }
   }
   }
-  if (statusOpen) androidx.compose.material3.ModalBottomSheet(onDismissRequest = { if (!busy) { statusOpen = false; onStatusDismiss() } },
-    sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+  if (statusOpen) XopcBottomSheet(XopcSheetPreset.Medium,
+    onDismissRequest = { if (!busy) { statusOpen = false; onStatusDismiss() } }) {
     Column(Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()).padding(20.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Text(stringResource(R.string.progress_adjust_status), style = MaterialTheme.typography.titleLarge)
@@ -1269,39 +1270,36 @@ internal fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError:
     }
   }
   confirmAction?.let { action ->
-    AlertDialog(onDismissRequest = { confirmAction = null },
-      title = { Text(stringResource(when (action) {
+    XopcConfirmDialog(
+      onDismiss = { confirmAction = null },
+      onConfirm = { confirmAction = null; onCommand(action) },
+      title = stringResource(when (action) {
         "cancel_task" -> R.string.progress_cancel_task
         "stop_run" -> R.string.task_stop_run
         else -> R.string.progress_command_close
-      })) },
-      text = { Text(stringResource(when (action) {
+      }),
+      message = stringResource(when (action) {
         "cancel_task" -> R.string.progress_cancel_task_help
         "stop_run" -> R.string.task_stop_run_help
         else -> R.string.progress_command_confirm
-      })) },
-      confirmButton = {
-        TextButton(onClick = { confirmAction = null; onCommand(action) },
-          modifier = Modifier.testTag("progress-command-confirm")) { Text(stringResource(R.string.progress_confirm)) }
-      }, dismissButton = {
-        TextButton(onClick = { confirmAction = null }) { Text(stringResource(R.string.progress_cancel)) }
-      })
+      }),
+      confirmLabel = stringResource(R.string.progress_confirm),
+      destructive = action == "cancel_task" || action == "stop_run",
+      confirmTag = "progress-command-confirm",
+    )
   }
-  if (confirmStart && "start" in task.allowedCommands && !busy) AlertDialog(
-    onDismissRequest = { confirmStart = false },
-    title = { Text(stringResource(R.string.progress_command_start)) },
-    text = { Text(stringResource(R.string.progress_start_confirm, agentId.trim())) },
-    confirmButton = {
-      TextButton(onClick = {
-        confirmStart = false
-        val selected = agentId.trim()
-        if (selected.isNotEmpty() && selected.length <= 128) onStart(selected)
-      }, modifier = Modifier.testTag("progress-start-confirm")) {
-        Text(stringResource(R.string.progress_confirm))
-      }
-    }, dismissButton = {
-      TextButton(onClick = { confirmStart = false }) { Text(stringResource(R.string.progress_cancel)) }
-    })
+  if (confirmStart && "start" in task.allowedCommands && !busy) XopcConfirmDialog(
+    onDismiss = { confirmStart = false },
+    onConfirm = {
+      confirmStart = false
+      val selected = agentId.trim()
+      if (selected.isNotEmpty() && selected.length <= 128) onStart(selected)
+    },
+    title = stringResource(R.string.progress_command_start),
+    message = stringResource(R.string.progress_start_confirm, agentId.trim()),
+    confirmLabel = stringResource(R.string.progress_confirm),
+    confirmTag = "progress-start-confirm",
+  )
 }
 
 @Composable

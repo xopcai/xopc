@@ -104,11 +104,7 @@ internal fun PersonalGoalsScreen(state: PersonalUiState, insets: PaddingValues, 
   )
   fun selectGoalTab(value: Boolean) { scope.launch { pager.animateScrollToPage(if (value) 1 else 0) } }
   Column(Modifier.fillMaxSize().padding(insets).testTag("personal-goals-screen")) {
-    Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp),
-      verticalAlignment = Alignment.CenterVertically) {
-      PageBackButton("personal-goals-back", onBack)
-      Text(stringResource(R.string.personal_goals), Modifier.weight(1f),
-        style = MaterialTheme.typography.titleMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    XopcPageHeader("personal-goals-back", onBack, title = stringResource(R.string.personal_goals)) {
       IconButton(onClick = { openEditor(null) }, enabled = state.summary != null,
         modifier = Modifier.testTag("goal-add")) {
         ActionIcon(R.drawable.action_add, contentDescription = stringResource(R.string.personal_goal_add))
@@ -145,7 +141,8 @@ internal fun PersonalGoalsScreen(state: PersonalUiState, insets: PaddingValues, 
       disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
       focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
       disabledIndicatorColor = Color.Transparent)
-    ModalBottomSheet(onDismissRequest = { if (!state.savingGoal) editorOpen = false },
+    XopcBottomSheet(XopcSheetPreset.Large,
+      onDismissRequest = { if (!state.savingGoal) editorOpen = false },
       sheetState = sheetState, containerColor = MaterialTheme.colorScheme.surface,
       modifier = Modifier.testTag("personal-goal-sheet")) {
       Column(Modifier.fillMaxWidth()

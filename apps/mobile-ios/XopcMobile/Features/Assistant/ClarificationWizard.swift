@@ -4,6 +4,7 @@ private struct ClarificationWizardDraft: Codable, Equatable { var index = 0; var
 
 struct ClarificationWizard: View {
     @Environment(\.mobileTheme) private var mobileTheme; @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let clarification: ClarificationRequest; let isSubmitting: Bool; let errorMessage: String?
     let onRespond: (String, ClarificationSubmission?) -> Void
     @State private var draft = ClarificationWizardDraft(); @State private var storageError: String?
@@ -60,7 +61,7 @@ struct ClarificationWizard: View {
             submit("answer"); return
         }
         if let nextUnanswered = questions.firstIndex(where: { !isAnswered($0) }) {
-            expandedCustomID = nil; withAnimation(.easeOut(duration: 0.18)) { draft.index = nextUnanswered }
+            expandedCustomID = nil; MobileMotion.perform(MobileMotion.exitDuration, reduceMotion: reduceMotion) { draft.index = nextUnanswered }
         }
     }
 
@@ -118,7 +119,7 @@ struct ClarificationWizard: View {
         let isMulti = questions.count > 1
         if collapsed {
             ClarificationCollapsedBar(title: question?.header ?? AppLocalization.resolve("待确认"), progress: isMulti ? "\(answeredCount)/\(questions.count)" : nil,
-                                      palette: palette, cornerRadius: mobileTheme.corner(18)) { withAnimation(.easeOut(duration: 0.18)) { collapsed = false } }
+                                      palette: palette, cornerRadius: mobileTheme.corner(18)) { MobileMotion.perform(MobileMotion.exitDuration, reduceMotion: reduceMotion) { collapsed = false } }
         } else {
             ClarificationCardShell(palette: palette, cornerRadius: mobileTheme.corner(20)) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -139,7 +140,7 @@ struct ClarificationWizard: View {
                         HStack(spacing: 6) {
                             ForEach(Array(questions.enumerated()), id: \.element.id) { idx, item in
                                 let active = idx == draft.index, done = isAnswered(item)
-                                Button { expandedCustomID = nil; withAnimation(.easeOut(duration: 0.16)) { draft.index = idx } } label: {
+                                Button { expandedCustomID = nil; MobileMotion.perform(MobileMotion.microDuration, reduceMotion: reduceMotion) { draft.index = idx } } label: {
                                     HStack(spacing: 4) {
                                         Text("\(idx + 1). \(item.header)").lineLimit(1); if done {
                                             Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
@@ -158,7 +159,7 @@ struct ClarificationWizard: View {
                     Text("\(answeredCount)/\(questions.count)").font(.caption2.monospacedDigit().weight(.medium)).foregroundStyle(palette.tertiaryText)
                 }
                 ClarificationHeaderActions(showMenu: draft.pendingAction == nil, disabled: locked, palette: palette, onAgentDecide: { submit("agent_decide") },
-                                           onCancel: { submit("cancel") }, onCollapse: { withAnimation(.easeOut(duration: 0.18)) { collapsed = true } })
+                                           onCancel: { submit("cancel") }, onCollapse: { MobileMotion.perform(MobileMotion.exitDuration, reduceMotion: reduceMotion) { collapsed = true } })
             }
             if isMulti {
                 HStack(spacing: 4) {
@@ -180,7 +181,7 @@ struct ClarificationWizard: View {
                 if question.type == "single_choice" {
                     ClarificationOptionsGroup(choices: choices, recommendedID: question.recommendedChoiceId, selectedID: answer?.choiceId,
                                               customExpanded: showCustom, disabled: locked, palette: palette, onPick: pickChoice,
-                                              onToggleCustom: { withAnimation(.easeOut(duration: 0.16)) { expandedCustomID = showCustom ? nil : question.id } })
+                                              onToggleCustom: { MobileMotion.perform(MobileMotion.microDuration, reduceMotion: reduceMotion) { expandedCustomID = showCustom ? nil : question.id } })
                 }
                 if showCustom {
                     ClarificationCustomEditor(selectedLabel: choices.first { $0.id == answer?.choiceId }?.label,
@@ -214,14 +215,14 @@ struct ClarificationWizard: View {
             Rectangle().fill(palette.divider).frame(height: 0.5)
             HStack(spacing: 10) {
                 if isMulti, draft.index > 0 {
-                    Button { expandedCustomID = nil; withAnimation(.easeOut(duration: 0.16)) { draft.index -= 1 } } label: {
+                    Button { expandedCustomID = nil; MobileMotion.perform(MobileMotion.microDuration, reduceMotion: reduceMotion) { draft.index -= 1 } } label: {
                         Text("上一题").font(.subheadline.weight(.medium)).foregroundStyle(palette.tonalText)
                             .padding(.horizontal, 14).frame(minHeight: 38).background(palette.tonalFill, in: Capsule())
                     }.buttonStyle(.plain).disabled(isSubmitting)
                 }
                 Spacer()
                 if isMulti, !complete, draft.index < questions.count - 1, draft.pendingAction == nil {
-                    Button { expandedCustomID = nil; withAnimation(.easeOut(duration: 0.16)) { draft.index += 1 } } label: {
+                    Button { expandedCustomID = nil; MobileMotion.perform(MobileMotion.microDuration, reduceMotion: reduceMotion) { draft.index += 1 } } label: {
                         Text("下一题").font(.subheadline.weight(.semibold)).foregroundStyle(palette.onAccent).padding(.horizontal, 18).frame(minHeight: 38)
                             .background(palette.accent.opacity((isSubmitting || !isAnswered(question)) ? 0.4 : 1), in: Capsule())
                     }.buttonStyle(.plain).disabled(isSubmitting || !isAnswered(question))

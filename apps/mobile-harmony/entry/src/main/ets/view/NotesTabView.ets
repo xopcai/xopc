@@ -1,4 +1,7 @@
-import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
+import { XOPC_PAGE_PADDING_X, xopcMoreIcon } from '../common/designTokens';
+import { xopcConfirmDialog } from '../common/dialogActions';
+import { xopcClickEffect, xopcPagerAnimated, xopcPagerDuration, xopcRevealTransition } from '../common/motionTokens';
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcPagerProgress, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
 import { generatedMusicPlayback, XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
 import { XopcMusicMiniPlayer } from './MusicPlaybackView';
 import { XopcLocalRecording } from '../service/discussionRecordingStore';
@@ -7,17 +10,28 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcMobileRoute } from '../model/home';
 import { XopcNoteIndexEntry, XopcNoteProjectReference, XopcNoteStatus } from '../model/note';
 import { XopcNoteViewModel } from '../viewmodel/noteViewModel';
-import { XopcEmptyHint, XopcListSkeleton, XopcPageHeader, XopcPageSearchField, XopcPaginationFooter } from './MobileComponents';
+import {
+  XopcBatchActionBar,
+  XopcEmptyHint,
+  XopcErrorState,
+  XopcInlineBanner,
+  XopcListSkeleton,
+  XopcPageHeader,
+  XopcPageSearchField,
+  XopcPaginationFooter,
+} from './MobileComponents';
 import { XopcNotesView } from './NotesView';
 import { userErrorMessage } from '../common/userError';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
 import { xopcFormatCaptureTime } from '../common/discussionAudio';
 import { formatNoteTimestamp } from '../common/notePresentation';
+import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { appSettings } from '../service/settings';
 
 @ComponentV2
 export struct XopcNotesTabView {
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local layout: XopcLayoutState = layoutState;
   @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
   @Local capture: XopcDiscussionCapture = discussionCapture;
   @Param activePage: boolean = false;
@@ -33,6 +47,31 @@ export struct XopcNotesTabView {
   @Local selectedId: string = '';
   @Local recoveriesOpen: boolean = false;
   private initialized: boolean = false;
+  private pager: SwiperController = new SwiperController();
+  private pagerProgress: XopcPagerProgress = new XopcPagerProgress();
+  private readonly statusOptions: XopcSegmentOption[] = [
+    { key: '', label: $r('app.string.note_all') },
+    { key: 'inbox', label: $r('app.string.inbox') },
+    { key: 'processed', label: $r('app.string.note_processed') },
+    { key: 'archived', label: $r('app.string.archive') },
+  ];
+
+  private statusIndex(): number {
+    return Math.max(0, this.statusOptions.findIndex((option: XopcSegmentOption): boolean => option.key === this.model.status));
+  }
+
+  private selectStatus(key: string): void {
+    const target = this.statusOptions.findIndex((option: XopcSegmentOption): boolean => option.key === key);
+    if (target < 0 || key === this.model.status) return;
+    this.pager.changeIndex(target, xopcPagerAnimated(this.layout.reduceMotion, target - this.statusIndex()));
+  }
+
+  private commitStatus(index: number): void {
+    const next = this.statusOptions[index]?.key ?? '';
+    if (next === this.model.status) return;
+    this.model.status = next as XopcNoteStatus | '';
+    void this.model.list(false, true);
+  }
 
   aboutToAppear(): void { this.updateActivity(); }
   aboutToDisappear(): void { this.model.dispose(); this.initialized = false; }
@@ -138,12 +177,13 @@ export struct XopcNotesTabView {
 
   private async confirmRecordingDiscard(id: string): Promise<void> {
     try {
-      const result = await this.getUIContext().getPromptAction().showDialog({
-        title: $r('app.string.capture_discard_title'), message: $r('app.string.capture_discard_message'),
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-          { text: $r('app.string.capture_discard'), color: this.colors.danger }]
+      const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+        title: $r('app.string.capture_discard_title'),
+        message: $r('app.string.capture_discard_message'),
+        confirmLabel: $r('app.string.capture_discard'),
+        destructive: true,
       });
-      if (result.index === 1) {
+      if (confirmed) {
         await this.capture.discardRecording(this.getUIContext().getHostContext() as common.UIAbilityContext, id);
       }
     } catch (error) { this.model.error = (error as Error).message; }
@@ -200,24 +240,113 @@ export struct XopcNotesTabView {
           .onClick((): void => { void this.restoreRecording(recording.id); })
         Blank().layoutWeight(1)
         Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(20).fontColor([this.colors.secondary])
+          SymbolGlyph(xopcMoreIcon()).fontSize(20).fontColor([this.colors.secondary])
         }.id('notes-recovery-more-' + recording.id).width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          .clickEffect(xopcClickEffect())
           .enabled(!this.capture.recoveryBusy).accessibilityText($r('app.string.more'))
           .bindMenu(this.recoveryMenu(recording), { placement: Placement.BottomRight })
       }.width('100%').margin({ top: 4 })
     }.width('100%').padding(12).alignItems(HorizontalAlign.Start)
       .borderRadius(this.colors.corner(14)).backgroundColor(this.colors.panel)
+      .transition(xopcRevealTransition(TransitionEdge.TOP, this.layout.reduceMotion))
   }
 
   private async confirmBatchDelete(): Promise<void> {
     try {
-      const result = await this.getUIContext().getPromptAction().showDialog({
-        title: $r('app.string.delete'), message: $r('app.string.notes_delete_selection_confirm'),
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-          { text: $r('app.string.delete'), color: this.colors.danger }]
+      const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+        title: $r('app.string.delete'),
+        message: $r('app.string.notes_delete_selection_confirm'),
+        confirmLabel: $r('app.string.delete'),
+        destructive: true,
       });
-      if (result.index === 1) await this.model.batch('delete');
+      if (confirmed) await this.model.batch('delete');
     } catch (error) { this.model.error = (error as Error).message; }
+  }
+
+  @Builder
+  private notesListBody() {
+    Refresh({ refreshing: this.model.loading && this.model.items.length > 0 }) {
+      List({ space: 8 }) {
+        if (this.capture.pendingRecordings.length && this.capture.phase !== 'recording' && this.capture.phase !== 'paused') {
+          ListItem() { this.recoveryHeader() }
+          if (this.recoveriesOpen) {
+            ForEach(this.capture.pendingRecordings, (recording: XopcLocalRecording) => {
+              ListItem() { this.recoveryRow(recording) }
+            }, (recording: XopcLocalRecording): string => recording.id + ':' + (recording.savedDurationMs ?? 0) +
+              ':' + (recording.sealRequested ?? false) + ':' + (recording.recoveryError ?? ''))
+          }
+        }
+        if (this.model.loading && !this.model.items.length) {
+          ListItem() { XopcListSkeleton() }
+        } else if (this.model.error && !this.model.items.length) {
+          ListItem() {
+            XopcErrorState({ error: this.model.error, context: 'collection',
+              onAction: (): void => { void this.model.list(); } })
+          }
+        } else if (!this.model.items.length) {
+          ListItem() { XopcEmptyHint({ message: $r('app.string.no_notes'), centered: true }) }
+        }
+        ForEach(this.model.items, (item: XopcNoteIndexEntry) => {
+          ListItem() {
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 12 }) {
+                if (item.kind === 'voice') {
+                  Row() {
+                    SymbolGlyph($r('sys.symbol.mic')).fontSize(17).fontColor([this.colors.secondary])
+                  }.width(32).height(32).justifyContent(FlexAlign.Center)
+                    .borderRadius(this.colors.corner(8)).backgroundColor(this.colors.input)
+                }
+                Column({ space: 5 }) {
+                  Row({ space: 6 }) {
+                    if (item.pinned) { SymbolGlyph($r('sys.symbol.pin')).fontSize(13).fontColor([this.colors.accent]) }
+                    Text(item.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(item.title) ? $r('app.string.note_voice_option') : item.title || $r('app.string.untitled')).fontSize(17).fontWeight(FontWeight.Medium)
+                      .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  }.width('100%')
+                  if (item.snippet) {
+                    Text(item.snippet).fontSize(14).lineHeight(20).fontColor(this.colors.secondary)
+                      .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                  }
+                  Text(formatNoteTimestamp(item.updatedAt, appSettings.effectiveLanguage()))
+                    .fontSize(12).fontColor(this.colors.tertiary).width('100%')
+                  if (item.projects?.length) {
+                    Text(item.projects.map((project: XopcNoteProjectReference): string => project.name).join(' · '))
+                      .fontSize(12).fontColor(this.colors.secondary).maxLines(1)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                  }
+                  if (item.tags?.length) {
+                    Text(item.tags.slice(0, 2).map((tag: string): string => '#' + tag).join('  '))
+                      .fontSize(12).fontColor(this.colors.accent).maxLines(1)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                  }
+                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
+                if (this.model.selecting) {
+                  SymbolGlyph(this.model.selectedIds.includes(item.id) ? $r('sys.symbol.checkmark_circle_fill')
+                    : $r('sys.symbol.circle')).fontSize(21).fontColor([this.colors.accent])
+                }
+              }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
+            }.width('100%').constraintSize({ minHeight: item.kind === 'voice' ? 72 : 96 }).padding(0)
+              .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
+              .clickEffect(xopcClickEffect())
+              .onClick((): void => {
+                if (this.model.selecting) this.model.toggleSelection(item.id);
+                else this.openNote(item.id);
+              }, SEGMENTED_PAGE_TAP_SLOP_VP)
+              .gesture(LongPressGesture({ duration: 350, repeat: false }).onAction((): void => {
+                this.model.toggleSelection(item.id);
+              }))
+          }
+        }, (item: XopcNoteIndexEntry): string => item.id + ':' + item.updatedAt)
+        if (this.model.hasMore) {
+          ListItem() {
+            XopcPaginationFooter({ loadingPage: this.model.loading || this.model.loadingMore, failedPage: !!this.model.error,
+              onLoad: (): void => { void this.model.list(true); } })
+          }
+        }
+      }.width('100%').height('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).scrollBar(BarState.Off)
+        .contentEndOffset(!this.model.selecting || this.recordingAvailable ? 72 : 0)
+    }.width('100%').height('100%').pullToRefresh(!this.model.loading)
+      .onRefreshing((): void => { void this.model.list(false, true); })
   }
 
   @Builder
@@ -230,114 +359,60 @@ export struct XopcNotesTabView {
         Column() {
           XopcPageSearchField({ searchId: 'notes-search', text: this.searchText, placeholder: $r('app.string.search_notes'),
             onChange: (value: string): void => { this.searchText = value; }, onSubmit: (): void => { this.searchAll(); } })
-        }.padding({ left: 20, right: 20, bottom: 12 })
+        }.padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 12 })
       }
       Row() {
-        XopcSegmentedTabs({ options: [
-          { key: '', label: $r('app.string.note_all') },
-          { key: 'inbox', label: $r('app.string.inbox') },
-          { key: 'processed', label: $r('app.string.note_processed') },
-          { key: 'archived', label: $r('app.string.archive') }
-        ], selectedKey: this.model.status, onSelect: (key: string): void => {
-          this.model.status = key as XopcNoteStatus | '';
-          void this.model.list(false, true);
-        } }).layoutWeight(1)
-      }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
-      if (this.model.error) {
-        Row({ space: 12 }) {
-          Text(userErrorMessage(this.model.error, 'collection')).fontSize(13).fontColor(this.colors.secondary)
-            .layoutWeight(1)
-          Button($r('app.string.retry')).fontSize(13).fontColor(this.colors.accent)
-            .backgroundColor(Color.Transparent).padding(0).height(36)
-            .onClick((): void => { void this.model.list(); })
-        }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
+        XopcSegmentedTabs({ options: this.statusOptions, selectedKey: this.model.status,
+          pagerProgress: this.pagerProgress, swipeToSelect: !this.model.selecting,
+          onSelect: (key: string): void => { this.selectStatus(key); } }).layoutWeight(1)
+      }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
+      if (this.model.error && this.model.items.length > 0) {
+        Column() {
+          XopcInlineBanner({
+            message: userErrorMessage(this.model.error, 'collection'),
+            actionLabel: $r('app.string.retry'),
+            busy: this.model.loading,
+            onAction: (): void => { void this.model.list(); },
+          })
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
       }
       Stack({ alignContent: Alignment.Bottom }) {
-        List({ space: 8 }) {
-          if (this.capture.pendingRecordings.length && this.capture.phase !== 'recording' && this.capture.phase !== 'paused') {
-            ListItem() { this.recoveryHeader() }
-            if (this.recoveriesOpen) {
-              ForEach(this.capture.pendingRecordings, (recording: XopcLocalRecording) => {
-                ListItem() { this.recoveryRow(recording) }
-              }, (recording: XopcLocalRecording): string => recording.id + ':' + (recording.savedDurationMs ?? 0) +
-                ':' + (recording.sealRequested ?? false) + ':' + (recording.recoveryError ?? ''))
-            }
-          }
-          if (this.model.loading && !this.model.items.length) {
-            ListItem() { XopcListSkeleton() }
-          } else if (!this.model.items.length && !this.model.error) {
-            ListItem() { XopcEmptyHint({ message: $r('app.string.no_notes') }) }
-          }
-          ForEach(this.model.items, (item: XopcNoteIndexEntry) => {
-            ListItem() {
-              Button({ type: ButtonType.Normal }) {
-                Row({ space: 12 }) {
-                  if (item.kind === 'voice') {
-                    Row() {
-                      SymbolGlyph($r('sys.symbol.mic')).fontSize(17).fontColor([this.colors.secondary])
-                    }.width(32).height(32).justifyContent(FlexAlign.Center)
-                      .borderRadius(this.colors.corner(8)).backgroundColor(this.colors.input)
-                  }
-                  Column({ space: 5 }) {
-                    Row({ space: 6 }) {
-                      if (item.pinned) { SymbolGlyph($r('sys.symbol.pin')).fontSize(13).fontColor([this.colors.accent]) }
-                      Text(item.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(item.title) ? $r('app.string.note_voice_option') : item.title || $r('app.string.untitled')).fontSize(17).fontWeight(FontWeight.Medium)
-                        .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    }.width('100%')
-                    if (item.snippet) {
-                      Text(item.snippet).fontSize(14).lineHeight(20).fontColor(this.colors.secondary)
-                        .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                    }
-                    Text(formatNoteTimestamp(item.updatedAt, appSettings.effectiveLanguage()))
-                      .fontSize(12).fontColor(this.colors.tertiary).width('100%')
-                    if (item.projects?.length) {
-                      Text(item.projects.map((project: XopcNoteProjectReference): string => project.name).join(' · '))
-                        .fontSize(12).fontColor(this.colors.secondary).maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                    }
-                    if (item.tags?.length) {
-                      Text(item.tags.slice(0, 2).map((tag: string): string => '#' + tag).join('  '))
-                        .fontSize(12).fontColor(this.colors.accent).maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                    }
-                  }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                  SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
-                  if (this.model.selecting) {
-                    SymbolGlyph(this.model.selectedIds.includes(item.id) ? $r('sys.symbol.checkmark_circle_fill')
-                      : $r('sys.symbol.circle')).fontSize(21).fontColor([this.colors.accent])
-                  }
-                }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
-              }.width('100%').constraintSize({ minHeight: item.kind === 'voice' ? 72 : 96 }).padding(0)
-                .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
-                .onClick((): void => {
-                  if (this.model.selecting) this.model.toggleSelection(item.id);
-                  else this.openNote(item.id);
-                }, SEGMENTED_PAGE_TAP_SLOP_VP)
-                .gesture(LongPressGesture({ duration: 350, repeat: false }).onAction((): void => {
-                  this.model.toggleSelection(item.id);
-                }))
-            }
-          }, (item: XopcNoteIndexEntry): string => item.id + ':' + item.updatedAt)
-          if (this.model.hasMore) {
-            ListItem() {
-              XopcPaginationFooter({ loadingPage: this.model.loading || this.model.loadingMore, failedPage: !!this.model.error,
-                onLoad: (): void => { void this.model.list(true); } })
-            }
-          }
-        }.width('100%').height('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
-          .contentEndOffset(!this.model.selecting || this.recordingAvailable ? 72 : 0)
+        Swiper(this.pager) {
+          ForEach(this.statusOptions, (option: XopcSegmentOption) => {
+            Column() {
+              if (option.key === this.model.status) {
+                this.notesListBody()
+              } else {
+                Column() { XopcListSkeleton() }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X })
+              }
+            }.width('100%').height('100%')
+              .accessibilityLevel(option.key === this.model.status ? 'auto' : 'no-hide-descendants')
+          }, (option: XopcSegmentOption): string => option.key || 'all')
+        }.id('notes-tab-pager').index(this.statusIndex()).loop(false).indicator(false).cachedCount(1)
+          .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(this.model.selecting)
+          .onContentDidScroll((_selected: number, index: number, position: number, length: number): void => {
+            this.pagerProgress.update(index, position, length);
+          })
+          .onAnimationEnd((): void => { this.pagerProgress.reset(); })
+          .onChange((index: number): void => { this.commitStatus(index); })
+          .width('100%').height('100%')
         if (!this.model.selecting || this.recordingAvailable) this.captureActions()
       }.layoutWeight(1).width('100%')
       if (this.model.selecting) {
-        Row({ space: 4 }) {
-          Button($r('app.string.pin')).layoutWeight(1).height(44).enabled(!this.model.saving)
+        XopcBatchActionBar({ barEnabled: !this.model.saving }) {
+          Button($r('app.string.pin')).layoutWeight(1).height(44).backgroundColor(Color.Transparent)
+            .fontColor(this.colors.foreground).enabled(!this.model.saving).clickEffect(xopcClickEffect())
             .onClick((): void => { void this.model.batch('pin'); })
-          Button($r('app.string.archive')).layoutWeight(1).height(44).enabled(!this.model.saving)
+          Button($r('app.string.archive')).layoutWeight(1).height(44).backgroundColor(Color.Transparent)
+            .fontColor(this.colors.foreground).enabled(!this.model.saving).clickEffect(xopcClickEffect())
             .onClick((): void => { void this.model.batch('archive'); })
-          Button($r('app.string.delete')).layoutWeight(1).height(44).fontColor(this.colors.danger).enabled(!this.model.saving)
+          Button($r('app.string.delete')).layoutWeight(1).height(44).backgroundColor(Color.Transparent)
+            .fontColor(this.colors.danger).enabled(!this.model.saving).clickEffect(xopcClickEffect())
             .onClick((): void => { void this.confirmBatchDelete(); })
-          Button($r('app.string.cancel')).layoutWeight(1).height(44).onClick((): void => { this.model.clearSelection(); })
-        }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
+          Button($r('app.string.cancel')).layoutWeight(1).height(44).backgroundColor(Color.Transparent)
+            .fontColor(this.colors.secondary).clickEffect(xopcClickEffect())
+            .onClick((): void => { this.model.clearSelection(); })
+        }
       }
       if (this.activePage && this.music.track) {
         XopcMusicMiniPlayer()

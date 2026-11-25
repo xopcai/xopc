@@ -25,7 +25,8 @@ export class XopcFilesViewModel {
   private transfer: XopcFileTransfer = new XopcFileTransfer();
   private generation: number = 0;
   private contextId: string = '';
-  private lastLibrarySearch: string = '';
+  private listQuery: string = '';
+  private loadingList: boolean = false;
 
   private libraryScope(): string {
     const profile = gatewaySession.currentProfile();
@@ -64,12 +65,21 @@ export class XopcFilesViewModel {
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) this.busy = false; }
   }
-  async load(search: string = '', replace: boolean = false): Promise<void> {
-    const differentSearch = replace && this.lastLibrarySearch !== search.trim();
-    if (this.busy && !differentSearch) return;
-    if (differentSearch) { this.lastLibrarySearch = search.trim(); this.items = []; }
+  clearSearch(): boolean {
+    if (this.busy && !this.loadingList) return false;
+    if (this.listQuery) void this.load();
+    return true;
+  }
+
+  async load(search: string = ''): Promise<void> {
+    const query = search.trim();
+    const queryChanged = this.listQuery !== query;
+    if (this.busy && !(this.loadingList && queryChanged)) return;
+    this.listQuery = query;
+    this.loadingList = true;
+    if (queryChanged) this.items = [];
     this.busy = true; this.error = ''; const generation = ++this.generation;
-    const library = !this.contextId && !this.space && !search.trim();
+    const library = !this.contextId && !this.space && !query;
     const scope = this.libraryScope();
     if (library && scope && scope === fileLibrarySnapshot.scope && !this.items.length) {
       this.spaces = fileLibrarySnapshot.spaces;
@@ -87,7 +97,7 @@ export class XopcFilesViewModel {
           fileLibrarySnapshot.spaces = spaces.spaces;
         }
       }
-      const path = search.trim() ? '/api/files/search?q=' + encodeURIComponent(search.trim()) + '&limit=50' + (this.contextId && this.space ? '&spaceId=' + encodeURIComponent(this.space.id) : '')
+      const path = query ? '/api/files/search?q=' + encodeURIComponent(query) + '&limit=50' + (this.contextId && this.space ? '&spaceId=' + encodeURIComponent(this.space.id) : '')
         : this.space ? '/api/files/spaces/' + encodeURIComponent(this.space.id) + '/children?path=' + encodeURIComponent(this.directory)
           : '/api/files/recent?limit=50';
       const result = JSON.parse(await gatewaySession.request(path)) as XopcFiles;
@@ -96,7 +106,12 @@ export class XopcFilesViewModel {
       this.items = result.items;
       if (library && scope && scope === fileLibrarySnapshot.scope) fileLibrarySnapshot.items = result.items;
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
-    finally { if (generation === this.generation) this.busy = false; }
+    finally {
+      if (generation === this.generation) {
+        this.loadingList = false;
+        this.busy = false;
+      }
+    }
   }
   async choose(space: XopcFileSpace): Promise<void> {
     if (this.busy) return;

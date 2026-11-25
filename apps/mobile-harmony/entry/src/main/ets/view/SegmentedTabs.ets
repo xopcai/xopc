@@ -1,5 +1,10 @@
 import { common } from '@kit.AbilityKit';
-import { curves } from '@kit.ArkUI';
+import {
+  XOPC_MOTION_EMPHASIS_MS,
+  XOPC_MOTION_MICRO_MS,
+  xopcMotionDuration,
+  xopcStandardCurve,
+} from '../common/motionTokens';
 import { appThemeColors, xopcRoundedClip, XopcThemeColors } from '../common/themePalette';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 
@@ -12,7 +17,6 @@ export interface XopcSegmentOption {
   minimumWidth?: number;
 }
 
-const segmentCurve: ICurve = curves.cubicBezierCurve(0.32, 0.72, 0, 1);
 export const SEGMENTED_PAGE_TAP_SLOP_VP = 8;
 
 @ObservedV2
@@ -170,7 +174,7 @@ export struct XopcSegmentedTabs {
             Blank().id('segmented-tab-indicator').width(this.indicatorWidth).height(44 * this.fontScale)
               .backgroundColor(this.colors.light ? this.colors.panel : this.colors.active)
               .borderRadius(this.segmentRadius).translate({ x: this.indicatorOffset })
-              .animation({ duration: this.layout.reduceMotion || this.pagerProgress !== undefined ? 0 : 250, curve: segmentCurve })
+              .animation({ duration: this.pagerProgress !== undefined ? 0 : xopcMotionDuration(XOPC_MOTION_EMPHASIS_MS, this.layout.reduceMotion), curve: xopcStandardCurve() })
               .hitTestBehavior(HitTestMode.None).accessibilityLevel('no')
           }
           Row() {
@@ -180,17 +184,17 @@ export struct XopcSegmentedTabs {
                   if (option.icon) {
                     SymbolGlyph(option.icon).fontSize(16).fontColor([
                       option.key === this.selectedKey ? this.selectedForeground : this.colors.secondary
-                    ]).animation({ duration: this.layout.reduceMotion ? 0 : 150, curve: Curve.EaseOut })
+                    ]).animation({ duration: xopcMotionDuration(XOPC_MOTION_MICRO_MS, this.layout.reduceMotion), curve: Curve.EaseOut })
                   }
                   Text(option.label).fontSize(14)
                     .fontWeight(option.key === this.selectedKey ? FontWeight.Bold : FontWeight.Medium).maxLines(1)
                     .textAlign(TextAlign.Center).textOverflow({ overflow: TextOverflow.Ellipsis })
                     .fontColor(option.key === this.selectedKey ? this.selectedForeground : this.colors.secondary)
-                    .animation({ duration: this.layout.reduceMotion ? 0 : 150, curve: Curve.EaseOut })
+                    .animation({ duration: xopcMotionDuration(XOPC_MOTION_MICRO_MS, this.layout.reduceMotion), curve: Curve.EaseOut })
                   if (option.count !== undefined) {
                     Text(option.count.toString()).fontSize(11).maxLines(1)
                       .fontColor(option.key === this.selectedKey ? this.selectedForeground : this.colors.secondary)
-                    .animation({ duration: this.layout.reduceMotion ? 0 : 150, curve: Curve.EaseOut })
+                    .animation({ duration: xopcMotionDuration(XOPC_MOTION_MICRO_MS, this.layout.reduceMotion), curve: Curve.EaseOut })
                   }
                 }.padding({ left: 6, right: 6 }).justifyContent(FlexAlign.Center)
               }.id(option.testId ?? '').width(this.segmentWidth(option)).height(44 * this.fontScale).padding(0)

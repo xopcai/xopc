@@ -459,46 +459,39 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         modifier = Modifier.testTag("notes-file-upload-rename")) { Text(stringResource(R.string.file_space_upload)) }
     },
     dismissButton = { TextButton(enabled = !uploadBusy, onClick = { conflictUri = null }) { Text(stringResource(R.string.progress_cancel)) } })
-  Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically) {
-      if (onExit != null) {
-        val back = when {
-          fileBrowserOpen -> closeFile
-          editorOpen -> closeEditor
-          selectedId != null -> closeNote
-          else -> onExit
-        }
-        IconButton(onClick = back, modifier = Modifier.testTag("notes-back")) {
-          Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
-        }
-      }
+  Column(modifier = Modifier.fillMaxSize().padding(insets),
+    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val back = when {
+      fileBrowserOpen -> closeFile
+      editorOpen -> closeEditor
+      selectedId != null -> closeNote
+      else -> onExit ?: {}
+    }
+    XopcPageHeader(
+      backTag = "notes-back",
+      onBack = back,
+      showBack = onExit != null,
+      title = if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
+    ) {
       if (fileBrowserOpen || editorOpen || selectedId != null) {
-
-        Text(if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
-          style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
-          modifier = Modifier.weight(1f).padding(end = 12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (fileBrowserOpen && selectedFile == null && onUploadSpaceFile != null &&
           fileSpaces.any { it.id == fileSpaceId && it.writable }) {
           TextButton(enabled = !uploadBusy, onClick = {
             uploadTarget = (fileSpaceId ?: return@TextButton) to filePath
             uploadPicker.launch(arrayOf("*/*"))
           }, modifier = Modifier.testTag("notes-file-upload")) { Text(stringResource(R.string.file_space_upload)) }
-        } else Text(if (fileBrowserOpen) "" else if (!editorOpen ||
-          state.draft?.version == state.draftSyncedVersion) stringResource(R.string.notes_saved)
-          else if (state.draftSaving) stringResource(R.string.notes_syncing)
-          else if (state.draft?.version == state.draftSavedVersion)
-            stringResource(R.string.notes_saved_locally)
-          else stringResource(R.string.notes_saving_locally),
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.width(72.dp), maxLines = 1)
+        } else if (!fileBrowserOpen) {
+          Text(
+            if (!editorOpen || state.draft?.version == state.draftSyncedVersion) stringResource(R.string.notes_saved)
+            else if (state.draftSaving) stringResource(R.string.notes_syncing)
+            else if (state.draft?.version == state.draftSavedVersion) stringResource(R.string.notes_saved_locally)
+            else stringResource(R.string.notes_saving_locally),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+          )
+        }
       } else {
-        Text(stringResource(R.string.tab_notes),
-          style = MaterialTheme.typography.headlineSmall,
-          fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(end = 12.dp),
-          maxLines = 1, overflow = TextOverflow.Ellipsis)
         PageSearchButton(searchOpen, R.string.notes_search, "notes-open-search", ::toggleSearch)
         IconButton(onClick = {
           focusManager.clearFocus(force = true)
@@ -512,6 +505,8 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         }
       }
     }
+    Column(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.PagePaddingX),
+      verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (fileBrowserOpen && uploadBusy) androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
     if (fileBrowserOpen && uploadIssue != 0) Text(stringResource(uploadIssue), color = MaterialTheme.colorScheme.error)
     val visibleFileSpaces = if (fileSpaceId == null && fileSearch.isBlank()) fileSpaces else emptyList()
@@ -650,21 +645,22 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           }
         }
       }, onPreviewAttachment = { previewAttachment = it }, scroll = detailScroll)
+    }
   }
   pendingExternalUrl?.let { url ->
     val externalLinkFailure = stringResource(R.string.message_open_link_failed)
-    AlertDialog(onDismissRequest = { pendingExternalUrl = null },
-      title = { Text(stringResource(R.string.message_open_external_title)) },
-      text = { Text(url, maxLines = 4, overflow = TextOverflow.Ellipsis) },
-      confirmButton = { TextButton(onClick = {
+    XopcConfirmDialog(
+      onDismiss = { pendingExternalUrl = null },
+      onConfirm = {
         pendingExternalUrl = null
         runCatching { uriHandler.openUri(url) }.onFailure {
-          android.widget.Toast.makeText(context, externalLinkFailure, android.widget.Toast.LENGTH_SHORT).show()
+          xopcShowToast(context, externalLinkFailure)
         }
-      }) { Text(stringResource(R.string.message_open_external)) } },
-      dismissButton = { TextButton(onClick = { pendingExternalUrl = null }) {
-        Text(stringResource(R.string.progress_cancel))
-      } })
+      },
+      title = stringResource(R.string.message_open_external_title),
+      message = url,
+      confirmLabel = stringResource(R.string.message_open_external),
+    )
   }
   val attachmentToPreview = previewAttachment
   if (attachmentToPreview != null && selectedId != null) {
@@ -732,9 +728,10 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         Text(stringResource(R.string.assistant_close))
       } })
   }
-  if (aiOpen) ModalBottomSheet(onDismissRequest = { aiOpen = false },
+  if (aiOpen) XopcBottomSheet(XopcSheetPreset.Medium, onDismissRequest = { aiOpen = false },
     modifier = Modifier.testTag("note-ai-sheet")) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+    val formScroll = if (aiPreview == null) Modifier.verticalScroll(rememberScrollState()) else Modifier
+    Column(modifier = Modifier.fillMaxWidth().then(formScroll).padding(horizontal = 20.dp, vertical = 12.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Text(stringResource(R.string.notes_ai_edit), style = MaterialTheme.typography.titleLarge)
       if (aiPreview == null) {
@@ -754,7 +751,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       } else {
         Text(aiPreview!!.summary.ifBlank { aiPreview!!.message },
           style = MaterialTheme.typography.bodyMedium)
-        Column(modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp)
+        Column(modifier = Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 380.dp)
           .verticalScroll(rememberScrollState()).testTag("note-ai-preview")) {
           Text(stringResource(R.string.notes_ai_before),
             style = MaterialTheme.typography.labelMedium)
@@ -782,7 +779,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         color = MaterialTheme.colorScheme.error)
     }
   }
-  if (attachmentSheetOpen) ModalBottomSheet(onDismissRequest = { attachmentSheetOpen = false },
+  if (attachmentSheetOpen) XopcBottomSheet(XopcSheetPreset.Compact, onDismissRequest = { attachmentSheetOpen = false },
     modifier = Modifier.testTag("note-attachment-sheet")) {
     Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -859,7 +856,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       Text(stringResource(R.string.progress_cancel))
     } })
   val detail = state.detail?.takeIf { it.id == selectedId }
-  if (historyOpen && detail != null) ModalBottomSheet(onDismissRequest = { historyOpen = false },
+  if (historyOpen && detail != null) XopcBottomSheet(XopcSheetPreset.Medium, onDismissRequest = { historyOpen = false },
     modifier = Modifier.testTag("note-history-sheet")) {
     BackHandler(enabled = historyTimestamp != null) {
       historyTimestamp = null
@@ -908,28 +905,25 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       }
     }
   }
-  if (restoreConfirmOpen) AlertDialog(onDismissRequest = { restoreConfirmOpen = false },
-    title = { Text(stringResource(R.string.notes_restore_version)) },
-    text = { Text(stringResource(R.string.notes_restore_confirm)) },
-    confirmButton = { TextButton(onClick = { restoreConfirmOpen = false; onRestoreSnapshot() },
-      modifier = Modifier.testTag("note-history-confirm-restore")) {
-      Text(stringResource(R.string.notes_restore_version))
-    } },
-    dismissButton = { TextButton(onClick = { restoreConfirmOpen = false }) {
-      Text(stringResource(R.string.progress_cancel))
-    } })
-  if (deleteConfirmOpen) AlertDialog(onDismissRequest = { deleteConfirmOpen = false },
-    title = { Text(stringResource(R.string.notes_delete)) },
-    text = { Text(stringResource(R.string.notes_delete_confirm)) },
-    confirmButton = { TextButton(onClick = { deleteConfirmOpen = false; onDeleteNote() },
-      modifier = Modifier.testTag("note-confirm-delete")) {
-      Text(stringResource(R.string.notes_delete), color = MaterialTheme.colorScheme.error)
-    } },
-    dismissButton = { TextButton(onClick = { deleteConfirmOpen = false },
-      modifier = Modifier.testTag("note-cancel-delete")) {
-      Text(stringResource(R.string.progress_cancel))
-    } })
-  if (moreOpen && detail != null) ModalBottomSheet(onDismissRequest = { moreOpen = false },
+  if (restoreConfirmOpen) XopcConfirmDialog(
+    onDismiss = { restoreConfirmOpen = false },
+    onConfirm = { restoreConfirmOpen = false; onRestoreSnapshot() },
+    title = stringResource(R.string.notes_restore_version),
+    message = stringResource(R.string.notes_restore_confirm),
+    confirmLabel = stringResource(R.string.notes_restore_version),
+    confirmTag = "note-history-confirm-restore",
+  )
+  if (deleteConfirmOpen) XopcConfirmDialog(
+    onDismiss = { deleteConfirmOpen = false },
+    onConfirm = { deleteConfirmOpen = false; onDeleteNote() },
+    title = stringResource(R.string.notes_delete),
+    message = stringResource(R.string.notes_delete_confirm),
+    confirmLabel = stringResource(R.string.notes_delete),
+    destructive = true,
+    confirmTag = "note-confirm-delete",
+    cancelTag = "note-cancel-delete",
+  )
+  if (moreOpen && detail != null) XopcBottomSheet(XopcSheetPreset.Compact, onDismissRequest = { moreOpen = false },
     modifier = Modifier.testTag("note-more-sheet")) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -977,9 +971,9 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     text = { Text(stringResource(R.string.notes_share_error)) },
     confirmButton = { TextButton(onClick = onDismissShare) { Text(stringResource(R.string.assistant_close)) } })
   val share = state.share?.takeIf { it.noteId == selectedId && detail?.id == selectedId }
-  if (share != null) ModalBottomSheet(onDismissRequest = onDismissShare,
+  if (share != null) XopcBottomSheet(XopcSheetPreset.Medium, onDismissRequest = onDismissShare,
     modifier = Modifier.testTag("note-share-sheet")) {
-    Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Text(share.title, style = MaterialTheme.typography.titleLarge)
       Text(share.url, color = MaterialTheme.colorScheme.primary,
@@ -1263,7 +1257,12 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
         SegmentOption(status, stringResource(label), "notes-filter-${status.ifEmpty { "all" }}")
       }, state.status, onStatus,
     )
-    LazyColumn(state = listState, modifier = Modifier.weight(1f).testTag("notes-list"),
+    XopcPullToRefreshBox(
+      isRefreshing = state.loading && state.items.isNotEmpty(),
+      onRefresh = onSubmit,
+      modifier = Modifier.weight(1f).fillMaxWidth(),
+    ) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("notes-list"),
       verticalArrangement = Arrangement.spacedBy(8.dp),
       contentPadding = PaddingValues(bottom = bottomContentPadding)) {
       if (pendingVoiceCount > 0) item(key = "voice-recovery") {
@@ -1310,6 +1309,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
       }
       if (state.moreError) item { Text(stringResource(R.string.notes_more_error),
         color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("notes-more-error")) }
+    }
     }
   }
 }

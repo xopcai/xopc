@@ -231,59 +231,60 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
     }
   }
 
-  Column(Modifier.fillMaxSize().background(colors.background).padding(insets).imePadding().padding(horizontal = 18.dp)) {
-    Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
-      Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        PageBackButton("capability-back", onExit)
-        Spacer(Modifier.weight(1f))
-        if (skills) {
-          IconButton(onClick = {
-            focus.clearFocus()
-            keyboard?.hide()
-            detail = CapabilityItem("marketplace:search", skillMarketTitle, group = "available")
-          }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape).testTag("capability-add-skills")) {
-            ActionIcon(R.drawable.action_search, color = colors.primary, contentDescription = skillMarketTitle)
-          }
-        } else if (plugins) {
-          IconButton(onClick = {
-            searchFocus.requestFocus()
-            keyboard?.show()
-          }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape)
-            .testTag("capability-add-plugins")) {
-            ActionIcon(R.drawable.action_search, color = colors.primary, contentDescription = stringResource(R.string.capability_search_plugins))
-          }
-        }
-        if (skills || agents || connections) {
-          val label = stringResource(when {
-            agents -> R.string.capability_create_agent
-            skills -> R.string.capability_create_skill
-            else -> R.string.capability_add_mcp
-          })
-          val prompt = stringResource(if (agents) R.string.capability_agent_setup_prompt else R.string.capability_skill_setup_prompt)
-          IconButton(onClick = {
-            focus.clearFocus()
-            keyboard?.hide()
-            if (connections) detail = CapabilityItem("mcp:setup", label, group = "available")
-            else onSetupChat(prompt, agents)
-          }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape)
-            .testTag(if (connections) "capability-add-mcp" else "capability-chat-setup-${category.key}")) {
-            ActionIcon(R.drawable.action_add, color = colors.primary, contentDescription = label)
-          }
-        }
-      }
-      Box(Modifier.padding(horizontal = if (skills) 100.dp else 48.dp)) {
+  val motionAllowed = rememberMotionAllowed()
+  Column(Modifier.fillMaxSize().background(colors.background).padding(insets).imePadding()) {
+    XopcPageHeader(
+      backTag = "capability-back",
+      onBack = onExit,
+      titleContent = {
         PageTitleMenu(
           categories.map { SegmentOption(it, stringResource(it.title), "capability-category-${it.key}") },
           category, "capability-page-menu",
         ) { target ->
           scope.launch {
-            if (kotlin.math.abs(pager.currentPage - target.ordinal) == 1) pager.animateScrollToPage(target.ordinal)
+            val distance = target.ordinal - pager.currentPage
+            if (xopcPagerAnimated(motionAllowed, distance)) pager.animateScrollToPage(target.ordinal)
             else pager.scrollToPage(target.ordinal)
           }
         }
+      },
+    ) {
+      if (skills) {
+        IconButton(onClick = {
+          focus.clearFocus()
+          keyboard?.hide()
+          detail = CapabilityItem("marketplace:search", skillMarketTitle, group = "available")
+        }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape).testTag("capability-add-skills")) {
+          ActionIcon(R.drawable.action_search, color = colors.primary, contentDescription = skillMarketTitle)
+        }
+      } else if (plugins) {
+        IconButton(onClick = {
+          searchFocus.requestFocus()
+          keyboard?.show()
+        }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape)
+          .testTag("capability-add-plugins")) {
+          ActionIcon(R.drawable.action_search, color = colors.primary, contentDescription = stringResource(R.string.capability_search_plugins))
+        }
+      }
+      if (skills || agents || connections) {
+        val label = stringResource(when {
+          agents -> R.string.capability_create_agent
+          skills -> R.string.capability_create_skill
+          else -> R.string.capability_add_mcp
+        })
+        val prompt = stringResource(if (agents) R.string.capability_agent_setup_prompt else R.string.capability_skill_setup_prompt)
+        IconButton(onClick = {
+          focus.clearFocus()
+          keyboard?.hide()
+          if (connections) detail = CapabilityItem("mcp:setup", label, group = "available")
+          else onSetupChat(prompt, agents)
+        }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape)
+          .testTag(if (connections) "capability-add-mcp" else "capability-chat-setup-${category.key}")) {
+          ActionIcon(R.drawable.action_add, color = colors.primary, contentDescription = label)
+        }
       }
     }
+    Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.PagePaddingX)) {
     HorizontalPager(pager, modifier = Modifier.weight(1f).fillMaxWidth().testTag("capability-pager"),
       key = { categories[it].key }, userScrollEnabled = detail == null,
       flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.33f),
@@ -308,24 +309,30 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
           val groups = capabilityRows(kind, catalog, personal, queries[kind].orEmpty())
           val search = queries[kind].orEmpty().trim()
           val list = lists.getValue(kind)
+          XopcPullToRefreshBox(
+            isRefreshing = loading[kind] == true && catalog != null,
+            onRefresh = { load(kind, refresh = true) },
+            modifier = Modifier.fillMaxSize(),
+          ) {
           LazyColumn(state = list, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (pending && catalog == null) item { CapabilityListSkeleton() }
             if (failed || catalog?.incomplete == true) item {
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(if (failed) R.string.capability_load_failed else R.string.capability_partial), Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(onClick = { load(kind, refresh = true) }) { Text(stringResource(R.string.capability_retry)) }
-              }
+              XopcInlineBanner(
+                message = stringResource(if (failed) R.string.capability_load_failed else R.string.capability_partial),
+                tone = if (failed) XopcBannerTone.Danger else XopcBannerTone.Warning,
+                actionLabel = stringResource(R.string.capability_retry),
+                onAction = { load(kind, refresh = true) },
+              )
             }
             if (!pending && !failed && groups.isEmpty()) item {
-              Column(Modifier.fillMaxWidth().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                ActionIcon(R.drawable.action_search)
-                Text(stringResource(if (search.isEmpty()) R.string.capability_empty else R.string.capability_no_matches),
-                  modifier = Modifier.padding(top = 8.dp).testTag("capability-empty"))
-                if (search.isNotEmpty()) TextButton(onClick = {
-                  if (pager.settledPage == index) updateQuery("")
-                }) { Text(stringResource(R.string.capability_clear)) }
-              }
+              XopcEmptyState(
+                message = stringResource(if (search.isEmpty()) R.string.capability_empty else R.string.capability_no_matches),
+                icon = R.drawable.action_search,
+                actionLabel = if (search.isNotEmpty()) stringResource(R.string.capability_clear) else null,
+                onAction = if (search.isNotEmpty()) ({ if (pager.settledPage == index) updateQuery("") }) else null,
+                modifier = Modifier.padding(top = 24.dp).testTag("capability-empty"),
+              )
             }
             capabilityGroups.forEach { group ->
               val rows = groups[group] ?: return@forEach
@@ -362,6 +369,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
               }
             }
           }
+          }
         }
       }
     }
@@ -378,13 +386,13 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
           ActionIcon(R.drawable.action_close, contentDescription = stringResource(R.string.capability_clear))
         }
       })
+    }
   }
   detail?.let { row ->
     val chat = if (category == CapabilityCategory.Agents && row.group != "disabled") {
       { detail = null; onOpenAgent(row) }
     } else null
-    ModalBottomSheet(onDismissRequest = { detail = null }, containerColor = colors.surface,
-      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    XopcBottomSheet(XopcSheetPreset.Large, onDismissRequest = { detail = null }, containerColor = colors.surface) {
       CapabilitySettingsPanel(row.name, row.description, origin, icon = {
         CapabilityItemIcon(row, category, origin, personal, agentAvatars, 44.dp)
       }, request = { body ->
@@ -398,23 +406,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
 
 @Composable
 internal fun CapabilityListSkeleton() {
-  val colors = MaterialTheme.colorScheme
-  val label = stringResource(R.string.brand_loading)
-  val placeholder = colors.surfaceContainerHighest
-  Column(Modifier.fillMaxWidth().semantics { contentDescription = label }.testTag("capability-loading"),
-    verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    repeat(3) {
-      Row(Modifier.fillMaxWidth().height(76.dp).background(colors.surface, themedCorners(18))
-        .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Box(Modifier.size(48.dp).background(placeholder, themedCorners(12)))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-          Box(Modifier.fillMaxWidth(.55f).height(12.dp).background(placeholder, CircleShape))
-          Box(Modifier.fillMaxWidth(.72f).height(8.dp).background(placeholder, CircleShape))
-        }
-      }
-    }
-  }
+  XopcListSkeleton(modifier = Modifier.testTag("capability-loading"), rows = 3)
 }
 
 @Composable
@@ -498,8 +490,7 @@ internal fun ConversationMcpAction(conversationId: String, activeRun: Boolean,
   }
   if (show) {
     val close: () -> Unit = { show = false; revision++ }
-    ModalBottomSheet(onDismissRequest = close, containerColor = MaterialTheme.colorScheme.surface,
-      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    XopcBottomSheet(XopcSheetPreset.Large, onDismissRequest = close, containerColor = MaterialTheme.colorScheme.surface) {
       CapabilitySettingsPanel(title, "", null, icon = {
         CapabilityLogo(null, null, "", R.drawable.action_capabilities, 44.dp)
       }, request = { body -> onPanel("connections", key, body) }, onChanged = {}, onChat = null, onClose = close,
@@ -512,8 +503,7 @@ internal fun ConversationMcpAction(conversationId: String, activeRun: Boolean,
 @Composable
 internal fun LinkedMcpSetupSheet(name: String, serverUrl: String, origin: String?,
   request: suspend (JSONObject?) -> JSONObject, onClose: () -> Unit, onUseInChat: (String) -> Unit) {
-  ModalBottomSheet(onDismissRequest = onClose, containerColor = MaterialTheme.colorScheme.surface,
-    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+  XopcBottomSheet(XopcSheetPreset.Large, onDismissRequest = onClose, containerColor = MaterialTheme.colorScheme.surface) {
     CapabilitySettingsPanel(stringResource(R.string.capability_add_mcp), "", origin,
       icon = { CapabilityLogo(null, origin, "", R.drawable.action_link, 44.dp) },
       request = request, onChanged = {}, onChat = null, onClose = onClose, onUseInChat = onUseInChat,
@@ -723,8 +713,12 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
         .padding(horizontal = 14.dp, vertical = 12.dp).testTag("capability-panel-status"),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         if (panel?.value("tone") == "success" || readyPrompt != null) {
-          val success = if (colors.surface.luminance() < .5f) Color(0xFF66D89A) else Color(0xFF187B49)
-          ActionIcon(R.drawable.action_check_circle, color = success, contentDescription = null, size = 18.dp)
+          ActionIcon(
+            R.drawable.action_check_circle,
+            color = ai.xopc.mobile.theme.LocalStatusColors.current.success,
+            contentDescription = null,
+            size = 18.dp,
+          )
         } else if (pollAction != null) {
           Box(Modifier.size(8.dp).background(colors.primary, CircleShape))
         }
@@ -841,11 +835,15 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
     }
   }
   confirm?.let { action ->
-    AlertDialog(onDismissRequest = { confirm = null },
-      title = { Text(action.getString("label")) }, text = { Text(action.optString("confirmation")) },
-      confirmButton = { TextButton(onClick = { confirm = null; scope.launch { load(action.getString("id")) } }) {
-        Text(capabilityLabel("确认", "Confirm"))
-      } }, dismissButton = { TextButton(onClick = { confirm = null }) { Text(capabilityLabel("取消", "Cancel")) } })
+    XopcConfirmDialog(
+      onDismiss = { confirm = null },
+      onConfirm = { confirm = null; scope.launch { load(action.getString("id")) } },
+      title = action.getString("label"),
+      message = action.optString("confirmation"),
+      confirmLabel = capabilityLabel("确认", "Confirm"),
+      cancelLabel = capabilityLabel("取消", "Cancel"),
+      destructive = action.optBoolean("destructive", false),
+    )
   }
 }
 

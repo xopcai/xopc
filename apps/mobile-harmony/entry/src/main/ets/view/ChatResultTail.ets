@@ -1,3 +1,4 @@
+import { xopcConfirmDialog, xopcToast } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { common } from '@kit.AbilityKit';
 import { XopcArtifact, XopcHistoryMedia, XopcChatRow, XopcProductDelivery, XopcProductReference } from '../model/chat';
@@ -84,11 +85,14 @@ export struct XopcChatResultTail {
   private async openLink(href: string): Promise<void> {
     if (!markdownLink(href)) return;
     try {
-      const result = await this.getUIContext().getPromptAction().showDialog({ title: $r('app.string.chat_open_link'), message: href,
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary }, { text: $r('app.string.open'), color: this.colors.accent }] });
-      if (result.index === 1) await (this.getUIContext().getHostContext() as common.UIAbilityContext).openLink(href, { appLinkingOnly: false });
+      const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+        title: $r('app.string.chat_open_link'),
+        message: href,
+        confirmLabel: $r('app.string.open'),
+      });
+      if (confirmed) await (this.getUIContext().getHostContext() as common.UIAbilityContext).openLink(href, { appLinkingOnly: false });
     } catch (_) {
-      try { this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_link_failed') }); } catch (_) {}
+      xopcToast(this.getUIContext(), $r('app.string.chat_link_failed'));
     }
   }
   build() {

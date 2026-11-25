@@ -1,3 +1,4 @@
+import { xopcConfirmDialog } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcMobileRoute } from '../model/home';
@@ -67,12 +68,13 @@ export struct XopcAutomationRunView {
   private async cancelRun(): Promise<void> {
     if (!this.run || !this.active(this.run.status) || this.busy) return;
     try {
-      const result = await this.getUIContext().getPromptAction().showDialog({
-        title: $r('app.string.cancel_run'), message: $r('app.string.cancel_run_help'),
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-          { text: $r('app.string.confirm'), color: this.colors.danger }]
+      const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+        title: $r('app.string.cancel_run'),
+        message: $r('app.string.cancel_run_help'),
+        confirmLabel: $r('app.string.cancel_run'),
+        destructive: true,
       });
-      if (result.index !== 1) return;
+      if (!confirmed) return;
       this.busy = true; this.error = '';
       await gatewaySession.request('/api/automation-runs/' + encodeURIComponent(this.run.id) + '/cancel', 'POST', '{}');
       this.busy = false; await this.load();

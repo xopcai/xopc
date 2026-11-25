@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 
 import { markdownLink } from '../common/markdown';
+import { xopcConfirmDialog } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 
@@ -216,12 +217,12 @@ export struct XopcCapabilitySetupView {
     if (this.busy || item.installed || !item.selection) return;
     this.busy = true; this.failed = false;
     try {
-      const result = await this.getUIContext().getPromptAction().showDialog({
-        title: item.name, message: $r('app.string.cap_native_skill_confirm'),
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-          { text: $r('app.string.cap_native_install'), color: this.colors.accent }],
+      const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+        title: item.name,
+        message: $r('app.string.cap_native_skill_confirm'),
+        confirmLabel: $r('app.string.cap_native_install'),
       });
-      if (result.index !== 1) return;
+      if (!confirmed) return;
       const saved = await capabilityRequest<NativeSkillInstall>('/skills', JSON.stringify({ selection: item.selection }));
       if (!saved.installed) throw new Error('SKILL_INSTALL_FAILED');
       this.installedItems = this.installedItems.concat(item.provider + ':' + item.id);

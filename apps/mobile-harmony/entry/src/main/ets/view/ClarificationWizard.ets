@@ -1,3 +1,5 @@
+import { xopcMoreIcon } from '../common/designTokens';
+import { xopcClickEffect } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import {
   XopcClarification, XopcClarificationQuestion, XopcClarificationChoice, XopcClarificationDraft,
@@ -209,8 +211,9 @@ export struct XopcClarificationWizard {
           }
           if (!this.draft().pendingAction) {
             Button({ type: ButtonType.Normal }) {
-              SymbolGlyph($r('sys.symbol.dot_grid_1x2')).fontSize(15).fontColor([p.secondaryText])
-            }.width(30).height(30).borderRadius(8).backgroundColor(Color.Transparent).enabled(!this.locked())
+              SymbolGlyph(xopcMoreIcon()).fontSize(18).fontColor([p.secondaryText])
+            }.width(36).height(36).borderRadius(10).backgroundColor(Color.Transparent).enabled(!this.locked())
+              .clickEffect(xopcClickEffect())
               .accessibilityText($r('app.string.clarify_more')).bindMenu(this.overflowMenu)
           }
           Button({ type: ButtonType.Normal }) {

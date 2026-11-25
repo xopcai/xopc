@@ -121,7 +121,7 @@ describe('chat bottom region composition', () => {
   it('keeps the bottom surface flush with the app safe-area edge', () => {
     expect(home).toMatch(/\.height\(LayoutPolicy\.matchParent\)\s+\.ignoreLayoutSafeArea\(\[LayoutSafeAreaType\.SYSTEM\], \[LayoutSafeAreaEdge\.TOP\]\)/);
     expect(chat).toContain(".margin({ top: 4, bottom: 0 })");
-    expect(sidebar).toMatch(/\.backgroundColor\('#66000000'\)\s+\.opacity\(this\.reveal\)\s+\.expandSafeArea\(\[SafeAreaType\.SYSTEM\], \[SafeAreaEdge\.BOTTOM\]\)/);
+    expect(sidebar).toMatch(/\.backgroundColor\(this\.colors\.scrim\)\s+\.opacity\(this\.reveal\)\s+\.expandSafeArea\(\[SafeAreaType\.SYSTEM\], \[SafeAreaEdge\.BOTTOM\]\)/);
     expect(sidebar).toMatch(/\.backgroundColor\(this\.colors\.panel\)\s+\.expandSafeArea\(\[SafeAreaType\.SYSTEM\], \[SafeAreaEdge\.BOTTOM\]\)/);
   });
 
@@ -136,7 +136,7 @@ describe('chat bottom region composition', () => {
   });
 
   it('does not stack page-level bottom padding on top of the reserved composer inset', () => {
-    expect(notesTab).toContain(".padding({ left: 20, right: 20 }).scrollBar(BarState.Off)");
+    expect(notesTab).toContain(".padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).scrollBar(BarState.Off)");
     expect(notesTab).not.toContain("padding({ left: 20, right: 20, bottom: 24 })");
     expect(sessions).not.toContain("padding({ left: 20, right: 20, bottom: 20 }).cachedCount(5)");
     expect(homeHubs).not.toContain("padding({ left: 20, right: 20, bottom: 28 })");
@@ -157,7 +157,7 @@ describe('chat bottom region composition', () => {
     expect(sidebar).toContain('void this.sessions.load(this.sessions.hasMore)');
     expect(home).toContain("startSearching: page === 'sessions-search'");
     expect(sessions).toContain('this.searchOpen = this.startSearching');
-    expect(sessions).toContain("XopcPageSearchButton({ searchId: 'sessions-open-search'");
+    expect(sessions).toContain("searchId: 'sessions-open-search'");
     expect(home).toContain('onExit: (): void => { this.pathStack.pop(); this.openSidebar(); }');
     expect(home).toContain('layoutState.dismissSidebar = (): boolean => this.closeSidebar();');
     expect(sessions).toContain('.virtualScroll({ totalCount: this.rows.length })');
@@ -167,10 +167,8 @@ describe('chat bottom region composition', () => {
   });
 
   it('centers the conversation create icon without relying on a clipped text glyph', () => {
-    const createButton = sessions.slice(sessions.indexOf("SymbolGlyph($r('sys.symbol.plus'))"),
-      sessions.indexOf(".id('sessions-new')") + 96);
-    expect(createButton).toContain("SymbolGlyph($r('sys.symbol.plus')).fontSize(22)");
-    expect(createButton).toContain(".id('sessions-new').width(44).height(44).padding(0)");
+    expect(sessions).toContain("actionIcon: $r('sys.symbol.plus')");
+    expect(sessions).toContain("actionId: 'sessions-new'");
     expect(sessions).not.toContain("Button('+').id('sessions-new')");
   });
 
@@ -253,7 +251,7 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain("if (this.sheetMode === 'context')");
     expect(chat).toContain("if (this.sheetMode === 'directory')");
     expect(chat).toContain('height: this.sheetHeight');
-    expect(chat).toContain('.bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight');
+    expect(chat).toContain(".bindSheet($$this.sheetOpen, this.optionsSheet, xopcSheetOptions('medium', { height: this.sheetHeight }))");
     expect(chat).toContain('onMode: (mode: string): void => { this.sheetMode = mode; }');
   });
 

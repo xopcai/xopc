@@ -63,18 +63,18 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
   val context = LocalContext.current
   @Suppress("DEPRECATION")
   val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
+  val motionAllowed = rememberMotionAllowed()
+  val headerTitle = when (section) {
+    "notifications" -> stringResource(R.string.push_title)
+    "appearance" -> stringResource(R.string.settings_appearance)
+    "language" -> stringResource(R.string.settings_language)
+    "about" -> stringResource(R.string.settings_about_xopc)
+    else -> stringResource(R.string.settings_title)
+  }
   Column(Modifier.fillMaxSize().padding(insets).testTag("settings-screen")) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
-      verticalAlignment = Alignment.CenterVertically) {
-      PageBackButton("settings-back", onBack)
-      if (section == "notifications") {
-        Text(stringResource(R.string.push_title), Modifier.padding(start = 12.dp),
-          style = MaterialTheme.typography.titleLarge)
-      }
-
-    }
+    XopcPageHeader("settings-back", onBack, title = headerTitle)
     AnimatedContent(targetState = section, modifier = Modifier.fillMaxSize(),
-      transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(180)) },
+      transitionSpec = { xopcScreenTransition(motionAllowed) },
       label = "settings-section") { currentSection ->
       Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
         .padding(horizontal = 20.dp, vertical = 8.dp),

@@ -12,6 +12,7 @@ struct ConversationContextView: View {
     let onStartScopedConversation: (ProjectRecord?, String?) -> Void
     let onDirectoryChanged: () -> Void
     let onRetry: () -> Void
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.locale) private var locale
     @State private var draftProject: ProjectRecord?
     @State private var draftProjectError: String?
@@ -56,6 +57,8 @@ struct ConversationContextView: View {
                 )
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(mobileTheme.canvas.ignoresSafeArea())
         .mobilePageTitle(Text("当前上下文"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: conversation?.id) { await loadDraftProject() }

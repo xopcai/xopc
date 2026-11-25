@@ -36,7 +36,7 @@ struct StreamingMarkdownText: View {
                 renderedCount = count
                 tailAlpha = fade ? 0.45 : 1
                 if fade {
-                    withAnimation(.easeOut(duration: 0.18)) { tailAlpha = 1 }
+                    MobileMotion.perform(MobileMotion.exitDuration, reduceMotion: reduceMotion) { tailAlpha = 1 }
                 }
             }
             .onChange(of: streaming) {

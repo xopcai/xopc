@@ -53,10 +53,8 @@ internal fun GatewayProfilesScreen(state: ConnectionUiState, insets: PaddingValu
         ?.name == editedName.trim()) editingId = ""
   }
   Column(Modifier.fillMaxSize().padding(insets).testTag("gateway-profiles-screen")) {
-    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
-      verticalAlignment = Alignment.CenterVertically) {
-      PageBackButton("gateways-back", onBack, !state.gatewayBusy)
-      Spacer(Modifier.weight(1f))
+    XopcPageHeader("gateways-back", onBack, backEnabled = !state.gatewayBusy,
+      title = stringResource(R.string.gateways_heading)) {
       IconButton(onClick = onAdd, enabled = !state.gatewayBusy,
         modifier = Modifier.testTag("gateways-add")) { ActionIcon(R.drawable.action_add, size = 24.dp) }
     }
@@ -162,17 +160,18 @@ internal fun GatewayProfilesScreen(state: ConnectionUiState, insets: PaddingValu
       }
     }
   }
-  if (removingId.isNotBlank()) AlertDialog(onDismissRequest = { removingId = "" },
-    title = { Text(stringResource(R.string.gateways_remove)) },
-    text = { Text(stringResource(R.string.gateways_remove_hint)) },
-    confirmButton = { TextButton(onClick = {
+  if (removingId.isNotBlank()) XopcConfirmDialog(
+    onDismiss = { removingId = "" },
+    onConfirm = {
       val id = removingId; removingId = ""; onRemove(id)
-    }, modifier = Modifier.testTag("gateway-remove-confirm")) {
-      Text(stringResource(R.string.gateways_remove), color = MaterialTheme.colorScheme.error)
-    } },
-    dismissButton = { TextButton(onClick = { removingId = "" }) {
-      Text(stringResource(R.string.conversations_cancel))
-    } })
+    },
+    title = stringResource(R.string.gateways_remove),
+    message = stringResource(R.string.gateways_remove_hint),
+    confirmLabel = stringResource(R.string.gateways_remove),
+    cancelLabel = stringResource(R.string.conversations_cancel),
+    destructive = true,
+    confirmTag = "gateway-remove-confirm",
+  )
 }
 
 private fun gatewayOrigin(profile: GatewayProfile): String = profile.routes

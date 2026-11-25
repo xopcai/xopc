@@ -262,12 +262,15 @@ private fun AutomationCardMenu(item: AutomationSummary, busy: Boolean, onEdit: (
       }, modifier = Modifier.testTag("automation-card-delete"), onClick = { open = false; confirming = true })
     }
   }
-  if (confirming) AlertDialog(onDismissRequest = { confirming = false },
-    title = { Text(stringResource(R.string.automation_delete)) },
-    text = { Text(stringResource(R.string.automation_delete_confirm)) },
-    confirmButton = { TextButton(onClick = { confirming = false; onDelete(item.id, deleteKey) },
-      modifier = Modifier.testTag("automation-card-delete-confirm")) { Text(stringResource(R.string.progress_confirm)) } },
-    dismissButton = { TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.progress_cancel)) } })
+  if (confirming) XopcConfirmDialog(
+    onDismiss = { confirming = false },
+    onConfirm = { confirming = false; onDelete(item.id, deleteKey) },
+    title = stringResource(R.string.automation_delete),
+    message = stringResource(R.string.automation_delete_confirm),
+    confirmLabel = stringResource(R.string.progress_confirm),
+    destructive = true,
+    confirmTag = "automation-card-delete-confirm",
+  )
 }
 
 @Composable
@@ -359,23 +362,23 @@ internal fun AutomationDetailContent(state: AutomationUiState,
       }
     }
   }
-  if (confirmRun) AlertDialog(onDismissRequest = { confirmRun = false },
-    title = { Text(stringResource(R.string.automation_run_now)) },
-    text = { Text(stringResource(R.string.automation_run_confirm)) },
-    confirmButton = { TextButton(onClick = { confirmRun = false; onAction("run") },
-      modifier = Modifier.testTag("automation-run-confirm")) { Text(stringResource(R.string.progress_confirm)) } },
-    dismissButton = { TextButton(onClick = { confirmRun = false }) {
-      Text(stringResource(R.string.progress_cancel))
-    } })
-  if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false },
-    title = { Text(stringResource(R.string.automation_delete)) },
-    text = { Text(stringResource(R.string.automation_delete_confirm)) },
-    confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete(deleteKey) },
-      modifier = Modifier.testTag("automation-delete-confirm")) {
-      Text(stringResource(R.string.progress_confirm))
-    } }, dismissButton = { TextButton(onClick = { confirmDelete = false }) {
-      Text(stringResource(R.string.progress_cancel))
-    } })
+  if (confirmRun) XopcConfirmDialog(
+    onDismiss = { confirmRun = false },
+    onConfirm = { confirmRun = false; onAction("run") },
+    title = stringResource(R.string.automation_run_now),
+    message = stringResource(R.string.automation_run_confirm),
+    confirmLabel = stringResource(R.string.progress_confirm),
+    confirmTag = "automation-run-confirm",
+  )
+  if (confirmDelete) XopcConfirmDialog(
+    onDismiss = { confirmDelete = false },
+    onConfirm = { confirmDelete = false; onDelete(deleteKey) },
+    title = stringResource(R.string.automation_delete),
+    message = stringResource(R.string.automation_delete_confirm),
+    confirmLabel = stringResource(R.string.progress_confirm),
+    destructive = true,
+    confirmTag = "automation-delete-confirm",
+  )
 }
 
 @Composable
@@ -444,15 +447,15 @@ internal fun AutomationRunContent(state: AutomationUiState,
       }
     }
   }
-  if (confirmCancel) AlertDialog(onDismissRequest = { confirmCancel = false },
-    title = { Text(stringResource(R.string.automation_cancel_run)) },
-    text = { Text(stringResource(R.string.automation_cancel_confirm)) },
-    confirmButton = { TextButton(onClick = { confirmCancel = false; onAction("cancel") },
-      modifier = Modifier.testTag("automation-cancel-confirm")) {
-      Text(stringResource(R.string.progress_confirm))
-    } }, dismissButton = { TextButton(onClick = { confirmCancel = false }) {
-      Text(stringResource(R.string.progress_cancel))
-    } })
+  if (confirmCancel) XopcConfirmDialog(
+    onDismiss = { confirmCancel = false },
+    onConfirm = { confirmCancel = false; onAction("cancel") },
+    title = stringResource(R.string.automation_cancel_run),
+    message = stringResource(R.string.automation_cancel_confirm),
+    confirmLabel = stringResource(R.string.progress_confirm),
+    destructive = true,
+    confirmTag = "automation-cancel-confirm",
+  )
 }
 
 private fun formatAutomationTime(time: Long): String = DateFormat.getDateTimeInstance().format(Date(time))

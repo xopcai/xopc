@@ -54,29 +54,21 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
       }
     }
   }
-  androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+  XopcPullToRefreshBox(
     isRefreshing = state.homeLoading && (state.needsUser.isNotEmpty() || state.background.isNotEmpty()),
     onRefresh = onRefresh, modifier = Modifier.fillMaxSize().testTag("progress-refresh-gesture")) {
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("progress-overview-list"),
       verticalArrangement = Arrangement.spacedBy(8.dp),
       contentPadding = PaddingValues(bottom = 20.dp)) {
       if (state.homeActionError) item(key = "action-error", contentType = "error") {
-        Text(stringResource(R.string.progress_home_action_error), color = MaterialTheme.colorScheme.error,
-          modifier = Modifier.testTag("progress-home-action-error"))
+        XopcInlineBanner(
+          message = stringResource(R.string.progress_home_action_error),
+          tone = XopcBannerTone.Danger,
+          modifier = Modifier.testTag("progress-home-action-error"),
+        )
       }
       if (initialLoading) item(key = "loading", contentType = "loading") {
-        Column(Modifier.fillMaxWidth().testTag("progress-loading").padding(vertical = 12.dp),
-          verticalArrangement = Arrangement.spacedBy(18.dp)) {
-          repeat(3) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-              Box(Modifier.size(28.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, themedCorners(6)))
-              Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.fillMaxWidth(0.75f).height(16.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(4.dp)))
-                Box(Modifier.fillMaxWidth(0.5f).height(12.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(4.dp)))
-              }
-            }
-          }
-        }
+        XopcListSkeleton(modifier = Modifier.testTag("progress-loading"), rows = 3)
       } else {
         if (state.needsUser.isNotEmpty()) {
           item(key = "needs-heading", contentType = "heading") {
@@ -106,9 +98,12 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
           }
         }
         if (state.homeError) item(key = "home-error", contentType = "error") {
-          OutlinedButton(onClick = onRefresh, modifier = Modifier.testTag("progress-retry")) {
-            Text(stringResource(R.string.progress_load_failed))
-          }
+          XopcErrorState(
+            message = stringResource(R.string.progress_load_failed),
+            retryLabel = stringResource(R.string.progress_refresh),
+            onRetry = onRefresh,
+            retryTag = "progress-retry",
+          )
         }
         if (scheduled.isNotEmpty()) {
           item(key = "upcoming-heading", contentType = "heading") {
@@ -132,8 +127,7 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
         }
         if (!state.homeError && pendingCount == 0 && deliveries.isEmpty() && state.background.isEmpty() &&
           state.automationMetrics?.nextRun == null) item(key = "empty") {
-          Text(stringResource(R.string.progress_overview_empty), Modifier.padding(vertical = 16.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+          XopcEmptyState(message = stringResource(R.string.progress_overview_empty))
         }
       }
     }

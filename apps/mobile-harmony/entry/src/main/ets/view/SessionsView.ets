@@ -1,9 +1,25 @@
-import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcPageSwipe } from './SegmentedTabs';
+import { XOPC_PAGE_PADDING_X } from '../common/designTokens';
+import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
+import { xopcClickEffect, xopcPagerAnimated, xopcPagerDuration } from '../common/motionTokens';
+import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcSessionsViewModel } from '../viewmodel/sessionsViewModel';
 import { XopcChatAgent, XopcSessionItem, XopcSessionGroup, XopcSidebarTaskChild, XopcSidebarTaskGroup } from '../model/chat';
 import { groupChatSessions, sessionAge } from '../common/sessionGroups';
-import { XopcErrorState, XopcHubRow, XopcListSkeleton, XopcPageSearchButton, XopcPageSearchField, XopcPageTitleMenu, XopcPageTitleOption, XopcPaginationFooter } from './MobileComponents';
+import {
+  XopcBatchActionBar,
+  XopcEmptyHint,
+  XopcErrorState,
+  XopcHubRow,
+  XopcInlineBanner,
+  XopcListSkeleton,
+  XopcPageHeader,
+  XopcPageSearchField,
+  XopcPageTitleOption,
+  XopcPaginationFooter,
+  XopcUndoBar,
+} from './MobileComponents';
 import { userErrorMessage } from '../common/userError';
 import { appSettings } from '../service/settings';
 import { XopcConversationShare } from './ConversationShare';
@@ -139,6 +155,8 @@ struct XopcSessionManagerRow {
 @ComponentV2
 export struct XopcSessionsView {
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local layout: XopcLayoutState = layoutState;
+  private pager: SwiperController = new SwiperController();
   @Param startSearching: boolean = false;
   @Param currentId: string = '';
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
@@ -211,8 +229,20 @@ export struct XopcSessionsView {
     } finally { if (revision === this.catalogRevision) this.groupsLoading = false; }
   }
 
+  private modeIndex(mode: string = this.historyMode): number {
+    return Math.max(0, this.historyOptions.findIndex((option: XopcPageTitleOption): boolean => option.key === mode));
+  }
+
   private selectMode(mode: string): void {
     if (mode === this.historyMode) return;
+    const target = this.modeIndex(mode);
+    const current = this.modeIndex(this.historyMode);
+    this.pager.changeIndex(target, xopcPagerAnimated(this.layout.reduceMotion, target - current));
+  }
+
+  private commitMode(index: number): void {
+    const mode = this.historyOptions[index]?.key;
+    if (!mode || mode === this.historyMode) return;
     this.catalogRevision++;
     this.historyMode = mode; this.groupId = ''; this.groupName = '';
     appSettings.rememberPageSelection('conversation-history', mode);
@@ -375,13 +405,16 @@ export struct XopcSessionsView {
     this.shareConversationId = item.key;
     this.shareOpen = true;
   }
-  private confirmDelete(): void {
+  private async confirmDelete(): Promise<void> {
     const targets = this.sessions.selectedItems();
     if (!targets.length) return;
-    this.getUIContext().showAlertDialog({ title: $r('app.string.delete'), message: $r('app.string.sessions_delete_confirm', targets.length),
-      primaryButton: { value: $r('app.string.cancel'), action: (): void => {} },
-      secondaryButton: { value: $r('app.string.delete'), fontColor: this.colors.danger,
-        action: (): void => { void this.sessions.act(targets, 'delete', this.onDelete); } } });
+    const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+      title: $r('app.string.delete'),
+      message: $r('app.string.sessions_delete_confirm', targets.length),
+      confirmLabel: $r('app.string.delete'),
+      destructive: true,
+    });
+    if (confirmed) void this.sessions.act(targets, 'delete', this.onDelete);
   }
   @Builder
   sessionMenuSheet() {
@@ -424,14 +457,14 @@ export struct XopcSessionsView {
   }
   @Builder
   batchBar() {
-    Row({ space: 4 }) {
+    XopcBatchActionBar({ barId: 'sessions-batch-bar', barEnabled: !this.sessions.busy && this.sessions.selected.length > 0 }) {
       Button() {
         Column({ space: 2 }) {
           SymbolGlyph($r('sys.symbol.archivebox')).fontSize(18).fontColor([this.colors.secondary])
           Text($r('app.string.archive')).fontSize(11).fontColor(this.colors.tertiary)
         }
       }.id('sessions-batch-archive').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.archive'))
+        .clickEffect(xopcClickEffect()).accessibilityText($r('app.string.archive'))
         .onClick((): void => { this.sessions.act(this.sessions.selectedItems(), 'archive'); })
       Button() {
         Column({ space: 2 }) {
@@ -439,7 +472,7 @@ export struct XopcSessionsView {
           Text($r('app.string.pin')).fontSize(11).fontColor(this.colors.tertiary)
         }
       }.id('sessions-batch-pin').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.pin'))
+        .clickEffect(xopcClickEffect()).accessibilityText($r('app.string.pin'))
         .onClick((): void => { this.sessions.act(this.sessions.selectedItems(), 'pin'); })
       Button() {
         Column({ space: 2 }) {
@@ -447,7 +480,7 @@ export struct XopcSessionsView {
           Text($r('app.string.sessions_rename')).fontSize(11).fontColor(this.colors.tertiary)
         }
       }.id('sessions-batch-rename').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.sessions_rename'))
+        .clickEffect(xopcClickEffect()).accessibilityText($r('app.string.sessions_rename'))
         .enabled(this.sessions.selected.length === 1).onClick((): void => {
           const item = this.sessions.selectedItems()[0]; if (item) this.renameItem(item);
         })
@@ -457,49 +490,40 @@ export struct XopcSessionsView {
           Text($r('app.string.delete')).fontSize(11).fontColor(this.colors.danger)
         }
       }.id('sessions-batch-delete').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.delete')).onClick((): void => { this.confirmDelete(); })
-    }.id('sessions-batch-bar').width('92%').padding(6).backgroundColor(this.colors.panel)
-      .borderRadius(this.colors.corner(28)).margin({ top: 6, bottom: 8 })
-      .enabled(!this.sessions.busy && this.sessions.selected.length > 0)
+        .clickEffect(xopcClickEffect()).accessibilityText($r('app.string.delete'))
+        .onClick((): void => { void this.confirmDelete(); })
+    }
   }
   @Builder
   content() {
     Column() {
-        Stack({ alignContent: Alignment.Center }) {
-          Row({ space: 8 }) {
-            Button({ type: ButtonType.Circle }) {
-              SymbolGlyph($r('sys.symbol.arrow_left')).fontSize(21).fontColor([this.colors.foreground])
-            }.id('sessions-back').width(44).height(44).padding(0)
-              .backgroundColor(this.colors.panel)
-              .accessibilityText($r('app.string.back')).onClick((): void => { if (!this.back()) this.onExit(); })
-            if (this.sessions.selecting) {
-              Text($r('app.string.sessions_selected', this.sessions.selected.length))
-                .fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).layoutWeight(1)
-            } else { Blank().layoutWeight(1) }
-            if (!this.sessions.selecting) {
-              XopcPageSearchButton({ searchId: 'sessions-open-search', open: this.searchOpen,
-                label: this.searchLabel(), onToggle: (): void => {
-                  if (this.searchOpen) this.closeSearch(); else this.searchOpen = true;
-                } })
-              if (this.historyMode === 'recent') {
-                Button() {
-                  SymbolGlyph($r('sys.symbol.plus')).fontSize(22).fontColor([this.colors.foreground])
-                }.id('sessions-new').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-                  .accessibilityText($r('app.string.new_chat')).enabled(!this.sessions.busy)
-                  .onClick(async (): Promise<void> => { await this.createConversation(); })
-              }
-            }
-          }.width('100%')
-          if (!this.sessions.selecting) {
-            XopcPageTitleMenu({ heading: this.historyMode === 'projects' ? $r('app.string.projects')
-              : this.historyMode === 'experts' ? $r('app.string.capability_experts') : $r('app.string.sessions_recent'),
-              selected: this.historyMode, menuId: 'sessions-mode-menu', options: this.historyOptions,
-              onSelect: (mode: string): void => { this.selectMode(mode); } }).constraintSize({ maxWidth: '48%' })
-          }
-        }.width('100%').padding({ left: 12, right: 12, top: 12, bottom: 12 })
+        XopcPageHeader({
+          heading: this.historyMode === 'projects' ? $r('app.string.projects')
+            : this.historyMode === 'experts' ? $r('app.string.capability_experts') : $r('app.string.sessions_recent'),
+          selectionTitle: this.sessions.selecting ? $r('app.string.sessions_selected', this.sessions.selected.length) : '',
+          titleOptions: this.historyOptions,
+          selectedTitle: this.historyMode,
+          titleMenuId: 'sessions-mode-menu',
+          onSelectTitle: (mode: string): void => { this.selectMode(mode); },
+          backVisible: true,
+          backId: 'sessions-back',
+          onBack: (): void => { if (!this.back()) this.onExit(); },
+          searchId: 'sessions-open-search',
+          searchOpen: this.searchOpen,
+          searchLabel: this.searchLabel(),
+          onSearch: (): void => {
+            if (this.searchOpen) this.closeSearch(); else this.searchOpen = true;
+          },
+          actionLabel: this.historyMode === 'recent' ? $r('app.string.new_chat') : '',
+          actionIcon: $r('sys.symbol.plus'),
+          actionId: 'sessions-new',
+          actionTone: 'accent',
+          actionEnabled: !this.sessions.busy,
+          onAction: (): void => { void this.createConversation(); },
+        })
         if (this.groupId) {
           Button(this.groupText(this.groupName) + ' ×').onClick((): void => { this.clearGroup(); })
-            .margin({ left: 20, bottom: 8 }).height(40).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
+            .margin({ left: XOPC_PAGE_PADDING_X, bottom: 8 }).height(40).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
         }
         if (this.searchOpen && !this.sessions.selecting) {
           Column() {
@@ -510,66 +534,89 @@ export struct XopcSessionsView {
                 else { this.scroller.scrollTo({ xOffset: 0, yOffset: 0 }); this.sessions.setSearch(text); }
               },
               onSubmit: (): void => { if (!this.browsingGroups()) void this.sessions.load(); } })
-          }.padding({ left: 20, right: 20, bottom: 8 })
+          }.padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
         }
-        Column() {
-          if (this.browsingGroups()) { this.groupList(); } else {
-            if ((this.sessions.error || this.sessions.actionError) && this.sessions.items.length) {
-              Row({ space: 8 }) {
-                Text(userErrorMessage(this.sessions.actionError || this.sessions.error, 'collection')).fontSize(13)
-                  .fontColor(this.colors.secondary).layoutWeight(1).maxLines(3)
-                Button($r('app.string.refresh')).height(44).enabled(!this.sessions.busy).onClick((): void => { this.sessions.load(); })
-              }.padding({ left: 20, right: 20, top: 4, bottom: 4 }).backgroundColor(this.colors.panel)
-            }
-            Refresh({ refreshing: this.sessions.refreshing }) {
-              List({ scroller: this.scroller }) {
-                if (this.sessions.loading && !this.sessions.items.length) { ListItem() { XopcListSkeleton() } }
-                if (!this.sessions.loading && this.sessions.error && !this.sessions.items.length) {
-                  ListItem() { XopcErrorState({ error: this.sessions.error, context: 'collection',
-                    onAction: (): void => { this.sessions.load(); } }) }
+        Swiper(this.pager) {
+          ForEach(this.historyOptions, (option: XopcPageTitleOption) => {
+            Column() {
+              if (option.key !== this.historyMode) {
+                Column() { XopcListSkeleton() }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X })
+              } else if (this.browsingGroups()) {
+                this.groupList()
+              } else {
+                if ((this.sessions.error || this.sessions.actionError) && this.sessions.items.length) {
+                  Column() {
+                    XopcInlineBanner({
+                      message: userErrorMessage(this.sessions.actionError || this.sessions.error, 'collection'),
+                      actionLabel: $r('app.string.refresh'),
+                      busy: this.sessions.busy,
+                      onAction: (): void => { void this.sessions.load(); },
+                    })
+                  }.padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
                 }
-                Repeat<XopcSessionDisplayRow>(this.rows).each((row: RepeatItem<XopcSessionDisplayRow>) => {
-                  ListItem() {
-                    XopcSessionManagerRow({ entry: row.item, selecting: this.sessions.selecting,
-                      selected: this.sessions.selected.includes(row.item.key), current: row.item.key === this.currentId,
-                      locked: this.sessions.busy,
-                      onOpen: (item: XopcSessionItem): void => { this.open(item); }, onMenu: (item: XopcSessionItem): void => { this.menu(item); },
-                      onToggle: (id: string): void => { this.toggleTasks(id); },
-                      onOpenTask: (id: string): void => { this.openTask(id); } })
-                  }
-                }).key((row: XopcSessionDisplayRow): string => row.key).virtualScroll({ totalCount: this.rows.length })
-                if (!this.sessions.loading && !this.rows.length && !this.sessions.error) {
-                  ListItem() { Text(this.sessions.search.trim() ? $r('app.string.sessions_no_results') : $r('app.string.no_conversations'))
-                    .fontColor(this.colors.secondary).width('100%').padding(24) }
-                }
-                if (this.sessions.hasMore) {
-                  ListItem() {
-                    XopcPaginationFooter({ loadingPage: this.sessions.loading || this.sessions.loadingMore || this.sessions.busy,
-                      failedPage: !!this.sessions.error,
-                      onLoad: (): void => { void this.sessions.load(true); } })
-                  }
-                }
-              }.id('sessions-list').width('100%').height('100%').padding({ left: 20, right: 20 }).cachedCount(5)
-            }.layoutWeight(1).pullToRefresh(!this.sessions.busy).onRefreshing((): void => { this.sessions.load(false, true); })
-          }
-        }.layoutWeight(1).width('100%')
-          .gestureModifier(new XopcPageSwipe(this.historyOptions.map((option: XopcPageTitleOption): string => option.key),
-            this.historyMode, (key: string): void => { this.selectMode(key); },
-            !this.sessions.selecting && !this.sessions.busy && !this.opening))
+                Refresh({ refreshing: this.sessions.refreshing }) {
+                  List({ scroller: this.scroller }) {
+                    if (this.sessions.loading && !this.sessions.items.length) { ListItem() { XopcListSkeleton() } }
+                    if (!this.sessions.loading && this.sessions.error && !this.sessions.items.length) {
+                      ListItem() { XopcErrorState({ error: this.sessions.error, context: 'collection',
+                        onAction: (): void => { this.sessions.load(); } }) }
+                    }
+                    Repeat<XopcSessionDisplayRow>(this.rows).each((row: RepeatItem<XopcSessionDisplayRow>) => {
+                      ListItem() {
+                        XopcSessionManagerRow({ entry: row.item, selecting: this.sessions.selecting,
+                          selected: this.sessions.selected.includes(row.item.key), current: row.item.key === this.currentId,
+                          locked: this.sessions.busy,
+                          onOpen: (item: XopcSessionItem): void => { this.open(item); }, onMenu: (item: XopcSessionItem): void => { this.menu(item); },
+                          onToggle: (id: string): void => { this.toggleTasks(id); },
+                          onOpenTask: (id: string): void => { this.openTask(id); } })
+                      }
+                    }).key((row: XopcSessionDisplayRow): string => row.key).virtualScroll({ totalCount: this.rows.length })
+                    if (!this.sessions.loading && !this.rows.length && !this.sessions.error) {
+                      ListItem() {
+                        XopcEmptyHint({
+                          message: this.sessions.search.trim() ? $r('app.string.sessions_no_results') : $r('app.string.no_conversations'),
+                          centered: true,
+                        })
+                      }
+                    }
+                    if (this.sessions.hasMore) {
+                      ListItem() {
+                        XopcPaginationFooter({ loadingPage: this.sessions.loading || this.sessions.loadingMore || this.sessions.busy,
+                          failedPage: !!this.sessions.error,
+                          onLoad: (): void => { void this.sessions.load(true); } })
+                      }
+                    }
+                  }.id('sessions-list').width('100%').height('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).cachedCount(5)
+                }.layoutWeight(1).pullToRefresh(!this.sessions.busy).onRefreshing((): void => { this.sessions.load(false, true); })
+              }
+            }.width('100%').height('100%')
+              .accessibilityLevel(option.key === this.historyMode ? 'auto' : 'no-hide-descendants')
+          }, (option: XopcPageTitleOption): string => option.key)
+        }.id('sessions-pager').index(this.modeIndex()).loop(false).indicator(false).cachedCount(1)
+          .duration(xopcPagerDuration(this.layout.reduceMotion))
+          .disableSwipe(this.sessions.selecting || this.sessions.busy || this.opening || this.menuOpen || this.renameOpen)
+          .onChange((index: number): void => { this.commitMode(index); })
+          .layoutWeight(1).width('100%')
         if (this.sessions.undoId) {
-          Row() {
-            Text($r('app.string.sessions_deleted')).fontColor(this.colors.foreground).layoutWeight(1)
-            Button($r('app.string.sessions_undo')).id('sessions-undo').height(44).onClick((): void => { this.sessions.undoDelete(); })
-          }.padding(12).backgroundColor(this.colors.panel)
+          Column() {
+            XopcUndoBar({
+              message: $r('app.string.sessions_deleted'),
+              actionLabel: $r('app.string.sessions_undo'),
+              actionId: 'sessions-undo',
+              onUndo: (): void => { this.sessions.undoDelete(); },
+            })
+          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
         }
         if (this.sessions.selecting) { this.batchBar() }
         Column().id('session-menu-sheet-host').width('100%').height(0)
-          .bindSheet($$this.menuOpen, this.sessionMenuSheet, { height: '65%', dragBar: true, showClose: false,
-            backgroundColor: this.colors.panel, onDisappear: (): void => { this.finishMenuDismiss(); } })
+          .bindSheet($$this.menuOpen, this.sessionMenuSheet, xopcSheetOptions('medium', {
+            height: '65%',
+            onDisappear: (): void => { this.finishMenuDismiss(); },
+          }))
         Column().id('session-rename-sheet-host').width('100%').height(0)
-          .bindSheet($$this.renameOpen, this.renameSheet, { height: '45%', dragBar: true, backgroundColor: this.colors.panel })
+          .bindSheet($$this.renameOpen, this.renameSheet, xopcSheetOptions('compact'))
     }.width('100%').height('100%')
-      .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
+      .bindSheet($$this.shareOpen, this.shareSheet, xopcSheetOptions('immersive', { backgroundColor: this.colors.panel }))
   }
   build() {
     NavDestination() { this.content() }

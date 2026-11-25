@@ -57,7 +57,7 @@ export struct XopcShareIntakeDialog {
   build() {
     if (this.intake.pending) {
       Stack({ alignContent: Alignment.Bottom }) {
-        Column().width('100%').height('100%').backgroundColor('#66000000')
+        Column().width('100%').height('100%').backgroundColor(this.colors.scrim)
         Column({ space: 12 }) {
           Text($r('app.string.intake_chat_title')).fontSize(19).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
           Scroll() {

@@ -1,3 +1,5 @@
+import { XOPC_ICON_HEADER, xopcBackIcon, xopcMoreIcon } from '../common/designTokens';
+import { xopcClickEffect } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
 import { XopcWorkspaceItem } from '../model/workspace';
@@ -47,16 +49,18 @@ export struct XopcTaskChatHeader {
   build() {
     Row({ space: 10 }) {
       Button({ type: ButtonType.Circle }) {
-        SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(18).fontColor([this.colors.foreground])
+        SymbolGlyph(xopcBackIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
       }.id('task-chat-close').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+        .clickEffect(xopcClickEffect())
         .accessibilityText($r('app.string.back')).onClick((): void => { this.onClose(); })
       Text(this.item?.title || $r('app.string.task_detail_title')).fontSize(16).fontWeight(FontWeight.Medium)
         .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         .layoutWeight(1)
       this.readAloudAction()
       Button({ type: ButtonType.Circle }) {
-        SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(20).fontColor([this.colors.foreground])
+        SymbolGlyph(xopcMoreIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
       }.id('task-chat-menu').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+        .clickEffect(xopcClickEffect())
         .accessibilityText($r('app.string.more')).bindMenu(this.taskMenu)
     }.id('task-chat-header').width('100%').height(this.topInset + 64).padding({ left: 12, right: 12, top: this.topInset })
       .backgroundColor(this.colors.chat.canvas)

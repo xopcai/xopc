@@ -1,6 +1,8 @@
 import { XopcChartMarkdownView } from './ChartMarkdownView';
 import { XopcMathMarkdownView } from './MathMarkdownView';
 import { mayContainMath, mathCandidateCount } from '../common/mathMarkdown';
+import { xopcConfirmDialog, xopcToast } from '../common/dialogActions';
+import { XOPC_MOTION_EXIT_MS } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { common } from '@kit.AbilityKit';
 import { i18n } from '@kit.LocalizationKit';
@@ -54,7 +56,7 @@ struct XopcMarkdownInline {
     clearTimeout(this.fadeTimer);
     if (!this.ready || !this.streaming || this.selecting) return;
     this.fadeTimer = setTimeout((): void => {
-      this.getUIContext().animateTo({ duration: 180, curve: Curve.EaseOut }, (): void => {
+      this.getUIContext().animateTo({ duration: XOPC_MOTION_EXIT_MS, curve: Curve.EaseOut }, (): void => {
         this.projection.spans.forEach((span: XopcMarkdownRenderSpan): void => { span.fresh = false; });
       });
     }, 16);
@@ -92,10 +94,13 @@ struct XopcMarkdownInline {
     if (internalMessageLink(href)) { this.onOpenLink(href); return; }
     if (!markdownLink(href)) return;
     try {
-      const result = await this.getUIContext().getPromptAction().showDialog({ title: $r('app.string.chat_open_link'), message: href,
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary }, { text: $r('app.string.open'), color: this.colors.accent }] });
-      if (result.index === 1) await (this.getUIContext().getHostContext() as common.UIAbilityContext).openLink(href, { appLinkingOnly: false });
-    } catch (_) { this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_link_failed') }); }
+      const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+        title: $r('app.string.chat_open_link'),
+        message: href,
+        confirmLabel: $r('app.string.open'),
+      });
+      if (confirmed) await (this.getUIContext().getHostContext() as common.UIAbilityContext).openLink(href, { appLinkingOnly: false });
+    } catch (_) { xopcToast(this.getUIContext(), $r('app.string.chat_link_failed')); }
   }
   build() {
     Column() {

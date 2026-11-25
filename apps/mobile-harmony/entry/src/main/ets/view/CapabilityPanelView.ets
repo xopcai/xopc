@@ -3,6 +3,7 @@ import { pasteboard } from '@kit.BasicServicesKit';
 import { fileIo as fs, fileUri } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
+import { xopcConfirmDialog } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { markdownLink } from '../common/markdown';
 import { gatewaySession } from '../service/gatewaySession';
@@ -250,14 +251,11 @@ export struct XopcCapabilityPanelView {
       return;
     }
     if (action.confirmation && !action.inlineReview) {
-      try {
-        const result = await this.getUIContext().getPromptAction().showDialog({
-          title: action.label, message: action.confirmation,
-          buttons: [{ text: this.t('取消', 'Cancel'), color: this.colors.secondary },
-            { text: this.t('确认', 'Confirm'), color: this.colors.accent }]
-        });
-        if (result.index !== 1) return;
-      } catch (_) { return; }
+      const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+        title: action.label,
+        message: action.confirmation,
+      });
+      if (!confirmed) return;
     }
     this.getUIContext().getFocusController().clearFocus();
     await this.request(action.id);

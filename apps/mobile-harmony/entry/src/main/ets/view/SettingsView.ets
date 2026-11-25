@@ -1,3 +1,5 @@
+import { XOPC_PAGE_PADDING_X } from '../common/designTokens';
+import { xopcClickEffect } from '../common/motionTokens';
 import { xopcAppVersion } from '../common/appInfo';
 import {
   appThemeColors,
@@ -34,6 +36,7 @@ struct XopcPreferenceOption {
     }.id(this.optionId).width('100%').padding(0)
       .backgroundColor(this.selected ? this.colors.accentSoft : this.colors.panel)
       .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14)).margin({ bottom: 8 })
+      .clickEffect(xopcClickEffect())
       .accessibilitySelected(this.selected)
       .onClick(this.onSelect)
   }
@@ -187,7 +190,8 @@ export struct XopcSettingsView {
       }.width('100%').alignItems(HorizontalAlign.Start)
     }.id(id).width('100%').height(84).padding(8)
       .backgroundColor(this.selectedScheme === scheme ? this.colors.accentSoft : this.colors.panel)
-      .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).accessibilitySelected(this.selectedScheme === scheme)
+      .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).clickEffect(xopcClickEffect())
+      .accessibilitySelected(this.selectedScheme === scheme)
       .onClick((): void => { this.choose(this.selectedLanguage, this.selectedTheme, scheme); })
   }
   private async openAboutLink(path: string = ''): Promise<void> {
@@ -230,6 +234,7 @@ export struct XopcSettingsView {
         }.width('100%').constraintSize({ minHeight: 64 }).padding({ left: 14, right: 14 })
       }.id('settings-personal-agent').width('100%').padding(0).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
         .backgroundColor(this.colors.panel).margin({ bottom: 8 }).enabled(!!this.personalAgent)
+        .clickEffect(xopcClickEffect())
         .onClick((): void => { this.onNavigate({ page: 'personal-agent-profile', itemId: '' }); })
       XopcHubRow({ heading: $r('app.string.settings_privacy_memory'), symbol: $r('sys.symbol.lock'),
         onOpen: (): void => { this.onNavigate({ page: 'about-you', itemId: '' }); } }).id('settings-privacy-memory')
@@ -298,7 +303,7 @@ export struct XopcSettingsView {
             this.notificationPreferences()
           }
           if (this.error) { Text(userErrorMessage(this.error, 'save')).fontColor(this.colors.danger).margin({ top: 16 }) }
-        }.width('100%').padding({ left: 20, right: 20, bottom: 24 }).alignItems(HorizontalAlign.Start)
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 24 }).alignItems(HorizontalAlign.Start)
       }.layoutWeight(1).width('100%').align(Alignment.Top)
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
   }

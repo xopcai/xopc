@@ -4,6 +4,7 @@ struct AutomationEditorView: View {
     let configuration: GatewayConfiguration
     let existing: AutomationRecord
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.locale) private var locale
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
@@ -43,6 +44,8 @@ struct AutomationEditorView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(mobileTheme.panel.ignoresSafeArea())
             .navigationTitle("编辑自动化")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -65,6 +68,7 @@ struct AutomationEditorView: View {
                 Button("好", role: .cancel) {}
             } message: { Text(error ?? "未知错误") }
         }
+        .mobileSheetPreset(.large)
     }
 
     private var canSave: Bool {

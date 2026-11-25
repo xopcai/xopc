@@ -4,7 +4,8 @@ import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ClarificationChoice
 import ai.xopc.mobile.gateway.ClarificationCommand
 import ai.xopc.mobile.gateway.ClarificationRequest
-import androidx.compose.foundation.BorderStroke
+import ai.xopc.mobile.theme.ClarificationThemeColors
+import ai.xopc.mobile.theme.LocalClarificationThemeColors
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,95 +37,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
-internal data class ClarificationPalette(
-  val surface: Color,
-  val grouped: Color,
-  val divider: Color,
-  val border: Color,
-  val primaryText: Color,
-  val secondaryText: Color,
-  val tertiaryText: Color,
-  val accent: Color,
-  val onAccent: Color,
-  val accentSoft: Color,
-  val accentText: Color,
-  val tonalFill: Color,
-  val tonalText: Color,
-  val inputFill: Color,
-  val badgeAmberFill: Color,
-  val badgeAmberTint: Color,
-  val danger: Color,
-)
+internal typealias ClarificationPalette = ClarificationThemeColors
 
 @Composable
-internal fun rememberClarificationPalette(): ClarificationPalette {
-  val scheme = MaterialTheme.colorScheme
-  val dark = scheme.surface.luminance() < 0.5f
-  val isDefault = scheme.background == Color(0xFFE9EDF3) || scheme.background == Color(0xFF14171C)
-  return if (isDefault) {
-    if (dark) {
-      ClarificationPalette(
-        surface = Color(0xFF1E222A),
-        grouped = Color(0xFF262B35),
-        divider = Color(0x12FFFFFF),
-        border = Color(0x17FFFFFF),
-        primaryText = Color(0xFFF3F5F8),
-        secondaryText = Color(0xFF9CA5B4),
-        tertiaryText = Color(0xFF6C7585),
-        accent = Color(0xFF3A6BFF),
-        onAccent = Color.White,
-        accentSoft = Color(0x2E4C82FF),
-        accentText = Color(0xFF96B6FF),
-        tonalFill = Color(0x14FFFFFF),
-        tonalText = Color(0xFFE6EAF0),
-        inputFill = Color(0xFF161920),
-        badgeAmberFill = Color(0x29F59E0B),
-        badgeAmberTint = Color(0xFFFBBF24),
-        danger = scheme.error,
-      )
-    } else {
-      ClarificationPalette(
-        surface = Color.White,
-        grouped = Color(0xFFF5F6F8),
-        divider = Color(0x0F0F172A),
-        border = Color(0x140F172A),
-        primaryText = Color(0xFF111318),
-        secondaryText = Color(0xFF5F6672),
-        tertiaryText = Color(0xFF8E95A2),
-        accent = Color(0xFF3A6BFF),
-        onAccent = Color.White,
-        accentSoft = Color(0xFFEDF3FF),
-        accentText = Color(0xFF2B5CE6),
-        tonalFill = Color(0xFFEFF1F5),
-        tonalText = Color(0xFF1D2129),
-        inputFill = Color.White,
-        badgeAmberFill = Color(0xFFFEF3E2),
-        badgeAmberTint = Color(0xFFB45309),
-        danger = scheme.error,
-      )
-    }
-  } else {
-    ClarificationPalette(
-      surface = scheme.surface,
-      grouped = scheme.surfaceContainerLow,
-      divider = if (dark) Color(0x14FFFFFF) else Color(0x12000000),
-      border = if (dark) Color(0x1AFFFFFF) else Color(0x14000000),
-      primaryText = scheme.onSurface,
-      secondaryText = scheme.onSurfaceVariant,
-      tertiaryText = scheme.onSurfaceVariant.copy(alpha = 0.72f),
-      accent = scheme.primary,
-      onAccent = scheme.onPrimary,
-      accentSoft = scheme.primaryContainer,
-      accentText = scheme.primary,
-      tonalFill = scheme.surfaceContainerLow,
-      tonalText = scheme.onSurface,
-      inputFill = scheme.surface,
-      badgeAmberFill = if (dark) Color(0x29F59E0B) else Color(0xFFFEF3E2),
-      badgeAmberTint = if (dark) Color(0xFFFBBF24) else Color(0xFFB45309),
-      danger = scheme.error,
-    )
-  }
-}
+internal fun rememberClarificationPalette(): ClarificationPalette =
+  LocalClarificationThemeColors.current
 
 @Composable
 internal fun ClarificationCardSurface(
@@ -138,7 +55,6 @@ internal fun ClarificationCardSurface(
     color = palette.surface,
     contentColor = palette.primaryText,
     shadowElevation = 6.dp,
-    border = BorderStroke(0.5.dp, palette.border),
     content = content,
   )
 }
@@ -157,7 +73,6 @@ internal fun ClarificationCollapsedBar(
     color = palette.surface,
     contentColor = palette.primaryText,
     shadowElevation = 4.dp,
-    border = BorderStroke(0.5.dp, palette.border),
   ) {
     Row(
       Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),

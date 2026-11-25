@@ -15,6 +15,8 @@ struct ChatImageGalleryView: View {
     let configuration: GatewayConfiguration
     let conversationID: String?
 
+    @Environment(\.mobileTheme) private var mobileTheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
     @State private var scrollIndex: Int?
     @State private var zoom: CGFloat = 1
@@ -74,6 +76,7 @@ struct ChatImageGalleryView: View {
                     Button("关闭", systemImage: "xmark") { dismiss() }
                 }
             }
+        .background(mobileTheme.canvas.ignoresSafeArea())
         }
     }
 
@@ -81,7 +84,7 @@ struct ChatImageGalleryView: View {
         let next = index + offset
         guard items.indices.contains(next) else { return }
         zoom = 1
-        withAnimation(.easeOut(duration: 0.25)) { scrollIndex = next }
+        MobileMotion.perform(MobileMotion.pagerDuration, reduceMotion: reduceMotion) { scrollIndex = next }
     }
 }
 

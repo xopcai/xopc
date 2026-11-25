@@ -1,3 +1,6 @@
+import { XOPC_ICON_HEADER, xopcBackIcon } from '../common/designTokens';
+import { xopcSheetOptions } from '../common/dialogActions';
+import { xopcClickEffect } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { connectionModel, XopcConnectionViewModel } from '../viewmodel/connectionViewModel';
 import { XopcGatewayProfilesView } from '../view/GatewayProfilesView';
@@ -117,8 +120,9 @@ struct XopcIndex {
     Row({ space: 10 }) {
       if (this.manualEntry || this.showHelp || this.connection.gatewayPage === 'add') {
         Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground])
-        }.id('pairing-back').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          SymbolGlyph(xopcBackIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
+        }.id('pairing-back').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
+          .clickEffect(xopcClickEffect())
           .enabled(!this.connection.busy).accessibilityText($r('app.string.back')).onClick((): void => {
             if (this.connection.gatewayPage === 'add') this.backFromGatewayFlow(); else this.closeSecondary();
           })
@@ -244,9 +248,11 @@ struct XopcIndex {
         this.pairingContent()
       }
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
-      .bindSheet(this.music.expanded, this.musicPlayerSheet, { height: '88%', dragBar: true,
-        showClose: false, backgroundColor: this.colors.chat.canvas,
-        onDisappear: (): void => { this.music.closePreview(); } })
+      .bindSheet(this.music.expanded, this.musicPlayerSheet, xopcSheetOptions('large', {
+        height: '88%',
+        backgroundColor: this.colors.chat.canvas,
+        onDisappear: (): void => { this.music.closePreview(); },
+      }))
     XopcVoiceCallView({ call: this.call, viewportWidth: this.viewportWidth, viewportHeight: this.viewportHeight })
     }.width('100%').height('100%')
       .bindContentCover(this.connection.gatewayPage !== 'hidden', this.gatewayFlow, {

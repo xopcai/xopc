@@ -224,12 +224,13 @@ private struct GatewayProfileRow: View {
     let onRename: () -> Void
     let onDetails: () -> Void
     let onRemove: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+                MobileMotion.perform(MobileMotion.standardDuration, reduceMotion: reduceMotion) { expanded.toggle() }
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "link")

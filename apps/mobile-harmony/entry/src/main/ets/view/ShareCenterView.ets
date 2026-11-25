@@ -1,9 +1,12 @@
+import { XOPC_ICON_HEADER, XOPC_PAGE_PADDING_X, xopcMoreIcon } from '../common/designTokens';
+import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
+import { xopcClickEffect, xopcPagerAnimated, xopcPagerDuration } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcShareItem, XopcShareResult } from '../model/share';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { validShareUrl } from '../service/shareService';
 import { XopcShareViewModel } from '../viewmodel/shareViewModel';
-import { XopcListSkeleton, XopcPageHeader } from './MobileComponents';
+import { XopcEmptyHint, XopcErrorState, XopcListSkeleton, XopcPageHeader } from './MobileComponents';
 import { XopcPagerProgress, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
 import { XopcShareResultView } from './ShareResultView';
 
@@ -22,7 +25,6 @@ export struct XopcShareCenterView {
 
   aboutToAppear(): void { this.model.load(); }
   aboutToDisappear(): void { this.model.dispose(); }
-  private text(resource: Resource): string { return this.getUIContext().getHostContext()?.resourceManager.getStringSync(resource.id) ?? ''; }
   private active(item: XopcShareItem): boolean { return !item.revoked && !item.expired; }
   private status(item: XopcShareItem): ResourceStr {
     return item.revoked ? $r('app.string.share_revoked') : item.expired ? $r('app.string.share_expired') : $r('app.string.share_active');
@@ -35,28 +37,33 @@ export struct XopcShareCenterView {
       attachmentCount: item.attachmentCount };
     this.resultOpen = true;
   }
-  private extend(item: XopcShareItem): void {
-    this.getUIContext().showActionSheet({ title: $r('app.string.share_extend'), message: '', sheets: [
-      { title: this.text($r('app.string.share_extend_one')), action: (): void => { this.model.extend(item, DAY_MS); } },
-      { title: this.text($r('app.string.share_extend_three')), action: (): void => { this.model.extend(item, 3 * DAY_MS); } },
-      { title: this.text($r('app.string.share_extend_seven')), action: (): void => { this.model.extend(item, 7 * DAY_MS); } }
-    ] });
+  private async revoke(item: XopcShareItem): Promise<void> {
+    const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+      title: $r('app.string.share_revoke'),
+      message: $r('app.string.share_revoke_confirm'),
+      confirmLabel: $r('app.string.share_revoke'),
+      destructive: true,
+    });
+    if (confirmed) void this.model.revoke(item);
   }
-  private revoke(item: XopcShareItem): void {
-    this.getUIContext().showAlertDialog({ title: $r('app.string.share_revoke'), message: $r('app.string.share_revoke_confirm'),
-      primaryButton: { value: $r('app.string.cancel'), action: (): void => {} },
-      secondaryButton: { value: $r('app.string.share_revoke'), fontColor: this.colors.danger,
-        action: (): void => { this.model.revoke(item); } } });
-  }
-  private menu(item: XopcShareItem): void {
-    const actions: SheetInfo[] = [
-      { title: this.text($r('app.string.share_extend')), action: (): void => { this.extend(item); } },
-      { title: this.text($r('app.string.share_revoke')), action: (): void => { this.revoke(item); } }
-    ];
-    if (validShareUrl(item.shareUrl)) {
-      actions.unshift({ title: this.text($r('app.string.share_preview')), action: (): void => { this.open(item); } });
+
+  @Builder
+  private itemMenu(item: XopcShareItem) {
+    Menu() {
+      if (validShareUrl(item.shareUrl)) {
+        MenuItem({ content: $r('app.string.share_preview') })
+          .onClick((): void => { this.open(item); })
+      }
+      MenuItem({ content: $r('app.string.share_extend_one') })
+        .onClick((): void => { void this.model.extend(item, DAY_MS); })
+      MenuItem({ content: $r('app.string.share_extend_three') })
+        .onClick((): void => { void this.model.extend(item, 3 * DAY_MS); })
+      MenuItem({ content: $r('app.string.share_extend_seven') })
+        .onClick((): void => { void this.model.extend(item, 7 * DAY_MS); })
+      MenuItem({ content: $r('app.string.share_revoke') })
+        .contentFontColor(this.colors.danger)
+        .onClick((): void => { void this.revoke(item); })
     }
-    this.getUIContext().showActionSheet({ title: item.fileName, message: '', sheets: actions });
   }
 
   private dateLabel(value: string): string {
@@ -86,13 +93,20 @@ export struct XopcShareCenterView {
           .fontColor(this.colors.secondary).width('100%')
       }.layoutWeight(1).alignItems(HorizontalAlign.Start).onClick((): void => { this.open(item); })
       if (this.active(item)) {
-        Button('•••').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .fontColor(this.colors.secondary).accessibilityText($r('app.string.share_actions'))
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph(xopcMoreIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.secondary])
+        }.width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          .clickEffect(xopcClickEffect())
+          .accessibilityText($r('app.string.share_actions'))
           .enabled(!this.model.busyId && !this.model.loading && !this.model.error)
-          .onClick((): void => { this.menu(item); })
+          .bindMenu(this.itemMenu(item), { placement: Placement.BottomRight })
       }
     }.id('share-record-' + item.id).width('100%').padding(14)
       .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
+      .bindContextMenu(this.active(item) && !this.model.busyId && !this.model.loading && !this.model.error
+        ? this.itemMenu(item) : undefined, ResponseType.LongPress, {
+        hapticFeedbackMode: HapticFeedbackMode.ENABLED,
+      })
   }
 
   private filters: XopcSegmentOption[] = [
@@ -103,7 +117,7 @@ export struct XopcShareCenterView {
   private selectFilter(key: string): void {
     const activeOnly = key === 'active';
     if (activeOnly !== this.model.activeOnly && !this.resultOpen && !this.model.busyId) {
-      this.pager.changeIndex(activeOnly ? 1 : 0, !this.layout.reduceMotion);
+      this.pager.changeIndex(activeOnly ? 1 : 0, xopcPagerAnimated(this.layout.reduceMotion));
     }
   }
 
@@ -113,25 +127,21 @@ export struct XopcShareCenterView {
       List({ space: 8 }) {
         if (this.model.error) {
           ListItem() {
-            Row({ space: 12 }) {
-              Text($r('app.string.share_load_failed')).fontSize(14).fontColor(this.colors.secondary).layoutWeight(1)
-              Button($r('app.string.refresh')).height(44).onClick((): void => { void this.model.load(); })
-            }.width('100%')
+            XopcErrorState({ error: this.model.error, context: 'collection',
+              actionLabel: $r('app.string.refresh'), onAction: (): void => { void this.model.load(); } })
           }
         } else if (!this.model.loaded) {
           ListItem() { XopcListSkeleton() }
         } else if (!this.model.visibleItems(activeOnly).length) {
           ListItem() {
-            Text(activeOnly ? $r('app.string.share_no_active') : $r('app.string.share_empty'))
-              .fontSize(15).fontColor(this.colors.secondary).width('100%').padding(16)
-              .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
+            XopcEmptyHint({ message: activeOnly ? $r('app.string.share_no_active') : $r('app.string.share_empty'), centered: true })
           }
         }
         ForEach(this.model.visibleItems(activeOnly), (item: XopcShareItem) => {
           ListItem() { this.record(item) }
         }, (item: XopcShareItem): string => item.id + ':' + item.expiresAt + ':' + item.revoked + ':' + item.expired)
       }.id('share-history-list').width('100%').height('100%')
-        .padding({ left: 20, right: 20, bottom: 24 }).scrollBar(BarState.Off)
+        .padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 24 }).scrollBar(BarState.Off)
         .accessibilityLevel(activeOnly === this.model.activeOnly ? 'auto' : 'no-hide-descendants')
     }.height('100%').width('100%').onRefreshing((): void => { void this.model.load(); })
   }
@@ -147,13 +157,13 @@ export struct XopcShareCenterView {
             pagerProgress: this.pagerProgress,
             swipeToSelect: !this.resultOpen,
             onSelect: (key: string): void => { this.selectFilter(key); } })
-        }.width('100%').padding({ left: 20, right: 20, bottom: 12 })
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 12 })
         Swiper(this.pager) {
           this.sharePage(false)
           this.sharePage(true)
         }.id('share-history-pager').index(this.model.activeOnly ? 1 : 0)
           .loop(false).indicator(false).cachedCount(1).disableSwipe(this.resultOpen || !!this.model.busyId)
-          .duration(this.layout.reduceMotion ? 0 : 230)
+          .duration(xopcPagerDuration(this.layout.reduceMotion))
           .onContentDidScroll((_selected: number, index: number, position: number, length: number): void => {
             this.pagerProgress.update(index, position, length);
           })
@@ -161,7 +171,7 @@ export struct XopcShareCenterView {
           .onChange((index: number): void => { this.model.activeOnly = index === 1; })
           .width('100%').layoutWeight(1)
       }.width('100%').height('100%').backgroundColor(this.colors.surface)
-        .bindSheet($$this.resultOpen, this.resultSheet, { height: '92%', dragBar: false })
+        .bindSheet($$this.resultOpen, this.resultSheet, xopcSheetOptions('immersive', { backgroundColor: this.colors.panel }))
     }.hideTitleBar(true).onBackPressed((): boolean => {
       if (this.resultOpen) this.resultOpen = false;
       else this.onExit();

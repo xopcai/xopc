@@ -171,7 +171,10 @@ struct CapabilitiesView: View {
             guard let prompt = pendingChatPrompt else { return }
             pendingChatPrompt = nil
             onSetupChat(prompt, nil)
-        }) { item in detailView(item) }
+        }) { item in
+            detailView(item)
+                .mobileSheetPreset(.large)
+        }
     }
 
     private func openDeviceTool(_ tool: String) {
@@ -218,7 +221,7 @@ struct CapabilitiesView: View {
         let cases = CapabilityCategory.allCases
         guard option != category, let from = cases.firstIndex(of: category),
               let targetIndex = cases.firstIndex(of: option) else { return }
-        withAnimation(!reduceMotion && abs(targetIndex - from) == 1 ? .easeOut(duration: 0.23) : nil) {
+        withAnimation(MobileMotion.pagerAnimation(reduceMotion: reduceMotion, distance: targetIndex - from)) {
             category = option
         }
     }
@@ -259,12 +262,12 @@ struct CapabilitiesView: View {
             .accessibilityIdentifier("capability-loading")
         }
         if failed || page?.incomplete == true {
-            HStack {
-                Text(failed ? "capability_load_failed" : "capability_partial")
-                    .foregroundStyle(mobileTheme.secondary)
-                Spacer()
-                Button("capability_retry") { load(kind, refresh: true) }
-            }
+            MobileInlineBanner(
+                message: AppLocalization.string(failed ? "capability_load_failed" : "capability_partial", locale: locale),
+                tone: failed ? .danger : .warning,
+                actionLabel: AppLocalization.string("capability_retry", locale: locale),
+                onAction: { load(kind, refresh: true) }
+            )
         }
         if groups.isEmpty, !loading, !failed {
             ContentUnavailableView {
@@ -384,7 +387,7 @@ struct CapabilitiesView: View {
                 Button {
                     openDetails(item)
                 } label: {
-                    Image(systemName: "ellipsis").font(.body.weight(.semibold))
+                    Image(systemName: "ellipsis.circle").font(.body.weight(.regular))
                         .foregroundStyle(mobileTheme.secondary).frame(width: 44, height: 44).contentShape(.rect)
                         .contentShape(.hoverEffect, .circle)
                         .hoverEffect(.highlight)
@@ -1298,11 +1301,21 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                     Text(verbatim: field.label)
                 }
             } else if field.presentation == "segmented" {
-                Picker(selection: value) {
-                    ForEach(field.options ?? []) { option in Text(verbatim: option.label).tag(option.id) }
-                } label: { Text(verbatim: field.label) }
-                    .pickerStyle(.segmented)
-                    .accessibilityIdentifier("capability-field-\(field.id)")
+                SegmentedTabs(
+                    options: (field.options ?? []).map { option in
+                        SegmentOption(
+                            id: option.id,
+                            title: LocalizedStringResource(stringLiteral: option.label),
+                            accessibilityID: "capability-field-\(field.id)-\(option.id)"
+                        )
+                    },
+                    selected: value.wrappedValue,
+                    label: LocalizedStringKey(field.label),
+                    swipeToSelect: true
+                ) { next in
+                    value.wrappedValue = next
+                }
+                .accessibilityIdentifier("capability-field-\(field.id)")
             } else if field.type == "select" {
                 selectInput(field, value: value)
             } else if field.type == "list" {

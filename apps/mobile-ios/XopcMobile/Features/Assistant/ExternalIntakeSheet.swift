@@ -7,6 +7,7 @@ struct ExternalIntakeSheet: View {
     var importError: String?
     let onSelect: (ExternalIntakeBatch, ConversationSelection) -> Void
     let onCancel: () -> Void
+    @Environment(\.mobileTheme) private var mobileTheme
     @State private var search = ""
     @State private var selected = "new"
     @State private var results: [ConversationSummary] = []
@@ -66,6 +67,8 @@ struct ExternalIntakeSheet: View {
                     Text(message).foregroundStyle(.red)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(mobileTheme.panel.ignoresSafeArea())
             .navigationTitle("添加到对话")
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 12) {
@@ -88,6 +91,7 @@ struct ExternalIntakeSheet: View {
             }
             .interactiveDismissDisabled()
         }
+        .mobileSheetPreset(.large)
     }
 
     private func targetRow(_ id: String, title: String, detail: String? = nil) -> some View {

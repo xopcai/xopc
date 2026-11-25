@@ -1,10 +1,15 @@
+import { xopcConfirmDialog } from '../common/dialogActions';
+import { xopcClickEffect, xopcRevealTransition } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { connectionModel, XopcConnectionViewModel, XopcGatewayProbeState } from '../viewmodel/connectionViewModel';
 import { XopcProfile } from '../model/gateway';
+import { layoutState, XopcLayoutState } from '../service/layoutState';
+import { connectionModel, XopcConnectionViewModel, XopcGatewayProbeState } from '../viewmodel/connectionViewModel';
+import { XopcPageHeader } from './MobileComponents';
 
 @ComponentV2
 export struct XopcGatewayProfilesView {
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local layout: XopcLayoutState = layoutState;
   @Local connection: XopcConnectionViewModel = connectionModel;
   @Local editingId: string = '';
   @Local editedName: string = '';
@@ -45,36 +50,31 @@ export struct XopcGatewayProfilesView {
   }
 
   private async remove(profile: XopcProfile): Promise<void> {
-    try {
-      const result = await this.getUIContext().getPromptAction().showDialog({
-        title: $r('app.string.gateways_remove'), message: $r('app.string.gateways_remove_hint'),
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-          { text: $r('app.string.confirm'), color: this.colors.danger }]
-      });
-      if (result.index === 1) await this.connection.remove(profile.gatewayId);
-    } catch (_) { /* Dismissing the dialog leaves the profile intact. */ }
+    const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+      title: $r('app.string.gateways_remove'),
+      message: $r('app.string.gateways_remove_hint'),
+      confirmLabel: $r('app.string.gateways_remove'),
+      destructive: true,
+    });
+    if (confirmed) await this.connection.remove(profile.gatewayId);
   }
 
   @Builder
   header() {
-    Stack({ alignContent: Alignment.Center }) {
-      Row() {
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.arrow_left')).fontSize(20).fontColor([this.colors.foreground])
-        }.id('gateways-back').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
-          .enabled(!this.connection.busy).accessibilityText($r('app.string.back'))
-          .onClick((): void => { this.connection.closeGateways(); })
-        Blank().layoutWeight(1)
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.plus')).fontSize(22).fontColor([this.colors.accent])
-        }.id('gateways-add').width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
-          .enabled(!this.connection.busy).accessibilityText($r('app.string.gateways_add'))
-          .onClick((): void => { this.connection.addGateway(); })
-      }.width('100%')
-      Text($r('app.string.gateways_title')).id('gateways-title').fontSize(18).fontWeight(FontWeight.Medium)
-        .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        .constraintSize({ maxWidth: '60%' }).hitTestBehavior(HitTestMode.None)
-    }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
+    XopcPageHeader({
+      heading: $r('app.string.gateways_title'),
+      showStaticTitle: true,
+      backVisible: true,
+      backId: 'gateways-back',
+      backEnabled: !this.connection.busy,
+      onBack: (): void => { this.connection.closeGateways(); },
+      actionLabel: $r('app.string.gateways_add'),
+      actionIcon: $r('sys.symbol.plus'),
+      actionId: 'gateways-add',
+      actionTone: 'accent',
+      actionEnabled: !this.connection.busy,
+      onAction: (): void => { this.connection.addGateway(); },
+    })
   }
 
   @Builder
@@ -115,6 +115,7 @@ export struct XopcGatewayProfilesView {
       }.width('100%').padding(14)
     }.id('gateway-select-' + profile.gatewayId).width('100%').padding(0).backgroundColor(Color.Transparent)
       .borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
+      .clickEffect(xopcClickEffect())
       .accessibilitySelected(profile.gatewayId === this.connection.activeGatewayId)
       .onClick((): void => {
         this.expandedId = this.expandedId === profile.gatewayId ? '' : profile.gatewayId;
@@ -188,6 +189,7 @@ export struct XopcGatewayProfilesView {
         }.width('100%')
       }
     }.width('100%').padding({ left: 14, right: 14, bottom: 6 })
+      .transition(xopcRevealTransition(TransitionEdge.TOP, this.layout.reduceMotion))
   }
 
   build() {

@@ -2,6 +2,8 @@ import { capabilityText, capabilityDisplayOffset, capabilityWireOffset, editCapa
 import { loadDesktopChatTarget, reselectDesktopChatTarget, XopcDesktopChatTarget } from '../repository/deviceConnectionsRepository';
 import { XopcConversationShare } from './ConversationShare';
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI';
+import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
+import { xopcWithMotion } from '../common/motionTokens';
 import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { XopcTaskChatHeader } from './TaskChatHeader';
 import { XopcPhoneViewModel } from '../viewmodel/phoneViewModel';
@@ -913,14 +915,10 @@ export struct XopcChatView {
       this.editor.stopEditing();
       this.getUIContext().getFocusController().clearFocus();
     }
-    if (!this.visible || this.layout.reduceMotion) {
+    xopcWithMotion(this.getUIContext(), open ? CHAT_ACTION_PANEL_OPEN_MS : CHAT_ACTION_PANEL_CLOSE_MS,
+      open ? Curve.EaseOut : Curve.EaseInOut, (): void => {
       this.panelOpen = open;
-      return;
-    }
-    this.getUIContext().animateTo({ duration: open ? CHAT_ACTION_PANEL_OPEN_MS : CHAT_ACTION_PANEL_CLOSE_MS,
-      curve: open ? Curve.EaseOut : Curve.EaseInOut }, (): void => {
-      this.panelOpen = open;
-    });
+    }, undefined, !this.visible || this.layout.reduceMotion);
   }
   private dismissComposer(): void {
     clearTimeout(this.composerFocusTimer);
@@ -1087,11 +1085,11 @@ export struct XopcChatView {
   private async newConversation(agentId: string = this.options.agentId, projectId: string | null = this.chat.projectId || null, executionMode?: string): Promise<void> {
     if (this.automationSetup || this.chat.loading || this.chat.sending || this.restoringDraft) return;
     if (this.draft.trim() || this.attachments.length || this.refs.length) {
-      try {
-        const result = await this.getUIContext().getPromptAction().showDialog({ message: $r('app.string.discard_changes'),
-          buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary }, { text: $r('app.string.confirm'), color: this.colors.danger }] });
-        if (result.index !== 1) return;
-      } catch (_) { return; }
+      const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+        message: $r('app.string.discard_changes'),
+        destructive: true,
+      });
+      if (!confirmed) return;
     }
     this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.draft = ''; this.attachments = []; this.refs = [];
     this.editingTurnId = '';
@@ -2381,23 +2379,28 @@ export struct XopcChatView {
       }
       this.conversation()
       Column().width('100%').height(0)
-        .bindSheet($$this.generatedVideoOpen, this.generatedVideoDrawer, {
-          height: '88%', dragBar: true,
-          showClose: false, backgroundColor: this.colors.chat.canvas,
-          onDisappear: (): void => { if (!this.generatedVideoOpen) this.generatedVideo = undefined; } })
+        .bindSheet($$this.generatedVideoOpen, this.generatedVideoDrawer, xopcSheetOptions('large', {
+          height: '88%',
+          backgroundColor: this.colors.chat.canvas,
+          onDisappear: (): void => { if (!this.generatedVideoOpen) this.generatedVideo = undefined; },
+        }))
       Column().id('chat-image-editor-sheet-host').width('100%').height(0)
-        .bindSheet($$this.imageEditorOpen, this.imageEditorSheet, { height: '75%', dragBar: false,
-          backgroundColor: this.colors.panel, onDisappear: (): void => { this.imageEditorError = ''; } })
+        .bindSheet($$this.imageEditorOpen, this.imageEditorSheet, xopcSheetOptions('medium', {
+          height: '75%',
+          dragBar: false,
+          onDisappear: (): void => { this.imageEditorError = ''; },
+        }))
       Column().id('chat-message-detail-sheet-host').width('100%').height(0)
-        .bindSheet($$this.messageDetailOpen, this.messageDetailSheet, { height: '94%', dragBar: false,
-          showClose: false, backgroundColor: this.colors.panel,
+        .bindSheet($$this.messageDetailOpen, this.messageDetailSheet, xopcSheetOptions('immersive', {
+          backgroundColor: this.colors.panel,
           onDisappear: (): void => {
             if (this.messageDetailContentTimer !== -1) clearTimeout(this.messageDetailContentTimer);
             this.messageDetailContentTimer = -1;
             this.messageDetailContentReady = false;
-          } })
+          },
+        }))
     }.width('100%').height('100%').backgroundColor(this.colors.chat.canvas)
-      .bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight, dragBar: true, showClose: false, backgroundColor: this.colors.panel })
+      .bindSheet($$this.sheetOpen, this.optionsSheet, xopcSheetOptions('medium', { height: this.sheetHeight }))
     if (this.chatTopInset > 0) {
       Column().id('chat-status-bar-background').width('100%').height(this.chatTopInset).backgroundColor(this.colors.chat.canvas)
         .hitTestBehavior(HitTestMode.None).accessibilityLevel('no')
@@ -2422,8 +2425,11 @@ export struct XopcChatView {
     if (this.searchOpen) { this.messageSearchSheet() }
     }.width('100%').height(LayoutPolicy.matchParent)
       .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], this.embedded || this.layout.systemTopInsetPx <= 0 ? [] : [LayoutSafeAreaEdge.TOP])
-      .bindSheet($$this.executionOpen, this.executionDetailSheet, { height: '92%', dragBar: false,
-        showClose: false, backgroundColor: this.colors.panel, onDisappear: (): void => { this.closeExecutionDetail(); } })
+      .bindSheet($$this.executionOpen, this.executionDetailSheet, xopcSheetOptions('immersive', {
+        height: '92%',
+        backgroundColor: this.colors.panel,
+        onDisappear: (): void => { this.closeExecutionDetail(); },
+      }))
   }
 
   @Builder

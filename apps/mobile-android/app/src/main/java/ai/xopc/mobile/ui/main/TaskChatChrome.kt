@@ -98,8 +98,7 @@ internal fun rememberTaskChatNavigation(connection: ConnectionUiState): TaskChat
   val navigation = remember(connection.profile?.gatewayId) { TaskChatNavigation() }
   val context = androidx.compose.ui.platform.LocalContext.current
   LaunchedEffect(connection.progress.taskChatError, connection.selectedConversationId, connection.chatNavigationId) {
-    if (navigation.settle(connection)) android.widget.Toast.makeText(context,
-      R.string.progress_task_chat_error, android.widget.Toast.LENGTH_SHORT).show()
+    if (navigation.settle(connection)) xopcShowToast(context, R.string.progress_task_chat_error)
   }
   return navigation
 }
@@ -164,20 +163,16 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
       }
     }
   }
-  if (detailsOpen && !statusOpen && !editOpen) ModalBottomSheet(
+  if (detailsOpen && !statusOpen && !editOpen) XopcBottomSheet(
+    preset = XopcSheetPreset.Large,
     onDismissRequest = onDismissDetails,
-    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   ) {
     Column(Modifier.fillMaxWidth().fillMaxHeight(0.8f)) {
-      Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text(task?.title ?: title.ifBlank { stringResource(R.string.progress_task_detail) },
-          modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge,
-          maxLines = 2, overflow = TextOverflow.Ellipsis)
-        IconButton(onClick = onDismissDetails, modifier = Modifier.testTag("task-chat-details-close")) {
-          Icon(painterResource(R.drawable.action_close), stringResource(R.string.assistant_close))
-        }
-      }
+      XopcSheetHeader(
+        title = task?.title ?: title.ifBlank { stringResource(R.string.progress_task_detail) },
+        onClose = onDismissDetails,
+        closeTag = "task-chat-details-close",
+      )
       Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(overviewScroll)
         .padding(20.dp).testTag("task-chat-overview"),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -309,8 +304,8 @@ private fun TaskChatEditor(task: ProgressTask, state: ProgressUiState, onLoadPro
   var discard by remember { mutableStateOf(false) }
   val dirty = title != task.title || body != task.body || project != task.projectId.orEmpty() || priority != (task.priority ?: "normal") || due != task.dueAt
   LaunchedEffect(state.editSavedRevision) { if (state.editSavedRevision > initialRevision) onClose() }
-  ModalBottomSheet(onDismissRequest = { if (!state.editBusy) { if (dirty) discard = true else onClose() } },
-    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+  XopcBottomSheet(XopcSheetPreset.Large,
+    onDismissRequest = { if (!state.editBusy) { if (dirty) discard = true else onClose() } }) {
     Box(Modifier.fillMaxWidth().fillMaxHeight(0.9f).padding(20.dp)) {
       ProgressTaskEditor(title, { title = it }, body, { body = it }, project, { project = it },
         priority, { priority = it }, due, { due = it }, state.projects, state.projectsLoading,
@@ -318,9 +313,13 @@ private fun TaskChatEditor(task: ProgressTask, state: ProgressUiState, onLoadPro
       ) { onSave(task.id, version, ProgressTaskEdit(title, body, project, priority, due)) }
     }
   }
-  if (discard) AlertDialog(onDismissRequest = { discard = false },
-    title = { Text(stringResource(R.string.progress_discard_title)) },
-    text = { Text(stringResource(R.string.progress_discard_message)) },
-    confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.progress_discard)) } },
-    dismissButton = { TextButton(onClick = { discard = false }) { Text(stringResource(R.string.progress_edit_task)) } })
+  if (discard) XopcConfirmDialog(
+    onDismiss = { discard = false },
+    onConfirm = onClose,
+    title = stringResource(R.string.progress_discard_title),
+    message = stringResource(R.string.progress_discard_message),
+    confirmLabel = stringResource(R.string.progress_discard),
+    cancelLabel = stringResource(R.string.progress_edit_task),
+    destructive = true,
+  )
 }

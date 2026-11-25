@@ -1,5 +1,8 @@
-import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { XOPC_ICON_HEADER, xopcBackIcon, xopcMoreIcon } from '../common/designTokens';
+import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
+import { xopcClickEffect } from '../common/motionTokens';
 import { phonePoint, XopcPhonePoint } from '../common/phoneInteraction';
+import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcPhoneViewModel } from '../viewmodel/phoneViewModel';
 
 @ComponentV2
@@ -77,11 +80,12 @@ export struct XopcPhoneView {
   }
   private async stopTask(): Promise<void> {
     const sessionId = this.phone.state?.report.sessionId;
-    try {
-      const result = await this.getUIContext().getPromptAction().showDialog({ message: $r('app.string.phone_stop_confirm'),
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary }, { text: $r('app.string.phone_stop'), color: this.colors.danger }] });
-      if (result.index === 1 && sessionId === this.phone.state?.report.sessionId) await this.phone.command('cancel');
-    } catch (_) {}
+    const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+      message: $r('app.string.phone_stop_confirm'),
+      confirmLabel: $r('app.string.phone_stop'),
+      destructive: true,
+    });
+    if (confirmed && sessionId === this.phone.state?.report.sessionId) await this.phone.command('cancel');
   }
   private openText(): void {
     this.textDraft = '';
@@ -171,8 +175,9 @@ export struct XopcPhoneView {
     Column({ space: 12 }) {
       Row({ space: 12 }) {
         Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground])
-        }.width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.phone_return'))
+          SymbolGlyph(xopcBackIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
+        }.width(44).height(44).padding(0).backgroundColor(this.colors.panel).clickEffect(xopcClickEffect())
+          .accessibilityText($r('app.string.phone_return'))
           .onClick((): void => { this.onReturn(); })
         Column({ space: 3 }) {
           Text(this.phone.summary?.deviceName ?? '').fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
@@ -182,8 +187,8 @@ export struct XopcPhoneView {
           }
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(23).fontColor([this.colors.foreground])
-        }.id('phone-more').width(44).height(44).backgroundColor(this.colors.input)
+          SymbolGlyph(xopcMoreIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
+        }.id('phone-more').width(44).height(44).padding(0).backgroundColor(this.colors.panel).clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.phone_more')).bindMenu(this.moreMenu)
       }.width('100%')
       this.phoneFrame()
@@ -220,8 +225,11 @@ export struct XopcPhoneView {
         Text($r('app.string.phone_view_only')).fontSize(14).fontColor(this.colors.secondary)
       }
     }.width('100%').height('100%').padding({ left: 16, right: 16, bottom: 16 }).backgroundColor(this.colors.surface)
-      .bindSheet($$this.showText, this.textSheet, { height: 300, dragBar: true, showClose: true,
-        backgroundColor: this.colors.panel, onDisappear: (): void => { this.textDraft = ''; } })
+      .bindSheet($$this.showText, this.textSheet, xopcSheetOptions('compact', {
+        height: 300,
+        showClose: true,
+        onDisappear: (): void => { this.textDraft = ''; },
+      }))
       .onDisAppear((): void => { this.showText = false; this.textDraft = ''; this.phone.cancel(); })
   }
 }

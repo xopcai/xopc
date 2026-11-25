@@ -90,7 +90,7 @@ struct LoopiIcon: View {
     }
 
     private func move(to next: LoopiPose, duration: Double) {
-        withAnimation(.easeInOut(duration: duration)) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: duration)) {
             pose = next
         }
     }

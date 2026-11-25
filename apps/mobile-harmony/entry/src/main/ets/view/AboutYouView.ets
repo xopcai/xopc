@@ -1,6 +1,8 @@
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { appSettings } from '../service/settings';
 import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
+import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
+import { xopcPagerAnimated, xopcPagerDuration } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcMobileRoute } from '../model/home';
 import { XopcUnderstandingItem, XopcUnderstandingProfile, XopcUnderstandingRule, XopcWorkMemoryItem } from '../model/userUnderstanding';
@@ -147,13 +149,14 @@ export struct XopcAboutYouView {
     if (!this.model.error) this.editingStatement = false;
   }
 
-  private confirmDelete(): void {
-    this.getUIContext().showAlertDialog({
+  private async confirmDelete(): Promise<void> {
+    const confirmed = await xopcConfirmDialog(this.getUIContext(), {
       title: $r('app.string.about_you_delete_title'),
       message: $r('app.string.about_you_delete_help'),
-      primaryButton: { value: $r('app.string.cancel'), action: (): void => {} },
-      secondaryButton: { value: $r('app.string.delete'), action: (): void => { this.model.removeSelected(); } }
+      confirmLabel: $r('app.string.delete'),
+      destructive: true,
     });
+    if (confirmed) void this.model.removeSelected();
   }
 
   private sourceLabel(item: XopcUnderstandingItem): Resource {
@@ -201,7 +204,7 @@ export struct XopcAboutYouView {
   private selectSection(key: string): void {
     const section = this.sections.indexOf(key);
     if (section < 0 || section === this.section) return;
-    this.pager.changeIndex(section, !this.layout.reduceMotion && Math.abs(this.section - section) === 1);
+    this.pager.changeIndex(section, xopcPagerAnimated(this.layout.reduceMotion, this.section - section));
   }
 
   private commitSection(section: number): void {
@@ -687,7 +690,7 @@ export struct XopcAboutYouView {
               this.sectionPage(section)
             }, (section: string): string => section)
           }.id('about-you-pager').index(this.section).loop(false).indicator(false).cachedCount(2)
-            .duration(this.layout.reduceMotion ? 0 : 230).disableSwipe(this.editProfileOpen)
+            .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(this.editProfileOpen)
             .onChange((index: number): void => { this.commitSection(index); })
             .width('100%').layoutWeight(1)
         }.width('100%').height('100%')
@@ -700,6 +703,6 @@ export struct XopcAboutYouView {
       if (this.model.openingId) { this.model.close(); return true; }
       if (this.searchOpen) { this.closeSearch(); return true; }
       return false;
-    }).bindSheet($$this.editProfileOpen, this.profileEditor, { height: SheetSize.LARGE, dragBar: true, backgroundColor: this.colors.panel })
+    }).bindSheet($$this.editProfileOpen, this.profileEditor, xopcSheetOptions('large'))
   }
 }

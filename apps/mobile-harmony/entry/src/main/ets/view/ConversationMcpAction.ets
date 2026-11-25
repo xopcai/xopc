@@ -1,3 +1,5 @@
+import { xopcSheetOptions } from '../common/dialogActions';
+import { xopcClickEffect } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { hasConversationMcpSetup } from '../repository/capabilitiesRepository';
 import { capabilityDrawerHeight, XopcCapabilityPanelView } from './CapabilityPanelView';
@@ -54,7 +56,7 @@ export struct XopcConversationMcpAction {
             Text($r('app.string.capability_mcp_continue')).fontColor(this.colors.chat.action).fontSize(14)
           }
         }.id('chat-mcp-setup').height(44).backgroundColor(this.colors.accentSoft)
-          .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14)).onClick((): void => {
+          .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14)).clickEffect(xopcClickEffect()).onClick((): void => {
             this.getUIContext().getFocusController().clearFocus();
             this.panelConversationId = this.conversationId;
             this.panelExpanded = false;
@@ -62,7 +64,10 @@ export struct XopcConversationMcpAction {
           })
       }
     }.width('100%').margin({ bottom: this.available ? 8 : 0 })
-      .bindSheet($$this.panelOpen, this.panel, { height: capabilityDrawerHeight(this.panelExpanded), dragBar: true, showClose: false,
-        backgroundColor: this.colors.surface, onDisappear: (): void => { void this.refresh(); } })
+      .bindSheet($$this.panelOpen, this.panel, xopcSheetOptions('large', {
+        height: capabilityDrawerHeight(this.panelExpanded),
+        backgroundColor: this.colors.surface,
+        onDisappear: (): void => { void this.refresh(); },
+      }))
   }
 }

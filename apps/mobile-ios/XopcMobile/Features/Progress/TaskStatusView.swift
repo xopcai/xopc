@@ -3,6 +3,7 @@ import SwiftUI
 struct TaskStatusView: View {
     let configuration: GatewayConfiguration
     let detail: TaskDetailEnvelope
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.dismiss) private var dismiss
     @State private var agents: [AgentSummary] = []
     @State private var agentID = ""
@@ -105,6 +106,8 @@ struct TaskStatusView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(mobileTheme.panel.ignoresSafeArea())
             .disabled(isWorking)
             .navigationTitle("调整状态")
             .navigationBarTitleDisplayMode(.inline)

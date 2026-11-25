@@ -273,21 +273,7 @@ private fun PersonalOverviewHeader(agent: PersonalAgentRecord, avatar: Bitmap?, 
 
 @Composable
 private fun DeliveryListSkeleton() {
-  val label = stringResource(R.string.brand_loading)
-  val placeholder = MaterialTheme.colorScheme.surfaceContainerHighest
-  Column(Modifier.fillMaxWidth().semantics { contentDescription = label }
-    .testTag("personal-overview-library-loading"), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-    repeat(3) {
-      Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(19.dp).background(placeholder, RoundedCornerShape(5.dp)))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          Box(Modifier.fillMaxWidth(.58f).height(12.dp).background(placeholder, CircleShape))
-          Box(Modifier.fillMaxWidth(.34f).height(8.dp).background(placeholder, CircleShape))
-        }
-      }
-    }
-  }
+  XopcListSkeleton(modifier = Modifier.testTag("personal-overview-library-loading"), rows = 3)
 }
 
 @Composable

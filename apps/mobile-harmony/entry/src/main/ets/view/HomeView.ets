@@ -1,3 +1,10 @@
+import { xopcConfirmDialog } from '../common/dialogActions';
+import {
+  XOPC_MOTION_STANDARD_MS,
+  xopcPagerAnimated,
+  xopcPagerDuration,
+  xopcWithMotion,
+} from '../common/motionTokens';
 import { XopcCapabilitiesView } from './CapabilitiesView';
 import { XopcCapabilityPanelView } from './CapabilityPanelView';
 import { XopcPersonalAgentRecord, XopcPersonalReadTarget } from '../model/personalAgent';
@@ -304,12 +311,12 @@ export struct XopcHomeView {
       }
       const version = Number(message.split(':')[1]);
       try {
-        const result = await this.getUIContext().getPromptAction().showDialog({
-          title: $r('app.string.capture_consent_title'), message: $r('app.string.capture_consent_message'),
-          buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-            { text: $r('app.string.capture_consent_continue'), color: this.colors.accent }]
+        const confirmed = await xopcConfirmDialog(this.getUIContext(), {
+          title: $r('app.string.capture_consent_title'),
+          message: $r('app.string.capture_consent_message'),
+          confirmLabel: $r('app.string.capture_consent_continue'),
         });
-        if (result.index !== 1) { this.capture.reset(); return; }
+        if (!confirmed) { this.capture.reset(); return; }
         await this.capture.acknowledge(version);
         this.capture.reset();
         await this.music.pause();
@@ -358,14 +365,15 @@ export struct XopcHomeView {
 
   private settleSidebar(target: number): void {
     const revision = ++this.sidebarTransition;
-    if (this.layout.reduceMotion || this.sidebarProgress === target) {
-      this.sidebarProgress = target;
+    if (this.sidebarProgress === target) {
       if (target === 0) this.sidebarMounted = false;
       return;
     }
-    this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseOut, onFinish: (): void => {
+    xopcWithMotion(this.getUIContext(), XOPC_MOTION_STANDARD_MS, Curve.EaseOut, (): void => {
+      this.sidebarProgress = target;
+    }, (): void => {
       if (!this.disposed && this.sidebarTransition === revision && target === 0) this.sidebarMounted = false;
-    } }, (): void => { this.sidebarProgress = target; });
+    }, this.layout.reduceMotion);
   }
 
   private startSidebarDrag(offsetX: number): void {
@@ -785,7 +793,7 @@ export struct XopcHomeView {
       if (this.recordingAvailable && (!this.recordingDocked || !this.recordingPanel.small) &&
         this.recordingViewportWidth > 0 && this.recordingViewportHeight > 0) {
         if (this.recordingDocked) {
-          Column() {}.width('100%').height('100%').backgroundColor('#330F172A').zIndex(49)
+          Column() {}.width('100%').height('100%').backgroundColor(this.colors.scrim).zIndex(49)
             .accessibilityLevel('no').onClick((): void => { this.collapseNotesRecording(); })
         }
         XopcDiscussionRecordingPanelView({ panel: this.recordingPanel,viewportWidth: this.recordingViewportWidth,viewportHeight: this.recordingViewportHeight,
@@ -817,7 +825,7 @@ struct XopcWorkbenchView {
   private selectPage(page: string): void {
     const index = WORK_PAGE_OPTIONS.findIndex((option: XopcPageTitleOption): boolean => option.key === page);
     if (index < 0 || index === this.selectedIndex) return;
-    this.pager.changeIndex(index, !this.layout.reduceMotion && Math.abs(index - this.selectedIndex) === 1);
+    this.pager.changeIndex(index, xopcPagerAnimated(this.layout.reduceMotion, index - this.selectedIndex));
   }
 
   private goBack(): void {
@@ -853,7 +861,7 @@ struct XopcWorkbenchView {
             workbenchRefresh: this.refreshRevision, workbenchSearchOpen: this.projectSearchOpen,
             onExit: this.onExit, onNavigate: this.onNavigate })
         }.id('work-page-pager').index(this.selectedIndex).loop(false).indicator(false).cachedCount(2)
-          .duration(this.layout.reduceMotion ? 0 : 230)
+          .duration(xopcPagerDuration(this.layout.reduceMotion))
           .width('100%').layoutWeight(1).clip(true)
           .onChange((index: number): void => {
             this.selectedIndex = index;

@@ -76,6 +76,7 @@ struct AppRootView: View {
                 musicSourceToOpen = track
                 music.expanded = false
             }
+            .mobileSheetPreset(.large)
         }
         .onChange(of: appState.gatewayConfiguration) { music.validateScope(appState.gatewayConfiguration) }
         .overlay(alignment: .top) {
@@ -106,6 +107,7 @@ struct AppRootView: View {
                 onRename: appState.renameGatewayProfile,
                 onRemove: appState.removeGatewayProfile
             )
+            .mobileSheetPreset(.large)
         }
         .sheet(item: Binding(get: {
             if case .route("tasks", _) = messageLinks.destination {

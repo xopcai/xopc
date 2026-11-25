@@ -1,19 +1,36 @@
-import { nameCapabilityPrompt } from '../common/capabilityText';
-import { layoutState, XopcLayoutState } from '../service/layoutState';
-import { appSettings } from '../service/settings';
-import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
 import { agentDisplayDescription, agentDisplayName } from '../common/agentPresentation';
+import { nameCapabilityPrompt } from '../common/capabilityText';
+import { XOPC_PAGE_PADDING_X, xopcMoreIcon } from '../common/designTokens';
+import { xopcSheetOptions } from '../common/dialogActions';
+import {
+  XOPC_MOTION_MICRO_MS,
+  xopcClickEffect,
+  xopcMotionDuration,
+  xopcPagerAnimated,
+  xopcPagerDuration,
+} from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatAttachment, XopcChatAgent } from '../model/chat';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { loadCapabilities, XopcCapabilityItem, XopcCapabilityPage } from '../repository/capabilitiesRepository';
-import { XopcListSkeleton, XopcPageTitleMenu, XopcPageTitleOption } from './MobileComponents';
-import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
-import { capabilityDrawerHeight, XopcCapabilityPanelView } from './CapabilityPanelView';
-import { XopcCapabilityLogo } from './CapabilityLogo';
+import { layoutState, XopcLayoutState } from '../service/layoutState';
+import { appSettings } from '../service/settings';
 import { CAPABILITY_CARD_CORNER, CAPABILITY_CARD_GAP, CAPABILITY_CARD_HEIGHT, CAPABILITY_CARD_PADDING,
   XopcCapabilityCardText } from './CapabilityCard';
+import { XopcCapabilityLogo } from './CapabilityLogo';
+import { capabilityDrawerHeight, XopcCapabilityPanelView } from './CapabilityPanelView';
 import { XopcDeviceConnectionsView } from './DeviceConnectionsView';
+import {
+  XopcEmptyHint,
+  XopcErrorState,
+  XopcInlineBanner,
+  XopcListSkeleton,
+  XopcPageHeader,
+  XopcPageSearchField,
+  XopcPageTitleOption,
+} from './MobileComponents';
+import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
+import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
 
 const categories: string[] = ['plugins', 'skills', 'connections', 'devices', 'agents', 'channels'];
 const groups: string[] = ['attention', 'assistant', 'expert', 'connected', 'installed', 'configured', 'disabled', 'available'];
@@ -48,7 +65,7 @@ export struct XopcCapabilitiesView {
   @Local detailOpen: boolean = false;
   @Local detailExpanded: boolean = false;
   @Local hoveredItemId: string = '';
-  @Local clearHovered: boolean = false;
+  @Local searchOpen: boolean = false;
   private pendingChatPrompt: string = '';
   private tabs: XopcCapabilityTabState[] = categories.map((key: string): XopcCapabilityTabState => new XopcCapabilityTabState(key));
   private swiper: SwiperController = new SwiperController();
@@ -96,7 +113,7 @@ export struct XopcCapabilitiesView {
     const target = categories.indexOf(category);
     if (target < 0 || this.detailOpen) return;
     const distance = Math.abs(target - categories.indexOf(this.category));
-    this.swiper.changeIndex(target, !this.layout.reduceMotion && distance === 1);
+    this.swiper.changeIndex(target, xopcPagerAnimated(this.layout.reduceMotion, distance));
   }
 
   private commitPage(index: number): void {
@@ -104,10 +121,21 @@ export struct XopcCapabilitiesView {
     if (!next || next === this.category) return;
     this.getUIContext().getFocusController().clearFocus();
     this.hoveredItemId = '';
-    this.clearHovered = false;
+    this.searchOpen = next !== 'devices' && (this.searchOpen || this.tabs[index].query.trim().length > 0);
     this.category = next;
     appSettings.rememberPageSelection('capabilities', next);
     this.loadNearby(index);
+  }
+
+  private closeSearch(): void {
+    if (this.searchOpen) this.getUIContext().getFocusController().clearFocus();
+    this.searchOpen = false;
+    if (this.activeTab.query) this.updateQuery(this.activeTab, '');
+  }
+
+  private toggleSearch(): void {
+    if (this.searchOpen) this.closeSearch();
+    else this.searchOpen = true;
   }
 
   private updateQuery(tab: XopcCapabilityTabState, value: string): void {
@@ -236,10 +264,10 @@ export struct XopcCapabilitiesView {
       }.layoutWeight(1).padding(0)
         .backgroundColor(this.hoveredItemId === item.id && (kind !== 'agents' || item.group !== 'disabled')
           ? this.colors.hoverOverlay : Color.Transparent)
-        .animation({ duration: this.layout.reduceMotion ? 0 : 120, curve: Curve.EaseOut })
+        .animation({ duration: xopcMotionDuration(XOPC_MOTION_MICRO_MS, this.layout.reduceMotion), curve: Curve.EaseOut })
         .id('capability-row-' + item.id)
         .borderRadius(this.colors.corner(CAPABILITY_CARD_CORNER)).clipShape(this.colors.cornerClip(CAPABILITY_CARD_CORNER))
-        .hoverEffect(HoverEffect.None).stateEffect(true)
+        .hoverEffect(HoverEffect.None).stateEffect(true).clickEffect(xopcClickEffect())
         .onHover((hovering: boolean): void => {
           if (hovering) this.hoveredItemId = item.id;
           else if (this.hoveredItemId === item.id) this.hoveredItemId = '';
@@ -254,10 +282,11 @@ export struct XopcCapabilitiesView {
         }, SEGMENTED_PAGE_TAP_SLOP_VP)
       if (kind === 'agents') {
         Button({ type: ButtonType.Circle }) {
-          Text('⋯').fontSize(22).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
+          SymbolGlyph(xopcMoreIcon()).fontSize(20).fontColor([this.colors.secondary])
         }.width(44).height(44).padding(0).margin({ right: 8 }).backgroundColor(Color.Transparent)
           .id('capability-settings-' + item.id)
           .accessibilityText(this.getLabel($r('app.string.settings')) + ' · ' + item.name)
+          .clickEffect(xopcClickEffect())
           .stateEffect(true).onClick((): void => {
             if (kind === this.category) this.showDetail(item);
           }, SEGMENTED_PAGE_TAP_SLOP_VP)
@@ -289,42 +318,46 @@ export struct XopcCapabilitiesView {
 
   @Builder
   header() {
-    Stack({ alignContent: Alignment.Center }) {
-      Row({ space: 8 }) {
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.arrow_left')).fontSize(20).fontColor([this.colors.foreground])
-        }.id('capability-back').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
-          .accessibilityText($r('app.string.back')).onClick((): void => { this.onExit(); })
-        Blank().layoutWeight(1)
-        if (this.category === 'skills') {
-          Button({ type: ButtonType.Circle }) {
-            SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(21).fontColor([this.colors.chat.action])
-          }.id('cap-native-open-skills').width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
-            .accessibilityText($r('app.string.cap_native_skill')).onClick((): void => { this.openSkillMarket(); })
-        } else if (this.category === 'plugins') {
-          Button({ type: ButtonType.Circle }) {
-            SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(21).fontColor([this.colors.chat.action])
-          }.id('cap-native-open-plugins').width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
-            .accessibilityText($r('app.string.capability_search_plugins'))
-            .onClick((): void => { this.getUIContext().getFocusController().requestFocus('capability-search'); })
-        }
-        if (this.category === 'skills' || this.category === 'agents' || this.category === 'connections') {
-          Button({ type: ButtonType.Circle }) {
-            SymbolGlyph($r('sys.symbol.plus')).fontSize(21).fontColor([this.colors.chat.action])
-          }.id(this.category === 'connections' ? 'capability-add-mcp' : 'capability-chat-setup-' + this.category)
-            .width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
-            .accessibilityText(this.setupLabel()).onClick((): void => { this.startSetup(); })
-        }
-      }.width('100%').height(44)
-      XopcPageTitleMenu({ heading: this.title(this.category), options: this.categoryOptions(), selected: this.category,
-        menuId: 'capability-page-menu', onSelect: (key: string): void => { this.select(key); } })
-        .constraintSize({ maxWidth: '48%' })
-    }.width('100%').padding({ top: 8, bottom: 8 })
+    XopcPageHeader({
+      heading: this.title(this.category),
+      titleOptions: this.categoryOptions(),
+      selectedTitle: this.category,
+      titleMenuId: 'capability-page-menu',
+      onSelectTitle: (key: string): void => { this.select(key); },
+      backVisible: true,
+      backId: 'capability-back',
+      onBack: (): void => { if (this.searchOpen) this.closeSearch(); else this.onExit(); },
+      searchId: this.category !== 'devices' ? 'capability-open-search' : '',
+      searchOpen: this.searchOpen,
+      onSearch: (): void => { this.toggleSearch(); },
+      secondaryActionLabel: this.category === 'skills' ? $r('app.string.cap_native_skill') : '',
+      secondaryActionIcon: $r('sys.symbol.square_grid_2x2'),
+      secondaryActionId: 'cap-native-open-skills',
+      secondaryActionTone: 'accent',
+      onSecondaryAction: (): void => { this.openSkillMarket(); },
+      actionLabel: this.category === 'skills' || this.category === 'agents' || this.category === 'connections' ? this.setupLabel() : '',
+      actionIcon: $r('sys.symbol.plus'),
+      actionId: this.category === 'connections' ? 'capability-add-mcp' : 'capability-chat-setup-' + this.category,
+      actionTone: 'accent',
+      onAction: (): void => { this.startSetup(); },
+    })
   }
 
   build() {
     Column() {
       this.header()
+      if (this.category !== 'devices' && this.searchOpen) {
+        Column() {
+          XopcPageSearchField({
+            searchId: 'capability-search',
+            text: this.activeTab.query,
+            placeholder: this.category === 'skills' ? $r('app.string.capability_search_installed_skills')
+              : $r('app.string.capability_search', this.getLabel(this.title(this.category))),
+            onChange: (value: string): void => { this.updateQuery(this.activeTab, value); },
+            onSubmit: (): void => { this.getUIContext().getFocusController().clearFocus(); },
+          })
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
+      }
       Swiper(this.swiper) {
         ForEach(this.tabs, (tab: XopcCapabilityTabState) => {
           Column() {
@@ -343,85 +376,69 @@ export struct XopcCapabilitiesView {
             } else {
               this.catalogList(tab)
             }
-          }.width('100%').height('100%').accessibilityLevel(tab.key === this.category ? 'auto' : 'no-hide-descendants')
+          }.width('100%').height('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X })
+            .accessibilityLevel(tab.key === this.category ? 'auto' : 'no-hide-descendants')
         }, (tab: XopcCapabilityTabState): string => tab.key)
       }.id('capability-pager').index(Math.max(0, categories.indexOf(this.category))).loop(false).indicator(false).cachedCount(4)
-        .duration(this.layout.reduceMotion ? 0 : 230).disableSwipe(this.detailOpen)
+        .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(this.detailOpen)
         .onChange((index: number): void => { this.commitPage(index); })
         .width('100%').layoutWeight(1)
-      if (this.category !== 'devices') {
-        this.searchField()
-      }
-    }.width('100%').height('100%').padding({ left: 18, right: 18 }).backgroundColor(this.colors.surface)
-      .bindSheet($$this.detailOpen, this.detailSheet, { height: capabilityDrawerHeight(this.detailExpanded), dragBar: true,
-        showClose: false, backgroundColor: this.colors.surface, onDisappear: (): void => {
+    }.width('100%').height('100%').backgroundColor(this.colors.surface)
+      .bindSheet($$this.detailOpen, this.detailSheet, xopcSheetOptions('large', {
+        height: capabilityDrawerHeight(this.detailExpanded),
+        backgroundColor: this.colors.surface,
+        onDisappear: (): void => {
           const prompt = this.pendingChatPrompt;
           this.pendingChatPrompt = '';
           if (prompt) this.onSetupChat(prompt, false);
-        } })
+        },
+      }))
   }
 
   @Builder
   catalogList(tab: XopcCapabilityTabState) {
-    List({ space: 10, scroller: tab.scroller }) {
-      if (!tab.failed && !tab.catalog) { ListItem() { XopcListSkeleton() }.id('capability-loading') }
-      if (tab.failed || tab.catalog?.incomplete) {
-        ListItem() {
-          Row() {
-            Text(tab.failed ? $r('app.string.capability_load_failed') : $r('app.string.capability_partial'))
-              .fontSize(14).fontColor(this.colors.secondary).layoutWeight(1)
-            Button($r('app.string.capability_retry')).height(44).backgroundColor(this.colors.accentSoft)
-              .fontColor(this.colors.chat.action).enabled(!tab.loading).onClick((): void => { void this.load(tab, true); })
-          }.width('100%').padding({ left: 14, right: 12, top: 8, bottom: 8 })
-            .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
-        }
-      }
-      if (tab.catalog && !tab.loading && !tab.failed && !this.matches(tab).length) {
-        ListItem() {
-          Column({ space: 10 }) {
-            SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(24).fontColor([this.colors.secondary])
-            Text(tab.query.trim() ? $r('app.string.capability_no_matches') : $r('app.string.capability_empty'))
-              .fontSize(16).fontColor(this.colors.foreground)
-            if (tab.query) Button($r('app.string.capability_clear')).height(44).backgroundColor(this.colors.accentSoft)
-              .fontColor(this.colors.chat.action).onClick((): void => { this.updateQuery(tab, ''); })
-          }.id('capability-empty').width('100%').padding({ top: 56 })
-        }
-      }
-      ForEach(groups, (group: string) => {
-        if (this.rows(tab, group).length) {
+    Refresh({ refreshing: tab.loading && tab.catalog !== undefined }) {
+      List({ space: 10, scroller: tab.scroller }) {
+        if (!tab.failed && !tab.catalog) { ListItem() { XopcListSkeleton() }.id('capability-loading') }
+        if (tab.failed && !tab.catalog) {
           ListItem() {
-            Text(this.groupTitle(group)).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
-              .padding({ left: 4, top: 14, bottom: 2 })
+            XopcErrorState({ error: 'LOAD_FAILED', context: 'collection',
+              actionLabel: $r('app.string.capability_retry'),
+              onAction: (): void => { void this.load(tab, true); } })
           }
-          ForEach(this.rows(tab, group), (item: XopcCapabilityItem) => {
-            ListItem() { this.itemRow(item, tab.key) }
-          }, (item: XopcCapabilityItem): string => item.id + ':' + item.name + ':' + (item.description ?? '')
-            + ':' + (item.avatar ?? '') + ':' + (item.iconUrl ?? '').slice(-64))
+        } else if (tab.failed || tab.catalog?.incomplete) {
+          ListItem() {
+            XopcInlineBanner({
+              message: tab.failed ? $r('app.string.capability_load_failed') : $r('app.string.capability_partial'),
+              actionLabel: $r('app.string.capability_retry'),
+              busy: tab.loading,
+              onAction: (): void => { void this.load(tab, true); },
+            })
+          }
         }
-      }, (group: string): string => group)
-    }.width('100%').layoutWeight(1).scrollBar(BarState.Off).margin({ top: 4 })
-  }
-
-  @Builder
-  searchField() {
-    Row({ space: 8 }) {
-      SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(19).fontColor([this.colors.secondary])
-      TextInput({ text: this.activeTab.query, placeholder: this.category === 'skills' ? $r('app.string.capability_search_installed_skills')
-        : $r('app.string.capability_search', this.getLabel(this.title(this.category))) })
-        .id('capability-search').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
-        .fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
-        .maxLength(160).enterKeyType(EnterKeyType.Search)
-        .onChange((value: string): void => { this.updateQuery(this.activeTab, value); })
-        .onSubmit((): void => { this.getUIContext().getFocusController().clearFocus(); })
-      if (this.activeTab.query) Button({ type: ButtonType.Circle }) {
-        SymbolGlyph($r('sys.symbol.xmark')).fontSize(17).fontColor([this.colors.secondary])
-      }.id('capability-search-clear').width(44).height(44).padding(0)
-        .backgroundColor(this.clearHovered ? this.colors.hoverOverlay : Color.Transparent)
-        .hoverEffect(HoverEffect.None).stateEffect(true)
-        .onHover((hovering: boolean): void => { this.clearHovered = hovering; })
-        .accessibilityText($r('app.string.capability_clear')).onClick((): void => { this.updateQuery(this.activeTab, ''); })
-    }.width('100%').padding({ left: 16, right: 6 })
-      .backgroundColor(this.colors.input).borderRadius(this.colors.corner(24))
-      .margin({ top: 14, bottom: 10 })
+        if (tab.catalog && !tab.loading && !tab.failed && !this.matches(tab).length) {
+          ListItem() {
+            XopcEmptyHint({
+              message: tab.query.trim() ? $r('app.string.capability_no_matches') : $r('app.string.capability_empty'),
+              actionLabel: tab.query ? $r('app.string.capability_clear') : '',
+              centered: true,
+              onAction: (): void => { this.updateQuery(tab, ''); },
+            }).id('capability-empty')
+          }
+        }
+        ForEach(groups, (group: string) => {
+          if (this.rows(tab, group).length) {
+            ListItem() {
+              Text(this.groupTitle(group)).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
+                .padding({ left: 4, top: 14, bottom: 2 })
+            }
+            ForEach(this.rows(tab, group), (item: XopcCapabilityItem) => {
+              ListItem() { this.itemRow(item, tab.key) }
+            }, (item: XopcCapabilityItem): string => item.id + ':' + item.name + ':' + (item.description ?? '')
+              + ':' + (item.avatar ?? '') + ':' + (item.iconUrl ?? '').slice(-64))
+          }
+        }, (group: string): string => group)
+      }.width('100%').height('100%').scrollBar(BarState.Off).margin({ top: 4 })
+    }.width('100%').layoutWeight(1).pullToRefresh(!tab.loading).onRefreshing((): void => { void this.load(tab, true); })
   }
 }

@@ -5,27 +5,24 @@ struct ClarificationPalette {
     let surface, grouped, divider, border, shadow, primaryText, secondaryText, tertiaryText: Color
     let accent, onAccent, accentSoft, accentText, tonalFill, tonalText, inputFill, badgeAmberFill, badgeAmberTint, danger: Color
     init(theme: MobileTheme, dark: Bool) {
-        let isDefault = theme.preset == .default
-        surface = isDefault ? Self.hex(dark ? 0x1E222A : 0xFFFFFF) : theme.panel
-        grouped = isDefault ? Self.hex(dark ? 0x262B35 : 0xF5F6F8) : theme.grouped
+        surface = theme.panel
+        grouped = theme.grouped
         divider = dark ? Color.white.opacity(0.07) : Color.black.opacity(0.06)
         border = dark ? Color.white.opacity(0.09) : Color.black.opacity(0.08)
-        shadow = dark ? Color.black.opacity(0.45) : Color.black.opacity(0.07)
-        primaryText = isDefault ? Self.hex(dark ? 0xF3F5F8 : 0x111318) : theme.foreground
-        secondaryText = isDefault ? Self.hex(dark ? 0x9CA5B4 : 0x5F6672) : theme.secondary
-        tertiaryText = isDefault ? Self.hex(dark ? 0x6C7585 : 0x8E95A2) : theme.secondary.opacity(0.75)
-        accent = isDefault ? Self.hex(0x3A6BFF) : theme.action; onAccent = isDefault ? .white : theme.onAction
-        accentSoft = isDefault ? (dark ? Self.hex(0x4C82FF).opacity(0.18) : Self.hex(0xEDF3FF)) : theme.active
-        accentText = isDefault ? Self.hex(dark ? 0x96B6FF : 0x2B5CE6) : theme.action
-        tonalFill = isDefault ? (dark ? Color.white.opacity(0.08) : Self.hex(0xEFF1F5)) : theme.grouped
-        tonalText = isDefault ? Self.hex(dark ? 0xE6EAF0 : 0x1D2129) : theme.foreground
-        inputFill = isDefault ? Self.hex(dark ? 0x161920 : 0xFFFFFF) : theme.panel
-        badgeAmberFill = dark ? Self.hex(0xF59E0B).opacity(0.16) : Self.hex(0xFEF3E2)
-        badgeAmberTint = Self.hex(dark ? 0xFBBF24 : 0xB45309); danger = theme.danger
-    }
-
-    private static func hex(_ rgb: UInt32) -> Color {
-        Color(red: Double((rgb >> 16) & 255) / 255, green: Double((rgb >> 8) & 255) / 255, blue: Double(rgb & 255) / 255)
+        shadow = theme.scrim.opacity(dark ? 0.45 : 0.16)
+        primaryText = theme.foreground
+        secondaryText = theme.secondary
+        tertiaryText = theme.secondary.opacity(0.75)
+        accent = theme.action
+        onAccent = theme.onAction
+        accentSoft = theme.active
+        accentText = theme.action
+        tonalFill = theme.input
+        tonalText = theme.foreground
+        inputFill = theme.canvas
+        badgeAmberFill = theme.warningFill
+        badgeAmberTint = theme.warningForeground
+        danger = theme.danger
     }
 }
 
@@ -37,8 +34,7 @@ struct ClarificationCardShell<Content: View>: View {
     let palette: ClarificationPalette; let cornerRadius: CGFloat; @ViewBuilder let content: Content
     var body: some View {
         content.background(palette.surface, in: .rect(cornerRadius: cornerRadius))
-            .overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(palette.border, lineWidth: 0.5))
-            .shadow(color: palette.shadow, radius: 16, y: 6).accessibilityElement(children: .contain)
+            .shadow(color: palette.shadow, radius: 12, y: 4).accessibilityElement(children: .contain)
     }
 }
 
@@ -58,8 +54,7 @@ struct ClarificationCollapsedBar: View {
             }.buttonStyle(.plain)
         }.padding(.horizontal, 14).padding(.vertical, 10).frame(maxWidth: .infinity, minHeight: 48)
             .background(palette.surface, in: .rect(cornerRadius: cornerRadius))
-            .overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(palette.border, lineWidth: 0.5))
-            .shadow(color: palette.shadow, radius: 10, y: 4)
+            .shadow(color: palette.shadow, radius: 8, y: 3)
     }
 }
 
@@ -150,7 +145,7 @@ struct ClarificationHeaderActions: View {
                     Button("交给助手", systemImage: "sparkles", action: onAgentDecide)
                     Button("取消", systemImage: "xmark", role: .destructive, action: onCancel)
                 } label: {
-                    Image(systemName: "ellipsis").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.secondaryText)
+                    Image(systemName: "ellipsis.circle").font(.system(size: 16, weight: .regular)).foregroundStyle(palette.secondaryText)
                         .frame(width: 30, height: 30).contentShape(.rect)
                 }.disabled(disabled).accessibilityLabel("更多操作")
             }
@@ -164,6 +159,7 @@ struct ClarificationHeaderActions: View {
 
 struct ClarificationCard: View {
     @Environment(\.mobileTheme) private var mobileTheme; @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let clarification: ClarificationRequest; let isSubmitting: Bool; let errorMessage: String?
     let onRespond: (String, ClarificationSubmission?) -> Void
     @State private var draft = ""; @State private var selectedID: String?
@@ -203,7 +199,7 @@ struct ClarificationCard: View {
         let remaining = remainingSeconds(at: now), expired = remaining == 0, disabled = isSubmitting || expired
         if collapsed, clarification.kind != "approval" {
             ClarificationCollapsedBar(title: clarification.question, progress: nil, palette: palette, cornerRadius: mobileTheme.corner(18)) {
-                withAnimation(.easeOut(duration: 0.18)) { collapsed = false }
+                MobileMotion.perform(MobileMotion.exitDuration, reduceMotion: reduceMotion) { collapsed = false }
             }
         } else if clarification.kind == "approval" {
             approvalBody(remaining: remaining, expired: expired, disabled: disabled)
@@ -287,7 +283,7 @@ struct ClarificationCard: View {
                 if approval.target?.isEmpty == false || approval.impact?.isEmpty == false {
                     Rectangle().fill(palette.divider).frame(height: 0.5).padding(.leading, 14)
                 }
-                Button { withAnimation(.easeOut(duration: 0.16)) { paramsExpanded.toggle() } } label: {
+                Button { MobileMotion.perform(MobileMotion.microDuration, reduceMotion: reduceMotion) { paramsExpanded.toggle() } } label: {
                     HStack(spacing: 10) {
                         Text("参数").font(.caption).foregroundStyle(palette.tertiaryText).frame(width: 40, alignment: .leading)
                         Text(String(format: AppLocalization.resolve("%lld 项"), approval.argumentsPreview?.count ?? 0)).font(.caption).foregroundStyle(palette.secondaryText)
@@ -322,7 +318,7 @@ struct ClarificationCard: View {
                     }
                     Spacer()
                     ClarificationHeaderActions(showMenu: true, disabled: disabled, palette: palette, onAgentDecide: { onRespond("agent_decide", nil) },
-                                               onCancel: { onRespond("cancel", nil) }, onCollapse: { withAnimation(.easeOut(duration: 0.18)) { collapsed = true } })
+                                               onCancel: { onRespond("cancel", nil) }, onCollapse: { MobileMotion.perform(MobileMotion.exitDuration, reduceMotion: reduceMotion) { collapsed = true } })
                 }.padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 4)
 
                 ScrollView {
@@ -340,7 +336,7 @@ struct ClarificationCard: View {
                                                               selectedID = choiceID; onRespond("answer", .input(choiceId: choiceID))
                                                           }
                                                       },
-                                                      onToggleCustom: { withAnimation(.easeOut(duration: 0.16)) { editing.toggle() } })
+                                                      onToggleCustom: { MobileMotion.perform(MobileMotion.microDuration, reduceMotion: reduceMotion) { editing.toggle() } })
                         }
                         if compose {
                             ClarificationCustomEditor(selectedLabel: choices.first { $0.id == selectedID }?.label,

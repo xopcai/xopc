@@ -1,3 +1,4 @@
+import { xopcPagerAnimated, xopcPagerDuration } from '../common/motionTokens';
 import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcPagerProgress, XopcSegmentedTabs } from './SegmentedTabs';
 import { artifactMedia, chatProductCapability } from '../common/chatRichContent';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
@@ -425,7 +426,7 @@ export struct XopcPersonalAgentOverview {
           swipeToSelect: true, onSelect: (key: string): void => {
             const library = key === 'library';
             if (library !== this.librarySelected && !this.deliveryPreview) {
-              this.pager.changeIndex(library ? 1 : 0, !this.layout.reduceMotion);
+              this.pager.changeIndex(library ? 1 : 0, xopcPagerAnimated(this.layout.reduceMotion));
             }
           } })
       }.width('100%').margin({ top: 12 - 4 * this.headerProgress, bottom: 16 })
@@ -439,7 +440,7 @@ export struct XopcPersonalAgentOverview {
           .onWillScroll((x: number, y: number, _state: ScrollState, source: ScrollSource): OffsetResult =>
             this.scrollHeader(x, y, source, true))
       }.id('personal-overview-pager').index(this.librarySelected ? 1 : 0).loop(false).indicator(false).cachedCount(1)
-        .duration(this.layout.reduceMotion ? 0 : 230).disableSwipe(!this.activePage || !!this.deliveryPreview)
+        .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(!this.activePage || !!this.deliveryPreview)
         .onContentDidScroll((_selected: number, index: number, position: number, length: number): void => {
           this.pagerProgress.update(index, position, length);
         })

@@ -49,7 +49,8 @@ internal fun ConversationShareSheet(state: ConnectionUiState, onReload: (String)
     2_592_000_000L -> R.string.session_share_month
     else -> R.string.session_share_day
   }
-  ModalBottomSheet(
+  XopcBottomSheet(
+    preset = XopcSheetPreset.Large,
     onDismissRequest = { if (!busy) onDismiss() },
     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,
       confirmValueChange = { it != SheetValue.Hidden || !currentBusy }),
@@ -185,12 +186,16 @@ internal fun ConversationShareSheet(state: ConnectionUiState, onReload: (String)
       }
     }
   }
-  if (confirmRevoke) AlertDialog(onDismissRequest = { confirmRevoke = false },
-    title = { Text(stringResource(R.string.share_revoke)) },
-    text = { Text(stringResource(R.string.session_share_revoke_help)) },
-    confirmButton = { TextButton(onClick = { confirmRevoke = false; onRevoke() },
-      modifier = Modifier.testTag("conversations-share-revoke-confirm")) { Text(stringResource(R.string.share_revoke)) } },
-    dismissButton = { TextButton(onClick = { confirmRevoke = false }) { Text(stringResource(R.string.conversations_cancel)) } })
+  if (confirmRevoke) XopcConfirmDialog(
+    onDismiss = { confirmRevoke = false },
+    onConfirm = { confirmRevoke = false; onRevoke() },
+    title = stringResource(R.string.share_revoke),
+    message = stringResource(R.string.session_share_revoke_help),
+    confirmLabel = stringResource(R.string.share_revoke),
+    cancelLabel = stringResource(R.string.conversations_cancel),
+    destructive = true,
+    confirmTag = "conversations-share-revoke-confirm",
+  )
 }
 
 @Composable

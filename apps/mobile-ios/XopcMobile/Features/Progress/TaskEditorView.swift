@@ -6,6 +6,7 @@ struct TaskEditorView: View {
     let initialProjectID: String?
     let onCreated: (TaskRecord) -> Void
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var bodyText: String
@@ -85,6 +86,8 @@ struct TaskEditorView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(mobileTheme.panel.ignoresSafeArea())
             .disabled(isSaving)
             .task(id: configuration) { await loadProjects() }
             .navigationTitle(task != nil ? "编辑任务" : initialProjectID != nil ? "新建项目任务" : "新建任务")
