@@ -17,6 +17,7 @@ import {
   OneShotFollowUpConflictError,
   stopOneShotFollowUp,
 } from './one-shot-follow-up.js';
+import { provenanceDetail } from './provenance.js';
 import {
   getAttention,
   getProactivitySettings,
@@ -24,7 +25,6 @@ import {
   listInterestCandidates,
   patchAttention,
   patchProactivitySettings,
-  provenanceDetail,
   recordFeedback,
   rollbackStrategy,
   strategyState,

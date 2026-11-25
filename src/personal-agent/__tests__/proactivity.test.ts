@@ -26,7 +26,8 @@ import { personalAgentId, personalConversationId } from '../repository.js';
 import { personalUnreadSnapshot } from '../unread.js';
 import { PersonalProactivityService } from '../proactivity/service.js';
 import { enqueueDue, getAttention, getOutreach, getProactivitySettings, isQuiet, patchAttention, patchProactivitySettings,
-  applyThreadFeedback, listInterestCandidates, preparationStrategy, provenanceDetail, recordFeedback, reserveModelCall, rollbackStrategy, saveAttention, strategyState } from '../proactivity/repository.js';
+  applyThreadFeedback, listInterestCandidates, preparationStrategy, recordFeedback, reserveModelCall, rollbackStrategy, saveAttention, strategyState } from '../proactivity/repository.js';
+import { provenanceDetail } from '../proactivity/provenance.js';
 
 describe('Personal proactive participation', () => {
   let dir: string;

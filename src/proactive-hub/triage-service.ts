@@ -42,7 +42,7 @@ import {
   saveProactiveItem,
   type Gate1AdmissionResult,
 } from './repository.js';
-import { hasCoveringOneShotFollowUp } from '../personal-agent/proactivity/one-shot-follow-up.js';
+import { hasCoveringOneShotFollowUp } from '../personal-agent/proactivity/one-shot-coverage.js';
 import type {
   CoalescedSignal,
   PreparedScoutPackage,
