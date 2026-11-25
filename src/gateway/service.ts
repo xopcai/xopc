@@ -1145,6 +1145,9 @@ export class GatewayService {
         log.debug({ err, itemId, phase: 'proactive_weixin_escalation' }, 'Skipped companion Weixin escalation');
       });
     },
+    adoptRsiCandidate: (ownerId, candidateId) => {
+      this.rsiCapability.adoptCandidate(ownerId, candidateId);
+    },
     onItemResolved: async item => {
       await this.rsiCapability.handleProactiveItemResolved(item);
     },

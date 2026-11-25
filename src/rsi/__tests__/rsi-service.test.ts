@@ -1,5 +1,5 @@
 import { once } from 'node:events';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { createHonoApp } from '../../gateway/hono/app.js';
+import { resetLazyRouteBundlesForTests } from '../../gateway/hono/routes/lazy-fallback.js';
 import type { GatewayService } from '../../gateway/service.js';
 import { getProactivitySettings, patchProactivitySettings } from '../../personal-agent/proactivity/repository.js';
 import { personalAgentId, personalConversationId } from '../../personal-agent/repository.js';
@@ -36,6 +37,28 @@ describe('Capability-first Bounded RSI pipeline and authenticated Gateway routes
   const config = ConfigSchema.parse({});
   let rsi: RsiCapabilityService;
   let hub: ProactiveHubService;
+
+  async function startGateway() {
+    const token = 'proactive-rsi-test-token';
+    const app = createHonoApp({
+      service: {
+        currentConfig: config,
+        proactiveHubInstance: hub,
+        rsiCapabilityInstance: rsi,
+        getResolvedAuth: () => ({ mode: 'token', token }),
+        getAuthToken: () => token,
+        isGatewayReady: () => true,
+        getExtensionLoader: () => null,
+      } as unknown as GatewayService,
+    });
+    const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
+    if (!server.listening) await once(server, 'listening');
+    return {
+      server,
+      base: `http://127.0.0.1:${(server.address() as { port: number }).port}`,
+      authHeaders: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    };
+  }
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-rsi-'));
@@ -72,6 +95,9 @@ describe('Capability-first Bounded RSI pipeline and authenticated Gateway routes
       ownerId,
       getConfig: () => config,
       isConversationAvailable: () => true,
+      adoptRsiCandidate: (ownerId, candidateId) => {
+        rsi.adoptCandidate(ownerId, candidateId);
+      },
       onItemResolved: async item => {
         await rsi.handleProactiveItemResolved(item);
       },
@@ -82,6 +108,7 @@ describe('Capability-first Bounded RSI pipeline and authenticated Gateway routes
 
   afterEach(() => {
     hub.stop();
+    resetLazyRouteBundlesForTests();
     vi.useRealTimers();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
@@ -139,8 +166,55 @@ describe('Capability-first Bounded RSI pipeline and authenticated Gateway routes
     // Crucial invariant: Staging never writes to live workspace skills before explicit adoption!
     expect(existsSync(skillPath)).toBe(false);
 
-    // Adopt v1
-    const adoptedV1 = await rsi.adoptCandidate(ownerId, v1Candidate.id);
+    const { server, base, authHeaders } = await startGateway();
+    try {
+      const inboxUrl = `${base}/api/proactive/inbox`;
+      const itemId = v1Candidate.proactiveItemId;
+      expect(itemId).toBeDefined();
+      const pending = await fetch(`${inboxUrl}?includeActed=false`, { headers: authHeaders });
+      expect(pending.status).toBe(200);
+      expect(await pending.json()).toMatchObject({
+        payload: { items: expect.arrayContaining([expect.objectContaining({ id: itemId, state: 'ready' })]) },
+      });
+
+      const approval = {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ action: 'approve', idempotencyKey: `ui-approve:${itemId}` }),
+      };
+
+      writeFileSync(workspaceDir, 'Block skill directory creation');
+      const failed = await fetch(`${inboxUrl}/${itemId}/act`, approval);
+      expect(failed.status).toBe(409);
+      const afterFailure = await fetch(`${inboxUrl}?includeActed=false`, { headers: authHeaders });
+      expect(await afterFailure.json()).toMatchObject({
+        payload: { items: [expect.objectContaining({ id: itemId, state: 'ready' })] },
+      });
+      expect(listRsiCandidates(ownerId)[0]?.status).toBe('inbox_pending');
+      rmSync(workspaceDir);
+
+      const adopted = await fetch(`${inboxUrl}/${itemId}/act`, approval);
+      expect(adopted.status).toBe(200);
+      expect(await adopted.json()).toMatchObject({ payload: { id: itemId, state: 'acted' } });
+      const replay = await fetch(`${inboxUrl}/${itemId}/act`, approval);
+      expect(replay.status).toBe(200);
+      await replay.json();
+
+      const refreshed = await fetch(`${inboxUrl}?includeActed=false`, { headers: authHeaders });
+      expect(refreshed.status).toBe(200);
+      expect(await refreshed.json()).toMatchObject({ payload: { items: [] } });
+
+      const history = await fetch(`${inboxUrl}?includeActed=true`, { headers: authHeaders });
+      expect(history.status).toBe(200);
+      expect(await history.json()).toMatchObject({
+        payload: { items: expect.arrayContaining([expect.objectContaining({ id: itemId, state: 'acted' })]) },
+      });
+    } finally {
+      server.close();
+      await once(server, 'close');
+    }
+
+    const adoptedV1 = listRsiCandidates(ownerId)[0]!;
     expect(adoptedV1.status).toBe('adopted');
     expect(adoptedV1.adoptedVersion).toBe(1);
     expect(existsSync(skillPath)).toBe(true);
@@ -187,7 +261,7 @@ describe('Capability-first Bounded RSI pipeline and authenticated Gateway routes
     expect(v2Candidate.baseVersion).toBe(1);
     expect(v2Candidate.verificationStatus).toBe('passed');
 
-    const adoptedV2 = await rsi.adoptCandidate(ownerId, v2Candidate.id);
+    const adoptedV2 = rsi.adoptCandidate(ownerId, v2Candidate.id);
     expect(adoptedV2.adoptedVersion).toBe(2);
     expect(readFileSync(skillPath, 'utf8')).toContain('回滚预案');
     expect(readFileSync(skillPath, 'utf8')).toContain('风险与阻塞');
@@ -358,25 +432,8 @@ describe('Capability-first Bounded RSI pipeline and authenticated Gateway routes
       now,
     });
 
-    const token = 'proactive-rsi-test-token';
-    const app = createHonoApp({
-      service: {
-        currentConfig: config,
-        proactiveHubInstance: hub,
-        rsiCapabilityInstance: rsi,
-        getResolvedAuth: () => ({ mode: 'token', token }),
-        getAuthToken: () => token,
-        isGatewayReady: () => true,
-        getExtensionLoader: () => null,
-      } as unknown as GatewayService,
-    });
-
-    const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
+    const { server, base, authHeaders } = await startGateway();
     try {
-      if (!server.listening) await once(server, 'listening');
-      const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-      const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-
       // Unauthenticated call must be rejected with 401
       expect((await fetch(`${base}/api/proactive/inbox`)).status).toBe(401);
       expect((await fetch(`${base}/api/rsi/candidates`)).status).toBe(401);

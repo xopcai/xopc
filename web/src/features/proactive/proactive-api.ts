@@ -119,8 +119,10 @@ export async function fetchProactiveInbox(includeActed = false, limit = 20): Pro
   items: ProactiveItem[];
   metrics: ProactiveHubMetrics;
 }> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (includeActed) query.set('includeActed', 'true');
   const res = await fetchJson<{ ok: true; payload: { items: ProactiveItem[]; metrics: ProactiveHubMetrics } }>(
-    apiUrl(`/api/proactive/inbox?includeActed=${includeActed ? 'true' : 'false'}&limit=${limit}`),
+    apiUrl(`/api/proactive/inbox?${query}`),
   );
   return res.payload;
 }

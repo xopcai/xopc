@@ -12,6 +12,7 @@ import {
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import type { Config } from '../config/schema.js';
 import { resolveSkillsDir } from '../config/paths.js';
+import { writeTextAtomicSync } from '../infra/write-file-atomic.js';
 import { getPersonalAgent, resolvePersonalOwnerId } from '../personal-agent/repository.js';
 import {
   createProactiveSubscription,
@@ -24,7 +25,7 @@ import { resolveModel } from '../providers/index.js';
 import { completeWithResolvedCredentials } from '../providers/model-call.js';
 import { extractAssistantText, getAssistantMessageErrorReason, stripCodeFences } from '../providers/model-response.js';
 import { DurableState } from '../storage/sqlite/durable-state.js';
-import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { afterSqliteCommit, getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { createLogger } from '../utils/logger.js';
 import {
   ensureRsiTelemetryVersion,
@@ -769,77 +770,73 @@ export class RsiCapabilityService {
    * Atomically adopts a verified RSI candidate, snapshotting prior live state so
    * `rollbackCandidate` can restore it cleanly at any time.
    */
-  async adoptCandidate(
+  adoptCandidate(
     ownerId: string,
     candidateId: string,
     now = this.now(),
-  ): Promise<RsiCapabilityCandidate> {
-    const candidate = getRsiCandidate(ownerId, candidateId);
-    if (!candidate) throw new Error('RSI candidate not found');
-    if (candidate.status === 'adopted') return candidate;
-    if (candidate.verificationStatus !== 'passed') {
-      throw new Error('Cannot adopt an unverified or failed RSI candidate');
-    }
-    if (candidate.status === 'rejected' || candidate.status === 'rolled_back') {
-      throw new Error(`Cannot adopt candidate in status "${candidate.status}"`);
-    }
-
-    const version = nextAdoptedCapabilityVersion(candidate.artifactKind, candidate.targetId);
-    let liveSnapshot = candidate.previousContentSnapshot;
-
-    if (candidate.stagedPayload.kind === 'skill') {
-      const skillDir = this.targetSkillDir(candidate.scopeType, candidate.stagedPayload.skillName);
-      const skillMdPath = join(skillDir, 'SKILL.md');
-      if (existsSync(skillMdPath)) {
-        liveSnapshot = readFileSync(skillMdPath, 'utf8');
+  ): RsiCapabilityCandidate {
+    return runSqliteWriteTransaction(db => {
+      const candidate = getRsiCandidate(ownerId, candidateId);
+      if (!candidate) throw new Error('RSI candidate not found');
+      if (candidate.status === 'adopted') return candidate;
+      if (candidate.verificationStatus !== 'passed') {
+        throw new Error('Cannot adopt an unverified or failed RSI candidate');
       }
-      await mkdir(skillDir, { recursive: true });
-      await writeFile(skillMdPath, candidate.stagedPayload.skillMarkdown, 'utf8');
-    } else if (candidate.stagedPayload.kind === 'filter_rule') {
-      const subId = `rsi:${candidate.id}`;
-      const existingSub = listProactiveSubscriptions(ownerId).find(s => s.id === subId);
-      if (!existingSub) {
-        createProactiveSubscription(
-          ownerId,
-          {
+      if (candidate.status === 'rejected' || candidate.status === 'rolled_back') {
+        throw new Error(`Cannot adopt candidate in status "${candidate.status}"`);
+      }
+
+      const payload = candidate.stagedPayload;
+      const version = nextAdoptedCapabilityVersion(candidate.artifactKind, candidate.targetId);
+      const skillPath = payload.kind === 'skill'
+        ? join(this.targetSkillDir(candidate.scopeType, payload.skillName), 'SKILL.md')
+        : undefined;
+      const liveSnapshot = skillPath && existsSync(skillPath)
+        ? readFileSync(skillPath, 'utf8')
+        : candidate.previousContentSnapshot;
+
+      if (payload.kind === 'filter_rule') {
+        const subId = `rsi:${candidate.id}`;
+        const existingSub = listProactiveSubscriptions(ownerId).find(s => s.id === subId);
+        if (!existingSub) {
+          createProactiveSubscription(ownerId, {
             scopeType: candidate.scopeType === 'project' ? 'project' : candidate.scopeType === 'workspace' ? 'workspace' : 'global',
             scopeId: candidate.scopeId,
-            sourcePattern: candidate.stagedPayload.sourcePattern,
-            eventTypePattern: candidate.stagedPayload.eventTypePattern,
-            matchPredicates: candidate.stagedPayload.matchPredicates,
-            defaultRoute: candidate.stagedPayload.defaultRoute,
-            coalesceWindowMs: candidate.stagedPayload.coalesceWindowMs,
+            sourcePattern: payload.sourcePattern,
+            eventTypePattern: payload.eventTypePattern,
+            matchPredicates: payload.matchPredicates,
+            defaultRoute: payload.defaultRoute,
+            coalesceWindowMs: payload.coalesceWindowMs,
             enabled: true,
-          },
-          'rsi_adopted',
-          now,
-          subId,
-        );
+          }, 'rsi_adopted', now, subId);
+        }
       }
-    }
 
-    ensureRsiTelemetryVersion(candidate.artifactKind, candidate.targetId, version);
-    const adopted = transitionRsiCandidateStatus({
-      ownerId,
-      candidateId,
-      status: 'adopted',
-      adoptedVersion: version,
-      previousContentSnapshot: liveSnapshot,
-      now,
-    });
+      ensureRsiTelemetryVersion(candidate.artifactKind, candidate.targetId, version);
+      const adopted = transitionRsiCandidateStatus({
+        ownerId,
+        candidateId,
+        status: 'adopted',
+        adoptedVersion: version,
+        previousContentSnapshot: liveSnapshot,
+        now,
+      });
 
-    if (adopted.proactiveItemId) {
-      getSqliteDatabase()
-        .prepare("UPDATE proactive_items SET state = 'acted', updated_at = ? WHERE id = ? AND owner_id = ?")
-        .run(now, adopted.proactiveItemId, ownerId);
-    }
-    this.deps.onPublishEvent?.('rsi.candidate.adopted', {
-      candidateId: adopted.id,
-      artifactKind: adopted.artifactKind,
-      targetId: adopted.targetId,
-      version,
+      if (adopted.proactiveItemId) {
+        db.prepare("UPDATE proactive_items SET state = 'acted', updated_at = ? WHERE id = ? AND owner_id = ?")
+          .run(now, adopted.proactiveItemId, ownerId);
+      }
+      if (skillPath && payload.kind === 'skill') {
+        writeTextAtomicSync(skillPath, payload.skillMarkdown);
+      }
+      afterSqliteCommit(() => this.deps.onPublishEvent?.('rsi.candidate.adopted', {
+        candidateId: adopted.id,
+        artifactKind: adopted.artifactKind,
+        targetId: adopted.targetId,
+        version,
+      }));
+      return adopted;
     });
-    return adopted;
   }
 
   rejectCandidate(ownerId: string, candidateId: string, now = this.now()): RsiCapabilityCandidate {

@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
     digests: [] as Array<Record<string, unknown>>,
     bufferedCount: 0,
     rsiCandidates: [] as Array<Record<string, unknown>>,
-    metrics: null,
+    metrics: { droppedSignalsTotal: 0 },
     loading: false,
     reload: vi.fn(async () => {}),
   },
@@ -59,7 +59,7 @@ describe('home card actions', () => {
       digests: [],
       bufferedCount: 0,
       rsiCandidates: [],
-      metrics: null,
+      metrics: { droppedSignalsTotal: 0 },
       loading: false,
       reload: vi.fn(async () => {}),
     };
@@ -260,5 +260,24 @@ describe('home card actions', () => {
     await act(async () => button('Open inbox').click());
     expect(dialog().textContent).toContain('Agent Inbox · External Signals');
     expect(dialog().textContent).toContain('Prepared a 45-day payment term reply draft.');
+  });
+
+  it('keeps adopted skills accessible when the inbox has no pending signals', async () => {
+    mocks.proactive.rsiCandidates = [{
+      id: 'candidate-1',
+      artifactKind: 'skill',
+      targetId: 'weekly-digest',
+      status: 'adopted',
+      adoptedVersion: 1,
+      simRationale: { problemPattern: 'Repeated report preparation', whyChanged: 'Reuse the verified workflow' },
+    }];
+
+    await render();
+    expect(container.querySelector('[data-composer="inline"]')).toBeTruthy();
+    await act(async () => button('Open inbox').click());
+    await act(async () => button('Pulse & Capabilities', dialog()).click());
+    await act(async () => button('Capabilities (RSI)', dialog()).click());
+    expect(dialog().textContent).toContain('skill:weekly-digest v1');
+    expect(dialog().textContent).toContain('Adopted');
   });
 });

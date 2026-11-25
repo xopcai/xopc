@@ -5,6 +5,7 @@ import {
   FileEdit,
   Inbox,
   Layers,
+  LoaderCircle,
   RotateCcw,
   Sparkles,
   X,
@@ -355,9 +356,12 @@ export function ProactiveInboxCard({
                   variant="primary"
                   className="h-8 rounded-lg px-2.5 text-xs"
                   disabled={busyId !== null}
+                  aria-busy={busyId === item.id}
                   onClick={() => void handleQuickApprove(item)}
                 >
-                  <Check className="size-3.5" aria-hidden />
+                  {busyId === item.id
+                    ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+                    : <Check className="size-3.5" aria-hidden />}
                   {item.proposedAction?.label ?? c.quickApprove}
                 </Button>
               </div>

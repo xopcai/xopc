@@ -21,7 +21,7 @@ import {
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const InboxQuerySchema = z.object({
-  includeActed: z.coerce.boolean().default(false),
+  includeActed: z.stringbool().default(false),
   limit: z.coerce.number().int().min(1).max(100).default(30),
 });
 
@@ -59,15 +59,7 @@ export function registerProactiveRsiRoutes(authenticated: Hono, deps: Authentica
     const input = ProactiveItemResolutionSchema.safeParse(await c.req.json().catch(() => null));
     if (!input.success) return c.json({ ok: false, error: 'Invalid proactive item resolution' }, 400);
     try {
-      const item = await deps.service.proactiveHubInstance.resolveItem(c.req.param('itemId'), input.data);
-      // If approving an RSI skill/routine card directly from Inbox, adopt the referenced candidate too.
-      if (
-        input.data.action === 'approve'
-        && item.proposedAction?.kind === 'adopt_rsi_candidate'
-        && item.proposedAction.targetRef
-      ) {
-        await deps.service.rsiCapabilityInstance.adoptCandidate(ownerId, item.proposedAction.targetRef);
-      }
+      const item = await deps.service.proactiveHubInstance.resolveItem(c.req.param('itemId'), input.data, ownerId);
       return c.json({ ok: true, payload: item });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : 'Failed to resolve item' }, 409);
@@ -135,11 +127,11 @@ export function registerProactiveRsiRoutes(authenticated: Hono, deps: Authentica
     return c.json({ ok: true, payload: listRsiCandidates(ownerId, parsed.data) });
   });
 
-  authenticated.post('/api/rsi/candidates/:candidateId/adopt', deps.strictRateLimitMiddleware, async c => {
+  authenticated.post('/api/rsi/candidates/:candidateId/adopt', deps.strictRateLimitMiddleware, c => {
     const ownerId = getPersonalOwnerId(c);
     if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
     try {
-      const adopted = await deps.service.rsiCapabilityInstance.adoptCandidate(ownerId, c.req.param('candidateId'));
+      const adopted = deps.service.rsiCapabilityInstance.adoptCandidate(ownerId, c.req.param('candidateId'));
       return c.json({ ok: true, payload: adopted });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : 'Failed to adopt candidate' }, 409);

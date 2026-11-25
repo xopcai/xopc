@@ -905,7 +905,10 @@ export function HomePage() {
       ? (language === 'zh' ? `${proactive.bufferedCount} 项低打扰外部动态待聚合` : `${proactive.bufferedCount} external updates buffered for digest`)
       : '');
   const proactiveBadgeCount = proactiveActionableItems.length + proactive.digests.length;
-  const proactiveCompactStrip = proactiveHasItems ? (
+  const hasRsiCapabilities = proactive.rsiCandidates.some(
+    (candidate) => candidate.status === 'adopted' || candidate.status === 'inbox_pending',
+  );
+  const proactiveCompactStrip = proactiveHasItems || hasRsiCapabilities ? (
     <div
       data-proactive-inbox-strip
       className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-edge bg-surface-panel px-3.5 py-2"

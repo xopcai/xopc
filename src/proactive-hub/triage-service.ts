@@ -94,6 +94,7 @@ export interface ProactiveHubDeps {
   isConversationAvailable: (conversationId: string) => boolean;
   onPublishEvent?: (type: string, payload: unknown) => void;
   onConversationEscalated?: (conversationId: string, itemId: string, item: ProactiveItem) => void;
+  adoptRsiCandidate?: (ownerId: string, candidateId: string) => void;
   onItemResolved?: (item: ProactiveItem) => void | Promise<void>;
   readAuthorizedContext?: (signal: CoalescedSignal) => Promise<ScoutReadOnlyContext[]> | ScoutReadOnlyContext[];
   callModel?: (operation: 'proactive.fast_triage' | 'proactive.readonly_scout', prompt: string, abortSignal: AbortSignal) => Promise<string>;
@@ -165,8 +166,21 @@ export class ProactiveHubService {
     }
   }
 
-  async resolveItem(itemId: string, resolution: ProactiveItemResolutionInput): Promise<ProactiveItem> {
-    const resolved = applyProactiveItemResolution(this.ownerId(), itemId, resolution, this.now());
+  async resolveItem(
+    itemId: string,
+    resolution: ProactiveItemResolutionInput,
+    ownerId = this.ownerId(),
+  ): Promise<ProactiveItem> {
+    const resolved = runSqliteWriteTransaction(() => {
+      const item = applyProactiveItemResolution(ownerId, itemId, resolution, this.now());
+      if (resolution.action === 'approve' && item.proposedAction?.kind === 'adopt_rsi_candidate') {
+        if (!item.proposedAction.targetRef || !this.deps.adoptRsiCandidate) {
+          throw new Error('RSI capability adoption is unavailable');
+        }
+        this.deps.adoptRsiCandidate(ownerId, item.proposedAction.targetRef);
+      }
+      return item;
+    });
     this.deps.onPublishEvent?.('proactive.inbox.updated', { itemId: resolved.id, state: resolved.state });
     this.deps.onPublishEvent?.('proactive.item.resolved', {
       itemId: resolved.id,
