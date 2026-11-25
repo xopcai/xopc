@@ -2,7 +2,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { TaskRunReceipt } from '@xopcai/gateway-contract';
 
-import { getPersonalAgent } from '../personal-agent/repository.js';
+import { AgentCatalogRepository } from '../agent-catalog/repository.js';
+import { personalAgentId } from '../personal-agent/identity.js';
 import { saveProactiveItem } from '../proactive-hub/repository.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/connection.js';
 import { afterSqliteCommit, getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
@@ -32,7 +33,7 @@ export function recordCapabilityOutcome(input: TelemetryEvent & { ownerId: strin
       const ref = `telemetry:${capabilityKind}:${targetId}:v${version}`;
       const item = saveProactiveItem({
         ownerId,
-        agentId: getPersonalAgent(ownerId)?.agentId ?? 'main',
+        agentId: new AgentCatalogRepository().get(personalAgentId(ownerId))?.id ?? 'main',
         coalesceKey: `rsi:degradation:${capabilityKind}:${targetId}:v${version}`,
         sourceEventIds: [ref],
         tier: 'tier_a_inbox',

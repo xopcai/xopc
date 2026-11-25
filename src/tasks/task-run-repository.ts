@@ -19,6 +19,7 @@ import { enqueueTaskAttentionRequiredEvent, enqueueTaskChangedEvent } from './ta
 import { TaskRepository } from './task-repository.js';
 import { taskInstructionSequence } from './task-instruction-sequence.js';
 import { recordTaskResultVersion } from './task-result-versions.js';
+import { getTaskWait, listActiveTaskWaits } from './task-wait-reader.js';
 import { inspectTaskWorkspace } from './task-workspace-verification.js';
 
 const ACTIVE_RUN_STATUSES: TaskRunStatus[] = ['queued', 'running', 'waiting', 'verifying'];
@@ -91,21 +92,6 @@ type TaskRunRow = {
   version: number;
 };
 
-type TaskWaitRow = {
-  wait_id: string;
-  task_id: string;
-  task_run_id: string | null;
-  kind: TaskWaitKind;
-  status: TaskWait['status'];
-  reason: string;
-  condition_json: string;
-  resume_at: number | null;
-  resolved_by_json: string | null;
-  resolution_json: string | null;
-  created_at: number;
-  resolved_at: number | null;
-};
-
 type TaskRunReceiptRow = {
   run_id: string;
   status: TaskRunReceipt['status'];
@@ -161,23 +147,6 @@ function fromRow(row: TaskRunRow): TaskRun {
     ...(row.terminal_code ? { terminalCode: row.terminal_code } : {}),
     ...(row.terminal_message ? { terminalMessage: row.terminal_message } : {}),
     version: row.version,
-  };
-}
-
-function waitFromRow(row: TaskWaitRow): TaskWait {
-  return {
-    id: row.wait_id,
-    taskId: row.task_id,
-    ...(row.task_run_id ? { taskRunId: row.task_run_id } : {}),
-    kind: row.kind,
-    status: row.status,
-    reason: row.reason,
-    condition: parseJson<Record<string, unknown>>(row.condition_json),
-    ...(row.resume_at === null ? {} : { resumeAt: row.resume_at }),
-    ...(row.resolved_by_json ? { resolvedBy: parseJson<Record<string, unknown>>(row.resolved_by_json) } : {}),
-    ...(row.resolution_json ? { resolution: parseJson<unknown>(row.resolution_json) } : {}),
-    createdAt: row.created_at,
-    ...(row.resolved_at === null ? {} : { resolvedAt: row.resolved_at }),
   };
 }
 
@@ -691,10 +660,7 @@ export class TaskRunRepository {
   }
 
   getWait(waitId: string): TaskWait | undefined {
-    const row = getSqliteDatabase().prepare(
-      'SELECT * FROM task_waits WHERE wait_id = ?',
-    ).get(waitId) as TaskWaitRow | undefined;
-    return row ? waitFromRow(row) : undefined;
+    return getTaskWait(waitId);
   }
 
   requireWait(waitId: string): TaskWait {
@@ -704,10 +670,7 @@ export class TaskRunRepository {
   }
 
   listActiveWaits(taskId: string): TaskWait[] {
-    return (getSqliteDatabase().prepare(
-      `SELECT * FROM task_waits WHERE task_id = ? AND status = 'active'
-       ORDER BY created_at ASC`,
-    ).all(taskId) as TaskWaitRow[]).map(waitFromRow);
+    return listActiveTaskWaits(taskId);
   }
 
   /** A Run's cancellation owns all its waits, never those of another Run on the same Task. */

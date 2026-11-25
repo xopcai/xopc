@@ -9,6 +9,10 @@ import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { getUserProfileSnapshot } from '../user-model/profile.js';
 
+import { personalAgentId } from './identity.js';
+
+export { personalAgentId } from './identity.js';
+
 export type PersonalAgentState = 'provisioning' | 'ready' | 'error';
 export type PersonalAppearance = 'loopi' | 'loopi-curious' | 'loopi-care' | 'custom';
 
@@ -26,10 +30,6 @@ export interface PersonalAgentRecord {
   messageReactionsEnabled?: boolean;
   revision: number;
   errorMessage: string | null;
-}
-
-export function personalAgentId(ownerId: string): string {
-  return `personal-${createHash('sha256').update(ownerId).digest('hex').slice(0, 12)}`;
 }
 
 export function personalConversationId(ownerId: string): string {

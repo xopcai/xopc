@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { AutomationEventEnvelope } from '../automations/domain/types.js';
-import { hasCoveringOneShotFollowUp } from '../personal-agent/proactivity/one-shot-follow-up.js';
+import { hasCoveringOneShotFollowUp } from '../personal-agent/proactivity/one-shot-coverage.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import {
   computeCoalesceKey,
