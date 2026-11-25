@@ -10,8 +10,8 @@ overrides:
   follow-redirects: '>=1.16.2'
   zod: 4.6.6
   '@xopc/web>zod': 3.25.76
-  '@a2ui/react@0.15.0>zod': 3.25.76
-  '@a2ui/web_core@0.15.0>zod': 3.25.76
+  '@a2ui/react@0.16.1>zod': 3.25.76
+  '@a2ui/web_core@0.16.1>zod': 3.25.76
   body-parser: '>=2.4.0'
   undici@>=6.0.0 <6.29.1: 6.29.1
   svgo: '>=4.1.0'
@@ -827,11 +827,11 @@ importers:
   web:
     dependencies:
       '@a2ui/react':
-        specifier: 0.15.0
-        version: 0.15.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@3.25.76)
+        specifier: 0.16.1
+        version: 0.16.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@3.25.76)
       '@a2ui/web_core':
-        specifier: 0.15.0
-        version: 0.15.0
+        specifier: 0.16.1
+        version: 0.16.1
       '@codemirror/commands':
         specifier: ^6.10.3
         version: 6.10.3
@@ -1139,21 +1139,21 @@ importers:
 
 packages:
 
-  '@a2ui/markdown-it@0.2.2':
-    resolution: {integrity: sha512-oj58ybxIPwnRzN2NpvgxrOOwDlZuBKoEtW5U6wRs6SOq1dDjk/zAAkRtb0U52WPSu01gHJOFSGEkuE+Xe09dcQ==}
+  '@a2ui/markdown-it@0.2.4':
+    resolution: {integrity: sha512-7gqKNyIxkFfkjtxXuDtJ0Lu07NFtf15x1JdyXC7VE0Q+tpk4LjD2RL+GRM19SyDFPc3dbN7bTQnD+wnsmMY/Sg==}
     peerDependencies:
-      '@a2ui/web_core': ^0.14.0
+      '@a2ui/web_core': ^0.16.1
 
-  '@a2ui/react@0.15.0':
-    resolution: {integrity: sha512-SkbdIMoRgtYNGh+nSEvK8YHDSAgS8LVFggDMCYdDqrUAWMLb2PS1unYOL8lfkXjskYK/+VoD7sa6X+I2F+F62w==}
+  '@a2ui/react@0.16.1':
+    resolution: {integrity: sha512-5KYlQn+3WAuYtmbXi1Wfv4C//YQqw8EsSs1dV2cVss3Ga9sl239Zj2XZ9gIXgqxsKtjANq5lgXDUPhU3GJRuSw==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      react: ^18.0.0 || ^19.0.0
-      react-dom: ^18.0.0 || ^19.0.0
+      react: ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^17.0.0 || ^18.0.0 || ^19.0.0
       zod: 3.25.76
 
-  '@a2ui/web_core@0.15.0':
-    resolution: {integrity: sha512-S3k9rAJ9O55z5TlDeWy22ly3yQnDLO+XBWihlL5JQSuyxaCUmd7jgFnxO4eq/Bn6dSgdBF0WG8cve/euMoz8SA==}
+  '@a2ui/web_core@0.16.1':
+    resolution: {integrity: sha512-sdQ8q4RNAaKla18AAXIGdAvfbzpE8+qay2vXMSPmgnBVUMZmi7ZwguzVsoCeRQSzvyAgNMjde/CcclARv7SzQw==}
 
   '@algolia/abtesting@1.19.0':
     resolution: {integrity: sha512-Lhnez3hhXHk25lfxLAMxvkP4fmN3+1RgADhD2ssMDBYuAsDVReeyP+3SGRx+ntq8ijMrLqUyfvO72TB6jsTteQ==}
@@ -8190,11 +8190,6 @@ packages:
     resolution: {integrity: sha512-/vxpCXddiX8NGfGO/mTafwjq4aFa/71pvamip0++IQk3zG8cbCj0fifNPrjjF1XMXUne91jL9OoxmdykoEtifQ==}
     engines: {node: '>= 10.13.0'}
 
-  redos-detector@6.1.4:
-    resolution: {integrity: sha512-lPlka1rEH6kK42gtgokvvxMmpAvyc28DcRjQbGxeP5RJsJWgAduBOdGedVCDPdSyCr4ay/JDxq3nGYsJZyt8tA==}
-    engines: {node: '>=16.0.0'}
-    hasBin: true
-
   regex-recursion@6.0.2:
     resolution: {integrity: sha512-0YCaSCq2VRIebiaUviZNs0cBz1kg5kVS2UKUfNIx8YVs1cN3AV7NTctO5FOKBA+UT2BPJIWZauYHPqJODG50cg==}
 
@@ -8206,10 +8201,6 @@ packages:
 
   regexp-tree@0.1.27:
     resolution: {integrity: sha512-iETxpjK6YoRWJG5o6hXLwvjYAoW+FEZn9os0PD/b6AP6xQwsa/Y7lCVgIixBbUPMfhu+i2LtdeAqVTgGlQarfA==}
-    hasBin: true
-
-  regjsparser@0.13.0:
-    resolution: {integrity: sha512-NZQZdC5wOE/H3UT28fVGL+ikOZcEzfMGk/c3iN9UGxzWHMa1op7274oyiUVrAG4B2EuFhus8SvkaYnhvW92p9Q==}
     hasBin: true
 
   rehype-harden@1.1.8:
@@ -9373,28 +9364,27 @@ packages:
 
 snapshots:
 
-  '@a2ui/markdown-it@0.2.2(@a2ui/web_core@0.15.0)':
+  '@a2ui/markdown-it@0.2.4(@a2ui/web_core@0.16.1)':
     dependencies:
-      '@a2ui/web_core': 0.15.0
+      '@a2ui/web_core': 0.16.1
       dompurify: 3.4.17
       markdown-it: 14.3.3
 
-  '@a2ui/react@0.15.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@3.25.76)':
+  '@a2ui/react@0.16.1(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@3.25.76)':
     dependencies:
-      '@a2ui/markdown-it': 0.2.2(@a2ui/web_core@0.15.0)
-      '@a2ui/web_core': 0.15.0
+      '@a2ui/markdown-it': 0.2.4(@a2ui/web_core@0.16.1)
+      '@a2ui/web_core': 0.16.1
       clsx: 2.1.1
       markdown-it: 14.3.3
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
       zod: 3.25.76
 
-  '@a2ui/web_core@0.15.0':
+  '@a2ui/web_core@0.16.1':
     dependencies:
       '@lit/context': 1.1.6
       '@preact/signals-core': 1.14.5
       lit: 3.3.3
-      redos-detector: 6.1.4
       validate-color: 2.2.4
       zod: 3.25.76
       zod-to-json-schema: 3.25.2(zod@3.25.76)
@@ -17049,10 +17039,6 @@ snapshots:
     dependencies:
       resolve: 1.22.12
 
-  redos-detector@6.1.4:
-    dependencies:
-      regjsparser: 0.13.0
-
   regex-recursion@6.0.2:
     dependencies:
       regex-utilities: 2.3.0
@@ -17064,10 +17050,6 @@ snapshots:
       regex-utilities: 2.3.0
 
   regexp-tree@0.1.27: {}
-
-  regjsparser@0.13.0:
-    dependencies:
-      jsesc: 3.1.0
 
   rehype-harden@1.1.8:
     dependencies:

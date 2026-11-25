@@ -11,7 +11,10 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import {
+  A2UI_VERSION,
+  A2UI_V1_VERSION,
   PROJECT_COMPARISON_ACTION_PATH,
+  appendProductDeliveryText,
   parseProductDeliveryEnvelope,
   projectComparisonActionResultSchema,
 } from '@xopcai/gateway-contract';
@@ -19,7 +22,11 @@ import {
 import { seedTestAgentCatalog } from '../src/agent-catalog/test-support.js';
 import { AgentDefaultsSchema } from '../src/agent-config/schema.js';
 import { ConfigSchema } from '../src/config/schema.js';
+import { buildProjectComparison } from '../src/projects/project-comparison.js';
+import { ProjectStore } from '../src/projects/project-store.js';
 import { closeXopcDatabase, openXopcDatabase } from '../src/storage/sqlite/connection.js';
+import { createConversation } from '../src/storage/sqlite/conversation-repository.js';
+import { appendTranscriptEntry } from '../src/storage/sqlite/transcript-repository.js';
 
 const { chromium } = createRequire(import.meta.url)('playwright-core') as typeof import('playwright-core');
 
@@ -145,6 +152,38 @@ seedTestAgentCatalog({
   agents: [{ id: 'main', enabled: true, workspace: root, toolAllowlist: ['xopc_use'], profile: { name: 'Main' } }],
   surfaceDefaults: { chat: 'main' },
 });
+const projectStore = new ProjectStore();
+const projects = [
+  projectStore.create({ name: 'Atlas', health: 'at_risk', description: 'Infrastructure migration' }),
+  projectStore.create({ name: 'Orbit', health: 'on_track', description: 'Design rollout' }),
+];
+projectIds.push(...projects.map(project => project.id));
+const legacyDelivery = buildProjectComparison(projects);
+assert(legacyDelivery.projectComparison);
+delete legacyDelivery.projectComparison.messagesV1;
+const legacyConversationId = createConversation({
+  agentId: 'main',
+  name: 'Legacy project comparison',
+  sourceChannel: 'webchat',
+}, root).key;
+const legacyTimestamp = Date.now() - 60_000;
+const toolCall = { type: 'toolCall' as const, id: 'legacy-compare', name: 'xopc_use',
+  arguments: { mode: 'project', command: 'compare', args: { projectIds } } };
+const assistant = {
+  role: 'assistant' as const, api: 'openai-completions' as const, provider: 'comparison-lab', model: 'lab',
+  usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+};
+appendTranscriptEntry(legacyConversationId, { role: 'user', content: comparisonPrompt, timestamp: legacyTimestamp });
+appendTranscriptEntry(legacyConversationId, { ...assistant, content: [toolCall], stopReason: 'toolUse', timestamp: legacyTimestamp + 1 });
+appendTranscriptEntry(legacyConversationId, {
+  role: 'toolResult', toolCallId: toolCall.id, toolName: toolCall.name, isError: false, timestamp: legacyTimestamp + 2,
+  content: [{ type: 'text', text: appendProductDeliveryText('Compared two projects.', legacyDelivery) }],
+});
+appendTranscriptEntry(legacyConversationId, {
+  ...assistant, content: [{ type: 'text', text: 'Here is the previous project comparison.' }],
+  stopReason: 'stop', timestamp: legacyTimestamp + 3,
+});
 closeXopcDatabase();
 
 const child = spawn(process.execPath, ['dist/src/cli/bin.js', 'gateway', '--port', String(port), '--no-hot-reload'],
@@ -169,13 +208,6 @@ try {
     await new Promise(done => setTimeout(done, 200));
   }
   assert(ready, 'Gateway did not start');
-  for (const [name, health, description] of [
-    ['Atlas', 'at_risk', 'Infrastructure migration'],
-    ['Orbit', 'on_track', 'Design rollout'],
-  ]) {
-    const { project } = await request<{ project: { id: string } }>('/api/projects', 'POST', { name, health, description });
-    projectIds.push(project.id);
-  }
   const browser = await chromium.launch({ headless: true, channel: 'chrome' });
   let conversationId: string;
   try {
@@ -195,7 +227,7 @@ try {
     try {
       const errors: string[] = [];
       page.on('pageerror', error => errors.push(error.message));
-      await page.goto(base + '/#/chat');
+      await page.goto(base + '/#/chat/new');
       const composer = page.locator('[contenteditable="true"]').first();
       let focused = false;
       for (let attempt = 0; attempt < 25; attempt++) {
@@ -214,6 +246,7 @@ try {
       const input = page.waitForRequest(req => req.method() === 'POST' && /\/api\/sessions\/[^/]+\/inputs$/.test(new URL(req.url()).pathname));
       await composer.press('Enter');
       conversationId = new URL((await input).url()).pathname.split('/')[3]!;
+      assert.notEqual(conversationId, legacyConversationId);
       const panel = page.locator('[data-project-comparison]');
       const atlas = panel.getByRole('button', { name: 'Inspect Atlas', exact: true });
       await atlas.waitFor({ timeout: 45000 });
@@ -227,25 +260,24 @@ try {
       const surfaceId = await panel.getAttribute('data-project-comparison');
       const persisted = panels.find(comparison => comparison.surfaceId === surfaceId);
       assert(persisted, 'Persisted comparison is missing from session history');
+      assert(persisted.messages.every(message => message.version === A2UI_VERSION));
+      assert.equal(persisted.messagesV1?.[0].version, A2UI_V1_VERSION);
       const fixture = JSON.stringify(persisted);
       const sha256 = createHash('sha256').update(fixture).digest('hex');
       await writeFile(join(evidence, 'gateway-fixture.json'), fixture);
 
       const { project } = await request<{ project: { version: number } }>(`/api/projects/${projectIds[0]}`);
       await request(`/api/projects/${projectIds[0]}`, 'PATCH', { expectedVersion: project.version, health: 'on_track' });
-      if (process.argv.includes('--keep-gateway')) {
-        await request(`/api/sessions/${conversationId}`, 'PATCH', { name: 'A2UI comparison acceptance' });
-        await writeFile(join(evidence, 'config.json'), JSON.stringify({ base, secureGateway, token, conversationId, projectIds }), { mode: 0o600 });
-      }
       const actionResponse = page.waitForResponse(result => new URL(result.url()).pathname === PROJECT_COMPARISON_ACTION_PATH);
       await atlas.click();
       const returned = await actionResponse;
       assert.equal(returned.status(), 200, () => returned.statusText());
       const outbound = returned.request().postDataJSON();
-      assert.equal(outbound.version, 'v0.9');
+      assert.equal(outbound.version, A2UI_V1_VERSION);
       assert.equal(outbound.action.context.projectId, projectIds[0]);
       assert.equal(outbound.action.context.status, 'active · at risk');
       const action = projectComparisonActionResultSchema.parse(await returned.json());
+      assert(action.messages.every(message => message.version === A2UI_V1_VERSION));
       await panel.getByText('Selected Atlas · active · on track · Infrastructure migration', { exact: true }).waitFor();
       await page.mouse.move(0, 0);
       await page.screenshot({ path: join(evidence, 'web-action.png') });
@@ -265,10 +297,37 @@ try {
       assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 390, 'Comparison extends past the viewport');
       assert(await panel.evaluate(element => element.scrollWidth <= element.clientWidth), 'Comparison content overflows');
       await page.screenshot({ path: join(evidence, 'web-narrow.png'), animations: 'disabled' });
+
+      const legacyHistory = await request<typeof history>(`/api/sessions/${legacyConversationId}/history?view=compact`);
+      const legacy = legacyHistory.session.messages.flatMap(message => message.deliveries ?? []).map(parseProductDeliveryEnvelope)
+        .find(delivery => delivery?.projectComparison?.surfaceId === legacyDelivery.projectComparison?.surfaceId)?.projectComparison;
+      assert(legacy, 'Legacy comparison is missing from session history');
+      assert.equal(legacy.messagesV1, undefined);
+      await page.goto(base + `/#/chat/${legacyConversationId}`);
+      const legacyPanel = page.locator(`[data-project-comparison="${legacy.surfaceId}"]`);
+      await legacyPanel.getByText('active · at risk', { exact: true }).waitFor();
+      const legacyResponse = page.waitForResponse(result => new URL(result.url()).pathname === PROJECT_COMPARISON_ACTION_PATH);
+      await legacyPanel.getByRole('button', { name: 'Inspect Atlas', exact: true }).click();
+      const legacyReturned = await legacyResponse;
+      assert.equal(legacyReturned.status(), 200, () => legacyReturned.statusText());
+      assert.equal(legacyReturned.request().postDataJSON().version, A2UI_VERSION);
+      const legacyAction = projectComparisonActionResultSchema.parse(await legacyReturned.json());
+      assert(legacyAction.messages.every(message => message.version === A2UI_VERSION));
+      await legacyPanel.getByText('Selected Atlas · active · on track · Infrastructure migration', { exact: true }).waitFor();
+      await page.screenshot({ path: join(evidence, 'web-legacy.png'), animations: 'disabled' });
+
       assert.deepEqual(errors, []);
       assert.equal(observed.toolCalls, 1);
       assert.deepEqual(observed.modelErrors, []);
-      await writeFile(join(evidence, 'web-result.json'), JSON.stringify({ conversationId, sha256, outbound, action, observed, ok: true }, null, 2));
+      await writeFile(join(evidence, 'web-result.json'), JSON.stringify({
+        conversationId, legacyConversationId, sha256, outbound, action, legacyAction, observed, ok: true,
+      }, null, 2));
+      if (process.argv.includes('--keep-gateway')) {
+        await request(`/api/sessions/${conversationId}`, 'PATCH', { name: 'A2UI comparison acceptance' });
+        await writeFile(join(evidence, 'config.json'), JSON.stringify({
+          base, secureGateway, token, conversationId, legacyConversationId, projectIds,
+        }), { mode: 0o600 });
+      }
     } catch (error) {
       await page.screenshot({ path: join(evidence, 'web-failure.png') }).catch(() => {});
       await writeFile(join(evidence, 'web-failure.html'), await page.content()).catch(() => {});

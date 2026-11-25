@@ -229,6 +229,7 @@ struct HistoryProductDelivery: Decodable, Sendable {
 struct ChatProjectComparison: Decodable, Equatable, Identifiable, Sendable {
     let surfaceId: String
     let messages: [JSONValue]
+    let messagesV1: [JSONValue]?
     var id: String {
         surfaceId
     }
