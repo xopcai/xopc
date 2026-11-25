@@ -1,6 +1,6 @@
 # xopc 移动端三端统一设计与交互规范（iOS · Android · 鸿蒙）
 
-> **版本**：v1.2 · **适用范围**：
+> **版本**：v1.3 · **适用范围**：
 > - **iOS**：`apps/mobile-ios`（SwiftUI / iOS 17+，141 文件 / ~3.93 万行）
 > - **Android**：`apps/mobile-android`（Jetpack Compose + Material 3，129 文件 / ~74 UI 文件）
 > - **鸿蒙**：`apps/mobile-harmony`（ArkTS ComponentV2 / HarmonyOS API 23+，71 视图 / ~4.02 万行）
@@ -14,13 +14,13 @@
 
 | 维度 | iOS (`mobile-ios`) | Android (`mobile-android`) | 鸿蒙 (`mobile-harmony`) |
 | --- | --- | --- | --- |
-| **主题色渗透率** | **已落地**：核心页面/弹窗补齐 `mobileTheme`，`ClarificationCard` 硬编码 Hex 与描边已归零；`MobileTheme` 补齐 `scrim / dangerSoft / success / warning*` | **已落地**：全量走 `MaterialTheme` + `LocalStatusColors` / `LocalAttentionColors`；`Theme.kt` `ClarificationThemeColors` 对齐主主题；业务硬编码 `Color(0x)` 与描边已归零 | **已落地**：全量走 `appThemeColors`；补齐 `scrim / warning / dangerSoft`；业务 Hex 与描边已归零 |
-| **共享底座** | **已落地**：`MobileDesignTokens.swift`、`MobileMotion.swift`、`MobileSheet.swift`、`MobileStates.swift`、`MobileTheme.swift`、`SegmentedTabs.swift` | **已落地**：`DesignTokens.kt`、`MotionTokens.kt`、`MobileChrome.kt`（含 `XopcInlineBanner` / `XopcUndoBar` / `XopcBatchActionBar` / `XopcButton` / `XopcCard` / `XopcBadge` / `xopcShowToast`） | **已落地**：`designTokens.ets`、`motionTokens.ets`、`dialogActions.ets`、`view/ui/*`、`MobileComponents.ets` |
-| **顶栏与导航** | **已落地**：`NavigationStack` + `.mobilePageTitle` 全覆盖，全站统一 `ellipsis.circle`（零裸 `ellipsis`） | **已落地**：全量收敛 `XopcPageHeader`（零散落 `PageBackButton`），`MainScreen` / `SpaceLibraryScreen` 升级 `HorizontalPager` | **已落地**：`XopcPageHeader` 全收敛（补齐 `FilesView` 返回与标题），统一 `arrow_left` / `ellipsis_circle`，`SessionsView` / `NotesTabView` 升级 `Swiper` |
-| **Sheet 与 Dialog** | **已落地**：30+ 处业务 `.sheet` 收口 `MobileSheetPreset` 4 档预设（仅保留系统 `FileShareSheet` 原生面板） | **已落地**：100% `XopcBottomSheet`（4 档高度上限 + `Immersive` 隐藏拖拽条）、核心确认弹窗收敛 `XopcConfirmDialog`、清理全部无用 `ModalBottomSheet` import | **已落地**：27/27 `bindSheet` 全走 `xopcSheetOptions`、`xopcConfirmDialog` 全收敛，`showAlertDialog` / `showActionSheet` 已归零 |
-| **搜索与刷新** | **已落地**：`CapabilitiesView` 搜索移至顶部 + 技能市场换 `square.grid.2x2` 图标，消除放大镜双义与残留 `Picker(.segmented)` | **已落地**：`CapabilitiesScreen` 搜索移至顶部 + 技能市场换 `action_capabilities`，4 大核心页全接入 `XopcPageSearchField`；100% `XopcPullToRefreshBox` | **已落地**：`CapabilitiesView` / `FilesView` 顶部展开搜索 + 技能市场 `square_grid_2x2`，10 页接入 `Refresh` |
-| **状态、反馈与 Toast** | **已落地**：`ProgressListSkeleton` 底层委托 `MobileListSkeleton`（呼吸动画 + `reduceMotion`），接入 `MobileInlineBanner` | **已落地**：`XopcErrorState` / `XopcEmptyState` / `XopcListSkeleton` / `XopcInlineBanner` / `XopcUndoBar` / `XopcBatchActionBar` 全线接入；0 处裸 `Toast.makeText` | **已落地**：`XopcErrorState` / `XopcEmptyHint` / `XopcInlineBanner` / `XopcUndoBar` / `XopcBatchActionBar` / 呼吸骨架屏；0 处直调 `showToast` |
-| **动效、触觉与守卫** | **已落地**：`MobileMotion` + `reduceMotion` 全守卫 + `SegmentedTabs`/`CapabilitiesView` `.sensoryFeedback` + `UIArchitectureGuardTests` | **已落地**：`rememberMotionAllowed()` / `xopcPagerAnimated` + `UiArchitectureGuardTest` | **已落地**：`motionTokens` 全接入、`clickEffect` + 长按触觉 + `uiInteractionConsistency.test.ts` |
+| **主题色渗透率** | **已落地**：核心页面/弹窗补齐 `mobileTheme`，`ClarificationCard` 硬编码 Hex 与描边已归零；`MobileTheme` 辅助语义色三端 RGB 精确对齐 | **已落地**：全量走 `MaterialTheme` + `LocalStatusColors` / `LocalAttentionColors`；`Theme.kt` 辅助语义色三端 RGB 精确对齐；业务硬编码 `Color(0x)` 与描边已归零 | **已落地**：全量走 `appThemeColors`；补齐 `scrim / warning / dangerSoft / success / successSoft` 并三端 RGB 精确对齐；业务 Hex 与描边已归零 |
+| **共享底座** | **已落地**：`MobileDesignTokens.swift`、`MobileMotion.swift`、`MobileSheet.swift`（`MobileSheetHeader` / `MobileCloseButton`）、`MobileStates.swift`、`MobileTheme.swift`、`SegmentedTabs.swift` | **已落地**：`DesignTokens.kt`、`MotionTokens.kt`、`MobileChrome.kt`（含 `XopcSheetHeader` / `XopcListSkeleton` / `XopcInlineBanner` / `XopcUndoBar` / `XopcBatchActionBar` / `XopcButton` / `XopcCard` / `XopcBadge` / `xopcShowToast`） | **已落地**：`designTokens.ets`、`motionTokens.ets`、`dialogActions.ets`、`view/ui/*`、`MobileComponents.ets` |
+| **顶栏与导航** | **已落地**：`NavigationStack` + `.mobilePageTitle` 全覆盖，`SpaceLibraryView` 升级跟手 `TabView(.page)`，全站统一 `ellipsis.circle`（零裸 `ellipsis`） | **已落地**：全量收敛 `XopcPageHeader`（零散落 `PageBackButton`），`MainScreen` / `SpaceLibraryScreen` 升级 `HorizontalPager` | **已落地**：`XopcPageHeader` 全收敛（补齐 `FilesView` 返回与标题），统一 `arrow_left` / `ellipsis_circle`，`SessionsView` / `NotesTabView` 升级 `Swiper` |
+| **Sheet 与 Dialog** | **已落地**：业务 `.sheet` 收口 `MobileSheetPreset` 4 档预设（`0.72 / 0.88 / 0.94` 对齐规范、消除冲突 detent），核心预览/详情/选项收敛 `MobileSheetHeader` / `MobileCloseButton` | **已落地**：100% `XopcBottomSheet`（4 档高度上限 + `Immersive` 隐藏拖拽条）、核心高频 Sheet 收敛 `XopcSheetHeader`、确认弹窗收敛 `XopcConfirmDialog` | **已落地**：27/27 `bindSheet` 全走 `xopcSheetOptions`、核心高频 Sheet 收敛 `XopcSheetHeader`、`xopcConfirmDialog` 全收敛，`showAlertDialog` / `showActionSheet` 已归零 |
+| **搜索与刷新** | **已落地**：`CapabilitiesView` 搜索移至顶部 + 技能市场换 `square.grid.2x2` 图标，消除放大镜双义与残留 `Picker(.segmented)` | **已落地**：`CapabilitiesScreen` 搜索移至顶部 + 技能市场换 `action_capabilities`，6 大核心列表页接入 `XopcPageSearchField` + `xopcExpandPanelEnter/Exit`；100% `XopcPullToRefreshBox` | **已落地**：`CapabilitiesView` / `FilesView` 顶部展开搜索 + 技能市场 `square_grid_2x2`，10 页接入 `Refresh` |
+| **状态、反馈与 Toast** | **已落地**：`ProgressListSkeleton` / `ProfileSkeleton` / `ConversationLoadingSkeleton` / `librarySkeleton` / `SpaceLibraryView` 全量委托 `MobileListSkeleton`，`SpaceLibraryView` 接入 `MobileUndoBar` / `MobileErrorView` / `MobileEmptyState` | **已落地**：6 大核心列表页加载态全收敛 `XopcListSkeleton`；`XopcErrorState` / `XopcEmptyState` / `XopcInlineBanner` / `XopcUndoBar` / `XopcBatchActionBar` 全线接入；0 处裸 `Toast.makeText` | **已落地**：`XopcErrorState` / `XopcEmptyHint` / `XopcInlineBanner` / `XopcUndoBar` / `XopcBatchActionBar` / 呼吸骨架屏；0 处直调 `showToast` |
+| **动效、触觉与守卫** | **已落地**：`MobileMotion` + `reduceMotion` 全守卫 + `SegmentedTabs`/`CapabilitiesView`/`SpaceLibraryView`/`MessageBubble` `.sensoryFeedback` + 核心视图 Dynamic Type 收敛 + `UIArchitectureGuardTests` | **已落地**：`rememberMotionAllowed()` / `xopcPagerAnimated` / `xopcExpandPanelEnter` + `SegmentedTabs` 切页触觉 + `UiArchitectureGuardTest` | **已落地**：`motionTokens` 全接入、`clickEffect` + 长按触觉 + `uiInteractionConsistency.test.ts` |
 
 ---
 
@@ -52,12 +52,14 @@
 - **层级铁律**：界面靠**背景色阶差**表达层级（`canvas/background` < `panel/surface` < `input/surfaceContainer`），禁止装饰性描边与重阴影。
 - **缺失语义 Token 三端统一**：
 
-| 语义角色 | iOS (`MobileTheme`) | Android (`XopcTheme` / `Local*`) | 鸿蒙 (`XopcThemeColors`) | Light / Dark 基准 |
+| 语义角色 | iOS (`MobileTheme`) | Android (`XopcTheme` / `Local*`) | 鸿蒙 (`XopcThemeColors`) | Light / Dark 基准（WCAG AA 校验） |
 | --- | --- | --- | --- | --- |
-| 模态遮罩 | `scrim` | `colorScheme.scrim` | `scrim` | `#52000000` / `#66000000` |
-| 警告底色 | `warningFill` | `LocalAttentionColors.fill` | `warningFill` | `#FEF3E2` / `#352A18` |
-| 警告前景 | `warningForeground` | `LocalAttentionColors.foreground` | `warningForeground` | `#92400E` / `#FBBF24` |
-| 危险柔底 | `dangerSoft` | `colorScheme.errorContainer` | `dangerSoft` | `#FDECEC` / `#351E22` |
+| 模态遮罩 | `scrim` | `LocalStatusColors.scrim` | `scrim` | `#66000000` / `#73000000` |
+| 警告底色 | `warningFill` | `LocalAttentionColors.fill` | `warningFill` | `#FFF2D2` / `#352C22` |
+| 警告前景 | `warningForeground` | `LocalAttentionColors.foreground` | `warningForeground` | `#734600` / `#FFBC63` |
+| 危险柔底 | `dangerSoft` | `LocalStatusColors.dangerSoft` | `dangerSoft` | `#FDECEC` / `#382124` |
+| 成功前景 | `success` | `LocalStatusColors.success` | `success` | `#176141` / `#66D89A` |
+| 成功柔底 | `successSoft` | `LocalStatusColors.successSoft` | `successSoft` | `#E6F5EC` / `#1A2F24` |
 
 ### 2.2 空间栅格与圆角（`pt = dp = vp`）
 

@@ -103,7 +103,11 @@ export class XopcThemeColors {
   }
 
   get success(): Resource {
-    return this.light ? $r('app.color.theme_success_light') : this.accent;
+    return this.light ? $r('app.color.theme_success_light') : $r('app.color.theme_success_dark');
+  }
+
+  get successSoft(): Resource {
+    return this.light ? $r('app.color.theme_success_soft_light') : $r('app.color.theme_success_soft_dark');
   }
 
   get scrim(): Resource {

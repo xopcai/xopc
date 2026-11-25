@@ -138,7 +138,7 @@ struct TaskStatusView: View {
                 Button("好", role: .cancel) { error = nil }
             } message: { Text(error ?? "未知错误") }
         }
-        .presentationDetents([.large])
+        .mobileSheetPreset(.medium)
         .interactiveDismissDisabled(isWorking)
     }
 

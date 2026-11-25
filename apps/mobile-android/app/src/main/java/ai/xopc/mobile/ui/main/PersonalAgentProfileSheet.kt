@@ -186,10 +186,14 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
       }
     } else {
       Column(Modifier.fillMaxWidth().fillMaxHeight(0.65f).imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-          horizontalArrangement = Arrangement.End) {
-          TextButton(onClick = closeProfile, enabled = !busy) { Text(stringResource(R.string.personal_agent_done)) }
-        }
+        XopcSheetHeader(
+          title = stringResource(R.string.personal_agent_name),
+          onClose = closeProfile,
+          closeEnabled = !busy,
+          trailing = {
+            TextButton(onClick = closeProfile, enabled = !busy) { Text(stringResource(R.string.personal_agent_done)) }
+          },
+        )
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
           verticalArrangement = Arrangement.spacedBy(16.dp)) {
           if (onShare != null) {

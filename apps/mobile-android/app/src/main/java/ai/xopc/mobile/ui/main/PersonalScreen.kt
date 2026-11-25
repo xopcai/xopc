@@ -119,11 +119,14 @@ internal fun PersonalGoalsScreen(state: PersonalUiState, insets: PaddingValues, 
       Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
         .padding(horizontal = 20.dp, vertical = 8.dp).testTag("personal-goals-list"),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (state.loading && state.summary == null) BrandLoadingPanel()
+        if (state.loading && state.summary == null) XopcListSkeleton(rows = 3)
         state.summary?.let { PersonalGoals(it, index == 1, ::openEditor) }
         if (state.error) {
-          Text(stringResource(R.string.personal_unavailable), color = MaterialTheme.colorScheme.onSurfaceVariant)
-          TextButton(onClick = onRefresh) { Text(stringResource(R.string.personal_retry)) }
+          XopcErrorState(
+            message = stringResource(R.string.personal_unavailable),
+            retryLabel = stringResource(R.string.personal_retry),
+            onRetry = onRefresh,
+          )
         }
       }
     }
@@ -146,14 +149,15 @@ internal fun PersonalGoalsScreen(state: PersonalUiState, insets: PaddingValues, 
       modifier = Modifier.testTag("personal-goal-sheet")) {
       Column(Modifier.fillMaxWidth()
         .height(minOf(600.dp, LocalConfiguration.current.screenHeightDp.dp * 0.86f)).imePadding()
-        .padding(horizontal = 24.dp).padding(bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          Text(stringResource(if (editingId == null) R.string.personal_goal_add else R.string.personal_goal_edit),
-            style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-          Text(stringResource(R.string.personal_goal_help), style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        .padding(bottom = 16.dp)) {
+        XopcSheetHeader(
+          title = stringResource(if (editingId == null) R.string.personal_goal_add else R.string.personal_goal_edit),
+          subtitle = stringResource(R.string.personal_goal_help),
+          onClose = { if (!state.savingGoal) editorOpen = false },
+          closeEnabled = !state.savingGoal,
+        )
+        Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp),
+          verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).testTag("goal-form"),
           verticalArrangement = Arrangement.spacedBy(20.dp)) {
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -214,6 +218,7 @@ internal fun PersonalGoalsScreen(state: PersonalUiState, insets: PaddingValues, 
             modifier = Modifier.weight(2f).heightIn(min = 48.dp).testTag("goal-save")) {
             Text(stringResource(if (state.savingGoal) R.string.personal_agent_saving else R.string.progress_save))
           }
+        }
         }
       }
     }

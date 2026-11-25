@@ -759,11 +759,20 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
     "archived" -> project.status == "archived"
     else -> true
   } }
+  val motionAllowed = rememberMotionAllowed()
   Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    if (searchOpen) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      OutlinedTextField(value = search, onValueChange = { search = it },
-        modifier = Modifier.weight(1f).then(if (active) searchInputFocus() else Modifier).testTag("progress-project-search"),
-        placeholder = { Text(stringResource(R.string.progress_search_projects)) }, singleLine = true)
+    androidx.compose.animation.AnimatedVisibility(
+      visible = searchOpen,
+      enter = xopcExpandPanelEnter(motionAllowed, Alignment.Top),
+      exit = xopcExpandPanelExit(motionAllowed, Alignment.Top),
+    ) {
+      XopcPageSearchField(
+        query = search,
+        onQueryChange = { search = it },
+        placeholder = stringResource(R.string.progress_search_projects),
+        tag = "progress-project-search",
+        autoFocus = active,
+      )
     }
     SegmentedTabs(
       listOf(
@@ -774,14 +783,19 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
     )
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
       if (state.projectsLoading && state.projects.isEmpty()) item {
-        BrandLoadingPanel(modifier = Modifier.testTag("progress-projects-loading"))
+        XopcListSkeleton(modifier = Modifier.testTag("progress-projects-loading"), rows = 4)
       }
       if (state.projectsError) item {
-        OutlinedButton(onClick = onRefresh, enabled = !state.projectsLoading,
-          modifier = Modifier.testTag("progress-project-retry")) { Text(stringResource(R.string.progress_load_failed)) }
+        XopcErrorState(
+          message = stringResource(R.string.progress_load_failed),
+          retryLabel = stringResource(R.string.progress_refresh),
+          onRetry = onRefresh,
+          retryEnabled = !state.projectsLoading,
+          retryTag = "progress-project-retry",
+        )
       }
       if (!state.projectsLoading && !state.projectsError && shown.isEmpty()) item {
-        Text(stringResource(R.string.progress_no_projects))
+        XopcEmptyState(message = stringResource(R.string.progress_no_projects))
       }
       items(shown, key = { it.id }) { project ->
         Card(onClick = { onOpenProject(project.id) },
@@ -1011,11 +1025,17 @@ private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterCha
     item { Text(stringResource(R.string.progress_loaded_count, state.tasks.size),
       style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     if (state.tasksError) item {
-      OutlinedButton(onClick = onRefresh) { Text(stringResource(R.string.progress_load_failed)) }
+      XopcErrorState(
+        message = stringResource(R.string.progress_load_failed),
+        retryLabel = stringResource(R.string.progress_refresh),
+        onRetry = onRefresh,
+      )
     }
-    if (state.loading && state.tasks.isEmpty()) item { BrandLoadingPanel() }
+    if (state.loading && state.tasks.isEmpty()) item { XopcListSkeleton(rows = 4) }
     if (!state.loading && !state.tasksError && shown.isEmpty()) item {
-      Text(stringResource(if (state.tasks.isEmpty()) R.string.progress_no_tasks else R.string.progress_no_matches))
+      XopcEmptyState(
+        message = stringResource(if (state.tasks.isEmpty()) R.string.progress_no_tasks else R.string.progress_no_matches),
+      )
     }
     items(shown, key = { it.id }) { task ->
       Card(onClick = { onOpenTask(task) }, modifier = Modifier.fillMaxWidth().testTag("progress-task-${task.id}")) {

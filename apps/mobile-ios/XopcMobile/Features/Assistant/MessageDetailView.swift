@@ -2,13 +2,21 @@ import SwiftUI
 
 struct MessageDetailView: View {
     @Environment(\.mobileTheme) private var mobileTheme
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     let message: TimelineMessage
     let configuration: GatewayConfiguration
     let conversationID: String?
     let assistantState: AssistantState?
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            MobileSheetHeader(
+                title: AppLocalization.string("消息详情", locale: locale),
+                closeID: "message-detail-close",
+                onClose: { dismiss() }
+            )
+            ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if !message.markdownParts.isEmpty {
                     MarkdownBodyView(parts: message.markdownParts, configuration: configuration, conversationID: conversationID)
@@ -66,6 +74,7 @@ struct MessageDetailView: View {
             .padding(.horizontal, 18)
             .padding(.bottom, 28)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
         }
         .background(mobileTheme.panel)
         .accessibilityIdentifier("message-detail-content")

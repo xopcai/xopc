@@ -49,7 +49,7 @@ struct ClarificationCollapsedBar: View {
             }
             Spacer(minLength: 4)
             Button(action: onExpand) {
-                HStack(spacing: 4) { Text("继续").font(.caption.weight(.semibold)); Image(systemName: "chevron.up").font(.system(size: 10, weight: .semibold)) }
+                HStack(spacing: 4) { Text("继续").font(.caption.weight(.semibold)); Image(systemName: "chevron.up").font(.caption2.weight(.semibold)) }
                     .foregroundStyle(palette.tonalText).padding(.horizontal, 12).padding(.vertical, 7).background(palette.tonalFill, in: Capsule())
             }.buttonStyle(.plain)
         }.padding(.horizontal, 14).padding(.vertical, 10).frame(maxWidth: .infinity, minHeight: 48)
@@ -103,7 +103,7 @@ struct ClarificationOptionsGroup: View {
                 ZStack {
                     if selected {
                         Circle().fill(palette.accent).frame(width: 20, height: 20)
-                        Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(palette.onAccent)
+                        Image(systemName: "checkmark").font(.caption2.weight(.bold)).foregroundStyle(palette.onAccent)
                     } else {
                         Circle().stroke(palette.tertiaryText.opacity(0.55), lineWidth: 1.5).frame(width: 20, height: 20)
                     }
@@ -145,12 +145,12 @@ struct ClarificationHeaderActions: View {
                     Button("交给助手", systemImage: "sparkles", action: onAgentDecide)
                     Button("取消", systemImage: "xmark", role: .destructive, action: onCancel)
                 } label: {
-                    Image(systemName: "ellipsis.circle").font(.system(size: 16, weight: .regular)).foregroundStyle(palette.secondaryText)
+                    Image(systemName: "ellipsis.circle").font(.callout).foregroundStyle(palette.secondaryText)
                         .frame(width: 30, height: 30).contentShape(.rect)
                 }.disabled(disabled).accessibilityLabel("更多操作")
             }
             Button(action: onCollapse) {
-                Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.secondaryText)
+                Image(systemName: "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(palette.secondaryText)
                     .frame(width: 30, height: 30).contentShape(.rect)
             }.buttonStyle(.plain).accessibilityLabel("收起")
         }
@@ -252,7 +252,7 @@ struct ClarificationCard: View {
         return HStack(spacing: 10) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10).fill(palette.badgeAmberFill).frame(width: 34, height: 34)
-                Image(systemName: "checkmark.shield.fill").font(.system(size: 16, weight: .semibold)).foregroundStyle(palette.badgeAmberTint)
+                Image(systemName: "checkmark.shield.fill").font(.callout.weight(.semibold)).foregroundStyle(palette.badgeAmberTint)
             }.accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text("确认操作").font(.caption.weight(.medium)).foregroundStyle(palette.secondaryText)
@@ -288,7 +288,7 @@ struct ClarificationCard: View {
                         Text("参数").font(.caption).foregroundStyle(palette.tertiaryText).frame(width: 40, alignment: .leading)
                         Text(String(format: AppLocalization.resolve("%lld 项"), approval.argumentsPreview?.count ?? 0)).font(.caption).foregroundStyle(palette.secondaryText)
                         Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(palette.tertiaryText)
+                        Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).foregroundStyle(palette.tertiaryText)
                             .rotationEffect(.degrees(paramsExpanded ? 90 : 0))
                     }.padding(.horizontal, 14).padding(.vertical, 10).contentShape(.rect)
                 }.buttonStyle(.plain)

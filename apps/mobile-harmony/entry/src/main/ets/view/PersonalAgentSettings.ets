@@ -8,7 +8,7 @@ import { pickChatPhoto } from '../service/chatPhotoPicker';
 import { XopcPersonalAgentRecord, XopcPersonalCallMode, XopcPersonalVoiceOption } from '../model/personalAgent';
 import { XopcPersonalAgentSettingsViewModel } from '../viewmodel/personalAgentSettingsViewModel';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
-import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
+import { XopcHubRow, XopcListSkeleton, XopcSheetHeader } from './MobileComponents';
 import { XopcChatOptionsViewModel } from '../viewmodel/chatOptionsViewModel';
 import { XopcChatOptions } from './ChatOptions';
 import { XopcConversationShare } from './ConversationShare';
@@ -147,12 +147,12 @@ export struct XopcPersonalAgentSettings {
           onClose: (): void => { this.modelPickerOpen = false; },
           onRetry: (): void => { this.onReloadModels(); } })
       } else {
-        Row() {
-          Button('×').width(44).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
-            .id('personal-setting-close').accessibilityText(this.label('关闭', 'Close'))
-            .enabled(!this.model.saving && !this.uploading)
-            .onClick((): void => { void this.close(); })
-        }.width('100%').justifyContent(FlexAlign.End).padding({ right: 16, top: 12 })
+        XopcSheetHeader({
+          heading: this.label('助手设置', 'Assistant settings'),
+          closeId: 'personal-setting-close',
+          closeEnabled: !this.model.saving && !this.uploading,
+          onClose: (): void => { void this.close(); },
+        })
         if (this.model.loading) { XopcListSkeleton() }
         else {
           Scroll() {

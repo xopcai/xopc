@@ -115,7 +115,7 @@ internal val LocalStatusColors = staticCompositionLocalOf {
   statusColors(false, xopcPalette("default", false))
 }
 
-private fun statusColors(dark: Boolean, palette: XopcPalette): StatusColors = if (dark) {
+private fun statusColors(dark: Boolean, @Suppress("UNUSED_PARAMETER") palette: XopcPalette): StatusColors = if (dark) {
   StatusColors(
     success = Color(0xFF66D89A),
     successSoft = Color(0xFF1A2F24),
@@ -124,9 +124,9 @@ private fun statusColors(dark: Boolean, palette: XopcPalette): StatusColors = if
   )
 } else {
   StatusColors(
-    success = Color(0xFF187B49),
+    success = Color(0xFF176141),
     successSoft = Color(0xFFE6F5EC),
-    dangerSoft = palette.danger.copy(alpha = 0.12f),
+    dangerSoft = Color(0xFFFDECEC),
     scrim = Color(0x66000000),
   )
 }

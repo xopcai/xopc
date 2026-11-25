@@ -143,7 +143,7 @@ struct ClarificationWizard: View {
                                 Button { expandedCustomID = nil; MobileMotion.perform(MobileMotion.microDuration, reduceMotion: reduceMotion) { draft.index = idx } } label: {
                                     HStack(spacing: 4) {
                                         Text("\(idx + 1). \(item.header)").lineLimit(1); if done {
-                                            Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
+                                            Image(systemName: "checkmark").font(.caption2.weight(.bold))
                                         }
                                     }
                                     .font(.caption.weight(.medium)).foregroundStyle(active ? palette.accentText : done ? palette.primaryText : palette.secondaryText)

@@ -346,22 +346,10 @@ struct PersonalAgentOverview: View {
     }
 
     private var librarySkeleton: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(0 ..< 3, id: \.self) { _ in
-                HStack(spacing: 12) {
-                    RoundedRectangle(cornerRadius: mobileTheme.corner(5)).fill(.quaternary).frame(width: 20, height: 20)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Capsule().fill(.quaternary).frame(width: 128, height: 12)
-                        Capsule().fill(.quaternary).frame(width: 84, height: 8)
-                    }
-                }
-                .frame(minHeight: 44)
-                .padding(.horizontal, 8)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("正在读取文件…")
-        .accessibilityIdentifier("personal-overview-library-loading")
+        MobileListSkeleton(rows: 3)
+            .padding(.horizontal, 8)
+            .accessibilityLabel("正在读取文件…")
+            .accessibilityIdentifier("personal-overview-library-loading")
     }
 
     private func taskRow(_ task: PersonalOverviewWork) -> some View {

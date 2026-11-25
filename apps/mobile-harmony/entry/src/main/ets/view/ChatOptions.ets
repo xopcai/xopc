@@ -2,7 +2,7 @@ import { capabilityText } from '../common/capabilityText';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatOptionsViewModel } from '../viewmodel/chatOptionsViewModel';
 import { XopcChatModel, XopcChatAgent } from '../model/chat';
-import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
+import { XopcHubRow, XopcListSkeleton, XopcSheetHeader } from './MobileComponents';
 import { appSettings } from '../service/settings';
 import { userErrorMessage } from '../common/userError';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
@@ -123,15 +123,14 @@ export struct XopcChatOptions {
   }
 
   build() {
-    Column({ space: 8 }) {
-      Row() {
-        Text(this.mode === 'model' ? $r('app.string.chat_model') : this.mode === 'thinking' ? $r('app.string.chat_thinking_effort')
+    Column() {
+      XopcSheetHeader({
+        heading: this.mode === 'model' ? $r('app.string.chat_model') : this.mode === 'thinking' ? $r('app.string.chat_thinking_effort')
           : this.mode === 'agent' ? $r('app.string.chat_agent')
-          : this.mode === 'preparation' ? $r('app.string.chat_project_preparation_title') : $r('app.string.chat_actions'))
-          .fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
-        Button('×').width(44).height(44).padding(0).fontSize(28).backgroundColor(Color.Transparent)
-          .fontColor(this.colors.secondary).accessibilityText($r('app.string.chat_close')).onClick((): void => { this.onClose(); })
-      }.width('100%')
+          : this.mode === 'preparation' ? $r('app.string.chat_project_preparation_title') : $r('app.string.chat_actions'),
+        onClose: (): void => { this.onClose(); },
+      })
+      Column({ space: 8 }) {
       if (this.mode === 'model' || this.mode === 'agent') {
         TextInput({ text: this.query, placeholder: $r('app.string.search') }).onChange((value: string): void => { this.query = value; })
       }
@@ -202,6 +201,7 @@ export struct XopcChatOptions {
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_session_files'), compact: true, symbol: $r('sys.symbol.folder'), onOpen: (): void => { this.onFiles(); } }) }
         }
       }.layoutWeight(1).width('100%')
-    }.padding({ left: 20, right: 20, top: 4, bottom: 16 }).width('100%').height('100%').backgroundColor(this.colors.panel)
+      }.padding({ left: 20, right: 20, bottom: 16 }).width('100%').layoutWeight(1)
+    }.width('100%').height('100%').backgroundColor(this.colors.panel)
   }
 }

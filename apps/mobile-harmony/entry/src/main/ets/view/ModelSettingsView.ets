@@ -3,7 +3,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcHttpError } from '../service/transport';
 import { appSettings } from '../service/settings';
-import { XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcSectionLabel } from './MobileComponents';
+import { XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcSectionLabel, XopcSheetHeader } from './MobileComponents';
 
 interface XopcGlobalModelChoice {
   ref: string; name: string; provider: string; displayNames?: Record<string, string>;
@@ -246,9 +246,12 @@ export struct XopcModelSettingsView {
   @Builder
   private sheetBody() {
     Column({ space: 8 }) {
-      Text(this.sheet === 'fallbacks' ? $r('app.string.ms_fallbacks')
-        : this.sheet === 'add' ? $r('app.string.ms_add_fallback') : this.label(this.route?.key ?? '', this.sheet === 'task'))
-        .fontSize(19).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
+      XopcSheetHeader({
+        heading: this.sheet === 'fallbacks' ? $r('app.string.ms_fallbacks')
+          : this.sheet === 'add' ? $r('app.string.ms_add_fallback') : this.label(this.route?.key ?? '', this.sheet === 'task'),
+        closeEnabled: !this.saving,
+        onClose: (): void => { if (!this.saving) this.showingSheet = false; },
+      })
       if (this.sheetError) {
         Text($r('app.string.ms_save_error')).fontSize(13).fontColor(this.colors.danger).width('100%')
       }

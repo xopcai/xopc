@@ -33,6 +33,7 @@ struct MessageBubble: View {
     @Environment(\.openURL) private var parentOpenURL
     @ScaledMetric(relativeTo: .body) private var previewHeight: CGFloat = 160
     @ScaledMetric(relativeTo: .body) private var userPreviewHeight: CGFloat = 92
+    @State private var copyHapticCount = 0
     @ScaledMetric(relativeTo: .body) private var previewFadeHeight: CGFloat = 48
     @ScaledMetric(relativeTo: .body) private var assistantTextSize = MobileTextStyle.body.size
     @State private var isActionsPresented = false
@@ -83,7 +84,7 @@ struct MessageBubble: View {
                 if let reaction = message.agentReaction, !message.isPending {
                     ZStack(alignment: .topLeading) {
                         Text(verbatim: reaction.emoji)
-                            .font(.system(size: 15))
+                            .font(.subheadline)
                             .frame(width: 26, height: 26)
                             .background(mobileTheme.reaction, in: Circle())
                             .offset(x: 4)
@@ -106,6 +107,7 @@ struct MessageBubble: View {
         // Keep accessibility bounds on the bubble before expanding its alignment frame.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat-message-\(message.role)-\(message.id)")
+        .sensoryFeedback(.success, trigger: copyHapticCount)
         .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
         .onChange(of: isDetailPresented || isExecutionPresented || isActionsPresented || isSelectingText) { _, presented in
             if presented {
@@ -191,7 +193,10 @@ struct MessageBubble: View {
             assistantMenuActions
         }
         if message.role == "user", !message.text.isEmpty {
-            Button("复制", systemImage: "doc.plaintext") { UIPasteboard.general.string = message.text }
+            Button("复制", systemImage: "doc.plaintext") {
+                UIPasteboard.general.string = message.text
+                copyHapticCount += 1
+            }
                 .accessibilityIdentifier("chat-user-copy-\(message.id)")
             if message.attachments.isEmpty, message.references.isEmpty {
                 Button("再次编辑", systemImage: "pencil") { onReuseUserText(message.text) }
@@ -220,7 +225,10 @@ struct MessageBubble: View {
     @ViewBuilder
     private var assistantMenuActions: some View {
         if !message.text.isEmpty {
-            Button("复制", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.text }
+            Button("复制", systemImage: "doc.on.doc") {
+                UIPasteboard.general.string = message.text
+                copyHapticCount += 1
+            }
                 .accessibilityIdentifier("chat-copy-\(message.id)")
             Button("选择文本", systemImage: "text.cursor") { isSelectingText = true }
                 .accessibilityIdentifier("chat-select-text-\(message.id)")

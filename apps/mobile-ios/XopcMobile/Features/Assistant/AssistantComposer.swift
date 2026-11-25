@@ -219,7 +219,7 @@ struct AssistantComposer: View {
                 voiceMode.toggle()
             } label: {
                 Image(systemName: voiceMode ? "keyboard" : "mic")
-                    .font(.system(size: 20)).frame(width: 44, height: 44)
+                    .font(.title3).frame(width: 44, height: 44)
             }
             .accessibilityLabel(voiceMode ? "键盘输入" : "语音输入")
             if voiceMode {
@@ -242,7 +242,7 @@ struct AssistantComposer: View {
             if isRunActive {
                 Button(action: onStop) {
                     Image(systemName: "stop.fill")
-                        .font(.system(size: 16))
+                        .font(.callout)
                         .frame(width: 40, height: 44)
                 }
                 .foregroundStyle(mobileTheme.danger)
@@ -256,7 +256,7 @@ struct AssistantComposer: View {
                 }
             } label: {
                 Image(systemName: isActionPanelExpanded ? "xmark.circle" : "plus.circle")
-                    .font(.system(size: 24))
+                    .font(.title2)
                     .frame(width: 40, height: 44)
             }
             .accessibilityLabel(AppLocalization.string(
@@ -267,7 +267,7 @@ struct AssistantComposer: View {
             if hasPayload {
                 Button(action: onSend) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 28))
+                        .font(.title)
                         .frame(width: 40, height: 44)
                 }
                 .disabled(!sendEnabled)
@@ -349,7 +349,7 @@ struct AssistantComposer: View {
                                 attachments.removeAll { $0.id == attachment.id }
                             } label: {
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote.weight(.semibold))
                                     .foregroundStyle(.white)
                                     .frame(width: 28, height: 28)
                                     .background(.black.opacity(0.75), in: .circle)

@@ -1,5 +1,6 @@
 import { xopcToast } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { XopcSheetHeader } from './MobileComponents';
 import { common } from '@kit.AbilityKit';
 import { webview } from '@kit.ArkWeb';
 import { XopcShareResult } from '../model/share';
@@ -33,13 +34,12 @@ export struct XopcShareResultView {
   }
 
   build() {
-    Column({ space: 12 }) {
-      Row({ space: 6 }) {
-        Text(this.share.title || this.share.fileName || $r('app.string.share_title')).fontSize(19).fontWeight(FontWeight.Medium)
-          .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Button() { SymbolGlyph($r('sys.symbol.xmark')).fontSize(20).fontColor([this.colors.secondary]) }
-          .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.close')).onClick(this.onClose)
-      }.width('100%')
+    Column() {
+      XopcSheetHeader({
+        heading: this.share.title || this.share.fileName || $r('app.string.share_title'),
+        onClose: this.onClose,
+      })
+      Column({ space: 12 }) {
       if (this.mode === 'qr') {
         Column({ space: 16 }) {
           QRCode(this.share.shareUrl).width(260).height(260).color('#111318').backgroundColor(Color.White)
@@ -80,6 +80,7 @@ export struct XopcShareResultView {
           }.width('100%')
         }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
       }
-    }.width('100%').height('100%').padding(20).backgroundColor(this.colors.panel)
+      }.width('100%').layoutWeight(1).padding({ left: 20, right: 20, bottom: 20 })
+    }.width('100%').height('100%').backgroundColor(this.colors.panel)
   }
 }

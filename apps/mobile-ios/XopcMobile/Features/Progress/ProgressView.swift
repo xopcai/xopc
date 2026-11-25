@@ -319,7 +319,7 @@ private extension ProgressHubView {
                 }
             }.frame(maxWidth: .infinity, alignment: .leading)
             if navigable {
-                Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(.secondary)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
             }
         }.padding(14).frame(minHeight: 64)
             .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(14)))
@@ -404,7 +404,7 @@ struct HomeDeliveryLink: View {
             } label: {
                 if progressCard {
                     HStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle").font(.system(size: 18))
+                        Image(systemName: "checkmark.circle").font(.headline)
                             .frame(width: 36, height: 36)
                             .background(.primary.opacity(0.06), in: .rect(cornerRadius: mobileTheme.corner(9)))
                             .foregroundStyle(.secondary).accessibilityHidden(true)

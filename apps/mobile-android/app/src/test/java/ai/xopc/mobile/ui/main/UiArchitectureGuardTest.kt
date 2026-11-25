@@ -129,4 +129,40 @@ class UiArchitectureGuardTest {
     assertTrue("CapabilitiesScreen skill market button must use action_capabilities icon",
       capabilities.contains("R.drawable.action_capabilities"))
   }
+
+  @Test
+  fun auxiliarySemanticColorsMatchThreePlatformSpec() {
+    val themeFile = File(uiMainDir().parentFile.parentFile, "theme/Theme.kt")
+    val source = themeFile.readText()
+    val requiredHex = listOf(
+      "0x66000000", "0x73000000",
+      "0xFFFFF2D2", "0xFF734600", "0xFF352C22", "0xFFFFBC63",
+      "0xFFFDECEC", "0xFF382124",
+      "0xFF176141", "0xFFE6F5EC", "0xFF66D89A", "0xFF1A2F24",
+    )
+    for (hex in requiredHex) {
+      assertTrue("Theme.kt must define canonical three-platform semantic color $hex", source.contains(hex))
+    }
+  }
+
+  @Test
+  fun listSkeletonsSheetHeadersHapticsAndExpandMotionAdopted() {
+    val segmentedTabs = File(uiMainDir(), "SegmentedTabs.kt").readText()
+    assertTrue("SegmentedTabs must trigger haptic feedback on tab switch", segmentedTabs.contains("LocalHapticFeedback"))
+
+    for (file in listOf("NotesScreen.kt", "MainScreen.kt", "AboutYouScreen.kt", "AutomationScreens.kt", "PersonalScreen.kt", "ProgressScreen.kt")) {
+      val text = File(uiMainDir(), file).readText()
+      assertTrue("$file must adopt XopcListSkeleton for list loading", text.contains("XopcListSkeleton("))
+    }
+
+    for (file in listOf("ChatOptionsPanel.kt", "ConversationShareSheet.kt", "PersonalAgentProfileSheet.kt", "ModelSettingsScreen.kt", "MainScreen.kt", "PersonalScreen.kt")) {
+      val text = File(uiMainDir(), file).readText()
+      assertTrue("$file must adopt XopcSheetHeader", text.contains("XopcSheetHeader("))
+    }
+
+    for (file in listOf("MainScreen.kt", "NotesScreen.kt", "AutomationScreens.kt", "ProgressScreen.kt")) {
+      val text = File(uiMainDir(), file).readText()
+      assertTrue("$file must animate expandable search/filter with xopcExpandPanelEnter", text.contains("xopcExpandPanelEnter("))
+    }
+  }
 }

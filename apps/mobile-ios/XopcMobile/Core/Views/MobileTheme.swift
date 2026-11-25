@@ -62,10 +62,10 @@ struct MobileTheme: Sendable {
         input = Self.color(values.input)
         active = Self.color(values.active)
         danger = Self.color(values.danger)
-        dangerSoft = dark ? Self.color(0x382124) : Self.color(values.danger).opacity(0.12)
+        dangerSoft = Self.color(dark ? 0x382124 : 0xFDECEC)
         attention = Self.color(dark ? 0x352C22 : 0xFFF2D2)
         onAttention = Self.color(dark ? 0xFFBC63 : 0x734600)
-        success = Self.color(dark ? 0x66D89A : 0x187B49)
+        success = Self.color(dark ? 0x66D89A : 0x176141)
         successSoft = Self.color(dark ? 0x1A2F24 : 0xE6F5EC)
         scrim = Color.black.opacity(dark ? 0.45 : 0.40)
         assistantBubble = dark ? input : panel

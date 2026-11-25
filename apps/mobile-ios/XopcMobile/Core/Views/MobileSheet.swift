@@ -12,9 +12,9 @@ enum MobileSheetPreset: Sendable, CaseIterable {
         case .compact:
             [.height(340), .medium]
         case .medium:
-            [.fraction(0.70), .large]
+            [.fraction(0.72), .large]
         case .large:
-            [.large]
+            [.fraction(0.88), .large]
         case .immersive:
             [.fraction(0.94)]
         }
@@ -72,32 +72,62 @@ struct MobileCloseButton: View {
     }
 }
 
-/// Unified sheet header: left title (+ optional subtitle), right circular `xmark` close button.
-struct MobileSheetHeader: View {
+/// Unified sheet header: left title (+ optional subtitle), optional trailing slot, right circular `xmark` close button.
+struct MobileSheetHeader<Trailing: View>: View {
     @Environment(\.mobileTheme) private var theme
     let title: String
     var subtitle: String = ""
     var closeID: String = "sheet-close"
     let onClose: () -> Void
+    @ViewBuilder let trailing: () -> Trailing
+
+    init(
+        title: String,
+        subtitle: String = "",
+        closeID: String = "sheet-close",
+        onClose: @escaping () -> Void,
+        @ViewBuilder trailing: @escaping () -> Trailing
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.closeID = closeID
+        self.onClose = onClose
+        self.trailing = trailing
+    }
 
     var body: some View {
         HStack(spacing: MobileDesignTokens.groupGap) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                Text(verbatim: title)
                     .font(.headline)
                     .foregroundStyle(theme.foreground)
                     .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
                 if !subtitle.isEmpty {
-                    Text(subtitle)
+                    Text(verbatim: subtitle)
                         .font(.caption)
                         .foregroundStyle(theme.secondary)
                         .lineLimit(1)
                 }
             }
             Spacer(minLength: 4)
+            trailing()
             MobileCloseButton(accessibilityID: closeID, action: onClose)
         }
         .padding(.horizontal, MobileDesignTokens.sheetPaddingX)
         .padding(.vertical, 10)
+    }
+}
+
+extension MobileSheetHeader where Trailing == EmptyView {
+    init(
+        title: String,
+        subtitle: String = "",
+        closeID: String = "sheet-close",
+        onClose: @escaping () -> Void
+    ) {
+        self.init(title: title, subtitle: subtitle, closeID: closeID, onClose: onClose) {
+            EmptyView()
+        }
     }
 }

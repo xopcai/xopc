@@ -139,8 +139,7 @@ struct AssistantExecutionSheet: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .presentationDetents([.fraction(0.92)])
-        .presentationDragIndicator(.hidden)
+        .mobileSheetPreset(.immersive)
         .presentationContentInteraction(.scrolls)
     }
 

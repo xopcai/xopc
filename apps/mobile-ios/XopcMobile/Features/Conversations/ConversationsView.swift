@@ -353,7 +353,7 @@ struct ConversationsView: View {
                         }
                     } label: {
                         Image(systemName: expandedConversations.contains(conversation.id) ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 16, weight: .medium))
+                            .font(.callout.weight(.medium))
                             .frame(width: 32, height: 44)
                             .contentShape(.rect)
                     }
@@ -542,14 +542,13 @@ private extension ConversationSummary {
 }
 
 private struct ConversationLoadingSkeleton: View {
-    @Environment(\.mobileTheme) private var mobileTheme
     var body: some View {
-        VStack(spacing: 12) {
-            ForEach(0 ..< 5) { _ in
-                RoundedRectangle(cornerRadius: mobileTheme.corner(16)).fill(.quaternary).frame(height: 64)
-            }
-            Spacer()
-        }.padding(20).accessibilityLabel("正在读取对话")
+        VStack(spacing: 0) {
+            MobileListSkeleton(rows: 5)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, MobileDesignTokens.pagePaddingX)
+        .accessibilityLabel("正在读取对话")
     }
 }
 

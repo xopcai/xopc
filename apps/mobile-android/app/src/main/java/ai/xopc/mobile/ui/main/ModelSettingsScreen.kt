@@ -182,9 +182,13 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
         listOf(choice.localizedName(language), choice.name, choice.provider, choice.ref)
           .any { it.contains(query.trim(), ignoreCase = true) }
       }
+      XopcSheetHeader(
+        title = stringResource(title),
+        onClose = { if (!saving) { picker = null; showFallbacks = false } },
+        closeEnabled = !saving,
+      )
       Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(title), style = MaterialTheme.typography.titleLarge)
         if (sheetError) Text(stringResource(R.string.ms_save_error), color = MaterialTheme.colorScheme.error)
         if (fallbackList) {
           ModelSettingsCaption(stringResource(R.string.ms_fallback_help))

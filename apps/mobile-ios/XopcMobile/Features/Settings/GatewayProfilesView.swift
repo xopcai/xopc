@@ -388,7 +388,8 @@ struct GatewayProfileEditor: View {
                     if !confirmationCode.isEmpty {
                         VStack(spacing: 10) {
                             Text(confirmationCode)
-                                .font(.system(size: 40, weight: .semibold, design: .rounded))
+                                .font(.largeTitle.weight(.semibold))
+                                .fontDesign(.rounded)
                                 .tracking(5)
                             Text("确认电脑上显示相同的核对码后批准连接。")
                                 .mobileTextStyle(.footnote)

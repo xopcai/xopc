@@ -161,4 +161,86 @@ struct UIArchitectureGuardTests {
         }
         #expect(presetCalls >= 30, "Expected at least 30 mobileSheetPreset call sites, found \(presetCalls)")
     }
+
+    @Test func auxiliarySemanticColorsAndSheetDetentsMatchThreePlatformSpec() throws {
+        let themeSource = try String(
+            contentsOf: Self.iosSourceRoot.appendingPathComponent("Core/Views/MobileTheme.swift"),
+            encoding: .utf8
+        )
+        for hex in ["0x382124", "0xFDECEC", "0x352C22", "0xFFF2D2", "0xFFBC63", "0x734600", "0x66D89A", "0x176141", "0x1A2F24", "0xE6F5EC"] {
+            #expect(themeSource.contains(hex), "MobileTheme must define canonical three-platform RGB \(hex)")
+        }
+
+        let sheetSource = try String(
+            contentsOf: Self.iosSourceRoot.appendingPathComponent("Core/Views/MobileSheet.swift"),
+            encoding: .utf8
+        )
+        #expect(sheetSource.contains(".fraction(0.72)"), "MobileSheetPreset.medium must align to 0.72")
+        #expect(sheetSource.contains(".fraction(0.88)"), "MobileSheetPreset.large must align to 0.88")
+        #expect(sheetSource.contains(".fraction(0.94)"), "MobileSheetPreset.immersive must align to 0.94")
+
+        for rel in [
+            "Features/Progress/TaskStatusView.swift",
+            "Features/Assistant/AssistantActivityView.swift",
+            "Features/Assistant/AssistantOptionsView.swift",
+            "Features/Assistant/ChatAttachmentPreview.swift",
+        ] {
+            let text = try String(contentsOf: Self.iosSourceRoot.appendingPathComponent(rel), encoding: .utf8)
+            #expect(!text.contains(".presentationDetents("), "\(rel) must use mobileSheetPreset instead of raw .presentationDetents")
+        }
+    }
+
+    @Test func spaceLibrarySkeletonsSheetHeadersDynamicTypeAndHapticsAdopted() throws {
+        let spaceLibrary = try String(
+            contentsOf: Self.iosSourceRoot.appendingPathComponent("Features/Profile/SpaceLibraryView.swift"),
+            encoding: .utf8
+        )
+        #expect(spaceLibrary.contains("TabView(selection:"), "SpaceLibraryView must use interactive TabView(.page)")
+        #expect(!spaceLibrary.contains(".pageSelectionSwipe("), "SpaceLibraryView must not fall back to discrete pageSelectionSwipe")
+        #expect(spaceLibrary.contains("MobileUndoBar("), "SpaceLibraryView must use MobileUndoBar")
+        #expect(spaceLibrary.contains("MobileErrorView("), "SpaceLibraryView must use MobileErrorView")
+        #expect(spaceLibrary.contains("MobileEmptyState("), "SpaceLibraryView must use MobileEmptyState")
+        #expect(spaceLibrary.contains("MobileListSkeleton("), "SpaceLibraryView must use MobileListSkeleton")
+        #expect(spaceLibrary.contains(".sensoryFeedback("), "SpaceLibraryView must trigger haptic feedback on scope change")
+
+        for rel in [
+            "Features/Profile/ProfileView.swift",
+            "Features/Conversations/ConversationsView.swift",
+            "Features/Assistant/PersonalAgentOverview.swift",
+            "Features/Progress/ProgressRow.swift",
+        ] {
+            let text = try String(contentsOf: Self.iosSourceRoot.appendingPathComponent(rel), encoding: .utf8)
+            #expect(text.contains("MobileListSkeleton("), "\(rel) must delegate skeletons to MobileListSkeleton")
+        }
+
+        for rel in [
+            "Features/Assistant/ChatAttachmentPreview.swift",
+            "Features/Assistant/MessageDetailView.swift",
+        ] {
+            let text = try String(contentsOf: Self.iosSourceRoot.appendingPathComponent(rel), encoding: .utf8)
+            #expect(text.contains("MobileSheetHeader("), "\(rel) must adopt MobileSheetHeader")
+        }
+
+        let dynamicTypeFiles = [
+            "Features/Assistant/ClarificationCard.swift",
+            "Features/Assistant/ClarificationWizard.swift",
+            "Features/Assistant/AssistantOptionsView.swift",
+            "Features/Assistant/AssistantComposer.swift",
+            "Features/Assistant/ChatResultCapsuleLabel.swift",
+            "Features/Assistant/MessageBubble.swift",
+            "Features/Progress/ProgressView.swift",
+            "Features/Conversations/ConversationsView.swift",
+            "Features/Settings/GatewayProfilesView.swift",
+        ]
+        for rel in dynamicTypeFiles {
+            let text = try String(contentsOf: Self.iosSourceRoot.appendingPathComponent(rel), encoding: .utf8)
+            #expect(!text.contains(".font(.system(size:"), "\(rel) must use semantic Dynamic Type styles instead of fixed .font(.system(size:))")
+        }
+
+        let bubble = try String(
+            contentsOf: Self.iosSourceRoot.appendingPathComponent("Features/Assistant/MessageBubble.swift"),
+            encoding: .utf8
+        )
+        #expect(bubble.contains(".sensoryFeedback(.success"), "MessageBubble must trigger success haptic feedback on copy")
+    }
 }

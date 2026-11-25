@@ -56,21 +56,18 @@ internal fun ConversationShareSheet(state: ConnectionUiState, onReload: (String)
       confirmValueChange = { it != SheetValue.Hidden || !currentBusy }),
     modifier = Modifier.testTag("conversations-share-sheet"),
   ) {
+    XopcSheetHeader(
+      title = stringResource(when {
+        preview -> R.string.share_preview
+        share != null -> R.string.session_share_link
+        state.conversationShareRevoked -> R.string.session_share_revoked
+        else -> R.string.conversations_share
+      }),
+      onClose = { if (preview) preview = false else onDismiss() },
+      closeEnabled = !busy,
+    )
     LazyColumn(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
       contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-      item {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-          Text(stringResource(when {
-            preview -> R.string.share_preview
-            share != null -> R.string.session_share_link
-            state.conversationShareRevoked -> R.string.session_share_revoked
-            else -> R.string.conversations_share
-          }), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-          TextButton(enabled = !busy, onClick = { if (preview) preview = false else onDismiss() }) {
-            Text(stringResource(if (preview) R.string.progress_back else R.string.assistant_close))
-          }
-        }
-      }
       if (state.conversationShareError || openError) item {
         Text(stringResource(R.string.session_share_error), color = MaterialTheme.colorScheme.error)
         if (share == null) TextButton(onClick = { onReload(conversationId) }) {

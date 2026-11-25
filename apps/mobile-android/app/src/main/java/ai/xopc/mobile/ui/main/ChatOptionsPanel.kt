@@ -31,21 +31,20 @@ import androidx.compose.ui.unit.sp
 @Composable
 internal fun ChatOptionsPanel(title: String, height: Dp = 448.dp, onClose: () -> Unit,
   content: @Composable ColumnScope.() -> Unit) {
-  val closeLabel = stringResource(R.string.assistant_close)
   Column(Modifier.fillMaxWidth()
     .height(minOf(height, (LocalConfiguration.current.screenHeightDp * 0.85f).dp))
-    .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 16.dp)
-    .testTag("chat-options-panel"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-      Text(title, Modifier.weight(1f), fontSize = 20.sp, fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurface)
-      IconButton(onClick = onClose, modifier = Modifier.size(XopcDesignTokens.ButtonHeightMd)
-        .semantics { contentDescription = closeLabel }.testTag("chat-options-close")) {
-        ActionIcon(R.drawable.action_close, size = XopcDesignTokens.IconRow,
-          color = MaterialTheme.colorScheme.onSurfaceVariant, contentDescription = closeLabel)
-      }
-    }
-    content()
+    .padding(bottom = 16.dp)
+    .testTag("chat-options-panel")) {
+    XopcSheetHeader(
+      title = title,
+      onClose = onClose,
+      closeTag = "chat-options-close",
+    )
+    Column(
+      Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.SheetPaddingX),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
+      content = content,
+    )
   }
 }
 

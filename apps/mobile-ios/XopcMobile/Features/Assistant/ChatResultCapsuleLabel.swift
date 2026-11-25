@@ -12,7 +12,7 @@ struct ChatResultCapsuleLabel: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: systemImage)
-                .font(.system(size: 18))
+                .font(.headline)
                 .foregroundStyle(mobileTheme.action)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
@@ -25,7 +25,7 @@ struct ChatResultCapsuleLabel: View {
                 ProgressView().controlSize(.small).frame(width: 13, height: 13)
             } else if canOpen {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundStyle(.tertiary)
                     .accessibilityHidden(true)
             }

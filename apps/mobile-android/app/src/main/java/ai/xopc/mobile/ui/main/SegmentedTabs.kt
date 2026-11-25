@@ -29,8 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -67,6 +69,7 @@ internal fun <T> SegmentedTabs(
 ) {
   if (options.isEmpty()) return
   val motionAllowed = rememberMotionAllowed()
+  val haptics = LocalHapticFeedback.current
   val density = LocalDensity.current
   val fontScale = density.fontScale.coerceAtLeast(1f)
   val textMeasurer = rememberTextMeasurer(cacheSize = options.size * 2)
@@ -149,7 +152,10 @@ internal fun <T> SegmentedTabs(
               tween(xopcMotionDuration(XopcMotionTokens.MicroMs, motionAllowed)), label = "Segment label color")
             Row(
               Modifier.width(widths[index]).heightIn(min = 48.dp * fontScale).clip(shape)
-                .testTag(option.tag).selectable(active, enabled = enabled, role = Role.Tab) { onSelect(option.value) }
+                .testTag(option.tag).selectable(active, enabled = enabled, role = Role.Tab) {
+                  if (!active) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                  onSelect(option.value)
+                }
                 .padding(horizontal = if (option.minimumWidth != null) 6.dp else 8.dp),
               horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
               verticalAlignment = Alignment.CenterVertically,

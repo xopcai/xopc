@@ -1222,21 +1222,28 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
   searchOpen: Boolean = false, listState: LazyListState = rememberLazyListState(),
   filtersOpen: MutableState<Boolean> = rememberSaveable { mutableStateOf(false) },
   bottomContentPadding: Dp = 20.dp, pendingVoiceCount: Int = 0, onRecoverVoice: () -> Unit = {}) {
+  val motionAllowed = rememberMotionAllowed()
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    if (searchOpen) XopcPageSearchField(
-      query = search,
-      onQueryChange = onSearchChange,
-      placeholder = stringResource(R.string.notes_search),
-      tag = "notes-search",
-      maxLength = 4096,
-      onSearch = onSubmit,
-      trailingAction = {
-        IconButton(onClick = onSubmit, enabled = !state.loading,
-          modifier = Modifier.size(48.dp).testTag("notes-refresh")) {
-          Icon(painterResource(R.drawable.action_search), stringResource(R.string.notes_search))
-        }
-      },
-    )
+    androidx.compose.animation.AnimatedVisibility(
+      visible = searchOpen,
+      enter = xopcExpandPanelEnter(motionAllowed, Alignment.Top),
+      exit = xopcExpandPanelExit(motionAllowed, Alignment.Top),
+    ) {
+      XopcPageSearchField(
+        query = search,
+        onQueryChange = onSearchChange,
+        placeholder = stringResource(R.string.notes_search),
+        tag = "notes-search",
+        maxLength = 4096,
+        onSearch = onSubmit,
+        trailingAction = {
+          IconButton(onClick = onSubmit, enabled = !state.loading,
+            modifier = Modifier.size(48.dp).testTag("notes-refresh")) {
+            Icon(painterResource(R.drawable.action_search), stringResource(R.string.notes_search))
+          }
+        },
+      )
+    }
     IconButton(onClick = { filtersOpen.value = !filtersOpen.value },
       modifier = Modifier.align(Alignment.End).size(48.dp)
         .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14))
@@ -1245,12 +1252,18 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
         tint = if (filtersOpen.value || state.status.isNotEmpty()) MaterialTheme.colorScheme.primary
           else MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    if (filtersOpen.value) SegmentedTabs(
-      listOf("" to R.string.notes_all, "inbox" to R.string.notes_inbox,
-        "processed" to R.string.notes_processed, "archived" to R.string.notes_archived).map { (status, label) ->
-        SegmentOption(status, stringResource(label), "notes-filter-${status.ifEmpty { "all" }}")
-      }, state.status, onStatus,
-    )
+    androidx.compose.animation.AnimatedVisibility(
+      visible = filtersOpen.value,
+      enter = xopcExpandPanelEnter(motionAllowed, Alignment.Top),
+      exit = xopcExpandPanelExit(motionAllowed, Alignment.Top),
+    ) {
+      SegmentedTabs(
+        listOf("" to R.string.notes_all, "inbox" to R.string.notes_inbox,
+          "processed" to R.string.notes_processed, "archived" to R.string.notes_archived).map { (status, label) ->
+          SegmentOption(status, stringResource(label), "notes-filter-${status.ifEmpty { "all" }}")
+        }, state.status, onStatus,
+      )
+    }
     XopcPullToRefreshBox(
       isRefreshing = state.loading && state.items.isNotEmpty(),
       onRefresh = onSubmit,
@@ -1280,15 +1293,21 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
         }
       }
       if (state.loading && state.items.isEmpty()) item {
-        BrandLoadingPanel(modifier = Modifier.testTag("notes-loading"))
+        XopcListSkeleton(modifier = Modifier.testTag("notes-loading"), rows = 4)
       }
-      if (state.listError) item { OutlinedButton(onClick = onSubmit,
-        modifier = Modifier.testTag("notes-retry")) {
-        Text(stringResource(R.string.progress_load_failed))
-      } }
-      if (!state.loading && !state.listError && state.items.isEmpty()) item {
-        if (state.drafts.isEmpty()) Text(stringResource(R.string.notes_empty),
-          modifier = Modifier.testTag("notes-empty"))
+      if (state.listError) item {
+        XopcErrorState(
+          message = stringResource(R.string.progress_load_failed),
+          retryLabel = stringResource(R.string.progress_refresh),
+          onRetry = onSubmit,
+          retryTag = "notes-retry",
+        )
+      }
+      if (!state.loading && !state.listError && state.items.isEmpty() && state.drafts.isEmpty()) item {
+        XopcEmptyState(
+          message = stringResource(R.string.notes_empty),
+          modifier = Modifier.testTag("notes-empty"),
+        )
       }
       items(state.drafts, key = { "draft-${it.id}" }) { draft ->
         NoteDraftCard(draft, onOpenDraft)
@@ -1301,8 +1320,13 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
           Text(stringResource(R.string.notes_load_more))
         }
       }
-      if (state.moreError) item { Text(stringResource(R.string.notes_more_error),
-        color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("notes-more-error")) }
+      if (state.moreError) item {
+        XopcInlineBanner(
+          message = stringResource(R.string.notes_more_error),
+          tone = XopcBannerTone.Danger,
+          modifier = Modifier.testTag("notes-more-error"),
+        )
+      }
     }
     }
   }

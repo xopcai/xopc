@@ -91,22 +91,39 @@ internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
       else -> true
     }
   }
+  val motionAllowed = rememberMotionAllowed()
   Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    if (searchOpen) OutlinedTextField(search, { search = it },
-      modifier = Modifier.fillMaxWidth().then(searchInputFocus()).testTag("automation-search"),
-      singleLine = true, placeholder = { Text(stringResource(R.string.progress_search)) })
+    androidx.compose.animation.AnimatedVisibility(
+      visible = searchOpen,
+      enter = xopcExpandPanelEnter(motionAllowed, Alignment.Top),
+      exit = xopcExpandPanelExit(motionAllowed, Alignment.Top),
+    ) {
+      XopcPageSearchField(
+        query = search,
+        onQueryChange = { search = it },
+        placeholder = stringResource(R.string.progress_search),
+        tag = "automation-search",
+        autoFocus = true,
+      )
+    }
     LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp),
       contentPadding = PaddingValues(bottom = 12.dp)) {
       if (state.listLoading && state.items.isEmpty()) item {
-        BrandLoadingPanel(modifier = Modifier.testTag("automation-list-loading"))
+        XopcListSkeleton(modifier = Modifier.testTag("automation-list-loading"), rows = 4)
       }
-      if (state.listError) item { OutlinedButton(onClick = onRefresh,
-        modifier = Modifier.testTag("automation-list-retry")) {
-        Text(stringResource(R.string.progress_load_failed))
-      } }
+      if (state.listError) item {
+        XopcErrorState(
+          message = stringResource(R.string.progress_load_failed),
+          retryLabel = stringResource(R.string.progress_refresh),
+          onRetry = onRefresh,
+          retryTag = "automation-list-retry",
+        )
+      }
       if (state.actionError || state.deleteError) item {
-        Text(stringResource(if (state.deleteError) R.string.automation_delete_error else R.string.automation_action_error),
-          color = MaterialTheme.colorScheme.error)
+        XopcInlineBanner(
+          message = stringResource(if (state.deleteError) R.string.automation_delete_error else R.string.automation_action_error),
+          tone = XopcBannerTone.Danger,
+        )
       }
       items(shown, key = { it.id }) { item ->
         AutomationCard(item, onOpen, onEdit, onToggle, onDelete, state.actionBusy || state.deleteBusy)
@@ -114,7 +131,7 @@ internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
       if (state.listLoaded && !state.listError) {
         if (filter == "all" && query.isBlank()) item {
           AutomationIdeas(showIntro = state.items.isEmpty(), onSelect = onSchedule)
-        } else if (shown.isEmpty()) item { Text(stringResource(R.string.progress_no_matches)) }
+        } else if (shown.isEmpty()) item { XopcEmptyState(message = stringResource(R.string.progress_no_matches)) }
       }
     }
     Button(onClick = { onSchedule("") }, modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)

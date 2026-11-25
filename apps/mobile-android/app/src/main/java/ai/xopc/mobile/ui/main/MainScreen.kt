@@ -3957,13 +3957,11 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   if (connection.executionMessageId != null) XopcBottomSheet(XopcSheetPreset.Immersive,
     onDismissRequest = onCloseExecution, dragHandle = null) {
     Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f).testTag("execution-sheet")) {
-      Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        TextButton(onClick = onCloseExecution, modifier = Modifier.testTag("execution-back")) {
-          Text(stringResource(R.string.assistant_close))
-        }
-        Text(stringResource(R.string.assistant_execution), style = MaterialTheme.typography.titleLarge)
-      }
+      XopcSheetHeader(
+        title = stringResource(R.string.assistant_execution),
+        onClose = onCloseExecution,
+        closeTag = "execution-back",
+      )
       HorizontalDivider()
       ExecutionDetails(connection.executionDetail, connection.executionLoading, connection.executionError,
         connection.activeRunId != null, onRetryExecution, openLink, Modifier.weight(1f))
@@ -4383,21 +4381,27 @@ private fun ConversationsScreen(
     if (groupId.isNotEmpty()) TextButton(onClick = ::clearGroup, modifier = Modifier.testTag("sessions-clear-group")) {
       Text("$groupName ×", maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
-    if (searchOpen && !selecting) Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      XopcPageSearchField(
-        query = if (browsingGroups) groupQuery else connection.conversationSearch,
-        onQueryChange = { if (browsingGroups) groupQuery = it else onSearchChange(it) },
-        placeholder = searchLabel,
-        tag = "conversations-search",
-        autoFocus = true,
-        modifier = Modifier.weight(1f),
-        trailingAction = {},
-      )
-      IconButton(onClick = ::closeSearch,
-        modifier = Modifier.size(48.dp).semantics { contentDescription = clearLabel }
-        .testTag("conversations-clear")) {
-        ActionIcon(R.drawable.action_close, size = XopcDesignTokens.IconRow, contentDescription = null)
+    AnimatedVisibility(
+      visible = searchOpen && !selecting,
+      enter = xopcExpandPanelEnter(sessionsMotionAllowed, Alignment.Top),
+      exit = xopcExpandPanelExit(sessionsMotionAllowed, Alignment.Top),
+    ) {
+      Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        XopcPageSearchField(
+          query = if (browsingGroups) groupQuery else connection.conversationSearch,
+          onQueryChange = { if (browsingGroups) groupQuery = it else onSearchChange(it) },
+          placeholder = searchLabel,
+          tag = "conversations-search",
+          autoFocus = true,
+          modifier = Modifier.weight(1f),
+          trailingAction = {},
+        )
+        IconButton(onClick = ::closeSearch,
+          modifier = Modifier.size(48.dp).semantics { contentDescription = clearLabel }
+          .testTag("conversations-clear")) {
+          ActionIcon(R.drawable.action_close, size = XopcDesignTokens.IconRow, contentDescription = null)
+        }
       }
     }
     androidx.compose.foundation.pager.HorizontalPager(
@@ -4421,11 +4425,13 @@ private fun ConversationsScreen(
         } else experts.map { it.id to it.name }
         val matches = groups.filter { (_, name) -> name.contains(groupQuery.trim(), ignoreCase = true) }
         when {
-          loading -> BrandLoadingPanel()
-          failed -> TextButton(onClick = { if (projects) onLoadProjects() else expertReload++ }) {
-            Text(stringResource(R.string.progress_refresh))
-          }
-          matches.isEmpty() -> Text(stringResource(R.string.progress_no_matches))
+          loading -> XopcListSkeleton(rows = 4)
+          failed -> XopcErrorState(
+            message = stringResource(R.string.chat_load_error),
+            retryLabel = stringResource(R.string.progress_refresh),
+            onRetry = { if (projects) onLoadProjects() else expertReload++ },
+          )
+          matches.isEmpty() -> XopcEmptyState(message = stringResource(R.string.progress_no_matches))
           else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(matches, key = { it.first }) { (id, name) ->
               Card(onClick = { closeSearch(); groupId = id; groupName = name },
@@ -4440,7 +4446,7 @@ private fun ConversationsScreen(
         }
         return@page
       }
-      if (connection.conversationsLoading && connection.conversations.isEmpty()) BrandLoadingPanel()
+      if (connection.conversationsLoading && connection.conversations.isEmpty()) XopcListSkeleton(rows = 5)
       if (connection.conversationsError) XopcInlineBanner(
         message = stringResource(R.string.chat_load_error),
         tone = XopcBannerTone.Danger,

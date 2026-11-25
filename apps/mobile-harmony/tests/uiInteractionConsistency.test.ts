@@ -134,4 +134,54 @@ describe('HarmonyOS UI & interaction unification guard', () => {
       expect(source, `${rel} must use xopcToast instead of direct showToast`).not.toMatch(/\.showToast\s*\(/);
     }
   });
+
+  it('keeps auxiliary semantic colors bit-for-bit aligned with the three-platform spec', () => {
+    const rawColors = JSON.parse(
+      readFileSync(new URL('../entry/src/main/resources/base/element/color.json', import.meta.url), 'utf8'),
+    ) as { color: Array<{ name: string; value: string }> };
+    const palette = new Map(rawColors.color.map((item) => [item.name, item.value]));
+    const expected: Record<string, string> = {
+      theme_scrim_light: '#66000000',
+      theme_scrim_dark: '#73000000',
+      theme_warning_fill_light: '#FFF2D2',
+      theme_warning_foreground_light: '#734600',
+      theme_warning_fill_dark: '#352C22',
+      theme_warning_foreground_dark: '#FFBC63',
+      theme_danger_soft_light: '#FDECEC',
+      theme_danger_soft_dark: '#382124',
+      theme_success_light: '#176141',
+      theme_success_dark: '#66D89A',
+      theme_success_soft_light: '#E6F5EC',
+      theme_success_soft_dark: '#1A2F24',
+    };
+    for (const [name, value] of Object.entries(expected)) {
+      expect(palette.get(name), `${name} must match canonical three-platform RGB`).toBe(value);
+    }
+    try {
+      appThemeColors.apply('default', true);
+      expect(appThemeColors.success).toBe('app.color.theme_success_dark');
+      expect(appThemeColors.successSoft).toBe('app.color.theme_success_soft_dark');
+      appThemeColors.apply('default', false);
+      expect(appThemeColors.success).toBe('app.color.theme_success_light');
+      expect(appThemeColors.successSoft).toBe('app.color.theme_success_soft_light');
+    } finally {
+      appThemeColors.apply('default', false);
+    }
+  });
+
+  it('adopts XopcSheetHeader across high-frequency bottom sheets', () => {
+    const required = [
+      'ShareResultView.ets',
+      'ChatOptions.ets',
+      'PersonalAgentSettings.ets',
+      'ConversationShare.ets',
+      'ModelSettingsView.ets',
+      'PersonalView.ets',
+      'SessionRenameForm.ets',
+    ];
+    for (const view of required) {
+      const source = readFileSync(join(etsRoot, 'view', view), 'utf8');
+      expect(source, `${view} should render XopcSheetHeader`).toContain('XopcSheetHeader(');
+    }
+  });
 });

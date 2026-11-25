@@ -16,27 +16,19 @@ struct MobilePreview<Actions: View, Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Button("关闭", systemImage: "xmark", action: onClose)
-                    .labelStyle(.iconOnly).frame(width: 44, height: 44)
-                    .accessibilityIdentifier(closeID)
-                Text(verbatim: title).font(.headline).lineLimit(1)
-                    .frame(maxWidth: .infinity).accessibilityAddTraits(.isHeader)
+            MobileSheetHeader(title: title, closeID: closeID, onClose: onClose) {
                 Menu(content: actions) {
-                    Image(systemName: "ellipsis.circle").frame(width: 44, height: 44)
+                    Image(systemName: "ellipsis.circle")
+                        .frame(width: MobileDesignTokens.buttonHeightMd, height: MobileDesignTokens.buttonHeightMd)
                         .accessibilityLabel("更多操作")
                 }
                 .accessibilityIdentifier("preview-actions")
             }
-            .buttonStyle(.plain).padding(.horizontal, 12).padding(.top, 8)
             content()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(theme.foreground).background(theme.canvas)
-        .presentationDetents([.fraction(heightFraction), .large])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(theme.corner(28))
-        .presentationBackground(theme.canvas)
+        .mobileSheetPreset(heightFraction >= 0.9 ? .immersive : .large, background: theme.canvas)
     }
 }
 

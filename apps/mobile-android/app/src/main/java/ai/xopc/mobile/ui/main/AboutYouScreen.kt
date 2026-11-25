@@ -354,11 +354,16 @@ private fun WorkMemoryList(gatewayId: String?, active: Boolean,
   LazyColumn(Modifier.fillMaxSize().testTag("work-memory-list"),
     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
     verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    if (loading && page == null) item { BrandLoadingPanel() }
+    if (loading && page == null) item { XopcListSkeleton(rows = 4) }
     if (failed) item {
-      TextButton(onClick = { request++ }, enabled = !loading) { Text(stringResource(R.string.about_you_work_memory_retry)) }
+      XopcErrorState(
+        message = stringResource(R.string.about_you_load_error),
+        retryLabel = stringResource(R.string.about_you_work_memory_retry),
+        onRetry = { request++ },
+        retryEnabled = !loading,
+      )
     } else if (!loading && page?.items.isNullOrEmpty()) item {
-      Text(stringResource(R.string.about_you_work_memory_empty))
+      XopcEmptyState(message = stringResource(R.string.about_you_work_memory_empty))
     }
     items(page?.items.orEmpty(), key = { it.id }) { memory ->
       Card(onClick = { expandedId = if (expandedId == memory.id) null else memory.id },
@@ -390,22 +395,24 @@ private fun AssertionList(state: PersonalUiState, filter: String, query: String,
   ) {
   Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
     .padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    if (state.assertionsLoading) BrandLoadingPanel(Modifier.padding(top = 24.dp))
+    if (state.assertionsLoading) XopcListSkeleton(modifier = Modifier.padding(top = 8.dp), rows = 4)
     else if (state.assertions.isEmpty() && !state.assertionsError) {
-      AboutCard {
-        Text(stringResource(if (query.isNotBlank()) R.string.about_you_empty_search else when (filter) {
+      XopcEmptyState(
+        message = stringResource(if (query.isNotBlank()) R.string.about_you_empty_search else when (filter) {
           "review" -> R.string.about_you_empty_review
           "explicit" -> R.string.about_you_empty_explicit
           "learned" -> R.string.about_you_empty_learned
           else -> R.string.about_you_empty_all
-        }))
-      }
+        }),
+      )
     }
     state.assertions.forEach { AssertionRow(it, onOpenDetail) }
     if (state.assertionsError) {
-      Text(stringResource(R.string.about_you_load_error),
-        color = MaterialTheme.colorScheme.error)
-      TextButton(onClick = onRetry) { Text(stringResource(R.string.personal_retry)) }
+      XopcErrorState(
+        message = stringResource(R.string.about_you_load_error),
+        retryLabel = stringResource(R.string.personal_retry),
+        onRetry = onRetry,
+      )
     }
     if (state.assertionCursor != null && !state.assertionsMoreLoading) TextButton(onClick = onLoadMore,
       modifier = Modifier.testTag("about-you-load-more")) { Text(stringResource(R.string.about_you_load_more)) }

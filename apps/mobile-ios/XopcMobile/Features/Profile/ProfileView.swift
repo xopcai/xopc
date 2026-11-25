@@ -482,8 +482,7 @@ private struct UserMemoryRow: View {
 
 private struct ProfileSkeleton: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) { Text("用户名称").font(.title2); Text("正在读取个人理解") }
-            .redacted(reason: .placeholder)
+        MobileListSkeleton(rows: 3)
     }
 }
 

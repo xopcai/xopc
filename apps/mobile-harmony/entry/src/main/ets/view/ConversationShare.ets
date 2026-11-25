@@ -7,6 +7,7 @@ import { gatewaySession } from '../service/gatewaySession';
 import { copyChatMessage } from '../service/chatMessageActions';
 import { shareChatLink, shareReachabilityText } from '../service/chatMediaShare';
 import { appSettings } from '../service/settings';
+import { XopcSheetHeader } from './MobileComponents';
 
 interface XopcShareTerm { ttl: number; label: Resource; }
 
@@ -220,14 +221,12 @@ export struct XopcConversationShare {
 
   build() {
     Column() {
-      Row({ space: 8 }) {
-        Text(this.previewOpen ? $r('app.string.share_preview') : this.result ? $r('app.string.session_share_link')
-          : this.revoked ? $r('app.string.session_share_revoked') : $r('app.string.share_session_title'))
-          .fontSize(19).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).layoutWeight(1)
-        Button(this.previewOpen ? $r('app.string.back') : $r('app.string.close'))
-          .height(44).backgroundColor(Color.Transparent).fontColor(this.colors.secondary).enabled(!this.busy)
-          .onClick((): void => { if (this.previewOpen) this.previewOpen = false; else this.onClose(); })
-      }.width('100%').margin({ bottom: 10 })
+      XopcSheetHeader({
+        heading: this.previewOpen ? $r('app.string.share_preview') : this.result ? $r('app.string.session_share_link')
+          : this.revoked ? $r('app.string.session_share_revoked') : $r('app.string.share_session_title'),
+        closeEnabled: !this.busy,
+        onClose: (): void => { if (this.previewOpen) this.previewOpen = false; else this.onClose(); },
+      })
       Scroll() {
         Column({ space: 12 }) {
           if (this.busy) { LoadingProgress().width(28).height(28).color(this.colors.accent) }
@@ -245,8 +244,8 @@ export struct XopcConversationShare {
             if (this.previewOpen) { this.preview(this.snapshot) }
             else { this.setup(this.snapshot) }
           }
-        }.width('100%').alignItems(HorizontalAlign.Start)
+        }.width('100%').padding({ left: 20, right: 20, bottom: 20 }).alignItems(HorizontalAlign.Start)
       }.layoutWeight(1).width('100%').align(Alignment.Top).scrollBar(BarState.Off)
-    }.width('100%').height('100%').padding(20).backgroundColor(this.colors.panel)
+    }.width('100%').height('100%').backgroundColor(this.colors.panel)
   }
 }

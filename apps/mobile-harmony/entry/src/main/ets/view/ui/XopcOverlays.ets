@@ -20,6 +20,7 @@ export struct XopcSheetHeader {
   @Param subtitle: ResourceStr = '';
   @Param closeId: string = '';
   @Param showClose: boolean = true;
+  @Param closeEnabled: boolean = true;
   @Event onClose: () => void = (): void => {};
 
   build() {
@@ -51,6 +52,7 @@ export struct XopcSheetHeader {
           .height(XOPC_BUTTON_HEIGHT_MD)
           .padding(0)
           .backgroundColor(this.colors.input)
+          .enabled(this.closeEnabled)
           .clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.close'))
           .onClick((): void => { this.onClose(); })

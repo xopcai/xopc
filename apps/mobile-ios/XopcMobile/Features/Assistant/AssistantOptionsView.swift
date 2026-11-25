@@ -100,18 +100,17 @@ struct AssistantSessionActionsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("关闭", systemImage: "xmark") { dismiss() }.frame(width: 44, height: 44)
+                    MobileCloseButton { dismiss() }
                 }
             }
             .task { await loadOptions() }
         }
-        .presentationDetents([.fraction(0.85)])
-        .presentationDragIndicator(.visible)
+        .mobileSheetPreset(.large)
     }
 
     private func optionRow(_ title: LocalizedStringKey, value: String? = nil, symbol: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: symbol).font(.system(size: 20)).frame(width: 24).accessibilityHidden(true)
+            Image(systemName: symbol).font(.title3).frame(width: 24).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).mobileTextStyle(.body)
                 if let value {
