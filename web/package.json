@@ -16,8 +16,6 @@
     "react-doctor:pr": "react-doctor --yes --offline --fail-on=error --annotations --diff"
   },
   "dependencies": {
-    "@a2ui/react": "0.16.1",
-    "@a2ui/web_core": "0.16.1",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-html": "^6.4.11",
@@ -96,8 +94,7 @@
     "unist-util-visit-parents": "6.0.2",
     "use-debounce": "^10.1.1",
     "xlsx": "file:./vendor/xlsx-0.20.3.tgz",
-    "zod": "3.25.76",
-    "zod4": "npm:zod@4.6.6",
+    "zod": "4.6.6",
     "zustand": "^5.0.12"
   },
   "devDependencies": {

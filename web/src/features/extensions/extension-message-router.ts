@@ -1,6 +1,6 @@
 import { ExtensionErrorCode, type ThemeInfo } from '@xopcai/extension-ui-sdk';
 import { CapabilityCallSchema, ExtensionCapabilityBindingSchema, type CapabilityDescriptor } from '@xopcai/gateway-contract';
-import { z } from 'zod4';
+import { z } from 'zod';
 
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { SessionManager } from '@/features/chat/session/session-manager';
