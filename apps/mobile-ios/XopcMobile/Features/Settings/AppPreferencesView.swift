@@ -205,7 +205,7 @@ private struct ShareCenterView: View {
                     }
                     Button("撤销链接", role: .destructive) { revokeTarget = share }
                 } label: {
-                    Image(systemName: "ellipsis").frame(minWidth: 44, minHeight: 44)
+                    Image(systemName: "ellipsis.circle").frame(minWidth: 44, minHeight: 44)
                 }
                 .accessibilityLabel("分享操作")
                 .disabled(busy || failed)

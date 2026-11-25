@@ -108,7 +108,7 @@ internal fun rememberPreviewExport(mimeType: String): (String, suspend (OutputSt
       } catch (cancelled: CancellationException) {
         throw cancelled
       } catch (_: Exception) {
-        Toast.makeText(context, R.string.preview_download_failed, Toast.LENGTH_SHORT).show()
+        xopcShowToast(context, R.string.preview_download_failed)
       }
     }
   }

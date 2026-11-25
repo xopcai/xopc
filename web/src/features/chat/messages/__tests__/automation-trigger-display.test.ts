@@ -38,4 +38,16 @@ describe('automation user message display', () => {
     expect(userMessageFromStreamPayload({ text, timestamp: 123 })?.content).toEqual([{ type: 'text', text: instruction }]);
     expect(wire).toEqual(original);
   });
+
+  it('unwraps task_brief envelopes in history and stream without duplicating identical objectives', () => {
+    const brief = '收集最近 24 小时重要的 AI 新闻，用简体中文简要汇总。每条附发布日期和可靠来源链接，只发送给当前用户。';
+    const wrapped = `<task_brief>\n${brief}\n</task_brief>`;
+    const duplicated = `${brief}\n\n${wrapped}`;
+    expect(stripUserMessageForDisplay(wrapped)).toBe(brief);
+    expect(stripUserMessageForDisplay(duplicated)).toBe(brief);
+    expect(sessionWireToUiMessages([{ role: 'user', content: wrapped, turnId: 'run-2', timestamp: 456 }])[0]?.content)
+      .toEqual([{ type: 'text', text: brief }]);
+    expect(userMessageFromStreamPayload({ role: 'user', content: duplicated, turnId: 'run-2', timestamp: 456 })?.content)
+      .toEqual([{ type: 'text', text: brief }]);
+  });
 });

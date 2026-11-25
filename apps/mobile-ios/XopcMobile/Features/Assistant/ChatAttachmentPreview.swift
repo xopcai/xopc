@@ -23,7 +23,7 @@ struct MobilePreview<Actions: View, Content: View>: View {
                 Text(verbatim: title).font(.headline).lineLimit(1)
                     .frame(maxWidth: .infinity).accessibilityAddTraits(.isHeader)
                 Menu(content: actions) {
-                    Image(systemName: "ellipsis").frame(width: 44, height: 44)
+                    Image(systemName: "ellipsis.circle").frame(width: 44, height: 44)
                         .accessibilityLabel("更多操作")
                 }
                 .accessibilityIdentifier("preview-actions")
@@ -173,9 +173,11 @@ struct ChatAttachmentPreview: View {
                 FilePreviewView(configuration: configuration, file: file)
                     .toolbar { Button("关闭") { managedFile = nil } }
             }
+            .mobileSheetPreset(.large)
         }
         .sheet(item: $share) { item in
             ManagedFileShareSheet(item: item) { share = nil }
+                .mobileSheetPreset(.medium)
         }
         .sheet(isPresented: $showsPreview, onDismiss: {
             removeTemporaryFile()

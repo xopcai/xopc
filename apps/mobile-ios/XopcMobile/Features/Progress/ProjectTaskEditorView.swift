@@ -4,6 +4,7 @@ struct ProjectTaskEditorView: View {
     let configuration: GatewayConfiguration
     let projectID: String
 
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.dismiss) private var dismiss
     @State private var objective = ""
     @State private var isSaving = false
@@ -22,6 +23,8 @@ struct ProjectTaskEditorView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(mobileTheme.panel.ignoresSafeArea())
             .navigationTitle("新建项目任务")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -44,6 +47,7 @@ struct ProjectTaskEditorView: View {
                 Button("好", role: .cancel) {}
             } message: { Text(error ?? "未知错误") }
         }
+        .mobileSheetPreset(.medium)
     }
 
     @MainActor private func save() async {

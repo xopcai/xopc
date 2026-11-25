@@ -223,7 +223,8 @@ export function buildTaskRunMessage(objective: string, trigger: Record<string, u
     ].join('\n');
   }
   const brief = body?.trim();
-  const taskMessage = brief
+  const normalizedObjective = objective.trim();
+  const taskMessage = brief && brief !== normalizedObjective
     ? `${objective}\n\n<task_brief>\n${brief.slice(0, 12_000)}\n</task_brief>`
     : objective;
   const fullBrief = taskId && brief && brief.length > 12_000

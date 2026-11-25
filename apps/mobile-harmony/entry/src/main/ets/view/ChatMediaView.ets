@@ -1,4 +1,4 @@
-import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
+import { xopcConfirmDialog, xopcSheetOptions, xopcToast } from '../common/dialogActions';
 import { XopcPreviewHeader } from './MusicPlaybackView';
 import { XopcChatResultCapsule } from './ChatResultCapsule';
 import { XopcChatImagePager } from './ChatImagePager';
@@ -490,7 +490,7 @@ export struct XopcChatMediaView {
     } catch (error) {
       if (generation === this.generation) {
         this.error = (error as Error).message;
-        this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_media_failed') });
+        xopcToast(this.getUIContext(), $r('app.string.chat_media_failed'));
       }
     } finally { if (generation === this.generation) this.busy = false; }
   }
@@ -544,7 +544,7 @@ export struct XopcChatMediaView {
     catch (error) {
       if (generation === this.generation) {
         this.error = (error as Error).message;
-        this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_open_file_failed') });
+        xopcToast(this.getUIContext(), $r('app.string.chat_open_file_failed'));
       }
     } finally { if (generation === this.generation) this.busy = false; }
   }
@@ -564,7 +564,7 @@ export struct XopcChatMediaView {
       if (generation !== this.generation) return;
       if (result.index === 1) {
         await copyChatMessage(payload.share.shareUrl);
-        this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_link_copied') });
+        xopcToast(this.getUIContext(), $r('app.string.chat_link_copied'));
       } else if (result.index === 2) await shareChatLink(context, payload.share);
     }
     catch (error) { if (generation === this.generation) this.error = (error as Error).message; }

@@ -37,6 +37,8 @@ export interface ExternalToolDescriptor extends ExternalToolSearchHit {
   batchRead?: boolean;
   /** Host-curated read scope; separate from eligibility for batch execution. */
   readOnly?: boolean;
+  /** Host-classified device role for endpoint tools in the current turn. */
+  deviceRole?: 'source' | 'selected' | 'other';
 }
 
 export interface VersionedExternalToolDescriptor extends ExternalToolDescriptor {

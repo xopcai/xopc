@@ -327,6 +327,7 @@ struct SegmentedTabs<Value: Hashable>: View {
             }
         }
         .frame(height: height)
+        .sensoryFeedback(.selection, trigger: selected)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(label)
     }

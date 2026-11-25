@@ -132,8 +132,9 @@ struct CapabilitiesView: View {
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .accessibilityIdentifier("capability-pager")
+        .sensoryFeedback(.selection, trigger: category)
         .background(mobileTheme.canvas)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .safeAreaInset(edge: .top, spacing: 0) {
             if category != .devices {
                 searchField
             }
@@ -146,7 +147,7 @@ struct CapabilitiesView: View {
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if category == .skills {
-                    Button("capability_skill_market", systemImage: "magnifyingglass") { openSkillMarket() }
+                    Button("capability_skill_market", systemImage: "square.grid.2x2") { openSkillMarket() }
                         .labelStyle(.iconOnly).foregroundStyle(mobileTheme.action).accessibilityIdentifier("capability-add-skills")
                 } else if category == .plugins {
                     Button("capability_search_plugins", systemImage: "magnifyingglass") { searchFocused = true }
@@ -633,6 +634,7 @@ struct ConversationMcpAction: View {
                 {
                     CapabilityLogo(reference: nil, origin: configuration.baseURL, label: "", symbol: "link", extent: 44)
                 }
+                .mobileSheetPreset(.large)
             }
         }
     }

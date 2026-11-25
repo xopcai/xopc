@@ -334,7 +334,7 @@ private struct AutomationActionsMenu: View {
                         .accessibilityIdentifier("automation-menu-delete")
                 }
             } label: {
-                Label("自动化操作", systemImage: "ellipsis").labelStyle(.iconOnly)
+                Label("自动化操作", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
                     .frame(minWidth: 44, minHeight: 44)
             }
             .buttonStyle(.plain)

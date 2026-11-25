@@ -1,3 +1,4 @@
+import { xopcToast } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { common } from '@kit.AbilityKit';
 import { webview } from '@kit.ArkWeb';
@@ -24,7 +25,7 @@ export struct XopcShareResultView {
   }
   private async copy(): Promise<void> {
     await copyChatMessage(this.share.shareUrl); this.copied = true;
-    this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_link_copied') });
+    xopcToast(this.getUIContext(), $r('app.string.chat_link_copied'));
   }
   private async systemShare(): Promise<void> {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;

@@ -40,7 +40,8 @@ export async function materializeNativeExternalTools(params: {
       }, { exposure: descriptor.exposure === 'model-only' ? 'model-only' : 'deferred', namespace: { name: `${prefix}__${createHash('sha256').update(parsed.namespace).digest('hex').slice(0, 12)}`,
         description: descriptor.source === 'endpoint' ? 'Tools of the current authorized device' : descriptor.namespace },
         outputSchema: descriptor.outputSchema as TSchema | undefined, annotations: descriptor.annotations,
-        external: { toolRef: descriptor.toolRef, revision: descriptor.revision, readOnly: descriptor.batchRead === true },
+        external: { toolRef: descriptor.toolRef, revision: descriptor.revision, readOnly: descriptor.batchRead === true,
+          ...(descriptor.deviceRole ? { deviceRole: descriptor.deviceRole } : {}) },
         ...(registry.subscribeInvalidation ? { subscribeInvalidation: (listener: (reason?: ToolInvalidationReason) => void) =>
           registry.subscribeInvalidation!(params.conversationId, descriptor.toolRef, listener) } : {}),
       });

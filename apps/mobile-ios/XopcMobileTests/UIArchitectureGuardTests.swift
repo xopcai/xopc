@@ -121,4 +121,44 @@ struct UIArchitectureGuardTests {
             #expect(text.contains("mobileTheme"), "\(relative) must subscribe to @Environment(\\.mobileTheme)")
         }
     }
+
+    @Test func unifiedOverflowIconographyAcrossFeaturesAndApp() throws {
+        let files = Self.swiftFiles(under: "Features") + Self.swiftFiles(under: "App")
+        let offenders = try files.filter { url in
+            let text = try String(contentsOf: url, encoding: .utf8)
+            return text.contains("\"ellipsis\"")
+        }.map(\.lastPathComponent)
+        #expect(offenders.isEmpty, "Use \"ellipsis.circle\" instead of bare \"ellipsis\" in: \(offenders)")
+    }
+
+    @Test func capabilitiesPlacesSearchAtTopWithDistinctSkillMarketIcon() throws {
+        let url = Self.iosSourceRoot.appendingPathComponent("Features/Capabilities/CapabilitiesView.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let topSearchPattern = try Regex(#"\.safeAreaInset\(edge:\s*\.top,\s*spacing:\s*0\)\s*\{[\s\S]{0,120}searchField"#)
+        let bottomSearchPattern = try Regex(#"\.safeAreaInset\(edge:\s*\.bottom,\s*spacing:\s*0\)\s*\{[\s\S]{0,120}searchField"#)
+        #expect(source.contains(topSearchPattern), "CapabilitiesView search must be anchored at top")
+        #expect(!source.contains(bottomSearchPattern), "CapabilitiesView must not pin search at bottom")
+        #expect(source.contains("systemImage: \"square.grid.2x2\""), "CapabilitiesView skill market must use grid icon")
+    }
+
+    @Test func sharedSkeletonHapticsAndSheetPresetAdoption() throws {
+        let progressRow = try String(
+            contentsOf: Self.iosSourceRoot.appendingPathComponent("Features/Progress/ProgressRow.swift"),
+            encoding: .utf8
+        )
+        #expect(progressRow.contains("MobileListSkeleton("), "ProgressListSkeleton must delegate to MobileListSkeleton")
+
+        let segmentedTabs = try String(
+            contentsOf: Self.iosSourceRoot.appendingPathComponent("Core/Views/SegmentedTabs.swift"),
+            encoding: .utf8
+        )
+        #expect(segmentedTabs.contains(".sensoryFeedback("), "SegmentedTabs must provide sensoryFeedback on tab selection")
+
+        let files = Self.swiftFiles(under: "Features") + Self.swiftFiles(under: "App")
+        let presetCalls = try files.reduce(0) { count, url in
+            let text = try String(contentsOf: url, encoding: .utf8)
+            return count + text.components(separatedBy: "mobileSheetPreset(").count - 1
+        }
+        #expect(presetCalls >= 30, "Expected at least 30 mobileSheetPreset call sites, found \(presetCalls)")
+    }
 }

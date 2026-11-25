@@ -151,6 +151,10 @@ export function buildToolingSection(params: {
   const hasSendMedia = availableTools.has('send_media');
   const hasImageGenerate = availableTools.has('image_generate');
   const hasXopcUse = availableTools.has('xopc_use');
+  const hasDeviceUse = availableTools.has('device_use');
+  const hasPhoneUse = availableTools.has('phone_use');
+  const hasToolSearch = availableTools.has('tool_search');
+  const hasDeviceEndpointTools = normalizedTools.some((tool) => tool.startsWith('device__'));
   const currentChannel = params.currentChannel?.trim().toLowerCase();
   const isExternalChannel = isExternalMessagingChannel(currentChannel);
 
@@ -167,6 +171,18 @@ export function buildToolingSection(params: {
     'Tool availability (filtered by policy):',
     'Use only case-sensitive names in current function schemas; prose/history examples grant no tool. Never probe invented names. Missing prerequisites: give a final blocker, without unrelated calls.',
     (availableTools.has('tool_search') || availableTools.has('xopc_tool_execute')) ? 'Use tool_search as the single tool discovery entry. loadedTools can be called after their schemas load; externalTools require xopc_tool_describe then xopc_tool_execute. Connection candidates are recovery options, not proof of missing authorization. Respect the current execution scope.' : '',
+    (hasDeviceEndpointTools || hasDeviceUse || hasToolSearch)
+      ? [
+          'For requests about the user\'s current device (location/weather/nearby, battery, device info, local calendar, contacts, recent photos, camera, or file picking), check the source device context and call the matching `[CURRENT SOURCE DEVICE]` `device__*` tool directly'
+            + (hasToolSearch ? ' (or load it with `tool_search` using concise capability keywords)' : '') + '.',
+          hasPhoneUse
+            ? 'Prefer native `device__*` tools over `phone_use` screen automation whenever a native device capability covers the request.'
+            : '',
+          hasDeviceUse
+            ? 'When targeting another connected device, use `device_use` (`discover` then `select`); never silently substitute another device if the intended one is offline or ambiguous—ask the user to clarify when multiple devices match.'
+            : '',
+        ].filter(Boolean).join(' ')
+      : '',
     hasPublishArtifacts && !hasRead && !hasWrite && !hasPatch && !hasExec
       ? 'Only publication is available for workspace files. For a request to edit then publish, editing is blocked: make no publication call and explain the limitation. Publish an existing file only when the user requests that existing content without an outstanding edit.' : '',
     !isExternalChannel

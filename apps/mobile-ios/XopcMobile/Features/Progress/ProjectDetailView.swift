@@ -67,10 +67,13 @@ struct ProjectDetailView: View {
         }
         .task(id: configuration) { await load() }
         .sheet(item: $creationSheet, onDismiss: { Task { await load() } }) { sheet in
-            switch sheet {
-            case .task: TaskEditorView(configuration: configuration, initialProjectID: projectID)
-            case .note: NoteEditorView(configuration: configuration, projectID: projectID)
+            Group {
+                switch sheet {
+                case .task: TaskEditorView(configuration: configuration, initialProjectID: projectID)
+                case .note: NoteEditorView(configuration: configuration, projectID: projectID)
+                }
             }
+            .mobileSheetPreset(.large)
         }
         .toolbar {
             if let project {

@@ -5,7 +5,7 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 export type ToolInvalidationReason = 'connection' | 'authorization' | 'catalog';
 
 export type XopcToolMetadata = Pick<ToolDefinition, 'exposure' | 'namespace' | 'annotations' | 'outputSchema'> & {
-  external?: { toolRef: string; revision: string; readOnly: boolean };
+  external?: { toolRef: string; revision: string; readOnly: boolean; deviceRole?: 'source' | 'selected' | 'other' };
   subscribeInvalidation?: (listener: (reason?: ToolInvalidationReason) => void) => () => void;
 };
 const metadataKey = Symbol('xopc.sdkToolMetadata');

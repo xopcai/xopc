@@ -17,6 +17,7 @@ import { getDeviceInteractionForRun } from '../../storage/sqlite/clarification-w
 import { deviceFoldersFor, permitsFolderInvocation } from '../../endpoint-tools/folder-connections.js';
 import { deviceCapabilityAllowed, isManagedDeviceCapability } from '../../endpoint-tools/device-capability-grants.js';
 import { DeviceTargetResolver } from '../../endpoint-tools/target-resolver.js';
+import { deviceToolKeywords } from '../../endpoint-tools/tool-keywords.js';
 import { currentDeviceExecutionActor } from '../../endpoint-tools/execution-actor.js';
 import { getEmbeddedExecutionRunId } from '../embedded/execution-context.js';
 import { deviceDelegationAllowsArguments, resolveDeviceDelegation } from '../../endpoint-tools/delegation.js';
@@ -106,6 +107,12 @@ export class EndpointToolProvider implements ExternalToolProvider {
 
   private describeResolved(toolRef: string, resolved: NonNullable<ReturnType<EndpointToolProvider['resolve']>>): ExternalToolDescriptor {
     const folders = resolved.folders?.map(({ id, kind, label }) => ({ id, kind, label }));
+    const roleTag = resolved.deviceRole === 'source'
+      ? '[CURRENT SOURCE DEVICE]'
+      : resolved.deviceRole === 'selected'
+        ? '[SELECTED EXECUTION DEVICE]'
+        : '[OTHER CONNECTED DEVICE]';
+    const keywords = deviceToolKeywords(resolved.tool.descriptor.name, resolved.kind);
     const toolDescription = resolved.selectedCapability?.startsWith('mobile.')
       ? resolved.tool.descriptor.description.replace(
         /Uses the (?:foreground )?device that sent this message\b/u,
@@ -117,11 +124,12 @@ export class EndpointToolProvider implements ExternalToolProvider {
       source: this.source,
       namespace: resolved.endpointId,
       title: resolved.tool.descriptor.title,
-      summary: `${toolDescription} (${resolved.displayName})`,
-      description: `${toolDescription} Device: ${JSON.stringify(resolved.displayName)}; endpoint: ${JSON.stringify(resolved.endpointId)}. Do not substitute another device.${resolved.tool.provider ? ` Provider: ${JSON.stringify(resolved.tool.provider.summary)}. Usage: ${JSON.stringify(resolved.tool.provider.instructions ?? '')}.` : ''}${resolved.approvedArguments ? ` Single-call cross-device consent requires exactly these arguments: ${JSON.stringify(resolved.approvedArguments)}.` : ""}${folders ? ` Authorized folders: ${JSON.stringify(folders)}.` : ''}`,
+      summary: `${roleTag} ${toolDescription} (${resolved.displayName})`,
+      description: `${roleTag} ${toolDescription} Device: ${JSON.stringify(resolved.displayName)}; endpoint: ${JSON.stringify(resolved.endpointId)}. Do not substitute another device.${resolved.tool.provider ? ` Provider: ${JSON.stringify(resolved.tool.provider.summary)}. Usage: ${JSON.stringify(resolved.tool.provider.instructions ?? '')}.` : ''}${resolved.approvedArguments ? ` Single-call cross-device consent requires exactly these arguments: ${JSON.stringify(resolved.approvedArguments)}.` : ''}${folders ? ` Authorized folders: ${JSON.stringify(folders)}.` : ''}${keywords ? ` Keywords: ${keywords}.` : ''}`,
       inputSchema: resolved.tool.descriptor.inputSchema,
       outputSchema: { type: 'object', properties: { content: resolved.tool.descriptor.name.endsWith('.device.get_location') ? { type: 'array', minItems: 1, maxItems: 1, items: { type: 'object', required: ['type', 'value'], properties: { type: { const: 'json' }, value: { type: 'object', required: ['source', 'purpose', 'data'] } } } } : resolved.tool.descriptor.outputSchema }, required: ['content'], additionalProperties: false },
       contractRevision: resolved.contractRevision,
+      deviceRole: resolved.deviceRole,
       annotations: { readOnlyHint: resolved.tool.descriptor.effect === 'read',
         destructiveHint: resolved.tool.descriptor.effect === 'destructive', idempotentHint: resolved.tool.descriptor.idempotent },
       batchRead: !resolved.tool.provider && resolved.tool.descriptor.effect === 'read' && resolved.tool.descriptor.sensitivity === 'public'
@@ -336,9 +344,16 @@ export class EndpointToolProvider implements ExternalToolProvider {
     const folders = isDeviceFolderTool(parsed.toolName) ? deviceFoldersFor(endpoint,
       currentDeviceExecutionActor(context.conversationId, getEmbeddedExecutionRunId()), context.origin, this.deps.runtime.registry) : undefined;
     if (folders && !folders.length) return undefined;
-    return tool ? { folders, selectedCapability: target?.capabilityTool, gatewayCapability, delegation: delegated?.grant, singleCallGrant, approvedArguments: singleCallGrant?.arguments, connectionId: endpoint.connectionId, endpointId: endpoint.endpointId, principalId: endpoint.principalId, displayName: getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName, tool,
+    const deviceRole: 'source' | 'selected' | 'other' = target?.endpointId === endpoint.endpointId && target?.capabilityTool
+      ? 'selected'
+      : context.origin.type === 'endpoint' && endpoint.endpointId === context.origin.endpointId
+        ? 'source'
+        : target?.endpointId === endpoint.endpointId
+          ? 'selected'
+          : 'other';
+    return tool ? { folders, kind: endpoint.kind, deviceRole, selectedCapability: target?.capabilityTool, gatewayCapability, delegation: delegated?.grant, singleCallGrant, approvedArguments: singleCallGrant?.arguments, connectionId: endpoint.connectionId, endpointId: endpoint.endpointId, principalId: endpoint.principalId, displayName: getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName, tool,
       contractRevision: createHash('sha256').update(JSON.stringify([endpoint.principalId, endpoint.connectionId, tool.revision, tool.provider?.digest ?? null, folders?.map(folder => folder.id) ?? null,
-        target?.selectedAt ?? null,
+        target?.selectedAt ?? null, deviceRole,
         delegated?.grant?.id ?? singleCallGrant?.id ?? null])).digest('hex'),
     } : undefined;
   }

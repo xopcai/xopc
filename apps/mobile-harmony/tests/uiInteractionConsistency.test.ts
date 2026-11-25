@@ -125,4 +125,13 @@ describe('HarmonyOS UI & interaction unification guard', () => {
       expect(source, `${view} should render XopcPageHeader`).toContain('XopcPageHeader(');
     }
   });
+
+  it('routes all toasts through xopcToast outside dialogActions.ets', () => {
+    const allFiles = [...uiFiles, ...collectViewFiles(join(etsRoot, 'service'))];
+    for (const file of allFiles) {
+      const rel = relative(etsRoot, file);
+      const source = readFileSync(file, 'utf8');
+      expect(source, `${rel} must use xopcToast instead of direct showToast`).not.toMatch(/\.showToast\s*\(/);
+    }
+  });
 });

@@ -2,6 +2,7 @@ import { common } from '@kit.AbilityKit';
 import { uniformTypeDescriptor as utd } from '@kit.ArkData';
 import { systemShare } from '@kit.ShareKit';
 import { UIContext } from '@kit.ArkUI';
+import { xopcToast } from '../common/dialogActions';
 import { XopcHistoryMedia } from '../model/chat';
 import { gatewaySession } from './gatewaySession';
 import { XopcShareResult } from '../model/share';
@@ -69,7 +70,7 @@ export async function shareSelectedChatText(ui: UIContext, content: string): Pro
   try {
     await sharePlainText(context, content, 'xopc');
   } catch (_) {
-    ui.getPromptAction().showToast({ message: $r('app.string.chat_share_failed') });
+    xopcToast(ui, $r('app.string.chat_share_failed'));
   }
 }
 

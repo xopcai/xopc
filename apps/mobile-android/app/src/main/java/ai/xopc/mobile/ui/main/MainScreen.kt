@@ -113,7 +113,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
@@ -648,7 +647,7 @@ internal fun MainScreen(
       cameraUri = null
       cameraGatewayId = null
       cameraConversationId = null
-      Toast.makeText(context, R.string.camera_capture_error, Toast.LENGTH_SHORT).show()
+      xopcShowToast(context, R.string.camera_capture_error)
     }
   }
   var pendingCameraGatewayId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -691,8 +690,8 @@ internal fun MainScreen(
   }
   LaunchedEffect(connection.messageNoteFeedback) {
     val feedback = connection.messageNoteFeedback ?: return@LaunchedEffect
-    Toast.makeText(context, if (feedback.saved) R.string.assistant_saved_note
-      else R.string.assistant_save_note_error, Toast.LENGTH_SHORT).show()
+    xopcShowToast(context, if (feedback.saved) R.string.assistant_saved_note
+      else R.string.assistant_save_note_error)
     onMessageNoteFeedbackHandled(feedback)
   }
   BrowserPreviewHost(browserPreviewAccess, connection) {
@@ -804,7 +803,7 @@ internal fun MainScreen(
     onCopyMessageText = { value ->
       (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
         .setPrimaryClip(ClipData.newPlainText(copyLabel, value))
-      Toast.makeText(context, R.string.assistant_copied, Toast.LENGTH_SHORT).show()
+      xopcShowToast(context, R.string.assistant_copied)
     },
     onLoadNotes = onLoadNotes, onNoteFileSpaces = onNoteFileSpaces,
     onNoteFiles = onNoteFiles,
@@ -1278,8 +1277,8 @@ internal fun MainContent(
         throw error
       } catch (error: Exception) {
         if (activeTab == sourceTab && activeGateway == gatewayId && activeConversation == sourceConversation)
-          Toast.makeText(voiceContext, if (personal && (error as? ai.xopc.mobile.gateway.GatewayHttpException)?.status == 400)
-            R.string.automation_setup_personal_update_gateway else R.string.automation_create_error, Toast.LENGTH_SHORT).show()
+          xopcShowToast(voiceContext, if (personal && (error as? ai.xopc.mobile.gateway.GatewayHttpException)?.status == 400)
+            R.string.automation_setup_personal_update_gateway else R.string.automation_create_error)
       } finally { openingAutomation = false }
     }
   }
@@ -1913,7 +1912,7 @@ internal fun MainContent(
                 throw error
               } catch (_: Exception) {
                 if (sourceActive())
-                  Toast.makeText(voiceContext, R.string.project_save_error, Toast.LENGTH_SHORT).show()
+                  xopcShowToast(voiceContext, R.string.project_save_error)
               } finally { openingProjectChat = false }
             }
           }
@@ -4313,6 +4312,11 @@ private fun ConversationsScreen(
     SegmentOption("projects", stringResource(R.string.progress_projects), "sessions-mode-projects"),
     SegmentOption("experts", stringResource(R.string.conversations_experts), "sessions-mode-experts"),
   )
+  val sessionsMotionAllowed = rememberMotionAllowed()
+  val modePager = androidx.compose.foundation.pager.rememberPagerState(
+    initialPage = historyModes.indexOfFirst { it.value == mode }.coerceAtLeast(0),
+    pageCount = { historyModes.size },
+  )
   fun selectMode(value: String) {
     if (mode == value) return
     val keepSearching = searchOpen
@@ -4320,6 +4324,20 @@ private fun ConversationsScreen(
     searchOpen = keepSearching
     mode = value
     navigation.rememberSelection("conversation-history", value)
+  }
+  LaunchedEffect(modePager) {
+    snapshotFlow { modePager.settledPage }.collect { index ->
+      val target = historyModes.getOrNull(index)?.value ?: return@collect
+      if (target != mode) selectMode(target)
+    }
+  }
+  LaunchedEffect(mode) {
+    val targetIndex = historyModes.indexOfFirst { it.value == mode }
+    if (targetIndex >= 0 && modePager.currentPage != targetIndex) {
+      val distance = targetIndex - modePager.currentPage
+      if (xopcPagerAnimated(sessionsMotionAllowed, distance)) modePager.animateScrollToPage(targetIndex)
+      else modePager.scrollToPage(targetIndex)
+    }
   }
   val clearLabel = stringResource(R.string.conversations_clear)
   val newConversationLabel = stringResource(R.string.assistant_new_action)
@@ -4367,31 +4385,32 @@ private fun ConversationsScreen(
     }
     if (searchOpen && !selecting) Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      BasicTextField(value = if (browsingGroups) groupQuery else connection.conversationSearch,
-        onValueChange = { if (browsingGroups) groupQuery = it else onSearchChange(it) },
-        modifier = Modifier.weight(1f).heightIn(min = 44.dp)
-          .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(24))
-          .padding(horizontal = 16.dp, vertical = 10.dp).then(searchInputFocus()).testTag("conversations-search"),
-        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-        singleLine = true,
-        decorationBox = { innerTextField ->
-          Box {
-            if ((if (browsingGroups) groupQuery else connection.conversationSearch).isEmpty()) Text(
-              searchLabel,
-              style = MaterialTheme.typography.bodyLarge,
-              color = MaterialTheme.colorScheme.onSurfaceVariant)
-            innerTextField()
-          }
-        })
+      XopcPageSearchField(
+        query = if (browsingGroups) groupQuery else connection.conversationSearch,
+        onQueryChange = { if (browsingGroups) groupQuery = it else onSearchChange(it) },
+        placeholder = searchLabel,
+        tag = "conversations-search",
+        autoFocus = true,
+        modifier = Modifier.weight(1f),
+        trailingAction = {},
+      )
       IconButton(onClick = ::closeSearch,
         modifier = Modifier.size(48.dp).semantics { contentDescription = clearLabel }
         .testTag("conversations-clear")) {
-        Text("×", style = MaterialTheme.typography.headlineMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ActionIcon(R.drawable.action_close, size = XopcDesignTokens.IconRow, contentDescription = null)
       }
     }
-    Column(Modifier.fillMaxWidth().weight(1f).testTag("sessions-mode-pager")
-      .swipePageSelection(historyModes.map { it.value }, mode, !selecting && !connection.batchConversationBusy, ::selectMode)) page@{
+    androidx.compose.foundation.pager.HorizontalPager(
+      state = modePager,
+      modifier = Modifier.fillMaxWidth().weight(1f).testTag("sessions-mode-pager"),
+      key = { historyModes[it].value },
+      userScrollEnabled = !selecting && !connection.batchConversationBusy,
+      flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(modePager, snapPositionalThreshold = 0.33f),
+    ) { pageIndex ->
+      val pageMode = historyModes[pageIndex].value
+      if (pageMode != mode) {
+        Box(Modifier.fillMaxSize()) { XopcListSkeleton(rows = 4) }
+      } else Column(Modifier.fillMaxSize()) page@{
       if (browsingGroups) {
         val projects = mode == "projects"
         val loading = if (projects) connection.progress.projectsLoading else expertsLoading
@@ -4540,6 +4559,7 @@ private fun ConversationsScreen(
         if (connection.conversationsMoreError) item {
           Text(stringResource(R.string.conversations_more_error), color = MaterialTheme.colorScheme.error)
         }
+      }
       }
       }
     }

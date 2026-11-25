@@ -8,7 +8,6 @@ import ai.xopc.mobile.gateway.AutomationSummary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
 import ai.xopc.mobile.gateway.ProjectMutation
 import ai.xopc.mobile.gateway.ProgressItem

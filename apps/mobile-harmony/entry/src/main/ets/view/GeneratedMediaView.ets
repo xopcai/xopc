@@ -1,4 +1,5 @@
 import { XopcPreviewVideo } from './ChatMediaView';
+import { xopcToast } from '../common/dialogActions';
 import { fileIo as fs, picker } from '@kit.CoreFileKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { generatedMediaTime, isGeneratedMediaInProgress } from '../common/generatedMedia';
@@ -234,7 +235,7 @@ export struct XopcGeneratedVideoDrawer {
       try { await fs.copyFile(source, target.fd); } finally { await fs.close(target); }
     } catch (_) {
       if (this.mounted) {
-        this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_media_failed') });
+        xopcToast(this.getUIContext(), $r('app.string.chat_media_failed'));
       }
     } finally {
       await removeGeneratedMediaFile(source);

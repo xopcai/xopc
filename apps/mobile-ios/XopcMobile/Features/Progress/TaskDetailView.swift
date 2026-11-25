@@ -56,10 +56,12 @@ struct TaskConversationView: View {
         }
         .sheet(item: $editingTask, onDismiss: { Task { await refresh() } }) { task in
             TaskEditorView(configuration: configuration, task: task)
+                .mobileSheetPreset(.large)
         }
         .sheet(isPresented: $showingStatus, onDismiss: { Task { await refresh() } }) {
             if let detail {
                 TaskStatusView(configuration: configuration, detail: detail)
+                    .mobileSheetPreset(.medium)
             }
         }
     }
@@ -138,8 +140,7 @@ struct TaskConversationView: View {
                         }
                     }
             }
-            .presentationDetents([.fraction(0.76), .large])
-            .presentationDragIndicator(.visible)
+            .mobileSheetPreset(.large)
         }
         .fullScreenCover(isPresented: Binding(get: { voiceCall.phase != .idle && voiceCall.expanded }, set: {
             if !$0 {

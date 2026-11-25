@@ -6,6 +6,7 @@ import { getEndpointDeviceSettings } from '../storage/sqlite/endpoint-device-set
 import type { AgentSourceContext } from '../agent/source-context/types.js';
 import type { GatewayPrincipal } from '../gateway/security/gateway-principal.js';
 import type { EndpointConnectionSnapshot, EndpointRegistry } from './registry.js';
+import { summarizeEndpointCapabilities } from './tool-keywords.js';
 
 export function endpointClaimBelongsToPrincipal(registry: EndpointRegistry, endpointId: string, principal: GatewayPrincipal): boolean {
   const endpoint = registry.get(endpointId);
@@ -15,9 +16,13 @@ export function endpointClaimBelongsToPrincipal(registry: EndpointRegistry, endp
 
 export function deviceTurnSourceContext(endpoint: EndpointConnectionSnapshot, environment?: EndpointContext, taskContext?: EndpointContextView, locationShares?: LocationShareSummary[]): AgentSourceContext {
   const name = getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName;
+  const capabilities = summarizeEndpointCapabilities(endpoint);
   const snapshot = {
     endpointId: endpoint.endpointId, principalId: endpoint.principalId,
     name: name.slice(0, 80), platform: endpoint.platform.slice(0, 40), kind: endpoint.kind,
+    availability: endpoint.availability,
+    ...(endpoint.backgroundToolsSupported ? { backgroundToolsSupported: true as const } : {}),
+    ...(capabilities.length ? { capabilities } : {}),
     ...(environment ? { environment } : {}),
     ...(taskContext ? { taskContext } : {}),
     ...(locationShares?.length ? { locationShares: locationShares.slice(-3) } : {}),

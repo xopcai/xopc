@@ -1,7 +1,7 @@
 import { common } from '@kit.AbilityKit';
 
 import { markdownLink } from '../common/markdown';
-import { xopcConfirmDialog } from '../common/dialogActions';
+import { xopcConfirmDialog, xopcToast } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 
@@ -182,7 +182,7 @@ export struct XopcCapabilitySetupView {
       this.agentName = profile.name;
       this.agentDescription = profile.description;
       this.onChanged();
-      this.getUIContext().getPromptAction().showToast({ message: $r('app.string.cap_native_agent_saved') });
+      xopcToast(this.getUIContext(), $r('app.string.cap_native_agent_saved'));
     } catch (_) { this.failed = true; }
     finally { this.busy = false; }
   }

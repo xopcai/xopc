@@ -2,6 +2,7 @@ import {
   nextTurnSuggestionResponseSchema,
   readClarificationPresentation,
   sessionInputCommandSchema,
+  taskDescriptionForDisplay,
   type BrowserPageContextInput,
   type BrowserTabBinding,
   type BrowserTabBindingMode,
@@ -300,7 +301,7 @@ function extractQueuedInputs(entries?: BrowserInputStateEntry[]): BrowserQueuedI
     return [{
       id: entry.id,
       version: entry.version,
-      content: typeof entry.content === 'string' ? entry.content : '',
+      content: typeof entry.content === 'string' ? taskDescriptionForDisplay(entry.content) : '',
     }];
   });
 }

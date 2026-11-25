@@ -116,6 +116,7 @@ struct AppRootView: View {
             return messageLinks.destination
         }, set: { messageLinks.destination = $0 })) { link in
             ChatMessageLinkDestination(link: link, appState: appState, router: messageLinks, defaultAgentID: defaultAgentID)
+                .mobileSheetPreset(.large)
         }
         .fullScreenCover(item: Binding(get: {
             if case .route("tasks", _) = messageLinks.destination {

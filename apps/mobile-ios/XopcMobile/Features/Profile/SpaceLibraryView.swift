@@ -158,6 +158,7 @@ struct SpaceLibraryView: View {
                                    undo = (item.id, $0)
                                    undoFailed = false
                                })
+                               .mobileSheetPreset(.large)
         }
         .scrollContentBackground(.hidden)
         .background(theme.canvas)
@@ -434,7 +435,7 @@ private struct SpaceLibraryDetail: View {
             } catch { self.error = label("资料暂不可用", "Result unavailable") }
         }
         .task(id: "\(version.id):\(playbackRetry)") { await loadPreview(version) }
-        .sheet(item: $link) { item in ManagedFileShareSheet(item: item) { link = nil } }
+        .sheet(item: $link) { item in ManagedFileShareSheet(item: item) { link = nil }.mobileSheetPreset(.medium) }
         .sheet(item: $share, onDismiss: {
             if let url = shareURL {
                 try? FileManager.default.removeItem(at: url.deletingLastPathComponent())

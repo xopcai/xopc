@@ -202,7 +202,7 @@ private fun AboutAppContent(version: String) {
     SettingsRow(stringResource(label), "", true, {
       try { uriHandler.openUri("https://xopc.ai/$language$path") }
       catch (_: IllegalArgumentException) {
-        android.widget.Toast.makeText(context, R.string.settings_link_error, android.widget.Toast.LENGTH_SHORT).show()
+        xopcShowToast(context, R.string.settings_link_error)
       }
     }, "settings-about-$id")
   }

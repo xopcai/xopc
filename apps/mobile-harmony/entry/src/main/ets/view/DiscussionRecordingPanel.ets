@@ -3,6 +3,7 @@ import { recordingOutcomePhrase } from '../common/recordingOutcomeResources';
 import { XopcRecordingOutcomeInput } from '../common/recordingOutcome';
 import { XopcDiscussionNoteViewModel } from '../viewmodel/discussionNoteViewModel';
 import { common } from '@kit.AbilityKit';
+import { xopcToast } from '../common/dialogActions';
 import { xopcRevealTransition } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { xopcFormatCaptureTime } from '../common/discussionAudio';
@@ -117,7 +118,7 @@ export struct XopcDiscussionRecordingPanelView {
   }
   private async finishRecording(): Promise<void> {
     try { await this.panel.finish(this.capture); }
-    catch (_error) { this.getUIContext().getPromptAction().showToast({ message: $r('app.string.capture_panel_action_failed') }); }
+    catch (_error) { xopcToast(this.getUIContext(), $r('app.string.capture_panel_action_failed')); }
   }
   private dismissOutcome(): void {
     this.panel.dismissed = true;

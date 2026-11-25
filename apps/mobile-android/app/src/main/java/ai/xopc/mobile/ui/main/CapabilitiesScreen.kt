@@ -59,7 +59,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -255,7 +254,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
           keyboard?.hide()
           detail = CapabilityItem("marketplace:search", skillMarketTitle, group = "available")
         }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape).testTag("capability-add-skills")) {
-          ActionIcon(R.drawable.action_search, color = colors.primary, contentDescription = skillMarketTitle)
+          ActionIcon(R.drawable.action_capabilities, color = colors.primary, contentDescription = skillMarketTitle)
         }
       } else if (plugins) {
         IconButton(onClick = {
@@ -285,6 +284,18 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
       }
     }
     Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.PagePaddingX)) {
+    if (category != CapabilityCategory.Devices) {
+      XopcPageSearchField(
+        query = query,
+        onQueryChange = { updateQuery(it) },
+        placeholder = if (skills) stringResource(R.string.capability_search_installed_skills)
+          else stringResource(R.string.capability_search, stringResource(category.title)),
+        tag = "capability-search",
+        autoFocus = false,
+        focusRequester = searchFocus,
+        modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+      )
+    }
     HorizontalPager(pager, modifier = Modifier.weight(1f).fillMaxWidth().testTag("capability-pager"),
       key = { categories[it].key }, userScrollEnabled = detail == null,
       flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.33f),
@@ -373,19 +384,6 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
         }
       }
     }
-    if (category != CapabilityCategory.Devices) TextField(query, { updateQuery(it.take(160)) }, Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 10.dp)
-      .focusRequester(searchFocus).testTag("capability-search"),
-      placeholder = { Text(if (skills) stringResource(R.string.capability_search_installed_skills)
-        else stringResource(R.string.capability_search, stringResource(category.title))) },
-      shape = CircleShape, singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-      keyboardActions = KeyboardActions(onSearch = { focus.clearFocus(); keyboard?.hide() }),
-      colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-        focusedContainerColor = colors.surfaceContainer, unfocusedContainerColor = colors.surfaceContainer),
-      leadingIcon = { ActionIcon(R.drawable.action_search) }, trailingIcon = {
-        if (query.isNotEmpty()) IconButton(onClick = { updateQuery("") }, modifier = Modifier.testTag("capability-search-clear")) {
-          ActionIcon(R.drawable.action_close, contentDescription = stringResource(R.string.capability_clear))
-        }
-      })
     }
   }
   detail?.let { row ->

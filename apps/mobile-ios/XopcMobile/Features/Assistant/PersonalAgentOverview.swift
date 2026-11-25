@@ -186,6 +186,7 @@ struct PersonalAgentOverview: View {
                                      conversation: conversation,
                                      onSaved: onEdit, onModelSaved: onModelSaved,
                                      allowsConversationSharing: allowsConversationSharing)
+                .mobileSheetPreset(.large)
         }
     }
 

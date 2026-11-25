@@ -131,6 +131,7 @@ struct AssistantComposer: View {
                         }
                     }
             }
+            .mobileSheetPreset(.large)
         }
         .quickLookPreview($previewFileURL)
         .onChange(of: previewFileURL) { _, value in

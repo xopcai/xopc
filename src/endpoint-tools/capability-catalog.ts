@@ -1,7 +1,7 @@
 /** Server-owned targeting rules; device descriptors cannot change these defaults. */
 export function deviceCapabilityTarget(toolName: string): 'turn_origin' | 'task_target' {
   if (/^(mobile|desktop|web|browser)\.device\./.test(toolName)
-    || /^(mobile|desktop|web)\.(file\.pick|media\.pick|camera\.capture|contacts\.(pick|search|get)|calendar\.query_(events|free_busy))$/.test(toolName)
+    || /^(mobile|desktop|web)\.(file\.pick|media\.(pick|list_recent|read_image)|camera\.capture|contacts\.(pick|find_by_name|search|get)|calendar\.query_(events|free_busy))$/.test(toolName)
     || toolName === 'desktop.clipboard.read'
     || toolName === 'desktop.screen.capture'
     || toolName === 'web.page.get_selection') return 'turn_origin';

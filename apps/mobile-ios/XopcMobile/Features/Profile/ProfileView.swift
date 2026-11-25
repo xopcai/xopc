@@ -45,6 +45,7 @@ struct PersonalAgentSettingsRow: View {
                                                        messageCount: 1, projectId: nil, transcriptId: nil)
                 PersonalAgentProfileView(configuration: configuration, record: personalAgent,
                                          conversation: ConversationSelection(summary: conversation), onSaved: onSaved)
+                    .mobileSheetPreset(.large)
             }
         }
     }
@@ -68,7 +69,7 @@ struct PersonalGoalsView: View {
     var body: some View {
         VStack(spacing: 0) {
             SegmentedTabs(options: goalTabs, selected: completed, label: "状态", swipeToSelect: !editing, pagerProgress: pagerProgress) { next in
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.23)) { completed = next }
+                MobileMotion.perform(MobileMotion.pagerDuration, reduceMotion: reduceMotion) { completed = next }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 8)
@@ -89,6 +90,7 @@ struct PersonalGoalsView: View {
         .task(id: configuration) { await load() }
         .sheet(isPresented: $editing) {
             GoalEditorView(configuration: configuration, goal: selectedGoal) { await load() }
+                .mobileSheetPreset(.medium)
         }
     }
 
@@ -209,6 +211,7 @@ struct UserUnderstandingView: View {
         .sheet(isPresented: $editingProfile) {
             if let summary {
                 ProfileEditorView(configuration: configuration, profile: summary.profile) { await refreshSummary() }
+                    .mobileSheetPreset(.medium)
             }
         }
     }

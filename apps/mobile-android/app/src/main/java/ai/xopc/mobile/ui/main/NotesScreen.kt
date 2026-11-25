@@ -61,7 +61,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.FilledTonalButton
@@ -1224,25 +1223,20 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
   filtersOpen: MutableState<Boolean> = rememberSaveable { mutableStateOf(false) },
   bottomContentPadding: Dp = 20.dp, pendingVoiceCount: Int = 0, onRecoverVoice: () -> Unit = {}) {
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    if (searchOpen) Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-      .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14)),
-      verticalAlignment = Alignment.CenterVertically) {
-      BasicTextField(search, { onSearchChange(it.take(4096)) },
-        modifier = Modifier.weight(1f).padding(start = 14.dp).then(searchInputFocus()).testTag("notes-search"),
-        singleLine = true, textStyle = MaterialTheme.typography.bodyLarge.copy(
-          color = MaterialTheme.colorScheme.onSurface),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
-        decorationBox = { inner -> Box {
-          if (search.isEmpty()) Text(stringResource(R.string.notes_search),
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-          inner()
-        } })
-      IconButton(onClick = onSubmit, enabled = !state.loading,
-        modifier = Modifier.size(48.dp).testTag("notes-refresh")) {
-        Icon(painterResource(R.drawable.action_search), stringResource(R.string.notes_search))
-      }
-    }
+    if (searchOpen) XopcPageSearchField(
+      query = search,
+      onQueryChange = onSearchChange,
+      placeholder = stringResource(R.string.notes_search),
+      tag = "notes-search",
+      maxLength = 4096,
+      onSearch = onSubmit,
+      trailingAction = {
+        IconButton(onClick = onSubmit, enabled = !state.loading,
+          modifier = Modifier.size(48.dp).testTag("notes-refresh")) {
+          Icon(painterResource(R.drawable.action_search), stringResource(R.string.notes_search))
+        }
+      },
+    )
     IconButton(onClick = { filtersOpen.value = !filtersOpen.value },
       modifier = Modifier.align(Alignment.End).size(48.dp)
         .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14))

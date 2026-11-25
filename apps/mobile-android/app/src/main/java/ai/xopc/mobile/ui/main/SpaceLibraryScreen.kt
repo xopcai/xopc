@@ -124,11 +124,30 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
     SegmentOption("favorites", t("收藏", "Favorites"), "space-tab-favorites"),
     SegmentOption("trash", t("回收站", "Trash"), "space-tab-trash"),
   )
+  val motionAllowed = rememberMotionAllowed()
+  val scopePager = androidx.compose.foundation.pager.rememberPagerState(
+    initialPage = scopes.indexOfFirst { it.value == view }.coerceAtLeast(0),
+    pageCount = { scopes.size },
+  )
   fun selectScope(value: String) {
     if (view == value) return
     query = ""
     view = value
     navigation.rememberSelection("library-scope", value)
+  }
+  LaunchedEffect(scopePager) {
+    androidx.compose.runtime.snapshotFlow { scopePager.settledPage }.collect { index ->
+      val target = scopes.getOrNull(index)?.value ?: return@collect
+      if (target != view) selectScope(target)
+    }
+  }
+  LaunchedEffect(view) {
+    val targetIndex = scopes.indexOfFirst { it.value == view }
+    if (targetIndex >= 0 && scopePager.currentPage != targetIndex) {
+      val distance = targetIndex - scopePager.currentPage
+      if (xopcPagerAnimated(motionAllowed, distance)) scopePager.animateScrollToPage(targetIndex)
+      else scopePager.scrollToPage(targetIndex)
+    }
   }
   val activeID = selected
   Column(Modifier.fillMaxSize().padding(insets).testTag("space-library")) {
@@ -137,13 +156,15 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
       onBack = onExit,
       titleContent = { PageTitleMenu(scopes, view, "space-scope-menu", onSelect = ::selectScope) },
     )
-    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-      OutlinedTextField(query, { query = it.take(160) }, Modifier.weight(1f).testTag("space-search"),
-        singleLine = true, placeholder = { Text(t("搜索资料", "Search files")) },
-        leadingIcon = { Icon(painterResource(R.drawable.action_search), contentDescription = null) },
-        trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
-          Icon(painterResource(R.drawable.action_close), t("清除搜索", "Clear search"))
-        } }, shape = RoundedCornerShape(16.dp))
+    Row(Modifier.fillMaxWidth().padding(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      XopcPageSearchField(
+        query = query,
+        onQueryChange = { query = it },
+        placeholder = t("搜索资料", "Search files"),
+        tag = "space-search",
+        autoFocus = false,
+        modifier = Modifier.weight(1f),
+      )
       Box {
         TextButton(onClick = { filterMenu = true }, Modifier.testTag("space-file-type")) {
           Text(kinds[fileKinds.indexOf(kind).coerceAtLeast(0)])
@@ -159,13 +180,25 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
         }
       }
     }
+    androidx.compose.foundation.pager.HorizontalPager(
+      state = scopePager,
+      modifier = Modifier.weight(1f).fillMaxWidth(),
+      key = { scopes[it].value },
+      userScrollEnabled = activeID == null,
+      flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(scopePager, snapPositionalThreshold = 0.33f),
+    ) { pageIndex ->
+      val pageScope = scopes[pageIndex].value
+      if (pageScope != view) {
+        Box(Modifier.fillMaxSize().padding(horizontal = XopcDesignTokens.PagePaddingX)) {
+          XopcListSkeleton(rows = 5)
+        }
+      } else {
     XopcPullToRefreshBox(
       isRefreshing = loading && items.isNotEmpty(),
       onRefresh = { refresh++ },
-      modifier = Modifier.weight(1f).fillMaxWidth(),
+      modifier = Modifier.fillMaxSize(),
     ) {
-    LazyColumn(Modifier.fillMaxSize()
-      .swipePageSelection(scopes.map { it.value }, view, activeID == null, ::selectScope), contentPadding = PaddingValues(horizontal = 16.dp),
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = XopcDesignTokens.PagePaddingX),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
       if (loading && items.isEmpty()) item {
         XopcListSkeleton(rows = 5)
@@ -206,6 +239,8 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
         }, enabled = !loading) { Text(t("加载更多", "Load more")) }
       } }
     }
+    }
+      }
     }
     undo?.let { (id, revision) ->
       XopcUndoBar(

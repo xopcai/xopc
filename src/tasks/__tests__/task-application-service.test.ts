@@ -431,6 +431,8 @@ describe('TaskApplicationService', () => {
     expect(buildTaskRunMessage('Handle the source event', run.trigger)).toContain('"noteId":"note-1"');
     expect(buildTaskRunMessage('Handle the source event', run.trigger, 'Use the linked brief and preserve all facts'))
       .toContain('<task_brief>\nUse the linked brief and preserve all facts\n</task_brief>');
+    expect(buildTaskRunMessage('Collect AI news', { kind: 'system' }, 'Collect AI news'))
+      .toBe('Collect AI news');
   });
 
   it('does not mark an empty TaskRun as succeeded', () => {

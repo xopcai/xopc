@@ -159,12 +159,15 @@ struct NoteDetailView: View {
                 readingTarget = target
                 readingToolsOpen = false
             }
+            .mobileSheetPreset(.medium)
         }
         .sheet(isPresented: $editingLocalDraft, onDismiss: { Task { await load() } }) {
             NoteEditorView(configuration: configuration, draftNoteID: noteID)
+                .mobileSheetPreset(.large)
         }
         .sheet(item: $editingNote, onDismiss: { Task { await load() } }) { note in
             NoteEditorView(configuration: configuration, existing: note)
+                .mobileSheetPreset(.large)
         }
         .fileImporter(isPresented: $isImportingFile, allowedContentTypes: [.item]) { result in
             Task { await uploadFile(result) }

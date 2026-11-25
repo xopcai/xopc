@@ -157,56 +157,12 @@ internal val LocalClarificationThemeColors = staticCompositionLocalOf {
 }
 
 private fun clarificationThemeColors(
-  scheme: String,
+  @Suppress("UNUSED_PARAMETER") scheme: String,
   dark: Boolean,
   palette: XopcPalette,
   colors: androidx.compose.material3.ColorScheme,
 ): ClarificationThemeColors {
-  val badgeAmberFill = if (dark) Color(0x29F59E0B) else Color(0xFFFEF3E2)
-  val badgeAmberTint = if (dark) Color(0xFFFBBF24) else Color(0xFFB45309)
-  if (scheme == "default") {
-    return if (dark) {
-      ClarificationThemeColors(
-        surface = Color(0xFF1E222A),
-        grouped = Color(0xFF262B35),
-        divider = Color(0x12FFFFFF),
-        border = Color(0x17FFFFFF),
-        primaryText = Color(0xFFF3F5F8),
-        secondaryText = Color(0xFF9CA5B4),
-        tertiaryText = Color(0xFF6C7585),
-        accent = Color(0xFF3A6BFF),
-        onAccent = Color.White,
-        accentSoft = Color(0x2E4C82FF),
-        accentText = Color(0xFF96B6FF),
-        tonalFill = Color(0x14FFFFFF),
-        tonalText = Color(0xFFE6EAF0),
-        inputFill = Color(0xFF161920),
-        badgeAmberFill = badgeAmberFill,
-        badgeAmberTint = badgeAmberTint,
-        danger = colors.error,
-      )
-    } else {
-      ClarificationThemeColors(
-        surface = Color.White,
-        grouped = Color(0xFFF5F6F8),
-        divider = Color(0x0F0F172A),
-        border = Color(0x140F172A),
-        primaryText = Color(0xFF111318),
-        secondaryText = Color(0xFF5F6672),
-        tertiaryText = Color(0xFF8E95A2),
-        accent = Color(0xFF3A6BFF),
-        onAccent = Color.White,
-        accentSoft = Color(0xFFEDF3FF),
-        accentText = Color(0xFF2B5CE6),
-        tonalFill = Color(0xFFEFF1F5),
-        tonalText = Color(0xFF1D2129),
-        inputFill = Color.White,
-        badgeAmberFill = badgeAmberFill,
-        badgeAmberTint = badgeAmberTint,
-        danger = colors.error,
-      )
-    }
-  }
+  val attention = attentionColors(dark)
   return ClarificationThemeColors(
     surface = palette.panel,
     grouped = palette.grouped,
@@ -219,11 +175,11 @@ private fun clarificationThemeColors(
     onAccent = colors.onPrimary,
     accentSoft = colors.primaryContainer,
     accentText = colors.primary,
-    tonalFill = palette.grouped,
+    tonalFill = palette.input,
     tonalText = palette.foreground,
-    inputFill = palette.panel,
-    badgeAmberFill = badgeAmberFill,
-    badgeAmberTint = badgeAmberTint,
+    inputFill = palette.surface,
+    badgeAmberFill = attention.fill,
+    badgeAmberTint = attention.foreground,
     danger = colors.error,
   )
 }

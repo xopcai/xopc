@@ -374,6 +374,7 @@ struct SessionEnvironmentSettingsView: View {
                     onDirectoryChanged()
                     Task { await load() }
                 }
+                .mobileSheetPreset(.large)
             }
         }
     }

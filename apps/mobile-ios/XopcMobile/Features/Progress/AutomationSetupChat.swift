@@ -98,6 +98,7 @@ struct ScopedAssistantChat: View {
     let onMaterialized: (ConversationSelection) -> Void
     @State private var selection: ConversationSelection
     @State private var voiceCall = RealtimeVoiceCall()
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.dismiss) private var dismiss
 
     init(configuration: GatewayConfiguration, selection: ConversationSelection, heading: LocalizedStringKey,
@@ -123,6 +124,7 @@ struct ScopedAssistantChat: View {
                       },
                       onOpenSettings: {}, onInputFocusChanged: { _ in }, showsFloatingHeader: false,
                       automationSetup: automationSetup) { $0 }
+            .background(mobileTheme.canvas.ignoresSafeArea())
             .mobilePageTitle(Text(heading))
             .toolbar {
                 if automationSetup {

@@ -230,8 +230,8 @@ export struct XopcMarkdownView {
   }
 
   private async copyCode(text: string): Promise<void> {
-    try { await copyChatMessage(text); this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copied') }); }
-    catch (_) { this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copy_failed') }); }
+    try { await copyChatMessage(text); xopcToast(this.getUIContext(), $r('app.string.chat_copied')); }
+    catch (_) { xopcToast(this.getUIContext(), $r('app.string.chat_copy_failed')); }
   }
 
   build() {

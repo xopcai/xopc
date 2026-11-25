@@ -155,6 +155,22 @@ export class EndpointInvocationService {
     return validate;
   }
 
+  private formatSchemaValidationError(validate: ValidateFunction): string {
+    const issues = (validate.errors ?? []).slice(0, 3).map(err => {
+      const path = err.instancePath ? err.instancePath.replace(/^\//, '').replaceAll('/', '.') : '';
+      const params = err.params as { additionalProperty?: unknown; allowedValues?: unknown[]; missingProperty?: unknown } | undefined;
+      const detail = err.keyword === 'additionalProperties' && typeof params?.additionalProperty === 'string'
+        ? ` (${params.additionalProperty})`
+        : err.keyword === 'enum' && Array.isArray(params?.allowedValues)
+          ? ` (allowed: ${params.allowedValues.join(', ')})`
+          : '';
+      return `${path ? `${path}: ` : ''}${err.message ?? err.keyword}${detail}`;
+    });
+    return issues.length
+      ? `Invalid endpoint tool arguments: ${issues.join('; ').slice(0, 240)}`
+      : 'Invalid endpoint tool arguments';
+  }
+
   invoke(params: {
     endpointId: string;
     toolCallId: string;
@@ -175,7 +191,7 @@ export class EndpointInvocationService {
     const endpoint = this.registry.get(params.endpointId);
     if (!endpoint) return Promise.reject(new EndpointToolExecutionError('ENDPOINT_OFFLINE', 'Endpoint is offline', true));
     if (params.gatewayCapability && !deviceCapabilityAllowed(endpoint, params.toolName)) {
-      return Promise.reject(new EndpointToolExecutionError('PERMISSION_DENIED', 'The device capability is not authorized for Gateway', true));
+      return Promise.reject(new EndpointToolExecutionError('PERMISSION_DENIED', 'The device capability is not authorized for Gateway. Ask the user to enable this capability for the Gateway in the device settings.', true));
     }
     if ([REMOTE_COMPUTER_CONTROL_TOOL, REMOTE_BROWSER_CONTROL_TOOL].includes(params.toolName) && !endpoint.executionAuthority) {
       return Promise.reject(new EndpointToolExecutionError('PERMISSION_DENIED', 'Remote device control requires independent desktop execution authority', true));
@@ -189,12 +205,12 @@ export class EndpointInvocationService {
     }
     {
       const validateInput = this.validator(tool.descriptor.inputSchema);
-      if (!validateInput(params.arguments)) return Promise.reject(new EndpointToolExecutionError('INVALID_ARGUMENTS', 'Invalid endpoint tool arguments', params.toolName === 'desktop.command.run'));
+      if (!validateInput(params.arguments)) return Promise.reject(new EndpointToolExecutionError('INVALID_ARGUMENTS', this.formatSchemaValidationError(validateInput), params.toolName === 'desktop.command.run'));
     }
     if (params.toolName.startsWith('mobile.calendar.')) {
       const { startAt, endAt } = params.arguments;
       if (typeof startAt !== 'number' || typeof endAt !== 'number' || endAt <= startAt || endAt - startAt > 7 * 86400000) {
-        return Promise.reject(new EndpointToolExecutionError('INVALID_ARGUMENTS', 'Calendar range must be positive and at most seven days', true));
+        return Promise.reject(new EndpointToolExecutionError('INVALID_ARGUMENTS', 'Calendar range must be positive and at most seven days (provide Unix timestamps in milliseconds with startAt < endAt and endAt - startAt <= 604800000)', true));
       }
     }
     if (['desktop.command.run', 'desktop.terminal.open'].includes(params.toolName) && (!Array.isArray(params.arguments.argv) || !params.arguments.argv[0]
@@ -207,7 +223,7 @@ export class EndpointInvocationService {
       }).confirmationRequired;
     } catch (error) {
       if (error instanceof EndpointToolPolicyError) {
-        return Promise.reject(new EndpointToolExecutionError('ENDPOINT_NOT_FOREGROUND', error.message, true));
+        return Promise.reject(new EndpointToolExecutionError('ENDPOINT_NOT_FOREGROUND', `${error.message}. Ask the user to bring the app to the foreground on that device and try again.`, true));
       }
       throw error;
     }

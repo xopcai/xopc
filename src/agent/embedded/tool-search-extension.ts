@@ -75,23 +75,43 @@ export function createXopcToolSearchExtension(tools: readonly AgentTool[], optio
               : { content: [], details: { loaded: [] as string[] } };
             const external = await externalSearch;
             signal?.throwIfAborted();
-            const loaded = (result.details as { loaded?: string[] } | undefined)?.loaded ?? [];
+            let loaded = (result.details as { loaded?: string[] } | undefined)?.loaded ?? [];
             const queryNames = new Set(input.query.match(/[\w.:-]+/g));
-            const active = new Set(pi.getActiveTools());
-            const alreadyLoaded = nativeDiscovery ? deferred.filter(tool => active.has(tool.name)
+            const activeBeforeBackfill = new Set(pi.getActiveTools());
+            const alreadyLoaded = nativeDiscovery ? deferred.filter(tool => activeBeforeBackfill.has(tool.name)
               && !loaded.includes(tool.name) && queryNames.has(tool.name)).map(tool => tool.name) : [];
             const externalTools = (external?.result?.tools ?? []).slice(0, Math.max(0, limit - loaded.length));
+            let extraNativeText = '';
+            const remainingNative = nativeDiscovery && loaded.length === nativeLimit
+              ? Math.max(0, limit - loaded.length - externalTools.length)
+              : 0;
+            if (remainingNative > 0) {
+              const extra = await definition.execute(id, { ...params, limit: remainingNative }, signal, update, context);
+              const extraLoaded = (extra.details as { loaded?: string[] } | undefined)?.loaded ?? [];
+              if (extraLoaded.length) {
+                loaded = [...loaded, ...extraLoaded];
+                extraNativeText = (extra.content as { type: string; text?: string }[])
+                  .filter(block => block.type === 'text').map(block => block.text).join('\n');
+              }
+            }
+            const active = new Set(pi.getActiveTools());
             if (externalTools.length) {
               // The contracts must be callable without a second discovery round trip.
               setActiveTools([...active, 'xopc_tool_describe', 'xopc_tool_execute']);
             }
             const all = new Map(pi.getAllTools().map(tool => [tool.name, tool]));
-            // BM25 can separate a numeric suffix from its label. Preserve exact identifier matches within its shortlist.
+            const deferredByName = new Map(deferred.map(tool => [tool.name, tool]));
+            const deviceRoleScore = (name: string): number => {
+              const role = deferredByName.get(name) ? getXopcToolMetadata(deferredByName.get(name)!)?.external?.deviceRole : undefined;
+              return role === 'source' ? 3 : role === 'selected' ? 2 : role === 'other' ? 0 : 1;
+            };
+            // BM25 can separate a numeric suffix from its label. Preserve exact identifier matches and source-device priority within its shortlist.
             const identifiers = new Set(exactIdentifiers(input.query));
-            const ranked = identifiers.size === 0 ? loaded : loaded.map(name => {
-              const matches = new Set(exactIdentifiers(`${name} ${all.get(name)?.description ?? ''}`).filter(term => identifiers.has(term)));
-              return { name, matches: matches.size };
-            }).sort((a, b) => b.matches - a.matches).map(item => item.name);
+            const ranked = loaded.map((name, index) => {
+              const matches = identifiers.size === 0 ? 0
+                : new Set(exactIdentifiers(`${name} ${all.get(name)?.description ?? ''}`).filter(term => identifiers.has(term))).size;
+              return { name, matches, roleScore: deviceRoleScore(name), index };
+            }).sort((a, b) => b.matches - a.matches || b.roleScore - a.roleScore || a.index - b.index).map(item => item.name);
             const payload = {
               loadedTools: ranked.map(name => ({ name, description: all.get(name)?.description, nextAction: 'call' })),
               alreadyLoaded,
@@ -111,6 +131,7 @@ export function createXopcToolSearchExtension(tools: readonly AgentTool[], optio
                 ...(nativeDiscovery ? {} : { restriction: 'Only the selected Personal request connector, account and curated reads are discoverable.' }) },
               instruction: [
                 nativeDiscovery ? (result.content as { type: string; text?: string }[]).filter(block => block.type === 'text').map(block => block.text).join('\n') : '',
+                extraNativeText,
                 alreadyLoaded.length ? `Already loaded: ${alreadyLoaded.join(', ')}. Call these tools directly.` : '',
                 external?.result?.instruction ?? '',
                 mcpSetupAvailable && nativeDiscovery

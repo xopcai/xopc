@@ -62,7 +62,7 @@ internal fun UserVoiceMessage(media: ConversationMedia,
     } catch (error: Exception) {
       value = Result.failure(error)
       withContext(Dispatchers.Main.immediate) {
-        Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show()
+        xopcShowToast(context, unavailable)
       }
       return@produceState
     }
@@ -92,7 +92,7 @@ internal fun UserVoiceMessage(media: ConversationMedia,
           setOnErrorListener { _, _, _ ->
             playing = false
             playbackFailed = true
-            Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show()
+            xopcShowToast(context, unavailable)
             true
           }
           start()
@@ -102,7 +102,7 @@ internal fun UserVoiceMessage(media: ConversationMedia,
       }
       value = started
       if (started.isFailure) withContext(Dispatchers.Main.immediate) {
-        Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show()
+        xopcShowToast(context, unavailable)
       }
       awaitCancellation()
     } finally {

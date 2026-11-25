@@ -59,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.Layout
@@ -328,15 +329,23 @@ internal fun XopcPageSearchField(
   tag: String,
   modifier: Modifier = Modifier,
   maxLength: Int = 160,
+  autoFocus: Boolean = true,
+  focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
   onSearch: () -> Unit = {},
+  trailingAction: (@Composable () -> Unit)? = null,
 ) {
   val focus = LocalFocusManager.current
   val keyboard = LocalSoftwareKeyboardController.current
+  val focusMod = when {
+    focusRequester != null -> Modifier.focusRequester(focusRequester)
+    autoFocus -> searchInputFocus()
+    else -> Modifier
+  }
   TextField(
     value = query,
     onValueChange = { onQueryChange(it.take(maxLength)) },
-    modifier = modifier.fillMaxWidth().then(searchInputFocus()).testTag(tag),
-    placeholder = { Text(placeholder) },
+    modifier = modifier.fillMaxWidth().then(focusMod).testTag(tag),
+    placeholder = { Text(placeholder, maxLines = 1, overflow = TextOverflow.Ellipsis) },
     shape = CircleShape,
     singleLine = true,
     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -353,7 +362,9 @@ internal fun XopcPageSearchField(
     ),
     leadingIcon = { ActionIcon(R.drawable.action_search, size = XopcDesignTokens.IconRow) },
     trailingIcon = {
-      if (query.isNotEmpty()) {
+      if (trailingAction != null) {
+        trailingAction()
+      } else if (query.isNotEmpty()) {
         IconButton(onClick = { onQueryChange("") }, modifier = Modifier.testTag("$tag-clear")) {
           ActionIcon(
             R.drawable.action_close,

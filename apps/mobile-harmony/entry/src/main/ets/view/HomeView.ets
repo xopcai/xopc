@@ -1,4 +1,4 @@
-import { xopcConfirmDialog } from '../common/dialogActions';
+import { xopcConfirmDialog, xopcToast } from '../common/dialogActions';
 import {
   XOPC_MOTION_STANDARD_MS,
   xopcPagerAnimated,
@@ -124,7 +124,7 @@ export struct XopcHomeView {
     pushNotifications.restore();
     const captureContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
     void this.capture.restore(captureContext).catch((caught: Error): void => {
-      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage(caught.message, 'save') });
+      xopcToast(this.getUIContext(), userErrorMessage(caught.message, 'save'));
     });
     try {
       layoutState.reduceMotion = accessibility.isAnimationReduceEnabledSync();
@@ -224,8 +224,8 @@ export struct XopcHomeView {
       this.pathStack.pushPath({ name: target.page, param: target });
     } catch (error) {
       if (!this.disposed && revision === this.navigationRevision && destination === this.detailRoute && depth === this.pathStack.size()) {
-        this.getUIContext().getPromptAction().showToast({ message: route.personalSchedule && error instanceof XopcHttpError && error.status === 400
-          ? $r('app.string.automation_setup_personal_update_gateway') : userErrorMessage((error as Error).message, 'save') });
+        xopcToast(this.getUIContext(), route.personalSchedule && error instanceof XopcHttpError && error.status === 400
+          ? $r('app.string.automation_setup_personal_update_gateway') : userErrorMessage((error as Error).message, 'save'));
       }
     } finally { this.automationOpening = false; }
   }
@@ -239,7 +239,7 @@ export struct XopcHomeView {
         this.navigate({ page: 'project-chat', itemId: id, projectId, title, prompt: 'draft' });
       }
     } catch (error) {
-      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
+      xopcToast(this.getUIContext(), userErrorMessage((error as Error).message, 'save'));
     }
   }
 
@@ -263,7 +263,7 @@ export struct XopcHomeView {
       };
       this.pathStack.pushPath({ name: 'task-conversation', param: target });
     } catch (error) {
-      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
+      xopcToast(this.getUIContext(), userErrorMessage((error as Error).message, 'save'));
     } finally { this.taskOpening = false; }
   }
 
@@ -278,7 +278,7 @@ export struct XopcHomeView {
       this.rememberConversation(id);
       this.switchToChat(id, '', true);
     } catch (error) {
-      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
+      xopcToast(this.getUIContext(), userErrorMessage((error as Error).message, 'save'));
     }
   }
   private async exploreShare(value: XopcIncomingShare, targetId: string): Promise<boolean> {
@@ -288,7 +288,7 @@ export struct XopcHomeView {
       if (id !== this.activeChatId) this.rememberConversation(id);
       this.switchToChat(id, '');
       return true;
-    } catch (error) { this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') }); return false; }
+    } catch (error) { xopcToast(this.getUIContext(), userErrorMessage((error as Error).message, 'save')); return false; }
   }
 
   private async startNoteCapture(): Promise<void> {
@@ -306,7 +306,7 @@ export struct XopcHomeView {
     } catch (caught) {
       const message = (caught as Error).message;
       if (!message.startsWith('CONSENT_REQUIRED:')) {
-        this.getUIContext().getPromptAction().showToast({ message: userErrorMessage(message, 'save') });
+        xopcToast(this.getUIContext(), userErrorMessage(message, 'save'));
         return;
       }
       const version = Number(message.split(':')[1]);
@@ -322,7 +322,7 @@ export struct XopcHomeView {
         await this.music.pause();
         await this.capture.start(context);
       } catch (error) {
-        this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
+        xopcToast(this.getUIContext(), userErrorMessage((error as Error).message, 'save'));
       }
     } finally {
       this.noteCaptureOpening = false;
@@ -450,7 +450,7 @@ export struct XopcHomeView {
       const record = await this.personalAgent.openOrCreate();
       if (this.disposed || revision !== this.navigationRevision) return;
       if (!record) {
-        this.getUIContext().getPromptAction().showToast({ message: userErrorMessage(this.personalAgent.error, 'save') });
+        xopcToast(this.getUIContext(), userErrorMessage(this.personalAgent.error, 'save'));
         return;
       }
       this.openConversationFromList(record.conversationId);
@@ -474,7 +474,7 @@ export struct XopcHomeView {
       }
     } catch (error) {
       if (!this.disposed && revision === this.navigationRevision) {
-        this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
+        xopcToast(this.getUIContext(), userErrorMessage((error as Error).message, 'save'));
       }
     } finally { this.ordinaryOpening = false; }
   }
@@ -494,7 +494,7 @@ export struct XopcHomeView {
 
   private rememberConversation(id: string): void {
     this.chatRepository.saveMainConversation(id).catch((error: Error): void => {
-      if (!this.disposed) this.getUIContext().getPromptAction().showToast({ message: userErrorMessage(error.message, 'save') });
+      if (!this.disposed) xopcToast(this.getUIContext(), userErrorMessage(error.message, 'save'));
     });
   }
 

@@ -204,7 +204,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             maxHeight: `calc(100dvh - ${callPosition.top + 12}px)`,
           } : {}) }}
           className={cn('xopc-session-context-popover data-[state=closed]:pointer-events-none fixed right-3 top-[calc(4.5rem+env(safe-area-inset-top))] z-[71] flex flex-col overflow-hidden border bg-surface-overlay text-fg shadow-float focus:outline-none',
-            callAnchor ? 'h-[min(19rem,calc(100dvh-6rem))] w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border-edge-subtle' : 'h-[min(480px,calc(100dvh-6rem))] w-[min(380px,calc(100vw-1.5rem))] rounded-xl border-edge')}>
+            callAnchor ? 'h-[min(28rem,calc(100dvh-6rem))] w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border-edge-subtle' : 'h-[min(480px,calc(100dvh-6rem))] w-[min(380px,calc(100vw-1.5rem))] rounded-xl border-edge')}>
           <header className={cn('flex shrink-0 items-center justify-between gap-3 px-4', callAnchor ? 'py-2' : 'border-b border-edge py-3')}>
             <div className="min-w-0"><Dialog.Title className="truncate font-medium">{target?.name ?? lastTargetName.current}</Dialog.Title><Dialog.Description className="text-xs text-fg-muted">{m.callSessionHint}</Dialog.Description></div>
             <div className="flex"><Button variant="ghost" onClick={() => setMore(!more)} aria-label={m.callMore} aria-expanded={more}><Ellipsis className="size-4" /></Button><Button variant="ghost" onClick={() => setExpanded(false)} aria-label={m.callMinimize}><Minimize2 className="size-4" /></Button></div>

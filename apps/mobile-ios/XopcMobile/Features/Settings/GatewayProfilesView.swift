@@ -79,6 +79,7 @@ struct GatewayProfilesView: View {
             }
             .sheet(isPresented: $editing) {
                 GatewayProfileEditor(onPair: onPair)
+                    .mobileSheetPreset(.large)
             }
             .confirmationDialog(
                 "移除 Gateway？",
@@ -477,6 +478,7 @@ struct GatewayProfileEditor: View {
                         }
                     }
                 }
+                .mobileSheetPreset(.large)
             }
         }
     }

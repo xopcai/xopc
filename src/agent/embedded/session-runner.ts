@@ -344,6 +344,16 @@ export class EmbeddedSessionRunnerPool {
     toolNames.push(...tools.filter(tool => params.executionToolPolicy?.discovery !== false
       && getXopcToolMetadata(tool)?.exposure === 'deferred'
       && restored.get(tool.name) === deferredToolContract(tool)).map(tool => tool.name));
+    if (params.executionToolPolicy?.discovery !== false && params.executionToolPolicy?.surface !== 'personal_request_worker') {
+      const autoActiveDeviceTools = tools.filter(tool => {
+        const meta = getXopcToolMetadata(tool);
+        return meta?.exposure === 'deferred'
+          && (meta.external?.deviceRole === 'source' || meta.external?.deviceRole === 'selected');
+      }).slice(0, 16).map(tool => tool.name);
+      for (const name of autoActiveDeviceTools) {
+        if (!toolNames.includes(name)) toolNames.push(name);
+      }
+    }
     let boundSession: AgentSession | undefined;
     const mcp = params.mcp;
     const hasMcp = Boolean(mcp?.servers.length);

@@ -2,7 +2,7 @@ import { capabilityText, capabilityDisplayOffset, capabilityWireOffset, editCapa
 import { loadDesktopChatTarget, reselectDesktopChatTarget, XopcDesktopChatTarget } from '../repository/deviceConnectionsRepository';
 import { XopcConversationShare } from './ConversationShare';
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI';
-import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
+import { xopcConfirmDialog, xopcSheetOptions, xopcToast } from '../common/dialogActions';
 import { xopcWithMotion } from '../common/motionTokens';
 import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { XopcTaskChatHeader } from './TaskChatHeader';
@@ -453,7 +453,7 @@ export struct XopcChatView {
     if (item.kind === 'note') {
       if (!item.sourceId || !item.version) return;
       if (!this.refs.some((ref: XopcContextRef): boolean => ref.kind === 'note' && ref.sourceId === item.sourceId)) {
-        if (this.refs.length >= 5) { this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_ref_limit') }); return; }
+        if (this.refs.length >= 5) { xopcToast(this.getUIContext(), $r('app.string.chat_ref_limit')); return; }
         this.refs = this.refs.concat([{ kind: 'note', sourceId: item.sourceId, expectedVersion: item.version, title: item.name }]);
       }
     }
@@ -693,9 +693,9 @@ export struct XopcChatView {
     this.composerNotice.clear();
     try {
       if (action === 'copy') {
-        await copyChatMessage(row.role === 'assistant' ? chatAnswerText(row) : capabilityText(row.text, this.skillLabels).text); this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copied') });
+        await copyChatMessage(row.role === 'assistant' ? chatAnswerText(row) : capabilityText(row.text, this.skillLabels).text); xopcToast(this.getUIContext(), $r('app.string.chat_copied'));
       } else if (action === 'copy-code') {
-        await copyChatMessage(extractMarkdownCodeBlocks(chatAnswerText(row))); this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copied') });
+        await copyChatMessage(extractMarkdownCodeBlocks(chatAnswerText(row))); xopcToast(this.getUIContext(), $r('app.string.chat_copied'));
       } else if (action === 'edit') { this.fillMessageDraft(row); }
       else if (action === 'read') {
         if (this.reader.sourceId === row.id && this.reader.state === 'loading') return;
@@ -715,7 +715,7 @@ export struct XopcChatView {
       }
       else if (action === 'save' && !this.savingNote) {
         this.savingNote = true; await saveChatMessage(chatAnswerText(row));
-        this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_saved_note') });
+        xopcToast(this.getUIContext(), $r('app.string.chat_saved_note'));
       } else if (action === 'regenerate' && !this.chat.runId) {
         let index = this.chat.rows.findIndex((item: XopcChatRow): boolean => item.id === row.id) - 1;
         while (index >= 0 && this.chat.rows[index].role !== 'user') index--;

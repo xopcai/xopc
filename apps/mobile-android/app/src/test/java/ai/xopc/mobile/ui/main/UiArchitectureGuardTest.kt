@@ -93,4 +93,40 @@ class UiArchitectureGuardTest {
       !clarification.contains("BorderStroke("),
     )
   }
+
+  @Test
+  fun noRawToastMakeTextOutsideMobileChrome() {
+    val offenders = uiMainKotlinFiles()
+      .filter { it.name != "MobileChrome.kt" }
+      .filter { Regex("""Toast\.makeText\s*\(""").containsMatchIn(it.readText()) }
+      .map { it.name }
+    assertTrue("Use xopcShowToast instead of raw Toast.makeText in: $offenders", offenders.isEmpty())
+  }
+
+  @Test
+  fun noUnusedModalBottomSheetImportsOutsideMobileChrome() {
+    val offenders = uiMainKotlinFiles()
+      .filter { it.name != "MobileChrome.kt" }
+      .filter { it.readText().contains("import androidx.compose.material3.ModalBottomSheet") }
+      .map { it.name }
+    assertTrue("Remove unused ModalBottomSheet imports in: $offenders", offenders.isEmpty())
+  }
+
+  @Test
+  fun unifiedSearchFieldAndHorizontalPagerAdoptedAcrossCoreScreens() {
+    for (file in listOf("CapabilitiesScreen.kt", "SpaceLibraryScreen.kt", "NotesScreen.kt", "MainScreen.kt")) {
+      val text = File(uiMainDir(), file).readText()
+      assertTrue("$file must adopt XopcPageSearchField", text.contains("XopcPageSearchField("))
+    }
+    for (file in listOf("MainScreen.kt", "SpaceLibraryScreen.kt")) {
+      val text = File(uiMainDir(), file).readText()
+      assertTrue("$file must use HorizontalPager instead of swipePageSelection", !text.contains("swipePageSelection("))
+    }
+    val capabilities = File(uiMainDir(), "CapabilitiesScreen.kt").readText()
+    val searchIdx = capabilities.indexOf("XopcPageSearchField(")
+    val pagerIdx = capabilities.indexOf("HorizontalPager(")
+    assertTrue("CapabilitiesScreen must place search above HorizontalPager", searchIdx in 0 until pagerIdx)
+    assertTrue("CapabilitiesScreen skill market button must use action_capabilities icon",
+      capabilities.contains("R.drawable.action_capabilities"))
+  }
 }

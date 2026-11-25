@@ -1,5 +1,5 @@
 import { PERSONAL_PROACTIVE_MESSAGE_TYPE, PersonalProvenanceSchema, parsePersonalProactiveMessage, type PersonalProvenance } from '@xopcai/gateway-contract';
-import { clarificationChoiceReceiptSchema, isUserTurnDocument, parseTurnOutcome, parseTaskResultDelivery, stripUserMessageDisplayContext, TASK_RESULT_DELIVERY_TYPE,
+import { clarificationChoiceReceiptSchema, isUserTurnDocument, parseTurnOutcome, parseTaskResultDelivery, stripUserMessageForDisplay, TASK_RESULT_DELIVERY_TYPE,
   type ClarificationChoiceReceipt, type TaskResultDelivery, type TurnOutcome, type UserTurnDocument } from '@xopcai/gateway-contract';
 
 import type { Message } from './types.js';
@@ -312,7 +312,7 @@ export function messagesToClientHistory(
         ...(typeof (m as unknown as { turnId?: unknown }).turnId === 'string'
           ? { turnId: (m as unknown as { turnId: string }).turnId }
           : {}),
-        content: m.role === 'user' ? stripUserMessageDisplayContext(text) : text,
+        content: m.role === 'user' ? stripUserMessageForDisplay(text) : text,
         ...(m.media?.length ? { media: m.media } : {}),
         ...(sourceContextDisplayMetadata(m.metadata)
           ? { metadata: sourceContextDisplayMetadata(m.metadata) }
@@ -824,7 +824,7 @@ export function transcriptRowsToClientHistory(
         role: messageRow.role,
         kind: 'message',
         content: messageRow.role === 'user'
-          ? stripUserMessageDisplayContext(flattenMessageContent(messageRow.content ?? ''))
+          ? stripUserMessageForDisplay(flattenMessageContent(messageRow.content ?? ''))
           : flattenMessageContent(messageRow.content ?? ''),
         ...(messageRow.media?.length ? { media: messageRow.media } : {}),
         ...(sourceContextDisplayMetadata(messageRow.metadata)

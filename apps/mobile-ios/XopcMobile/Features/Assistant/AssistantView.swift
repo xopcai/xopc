@@ -522,6 +522,7 @@ struct AssistantView<Dock: View>: View {
             .sheet(item: $presentedGeneratedVideo) { card in
                 if let id = scope?.id {
                     GeneratedVideoDrawer(card: card, conversationID: id, configuration: configuration)
+                        .mobileSheetPreset(.large)
                 }
             }
             .onChange(of: showingPhone) {
@@ -557,7 +558,7 @@ struct AssistantView<Dock: View>: View {
                 if sharingConversation, let conversation {
                     ConversationShareView(configuration: configuration, conversationID: conversation.id)
                         .interactiveDismissDisabled()
-                        .presentationDetents([.large])
+                        .mobileSheetPreset(.large)
                 } else {
                     AssistantSessionActionsView(
                         configuration: configuration,
@@ -578,6 +579,7 @@ struct AssistantView<Dock: View>: View {
                         onSearch: { searchAfterOptions = true; showingSessionActions = false },
                         onShare: { sharingConversation = true }
                     )
+                    .mobileSheetPreset(.large)
                 }
             }
             .sheet(item: $executionPresentation) { presentation in
@@ -587,6 +589,7 @@ struct AssistantView<Dock: View>: View {
                     assistantState: state,
                     onDismiss: { executionPresentation = nil }
                 )
+                .mobileSheetPreset(.immersive)
             }
             .sheet(isPresented: $showingReferencePicker) {
                 ReferencePickerView(
@@ -1575,7 +1578,7 @@ struct PersonalAgentProfileView: View {
             .sheet(isPresented: $showingShare) {
                 ConversationShareView(configuration: configuration, conversationID: conversation.id)
                     .interactiveDismissDisabled()
-                    .presentationDetents([.large])
+                    .mobileSheetPreset(.large)
             }
             .disabled(saving || loadingProfile)
             .redacted(reason: loadingProfile ? .placeholder : [])
@@ -2017,7 +2020,7 @@ private struct ChatMessageSearchView: View {
                 }.toolbar {
                     ToolbarItem(placement: .confirmationAction) { Button("完成") { selectedMessage = nil } }
                 }
-            }.presentationDetents([.fraction(0.92)])
+            }.mobileSheetPreset(.immersive)
         }
     }
 }

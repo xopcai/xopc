@@ -11,6 +11,7 @@ import {
   XopcMobileTaskAttention, XopcTaskAcceptanceCheck
 } from '../model/workspace';
 import type { XopcTaskPhaseChange } from '../model/workspace';
+import { taskDescriptionForDisplay } from '../common/chatDisplay';
 import { taskActiveRootRun, taskCompletionBlock, taskCriterionState, taskPausedWaitId, taskPhaseAction, taskReviewAction, taskSignoffResult } from '../common/taskManagement';
 import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
 import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
@@ -371,7 +372,7 @@ export struct XopcWorkspaceView {
 
   private itemSummary(item: XopcWorkspaceItem): string {
     if (this.section === 'projects') return item.brief || item.body || item.outcome || '';
-    return item.body;
+    return this.section === 'tasks' ? taskDescriptionForDisplay(item.body) : item.body;
   }
 
   private criterionState(info: XopcMobileTaskDetail, criterion: string, index: number): string {

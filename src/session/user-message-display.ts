@@ -1,19 +1,28 @@
-import { stripRuntimeUserMessageEnvelope, stripUserMessageDisplayContext } from '@xopcai/gateway-contract';
+import {
+  stripAutomationTriggerContext,
+  stripRuntimeUserMessageEnvelope,
+  stripUserMessageForDisplay,
+  taskDescriptionForDisplay,
+} from '@xopcai/gateway-contract';
 
 import { stripSessionStartupContextFromUserText } from '../agent/reply/startup-context.js';
 
 /** Client-facing form of a persisted model-facing user message. */
 export function stripRuntimeContextFromUserMessage(text: string): string {
-  return stripRuntimeUserMessageEnvelope(stripSessionStartupContextFromUserText(text));
+  return taskDescriptionForDisplay(
+    stripAutomationTriggerContext(
+      stripRuntimeUserMessageEnvelope(stripSessionStartupContextFromUserText(text)),
+    ),
+  );
 }
 
 /** Preserve structured content while cleaning every user text block. */
 export function stripRuntimeContextFromUserContent(content: string | unknown[]): string | unknown[] {
-  if (typeof content === 'string') return stripUserMessageDisplayContext(content);
+  if (typeof content === 'string') return stripUserMessageForDisplay(content);
   return content.map((block) => {
     if (!block || typeof block !== 'object') return block;
     const row = block as { type?: unknown; text?: unknown };
     if (row.type !== 'text' || typeof row.text !== 'string') return block;
-    return { ...row, text: stripUserMessageDisplayContext(row.text) };
+    return { ...row, text: stripUserMessageForDisplay(row.text) };
   });
 }

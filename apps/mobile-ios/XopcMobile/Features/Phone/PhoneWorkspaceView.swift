@@ -176,7 +176,7 @@ struct PhoneWorkspaceView: View {
                         Spacer()
                     }.padding(24).navigationTitle("输入文字").navigationBarTitleDisplayMode(.inline)
                         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { textOpen = false } } }
-                }.presentationDetents([.height(260)])
+                }.mobileSheetPreset(.compact)
             }
             .alert("停止当前手机任务？已经执行的操作无法撤回。", isPresented: $stopOpen) {
                 Button("停止任务", role: .destructive) {

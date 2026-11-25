@@ -9,6 +9,7 @@ vi.mock('@kit.ShareKit', () => ({ systemShare: {
   SelectionMode: { SINGLE: 1 }, SharePreviewMode: { DEFAULT: 0 }
 } }));
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request } }));
+vi.mock('../entry/src/main/ets/common/dialogActions.ets', () => ({ xopcToast: vi.fn() }));
 
 import { chatMediaShareRequest, createChatMediaShare, shareChatLink, shareReachabilityText } from '../entry/src/main/ets/service/chatMediaShare.ets';
 

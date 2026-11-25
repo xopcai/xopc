@@ -98,24 +98,27 @@ struct NotesView: View {
                 await refreshPendingVoiceNote()
             }
         }) { sheet in
-            switch sheet {
-            case .create:
-                NoteEditorView(configuration: configuration)
-            case let .detail(id):
-                NavigationStack {
-                    NoteDetailView(
+            Group {
+                switch sheet {
+                case .create:
+                    NoteEditorView(configuration: configuration)
+                case let .detail(id):
+                    NavigationStack {
+                        NoteDetailView(
+                            configuration: configuration,
+                            noteID: id,
+                            onOpenConversation: onOpenConversation,
+                            showsCloseButton: true
+                        )
+                    }
+                case .voice:
+                    VoiceNoteFlowView(
                         configuration: configuration,
-                        noteID: id,
-                        onOpenConversation: onOpenConversation,
-                        showsCloseButton: true
+                        onOpenConversation: onOpenConversation
                     )
                 }
-            case .voice:
-                VoiceNoteFlowView(
-                    configuration: configuration,
-                    onOpenConversation: onOpenConversation
-                )
             }
+            .mobileSheetPreset(.large)
         }
         .task(id: configuration) { await refreshPendingVoiceNote() }
         .task(id: currentQuery) {

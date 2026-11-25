@@ -1,4 +1,4 @@
-import { resolveToolActivity, type ToolActivity } from '@xopcai/gateway-contract';
+import { resolveToolActivity, stripUserMessageForDisplay, type ToolActivity } from '@xopcai/gateway-contract';
 
 export type BrowserTextBlock = {
   type: 'text';
@@ -235,7 +235,14 @@ export function normalizeChatMessages(values: readonly unknown[]): BrowserChatMe
     if (row.role !== 'user' && row.role !== 'assistant' && row.role !== 'system') continue;
     const startedAt = timestamp(row.timestamp);
     const rawBlocks = parseBlocks(row.rawContent, startedAt);
-    const blocks = rawBlocks.length ? rawBlocks : parseBlocks(row.content, startedAt);
+    const parsedBlocks = rawBlocks.length ? rawBlocks : parseBlocks(row.content, startedAt);
+    const blocks = row.role === 'user'
+      ? parsedBlocks.flatMap((block): BrowserMessageBlock[] => {
+          if (block.type !== 'text') return [block];
+          const text = stripUserMessageForDisplay(block.text);
+          return text.trim() ? [{ ...block, text }] : [];
+        })
+      : parsedBlocks;
     if (row.role === 'assistant') appendDeclaredTools(blocks, row, startedAt);
     const attachments = [...parseAttachments(row.media), ...parseAttachments(row.attachments)];
     const sourceContexts = parseSourceContexts(row.metadata);
