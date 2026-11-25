@@ -7,7 +7,7 @@ export type ProjectSkill = {
   name: string;
   description: string;
   category?: string;
-  origin: 'extra' | 'bundled' | 'agents-global' | 'agents-workspace' | 'custom-global' | 'xopc-global' | 'xopc-workspace';
+  origin: 'extra' | 'bundled' | 'agents-global' | 'agents-workspace' | 'custom-global' | 'xopc-global' | 'xopc-workspace' | 'rsi-project';
   path: string;
   managed: boolean;
   writable: boolean;

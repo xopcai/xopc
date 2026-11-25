@@ -123,11 +123,13 @@ export type SkillOriginId =
   | 'agents-workspace'
   | 'custom-global'
   | 'xopc-global'
-  | 'xopc-workspace';
+  | 'xopc-workspace'
+  | 'rsi-project';
 
 export interface SkillSourceDescriptor {
   id: SkillOriginId;
   rootDir: string;
+  projectId?: string;
   priority: number;
   scope: 'builtin' | 'workspace' | 'global' | 'extra';
   managed: boolean;
@@ -205,6 +207,8 @@ export interface Skill {
   requiredEnvVarNames?: string[];
   /** Raw content of SKILL.md */
   content: string;
+  /** Hash of the complete file used to attribute an explicit skill invocation. */
+  contentHash?: string;
 }
 
 /** GET /api/skills/:name/content — body without YAML frontmatter plus parsed metadata for the gateway console. */

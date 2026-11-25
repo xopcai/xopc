@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { basename, dirname, join, relative, sep } from 'path';
 import { parseFrontmatter } from '../../markdown/frontmatter.js';
 import { resolveStateDir } from '../../config/paths.js';
+import { isLegacyRsiProjectSkillCopy, rsiSkillContentHash } from '../../rsi/skill-installations.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSkillConfigManager, isSkillEnabled } from './config.js';
 import { formatSkillsForPrompt } from './format-skills-prompt.js';
@@ -304,6 +305,10 @@ function loadSkillFromFile(
     const parentDirName = basename(skillDir);
 
     const name = (frontmatter.name as string | undefined) || parentDirName;
+    const contentHash = rsiSkillContentHash(rawContent);
+    if (source.id === 'xopc-workspace' && isLegacyRsiProjectSkillCopy(name, filePath, contentHash)) {
+      return { skill: null };
+    }
     const description =
       (frontmatter.description as string | undefined)?.trim() || deriveDescriptionFromMarkdown(content);
     if (!description?.trim()) {
@@ -321,7 +326,7 @@ function loadSkillFromFile(
     // Derive category from directory path: .xopc/skills/creative/theme-factory → 'creative'
     // Only assign a category when the skill is nested at least two levels below rootDir.
     let category: string | undefined;
-    if (rootDir) {
+    if (rootDir && source.id !== 'rsi-project') {
       const relDir = toPosixPath(relative(rootDir, skillDir));
       const segments = relDir.split('/');
       if (segments.length > 1) {
@@ -351,6 +356,7 @@ function loadSkillFromFile(
         toolConditions,
         requiredEnvVarNames: requiredEnvVarNames.length > 0 ? requiredEnvVarNames : undefined,
         content,
+        contentHash,
       },
       ...(localized.warning ? {
         diagnostic: {
@@ -407,13 +413,13 @@ export function loadSkills(options: ResolveSkillSourcesOptions & {
 /** Discover project-owned XOPC and Agents skills with runtime-equivalent trust and precedence. */
 export function loadWorkspaceSkillInventory(
   workspaceDir: string,
-  options: { workspaceTrust: 'trusted' | 'untrusted' },
+  options: { workspaceTrust: 'trusted' | 'untrusted'; projectId?: string },
 ): WorkspaceSkillInventoryResult {
   const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
-  const resolved = resolveSkillSources({ workspaceDir, workspaceTrust: options.workspaceTrust }, skillsConfig);
+  const resolved = resolveSkillSources({ workspaceDir, ...options }, skillsConfig);
   const maxSkillFileBytes = resolveMaxSkillFileBytes(skillsConfig);
   const workspaceSources = resolved.sources.filter(
-    (source) => source.id === 'xopc-workspace' || source.id === 'agents-workspace',
+    (source) => source.scope === 'workspace',
   );
   const discovered = discoverAndMergeSkills(
     workspaceSources,
@@ -474,6 +480,7 @@ export interface SkillLoader {
 
 export interface SkillLoaderOptions {
   agentId?: string;
+  projectId?: string;
   /** Re-evaluated on every load so trust changes take effect without recreating the runtime. */
   isWorkspaceTrusted?: (workspaceDir: string) => boolean;
 }
@@ -499,7 +506,7 @@ export function createSkillLoader(options: SkillLoaderOptions = {}): SkillLoader
       workspaceDir && options.isWorkspaceTrusted?.(workspaceDir) === true
         ? 'trusted'
         : 'untrusted';
-    return loadSkills({ workspaceDir, builtinDir, workspaceTrust, agentId: options.agentId });
+    return loadSkills({ workspaceDir, builtinDir, workspaceTrust, agentId: options.agentId, projectId: options.projectId });
   }
 
   return {

@@ -39,6 +39,8 @@ import { materializeNativeExternalTools } from './external-tool-discovery.js';
 import { filterExecutionTools, resolveExecutionToolPolicy } from './execution-tool-policy.js';
 import { getTaskContinuation, getTaskExecutionDeadline } from '../../tasks/task-continuation.js';
 import { boundAutomationMcpSource, restrictAutomationMcpConfig } from '../../automations/mcp-source.js';
+import { recordRsiTurnOutcome, registerRsiSkillInvocation, withRsiSkillTurn } from '../../rsi/telemetry.js';
+import type { RsiSkillVersion } from '../../rsi/skill-installations.js';
 
 const log = createLogger('EmbeddedTurnForSession');
 
@@ -48,6 +50,7 @@ export type RunEmbeddedForSessionParams = {
   gatewayRunStartedMonotonic?: number;
   preparationTimings?: Record<string, number>;
   userMessage: AgentMessage;
+  invokedRsiSkill?: RsiSkillVersion;
   dynamicSystemContext?: string;
   llmImages?: import('@earendil-works/pi-ai').ImageContent[];
   sessionStore: SessionStore;
@@ -72,7 +75,8 @@ export async function runEmbeddedTurnForSession(
   params: RunEmbeddedForSessionParams,
 ): Promise<RunXopcEmbeddedTurnResult> {
   const input = { ...params, runId: params.runId ?? crypto.randomUUID() };
-  return traceRun('agent.run', { conversationId: input.conversationId, runId: input.runId }, () => runEmbeddedTurnForSessionInner(input), input.userMessage);
+  return traceRun('agent.run', { conversationId: input.conversationId, runId: input.runId },
+    () => withRsiSkillTurn(input.conversationId, input.runId, () => runEmbeddedTurnForSessionInner(input)), input.userMessage);
 }
 
 async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParams): Promise<RunXopcEmbeddedTurnResult> {
@@ -126,27 +130,32 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       }
     }
     if (result.stopReason === 'connection_required' || result.stopReason === 'clarification_required' || result.stopReason === 'phone_assistance_required' || result.stopReason === 'browser_assistance_required') return result;
+    const runStatus = result.ok
+      ? 'success'
+      : result.terminationReason === 'user_cancelled' || result.terminationReason === 'parent_cancelled'
+        || (result.errorMessage === 'aborted' && supervisor.signal.aborted)
+        ? 'cancelled'
+        : 'error';
+    let outcome: ReturnType<typeof projectTurnOutcome> | undefined;
     try {
       const rows = await sessionStore.loadTranscriptRows(conversationId);
       const hasTurn = rows.some((source) => {
         const row = source as TranscriptStoredRow & Record<string, unknown>;
         return row.turnId === runId;
       });
-      const alreadyPersisted = rows.some((source) => {
+      const alreadyPersisted = rows.find((source) => {
         const row = source as TranscriptStoredRow & Record<string, unknown>;
         return row.type === 'custom'
           && row.customType === 'turn_outcome'
           && parseTurnOutcome(row.data)?.turnId === runId;
       });
-      if (!hasTurn || alreadyPersisted) return result;
+      if (alreadyPersisted) {
+        outcome = parseTurnOutcome((alreadyPersisted as TranscriptStoredRow & { data?: unknown }).data) ?? undefined;
+        return result;
+      }
+      if (!hasTurn) return result;
 
-      const runStatus = result.ok
-        ? 'success'
-        : result.terminationReason === 'user_cancelled' || result.terminationReason === 'parent_cancelled'
-          || (result.errorMessage === 'aborted' && supervisor.signal.aborted)
-          ? 'cancelled'
-          : 'error';
-      const outcome = projectTurnOutcome({
+      outcome = projectTurnOutcome({
         rows,
         turnId: runId,
         runStatus,
@@ -159,6 +168,11 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       params.onEvent?.({ type: 'turn_outcome', runId, outcome });
     } catch (err) {
       log.warn({ err, conversationId, runId }, 'Turn outcome persistence failed');
+    } finally {
+      recordRsiTurnOutcome(conversationId, runId,
+        runStatus === 'cancelled' ? 'ignored'
+          : runStatus === 'error' || outcome?.status === 'failed' || outcome?.evidence.some(item => item.status === 'failed') ? 'failure'
+            : outcome?.status === 'succeeded' && !result.stopReason ? 'verified_success' : 'unverified');
     }
     return result;
   };
@@ -375,6 +389,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       const attempt = startObservation(isFallbackAttempt ? 'model.fallback' : 'model.attempt', 'span');
       attempt.update({ 'xopc.attempt': i + 1, 'gen_ai.request.model': candidateModel.id, 'gen_ai.system': candidateModel.provider, 'xopc.fallback': isFallbackAttempt, 'xopc.fallbackReason': lastResult?.errorMessage ?? '' });
       try {
+        if (i === 0 && params.invokedRsiSkill) registerRsiSkillInvocation(params.invokedRsiSkill);
         const turnResult = await attempt.run(() => runWithEmbeddedExecutionSession(
           conversationId,
           () => runXopcEmbeddedTurn({

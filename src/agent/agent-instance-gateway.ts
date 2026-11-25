@@ -78,7 +78,7 @@ export interface AgentInstanceGateway {
 
   // ── Skill prompt expansion (`/skill:name` shorthand) ──────────────────
   expandSkillUserText(text: string): string;
-  prepareSkillTurn(conversationId: string, text: string): { text: string; activatedCapabilityNames: string[] };
+  prepareSkillTurn(conversationId: string, text: string): import('./agent-manager.js').PreparedSkillTurn;
   withSkillCapabilities<T>(
     conversationId: string,
     capabilityNames: readonly string[],

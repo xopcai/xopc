@@ -153,6 +153,7 @@ async function runProcessDirectInner(deps: RunProcessDirectDeps, input: Paramete
                 conversationId: input.conversationId,
                 runId: input.runId,
                 userMessage,
+                invokedRsiSkill: skillTurn.invokedRsiSkill,
                 abortSignal: input.signal,
                 deadlineAtMs: input.deadlineAtMs,
               },

@@ -20,6 +20,7 @@ import {
   reconcileProactivePulseAutomations,
 } from '../proactive-hub/index.js';
 import { RsiCapabilityService } from '../rsi/index.js';
+import { onRsiQualityAlert } from '../rsi/telemetry.js';
 import { flushTracing } from '../observability/runtime.js';
 import { patchSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
@@ -453,6 +454,7 @@ export class GatewayService {
   private connectorLearningCoordinator: ConnectorLearningCoordinator | null = null;
   private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
+  private stopRsiQualityAlerts?: () => void;
   private stopTaskResultQueued: (() => void) | null = null;
   private stopRealtimeLogBridge: (() => void) | null = null;
 
@@ -1000,10 +1002,11 @@ export class GatewayService {
           if (!allocation || !agentId) return;
           const handoff = getTaskHandoff(taskId);
           if (handoff) assertTaskHandoffAccess(handoff);
+          const projectId = new TaskRepository().get(taskId)?.projectId;
           assertTaskExecutorReady(taskId, allocation.origin_conversation_id, agentId, {
             ownAgentId: getSessionMetadata(allocation.origin_conversation_id)?.agentId ?? '',
             getConfig: () => this.config,
-            getAgentSkillAvailability: id => this.agentService.getAgentSkillAvailability(id),
+            getAgentSkillAvailability: id => this.agentService.getAgentSkillAvailability(id, projectId),
             getAgentToolAvailability: (id, tool) => this.agentService.getAgentToolAvailability(id, tool),
           });
         },
@@ -1125,7 +1128,17 @@ export class GatewayService {
   private readonly rsiCapability = new RsiCapabilityService({
     getConfig: () => this.config,
     resolveWorkspacePath: () => this.workspacePath,
-    onPublishEvent: (type, payload) => this.emit(type, payload),
+    onPublishEvent: (type, payload) => {
+      if ((type === 'rsi.candidate.adopted' || type === 'rsi.candidate.rolled_back')
+        && (payload as { artifactKind?: string }).artifactKind === 'skill') {
+        try {
+          this._agentService?.refreshSkillsAfterDiskChange();
+        } catch (err) {
+          log.warn({ err, phase: 'rsi_skill_refresh' }, 'Could not refresh skills after RSI change');
+        }
+      }
+      this.emit(type, payload);
+    },
   });
 
   private readonly proactiveHub = new ProactiveHubService({
@@ -1193,10 +1206,10 @@ export class GatewayService {
   dispatchTaskRuns(): void {
     if (this.stopping || this.serviceConfig.taskDispatchEnabled === false) return;
     this.taskAllocationDispatcher ??= new TaskAllocationDispatcher({
-      context: conversationId => ({
+      context: (conversationId, projectId) => ({
         ownAgentId: getSessionMetadata(conversationId)?.agentId ?? '',
         getConfig: () => this.config,
-        getAgentSkillAvailability: agentId => this.agentService.getAgentSkillAvailability(agentId),
+        getAgentSkillAvailability: agentId => this.agentService.getAgentSkillAvailability(agentId, projectId),
         getAgentToolAvailability: (agentId, name) => this.agentService.getAgentToolAvailability(agentId, name),
         getAgentRegisteredToolNames: agentId => this.agentService.getAgentRegisteredToolNames(agentId),
       }),
@@ -1842,6 +1855,8 @@ export class GatewayService {
       onReliabilityAttention: (input) => this.emit('automation.attention.required', input),
     });
     this.startSessionTranscriptEventIngestion();
+    this.stopRsiQualityAlerts?.();
+    this.stopRsiQualityAlerts = onRsiQualityAlert(itemId => this.emit('proactive.inbox.updated', { itemId, state: 'ready' }));
 
 
     this.sessionIndex.on('sessionUpdated', (data: { key: string; name?: string; tags?: string[] }) => {
@@ -2146,6 +2161,8 @@ export class GatewayService {
     await this.automationService.stop();
     this.stopSessionTranscriptAutomationEvents?.();
     this.stopSessionTranscriptAutomationEvents = null;
+    this.stopRsiQualityAlerts?.();
+    this.stopRsiQualityAlerts = undefined;
     this.stopTaskResultQueued?.();
     this.stopTaskResultQueued = null;
 

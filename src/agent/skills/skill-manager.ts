@@ -28,6 +28,7 @@ export interface SkillLoadResult {
 
 export interface SkillManagerOptions {
   agentId?: string;
+  projectId?: string;
   isWorkspaceTrusted?: (workspaceDir: string) => boolean;
 }
 
@@ -51,7 +52,7 @@ export class SkillManager {
   constructor(workspace: string, bundledSkillsDir?: string, options: SkillManagerOptions = {}) {
     this.workspace = workspace;
     this.bundledSkillsDir = bundledSkillsDir || resolveBundledSkillsDir();
-    this.skillLoader = createSkillLoader({ agentId: options.agentId, isWorkspaceTrusted: options.isWorkspaceTrusted });
+    this.skillLoader = createSkillLoader(options);
     this.initialize();
   }
 
@@ -280,7 +281,11 @@ export class SkillManager {
   /**
    * Expand a skill command into a full skill block
    */
-  expandCommand(text: string, options?: { skillAllowlist?: string[]; registeredToolNames?: string[] }): string {
+  expandCommand(
+    text: string,
+    options?: { skillAllowlist?: string[]; registeredToolNames?: string[] },
+    onExpanded?: (skill: Skill) => void,
+  ): string {
     if (!text.startsWith('/skill:')) {
       return text;
     }
@@ -294,6 +299,7 @@ export class SkillManager {
       return text;
     }
 
+    onExpanded?.(skill);
     return this.buildSkillBlock(skill, args);
   }
 

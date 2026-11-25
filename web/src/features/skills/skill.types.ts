@@ -77,7 +77,7 @@ export interface SkillCatalogEntry {
   /** Category derived from parent directory (e.g. skills/creative/theme-factory → 'creative') */
   category?: string;
   source: 'builtin' | 'workspace' | 'global' | 'extra';
-  origin: `plugin:${string}` | 'extra' | 'bundled' | 'agents-global' | 'agents-workspace' | 'custom-global' | 'xopc-global' | 'xopc-workspace';
+  origin: `plugin:${string}` | 'extra' | 'bundled' | 'agents-global' | 'agents-workspace' | 'custom-global' | 'xopc-global' | 'xopc-workspace' | 'rsi-project';
   path: string;
   managed: boolean;
   writable: boolean;

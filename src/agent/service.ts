@@ -628,8 +628,8 @@ export class AgentService {
     return this.agentManager.getAgentRegisteredToolNames(agentId);
   }
 
-  getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
-    return this.agentManager.getAgentSkillAvailability(agentId);
+  getAgentSkillAvailability(agentId: string, projectId?: string): AgentSkillAvailabilityPayload {
+    return this.agentManager.getAgentSkillAvailability(agentId, projectId);
   }
 
   async getSessionSkillAvailability(conversationId: string): Promise<AgentSkillAvailabilityPayload> {

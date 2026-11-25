@@ -189,9 +189,11 @@ export class ProjectSkillService {
     const location = this.resolveLocation(projectId, false);
     const trust = this.options.getWorkspaceTrust(location.workspaceRoot);
     const loaded = loadWorkspaceSkillInventory(location.workspaceRoot, {
+      projectId,
       workspaceTrust: trust.trusted ? 'trusted' : 'untrusted',
     });
     const all = loadSkills({
+      projectId,
       workspaceDir: location.workspaceRoot,
       builtinDir: resolveBundledSkillsDir(),
       workspaceTrust: trust.trusted ? 'trusted' : 'untrusted',

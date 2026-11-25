@@ -522,6 +522,7 @@ function SkillSection({
 
 function skillOriginLabel(copy: Copy, origin: ProjectSkill['origin']): string {
   switch (origin) {
+    case 'rsi-project': return 'RSI';
     case 'xopc-workspace': return copy.xopcSource;
     case 'agents-workspace': return copy.agentsSource;
     case 'xopc-global':

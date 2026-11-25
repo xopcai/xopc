@@ -1,5 +1,5 @@
 import { once } from 'node:events';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,15 +7,21 @@ import { serve } from '@hono/node-server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
+import { loadSkills } from '../../agent/skills/index.js';
+import { SkillManager } from '../../agent/skills/skill-manager.js';
+import { createSkillViewTool } from '../../agent/tools/skills-tools.js';
+import type { AutomationEventEnvelope } from '../../automations/domain/types.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { createHonoApp } from '../../gateway/hono/app.js';
 import { resetLazyRouteBundlesForTests } from '../../gateway/hono/routes/lazy-fallback.js';
 import type { GatewayService } from '../../gateway/service.js';
 import { getProactivitySettings, patchProactivitySettings } from '../../personal-agent/proactivity/repository.js';
 import { personalAgentId, personalConversationId } from '../../personal-agent/repository.js';
+import { ProjectStore } from '../../projects/project-store.js';
 import {
   ProactiveHubService,
   listProactiveInboxItems,
+  listProactiveSubscriptions,
   saveProactiveItem,
 } from '../../proactive-hub/index.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/connection.js';
@@ -23,8 +29,9 @@ import { createConversation } from '../../storage/sqlite/conversation-repository
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
-import { listRsiCandidates, saveRsiCandidate } from '../repository.js';
+import { ensureRsiTelemetryVersion, listRsiCandidates, saveRsiCandidate, transitionRsiCandidateStatus } from '../repository.js';
 import { RsiCapabilityService, buildFormattedSkillMarkdown } from '../service.js';
+import { onRsiQualityAlert, recordRsiTaskRevision, recordRsiTurnOutcome, withRsiSkillTurn } from '../telemetry.js';
 import { verifyRsiCandidate } from '../verifier.js';
 
 describe('Capability-first Bounded RSI pipeline and authenticated Gateway routes', () => {
@@ -62,6 +69,7 @@ describe('Capability-first Bounded RSI pipeline and authenticated Gateway routes
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-rsi-'));
+    vi.stubEnv('XOPC_STATE_DIR', dir);
     workspaceDir = join(dir, 'workspace');
     stagingDir = join(dir, 'skills-staging');
     resetXopcDatabaseSingletonForTest();
@@ -112,7 +120,175 @@ describe('Capability-first Bounded RSI pipeline and authenticated Gateway routes
     vi.useRealTimers();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
+    vi.unstubAllEnvs();
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  function saveDraft(suffix: string, projectId?: string) {
+    return saveProactiveItem({
+      ownerId,
+      agentId: personalAgentId(ownerId),
+      coalesceKey: `mail:${suffix}`,
+      sourceEventIds: [suffix],
+      tier: 'tier_a_inbox',
+      category: 'prepared_draft',
+      title: 'Weekly project digest',
+      summary: 'Review the project draft.',
+      provenance: {
+        source: 'composio:gmail',
+        eventType: 'connector.mail.received',
+        trust: 'connector',
+        coalescedCount: 1,
+        reason: 'Weekly update',
+        evidenceRefs: [suffix],
+        ...(projectId ? { matchedProjectId: projectId } : {}),
+        score: { actionability: 2, urgency: 1, novelty: 1, preparedness: 2, disruptionPenalty: 0, netScore: 6 },
+      },
+      preparedPayload: { verifiedFacts: [], evidenceRefs: [suffix], preparedDraft: 'The weekly digest is ready.' },
+      state: 'ready',
+      idempotencyKey: suffix,
+      validUntil: now + 60_000,
+      now,
+    });
+  }
+
+  async function draftSkill(suffix: string, directive: string, projectId?: string) {
+    const draft = saveDraft(suffix, projectId);
+    await hub.resolveItem(draft.id, { action: 'edit_and_approve', idempotencyKey: `edit:${suffix}`,
+      editedDraft: `The weekly digest is ready.\n${directive}` });
+    const candidate = listRsiCandidates(ownerId, { artifactKind: 'skill' })[0]!;
+    expect(candidate.status).toBe('inbox_pending');
+    return candidate;
+  }
+
+  it('loads each project’s approved skill by project ID even in the same workspace and recovers legacy project installs', async () => {
+    const projects = new ProjectStore();
+    const alpha = projects.create({ name: 'Alpha', slug: 'alpha' });
+    const beta = projects.create({ name: 'Beta', slug: 'beta' });
+    const a1 = await draftSkill('alpha-1', 'Include Alpha milestones.', alpha.id);
+    const name = a1.targetId;
+    const legacyDir = join(workspaceDir, '.xopc', 'skills', name);
+    mkdirSync(legacyDir, { recursive: true });
+    if (a1.stagedPayload.kind !== 'skill') throw new Error('Expected a skill');
+    writeFileSync(join(legacyDir, 'SKILL.md'), a1.stagedPayload.skillMarkdown);
+    transitionRsiCandidateStatus({ ownerId, candidateId: a1.id, status: 'adopted', adoptedVersion: 1 });
+
+    const b1 = await draftSkill('beta-1', 'Include Beta checkpoints.', beta.id);
+    expect(b1.targetId).toBe(name);
+    expect(b1.baseVersion).toBeUndefined();
+    rsi.adoptCandidate(ownerId, b1.id);
+    const load = (projectId?: string) => loadSkills({ workspaceDir, projectId }).skills.find(skill => skill.name === name);
+    expect(load()).toBeUndefined();
+    expect(load(alpha.id)?.content).toContain('Alpha milestones');
+    expect(load(beta.id)?.content).toContain('Beta checkpoints');
+
+    const a2 = await draftSkill('alpha-2', 'Include Alpha risks.', alpha.id);
+    expect(a2.baseVersion).toBe(1);
+    rsi.adoptCandidate(ownerId, a2.id);
+    expect(load(alpha.id)?.content).toContain('Alpha risks');
+    await rsi.rollbackCandidate(ownerId, a2.id);
+    expect(load(alpha.id)?.content).toContain('Alpha milestones');
+    expect(load(alpha.id)?.content).not.toContain('Alpha risks');
+    expect(load(beta.id)?.content).toContain('Beta checkpoints');
+    expect(load()).toBeUndefined();
+
+    const workspace = await draftSkill('workspace-1', 'Include workspace-wide totals.');
+    expect(workspace.baseVersion).toBeUndefined();
+    expect(workspace.previousContentSnapshot).toBeUndefined();
+    expect(workspace.stagedPayload).toMatchObject({ skillMarkdown: expect.stringContaining('workspace-wide totals') });
+    expect(workspace.stagedPayload).toMatchObject({ skillMarkdown: expect.not.stringContaining('Alpha milestones') });
+  });
+
+  it('limits muted signals to their own project and keeps matching coalesced entries independent', async () => {
+    const projects = new ProjectStore();
+    const alpha = projects.create({ name: 'Alpha', slug: 'alpha' });
+    const beta = projects.create({ name: 'Beta', slug: 'beta' });
+    const mute = async (projectId: string) => {
+      const draft = saveDraft(`mute:${projectId}`, projectId);
+      await hub.resolveItem(draft.id, { action: 'mute_rule', idempotencyKey: `resolve:${projectId}`, mode: 'drop' });
+    };
+    await mute(alpha.id);
+    const signal = (id: string, projectId?: string): AutomationEventEnvelope => ({
+      id, source: 'composio:gmail', type: 'connector.mail.received', schemaVersion: 1,
+      occurredAtMs: now, ingestedAtMs: now, correlationId: id, rootEventId: id, chainDepth: 0, trust: 'connector',
+      subject: { kind: 'thread', id: 'shared-thread-id' },
+      payload: { subject: 'Team update', ...(projectId ? { projectId } : {}) },
+    });
+    const betaAdmission = hub.ingestEvent(signal('beta-1', beta.id));
+    const alphaAdmission = hub.ingestEvent(signal('alpha-1', alpha.id));
+    expect(betaAdmission.outcome).toBe('buffered');
+    expect(alphaAdmission.outcome).toBe('dropped_rule');
+    expect(alphaAdmission.coalesceKey).not.toBe(betaAdmission.coalesceKey);
+    expect(hub.ingestEvent(signal('beta-2', beta.id)).outcome).toBe('dropped_duplicate');
+    expect(hub.ingestEvent(signal('unscoped')).outcome).toBe('buffered');
+
+    await mute(beta.id);
+    expect(hub.ingestEvent(signal('beta-3', beta.id)).outcome).toBe('dropped_rule');
+    expect(listProactiveSubscriptions(ownerId).filter(rule => rule.authority === 'rsi_adopted').map(rule => rule.scopeId).sort())
+      .toEqual([alpha.id, beta.id].sort());
+  });
+
+  it('credits the skill file version actually read once and settles Task runs from their receipts', async () => {
+    const project = new ProjectStore().create({ name: 'Digest', slug: 'digest' });
+    const first = await draftSkill('digest-1', 'Summarize delivered milestones.', project.id);
+    const version1 = rsi.adoptCandidate(ownerId, first.id).adoptedVersion!;
+    const manager = new SkillManager(workspaceDir, undefined, { projectId: project.id });
+    let activeProject: string | undefined = project.id;
+    const view = createSkillViewTool({ getSkillManager: () => manager, getProjectId: () => activeProject });
+    const read = (toolCallId: string, path?: string) => view.execute(toolCallId, { name: first.targetId, path });
+    const stats = (version: number) => ensureRsiTelemetryVersion('skill', first.targetId, version);
+
+    await withRsiSkillTurn(conversationId, 'turn-1', async () => {
+      expect((await read('read-1')).content[0]).toMatchObject({ text: expect.stringContaining('delivered milestones') });
+      await read('read-2');
+    });
+    const second = await draftSkill('digest-2', 'Add verified next steps.', project.id);
+    const version2 = rsi.adoptCandidate(ownerId, second.id).adoptedVersion!;
+    manager.reload();
+    recordRsiTurnOutcome(conversationId, 'turn-1', 'failure');
+    recordRsiTurnOutcome(conversationId, 'turn-1', 'failure');
+    expect(stats(version1)).toMatchObject({ invocations: 1, failures: 1 });
+    expect(stats(version2)).toMatchObject({ invocations: 0 });
+
+    activeProject = undefined;
+    await withRsiSkillTurn(conversationId, 'out-of-scope', async () => {
+      expect((await read('forbidden')).details).toMatchObject({ errorCode: 'skill_not_found' });
+    });
+    recordRsiTurnOutcome(conversationId, 'out-of-scope', 'failure');
+    activeProject = project.id;
+
+    const task = new TaskRepository().create({ title: 'Deliver digest', objective: 'Publish digest', projectId: project.id });
+    const runs = new TaskRunRepository();
+    const taskRun = runs.create({ taskId: task.id, conversationId, executorKind: 'agent', executorRef: {}, trigger: {},
+      correlationId: 'digest-delivery', idempotencyKey: 'digest-delivery', contractVersion: 1 });
+    await withRsiSkillTurn(conversationId, taskRun.id, async () => {
+      expect((await read('task-read')).content[0]).toMatchObject({ text: expect.stringContaining('verified next steps') });
+    });
+    recordRsiTurnOutcome(conversationId, taskRun.id, 'verified_success');
+    expect(stats(version2)).toMatchObject({ invocations: 0 });
+    expect(runs.finalize({ runId: taskRun.id, expectedVersion: taskRun.version, receipt: {
+      status: 'succeeded', completionVerdict: 'achieved', summary: 'Published digest', changes: [], evidence: [],
+      verification: { status: 'passed', checks: [] }, remainingWork: [],
+    } })).toBeDefined();
+    expect(stats(version2)).toMatchObject({ invocations: 1, verifiedSuccesses: 1 });
+    recordRsiTaskRevision(taskRun.id);
+    recordRsiTaskRevision(taskRun.id);
+    expect(stats(version2)).toMatchObject({ invocations: 1, verifiedSuccesses: 0, humanEdits: 1 });
+
+    const notify = vi.fn();
+    const stop = onRsiQualityAlert(notify);
+    try {
+      for (const turnId of ['failure-1', 'failure-2', 'cancelled']) {
+        await withRsiSkillTurn(conversationId, turnId, () => read(turnId));
+        recordRsiTurnOutcome(conversationId, turnId, turnId === 'cancelled' ? 'ignored' : 'failure');
+      }
+      expect(stats(version2)).toMatchObject({ invocations: 3, failures: 2, humanEdits: 1, degradationAlerted: true });
+      const alerts = listProactiveInboxItems(ownerId).filter(item => item.provenance.eventType === 'rsi.telemetry.degraded');
+      expect(alerts).toHaveLength(1);
+      expect(notify).toHaveBeenCalledExactlyOnceWith(alerts[0]!.id);
+    } finally {
+      stop();
+    }
   });
 
   it('synthesizes a verified Skill from human Edit & Run diff, adopts v1 -> v2 safely, tracks degradation telemetry, and rolls back cleanly', async () => {

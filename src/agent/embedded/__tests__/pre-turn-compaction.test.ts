@@ -5,6 +5,8 @@ import type { EmbeddedStreamEvent } from '../types.js';
 import { withModelUsageOrigin } from '../../../providers/model-usage.js';
 import { seedTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { closeXopcDatabase, ensureSessionRecord, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../storage/sqlite/index.js';
+import { ensureRsiTelemetryVersion, saveRsiCandidate, transitionRsiCandidateStatus } from '../../../rsi/repository.js';
+import { rsiSkillContentHash } from '../../../rsi/skill-installations.js';
 
 /**
  * Tests for pre-turn automatic compaction in runEmbeddedTurnForSession.
@@ -164,6 +166,41 @@ describe('pre-turn auto-compaction', () => {
     mockRunXopcEmbeddedTurn.mockResolvedValue({ ok: true });
     const mod = await import('../run-for-session.js');
     runEmbeddedTurnForSession = mod.runEmbeddedTurnForSession;
+  });
+
+  it('settles an explicitly expanded RSI skill at the embedded turn outcome and deduplicates replay', async () => {
+    const conversationId = crypto.randomUUID();
+    resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' }); seedTestAgentCatalog();
+    ensureSessionRecord(conversationId, '/tmp', { agentId: 'main' });
+    try {
+      const markdown = 'Summarize recent milestones for the project.';
+      const { candidate } = saveRsiCandidate({
+        ownerId: 'local-owner', artifactKind: 'skill', targetId: 'milestone-digest',
+        scopeType: 'workspace', scopeId: '/tmp', triggerKind: 'human_edit_diff', dedupeKey: 'rsi:digest',
+        sourceRefs: ['proactive_item:digest'], contentHash: rsiSkillContentHash(markdown), stagedContentUri: '/tmp/staged/SKILL.md',
+        stagedPayload: { kind: 'skill', skillName: 'milestone-digest', description: 'Summarize milestones', skillMarkdown: markdown },
+        simRationale: { problemPattern: 'Recurring digests', whyChanged: 'Use the selected format',
+          applicabilityConditions: ['Project summaries'], negativeConstraints: ['Skip unrelated tasks'], preservedInvariants: [] },
+      });
+      transitionRsiCandidateStatus({ ownerId: 'local-owner', candidateId: candidate.id, status: 'adopted', adoptedVersion: 1 });
+      const runId = 'rsi-skill-run';
+      const store = createMockSessionStore({ needsCompaction: false });
+      store.loadTranscriptRows.mockResolvedValue([{ type: 'message', role: 'user', turnId: runId }]);
+      const params = {
+        conversationId, runId,
+        invokedRsiSkill: { candidateId: candidate.id, targetId: candidate.targetId, version: 1 },
+        userMessage: { role: 'user', content: markdown, timestamp: Date.now() } as AgentMessage,
+        sessionStore: store as any,
+        agentManager: createMockAgentManager() as any,
+        modelManager: createMockModelManager() as any,
+      };
+      await runEmbeddedTurnForSession(params);
+      await runEmbeddedTurnForSession(params);
+      expect(ensureRsiTelemetryVersion('skill', candidate.targetId, 1)).toMatchObject({ invocations: 1, verifiedSuccesses: 1 });
+    } finally {
+      closeXopcDatabase();
+      resetXopcDatabaseSingletonForTest();
+    }
   });
 
   it.each(['smalltalk', 'task', 'published'] as const)('keeps fallback voice %s on the correct Chat boundary', async kind => {

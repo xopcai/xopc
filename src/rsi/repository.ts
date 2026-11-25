@@ -225,6 +225,14 @@ export function nextAdoptedCapabilityVersion(artifactKind: RsiArtifactKind, targ
   return Number(row?.max_v ?? 0) + 1;
 }
 
+export function currentRsiSkillVersion(targetId: string, scopeType: RsiScopeType, scopeId?: string): number {
+  const row = getSqliteDatabase().prepare(`
+    SELECT MAX(adopted_version) AS version FROM rsi_capability_candidates
+    WHERE artifact_kind = 'skill' AND target_id = ? AND scope_type = ? AND scope_id IS ? AND status = 'adopted'
+  `).get(targetId, scopeType, scopeId ?? null) as { version: number | null };
+  return row.version ?? 0;
+}
+
 export function transitionRsiCandidateStatus(input: {
   ownerId: string;
   candidateId: string;
@@ -276,7 +284,8 @@ export function recordRsiTelemetryEvent(input: {
   capabilityKind: RsiArtifactKind;
   targetId: string;
   version: number;
-  outcome: 'verified_success' | 'failure' | 'human_edited';
+  outcome: 'verified_success' | 'failure' | 'human_edited' | 'unverified';
+  revises?: 'verified_success' | 'unverified';
   now?: number;
 }): RsiCapabilityTelemetry {
   const now = input.now ?? Date.now();
@@ -284,14 +293,15 @@ export function recordRsiTelemetryEvent(input: {
     ensureRsiTelemetryVersion(input.capabilityKind, input.targetId, input.version);
     db.prepare(`
       UPDATE rsi_capability_telemetry
-      SET invocations = invocations + 1,
+      SET invocations = invocations + ?,
           verified_successes = verified_successes + ?,
           failures = failures + ?,
           human_edits = human_edits + ?,
           last_used_at = ?
       WHERE capability_kind = ? AND target_id = ? AND version = ?
     `).run(
-      input.outcome === 'verified_success' ? 1 : 0,
+      input.revises ? 0 : 1,
+      input.revises === 'verified_success' ? -1 : input.outcome === 'verified_success' ? 1 : 0,
       input.outcome === 'failure' ? 1 : 0,
       input.outcome === 'human_edited' ? 1 : 0,
       now,

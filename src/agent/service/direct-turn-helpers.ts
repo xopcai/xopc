@@ -154,6 +154,7 @@ export interface RunDirectAgentTurnInput {
   runId?: string;
   gatewayRunStartedMonotonic?: number;
   userMessage: AgentMessage;
+  invokedRsiSkill?: import('../../rsi/skill-installations.js').RsiSkillVersion;
   abortSignal?: AbortSignal;
   deadlineAtMs?: number;
   sourceImages?: ImageContent[];
@@ -219,6 +220,7 @@ export async function runDirectAgentTurn(
     gatewayRunStartedMonotonic: input.gatewayRunStartedMonotonic,
     preparationTimings: { ...preparationTimings, directPreparationMs: performance.now() - directStartedAt },
     userMessage: sourceEnrichedMessage,
+    invokedRsiSkill: input.invokedRsiSkill,
     dynamicSystemContext: [userContext.dynamicSystemContext, taskContext].filter(Boolean).join('\n\n'),
     llmImages,
     presentation: input.presentation,

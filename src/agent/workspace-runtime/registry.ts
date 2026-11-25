@@ -57,12 +57,12 @@ export class WorkspaceRuntimeRegistry {
   }
 
   /** Lazily construct and cache an agent-scoped runtime for a workspace. */
-  getOrCreate(resolvedPath: string, requestedAgentId?: string): WorkspaceRuntime {
+  getOrCreate(resolvedPath: string, requestedAgentId?: string, projectId?: string): WorkspaceRuntime {
     const cfg = this.getConfig();
     const agentId = normalizeAgentId(
       requestedAgentId?.trim() || resolveAgentIdForWorkspacePath(resolvedPath),
     );
-    const runtimeKey = `${agentId}\u0000${resolvedPath}`;
+    const runtimeKey = `${agentId}\u0000${resolvedPath}\u0000${projectId ?? ''}`;
     const existing = this.runtimes.get(runtimeKey);
     if (existing) {
       return existing;
@@ -71,6 +71,7 @@ export class WorkspaceRuntimeRegistry {
     const { memoryManager } = this.userContextRuntimes.getOrCreate(cfg);
     const skillManager = new SkillManager(resolvedPath, this.bundledSkillsDir, {
       agentId,
+      projectId,
       isWorkspaceTrusted: () => this.isWorkspaceTrusted?.(resolvedPath) === true,
     });
     const systemPromptBuilder = new SystemPromptBuilder({

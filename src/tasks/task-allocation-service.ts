@@ -100,7 +100,7 @@ export class TaskAllocationDispatcher {
   #stopped = false;
 
   constructor(private readonly deps: {
-    context: (conversationId: string) => MatchingContext & { getAgentRegisteredToolNames?: (agentId: string) => string[] };
+    context: (conversationId: string, projectId?: string) => MatchingContext & { getAgentRegisteredToolNames?: (agentId: string) => string[] };
     decide?: (input: AllocationDecisionInput) => Promise<AllocationDecision>;
     planner?: TaskContractPlanner;
     wake: () => void;
@@ -158,7 +158,7 @@ export class TaskAllocationDispatcher {
     const requirements = normalizeSpecialistRequirements(JSON.parse(row.requirements_json));
     let inferred: ExecutionCapability[] = [];
     let handoff;
-    try { handoff = await resolveTaskHandoffReferences(task.id, this.deps.context(row.origin_conversation_id).getConfig?.()); }
+    try { handoff = await resolveTaskHandoffReferences(task.id, this.deps.context(row.origin_conversation_id, task.projectId).getConfig?.()); }
     catch (error) {
       this.finishFailure(row, error instanceof Error ? error.message : String(error), 'source_reference_unavailable');
       return;
@@ -224,7 +224,7 @@ export class TaskAllocationDispatcher {
     }
     if (handoff && !requirements.connector) requirements.requiredTools = [...new Set([...(requirements.requiredTools ?? []), 'task_collaboration'])];
     const needs = taskExecutionRequirements(task, requirements, inferred);
-    const context = this.deps.context(row.origin_conversation_id);
+    const context = this.deps.context(row.origin_conversation_id, task.projectId);
     const permittedExecutors = () => {
       const connector = requirements.connector;
       if (!connector) return undefined;

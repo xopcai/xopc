@@ -576,6 +576,7 @@ async function* runProcessDirectStreamingInner(
               {
                 conversationId,
                 userMessage,
+                invokedRsiSkill: skillTurn.invokedRsiSkill,
                 abortSignal: signal,
                 sourceContexts,
                 presentation: input.presentation,

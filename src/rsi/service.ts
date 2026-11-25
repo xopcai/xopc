@@ -28,11 +28,10 @@ import { DurableState } from '../storage/sqlite/durable-state.js';
 import { afterSqliteCommit, getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { createLogger } from '../utils/logger.js';
 import {
+  currentRsiSkillVersion,
   ensureRsiTelemetryVersion,
   getRsiCandidate,
-  markRsiTelemetryDegradationAlerted,
   nextAdoptedCapabilityVersion,
-  recordRsiTelemetryEvent,
   recordRsiVerificationResult,
   saveRsiCandidate,
   transitionRsiCandidateStatus,
@@ -46,7 +45,9 @@ import {
   type RsiStagedPayload,
   type SimRationale,
 } from './types.js';
+import { recordCapabilityOutcome } from './telemetry.js';
 import { verifyRsiCandidate } from './verifier.js';
+import { currentRsiProjectSkillMarkdown, isLegacyRsiProjectSkillCopy, rsiProjectSkillFile, rsiSkillContentHash } from './skill-installations.js';
 
 const log = createLogger('RsiCapability');
 
@@ -152,11 +153,22 @@ export class RsiCapabilityService {
     return this.deps.stagingRootDir ?? join(resolveSkillsDir(), '..', 'skills-staging');
   }
 
-  private targetSkillDir(scopeType: RsiScopeType, skillName: string): string {
-    if (scopeType === 'workspace' || scopeType === 'project') {
-      return join(resolveWorkspaceSkillsRoot(this.deps.resolveWorkspacePath()), skillName);
+  private targetSkillDir(scopeType: RsiScopeType, scopeId: string | undefined, skillName: string): string {
+    if (scopeType === 'workspace') {
+      return join(resolveWorkspaceSkillsRoot(scopeId ?? this.deps.resolveWorkspacePath()), skillName);
     }
     return join(resolveGlobalSkillsRoot(), skillName);
+  }
+
+  private previousSkillMarkdown(scopeType: RsiScopeType, scopeId: string | undefined, name: string): string | undefined {
+    if (scopeType === 'project') return scopeId ? currentRsiProjectSkillMarkdown(scopeId, name) : undefined;
+    const file = join(this.targetSkillDir(scopeType, scopeId, name), 'SKILL.md');
+    if (!existsSync(file)) return undefined;
+    const markdown = readFileSync(file, 'utf8');
+    if (scopeType === 'workspace' && isLegacyRsiProjectSkillCopy(name, file, rsiSkillContentHash(markdown))) {
+      return undefined;
+    }
+    return markdown;
   }
 
   /**
@@ -190,6 +202,7 @@ export class RsiCapabilityService {
     const resolution = item.humanResolution!;
     const route = resolution.muteMode ?? 'drop';
     const filterText = resolution.senderOrSubjectFilter?.trim();
+    const projectId = item.provenance.matchedProjectId;
 
     const stagedPayload: RsiStagedPayload = {
       kind: 'filter_rule',
@@ -227,10 +240,10 @@ export class RsiCapabilityService {
       ownerId,
       artifactKind: 'filter_rule',
       targetId,
-      scopeType: item.provenance.matchedProjectId ? 'project' : 'workspace',
-      scopeId: item.provenance.matchedProjectId ?? this.deps.resolveWorkspacePath(),
+      scopeType: projectId ? 'project' : 'workspace',
+      scopeId: projectId ?? this.deps.resolveWorkspacePath(),
       triggerKind: 'triage_mute',
-      dedupeKey: `mute:${ownerId}:${contentHash}`,
+      dedupeKey: projectId ? `mute:${ownerId}:project:${projectId}:${contentHash}` : `mute:${ownerId}:${contentHash}`,
       sourceRefs: [`proactive_item:${item.id}`],
       simRationale,
       stagedContentUri: `sqlite://rsi_capability_candidates/${targetId}`,
@@ -296,6 +309,7 @@ export class RsiCapabilityService {
         ...(delta.removedLines.length ? ['', '### Patterns to Avoid', ...delta.removedLines.map(l => `- Avoid phrasing/step: \`${l.slice(0, 200)}\``)] : []),
       ].join('\n'),
       scopeType,
+      scopeId,
     });
 
     return this.stageVerifyAndPublishSkill({
@@ -403,6 +417,7 @@ export class RsiCapabilityService {
           row.summary.slice(0, 1_500),
         ].join('\n'),
         scopeType,
+        scopeId,
       });
 
       const candidate = await this.stageVerifyAndPublishSkill({
@@ -515,6 +530,7 @@ export class RsiCapabilityService {
           ...sampleSummaries,
         ].join('\n'),
         scopeType,
+        scopeId,
       });
 
       const candidate = await this.stageVerifyAndPublishSkill({
@@ -541,6 +557,7 @@ export class RsiCapabilityService {
     fallbackSim: SimRationale;
     fallbackBody: string;
     scopeType: RsiScopeType;
+    scopeId?: string;
   }): Promise<{
     skillName: string;
     description: string;
@@ -549,9 +566,10 @@ export class RsiCapabilityService {
     previousSnapshot?: string;
     baseVersion?: number;
   }> {
-    const existingDir = this.targetSkillDir(input.scopeType, input.defaultName);
-    const existingMdPath = join(existingDir, 'SKILL.md');
-    const previousSnapshot = existsSync(existingMdPath) ? readFileSync(existingMdPath, 'utf8') : undefined;
+    const previousSnapshot = this.previousSkillMarkdown(input.scopeType, input.scopeId, input.defaultName);
+    const snapshotFor = (name: string) => name === input.defaultName
+      ? previousSnapshot
+      : this.previousSkillMarkdown(input.scopeType, input.scopeId, name);
 
     if (this.deps.synthesizeSkill) {
       const llmOut = SynthesizedSkillResponseSchema.parse(await this.deps.synthesizeSkill({
@@ -571,7 +589,7 @@ export class RsiCapabilityService {
           sim: llmOut.simRationale,
         }),
         simRationale: llmOut.simRationale,
-        previousSnapshot,
+        previousSnapshot: snapshotFor(cleanName),
       };
     }
 
@@ -607,7 +625,7 @@ export class RsiCapabilityService {
               sim: parsed.simRationale,
             }),
             simRationale: parsed.simRationale,
-            previousSnapshot,
+            previousSnapshot: snapshotFor(cleanName),
           };
         }
       } catch {
@@ -671,7 +689,7 @@ export class RsiCapabilityService {
       skillMarkdown: input.proposal.skillMarkdown,
     };
     const contentHash = createHash('sha256').update(input.proposal.skillMarkdown).digest('hex');
-    const priorVersion = nextAdoptedCapabilityVersion('skill', input.proposal.skillName) - 1;
+    const priorVersion = currentRsiSkillVersion(input.proposal.skillName, input.scopeType, input.scopeId);
 
     const { candidate, created } = saveRsiCandidate({
       id: candidateId,
@@ -709,12 +727,14 @@ export class RsiCapabilityService {
     const inboxCard = saveProactiveItem({
       ownerId: input.ownerId,
       agentId: personal?.agentId ?? 'main',
-      coalesceKey: `rsi:skill:${input.proposal.skillName}`,
+      coalesceKey: input.scopeType === 'project'
+        ? `rsi:skill:project:${input.scopeId}:${input.proposal.skillName}`
+        : `rsi:skill:${input.proposal.skillName}`,
       sourceEventIds: input.sourceRefs,
       tier: 'tier_a_inbox',
       category: 'skill_candidate',
       title: priorVersion > 0
-        ? `技能升级建议：${input.proposal.skillName} (v${priorVersion} → v${priorVersion + 1})`
+        ? `技能升级建议：${input.proposal.skillName}（当前 v${priorVersion}）`
         : `新技能沉淀建议：${input.proposal.skillName}`,
       summary: `${input.proposal.simRationale.whyChanged}（已通过安全与能力保持三道门禁校验）`,
       provenance: {
@@ -788,12 +808,17 @@ export class RsiCapabilityService {
 
       const payload = candidate.stagedPayload;
       const version = nextAdoptedCapabilityVersion(candidate.artifactKind, candidate.targetId);
-      const skillPath = payload.kind === 'skill'
-        ? join(this.targetSkillDir(candidate.scopeType, payload.skillName), 'SKILL.md')
-        : undefined;
-      const liveSnapshot = skillPath && existsSync(skillPath)
-        ? readFileSync(skillPath, 'utf8')
-        : candidate.previousContentSnapshot;
+      if (candidate.scopeType === 'project' && (!candidate.scopeId
+        || !db.prepare('SELECT 1 FROM projects WHERE project_id = ?').get(candidate.scopeId))) {
+        throw new Error('The RSI candidate project is no longer available');
+      }
+      const projectId = candidate.scopeType === 'project' ? candidate.scopeId : undefined;
+      const skillPath = payload.kind !== 'skill' ? undefined : projectId
+        ? rsiProjectSkillFile(projectId, candidate.id, payload.skillName)
+        : join(this.targetSkillDir(candidate.scopeType, candidate.scopeId, payload.skillName), 'SKILL.md');
+      const liveSnapshot = payload.kind === 'skill' && projectId
+        ? currentRsiProjectSkillMarkdown(projectId, payload.skillName)
+        : skillPath && existsSync(skillPath) ? readFileSync(skillPath, 'utf8') : candidate.previousContentSnapshot;
 
       if (payload.kind === 'filter_rule') {
         const subId = `rsi:${candidate.id}`;
@@ -865,8 +890,8 @@ export class RsiCapabilityService {
       throw new Error('Only adopted RSI candidates can be rolled back');
     }
 
-    if (candidate.stagedPayload.kind === 'skill') {
-      const skillDir = this.targetSkillDir(candidate.scopeType, candidate.stagedPayload.skillName);
+    if (candidate.stagedPayload.kind === 'skill' && candidate.scopeType !== 'project') {
+      const skillDir = this.targetSkillDir(candidate.scopeType, candidate.scopeId, candidate.stagedPayload.skillName);
       const skillMdPath = join(skillDir, 'SKILL.md');
       if (candidate.previousContentSnapshot !== undefined) {
         await mkdir(skillDir, { recursive: true });
@@ -904,45 +929,6 @@ export class RsiCapabilityService {
     version: number;
     outcome: 'verified_success' | 'failure' | 'human_edited';
   }): RsiCapabilityTelemetry {
-    const now = this.now();
-    const ownerId = this.ownerId();
-    const stats = recordRsiTelemetryEvent({ ...input, now });
-
-    const problemRuns = stats.failures + stats.humanEdits;
-    if (stats.invocations >= 3 && problemRuns / stats.invocations >= 0.6 && !stats.degradationAlerted) {
-      markRsiTelemetryDegradationAlerted(input.capabilityKind, input.targetId, input.version);
-      const personal = getPersonalAgent(ownerId);
-      saveProactiveItem({
-        ownerId,
-        agentId: personal?.agentId ?? 'main',
-        coalesceKey: `rsi:degradation:${input.capabilityKind}:${input.targetId}:v${input.version}`,
-        sourceEventIds: [`telemetry:${input.targetId}:v${input.version}`],
-        tier: 'tier_a_inbox',
-        category: 'skill_candidate',
-        title: `能力质量预警：建议回滚 ${input.targetId} (v${input.version})`,
-        summary: `该版本最近 ${stats.invocations} 次调用中出现 ${stats.failures} 次失败与 ${stats.humanEdits} 次人工重写，建议回滚至上一稳定版本。`,
-        provenance: {
-          source: 'rsi:telemetry',
-          eventType: 'rsi.telemetry.degraded',
-          trust: 'system',
-          coalescedCount: stats.invocations,
-          reason: 'Post-adoption failure/override ratio exceeded 60%',
-          evidenceRefs: [`telemetry:${input.capabilityKind}:${input.targetId}:v${input.version}`],
-          score: {
-            actionability: 3,
-            urgency: 2,
-            novelty: 2,
-            preparedness: 2,
-            disruptionPenalty: 0,
-            netScore: 14,
-          },
-        },
-        state: 'ready',
-        idempotencyKey: `rsi:degradation_alert:${input.capabilityKind}:${input.targetId}:v${input.version}`,
-        validUntil: now + 7 * 86_400_000,
-        now,
-      });
-    }
-    return stats;
+    return recordCapabilityOutcome({ ...input, ownerId: this.ownerId(), now: this.now() });
   }
 }

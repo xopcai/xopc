@@ -534,7 +534,7 @@ export class AgentToolsFactory {
     const knowledgeWritePolicy = () => this.deps.getConfig?.()?.userContext.knowledgeMemory.writePolicy ?? 'deny';
     const currentProjectId = () => {
       const key = currentConversationId();
-      return key ? getSessionMetadata(key)?.projectId : undefined;
+      return key && isXopcDatabaseOpen() ? getSessionMetadata(key)?.projectId : undefined;
     };
     const getCommandIsolation = () => {
       const config = this.deps.getConfig?.();
@@ -697,10 +697,12 @@ export class AgentToolsFactory {
         ? [
             createSkillsListTool({
               getSkillManager: getSkillMgr,
+              getProjectId: currentProjectId,
               getSkillIndexingContext: this.deps.getSkillIndexingContext,
             }),
             createSkillViewTool({
               getSkillManager: getSkillMgr,
+              getProjectId: currentProjectId,
               getSkillIndexingContext: this.deps.getSkillIndexingContext,
               registerSkillEnvPassthrough: this.deps.registerSkillEnvPassthrough,
             }),

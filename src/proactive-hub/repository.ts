@@ -419,14 +419,13 @@ export function findActiveEntityAnchor(_ownerId: string, event: AutomationEventE
   const payload = event.payload && typeof event.payload === 'object'
     ? (event.payload as Record<string, unknown>)
     : {};
-  const payloadProjectId = typeof payload.projectId === 'string' && payload.projectId.trim()
-    ? payload.projectId.trim()
-    : event.subject?.kind === 'project' && typeof event.subject.id === 'string' && event.subject.id.trim()
-      ? event.subject.id.trim()
-      : undefined;
-  const matchedProject = payloadProjectId
+  const payloadProjectId = typeof payload.projectId === 'string' ? payload.projectId.trim() : '';
+  const subjectProjectId = event.subject?.kind === 'project' && typeof event.subject.id === 'string' ? event.subject.id.trim() : '';
+  if (subjectProjectId && payloadProjectId && subjectProjectId !== payloadProjectId) return {};
+  const projectId = subjectProjectId || payloadProjectId;
+  const matchedProject = projectId
     ? db.prepare("SELECT project_id FROM projects WHERE project_id = ? AND status NOT IN ('completed','cancelled','archived') LIMIT 1")
-      .get(payloadProjectId) as { project_id: string } | undefined
+      .get(projectId) as { project_id: string } | undefined
     : undefined;
 
   return {
@@ -475,15 +474,15 @@ export function admitSignalAtGate1(
   return runSqliteWriteTransaction(db => {
     const subs = (db.prepare('SELECT * FROM proactive_subscriptions WHERE owner_id = ? AND enabled = 1')
       .all(ownerId) as unknown as SubscriptionRow[]).map(mapSubscription);
-    const matchedSub = selectMatchingSubscription(subs, event);
     const anchor = findActiveEntityAnchor(ownerId, event);
+    const matchedSub = selectMatchingSubscription(subs, event, anchor.projectId);
 
     if (!matchedSub && !anchor.projectId) {
       return { outcome: 'dropped_unmatched' };
     }
 
+    const coalesceKey = computeCoalesceKey(event, anchor.projectId);
     if (matchedSub?.defaultRoute === 'drop') {
-      const coalesceKey = computeCoalesceKey(event);
       const fingerprint = computeSignalFingerprint(event);
       db.prepare(`
         INSERT INTO proactive_coalesced_signals(
@@ -521,7 +520,6 @@ export function admitSignalAtGate1(
       return { outcome: 'dropped_rule' };
     }
 
-    const coalesceKey = computeCoalesceKey(event);
     const fingerprint = computeSignalFingerprint(event);
     const existing = db.prepare('SELECT * FROM proactive_coalesced_signals WHERE owner_id = ? AND coalesce_key = ?')
       .get(ownerId, coalesceKey) as unknown as SignalRow | undefined;

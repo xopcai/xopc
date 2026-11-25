@@ -13,6 +13,7 @@ import type {
 } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { recordRsiTaskOutcome } from '../rsi/telemetry.js';
 
 import { enqueueTaskAttentionRequiredEvent, enqueueTaskChangedEvent } from './task-change-events.js';
 import { TaskRepository } from './task-repository.js';
@@ -572,6 +573,7 @@ export class TaskRunRepository {
         input.actor ?? { kind: 'system' },
         now,
       );
+      recordRsiTaskOutcome(input.runId, { ...input.receipt, verification });
       return this.get(input.runId);
     });
   }

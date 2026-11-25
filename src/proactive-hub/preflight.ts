@@ -109,9 +109,11 @@ function authorityRank(authority: ProactiveSubscription['authority'], route: Pro
 export function selectMatchingSubscription(
   subscriptions: readonly ProactiveSubscription[],
   event: AutomationEventEnvelope,
+  projectId?: string,
 ): ProactiveSubscription | undefined {
   const matches = subscriptions
     .filter(sub => sub.enabled
+      && (sub.scopeType !== 'project' || (projectId !== undefined && sub.scopeId === projectId))
       && matchesProactivePattern(sub.sourcePattern, event.source)
       && matchesProactivePattern(sub.eventTypePattern, event.type)
       && evaluateMatchPredicates(sub.matchPredicates, event))
@@ -133,7 +135,7 @@ function stableNormalize(value: unknown, depth = 0): unknown {
   return out;
 }
 
-export function computeCoalesceKey(event: AutomationEventEnvelope): string {
+export function computeCoalesceKey(event: AutomationEventEnvelope, projectId?: string): string {
   const subjectKind = event.subject?.kind
     ?? (typeof event.payload.threadId === 'string' ? 'thread'
       : typeof event.payload.folderId === 'string' ? 'folder'
@@ -150,7 +152,8 @@ export function computeCoalesceKey(event: AutomationEventEnvelope): string {
       ?? event.dedupeKey
       ?? event.id,
     );
-  return `${event.source}:${event.type}:${subjectKind}:${subjectId}`.slice(0, 320);
+  const projectPrefix = projectId ? `project:${projectId}:` : '';
+  return `${projectPrefix}${event.source}:${event.type}:${subjectKind}:${subjectId}`.slice(0, 320);
 }
 
 export function computeSignalFingerprint(event: AutomationEventEnvelope): string {

@@ -14,6 +14,7 @@ import type {
 } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { recordRsiTaskRevision } from '../rsi/telemetry.js';
 
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { isPersonalDelegatedTask } from '../personal-agent/repository.js';
@@ -304,6 +305,7 @@ export class TaskApplicationService {
       db.prepare(`UPDATE task_result_deliveries SET reply_status = 'stale' WHERE task_run_id IN
         (SELECT run_id FROM task_runs WHERE task_id = ?) AND reply_status IN ('pending','generating','ready')`).run(task.id);
       enqueueTaskChangedEvent(db, { taskId: task.id, version: current.version, changedFields: ['contract', 'body', 'phase', 'context'], actor });
+      recordRsiTaskRevision(baseline.taskRunId);
       return { ok: true, model: this.#projector.project(current) };
     });
   }

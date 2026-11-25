@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import { resolveStateDir } from '../../config/paths.js';
+import { recordRsiSkillRead } from '../../rsi/telemetry.js';
 import { createSkillConfigManager, isSkillEnabled, resolveSkillConfig } from '../skills/config.js';
 import { resolveSkillReadablePath } from '../skills/skill-view-path.js';
 import type { SkillManager } from '../skills/skill-manager.js';
@@ -34,6 +35,7 @@ const SkillViewSchema = Type.Object({
 
 export interface SkillsToolsDeps {
   getSkillManager: () => SkillManager | undefined;
+  getProjectId?: () => string | undefined;
   getSkillIndexingContext?: () =>
     | { registeredToolNames: string[]; skillAllowlist?: string[] }
     | undefined;
@@ -70,6 +72,8 @@ export function createSkillsListTool(deps: SkillsToolsDeps): AgentTool {
         skillAllowlist: idx?.skillAllowlist,
         registeredToolNames: idx?.registeredToolNames,
       });
+      const projectId = deps.getProjectId?.();
+      skills = skills.filter(skill => !skill.origin.projectId || skill.origin.projectId === projectId);
       const q = (params as { query?: string }).query?.trim().toLowerCase();
       if (q) {
         skills = skills.filter(
@@ -115,7 +119,7 @@ export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool {
       }
 
       const skill = mgr.findSkill(p.name.trim());
-      if (!skill) {
+      if (!skill || (skill.origin.projectId && skill.origin.projectId !== deps.getProjectId?.())) {
         return {
           content: [
             {
@@ -212,6 +216,9 @@ export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool {
           outputText += `\n\n[skill env passthrough] Registered ${envNames.length} declared variable name(s) for this session; ${setNow} are currently defined in the process (values are never shown).`;
         }
 
+        if (truncation.content.trim() && !truncation.firstLineExceedsLimit) {
+          recordRsiSkillRead(skill.name, resolved.absolutePath, raw);
+        }
         return { content: [{ type: 'text', text: outputText }], details: {} };
       } catch (e) {
         return {

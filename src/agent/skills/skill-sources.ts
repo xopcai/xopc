@@ -5,6 +5,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { resolveSkillsDir } from '../../config/paths.js';
 import { resolvePluginCapabilityAccess } from '../../extensions/agent-plugins/capability-access.js';
 import { AgentPluginStore } from '../../extensions/agent-plugins/store.js';
+import { loadRsiProjectSkillFiles, rsiProjectSkillRoot } from '../../rsi/skill-installations.js';
 import { resolveWorkspaceSkillsDir } from './workspace-skills-dir.js';
 import type {
   SkillDiagnostic,
@@ -21,11 +22,13 @@ const PRIORITY = {
   xopcGlobal: 400,
   agentsWorkspace: 450,
   xopcWorkspace: 500,
+  rsiProject: 550,
 } as const;
 
 export interface ResolveSkillSourcesOptions {
   workspaceDir?: string;
   agentId?: string;
+  projectId?: string;
   globalDir?: string;
   builtinDir?: string;
   agentsDir?: string;
@@ -210,6 +213,23 @@ export function resolveSkillSources(
     }));
   }
 
+  if (options.projectId) {
+    const skillFiles = loadRsiProjectSkillFiles(options.projectId);
+    if (skillFiles.length) {
+      sources.push({
+        ...descriptor({
+          id: 'rsi-project',
+          rootDir: rsiProjectSkillRoot(options.projectId),
+          priority: PRIORITY.rsiProject,
+          scope: 'workspace',
+          managed: true,
+          writable: false,
+        }),
+        projectId: options.projectId,
+        skillFiles,
+      });
+    }
+  }
   return { sources: dedupeSources(sources), diagnostics };
 }
 
