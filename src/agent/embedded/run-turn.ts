@@ -95,7 +95,7 @@ import { getActiveTranscriptUserText } from '../inbound/attachment-pipeline.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { getModelThinking } from '../../providers/model-thinking.js';
 import { NO_REPLY } from '../messaging/no-reply.js';
-import { ACCEPTANCE_REPAIR_READ_TOOLS, canResumeAfterModelFailure, completedRecoveryToolResult } from '../orchestration/turn-recovery.js';
+import { ACCEPTANCE_REPAIR_READ_TOOLS, canResumeAfterModelFailure, completedRecoveryToolResult, RECOVERY_READ_TOOLS as RESUMABLE_MISSING_READ_TOOLS } from '../orchestration/turn-recovery.js';
 import { withCloudCreditBudget, reportCloudCreditError, isCloudCreditBudgetExhausted, cloudCreditBudgetStopMessage } from '../../providers/xopc-cloud-credit-budget.js';
 
 const log = createLogger('EmbeddedRun');
@@ -1066,8 +1066,11 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
             } else if (clarificationResume) {
               await session.sendCustomMessage({ customType: 'clarification_resume', content: clarificationResume.content, display: false }, { triggerTurn: true });
             } else if (params.recoveryMessage && !params.resumeLastUserMessage) {
-              if (!canResumeAfterModelFailure(session.agent.state.messages, ['acceptance_repair', 'model_failure'].includes(params.recoveryReason ?? '')
-                ? { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS } : undefined)) throw new Error('Cannot resume because a tool outcome is unconfirmed');
+              const repair = ['acceptance_repair', 'model_failure'].includes(params.recoveryReason ?? '');
+              if (!canResumeAfterModelFailure(session.agent.state.messages, {
+                ...(repair ? { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS } : {}),
+                ...(repair || params.recoveryReason === 'process_restart' ? { allowMissingReadTools: RESUMABLE_MISSING_READ_TOOLS } : {}),
+              })) throw new Error('Cannot resume because a tool outcome is unconfirmed');
               await session.sendCustomMessage({ customType: 'task_continuation', content: params.recoveryMessage, display: false }, { triggerTurn: true });
             } else if (params.resumeLastUserMessage) {
               await session.agent.continue();

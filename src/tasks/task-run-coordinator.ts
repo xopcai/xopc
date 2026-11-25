@@ -28,8 +28,7 @@ import { getTaskHandoff } from './task-handoff.js';
 import { currentTaskJsonAcceptance, verifyTaskJsonPublication } from './task-json-acceptance.js';
 import { isChatReplyOutput } from './task-final-reply.js';
 import { savedExecutionRequirements } from './task-execution-capabilities.js';
-import { TaskOriginRepository } from './task-origin-repository.js';
-import { isPersonalConversation } from '../personal-agent/repository.js';
+import { isPersonalDelegatedTask } from '../personal-agent/repository.js';
 import { resolveTaskLocale } from './task-language.js';
 import { loadTranscriptRowsForSession } from '../storage/sqlite/index.js';
 import { ACCEPTANCE_REPAIR_READ_TOOLS, RECOVERY_READ_TOOLS, findUnconfirmedToolEffect, type UnconfirmedToolEffect } from '../agent/orchestration/turn-recovery.js';
@@ -42,8 +41,7 @@ function unreviewedLocalPublication(task: ReturnType<TaskRepository['require']>,
   if (contract?.acceptancePolicy !== 'verified_auto' || contract.risks.length || contract.approvalRequired.length
     || contract.expectedOutputs.some(isChatReplyOutput) || task.priority === 'critical'
     || publications.missing.length || publications.artifactIds.length !== 1 || publications.latestPublishedArtifacts.length !== 1) return;
-  const origin = new TaskOriginRepository().getConversationId(task.id);
-  if (!origin || !isPersonalConversation(origin) || new TaskContextRepository().listActiveGrants(task.id).length) return;
+  if (!isPersonalDelegatedTask(task.id) || new TaskContextRepository().listActiveGrants(task.id).length) return;
   const plan = savedExecutionRequirements(task.id);
   if (plan?.contractVersion !== run.contractVersion || plan.requirements.connector
     || !plan.needs.some(need => need.capability === 'publish_files' || need.capability === 'generate_image')
@@ -263,9 +261,12 @@ export class TaskRunCoordinator {
       requiresFinalText: !personalSnapshot && task.contract?.expectedOutputs.some(isChatReplyOutput),
       requiresReview: !jsonSpec && (task.contract?.acceptancePolicy === 'verified_auto' || task.contract?.resultPolicy === 'selected') });
     const repairBlocked = repair ? unconfirmedEffect() : undefined;
-    if (status === 'failed' && isTransientProviderErrorMessage(input.summary) && !unconfirmedEffects
+    const safelyRetryable = isTransientProviderErrorMessage(input.summary)
+      || (emptySuccess && task.contract?.acceptancePolicy === 'verified_auto' && isPersonalDelegatedTask(task.id));
+    if (status === 'failed' && safelyRetryable && !unconfirmedEffects
       && this.#runs.scheduleContinuation({ runId: run.id, expectedVersion: run.version, reason: 'model_failure',
-        message: ['The previous model request failed transiently. Continue this same task from recorded completed operations; do not replay external effects.',
+        message: [emptySuccess ? 'The previous turn did not produce a result.' : 'The previous model request failed transiently.',
+          'Continue this same task from recorded completed operations. Do not replay external effects.',
           ...(repair ? [repair.message] : ['Finish only the remaining work.'])].join('\n') })) return;
     if (status === 'succeeded' && repair && !repairBlocked && this.#runs.scheduleContinuation({ runId: run.id,
       expectedVersion: run.version, reason: 'acceptance_repair', repairFingerprint: repair.fingerprint, message: repair.message })) return;

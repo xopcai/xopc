@@ -4,7 +4,7 @@ import { createLogger } from '../utils/logger.js';
 
 import { getNotificationDevice, listDeliverableNotificationDevices, listRevokedPlatformPushDevices,
   removeNotificationDevice, replaceNotificationPushReference } from './device-store.js';
-import { notificationPlanFromGatewayEvent, type NotificationPlan } from './planner.js';
+import { isTaskInputNotificationActionable, notificationPlanFromGatewayEvent, type NotificationPlan } from './planner.js';
 import {
   createNotificationEvent,
   cancelNotificationDelivery,
@@ -139,7 +139,7 @@ export class NotificationService {
   }
 
   private async send(delivery: NotificationDelivery): Promise<void> {
-    if (!isClarificationNotificationActionable(delivery.event)) {
+    if (!isClarificationNotificationActionable(delivery.event) || !isTaskInputNotificationActionable(delivery.event)) {
       cancelNotificationDelivery(delivery.event.id, delivery.deviceId);
       return;
     }

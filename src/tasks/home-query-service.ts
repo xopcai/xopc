@@ -127,10 +127,12 @@ export function decisionFromTask(
   locale?: string,
 ): HomeDecision | null {
   const task = model.task;
-  if (task.phase === 'closed' || (model.operationalState === 'waiting' && model.attention.length === 0)) return null;
+  if (task.phase === 'closed' || model.personalAttention === null
+    || (model.operationalState === 'waiting' && model.attention.length === 0)) return null;
   const isChinese = locale?.toLowerCase().startsWith('zh') ?? task.locale === 'zh';
   const action = model.presentation.primaryAction;
-  if (action?.type === 'review' || action?.type === 'signoff') {
+  if (model.personalAttention === 'review' || (model.personalAttention === undefined
+    && (action?.type === 'review' || action?.type === 'signoff'))) {
     return {
       id: `task:${task.id}:review`,
       response: { kind: 'task', taskId: task.id, canRetry: false },
@@ -149,7 +151,7 @@ export function decisionFromTask(
 
   const sourceId = action?.type === 'resolve_wait' ? action.waitId
     : action?.type === 'inspect_run' || action?.type === 'retry_run' ? action.runId : undefined;
-  const item = (sourceId ? model.attention.find(candidate => candidate.sourceId === sourceId) : undefined) ?? model.attention.find((candidate) => [
+  const item = model.personalAttention ?? (sourceId ? model.attention.find(candidate => candidate.sourceId === sourceId) : undefined) ?? model.attention.find((candidate) => [
     'input_required',
     'approval_required',
     'dependency_blocked',
@@ -160,7 +162,7 @@ export function decisionFromTask(
     'overdue',
   ].includes(candidate.kind));
   if (!item) return null;
-  const reason = item.kind === 'input_required' || item.kind === 'run_decision_required'
+  const reason = item.kind === 'input_required' || item.kind === 'run_decision_required' || item.kind === 'allocation_blocked'
     ? 'needs_input'
     : item.kind === 'approval_required'
       ? 'approval_required'
@@ -494,7 +496,9 @@ export class HomeQueryService {
     const pausedTaskIds = new Set<string>();
     const runningTasks = models.filter((model) => {
       const task = model.task;
-      if (model.operationalState === 'waiting' && model.attention.length === 0) {
+      if ((model.operationalState === 'waiting' && (model.attention.length === 0 || model.personalAttention === null))
+        || (model.operationalState === 'blocked' && model.personalAttention === null
+          && model.attention.some(item => item.kind === 'dependency_blocked'))) {
         const waits = this.#runs.listActiveWaits(task.id);
         const pause = waits.find((wait) => wait.kind === 'paused');
         if (pause) pausedTaskIds.add(task.id);

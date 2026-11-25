@@ -16,8 +16,10 @@ import type {
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
+import { isPersonalDelegatedTask } from '../personal-agent/repository.js';
 import { getConnectorAccount } from '../storage/sqlite/connector-account-repository.js';
 import { getConnectorConnection } from '../storage/sqlite/connector-repository.js';
+import { loadTranscriptRowsForSession } from '../storage/sqlite/transcript-repository.js';
 import { TaskContextRepository } from './task-context-repository.js';
 import { delegatedRunText } from './delegated-run-result.js';
 import { enqueueTaskAttentionRequiredEvent, enqueueTaskChangedEvent } from './task-change-events.js';
@@ -32,15 +34,16 @@ import { TaskOriginRepository } from './task-origin-repository.js';
 import type { TurnContextRef } from '../agent/source-context/types.js';
 import { captureTaskHandoff, captureWorkspaceFileHandoff, replaceUnresolvedTaskHandoffReferences, type WorkspaceFileInput } from './task-handoff.js';
 import { TaskRepository } from './task-repository.js';
-import { mcpDelegatedRunPrincipal, TaskRunRepository } from './task-run-repository.js';
+import { bindTaskVerification, mcpDelegatedRunPrincipal, TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
 import { TaskCriterionReviewRepository } from './task-criterion-review-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
 import { taskInstructionSequence } from './task-instruction-sequence.js';
+import { isReadOnlyRetryDecision, isReadOnlyTaskRetry } from './task-retry-policy.js';
 import { verifyTaskWorkspace } from './task-workspace-verification.js';
 import { resolveTaskLocale } from './task-language.js';
-import type { UnconfirmedToolEffect } from '../agent/orchestration/turn-recovery.js';
+import { ACCEPTANCE_REPAIR_READ_TOOLS, findUnconfirmedToolEffect, RECOVERY_READ_TOOLS, type UnconfirmedToolEffect } from '../agent/orchestration/turn-recovery.js';
 
 export type TaskApplicationResult =
   | { ok: true; model: TaskReadModel; runId?: string }
@@ -221,7 +224,7 @@ export class TaskApplicationService {
         });
       } else if (started.ok === false && started.reason === 'blocked') {
         const waits = this.#runs.listActiveWaits(current.id);
-        if (!waits.some((wait) => wait.kind === 'approval' || wait.kind === 'user_input')) {
+        if (!isPersonalDelegatedTask(current.id) && !waits.some((wait) => wait.kind === 'approval' || wait.kind === 'user_input')) {
           enqueueTaskAttentionRequiredEvent(db, {
             taskId: current.id,
             taskTitle: current.title,
@@ -964,7 +967,7 @@ export class TaskApplicationService {
       if (result.ok === false) {
         if (result.reason === 'blocked') {
           const waits = this.#runs.listActiveWaits(task.id);
-          if (!waits.some((wait) => wait.kind === 'approval' || wait.kind === 'user_input')) {
+          if (!isPersonalDelegatedTask(task.id) && !waits.some((wait) => wait.kind === 'approval' || wait.kind === 'user_input')) {
             enqueueTaskAttentionRequiredEvent(db, {
               taskId: task.id,
               taskTitle: task.title,
@@ -1034,21 +1037,80 @@ export class TaskApplicationService {
         return { ok: false, reason: 'conflict', model: this.#projector.get(run.taskId) };
       }
       const task = this.#tasks.require(run.taskId);
+      const zh = resolveTaskLocale(task) === 'zh';
+      const personal = isPersonalDelegatedTask(task.id);
+      const activeConversationId = new TaskConversationRepository().getState(task.id)?.activeConversationId;
+      const alreadyWaiting = this.#runs.listActiveWaits(task.id).length > 0;
+      const current = !run.parentRunId && run.contractVersion === task.latestContractVersion
+        && (!run.conversationId || !activeConversationId || run.conversationId === activeConversationId);
+      const phaseUnchanged = this.#tasks.runPhaseUnchanged(task.id, run.id);
       const latestInstructionSequence = taskInstructionSequence(task.id);
       const currentInstructions = latestInstructionSequence === (run.instructionSequenceAtStart ?? 0)
         || latestInstructionSequence === input.reviewedInstructionSequence;
-      const instructionGap = resolveTaskLocale(task) === 'zh' ? '尚未核验运行期间补充的指令。'
+      const instructionGap = zh ? '尚未核验运行期间补充的指令。'
         : 'Directions added during execution still need verification.';
       const workspaceFiles = !run.parentRunId && input.receipt.status === 'succeeded'
         ? verifyTaskWorkspace(task, run.policySnapshot?.workspaceBaseline) : [];
       const missingWorkspaceFiles = workspaceFiles.filter(file => !file.verified);
-      const workspaceGaps = missingWorkspaceFiles.map(file => resolveTaskLocale(task) === 'zh'
+      const workspaceGaps = missingWorkspaceFiles.map(file => zh
         ? `目标位置待核验：${file.relativePath || '工作区文件'}` : `Workspace target needs verification: ${file.relativePath || 'workspace file'}`);
-      const receipt = !currentInstructions && input.receipt.status === 'succeeded'
+      let receipt = !currentInstructions && input.receipt.status === 'succeeded'
         ? { ...input.receipt, completionVerdict: 'partial' as const, verification: { status: 'unverified' as const, checks: [] },
           remainingWork: [...input.receipt.remainingWork, instructionGap, ...workspaceGaps] }
         : workspaceGaps.length ? { ...input.receipt, completionVerdict: 'partial' as const,
           remainingWork: [...input.receipt.remainingWork, ...workspaceGaps] } : input.receipt;
+      let unconfirmedEffect = input.unconfirmedEffect;
+      const criteria = task.contract?.acceptanceCriteria ?? [];
+      const allCriteriaVerified = (verified: Set<string>) => criteria.length > 0
+        && criteria.every((_, index) => verified.has(taskCheckId(task.id, run.contractVersion, index)));
+      if (personal && current && phaseUnchanged && task.phase !== 'closed' && !alreadyWaiting
+        && task.contract?.acceptancePolicy === 'verified_auto' && receipt.status === 'succeeded' && !receipt.needsUser) {
+        const verification = bindTaskVerification(run, receipt.verification, criteria);
+        const verifiedChecks = verifiedTaskCheckIds({ ...receipt, verification });
+        if (receipt.verification.status !== 'passed' || receipt.completionVerdict !== 'achieved'
+          || receipt.remainingWork.length || !allCriteriaVerified(verifiedChecks)) {
+          const gaps = [...new Set([...receipt.remainingWork,
+            ...criteria.filter((_, index) => !verifiedChecks.has(taskCheckId(task.id, run.contractVersion, index)))])];
+          if (!gaps.length) gaps.push(zh ? '确认交付是否满足当前任务要求。' : 'Verify that the result meets the current task requirements.');
+          if (!input.hostArtifact && run.conversationId) {
+            unconfirmedEffect ??= findUnconfirmedToolEffect(loadTranscriptRowsForSession(run.conversationId), {
+              allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS, allowMissingReadTools: RECOVERY_READ_TOOLS,
+            });
+            if (!unconfirmedEffect && this.#runs.scheduleContinuation({ runId: run.id, expectedVersion: run.version,
+              reason: 'acceptance_repair', repairFingerprint: requestHash({ gaps, latestInstructionSequence }),
+              message: ['Complete and verify only the outstanding requirements using the current task and recorded work.',
+                'Use authorized source reads, corrections to the explicitly requested workspace outputs, and artifact publication. Preserve already verified results.',
+                'Do not repeat an external operation. If a specific fact or permission is required, ask for it.',
+                'Outstanding checks:', JSON.stringify(gaps).slice(0, 16_000)].join('\n') })) {
+              return { ok: true, model: this.#projector.project(task) };
+            }
+          }
+          const nextAction = unconfirmedEffect
+            ? (zh ? '请先确认上一次操作是否已生效。' : 'Confirm whether the previous operation took effect.') : undefined;
+          receipt = { ...receipt,
+            status: 'failed',
+            verification: { ...receipt.verification, status: verification.status === 'failed' ? 'failed' : 'unverified' },
+            remainingWork: gaps, completionVerdict: 'partial',
+            needsUser: Boolean(nextAction),
+            nextAction,
+            failure: nextAction
+              ? { code: 'tool_outcome_unconfirmed', phase: 'execution', recoveryAction: nextAction }
+              : { code: 'acceptance_incomplete', phase: 'verification',
+                recoveryAction: zh ? '可查看已保留的成果和未核验项。' : 'The retained results and verification gaps are available in the task record.' },
+          };
+        }
+      }
+      if (personal && current && receipt.status === 'failed' && receipt.needsUser && unconfirmedEffect) {
+        const connected = Boolean(personalRequestForTask(task.id));
+        const reasonCode = receipt.failure?.code ?? 'tool_outcome_unconfirmed';
+        if (isReadOnlyRetryDecision({ type: 'run_decision', reasonCode, operation: unconfirmedEffect }, connected)
+          && (connected || isReadOnlyTaskRetry(task, run))) {
+          receipt = { ...receipt, needsUser: false, nextAction: undefined, failure: {
+            code: reasonCode, phase: receipt.failure?.phase ?? 'execution',
+            recoveryAction: zh ? '可从原任务重试只读操作。' : 'Read-only execution can be retried from the original task.',
+          } };
+        }
+      }
       const finalized = this.#runs.finalize({
         runId: run.id,
         expectedVersion: run.version,
@@ -1065,20 +1127,15 @@ export class TaskApplicationService {
       if (mcpDelegatedRunPrincipal(run) && input.resultText?.trim() && input.resultText.trim() !== 'NO_REPLY') {
         delegatedRunText.set(run.id, input.resultText);
       }
-      const activeConversationId = new TaskConversationRepository().getState(task.id)?.activeConversationId;
-      const alreadyWaiting = this.#runs.listActiveWaits(task.id).length > 0;
-      const current = !run.parentRunId && run.contractVersion === task.latestContractVersion
-        && (!run.conversationId || !activeConversationId || run.conversationId === activeConversationId);
-      const decisionReason = input.receipt.needsUser
-        ? input.receipt.nextAction?.trim() || input.receipt.failure?.recoveryAction?.trim() || input.receipt.summary.trim()
-          || (resolveTaskLocale(task) === 'zh' ? '请核对上次执行结果' : 'Check the previous run result')
+      const decisionReason = receipt.needsUser
+        ? receipt.nextAction?.trim() || receipt.failure?.recoveryAction?.trim() || receipt.summary.trim()
+          || (zh ? '请核对上次执行结果' : 'Check the previous run result')
         : undefined;
-      if (current && decisionReason && task.phase !== 'closed') {
-        const reasonCode = input.receipt.failure?.code ?? (input.unconfirmedEffect ? 'tool_outcome_unconfirmed' : undefined);
-        this.#runs.createWait({ taskId: task.id, taskRunId: run.id, kind: 'external_event', reason: decisionReason,
+      const reasonCode = receipt.failure?.code ?? (unconfirmedEffect ? 'tool_outcome_unconfirmed' : undefined);
+      const decisionWait = current && decisionReason && task.phase !== 'closed'
+        ? this.#runs.createWait({ taskId: task.id, taskRunId: run.id, kind: 'external_event', reason: decisionReason,
           condition: { type: 'run_decision', contractVersion: run.contractVersion, ...(reasonCode ? { reasonCode } : {}),
-            ...(input.unconfirmedEffect ? { operation: input.unconfirmedEffect } : {}) } });
-      }
+            ...(unconfirmedEffect ? { operation: unconfirmedEffect } : {}) } }) : undefined;
       // Late and child receipts cannot override a user's pause/close decision
       // or certify a newer contract.
       if (!current || alreadyWaiting || (task.phase === 'closed' && task.resolution !== 'done')) {
@@ -1092,28 +1149,30 @@ export class TaskApplicationService {
       new TaskCollaborationRepository().append({
         taskId: run.taskId, taskRunId: run.id, authorKind: 'system', authorId: 'task-run',
         kind: receipt.status === 'succeeded' && !receipt.needsUser && currentInstructions ? 'result' : 'failure',
-        body: (decisionReason ?? (!currentInstructions ? instructionGap : receipt.summary)).slice(0, 8000) || (resolveTaskLocale(task) === 'zh'
-          ? input.receipt.status === 'succeeded' ? '任务执行完成' : '任务执行失败'
-          : input.receipt.status === 'succeeded' ? 'TaskRun completed' : 'TaskRun failed'),
+        body: (decisionReason ?? (!currentInstructions ? instructionGap : receipt.summary)).slice(0, 8000) || (zh
+          ? receipt.status === 'succeeded' ? '任务执行完成' : '任务执行失败'
+          : receipt.status === 'succeeded' ? 'TaskRun completed' : 'TaskRun failed'),
         idempotencyKey: `task-run-receipt:${run.id}`,
       });
       if (currentInstructions && (receipt.status === 'succeeded' || receipt.status === 'failed')) {
         new TaskResultDeliveryRepository().enqueue(run.id, receipt.summary, receipt.status, input.resultText, input.hostArtifact,
           missingWorkspaceFiles.length > 0);
       }
-      if (!this.#tasks.runPhaseUnchanged(task.id, run.id) || task.phase === 'closed') {
+      if (!phaseUnchanged || task.phase === 'closed') {
         enqueueTaskChangedEvent(db, { taskId: task.id, projectId: task.projectId, version: task.version,
           changedFields: ['runs', 'receipts'], source: 'runtime' });
         return { ok: true, model: this.#projector.project(task) };
       }
-      if (input.receipt.status !== 'succeeded') {
+      if (receipt.status !== 'succeeded' || (personal && decisionReason)) {
         const model = this.#projector.project(task);
-        if (!input.suppressAttention) enqueueTaskAttentionRequiredEvent(db, {
+        const notify = !personal || (receipt.status !== 'cancelled' && (decisionReason || receipt.failure?.phase === 'preflight'));
+        if (!input.suppressAttention && notify) enqueueTaskAttentionRequiredEvent(db, {
           taskId: task.id,
           taskTitle: task.title,
           ...(task.projectId ? { projectId: task.projectId } : {}),
-          reason: 'failed',
-          detail: input.terminalMessage ?? input.receipt.summary,
+          ...(personal && decisionWait ? { waitId: decisionWait.id } : {}),
+          reason: personal && decisionReason ? 'user_input' : 'failed',
+          detail: decisionReason ?? input.terminalMessage ?? receipt.summary,
           correlationId: run.id,
         });
         enqueueTaskChangedEvent(db, {
@@ -1126,10 +1185,7 @@ export class TaskApplicationService {
         });
         return { ok: true, model };
       }
-      const verifiedCriteria = verifiedTaskCheckIds(this.#runs.getReceipt(run.id));
-      const criteria = task.contract?.acceptanceCriteria ?? [];
-      const criteriaVerified = criteria.length > 0
-        && criteria.every((_, index) => verifiedCriteria.has(taskCheckId(task.id, run.contractVersion, index)));
+      const criteriaVerified = allCriteriaVerified(verifiedTaskCheckIds(this.#runs.getReceipt(run.id)));
       const humanReviewBlocksCompletion = new TaskCriterionReviewRepository().list(task.id, task.latestContractVersion)
         .some(review => review.status !== 'passed');
       const hasWaits = this.#runs.listActiveWaits(task.id).length > 0;

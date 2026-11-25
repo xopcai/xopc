@@ -9,6 +9,7 @@ import type {
 import { taskRunResultKind } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
+import { isPersonalDelegatedTask } from '../personal-agent/repository.js';
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
 
 import { TaskAllocationRepository } from './task-allocation-repository.js';
@@ -18,6 +19,7 @@ import { resolveTaskLocale } from './task-language.js';
 import { TaskCriterionReviewRepository } from './task-criterion-review-repository.js';
 import { taskInstructionSequence } from './task-instruction-sequence.js';
 import { isReadOnlyRetryDecision, isReadOnlyTaskRetry } from './task-retry-policy.js';
+import { TaskCollaborationRepository } from './task-collaboration-repository.js';
 
 export interface TaskReadModel {
   task: TaskAggregate;
@@ -26,6 +28,7 @@ export interface TaskReadModel {
   presentation: TaskPresentation;
   acceptanceTarget?: TaskAcceptanceTarget;
   attention: TaskAttentionItem[];
+  personalAttention?: TaskAttentionItem | 'review' | null;
   allowedCommands: string[];
   revisionBaseline?: { resultId: string; baselineVersion: string; resultRevision: number; expectedVersion: number };
 }
@@ -43,6 +46,8 @@ export class TaskReadModelProjector {
     const activeRun = this.#runs.getActiveRoot(task.id);
     const latestRun = activeRun ?? this.#runs.getLatestRoot(task.id);
     const waits = this.#runs.listActiveWaits(task.id);
+    const personal = isPersonalDelegatedTask(task.id);
+    const board = personal ? new TaskCollaborationRepository() : undefined;
     const paused = waits.some((wait) => wait.kind === 'paused');
     const hasIncompleteDependency = Boolean(getSqliteDatabase().prepare(
       `SELECT 1 FROM task_dependencies edge
@@ -58,6 +63,7 @@ export class TaskReadModelProjector {
     if (allocation && ['blocked', 'failed'].includes(allocation.status)) attention.push({
       kind: allocation.status === 'failed' ? 'allocation_failed' : 'allocation_blocked',
       summary: allocation.selectionReason ?? allocation.reasonCode ?? 'Allocation needs attention', sourceId: allocation.id });
+    const internalQuestions = new Set<string>();
     for (const wait of waits) {
       if (wait.kind === 'external_event' && wait.condition.type === 'run_decision') {
         attention.push({ kind: 'run_decision_required', summary: wait.reason, sourceId: wait.taskRunId });
@@ -70,11 +76,15 @@ export class TaskReadModelProjector {
           : wait.kind === 'dependency'
             ? 'dependency_blocked'
             : undefined;
+      if (kind === 'input_required' && typeof wait.condition.collaborationEntryId === 'string'
+        && board?.hasPendingMainQuestion(task.id, wait.condition.collaborationEntryId)) internalQuestions.add(wait.id);
       if (kind) attention.push({ kind, summary: wait.reason, sourceId: wait.id });
     }
+    let preflightFailure = false;
     if (latestRun && latestRun.contractVersion === task.latestContractVersion
       && (latestRun.status === 'failed' || latestRun.status === 'succeeded' && task.phase === 'review')) {
       const receipt = this.#runs.getReceipt(latestRun.id);
+      preflightFailure = receipt?.failure?.phase === 'preflight';
       const zh = resolveTaskLocale(task) === 'zh';
       const resultKind = receipt ? taskRunResultKind(receipt) : 'execution_failed';
       if (resultKind === 'execution_failed') {
@@ -118,7 +128,11 @@ export class TaskReadModelProjector {
       resultRevision: Number(result.resultRevision ?? 1), expectedVersion: task.version } : undefined;
     if (revisionBaseline && !activeRun && !waits.length && ['closed', 'review'].includes(task.phase) && (!task.resolution || task.resolution === 'done')
       && !getSqliteDatabase().prepare('SELECT 1 FROM personal_requests WHERE task_id = ?').get(task.id)) allowedCommands.push('revise');
-    const operationalState = task.phase !== 'closed' && !paused && !activeRun && waits.length === 0 && allocation
+    const unverifiedPersonalResult = personal && task.contract?.acceptancePolicy === 'verified_auto'
+      && task.phase === 'review' && executionState === 'idle' && latestRun?.status === 'succeeded'
+      && latestRun.contractVersion === task.latestContractVersion && this.#tasks.runPhaseUnchanged(task.id, latestRun.id);
+    const operationalState = unverifiedPersonalResult ? 'failed'
+      : task.phase !== 'closed' && !paused && !activeRun && waits.length === 0 && allocation
       ? allocating ? 'allocating' : allocation.status === 'blocked' ? 'blocked' : allocation.status === 'failed' ? 'failed' : executionState
       : executionState;
     const reviews = new TaskCriterionReviewRepository();
@@ -126,13 +140,27 @@ export class TaskReadModelProjector {
     const workspaceBlocked = task.phase === 'review' && !reviews.workspaceVerified(task, target);
     const acceptanceTarget = target ? { id: target.id, ...(target.runId ? { runId: target.runId } : {}),
       canSignOff: !waits.length && !workspaceBlocked && reviews.canSignOff(task, target) } : undefined;
+    const foreground = internalQuestions.size === 0 ? attention
+      : attention.filter(item => !item.sourceId || !internalQuestions.has(item.sourceId));
+    const presentation = unverifiedPersonalResult && latestRun
+      ? { status: 'failed' as const, reason: attention.find(item => item.kind === 'verification_failed'
+        || item.kind === 'verification_unverified')?.summary, primaryAction: { type: 'inspect_run' as const, runId: latestRun.id } }
+      : this.presentation(task, operationalState, waits, foreground, allowedCommands, latestRun, workspaceBlocked, acceptanceTarget);
+    const visibleAttention = (task.phase === 'closed' && (task.resolution !== 'done' || waits.length === 0)) || paused ? [] : attention;
+    const actionable = visibleAttention.length ? foreground : [];
+    const personalAttention = actionable.find(item => item.kind === 'input_required' || item.kind === 'approval_required')
+      ?? actionable.find(item => (item.kind === 'run_decision_required' && presentation.status === 'needsUser')
+      || (item.kind === 'run_failed' && preflightFailure)
+      || (item.kind === 'allocation_blocked' && allocation?.reasonCode === 'needs_input' && !board?.hasPendingMainQuestion(task.id)));
     return {
       task,
       allocation,
       operationalState,
-      presentation: this.presentation(task, operationalState, waits, attention, allowedCommands, latestRun, workspaceBlocked, acceptanceTarget),
+      presentation,
       acceptanceTarget,
-      attention: (task.phase === 'closed' && (task.resolution !== 'done' || waits.length === 0)) || paused ? [] : attention,
+      attention: visibleAttention,
+      ...(personal ? { personalAttention: personalAttention
+        ?? (presentation.status === 'review' && task.contract?.acceptancePolicy !== 'verified_auto' ? 'review' : null) } : {}),
       allowedCommands,
       ...(revisionBaseline ? { revisionBaseline } : {}),
     };

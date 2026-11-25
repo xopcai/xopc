@@ -22,6 +22,20 @@ import { inspectTaskWorkspace } from './task-workspace-verification.js';
 
 const ACTIVE_RUN_STATUSES: TaskRunStatus[] = ['queued', 'running', 'waiting', 'verifying'];
 
+export function bindTaskVerification(
+  run: Pick<TaskRun, 'taskId' | 'contractVersion'>,
+  verification: TaskRunReceipt['verification'],
+  criteria: readonly string[],
+): TaskRunReceipt['verification'] {
+  const checks = verification.checks.map(check => {
+    const index = check.checkId
+      ? criteria.findIndex((text, position) => text === check.criterion && taskCheckId(run.taskId, run.contractVersion, position) === check.checkId)
+      : criteria.indexOf(check.criterion) === criteria.lastIndexOf(check.criterion) ? criteria.indexOf(check.criterion) : -1;
+    return { ...check, checkId: index >= 0 ? taskCheckId(run.taskId, run.contractVersion, index) : undefined };
+  });
+  return { ...verification, checks };
+}
+
 export function mcpDelegatedRunPrincipal(run: TaskRun | undefined): string | undefined {
   if (!run || run.executorKind !== 'agent' || run.parentRunId) return undefined;
   const actor = ActorRefSchema.safeParse(run.trigger.actor);
@@ -507,12 +521,7 @@ export class TaskRunRepository {
       );
       if (result.changes === 0) return undefined;
       const criteria = new TaskRepository().getContract(run.taskId, run.contractVersion)?.acceptanceCriteria ?? [];
-      const checks = input.receipt.verification.checks.map(check => {
-        const index = check.checkId
-          ? criteria.findIndex((text, position) => text === check.criterion && taskCheckId(run.taskId, run.contractVersion, position) === check.checkId)
-          : criteria.indexOf(check.criterion) === criteria.lastIndexOf(check.criterion) ? criteria.indexOf(check.criterion) : -1;
-        return { ...check, checkId: index >= 0 ? taskCheckId(run.taskId, run.contractVersion, index) : undefined };
-      });
+      const verification = bindTaskVerification(run, input.receipt.verification, criteria);
       db.prepare(
         `INSERT INTO task_run_receipts (
           run_id, status, summary, changes_json, evidence_json, verification_json,
@@ -532,7 +541,7 @@ export class TaskRunRepository {
         input.receipt.summary,
         JSON.stringify(input.receipt.changes),
         JSON.stringify(input.receipt.evidence),
-        JSON.stringify({ ...input.receipt.verification, checks }),
+        JSON.stringify(verification),
         JSON.stringify(input.receipt.remainingWork),
         input.receipt.nextAction ?? null,
         input.receipt.needsUser ? 1 : 0,
@@ -542,7 +551,8 @@ export class TaskRunRepository {
         input.receipt.contextTraceId ?? null,
         now,
       );
-      if (!run.parentRunId && input.receipt.status === 'succeeded') {
+      if (!run.parentRunId && (input.receipt.status === 'succeeded' || (input.receipt.failure?.code === 'acceptance_incomplete'
+        && input.receipt.completionVerdict === 'partial'))) {
         const state = db.prepare('SELECT active_conversation_id, assignment_epoch FROM task_conversation_state WHERE task_id = ?')
           .get(run.taskId) as { active_conversation_id: string | null; assignment_epoch: number } | undefined;
         const currentSequence = taskInstructionSequence(run.taskId);

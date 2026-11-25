@@ -149,3 +149,10 @@ export function isPersonalConversation(conversationId: string): boolean {
   }
   return session.agent_id === personalAgentId(ownerId);
 }
+
+export function isPersonalDelegatedTask(taskId: string): boolean {
+  if (!isXopcDatabaseOpen()) return false;
+  const origin = getSqliteDatabase().prepare('SELECT conversation_id FROM task_origin_links WHERE task_id = ?')
+    .get(taskId)?.conversation_id;
+  return typeof origin === 'string' && isPersonalConversation(origin);
+}

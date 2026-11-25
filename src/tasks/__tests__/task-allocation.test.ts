@@ -248,10 +248,16 @@ describe('background task allocation', () => {
     expect(new TaskRunRepository().getActiveRoot(task.id)).toBeDefined();
   });
 
-  it('blocks rather than executing after background capability planning fails', async () => {
+  it('retries Personal capability planning in the background and blocks if it stays unavailable', async () => {
     const task = submit('planner-unavailable');
-    await new TaskAllocationDispatcher({ context, decide, wake: vi.fn(), planner: { plan: async () => ({
-      ...defineTaskContract('Analyze sales'), capabilityPlanning: 'unavailable' }) } }).drain();
+    const allocator = new TaskAllocationDispatcher({ context, decide, wake: vi.fn(), planner: { plan: async () => ({
+      ...defineTaskContract('Analyze sales'), capabilityPlanning: 'unavailable' }) } });
+    await allocator.drain();
+    expect(new TaskAllocationRepository().summary(task.id)).toMatchObject({ status: 'pending', attempts: 1 });
+    for (let attempt = 2; attempt <= 3; attempt++) {
+      getSqliteDatabase().prepare('UPDATE task_allocations SET next_attempt_at = 0 WHERE task_id = ?').run(task.id);
+      await allocator.drain();
+    }
     expect(new TaskAllocationRepository().summary(task.id)).toMatchObject({ status: 'blocked', reasonCode: 'capability_planning_unavailable' });
     expect(new TaskRunRepository().getActiveRoot(task.id)).toBeUndefined();
     expect(new TaskRunRepository().listByTask(task.id)).toHaveLength(0);

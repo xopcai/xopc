@@ -35,6 +35,9 @@ import { TaskMainUpdateDelivery } from '../task-main-update-delivery.js';
 import { submitAndConfirmTaskMainUpdate } from '../task-main-update-input.js';
 import { TaskResultDeliveryRepository } from '../task-result-delivery-repository.js';
 import { TaskCollaborationRepository } from '../task-collaboration-repository.js';
+import { TaskOriginRepository } from '../task-origin-repository.js';
+import { decisionFromTask } from '../home-query-service.js';
+import { isTaskInputNotificationActionable, notificationPlanFromGatewayEvent } from '../../notifications/planner.js';
 import { PersonalPromptContext } from '../../personal-agent/prompt-context.js';
 import type { ClientHistoryMessage } from '../../session/client-history.js';
 import { SessionStore } from '../../session/store.js';
@@ -124,13 +127,119 @@ describe('background task result delivery', () => {
       expect(new TaskResultDeliveryRepository().hasForRun(runId)).toBe(false);
       return;
     }
-    expect(runs.getReceipt(runId)).toMatchObject({ status: 'succeeded', completionVerdict: 'partial', verification: { status: 'unverified' } });
-    expect(new TaskRepository().require(taskId).phase).toBe('review');
+    expect(runs.getReceipt(runId)).toMatchObject({ status: 'failed', completionVerdict: 'partial', needsUser: false,
+      verification: { status: 'unverified' }, failure: { code: 'acceptance_incomplete' } });
+    const model = new TaskReadModelProjector().get(taskId)!;
+    expect(model.task.phase).toBe('active');
+    expect(decisionFromTask(model)).toBeNull();
+    expect(new TaskOriginRepository().listCurrent(main.key)).toEqual([]);
+    expect(getSqliteDatabase().prepare(`SELECT 1 FROM domain_outbox WHERE event_type = 'task.attention_required.v2'
+      AND subject_id = ?`).get(taskId)).toBeUndefined();
+    const submitAndConfirm = vi.fn(async () => true);
+    await new TaskMainUpdateDelivery().drain({ isAvailable: () => true, decide: vi.fn(), submitAndConfirm });
+    expect(submitAndConfirm).not.toHaveBeenCalled();
     await new TaskResultDeliveryService().drain(vi.fn());
     expect(new TaskResultDeliveryRepository().fileDeliveryState(taskId, main.key)).toMatchObject({ status: 'delivered', availableFileCount: 1 });
     const result = getSqliteDatabase().prepare('SELECT payload_json FROM task_result_deliveries WHERE task_run_id = ?').get(runId);
     expect(JSON.parse(String(result?.payload_json))).toMatchObject({ outcome: { status: 'partial' }, text: '交付内容尚未逐项核验。' });
     expect(String(result?.payload_json)).not.toContain('All requirements verified');
+    expect(new TaskOriginRepository().listRecentEnded(main.key, 10, 0)).toMatchObject({
+      total: 1, items: [{ id: taskId, presentation: { status: 'failed' }, artifact: { title: 'Sunset.png' } }],
+    });
+  });
+
+  it('continues incomplete automatic verification on the same task and closes after evidence is present', () => {
+    const criterion = 'Image matches the brief';
+    const { main, taskId, runId } = task([criterion], 'verified_auto');
+    markPersonal(main.key);
+    const runs = new TaskRunRepository();
+    const app = new TaskApplicationService();
+    const receipt = { status: 'succeeded' as const, summary: 'Generated', changes: [], evidence: [], needsUser: false,
+      verification: { status: 'unverified' as const, checks: [] }, completionVerdict: 'partial' as const, remainingWork: [criterion] };
+    app.completeRun({ runId, expectedRunVersion: runs.require(runId).version, receipt });
+    const waiting = runs.require(runId);
+    expect(waiting).toMatchObject({ status: 'waiting', policySnapshot: { continuation: { reason: 'acceptance_repair' } } });
+    expect(runs.getReceipt(runId)).toBeUndefined();
+    expect(decisionFromTask(new TaskReadModelProjector().get(taskId)!)).toBeNull();
+    runs.setStatus({ runId, expectedVersion: waiting.version, from: ['waiting'], to: 'running' });
+    expect(app.completeRun({ runId, expectedRunVersion: runs.require(runId).version, receipt: { ...receipt,
+      evidence: [{ kind: 'test', title: 'Image check', summary: 'Image checked', provenance: 'tool', strength: 'verified', observedAt: 1 }],
+      verification: { status: 'passed', checks: [{ criterion, status: 'passed', evidenceTitles: ['Image check'] }] },
+      completionVerdict: 'achieved', remainingWork: [],
+    } })).toMatchObject({ ok: true, model: { task: { phase: 'closed', resolution: 'done' } } });
+    expect(runs.listByTask(taskId)).toHaveLength(1);
+  });
+
+  it('lets Personal Agent handle a worker question before it appears as user work', () => {
+    const { main, taskId, runId } = task(['Image matches the brief'], 'verified_auto');
+    markPersonal(main.key);
+    const board = new TaskCollaborationRepository();
+    const question = board.append({ taskId, taskRunId: runId, authorKind: 'worker_agent', authorId: 'worker',
+      kind: 'question', body: 'Which reference image?', idempotencyKey: 'question-before-handoff' });
+    const runs = new TaskRunRepository();
+    const wait = runs.createWait({ taskId, taskRunId: runId, kind: 'external_event', reason: question.body,
+      condition: { collaborationEntryId: question.id } });
+    runs.setStatus({ runId, expectedVersion: runs.require(runId).version, from: ['running'], to: 'waiting' });
+    const origin = new TaskOriginRepository();
+    const projector = new TaskReadModelProjector();
+    expect(origin.listCurrent(main.key)).toMatchObject([{ id: taskId, presentation: { status: 'waiting' } }]);
+    expect(decisionFromTask(projector.get(taskId)!)).toBeNull();
+    board.markMainUpdateDelivered(question.id);
+    expect(origin.listCurrent(main.key)).toMatchObject([{ id: taskId, attention: { kind: 'input_required', sourceId: wait.id },
+      presentation: { status: 'needsUser' } }]);
+    expect(decisionFromTask(projector.get(taskId)!)).toMatchObject({ reason: 'needs_input', detail: question.body });
+    runs.resolveWait({ waitId: wait.id, actor: { kind: 'agent' }, resolution: { answer: 'The existing reference.' } });
+    expect(decisionFromTask(projector.get(taskId)!)).toBeNull();
+  });
+
+  it('asks the user to check an unconfirmed external operation before continuing', () => {
+    const { main, worker, taskId, runId } = task(['The message was sent'], 'verified_auto');
+    markPersonal(main.key);
+    appendTranscriptEntry(worker.key, { role: 'assistant', content: [
+      { type: 'toolCall', id: 'send-attempt', name: 'send_message', arguments: {} },
+    ], stopReason: 'toolUse', timestamp: Date.now() } as Parameters<typeof appendTranscriptEntry>[1]);
+    const runs = new TaskRunRepository();
+    const app = new TaskApplicationService();
+    const result = app.completeRun({ runId, expectedRunVersion: runs.require(runId).version, receipt: {
+      status: 'succeeded', summary: 'Attempted to send the message', changes: [], evidence: [],
+      verification: { status: 'unverified', checks: [] }, remainingWork: ['Verify the send'], needsUser: false,
+    } });
+    expect(result).toMatchObject({ ok: true, model: { task: { phase: 'active' }, presentation: { status: 'needsUser' } } });
+    if (!result.ok) throw new Error('Expected final task state');
+    expect(decisionFromTask(result.model)).toMatchObject({ reason: 'needs_input', detail: '请先确认上一次操作是否已生效。' });
+    expect(runs.require(runId).policySnapshot.continuation).toBeUndefined();
+    const waits = runs.listActiveWaits(taskId);
+    expect(waits).toMatchObject([{ condition: { type: 'run_decision', operation: { toolName: 'send_message' } } }]);
+    const event = getSqliteDatabase().prepare(`SELECT payload_json FROM domain_outbox
+      WHERE event_type = 'task.attention_required.v2' AND subject_id = ?`).get(taskId);
+    const payload = { ...JSON.parse(String(event?.payload_json)), sourceEventId: 'unconfirmed-send' };
+    expect(payload).toMatchObject({ reason: 'user_input', waitId: waits[0].id });
+    const plan = notificationPlanFromGatewayEvent('task.attention_required.v2', payload);
+    expect(plan?.notification).toMatchObject({ type: 'task.needs_input' });
+    runs.resolveWait({ waitId: waits[0].id, actor: { kind: 'user' }, resolution: { confirmed: true } });
+    expect(notificationPlanFromGatewayEvent('task.attention_required.v2', payload)).toBeNull();
+    expect(isTaskInputNotificationActionable(plan!.notification)).toBe(false);
+  });
+
+  it.each(['verified_auto', 'manual'] as const)('surfaces only real sign-off for existing %s review tasks', acceptancePolicy => {
+    const { main, taskId, runId } = task(['Image matches the brief'], acceptancePolicy);
+    const runs = new TaskRunRepository();
+    new TaskApplicationService().completeRun({ runId, expectedRunVersion: runs.require(runId).version, receipt: {
+      status: 'succeeded', summary: 'Image available', changes: [], evidence: [],
+      verification: { status: 'unverified', checks: [] }, remainingWork: ['Image matches the brief'], needsUser: false,
+    } });
+    markPersonal(main.key);
+    const model = new TaskReadModelProjector().get(taskId)!;
+    const origin = new TaskOriginRepository();
+    expect(model.task.phase).toBe('review');
+    if (acceptancePolicy === 'manual') {
+      expect(decisionFromTask(model)).toMatchObject({ reason: 'decision_needed' });
+      expect(origin.listCurrent(main.key)).toMatchObject([{ id: taskId, presentation: { status: 'review' } }]);
+    } else {
+      expect(decisionFromTask(model)).toBeNull();
+      expect(origin.listCurrent(main.key)).toEqual([]);
+      expect(origin.listRecentEnded(main.key, 10, 0)).toMatchObject({ total: 1, items: [{ id: taskId }] });
+    }
   });
 
   it('persists final-only on one task and still routes its blocking question', async () => {

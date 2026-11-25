@@ -9,6 +9,7 @@ import type { AutomationRun } from '../automations/domain/types.js';
 import { hasCoveringOneShotFollowUp } from '../personal-agent/proactivity/one-shot-follow-up.js';
 import { resolvePersonalOwnerId } from '../personal-agent/repository.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/connection.js';
+import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { markdownNotificationPreview } from './plain-text.js';
 
 export type NotificationPlan = {
@@ -81,6 +82,14 @@ function personalReplyPlan(payload: unknown): NotificationPlan | null {
   };
 }
 
+export function isTaskInputNotificationActionable(notification: Pick<ProductNotification, 'type' | 'target' | 'payload'>): boolean {
+  const waitId = notification.payload?.waitId;
+  if (notification.type !== 'task.needs_input' || notification.target.kind !== 'task'
+    || typeof waitId !== 'string' || !isXopcDatabaseOpen()) return true;
+  return Boolean(getSqliteDatabase().prepare("SELECT 1 FROM task_waits WHERE task_id = ? AND wait_id = ? AND status = 'active'")
+    .get(notification.target.taskId, waitId));
+}
+
 function taskPlan(payload: unknown): NotificationPlan | null {
   if (!payload || typeof payload !== 'object') return null;
   const data = payload as TaskPayload;
@@ -99,8 +108,11 @@ function taskPlan(payload: unknown): NotificationPlan | null {
         ? 'task.completed'
         : undefined;
   if (!type) return null;
+  const waitId = typeof data.waitId === 'string' ? data.waitId : undefined;
+  const target = { kind: 'task' as const, taskId };
+  const notificationPayload = { taskId, sourceEventId, ...(waitId ? { waitId } : {}) };
+  if (!isTaskInputNotificationActionable({ type, target, payload: notificationPayload })) return null;
   if (type === 'task.needs_input' && isXopcDatabaseOpen()) {
-    const waitId = typeof data.waitId === 'string' ? data.waitId : undefined;
     if (hasCoveringOneShotFollowUp(resolvePersonalOwnerId(), taskId, waitId)) return null;
   }
   const taskTitle = typeof data.task?.title === 'string' ? data.task.title.trim().slice(0, 120) : '';
@@ -115,11 +127,11 @@ function taskPlan(payload: unknown): NotificationPlan | null {
     dedupeKey: `${type}:${sourceEventId}`,
     notification: {
       type,
-      target: { kind: 'task', taskId },
+      target,
       priority: type === 'task.completed' ? 'normal' : 'high',
       title,
       ...(taskTitle ? { body: { en: taskTitle, zh: taskTitle } } : {}),
-      payload: { taskId, sourceEventId },
+      payload: notificationPayload,
     },
   };
 }

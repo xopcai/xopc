@@ -3,6 +3,7 @@ import type { TaskAllocation, TaskOperationalState, TaskPresentation, TaskResolu
 
 import { getClarification } from '../storage/sqlite/clarification-wait-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
+import { isPersonalConversation } from '../personal-agent/repository.js';
 import { TaskReadModelProjector } from './task-read-model-projector.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
@@ -20,13 +21,31 @@ export interface DelegatedTaskSummary {
   updatedAt: number;
 }
 
+const DELEGATED_WORK = `FROM task_origin_links origin JOIN tasks task ON task.task_id = origin.task_id
+  LEFT JOIN task_runs latest ON latest.run_id = (SELECT run.run_id FROM task_runs run
+    WHERE run.task_id = task.task_id AND run.parent_run_id IS NULL ORDER BY run.queued_at DESC, run.rowid DESC LIMIT 1)
+  WHERE origin.conversation_id = ?`;
+const ACTIVE_WAIT = `EXISTS (SELECT 1 FROM task_waits wait WHERE wait.task_id = task.task_id AND wait.status = 'active')`;
+const CLOSED_WORK = `task.phase = 'closed' AND (task.resolution IS NOT 'done' OR NOT ${ACTIVE_WAIT})`;
+const PERSONAL_BACKGROUND_OUTCOME = `task.phase <> 'closed' AND NOT ${ACTIVE_WAIT}
+  AND NOT EXISTS (SELECT 1 FROM task_runs run WHERE run.task_id = task.task_id AND run.parent_run_id IS NULL
+    AND run.status IN ('queued', 'running', 'waiting', 'verifying'))
+  AND NOT EXISTS (SELECT 1 FROM task_allocations allocation WHERE allocation.task_id = task.task_id
+    AND (allocation.status IN ('pending', 'selecting') OR allocation.reason_code = 'needs_input'))
+  AND (COALESCE(latest.contract_version = task.latest_contract_version AND (
+    (latest.status = 'failed' AND NOT EXISTS (SELECT 1 FROM task_run_receipts receipt WHERE receipt.run_id = latest.run_id
+      AND json_extract(receipt.failure_json, '$.phase') = 'preflight'))
+    OR (task.phase = 'review' AND latest.status = 'succeeded' AND latest.manual_phase_revision = task.manual_phase_revision AND EXISTS (
+      SELECT 1 FROM task_contracts contract WHERE contract.task_id = task.task_id AND contract.version = task.latest_contract_version
+        AND contract.acceptance_policy = 'verified_auto'))
+  ), 0) OR EXISTS (SELECT 1 FROM task_allocations allocation WHERE allocation.task_id = task.task_id
+    AND allocation.status IN ('failed', 'blocked')))`;
+
 export class TaskOriginRepository {
   listCurrent(conversationId: string) {
+    const ended = this.endedWork(conversationId);
     const rows = getSqliteDatabase().prepare(`SELECT task.task_id AS id
-      FROM task_origin_links origin JOIN tasks task ON task.task_id = origin.task_id
-      WHERE origin.conversation_id = ? AND (task.phase <> 'closed' OR (task.resolution = 'done' AND EXISTS (
-        SELECT 1 FROM task_waits wait WHERE wait.task_id = task.task_id AND wait.status = 'active'
-      )))
+      ${DELEGATED_WORK} AND NOT (${ended})
       ORDER BY task.updated_at DESC, task.task_id DESC`).all(conversationId) as { id: string }[];
     const projector = new TaskReadModelProjector();
     const runs = new TaskRunRepository();
@@ -35,13 +54,18 @@ export class TaskOriginRepository {
       const model = projector.get(id);
       if (!model) return [];
       const { task, operationalState } = model;
-      const attention = model.attention.find(item => item.kind === 'approval_required' || item.kind === 'input_required');
-      const clarificationId = attention?.sourceId ? runs.getWait(attention.sourceId)?.condition.clarificationId : undefined;
+      const attention = model.personalAttention === undefined
+        ? model.attention.find(item => item.kind === 'approval_required' || item.kind === 'input_required')
+        : model.personalAttention === 'review' ? undefined : model.personalAttention ?? undefined;
+      const clarificationId = attention?.sourceId && ['input_required', 'approval_required'].includes(attention.kind)
+        ? runs.getWait(attention.sourceId)?.condition.clarificationId : undefined;
       const clarification = typeof clarificationId === 'string' ? getClarification(clarificationId) : undefined;
       const prompt = clarification?.status === 'open' && (!clarification.expiresAt || clarification.expiresAt > Date.now())
         ? { id: clarification.id, conversationId: clarification.conversationId } : undefined;
+      const presentation = model.personalAttention === null && ['review', 'blocked', 'failed', 'needsUser'].includes(model.presentation.status)
+        ? { ...model.presentation, status: 'waiting' as const } : model.presentation;
       return [{ id, title: task.title, phase: task.phase, operationalState,
-        resolution: task.resolution, updatedAt: task.updatedAt, presentation: model.presentation,
+        resolution: task.resolution, updatedAt: task.updatedAt, presentation,
         attention: clarification && !prompt ? undefined : attention, prompt,
         artifact: task.phase === 'review' ? deliveries.fileDeliveryState(id, conversationId, true).artifact : undefined }];
     });
@@ -105,20 +129,23 @@ export class TaskOriginRepository {
 
   listRecentEnded(conversationId: string, limit: number, offset: number) {
     const db = getSqliteDatabase();
-    const ended = `FROM task_origin_links origin JOIN tasks task ON task.task_id = origin.task_id
-      WHERE origin.conversation_id = ? AND task.phase = 'closed' AND (task.resolution IS NOT 'done' OR NOT EXISTS (
-        SELECT 1 FROM task_waits wait WHERE wait.task_id = task.task_id AND wait.status = 'active'
-      ))`;
+    const ended = `${DELEGATED_WORK} AND (${this.endedWork(conversationId)})`;
     const { total } = db.prepare(`SELECT count(*) AS total ${ended}`).get(conversationId) as { total: number };
     const items = db.prepare(`SELECT task.task_id AS id, task.title, task.phase, task.resolution,
-      task.updated_at AS updatedAt ${ended} ORDER BY task.updated_at DESC, task.task_id DESC LIMIT ? OFFSET ?`)
-      .all(conversationId, limit, offset) as { id: string; title: string; phase: 'closed'; resolution: TaskResolution | null; updatedAt: number }[];
+      CASE WHEN task.phase = 'closed' THEN task.updated_at
+        ELSE MAX(task.updated_at, COALESCE(latest.completed_at, task.updated_at)) END AS updatedAt
+      ${ended} ORDER BY updatedAt DESC, task.task_id DESC LIMIT ? OFFSET ?`)
+      .all(conversationId, limit, offset) as { id: string; title: string; phase: string; resolution: TaskResolution | null; updatedAt: number }[];
     const deliveries = new TaskResultDeliveryRepository();
     return { total, items: items.map(item => ({
       ...item,
-      presentation: { status: item.resolution === 'done' ? 'completed' as const : 'ended' as const,
+      presentation: { status: item.resolution === 'done' ? 'completed' as const : item.phase === 'closed' ? 'ended' as const : 'failed' as const,
         primaryAction: { type: 'view_results' as const } },
-      artifact: item.resolution === 'done' ? deliveries.fileDeliveryState(item.id, conversationId, true).artifact : undefined,
+      artifact: item.resolution === 'done' || item.phase !== 'closed' ? deliveries.fileDeliveryState(item.id, conversationId, true).artifact : undefined,
     })) };
+  }
+
+  private endedWork(conversationId: string): string {
+    return isPersonalConversation(conversationId) ? `(${CLOSED_WORK}) OR (${PERSONAL_BACKGROUND_OUTCOME})` : CLOSED_WORK;
   }
 }

@@ -8,6 +8,7 @@ import { isXopcDatabaseOpen, loadTranscriptRowsForSession } from '../storage/sql
 import { findUnconfirmedToolEffect, RECOVERY_READ_TOOLS } from '../agent/orchestration/turn-recovery.js';
 import { runInIndependentAgentExecution } from '../agent/independent-execution.js';
 import { TaskModelPreflightError } from '../agent/models/turn-candidates.js';
+import { isPersonalDelegatedTask } from '../personal-agent/repository.js';
 
 const log = createLogger('TaskRunDispatcher');
 const LEASE_MS = 60_000;
@@ -65,17 +66,23 @@ export class TaskRunDispatcher {
             message: 'Execution was interrupted by a process restart. Continue this same task from confirmed tool results. Do not repeat completed operations. If any external effect cannot be confirmed, ask for verification instead of replaying it.' })) continue;
         const task = this.#tasks.require(run.taskId);
         const zh = resolveTaskLocale(task) === 'zh';
+        const needsUser = Boolean(unconfirmedEffect) || !isPersonalDelegatedTask(task.id);
+        const interruption = zh ? '任务执行已中断' : 'Task execution was interrupted';
         this.#application.completeRun({
           runId: run.id, expectedRunVersion: run.version,
           unconfirmedEffect,
           terminalCode: 'execution_interrupted',
-          terminalMessage: zh ? '任务执行已停止，结果尚未确认' : 'Task execution stopped before its result could be confirmed',
+          terminalMessage: needsUser ? (zh ? '任务执行已停止，结果尚未确认' : 'Task execution stopped before its result could be confirmed') : interruption,
           receipt: {
-            status: 'failed', summary: zh ? '执行已中断；重试前请检查外部操作的影响' : 'Execution interrupted; verify external effects before retrying',
+            status: 'failed', summary: needsUser
+              ? (zh ? '执行已中断；重试前请检查外部操作的影响' : 'Execution interrupted; verify external effects before retrying') : interruption,
             changes: [], evidence: [], verification: { status: 'unverified', checks: [] },
-            remainingWork: [zh ? '检查上次执行是否已产生外部变更' : 'Verify whether the previous execution made external changes'],
-            needsUser: true, completionVerdict: 'not_achieved',
-            failure: { code: 'execution_interrupted', phase: 'execution', recoveryAction: zh ? '重试前检查执行影响' : 'Inspect effects before retrying' },
+            remainingWork: [needsUser ? (zh ? '检查上次执行是否已产生外部变更' : 'Verify whether the previous execution made external changes')
+              : task.contract?.objective ?? task.title],
+            needsUser, completionVerdict: 'not_achieved',
+            failure: { code: 'execution_interrupted', phase: 'execution', recoveryAction: needsUser
+              ? (zh ? '重试前检查执行影响' : 'Inspect effects before retrying')
+              : (zh ? '可从任务记录查看中断前的进度。' : 'Progress before the interruption is available in the task record.') },
           },
         });
       } catch (error) {

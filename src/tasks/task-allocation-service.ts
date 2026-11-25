@@ -8,6 +8,7 @@ import { AgentSelectionRepository, selectionRequestHash } from '../agent-matchin
 import { completeWithResolvedCredentials } from '../providers/model-call.js';
 import { extractAssistantText, getAssistantMessageErrorReason, stripCodeFences } from '../providers/model-response.js';
 import { personalCapabilities } from '../personal-agent/capability-service.js';
+import { isPersonalConversation } from '../personal-agent/repository.js';
 import { personalRequestForTask, updatePersonalRequest } from '../personal-agent/request-repository.js';
 import { resolveModel } from '../providers/index.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
@@ -192,7 +193,9 @@ export class TaskAllocationDispatcher {
         : await (this.deps.planner ?? new ModelTaskContractPlanner()).plan({
         objective: task.contract.objective, taskContext, locale: resolveTaskLocale(task), signal });
       if (planned.capabilityPlanning === 'unavailable') {
-        this.finishFailure(row, zh ? '后台未能完成任务能力清单，请重试分配；尚未启动执行。' : 'Background capability planning is unavailable; retry allocation. Execution has not started.', 'capability_planning_unavailable');
+        const retry = row.attempts < 3 && isPersonalConversation(row.origin_conversation_id);
+        this.finishFailure(row, zh ? '后台未能完成任务能力检查，任务尚未开始。'
+          : 'Background capability planning could not complete. Execution has not started.', 'capability_planning_unavailable', retry);
         return;
       }
       inferred = planned.requiredCapabilities ?? [];

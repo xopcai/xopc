@@ -201,9 +201,23 @@ export class TaskCollaborationRepository {
       .get(clientMessageId, `${clientMessageId}:retry:*`));
   }
 
+  hasPendingMainQuestion(taskId: string, entryId?: string): boolean {
+    const db = getSqliteDatabase();
+    if (entryId) return Boolean(db.prepare(`SELECT 1 FROM task_main_update_deliveries main
+      JOIN task_collaboration_entries entry USING (entry_id)
+      WHERE main.entry_id = ? AND entry.task_id = ? AND main.status = 'pending'`).get(entryId, taskId));
+    return db.prepare(`SELECT main.status FROM task_collaboration_entries entry
+      JOIN task_main_update_deliveries main USING (entry_id)
+      WHERE entry.task_id = ? AND entry.author_id = 'task-router' AND entry.kind = 'question'
+      ORDER BY entry.sequence DESC LIMIT 1`).get(taskId)?.status === 'pending';
+  }
+
   markMainUpdateDelivered(entryId: string): void {
-    getSqliteDatabase().prepare(`UPDATE task_main_update_deliveries SET status = 'delivered', updated_at = ?
-      WHERE entry_id = ? AND status = 'pending'`).run(Date.now(), entryId);
+    runSqliteWriteTransaction(db => {
+      const changed = db.prepare(`UPDATE task_main_update_deliveries SET status = 'delivered', updated_at = ?
+        WHERE entry_id = ? AND status = 'pending'`).run(Date.now(), entryId);
+      if (changed.changes) this.publishQuestionHandoff(entryId);
+    });
   }
 
   deferMainUpdate(entryId: string, delayMs = 1_000): void {
@@ -212,10 +226,23 @@ export class TaskCollaborationRepository {
   }
 
   failMainUpdate(entryId: string, error: string, delayMs: number, terminal: boolean): void {
-    getSqliteDatabase().prepare(`UPDATE task_main_update_deliveries
-      SET failure_count = failure_count + 1, last_error = ?, status = ?, updated_at = ?
-      WHERE entry_id = ? AND status = 'pending'`)
-      .run(error.slice(0, 1_000), terminal ? 'failed' : 'pending', Date.now() + delayMs, entryId);
+    runSqliteWriteTransaction(db => {
+      const changed = db.prepare(`UPDATE task_main_update_deliveries
+        SET failure_count = failure_count + 1, last_error = ?, status = ?, updated_at = ?
+        WHERE entry_id = ? AND status = 'pending'`)
+        .run(error.slice(0, 1_000), terminal ? 'failed' : 'pending', Date.now() + delayMs, entryId);
+      if (changed.changes && terminal) this.publishQuestionHandoff(entryId);
+    });
+  }
+
+  private publishQuestionHandoff(entryId: string): void {
+    const db = getSqliteDatabase();
+    const task = db.prepare(`SELECT task.task_id, task.project_id, task.version
+      FROM task_collaboration_entries entry JOIN tasks task USING (task_id)
+      WHERE entry.entry_id = ? AND entry.kind = 'question'`).get(entryId) as
+      { task_id: string; project_id: string | null; version: number } | undefined;
+    if (task) enqueueTaskChangedEvent(db, { taskId: task.task_id, projectId: task.project_id ?? undefined,
+      version: task.version, changedFields: ['attention'], source: 'runtime' });
   }
 
   markDelivered(entryId: string, conversationId: string, assignmentEpoch: number): void {

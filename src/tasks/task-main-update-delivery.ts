@@ -56,6 +56,14 @@ export class TaskMainUpdateDelivery {
         continue;
       }
       const results = new TaskResultDeliveryRepository();
+      if (personal && entry.kind === 'failure' && entry.authorId === 'task-run' && entry.taskRunId
+        && results.hasForRun(entry.taskRunId)) {
+        const receipt = new TaskRunRepository().getReceipt(entry.taskRunId);
+        if (receipt?.failure?.code === 'acceptance_incomplete' && !receipt.needsUser) {
+          this.#entries.markMainUpdateDelivered(entry.id);
+          continue;
+        }
+      }
       const isResult = entry.kind === 'result' && entry.taskRunId;
       if (isResult && results.hasForRun(entry.taskRunId!)) {
         this.#entries.markMainUpdateDelivered(entry.id);
