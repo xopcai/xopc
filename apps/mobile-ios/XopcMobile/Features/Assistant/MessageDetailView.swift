@@ -17,64 +17,64 @@ struct MessageDetailView: View {
                 onClose: { dismiss() }
             )
             ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if !message.markdownParts.isEmpty {
-                    MarkdownBodyView(parts: message.markdownParts, configuration: configuration, conversationID: conversationID)
-                        .padding(.vertical, 22)
-                } else if message.text.isEmpty {
-                    Text("无文本内容")
-                        .padding(.vertical, 22)
-                } else {
-                    Text(verbatim: message.text)
-                        .textSelection(.enabled)
-                        .padding(.vertical, 22)
-                }
-                if !message.references.isEmpty {
-                    Divider()
-                    Text("引用").font(.headline).padding(.top, 18)
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(message.references) { reference in
-                            Label(reference.title, systemImage: reference.kind.systemImage)
-                        }
+                VStack(alignment: .leading, spacing: 0) {
+                    if !message.markdownParts.isEmpty {
+                        MarkdownBodyView(parts: message.markdownParts, configuration: configuration, conversationID: conversationID)
+                            .padding(.vertical, 22)
+                    } else if message.text.isEmpty {
+                        Text("无文本内容")
+                            .padding(.vertical, 22)
+                    } else {
+                        Text(verbatim: message.text)
+                            .textSelection(.enabled)
+                            .padding(.vertical, 22)
                     }
-                    .padding(.vertical, 14)
-                }
-                if !message.attachments.isEmpty {
-                    Divider()
-                    Text("附件").font(.headline).padding(.top, 18)
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(message.attachments) { attachment in
-                            if attachment.isImage, let uri = attachment.imageSource {
-                                MarkdownImageView(
-                                    alt: attachment.name ?? "图片",
-                                    source: uri,
-                                    configuration: configuration,
-                                    conversationID: conversationID,
-                                    compact: true,
-                                    gallery: message.attachments.filter(\.isImage)
-                                )
-                            } else if attachment.isAudio, let conversationID {
-                                ChatAudioAttachmentView(
-                                    attachment: attachment,
-                                    configuration: configuration,
-                                    conversationID: conversationID
-                                )
-                            } else {
-                                ChatAttachmentPreview(
-                                    attachment: attachment,
-                                    configuration: configuration,
-                                    conversationID: conversationID
-                                )
+                    if !message.references.isEmpty {
+                        Divider()
+                        Text("引用").font(.headline).padding(.top, 18)
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(message.references) { reference in
+                                Label(reference.title, systemImage: reference.kind.systemImage)
                             }
                         }
+                        .padding(.vertical, 14)
                     }
-                    .padding(.vertical, 14)
+                    if !message.attachments.isEmpty {
+                        Divider()
+                        Text("附件").font(.headline).padding(.top, 18)
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(message.attachments) { attachment in
+                                if attachment.isImage, let uri = attachment.imageSource {
+                                    MarkdownImageView(
+                                        alt: attachment.name ?? "图片",
+                                        source: uri,
+                                        configuration: configuration,
+                                        conversationID: conversationID,
+                                        compact: true,
+                                        gallery: message.attachments.filter(\.isImage)
+                                    )
+                                } else if attachment.isAudio, let conversationID {
+                                    ChatAudioAttachmentView(
+                                        attachment: attachment,
+                                        configuration: configuration,
+                                        conversationID: conversationID
+                                    )
+                                } else {
+                                    ChatAttachmentPreview(
+                                        attachment: attachment,
+                                        configuration: configuration,
+                                        conversationID: conversationID
+                                    )
+                                }
+                            }
+                        }
+                        .padding(.vertical, 14)
+                    }
                 }
+                .padding(.horizontal, 18)
+                .padding(.bottom, 28)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 28)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
         }
         .background(mobileTheme.panel)
         .accessibilityIdentifier("message-detail-content")

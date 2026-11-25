@@ -1288,15 +1288,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     }
 
     @ViewBuilder private func input(_ field: CapabilityPanelPayload.Field) -> some View {
-        let value = Binding(get: { values[field.id] ?? "" }, set: {
-            values[field.id] = $0
-            if field.retain == true {
-                retainedValues[field.id] = $0
-            }
-            if field.presentation == "segmented" {
-                dismissPanelKeyboard(); errorMessage = nil
-            }
-        })
+        let value = fieldValueBinding(field)
         VStack(alignment: .leading, spacing: 6) {
             if field.type == "toggle" {
                 Toggle(isOn: Binding(get: { value.wrappedValue == "true" }, set: { value.wrappedValue = String($0) })) {
@@ -1339,6 +1331,19 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             }
             fieldDescription(field)
         }
+    }
+
+    private func fieldValueBinding(_ field: CapabilityPanelPayload.Field) -> Binding<String> {
+        Binding(get: { values[field.id] ?? "" }, set: {
+            values[field.id] = $0
+            if field.retain == true {
+                retainedValues[field.id] = $0
+            }
+            if field.presentation == "segmented" {
+                dismissPanelKeyboard()
+                errorMessage = nil
+            }
+        })
     }
 
     @ViewBuilder private func selectInput(_ field: CapabilityPanelPayload.Field, value: Binding<String>) -> some View {

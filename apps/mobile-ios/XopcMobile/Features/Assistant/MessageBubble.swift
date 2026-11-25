@@ -197,7 +197,7 @@ struct MessageBubble: View {
                 UIPasteboard.general.string = message.text
                 copyHapticCount += 1
             }
-                .accessibilityIdentifier("chat-user-copy-\(message.id)")
+            .accessibilityIdentifier("chat-user-copy-\(message.id)")
             if message.attachments.isEmpty, message.references.isEmpty {
                 Button("再次编辑", systemImage: "pencil") { onReuseUserText(message.text) }
                     .accessibilityIdentifier("chat-user-reuse-\(message.id)")
@@ -229,7 +229,7 @@ struct MessageBubble: View {
                 UIPasteboard.general.string = message.text
                 copyHapticCount += 1
             }
-                .accessibilityIdentifier("chat-copy-\(message.id)")
+            .accessibilityIdentifier("chat-copy-\(message.id)")
             Button("选择文本", systemImage: "text.cursor") { isSelectingText = true }
                 .accessibilityIdentifier("chat-select-text-\(message.id)")
             Button("保存到笔记", systemImage: "bookmark") { Task { await saveAsNote() } }

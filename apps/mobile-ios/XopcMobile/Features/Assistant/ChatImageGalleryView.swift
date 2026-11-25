@@ -76,7 +76,7 @@ struct ChatImageGalleryView: View {
                     Button("关闭", systemImage: "xmark") { dismiss() }
                 }
             }
-        .background(mobileTheme.canvas.ignoresSafeArea())
+            .background(mobileTheme.canvas.ignoresSafeArea())
         }
     }
 

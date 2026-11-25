@@ -41,9 +41,15 @@ struct NotesView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                 if pendingVoiceNote != nil || pendingVoiceNoteLoadFailed {
-                    recordingRecoveryRow
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
+                    NotesRecordingRecoveryRow(
+                        pendingVoiceNote: pendingVoiceNote,
+                        pendingVoiceNoteLoadFailed: pendingVoiceNoteLoadFailed
+                    ) {
+                        isSearchFocused = false
+                        presentedSheet = .voice
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
                 if matchingNotes.isEmpty, isLoading || loadedQuery != currentQuery && error == nil {
                     loadingRows
@@ -148,64 +154,6 @@ struct NotesView: View {
         search.isEmpty ? "暂无笔记" : "没有匹配的笔记"
     }
 
-    private var recordingRecoveryRow: some View {
-        Button {
-            isSearchFocused = false
-            presentedSheet = .voice
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "mic.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.tint)
-                    .frame(width: 34, height: 34)
-                    .background(Color.accentColor.opacity(0.14), in: .rect(cornerRadius: 9))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(pendingVoiceNoteLoadFailed ? LocalizedStringKey("检查本地录音") : "待恢复录音")
-                        .mobileTextStyle(.rowTitle)
-                    if let pendingVoiceNote, !pendingVoiceNoteLoadFailed {
-                        ViewThatFits(in: .horizontal) {
-                            HStack(spacing: 6) { recoveryMetadata(pendingVoiceNote) }
-                            VStack(alignment: .leading, spacing: 4) { recoveryMetadata(pendingVoiceNote) }
-                        }
-                        .mobileTextStyle(.secondary)
-                        .foregroundStyle(mobileTheme.secondary)
-                    } else {
-                        Text("本地录音状态暂不可读，点此重试。")
-                            .mobileTextStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-            }
-            .foregroundStyle(mobileTheme.foreground)
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(mobileTheme.panel, in: .rect(cornerRadius: 14))
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(pendingVoiceTitle)
-        .accessibilityHint("打开本地待上传录音")
-        .accessibilityIdentifier("notes-recover-voice")
-    }
-
-    @ViewBuilder
-    private func recoveryMetadata(_ draft: PendingVoiceNote) -> some View {
-        Text(draft.recordedAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
-        Text(voiceNoteTime(draft.duration)).monospacedDigit()
-    }
-
-    private var pendingVoiceTitle: LocalizedStringKey {
-        if pendingVoiceNoteLoadFailed {
-            return "检查本地录音"
-        }
-        return pendingVoiceNote?.noteID == nil ? "继续保存语音笔记" : "继续处理语音笔记"
-    }
-
     private var loadingRows: some View {
         ForEach(0 ..< 4, id: \.self) { _ in
             VStack(alignment: .leading, spacing: 8) {
@@ -297,6 +245,68 @@ struct NotesView: View {
         } catch {
             pendingVoiceNoteLoadFailed = true
         }
+    }
+}
+
+private struct NotesRecordingRecoveryRow: View {
+    @Environment(\.mobileTheme) private var mobileTheme
+    let pendingVoiceNote: PendingVoiceNote?
+    let pendingVoiceNoteLoadFailed: Bool
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: 12) {
+                Image(systemName: "mic.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.tint)
+                    .frame(width: 34, height: 34)
+                    .background(Color.accentColor.opacity(0.14), in: .rect(cornerRadius: 9))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(pendingVoiceNoteLoadFailed ? LocalizedStringKey("检查本地录音") : "待恢复录音")
+                        .mobileTextStyle(.rowTitle)
+                    if let pendingVoiceNote, !pendingVoiceNoteLoadFailed {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 6) { recoveryMetadata(pendingVoiceNote) }
+                            VStack(alignment: .leading, spacing: 4) { recoveryMetadata(pendingVoiceNote) }
+                        }
+                        .mobileTextStyle(.secondary)
+                        .foregroundStyle(mobileTheme.secondary)
+                    } else {
+                        Text("本地录音状态暂不可读，点此重试。")
+                            .mobileTextStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(mobileTheme.foreground)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(mobileTheme.panel, in: .rect(cornerRadius: 14))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(pendingVoiceTitle)
+        .accessibilityHint("打开本地待上传录音")
+        .accessibilityIdentifier("notes-recover-voice")
+    }
+
+    @ViewBuilder
+    private func recoveryMetadata(_ draft: PendingVoiceNote) -> some View {
+        Text(draft.recordedAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
+        Text(voiceNoteTime(draft.duration)).monospacedDigit()
+    }
+
+    private var pendingVoiceTitle: LocalizedStringKey {
+        if pendingVoiceNoteLoadFailed {
+            return "检查本地录音"
+        }
+        return pendingVoiceNote?.noteID == nil ? "继续保存语音笔记" : "继续处理语音笔记"
     }
 }
 

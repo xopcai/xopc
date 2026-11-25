@@ -259,7 +259,9 @@ struct NoteDetailView: View {
             guard attachment.id != originalID else { return false }
             guard note.kind == "voice", attachment.mimeType == "application/json" else { return true }
             let link = "xopc-attachment://notes/\(note.id)/\(attachment.id)"
-            if note.markdown.contains(link) { return true }
+            if note.markdown.contains(link) {
+                return true
+            }
             return !isRecordingManifest(attachment.fileName)
         }
     }

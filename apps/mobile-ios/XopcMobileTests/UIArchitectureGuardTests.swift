@@ -113,7 +113,7 @@ struct UIArchitectureGuardTests {
             "Features/Progress/AutomationRunDetailView.swift",
             "Features/Progress/ProjectManageView.swift",
             "Features/Progress/TaskEditorView.swift",
-            "Features/Progress/TaskStatusView.swift",
+            "Features/Progress/TaskStatusView.swift"
         ]
         for relative in required {
             let url = Self.iosSourceRoot.appendingPathComponent(relative)
@@ -183,7 +183,7 @@ struct UIArchitectureGuardTests {
             "Features/Progress/TaskStatusView.swift",
             "Features/Assistant/AssistantActivityView.swift",
             "Features/Assistant/AssistantOptionsView.swift",
-            "Features/Assistant/ChatAttachmentPreview.swift",
+            "Features/Assistant/ChatAttachmentPreview.swift"
         ] {
             let text = try String(contentsOf: Self.iosSourceRoot.appendingPathComponent(rel), encoding: .utf8)
             #expect(!text.contains(".presentationDetents("), "\(rel) must use mobileSheetPreset instead of raw .presentationDetents")
@@ -207,7 +207,7 @@ struct UIArchitectureGuardTests {
             "Features/Profile/ProfileView.swift",
             "Features/Conversations/ConversationsView.swift",
             "Features/Assistant/PersonalAgentOverview.swift",
-            "Features/Progress/ProgressRow.swift",
+            "Features/Progress/ProgressRow.swift"
         ] {
             let text = try String(contentsOf: Self.iosSourceRoot.appendingPathComponent(rel), encoding: .utf8)
             #expect(text.contains("MobileListSkeleton("), "\(rel) must delegate skeletons to MobileListSkeleton")
@@ -215,7 +215,7 @@ struct UIArchitectureGuardTests {
 
         for rel in [
             "Features/Assistant/ChatAttachmentPreview.swift",
-            "Features/Assistant/MessageDetailView.swift",
+            "Features/Assistant/MessageDetailView.swift"
         ] {
             let text = try String(contentsOf: Self.iosSourceRoot.appendingPathComponent(rel), encoding: .utf8)
             #expect(text.contains("MobileSheetHeader("), "\(rel) must adopt MobileSheetHeader")
@@ -230,7 +230,7 @@ struct UIArchitectureGuardTests {
             "Features/Assistant/MessageBubble.swift",
             "Features/Progress/ProgressView.swift",
             "Features/Conversations/ConversationsView.swift",
-            "Features/Settings/GatewayProfilesView.swift",
+            "Features/Settings/GatewayProfilesView.swift"
         ]
         for rel in dynamicTypeFiles {
             let text = try String(contentsOf: Self.iosSourceRoot.appendingPathComponent(rel), encoding: .utf8)

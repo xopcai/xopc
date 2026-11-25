@@ -59,7 +59,12 @@ private struct VoiceNoteCaptureView: View {
                             .accessibilityHidden(true)
                     }
                     if let draft {
-                        recoveryCard(draft)
+                        VoiceNoteRecoveryCard(
+                            draft: draft,
+                            isSaving: isSaving,
+                            onDiscard: { showingDiscardConfirmation = true },
+                            onSave: { Task { await save() } }
+                        )
                     } else if unsavedAudio != nil {
                         Text("录音尚未写入本地存储，请重试")
                             .foregroundStyle(.secondary)
@@ -184,53 +189,6 @@ private struct VoiceNoteCaptureView: View {
         }
     }
 
-    private func recoveryCard(_ draft: PendingVoiceNote) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "waveform")
-                    .foregroundStyle(.tint)
-                    .frame(width: 36, height: 36)
-                    .background(Color.accentColor.opacity(0.14), in: .rect(cornerRadius: 10))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(draft.recordedAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
-                        .mobileTextStyle(.rowTitle)
-                    Text(voiceNoteTime(draft.duration))
-                        .mobileTextStyle(.secondary)
-                        .monospacedDigit()
-                }
-                Spacer(minLength: 8)
-                Menu("更多", systemImage: "ellipsis.circle") {
-                    Button("丢弃这段录音", systemImage: "trash", role: .destructive) { showingDiscardConfirmation = true }
-                }
-                .labelStyle(.iconOnly)
-                .frame(width: 44, height: 44)
-                .disabled(isSaving)
-            }
-            Text(draft.noteID == nil
-                ? LocalizedStringKey("录音已保存在此设备，等待上传")
-                : LocalizedStringKey("录音仍保存在此设备，等待服务器确认保存"))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Button {
-                Task { await save() }
-            } label: {
-                Label(draft.noteID == nil ? LocalizedStringKey("继续保存") : "继续处理", systemImage: "arrow.clockwise")
-                    .mobileTextStyle(.rowTitle)
-                    .foregroundStyle(mobileTheme.onAction)
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 44)
-                    .background(mobileTheme.action, in: .rect(cornerRadius: 12))
-            }
-            .buttonStyle(.plain)
-            .opacity(isSaving ? 0.5 : 1)
-            .disabled(isSaving)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(mobileTheme.panel, in: .rect(cornerRadius: 16))
-    }
-
     private var consentBinding: Binding<Bool> {
         Binding(get: { pendingConsentVersion != nil }, set: {
             if !$0 {
@@ -319,6 +277,59 @@ private struct VoiceNoteCaptureView: View {
             unsavedAudio = nil
             saveError = nil
         } catch { saveError = error.localizedDescription }
+    }
+}
+
+private struct VoiceNoteRecoveryCard: View {
+    @Environment(\.mobileTheme) private var mobileTheme
+    let draft: PendingVoiceNote
+    let isSaving: Bool
+    let onDiscard: () -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "waveform")
+                    .foregroundStyle(.tint)
+                    .frame(width: 36, height: 36)
+                    .background(Color.accentColor.opacity(0.14), in: .rect(cornerRadius: 10))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(draft.recordedAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
+                        .mobileTextStyle(.rowTitle)
+                    Text(voiceNoteTime(draft.duration))
+                        .mobileTextStyle(.secondary)
+                        .monospacedDigit()
+                }
+                Spacer(minLength: 8)
+                Menu("更多", systemImage: "ellipsis.circle") {
+                    Button("丢弃这段录音", systemImage: "trash", role: .destructive, action: onDiscard)
+                }
+                .labelStyle(.iconOnly)
+                .frame(width: 44, height: 44)
+                .disabled(isSaving)
+            }
+            Text(draft.noteID == nil
+                ? LocalizedStringKey("录音已保存在此设备，等待上传")
+                : LocalizedStringKey("录音仍保存在此设备，等待服务器确认保存"))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(action: onSave) {
+                Label(draft.noteID == nil ? LocalizedStringKey("继续保存") : "继续处理", systemImage: "arrow.clockwise")
+                    .mobileTextStyle(.rowTitle)
+                    .foregroundStyle(mobileTheme.onAction)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 44)
+                    .background(mobileTheme.action, in: .rect(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .opacity(isSaving ? 0.5 : 1)
+            .disabled(isSaving)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(mobileTheme.panel, in: .rect(cornerRadius: 16))
     }
 }
 

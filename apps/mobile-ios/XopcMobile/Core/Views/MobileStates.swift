@@ -177,13 +177,13 @@ enum MobileButtonVariant: Sendable {
 }
 
 enum MobileButtonSize: Sendable {
-    case sm, md, lg
+    case small, medium, large
 
     var minHeight: CGFloat {
         switch self {
-        case .sm: MobileDesignTokens.buttonHeightSm
-        case .md: MobileDesignTokens.buttonHeightMd
-        case .lg: MobileDesignTokens.buttonHeightLg
+        case .small: MobileDesignTokens.buttonHeightSm
+        case .medium: MobileDesignTokens.buttonHeightMd
+        case .large: MobileDesignTokens.buttonHeightLg
         }
     }
 }
@@ -193,7 +193,7 @@ struct MobileButton: View {
     @Environment(\.mobileTheme) private var theme
     let title: String
     var variant: MobileButtonVariant = .primary
-    var size: MobileButtonSize = .md
+    var size: MobileButtonSize = .medium
     var fullWidth = false
     var disabled = false
     let action: () -> Void

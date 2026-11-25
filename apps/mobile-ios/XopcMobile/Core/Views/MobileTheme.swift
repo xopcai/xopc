@@ -48,8 +48,13 @@ struct MobileTheme: Sendable {
     let bubble: Color
     let card: Color
 
-    var warningFill: Color { attention }
-    var warningForeground: Color { onAttention }
+    var warningFill: Color {
+        attention
+    }
+
+    var warningForeground: Color {
+        onAttention
+    }
 
     init(preset: MobileThemePreset = .default, dark: Bool = false) {
         self.preset = preset

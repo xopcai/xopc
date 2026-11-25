@@ -61,7 +61,9 @@ struct NoteAudioPlayerView: View {
             while player.isPlaying {
                 do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
             }
-            if !Task.isCancelled { isPlaying = false }
+            if !Task.isCancelled {
+                isPlaying = false
+            }
         }
         .onDisappear {
             loadTask?.cancel()
@@ -72,7 +74,9 @@ struct NoteAudioPlayerView: View {
 
     private var displayFileName: String {
         let fallback = AppLocalization.string("语音记录", locale: AppLocalization.selectedLocale)
-        if attachment.fileName == "语音消息.wav" { return fallback }
+        if attachment.fileName == "语音消息.wav" {
+            return fallback
+        }
         let name = URL(fileURLWithPath: attachment.fileName).deletingPathExtension().lastPathComponent
         return name.isEmpty ? fallback : name
     }
@@ -110,7 +114,9 @@ struct NoteAudioPlayerView: View {
             self.player = player
             start(player)
         } catch {
-            if !Task.isCancelled { errorMessage = error.localizedDescription }
+            if !Task.isCancelled {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }

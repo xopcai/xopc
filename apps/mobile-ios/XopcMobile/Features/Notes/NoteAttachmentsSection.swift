@@ -14,7 +14,9 @@ struct NoteAttachmentsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if showsHeading { Text("附件").font(.headline) }
+            if showsHeading {
+                Text("附件").font(.headline)
+            }
             ForEach(attachments) { attachment in
                 if attachment.mimeType.hasPrefix("audio/") {
                     NoteAudioPlayerView(
