@@ -7,12 +7,18 @@ import { closeXopcDatabase, openXopcDatabase } from '../../../storage/sqlite/con
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import { ProjectStore } from '../../../projects/project-store.js';
+import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
+import { setSessionInteractionPolicy } from '../../session/interaction-policy.js';
 import {
   appendExternalTranscriptEntry,
   bindExternalSession,
+  compactExternalSession,
+  disposeAllPooledExternalSessions,
+  forkExternalSession,
   hasExternalSessionBinding,
   readExternalSessionBinding,
   resolveExternalInteraction,
+  rollbackExternalSession,
   runExternalProjectTurn,
   steerExternalTurn,
 } from '../index.js';
@@ -46,6 +52,7 @@ vi.mock('../drivers/codex/app-server.js', async importOriginal => {
         requests(method, params);
         if (method === 'model/list') return { data: [{ isDefault: true, model: 'test-codex-model' }] };
         if (method === 'thread/start' || method === 'thread/resume') return { thread: { id: 'native-thread' } };
+        if (method === 'thread/fork') return { thread: { id: 'forked-thread-99' } };
         if (method === 'turn/start') {
           if (onTurnStartHook.fn) {
             onTurnStartHook.fn({ emit: this.emit, onRequest: this.onRequest, params });
@@ -72,7 +79,8 @@ vi.mock('../drivers/codex/app-server.js', async importOriginal => {
 });
 
 let root: string | undefined;
-afterEach(() => {
+afterEach(async () => {
+  await disposeAllPooledExternalSessions(true);
   requests.mockClear();
   onTurnStartHook.fn = undefined;
   serverReplyLog.replies = [];
@@ -470,4 +478,195 @@ it('delivers mid-turn steering to Codex via native turn/steer and persists steer
     && p.metadata?.steered === true
     && p.metadata?.clientMessageId === 'steer-msg-1',
   )).toBe(true);
+});
+
+it('injects xopc sourceContexts (@note/@file) and enforces Plan mode read-only sandbox for Codex', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-codex-context-plan-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'Codex Context', workspaceRoot: root });
+  const session = createConversation({ agentId: 'codex', projectId: project.id }, root);
+  setSessionInteractionPolicy(session.key, { mode: 'plan', access: 'read-only' });
+
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'codex',
+    execution: { kind: 'codex' },
+    runId: 'ctx-plan-run',
+    content: 'Review the architecture note and plan migration',
+    sourceContexts: [
+      {
+        refId: 'note-ref-1',
+        kind: 'note',
+        sourceId: 'note-123',
+        version: 'v1',
+        title: 'Architecture Spec',
+        text: 'Use SQLite WAL mode for all local persistence.',
+      },
+    ],
+    hasAttachmentsOrContext: true,
+    signal: new AbortController().signal,
+  }));
+
+  expect(requests).toHaveBeenCalledWith('turn/start', expect.objectContaining({
+    approvalPolicy: 'on-request',
+    sandboxPolicy: { type: 'readOnly' },
+    input: [
+      expect.objectContaining({
+        type: 'text',
+        text: expect.stringMatching(/<plan_mode>[\s\S]*<source_contexts>[\s\S]*Use SQLite WAL mode/),
+      }),
+    ],
+  }));
+
+  const rows = getSqliteDatabase()
+    .prepare('SELECT payload_json FROM transcript_entries WHERE transcript_id = ? ORDER BY seq')
+    .all(session.transcriptId!) as Array<{ payload_json: string }>;
+  const userRow = rows.map((r) => JSON.parse(r.payload_json)).find((p) => p.role === 'user');
+  expect(userRow?.content).toBe('Review the architecture note and plan migration');
+  expect(userRow?.metadata?.sourceContexts).toEqual([
+    expect.objectContaining({ kind: 'note', sourceId: 'note-123', title: 'Architecture Spec' }),
+  ]);
+});
+
+it('forwards Codex serviceTierOverride and supports native thread/compact/start and thread/fork', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-codex-control-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  initializeTestAgentCatalog({
+    defaults: {
+      models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
+      skills: { mode: 'all-enabled', exclude: [] },
+      tools: {},
+      runtime: {},
+    },
+    agents: [
+      { id: 'main', enabled: true, profile: { name: 'Main' } },
+      { id: 'codex-ctl', enabled: true, execution: { kind: 'codex' }, profile: { name: 'Codex' } },
+    ],
+  });
+  const project = new ProjectStore().create({ name: 'Codex Control', workspaceRoot: root });
+  const source = createConversation({ agentId: 'codex-ctl', projectId: project.id }, root);
+  const target = createConversation({ agentId: 'codex-ctl', projectId: project.id }, root);
+
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: source.key,
+    transcriptId: source.transcriptId!,
+    agentId: 'codex-ctl',
+    execution: { kind: 'codex' },
+    serviceTierOverride: 'priority',
+    runId: 'tier-run',
+    content: 'Fast check',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+
+  expect(requests).toHaveBeenCalledWith('turn/start', expect.objectContaining({
+    serviceTier: 'priority',
+  }));
+
+  const compacted = await compactExternalSession(source.key);
+  expect(compacted.compacted).toBe(true);
+  expect(requests).toHaveBeenCalledWith('thread/compact/start', { threadId: 'native-thread' });
+
+  const forked = await forkExternalSession({
+    sourceConversationId: source.key,
+    targetConversationId: target.key,
+  });
+  expect(forked).toBe(true);
+  expect(requests).toHaveBeenCalledWith('thread/fork', expect.objectContaining({ threadId: 'native-thread' }));
+  expect(hasExternalSessionBinding(target.key)).toBe(true);
+
+  const rolledBack = await rollbackExternalSession(source.key, 1);
+  expect(rolledBack).toBe(true);
+  expect(requests).toHaveBeenCalledWith('thread/rollback', { threadId: 'native-thread', numTurns: 1 });
+});
+
+it('bridges Codex mcpServer/elicitation/request (form + url) through unified external interactions', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-codex-elicit-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'Codex Elicit', workspaceRoot: root });
+  const session = createConversation({ agentId: 'codex-elicit', projectId: project.id }, root);
+
+  onTurnStartHook.fn = ({ emit, onRequest }) => {
+    const scope = { threadId: 'native-thread', turnId: 'native-turn' };
+    void (async () => {
+      const formRes = await onRequest?.('mcpServer/elicitation/request', {
+        threadId: 'native-thread',
+        turnId: 'native-turn',
+        serverName: 'github',
+        mode: 'form',
+        message: 'Configure deployment target',
+        requestedSchema: {
+          type: 'object',
+          properties: {
+            environment: { type: 'string', title: 'Environment', enum: ['staging', 'prod'] },
+            dryRun: { type: 'boolean', title: 'Dry run?' },
+          },
+        },
+        _meta: null,
+      });
+      if (formRes) serverReplyLog.replies.push(formRes);
+
+      const urlRes = await onRequest?.('mcpServer/elicitation/request', {
+        threadId: 'native-thread',
+        turnId: 'native-turn',
+        serverName: 'linear',
+        mode: 'url',
+        message: 'Authorize Linear access',
+        url: 'https://linear.app/oauth/authorize?client_id=test',
+        elicitationId: 'elicit-1',
+        _meta: null,
+      });
+      if (urlRes) serverReplyLog.replies.push(urlRes);
+
+      emit('item/agentMessage/delta', { ...scope, itemId: 'elicit-reply', delta: 'Elicitations completed.' });
+      emit('item/completed', { ...scope, item: { type: 'agentMessage', id: 'elicit-reply', text: 'Elicitations completed.' } });
+      emit('turn/completed', { ...scope, turn: { id: 'native-turn', status: 'completed' } });
+    })();
+  };
+
+  const events: Array<{ type: string; [key: string]: unknown }> = [];
+  for await (const ev of runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'codex-elicit',
+    execution: { kind: 'codex' },
+    runId: 'elicit-run',
+    content: 'Deploy with MCP',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  })) {
+    events.push(ev);
+    if (ev.type === 'clarify_request' && typeof ev.requestId === 'string') {
+      const q = String(ev.question ?? '');
+      if (q.includes('Environment')) {
+        resolveExternalInteraction({
+          id: ev.requestId,
+          expectedVersion: 1,
+          action: 'answer',
+          response: { choiceId: 'staging', text: 'staging' },
+        });
+      } else if (q.includes('Dry run')) {
+        resolveExternalInteraction({
+          id: ev.requestId,
+          expectedVersion: 1,
+          action: 'answer',
+          response: { choiceId: 'true', text: 'true' },
+        });
+      } else {
+        resolveExternalInteraction({
+          id: ev.requestId,
+          expectedVersion: 1,
+          action: 'answer',
+          decision: 'approve',
+        });
+      }
+    }
+  }
+
+  expect(serverReplyLog.replies).toEqual([
+    { action: 'accept', content: { environment: 'staging', dryRun: true }, _meta: null },
+    { action: 'accept', content: null, _meta: null },
+  ]);
+  expect(events.some((e) => e.type === 'message_end')).toBe(true);
 });

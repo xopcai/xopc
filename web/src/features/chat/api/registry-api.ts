@@ -1,4 +1,9 @@
 import type { ModelThinkingCapabilities } from '@xopcai/gateway-contract';
+import type {
+  ExternalRuntimeCommand,
+  ExternalRuntimeRateLimits,
+  ExternalRuntimeServiceTier,
+} from '@/features/settings/types/agent-gateway';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { apiUrl } from '@/lib/url';
 
@@ -11,6 +16,7 @@ export type ConfiguredModel = {
   maxTokens?: number;
   reasoning?: boolean;
   thinking?: ModelThinkingCapabilities;
+  serviceTiers?: ExternalRuntimeServiceTier[];
   vision?: boolean;
   computerUse?: { dedicated?: boolean; profile: 'gui-plus-2026-02-26' | 'structured-tools-v1' | 'openai-responses-computer-v1' };
   phoneUse?: { profile: 'autoglm-phone-v1' | 'structured-phone-v1' | 'structured-tools-phone-v1' | 'doubao-seed-phone-v1' | 'gui-owl-phone-v1'; dedicated?: boolean };
@@ -92,6 +98,11 @@ export type ExternalAgentRuntimeModelsPayload = {
   status: string;
   defaultModel: string;
   models: ConfiguredModel[];
+  rateLimits?: ExternalRuntimeRateLimits;
+  commands?: ExternalRuntimeCommand[];
+  supportsCompact?: boolean;
+  supportsFork?: boolean;
+  supportsRollback?: boolean;
   message?: string;
 };
 

@@ -35,6 +35,7 @@ import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { getExternalAgentDriver, getExternalConversationAgent } from '../external/index.js';
+import { getSessionInteractionPolicy, setSessionInteractionPolicy } from './interaction-policy.js';
 
 const log = createLogger('SessionConfigService');
 
@@ -52,12 +53,14 @@ export interface PatchSessionAgentConfigInput {
   fixedModel?: boolean;
   configVersion?: number;
   model?: string | null;
+  serviceTier?: string | null;
   /** Preferred activity-detail field. `null` clears the session override. */
   activityDetailLevel?: string | null;
   verboseLevel?: string;
   workingDirectory?: string;
   responseLanguage?: string | null;
   userContextMode?: 'enabled' | 'off' | 'temporary';
+  interactionMode?: 'default' | 'plan';
 }
 
 export interface PatchSessionAgentConfigResult {
@@ -184,6 +187,32 @@ export class SessionConfigService {
         return { ok: false, error: 'Invalid user context mode' };
       }
       await this.opts.sessionConfigStore.update(conversationId, { userContextMode: partial.userContextMode });
+    }
+
+    if (partial.serviceTier !== undefined) {
+      if (partial.serviceTier === null || partial.serviceTier.trim() === '' || partial.serviceTier.trim() === 'default') {
+        await this.opts.sessionConfigStore.update(conversationId, { serviceTierOverride: undefined });
+      } else if (typeof partial.serviceTier === 'string' && partial.serviceTier.trim().length <= 64) {
+        await this.opts.sessionConfigStore.update(conversationId, { serviceTierOverride: partial.serviceTier.trim() });
+      } else {
+        return { ok: false, error: 'Invalid service tier' };
+      }
+    }
+
+    if (partial.interactionMode !== undefined) {
+      if (partial.interactionMode !== 'default' && partial.interactionMode !== 'plan') {
+        return { ok: false, error: 'Invalid interaction mode' };
+      }
+      try {
+        const current = getSessionInteractionPolicy(conversationId);
+        setSessionInteractionPolicy(conversationId, {
+          ...current,
+          mode: partial.interactionMode,
+          access: partial.interactionMode === 'plan' ? 'read-only' : 'configured',
+        });
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
     }
 
     if (partial.workingDirectory !== undefined) {

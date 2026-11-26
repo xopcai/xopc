@@ -360,6 +360,38 @@ export function useChatSessionLoad(deps: {
     },
     [applySessionAgentConfig, conversationId, sessionMgrRef],
   );
+  const onSessionInteractionModeChange = useCallback(
+    async (mode: 'default' | 'plan') => {
+      if (!conversationId) return;
+      try {
+        store().setShellError(null);
+        const cfg = await sessionMgrRef.current.patchSessionAgentConfig(conversationId, {
+          interactionMode: mode,
+        });
+        patchSessionAgentConfigView(conversationId, cfg);
+      } catch (error) {
+        store().setShellError(error instanceof Error ? error.message : 'Failed to update interaction mode');
+        throw error;
+      }
+    },
+    [conversationId, sessionMgrRef],
+  );
+  const onSessionServiceTierChange = useCallback(
+    async (tier: string) => {
+      if (!conversationId) return;
+      try {
+        store().setShellError(null);
+        const cfg = await sessionMgrRef.current.patchSessionAgentConfig(conversationId, {
+          serviceTier: tier === 'default' ? null : tier,
+        });
+        patchSessionAgentConfigView(conversationId, cfg);
+      } catch (error) {
+        store().setShellError(error instanceof Error ? error.message : 'Failed to update speed tier');
+        throw error;
+      }
+    },
+    [conversationId, sessionMgrRef],
+  );
   const createNewSession = useCallback(
     async (opts?: { forceNew?: boolean; projectId?: string | null; temporary?: boolean; executionMode?: LocalSessionOptions['executionMode'] }) => {
       store().setShellError(null);
@@ -432,6 +464,8 @@ export function useChatSessionLoad(deps: {
     onSessionModelChange,
     onSessionThinkingLevelChange,
     onSessionWorkingDirectoryChange,
+    onSessionInteractionModeChange,
+    onSessionServiceTierChange,
     createNewSession,
     resetCurrentSession,
   };

@@ -20,7 +20,7 @@ import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settin
 
 const inputClass = 'w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent/15';
 
-const DEFAULT_RUNTIME_NAMES = new Set(['', 'Codex', 'Antigravity']);
+const DEFAULT_RUNTIME_NAMES = new Set(['', 'Codex', 'Antigravity', 'Claude Code']);
 
 export type ManualAgentDraft = {
   open: boolean;
@@ -66,7 +66,7 @@ export function CreateAgentDialog({
       });
       return;
     }
-    const defaultName = next === 'codex' ? 'Codex' : 'Antigravity';
+    const defaultName = next === 'codex' ? 'Codex' : next === 'claude' ? 'Claude Code' : 'Antigravity';
     onChange({
       execution: next,
       executionConfig: { kind: next },
@@ -93,14 +93,20 @@ export function CreateAgentDialog({
     {
       id: 'codex',
       label: 'Codex',
-      subtitle: zh ? 'codex app-server' : 'codex app-server',
+      subtitle: 'codex app-server',
       probe: externalRuntimes?.find((entry) => entry.kind === 'codex'),
     },
     {
       id: 'agy',
       label: 'Antigravity',
-      subtitle: zh ? 'agy acp' : 'agy acp',
+      subtitle: 'agy acp',
       probe: externalRuntimes?.find((entry) => entry.kind === 'agy'),
+    },
+    {
+      id: 'claude',
+      label: 'Claude Code',
+      subtitle: 'claude stream-json',
+      probe: externalRuntimes?.find((entry) => entry.kind === 'claude'),
     },
   ];
 
@@ -132,7 +138,7 @@ export function CreateAgentDialog({
 
             <div className="space-y-2">
               <span className="block text-xs font-medium text-fg-muted">{messages.manualCreateExecution}</span>
-              <div className="grid gap-2.5 sm:grid-cols-3" role="radiogroup" aria-label={messages.manualCreateExecution}>
+              <div className="grid gap-2.5 sm:grid-cols-2" role="radiogroup" aria-label={messages.manualCreateExecution}>
                 {runtimeOptions.map((option) => {
                   const selected = draft.execution === option.id;
                   return (
@@ -171,6 +177,13 @@ export function CreateAgentDialog({
               </div>
               {draft.execution === 'codex' ? <p className="text-xs leading-5 text-fg-subtle">{messages.manualCreateCodexHint}</p> : null}
               {draft.execution === 'agy' ? <p className="text-xs leading-5 text-fg-subtle">{messages.manualCreateAgyHint}</p> : null}
+              {draft.execution === 'claude' ? (
+                <p className="text-xs leading-5 text-fg-subtle">
+                  {zh
+                    ? '通过本机 Claude Code CLI 执行项目任务，支持思考级别、计划模式、工具审批与长连接会话复用。'
+                    : 'Runs Project tasks through your local Claude Code CLI with effort levels, Plan mode, approvals, and warm session reuse.'}
+                </p>
+              ) : null}
             </div>
 
             <label htmlFor="manual-agent-name" className="block text-xs font-medium text-fg-muted">

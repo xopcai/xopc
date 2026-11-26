@@ -101,7 +101,7 @@ export function bindExternalSession(
   identity: ExternalSessionIdentity,
   binding: {
     nativeSessionId: string;
-    inputEntryId: string;
+    inputEntryId?: string | null;
     resumeCursor?: string;
     metadata?: Record<string, unknown>;
     allowSessionRotation?: boolean;
@@ -135,10 +135,21 @@ export function bindExternalSession(
       identity.cwd,
       binding.nativeSessionId,
       binding.resumeCursor ?? null,
-      binding.inputEntryId,
+      binding.inputEntryId ?? null,
       metadataJson,
       Date.now(),
     );
+  });
+}
+
+/** Clear last_input_entry_id after an intentional external rollback so the next turn can resume cleanly. */
+export function clearExternalSessionLastInputEntry(transcriptId: string): void {
+  runSqliteWriteTransaction(db => {
+    db.prepare(`
+      UPDATE external_agent_session_bindings
+      SET last_input_entry_id = NULL, updated_at = ?
+      WHERE transcript_id = ?
+    `).run(Date.now(), transcriptId);
   });
 }
 

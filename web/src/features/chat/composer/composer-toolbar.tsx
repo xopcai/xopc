@@ -44,6 +44,10 @@ export interface ComposerToolbarProps {
   onModelChange: (modelId: string, thinkingLevel?: string) => void | Promise<void>;
   modelDisabled: boolean;
   externalAgentId?: string;
+  interactionMode?: 'default' | 'plan';
+  onInteractionModeChange?: (mode: 'default' | 'plan') => void | Promise<void>;
+  serviceTier?: string;
+  onServiceTierChange?: (tier: string) => void | Promise<void>;
 }
 
 export function ComposerAttachButton({
@@ -185,6 +189,10 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   onModelChange,
   modelDisabled,
   externalAgentId,
+  interactionMode,
+  onInteractionModeChange,
+  serviceTier,
+  onServiceTierChange,
 }: ComposerToolbarProps) {
   if (voiceActive) return null;
   return (
@@ -210,6 +218,11 @@ export const ComposerToolbar = memo(function ComposerToolbar({
             thinkingDisabled={disabled || modelDisabled}
             onThinkingChange={onThinkingChange}
             externalAgentId={externalAgentId}
+            interactionMode={interactionMode}
+            interactionModeDisabled={disabled || runBusy || modelDisabled}
+            onInteractionModeChange={onInteractionModeChange}
+            serviceTier={serviceTier}
+            onServiceTierChange={onServiceTierChange}
           />
         ) : null}
         <div className="flex shrink-0 items-center gap-1">

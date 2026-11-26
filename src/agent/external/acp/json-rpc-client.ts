@@ -60,10 +60,10 @@ export class AcpJsonRpcClient {
   private readonly pending = new Map<number, ReturnType<typeof deferred<unknown>>>();
   private readonly closed = deferred<void>();
   private readonly label: string;
-  private readonly onNotification: (method: string, params: AcpRecord) => void;
-  private readonly onRequest?: (method: string, params: AcpRecord) => Promise<AcpRecord> | AcpRecord;
+  private onNotification?: (method: string, params: AcpRecord) => void;
+  private onRequest?: (method: string, params: AcpRecord) => Promise<AcpRecord> | AcpRecord;
   private readonly onNonJsonLine?: (line: string) => Error | undefined;
-  private readonly onFailure?: (error: Error) => void;
+  private onFailure?: (error: Error) => void;
   private failure: Error | undefined;
   private closing = false;
   private exitTimer?: NodeJS.Timeout;
@@ -189,6 +189,20 @@ export class AcpJsonRpcClient {
     }
   }
 
+  isAlive(): boolean {
+    return !this.closing && !this.failure;
+  }
+
+  setHandlers(handlers: {
+    onNotification?: (method: string, params: AcpRecord) => void;
+    onRequest?: (method: string, params: AcpRecord) => Promise<AcpRecord> | AcpRecord;
+    onFailure?: (error: Error) => void;
+  }): void {
+    this.onNotification = handlers.onNotification;
+    this.onRequest = handlers.onRequest;
+    this.onFailure = handlers.onFailure;
+  }
+
   notify(method: string, params?: AcpRecord): void {
     this.send({ jsonrpc: '2.0', method, ...(params !== undefined ? { params } : {}) });
   }
@@ -233,7 +247,7 @@ export class AcpJsonRpcClient {
       if (typeof id === 'number' || typeof id === 'string') {
         void this.handleIncomingRequest(id, method, params);
       } else {
-        this.onNotification(method, params);
+        this.onNotification?.(method, params);
       }
       return;
     }

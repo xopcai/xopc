@@ -145,7 +145,7 @@ function DiffBody({ lines }: { lines: DiffLine[] }) {
           className={cn(
             'whitespace-pre-wrap break-words [overflow-wrap:anywhere]',
             l.kind === 'add' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-            l.kind === 'del' && 'bg-red-500/15 text-red-700 dark:text-red-300',
+            l.kind === 'del' && 'bg-danger-soft text-danger',
             l.kind === 'hunk' && 'text-fg-subtle',
             l.kind === 'meta' && 'text-fg-disabled',
           )}

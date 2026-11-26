@@ -192,10 +192,12 @@ export async function replaceLatestSessionTurn(
   targetTurnId: string,
 ) {
   const externalAgent = getExternalConversationAgent(conversationId);
-  if (externalAgent) {
-    const driver = getExternalAgentDriver(externalAgent.execution.kind);
-    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `Send a follow-up or start a new ${driver.label} session to revise a task.` } }, 400);
+  const externalDriver = externalAgent ? getExternalAgentDriver(externalAgent.execution.kind) : undefined;
+  if (externalDriver && !externalDriver.rollbackSession) {
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `Send a follow-up or start a new ${externalDriver.label} session to revise a task.` } }, 400);
   }
+  const forbidden = externalAgentAccessError(externalAgent, getGatewayPrincipal(c));
+  if (forbidden) return c.json({ ok: false, error: { code: 'FORBIDDEN', message: forbidden } }, 403);
   const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
   if (!body || !conversationId || !targetTurnId) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid request' } }, 400);
@@ -234,17 +236,20 @@ export async function replaceLatestSessionTurn(
       return c.json({ ok: false, error: { code: 'SESSION_BUSY', message: 'End the voice call before editing a turn' } }, 409);
     }
     const selection = body.configVersion !== undefined ? await deps.service.sessions.getAgentConfig(conversationId) : undefined;
+    const managesOwnModel = externalDriver?.capabilities.managesOwnModel === true;
     if (selection) {
-      if (!Number.isSafeInteger(body.configVersion) || selection.configVersion !== body.configVersion || !selection.fixedModel) {
+      if (!Number.isSafeInteger(body.configVersion) || selection.configVersion !== body.configVersion || (!managesOwnModel && !selection.fixedModel)) {
         return c.json({ ok: false, error: { code: 'CONFIG_CHANGED', message: 'Model configuration changed. Refresh before sending.' } }, 409);
       }
-      try {
-        const capabilities = getModelThinking(resolveModel(selection.model));
-        if (!capabilities.options.includes(selection.thinkingLevel as ModelThinkingValue)) {
-          return c.json({ ok: false, error: { code: 'INVALID_THINKING', message: 'Select a supported thinking level before sending.' } }, 409);
+      if (!managesOwnModel) {
+        try {
+          const capabilities = getModelThinking(resolveModel(selection.model));
+          if (!capabilities.options.includes(selection.thinkingLevel as ModelThinkingValue)) {
+            return c.json({ ok: false, error: { code: 'INVALID_THINKING', message: 'Select a supported thinking level before sending.' } }, 409);
+          }
+        } catch {
+          return c.json({ ok: false, error: { code: 'MODEL_UNAVAILABLE', message: `Model unavailable: ${selection.model}` } }, 409);
         }
-      } catch {
-        return c.json({ ok: false, error: { code: 'MODEL_UNAVAILABLE', message: `Model unavailable: ${selection.model}` } }, 409);
       }
     }
     const result = await deps.service.replaceLatestSessionTurn({

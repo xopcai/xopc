@@ -101,6 +101,8 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
   const effectiveWorkspacePath = sessionSlice?.effectiveWorkspacePath ?? '';
   const workspaceSource = sessionSlice?.workspaceSource ?? 'agent_default_root';
   const userContextMode = sessionSlice?.userContextMode ?? 'enabled';
+  const interactionMode = sessionSlice?.interactionMode ?? 'default';
+  const serviceTier = sessionSlice?.serviceTier ?? 'default';
 
   useEffect(() => {
     if (!visibleConversationId || sending || streaming) return;
@@ -216,6 +218,8 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
     onSessionModelChange,
     onSessionThinkingLevelChange,
     onSessionWorkingDirectoryChange,
+    onSessionInteractionModeChange,
+    onSessionServiceTierChange,
     createNewSession,
     resetCurrentSession,
   } = useChatSessionLoad({
@@ -457,6 +461,10 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
       thinkingLevel: projectPreparation ? preparedModel.thinkingLevel : thinkingLevel,
       onSessionThinkingLevelChange: projectPreparation ? preparedModel.onThinkingChange : onSessionThinkingLevelChange,
       onSessionWorkingDirectoryChange,
+      interactionMode,
+      onSessionInteractionModeChange,
+      serviceTier,
+      onSessionServiceTierChange,
       reasoningLevel,
       modelSupportsThinking: projectPreparation ? preparedModel.modelSupportsThinking : modelSupportsThinking,
       effectiveWorkspacePath,

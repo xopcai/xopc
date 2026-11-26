@@ -8,7 +8,7 @@ import type {
   ExternalAgentKind,
   ExternalPermissionMode,
 } from '../../../agent-config/schema.js';
-import type { SessionInteractionPolicy } from '../../session/interaction-policy-state.js';
+import { PLAN_MODE_INSTRUCTIONS, type SessionInteractionPolicy } from '../../session/interaction-policy-state.js';
 import { normalizeThinkLevel } from '../../transcript/thinking-types.js';
 import { formatFileAttachmentsContext } from '../attachments.js';
 import {
@@ -18,14 +18,21 @@ import {
   toWorkspaceRelativePath,
   unwrapShellCommand,
 } from '../presentation.js';
+import {
+  checkinPooledExternalSession,
+  checkoutPooledExternalSession,
+  disposePooledExternalSession,
+} from '../session-pool.js';
 import type {
   ExternalAgentDriver,
   ExternalDriverTurnContext,
   ExternalRuntimeCapabilities,
+  ExternalRuntimeCommand,
   ExternalRuntimeModelOption,
   ExternalRuntimeProbeResult,
   ExternalRuntimeToolCall,
   ExternalRuntimeToolResult,
+  ExternalSessionControlContext,
 } from '../types.js';
 import { AcpJsonRpcClient, AcpRpcError, asRecord, type AcpRecord } from './json-rpc-client.js';
 
@@ -618,6 +625,60 @@ function extractAvailableModels(sessionResult: AcpRecord): ExternalRuntimeModelO
   return options;
 }
 
+function findAcpAvailableModes(sessionResult: AcpRecord): {
+  modeConfigId?: string;
+  currentModeId?: string;
+  availableModeIds: string[];
+} {
+  if (Array.isArray(sessionResult.configOptions)) {
+    const modeOpt = sessionResult.configOptions
+      .map(asRecord)
+      .find((opt) => opt?.type === 'select' && (str(opt.category).toLowerCase() === 'mode' || opt.id === 'mode'));
+    if (modeOpt) {
+      const entries = collectSelectOptionValues(modeOpt);
+      return {
+        modeConfigId: str(modeOpt.id).trim() || 'mode',
+        currentModeId: str(modeOpt.currentValue).trim() || undefined,
+        availableModeIds: entries.map((e) => e.value),
+      };
+    }
+  }
+  const modes = asRecord(sessionResult.modes);
+  if (modes && Array.isArray(modes.availableModes)) {
+    const availableModeIds = modes.availableModes
+      .map(asRecord)
+      .map((m) => str(m?.id).trim())
+      .filter(Boolean);
+    return {
+      currentModeId: str(modes.currentModeId).trim() || undefined,
+      availableModeIds,
+    };
+  }
+  return { availableModeIds: [] };
+}
+
+function selectTargetAcpMode(
+  availableModeIds: ReadonlyArray<string>,
+  sessionPolicy: SessionInteractionPolicy,
+  permissionMode: ExternalPermissionMode,
+): string | undefined {
+  if (availableModeIds.length === 0) return undefined;
+  const pick = (candidates: ReadonlyArray<string>) =>
+    candidates.find((c) => availableModeIds.some((id) => id.toLowerCase() === c))
+      ? availableModeIds.find((id) => candidates.includes(id.toLowerCase()))
+      : undefined;
+  if (sessionPolicy.mode === 'plan' || sessionPolicy.access === 'read-only') {
+    return pick(['plan', 'read-only', 'readonly']);
+  }
+  if (permissionMode === 'ask') {
+    return pick(['ask', 'approval-required', 'supervised', 'default', 'code']);
+  }
+  if (permissionMode === 'full_access') {
+    return pick(['full-access', 'full_access', 'auto', 'code', 'default']);
+  }
+  return pick(['auto', 'code', 'default', 'ask']);
+}
+
 function selectAuthMethodId(initializeResult: AcpRecord, preferred?: string): string | undefined {
   if (preferred?.trim()) return preferred.trim();
   const methods = Array.isArray(initializeResult.authMethods)
@@ -748,6 +809,13 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
         if (!update) return;
         const kind = str(update.sessionUpdate);
 
+        if (kind === 'config_option_update' && Array.isArray(update.configOptions)) {
+          if (activeSessionResult) {
+            activeSessionResult = { ...activeSessionResult, configOptions: update.configOptions };
+          }
+          return;
+        }
+
         if (kind === 'agent_message_chunk') {
           const text = contentBlockText(update.content);
           if (!text) return;
@@ -863,141 +931,227 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
         }
       };
 
+      let activeSessionResult: AcpRecord | undefined;
+      type PooledAcpSession = {
+        client: AcpJsonRpcClient;
+        sessionId: string;
+        initializeResult: AcpRecord;
+        sessionResult: AcpRecord;
+        resolvedModel?: string;
+        resolvedThinking?: string;
+        resolvedMode?: string;
+        sessionMetaApplied: boolean;
+      };
+      const buildFingerprint = (boundSessionId: string) => JSON.stringify([
+        config.kind,
+        cwd,
+        spawnConfig.command,
+        spawnConfig.args,
+        instructions?.trim() ?? '',
+        boundSessionId,
+      ]);
+
+      const onNotification = (method: string, params: AcpRecord) => {
+        if (method === 'session/update') handleSessionUpdate(params);
+      };
+      const onRequest = (method: string, params: AcpRecord) => {
+        if (method === 'session/request_permission') {
+          if (!acceptingPromptUpdates || !sessionId || params.sessionId !== sessionId || signal.aborted) {
+            return { outcome: { outcome: 'cancelled' } };
+          }
+          return handleAcpPermissionRequest({
+            params,
+            permissionMode,
+            sessionPolicy,
+            requestInteraction,
+          });
+        }
+        throw new AcpRpcError(-32601, `xopc does not implement ACP client method ${method}.`);
+      };
+
+      let initializeResult: AcpRecord = {};
+      let resolvedModel: string | undefined;
+      let resolvedThinking: string | undefined;
+      let resolvedMode: string | undefined;
+      let sessionMetaApplied = false;
+
       signal.addEventListener('abort', onAbort, { once: true });
       try {
-        client = new AcpJsonRpcClient({
-          command: spawnConfig.command,
-          args: spawnConfig.args,
-          cwd,
-          env: spawnConfig.env,
-          label: config.label,
-          notFoundMessage: config.notFoundMessage,
-          onNotification: (method, params) => {
-            if (method === 'session/update') handleSessionUpdate(params);
-          },
-          onRequest: (method, params) => {
-            if (method === 'session/request_permission') {
-              if (!acceptingPromptUpdates || !sessionId || params.sessionId !== sessionId || signal.aborted) {
-                return { outcome: { outcome: 'cancelled' } };
-              }
-              return handleAcpPermissionRequest({
-                params,
-                permissionMode,
-                sessionPolicy,
-                requestInteraction,
-              });
-            }
-            throw new AcpRpcError(-32601, `xopc does not implement ACP client method ${method}.`);
-          },
-          onNonJsonLine: config.onNonJsonLine,
-          onStderrLine: config.onStderrLine,
-        });
+        const warm = existingBinding?.nativeSessionId
+          ? await checkoutPooledExternalSession<PooledAcpSession>(
+              context.conversationId,
+              buildFingerprint(existingBinding.nativeSessionId),
+            )
+          : undefined;
 
-        const initializeResult = await client.request(
-          'initialize',
-          {
-            protocolVersion: 1,
-            clientCapabilities: {
-              fs: { readTextFile: false, writeTextFile: false },
-              terminal: false,
+        if (warm) {
+          client = warm.client;
+          sessionId = warm.sessionId;
+          initializeResult = warm.initializeResult;
+          activeSessionResult = warm.sessionResult;
+          resolvedModel = warm.resolvedModel;
+          resolvedThinking = warm.resolvedThinking;
+          resolvedMode = warm.resolvedMode;
+          sessionMetaApplied = warm.sessionMetaApplied;
+          client.setHandlers({ onNotification, onRequest });
+        } else {
+          client = new AcpJsonRpcClient({
+            command: spawnConfig.command,
+            args: spawnConfig.args,
+            cwd,
+            env: spawnConfig.env,
+            label: config.label,
+            notFoundMessage: config.notFoundMessage,
+            onNotification,
+            onRequest,
+            onNonJsonLine: config.onNonJsonLine,
+            onStderrLine: config.onStderrLine,
+          });
+
+          initializeResult = await client.request(
+            'initialize',
+            {
+              protocolVersion: 1,
+              clientCapabilities: {
+                fs: { readTextFile: false, writeTextFile: false },
+                terminal: false,
+              },
+              clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
             },
-            clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
-          },
-          signal,
-        );
-
-        const configuredAuthMethod = config.authMethodId?.(execution);
-        if (config.authenticateEagerly && configuredAuthMethod) {
-          await client.request('authenticate', { methodId: configuredAuthMethod }, signal);
-        }
-
-        const sessionMeta = config.buildSessionMeta?.(initializeResult, instructions);
-        const openSession = async (): Promise<{ id: string; result: AcpRecord }> => {
-          const agentCapabilities = asRecord(initializeResult.agentCapabilities);
-          const sessionCapabilities = asRecord(agentCapabilities?.sessionCapabilities);
-          const metaField = sessionMeta ? { _meta: sessionMeta } : {};
-
-          if (existingBinding?.nativeSessionId) {
-            const nativeId = existingBinding.nativeSessionId;
-            if (sessionCapabilities?.resume != null) {
-              const resumed = await client!.request(
-                'session/resume',
-                { sessionId: nativeId, cwd, mcpServers: [], ...metaField },
-                signal,
-              );
-              return { id: str(resumed.sessionId) || nativeId, result: resumed };
-            }
-            if (agentCapabilities?.loadSession === true) {
-              const loaded = await client!.request(
-                'session/load',
-                { sessionId: nativeId, cwd, mcpServers: [], ...metaField },
-                signal,
-              );
-              return { id: str(loaded.sessionId) || nativeId, result: loaded };
-            }
-            throw new Error(`${config.label} ACP server does not advertise session/resume or session/load support.`);
-          }
-
-          const created = await client!.request(
-            'session/new',
-            { cwd, mcpServers: [], ...metaField },
             signal,
           );
-          const createdId = str(created.sessionId).trim();
-          if (!createdId) throw new Error(`${config.label} did not return a session ID.`);
-          return { id: createdId, result: created };
-        };
 
-        let opened: { id: string; result: AcpRecord };
-        try {
-          opened = await openSession();
-        } catch (error) {
-          if (!isAuthRequiredRpcError(error)) throw error;
-          const authMethodId = selectAuthMethodId(initializeResult, configuredAuthMethod);
-          if (!authMethodId) throw new Error(config.signInRequiredMessage, { cause: error });
-          await client.request('authenticate', { methodId: authMethodId }, signal);
-          opened = await openSession();
+          const configuredAuthMethod = config.authMethodId?.(execution);
+          if (config.authenticateEagerly && configuredAuthMethod) {
+            await client.request('authenticate', { methodId: configuredAuthMethod }, signal);
+          }
+
+          const sessionMeta = config.buildSessionMeta?.(initializeResult, instructions);
+          sessionMetaApplied = Boolean(sessionMeta);
+          const openSession = async (): Promise<{ id: string; result: AcpRecord }> => {
+            const agentCapabilities = asRecord(initializeResult.agentCapabilities);
+            const sessionCapabilities = asRecord(agentCapabilities?.sessionCapabilities);
+            const metaField = sessionMeta ? { _meta: sessionMeta } : {};
+
+            if (existingBinding?.nativeSessionId) {
+              const nativeId = existingBinding.nativeSessionId;
+              if (sessionCapabilities?.resume != null) {
+                const resumed = await client!.request(
+                  'session/resume',
+                  { sessionId: nativeId, cwd, mcpServers: [], ...metaField },
+                  signal,
+                );
+                return { id: str(resumed.sessionId) || nativeId, result: resumed };
+              }
+              if (agentCapabilities?.loadSession === true) {
+                const loaded = await client!.request(
+                  'session/load',
+                  { sessionId: nativeId, cwd, mcpServers: [], ...metaField },
+                  signal,
+                );
+                return { id: str(loaded.sessionId) || nativeId, result: loaded };
+              }
+              throw new Error(`${config.label} ACP server does not advertise session/resume or session/load support.`);
+            }
+
+            const created = await client!.request(
+              'session/new',
+              { cwd, mcpServers: [], ...metaField },
+              signal,
+            );
+            const createdId = str(created.sessionId).trim();
+            if (!createdId) throw new Error(`${config.label} did not return a session ID.`);
+            return { id: createdId, result: created };
+          };
+
+          let opened: { id: string; result: AcpRecord };
+          try {
+            opened = await openSession();
+          } catch (error) {
+            if (!isAuthRequiredRpcError(error)) throw error;
+            const authMethodId = selectAuthMethodId(initializeResult, configuredAuthMethod);
+            if (!authMethodId) throw new Error(config.signInRequiredMessage, { cause: error });
+            await client.request('authenticate', { methodId: authMethodId }, signal);
+            opened = await openSession();
+          }
+
+          sessionId = opened.id;
+          activeSessionResult = opened.result;
+          resolvedModel = extractCurrentModel(opened.result);
+          resolvedThinking = findAcpThinkingConfigOption(opened.result)?.currentValue;
+          resolvedMode = findAcpAvailableModes(opened.result).currentModeId;
         }
 
-        sessionId = opened.id;
-        let resolvedModel = extractCurrentModel(opened.result);
+        const currentSessionResult = activeSessionResult ?? {};
         const requestedModel = context.modelOverride?.trim() || execution.model?.trim();
         if (requestedModel && requestedModel !== resolvedModel) {
-          const modelConfigOpt = Array.isArray(opened.result.configOptions)
-            ? opened.result.configOptions
+          const modelConfigOpt = Array.isArray(currentSessionResult.configOptions)
+            ? currentSessionResult.configOptions
                 .map(asRecord)
                 .find((opt) => opt?.type === 'select' && (opt.id === 'model' || str(opt.category).toLowerCase() === 'model'))
             : undefined;
           const modelConfigId = str(modelConfigOpt?.id).trim() || 'model';
           try {
-            await client.request(
+            const setRes = await client.request(
               'session/set_config_option',
               { sessionId, configId: modelConfigId, value: requestedModel },
               signal,
             );
             resolvedModel = requestedModel;
+            if (Array.isArray(setRes.configOptions)) {
+              activeSessionResult = { ...currentSessionResult, configOptions: setRes.configOptions };
+            }
           } catch {
             // Fall back to the agent's negotiated model if set_config_option is unsupported.
           }
         }
+
         const requestedThinking = context.thinkingLevel?.trim();
         if (requestedThinking) {
-          const thinkingOpt = findAcpThinkingConfigOption(opened.result);
+          const thinkingOpt = findAcpThinkingConfigOption(activeSessionResult ?? currentSessionResult);
           if (thinkingOpt) {
             const matchedValue = matchAcpThinkingRawValue(requestedThinking, thinkingOpt.rawValues);
-            if (matchedValue && matchedValue !== thinkingOpt.currentValue) {
+            if (matchedValue && matchedValue !== (resolvedThinking ?? thinkingOpt.currentValue)) {
               try {
                 await client.request(
                   'session/set_config_option',
                   { sessionId, configId: thinkingOpt.configId, value: matchedValue },
                   signal,
                 );
+                resolvedThinking = matchedValue;
               } catch {
                 // Ignore if the runtime rejects a thinking effort override on this model.
               }
             }
           }
         }
+
+        // Synchronize native ACP session mode when advertised (e.g. Plan vs Auto/Ask).
+        let nativePlanModeApplied = false;
+        const modeInfo = findAcpAvailableModes(activeSessionResult ?? currentSessionResult);
+        const targetMode = selectTargetAcpMode(modeInfo.availableModeIds, sessionPolicy, permissionMode);
+        if (targetMode) {
+          if (targetMode !== (resolvedMode ?? modeInfo.currentModeId)) {
+            try {
+              if (modeInfo.modeConfigId) {
+                await client.request(
+                  'session/set_config_option',
+                  { sessionId, configId: modeInfo.modeConfigId, value: targetMode },
+                  signal,
+                );
+              } else {
+                await client.request('session/set_mode', { sessionId, modeId: targetMode }, signal);
+              }
+              resolvedMode = targetMode;
+            } catch {
+              // Best-effort mode sync; permission callbacks still enforce sessionPolicy.
+            }
+          }
+          if ((resolvedMode ?? modeInfo.currentModeId)?.toLowerCase() === 'plan') {
+            nativePlanModeApplied = true;
+          }
+        }
+
         emit({
           type: 'session_bound',
           nativeSessionId: sessionId,
@@ -1005,10 +1159,14 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
         });
         signal.throwIfAborted();
 
-        const promptText =
-          !existingBinding && instructions && !sessionMeta
+        const basePrompt =
+          !existingBinding && instructions && !sessionMetaApplied
             ? `${instructions}\n\n${content}`
             : content;
+        const promptText =
+          sessionPolicy.mode === 'plan' && !nativePlanModeApplied
+            ? `<plan_mode>\n${PLAN_MODE_INSTRUCTIONS}\n</plan_mode>\n\n${basePrompt}`
+            : basePrompt;
         const promptCaps = asRecord(asRecord(initializeResult.agentCapabilities)?.promptCapabilities);
         const supportsImageBlocks = promptCaps?.image === true;
         const promptBlocks = buildAcpPromptBlocks({
@@ -1063,7 +1221,33 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
         acceptingPromptUpdates = false;
         signal.removeEventListener('abort', onAbort);
         clearTimeout(stopTimer);
-        await client?.close(Boolean(failed || signal.aborted));
+        const reusable =
+          !failed
+          && !signal.aborted
+          && Boolean(client && sessionId)
+          && client!.isAlive();
+        if (reusable && client && sessionId) {
+          const pooledClient = client;
+          pooledClient.setHandlers({});
+          checkinPooledExternalSession<PooledAcpSession>(context.conversationId, {
+            fingerprint: buildFingerprint(sessionId),
+            resource: {
+              client: pooledClient,
+              sessionId,
+              initializeResult,
+              sessionResult: activeSessionResult ?? {},
+              resolvedModel,
+              resolvedThinking,
+              resolvedMode,
+              sessionMetaApplied,
+            },
+            isAlive: () => pooledClient.isAlive(),
+            dispose: (force) => pooledClient.close(force),
+          });
+        } else {
+          await disposePooledExternalSession(context.conversationId, true);
+          await client?.close(Boolean(failed || signal.aborted));
+        }
       }
     },
 
@@ -1094,6 +1278,8 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
       );
       let client: AcpJsonRpcClient | undefined;
       let version: string | undefined;
+      const discoveredCommands: ExternalRuntimeCommand[] = [];
+      const seenCommandNames = new Set<string>();
       try {
         client = new AcpJsonRpcClient({
           command: spawnConfig.command,
@@ -1102,7 +1288,20 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
           env: spawnConfig.env,
           label: config.label,
           notFoundMessage: config.notFoundMessage,
-          onNotification: () => {},
+          onNotification: (method, params) => {
+            if (method !== 'session/update') return;
+            const update = asRecord(params.update);
+            if (str(update?.sessionUpdate) !== 'available_commands_update') return;
+            const available = Array.isArray(update?.availableCommands) ? update.availableCommands : [];
+            for (const entry of available) {
+              const rec = asRecord(entry);
+              const name = str(rec?.name).trim().replace(/^\/+/, '');
+              if (!name || seenCommandNames.has(name)) continue;
+              seenCommandNames.add(name);
+              const description = str(rec?.description).trim() || undefined;
+              discoveredCommands.push({ name, ...(description ? { description } : {}), source: 'command' });
+            }
+          },
           onRequest: (method) => {
             if (method === 'session/request_permission') return { outcome: { outcome: 'cancelled' } };
             throw new AcpRpcError(-32601, `xopc does not implement ACP client method ${method}.`);
@@ -1150,6 +1349,7 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
           status: 'ready',
           ...(executablePath ? { executablePath } : {}),
           ...(version ? { version } : {}),
+          ...(discoveredCommands.length > 0 ? { commands: discoveredCommands } : {}),
           models,
           checkedAt: Date.now(),
         };
@@ -1173,6 +1373,62 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
       } finally {
         clearTimeout(timer);
         await client?.close(true);
+      }
+    },
+
+    async forkSession(
+      context: ExternalSessionControlContext,
+    ): Promise<{ nativeSessionId: string; resumeCursor?: string } | null> {
+      const spawnConfig = config.resolveSpawn(context.cwd, context.execution);
+      const abortController = new AbortController();
+      const signal = context.signal ? AbortSignal.any([context.signal, abortController.signal]) : abortController.signal;
+      const timer = setTimeout(() => abortController.abort(new Error(`${config.label} fork timed out.`)), 20_000);
+      let client: AcpJsonRpcClient | undefined;
+      try {
+        client = new AcpJsonRpcClient({
+          command: spawnConfig.command,
+          args: spawnConfig.args,
+          cwd: context.cwd,
+          env: spawnConfig.env,
+          label: config.label,
+          notFoundMessage: config.notFoundMessage,
+          onNotification: () => {},
+          onRequest: (method) => {
+            if (method === 'session/request_permission') return { outcome: { outcome: 'cancelled' } };
+            throw new AcpRpcError(-32601, `xopc does not implement ACP client method ${method}.`);
+          },
+          onNonJsonLine: config.onNonJsonLine,
+          onStderrLine: config.onStderrLine,
+        });
+        const initializeResult = await client.request(
+          'initialize',
+          {
+            protocolVersion: 1,
+            clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+            clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
+          },
+          signal,
+        );
+        const sessionCaps = asRecord(asRecord(initializeResult.agentCapabilities)?.sessionCapabilities);
+        if (sessionCaps?.fork == null) return null;
+
+        const configuredAuthMethod = config.authMethodId?.(context.execution);
+        if (config.authenticateEagerly && configuredAuthMethod) {
+          await client.request('authenticate', { methodId: configuredAuthMethod }, signal);
+        }
+        const sessionMeta = config.buildSessionMeta?.(initializeResult, context.instructions);
+        const metaField = sessionMeta ? { _meta: sessionMeta } : {};
+        const forked = await client.request(
+          'session/fork',
+          { sessionId: context.nativeSessionId, cwd: context.cwd, mcpServers: [], ...metaField },
+          signal,
+        );
+        const newSessionId = str(forked.sessionId).trim();
+        if (!newSessionId) return null;
+        return { nativeSessionId: newSessionId };
+      } finally {
+        clearTimeout(timer);
+        await client?.close(false);
       }
     },
   };

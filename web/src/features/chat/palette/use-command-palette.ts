@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { resolveSkillPresentation } from '@xopcai/composer-core/skill-localization';
 
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
+import { fetchAgentRuntimeModelsCached } from '@/features/chat/api/registry-api';
 import { listSkillNamesInWire } from '@/features/chat/composer/composer-editor-wire';
 import { CHAT_COMPOSER_CAPABILITIES, type ComposerCapabilities } from '@/features/chat/composer/composer-capabilities';
 import { ABORT_CLASS_NAMES } from '@/features/chat/composer/palette-item-handlers';
@@ -307,8 +308,36 @@ export function useCommandPalette(
       });
       // Agents: only when there is more than one (matches header `showChatAgentSelector`).
       const agentsMessages = messages(language).agentsSettings;
-      const selectableAgents = agentsResult.status === 'fulfilled'
-        ? agentsResult.value.items.filter(agent => options?.externalAgentsAvailable || !agent.execution) : [];
+      const allAgents = agentsResult.status === 'fulfilled' ? agentsResult.value.items : [];
+      const currentExternalAgent = options?.currentAgentId
+        ? allAgents.find((a) => a.id === options.currentAgentId && Boolean(a.execution))
+        : undefined;
+      let externalItems: PaletteItem[] = [];
+      if (currentExternalAgent) {
+        try {
+          const runtimeData = await fetchAgentRuntimeModelsCached(currentExternalAgent.id);
+          const existingNames = new Set([
+            ...commandItems.map((c) => c.name.toLowerCase()),
+            ...skillItems.map((s) => (s.kind === 'skill' ? (s.canonicalName ?? s.name) : s.name).toLowerCase()),
+          ]);
+          externalItems = (runtimeData.commands ?? [])
+            .filter((cmd) => cmd.name && !existingNames.has(cmd.name.toLowerCase()))
+            .map((cmd) => ({
+              kind: 'command' as const,
+              id: `ext-cmd:${currentExternalAgent.id}:${cmd.name}`,
+              name: cmd.name,
+              description: cmd.description || `${runtimeData.runtimeLabel} ${cmd.source}`,
+              category: 'extension' as const,
+              acceptsArgs: true,
+              acceptsContext: true,
+              aliases: [],
+              examples: [],
+            }));
+        } catch {
+          // Best-effort runtime command discovery.
+        }
+      }
+      const selectableAgents = allAgents.filter(agent => options?.externalAgentsAvailable || !agent.execution);
       const agentItems: PaletteItem[] =
         selectableAgents.length > 1
           ? selectableAgents.map((a) => ({
@@ -322,7 +351,7 @@ export function useCommandPalette(
               aliases: [a.id, ...(a.name ? [a.name] : [])],
             }))
           : [];
-      return { items: [...skillItems, ...commandItems, ...agentItems], failedKinds };
+      return { items: [...externalItems, ...skillItems, ...commandItems, ...agentItems], failedKinds };
     },
     [language, options?.currentAgentId, options?.conversationId, options?.externalAgentsAvailable, skillsVersion],
     {

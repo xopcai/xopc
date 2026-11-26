@@ -29,7 +29,7 @@ export function ToolCardBadge({
     tone === 'positive'
       ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
       : tone === 'negative'
-        ? 'bg-red-500/15 text-red-700 dark:text-red-300'
+        ? 'bg-danger-soft text-danger'
         : tone === 'warning'
           ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
           : tone === 'accent'

@@ -24,6 +24,8 @@ import { APP_PORTALED_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 
 export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisabled, onModelChange,
   thinkingLevel, thinkingDisabled, onThinkingChange, externalAgentId,
+  interactionMode = 'default', interactionModeDisabled = false, onInteractionModeChange,
+  serviceTier = 'default', onServiceTierChange,
 }: {
   chat: MessageBundle['chat'];
   sessionModel: string;
@@ -34,6 +36,11 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
   onThinkingChange: (level: string) => void | Promise<void>;
   /** When set, loads models and thinking capabilities from this external runtime agent instead of built-in providers. */
   externalAgentId?: string;
+  interactionMode?: 'default' | 'plan';
+  interactionModeDisabled?: boolean;
+  onInteractionModeChange?: (mode: 'default' | 'plan') => void | Promise<void>;
+  serviceTier?: string;
+  onServiceTierChange?: (tier: string) => void | Promise<void>;
 }) {
   const language = useLocaleStore((s) => s.language);
   const builtinRegistry = useSWR(
@@ -112,6 +119,11 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
             <span className="min-w-0 truncate font-medium">{title}</span>
             {unavailable ? <span className="shrink-0 text-fg-muted">{m.modelUnavailable}</span>
               : effort && <span className="shrink-0 text-fg-muted">· {effort}</span>}
+            {interactionMode === 'plan' ? (
+              <span className="shrink-0 rounded-full bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent-fg">
+                {language === 'zh' ? '规划' : 'Plan'}
+              </span>
+            ) : null}
           </>}
           <ChevronDown className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
         </button>
@@ -154,6 +166,97 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
                       : m.modelThinkingUnknown
                 }</p>}
               </div>}
+              {onServiceTierChange && selected?.serviceTiers && selected.serviceTiers.length > 0 ? (
+                <div className="mt-2 border-t border-edge-subtle pt-2.5">
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <span className="text-xs font-medium text-fg-muted">
+                      {language === 'zh' ? '速度档位' : 'Speed'}
+                    </span>
+                    <div
+                      role="radiogroup"
+                      aria-label={language === 'zh' ? '速度档位' : 'Speed'}
+                      className="inline-flex flex-wrap justify-end gap-0.5 rounded-lg border border-edge bg-surface-base p-0.5"
+                    >
+                      {[
+                        { id: 'default', label: language === 'zh' ? '标准' : 'Standard' },
+                        ...selected.serviceTiers.map((tier) => ({ id: tier.id, label: tier.label })),
+                      ].map((opt) => {
+                        const active = (serviceTier || 'default') === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            disabled={busy}
+                            onClick={() => {
+                              if (active) return;
+                              void save(() => onServiceTierChange(opt.id));
+                            }}
+                            className={cn(
+                              'rounded-md px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50',
+                              active
+                                ? 'bg-accent-soft text-accent-fg'
+                                : 'text-fg-muted hover:text-fg',
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              {onInteractionModeChange ? (
+                <div className="mt-2 border-t border-edge-subtle pt-2.5">
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <span className="text-xs font-medium text-fg-muted">
+                      {language === 'zh' ? '协作模式' : 'Mode'}
+                    </span>
+                    <div
+                      role="radiogroup"
+                      aria-label={language === 'zh' ? '协作模式' : 'Mode'}
+                      className="inline-flex rounded-lg border border-edge bg-surface-base p-0.5"
+                    >
+                      {([
+                        { id: 'default', label: language === 'zh' ? '执行' : 'Build' },
+                        { id: 'plan', label: language === 'zh' ? '规划' : 'Plan' },
+                      ] as const).map((opt) => {
+                        const active = interactionMode === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            disabled={busy || interactionModeDisabled}
+                            onClick={() => {
+                              if (active) return;
+                              void save(() => onInteractionModeChange(opt.id));
+                            }}
+                            className={cn(
+                              'rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50',
+                              active
+                                ? 'bg-accent-soft text-accent-fg'
+                                : 'text-fg-muted hover:text-fg',
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {interactionMode === 'plan' ? (
+                    <p className="mt-1.5 px-1 text-[11px] leading-4 text-fg-subtle">
+                      {language === 'zh'
+                        ? '只读分析并输出方案，不修改文件或执行变更命令。'
+                        : 'Read-only planning without editing files or running mutating commands.'}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </>}
           </div>}
           {pending && <span className="sr-only" role="status">{m.modelConfigSaving}</span>}

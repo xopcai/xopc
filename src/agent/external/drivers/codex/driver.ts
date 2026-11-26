@@ -8,7 +8,7 @@ import type { ModelThinkingCapabilities, ModelThinkingValue } from '@xopcai/gate
 
 import type { CodexExecution, ExternalAgentExecution, ExternalPermissionMode } from '../../../../agent-config/schema.js';
 import { resolveUserPath } from '../../../agent-scope.js';
-import type { SessionInteractionPolicy } from '../../../session/interaction-policy-state.js';
+import { PLAN_MODE_INSTRUCTIONS, type SessionInteractionPolicy } from '../../../session/interaction-policy-state.js';
 import { normalizeThinkLevel } from '../../../transcript/thinking-types.js';
 import { formatFileAttachmentsContext } from '../../attachments.js';
 import {
@@ -19,13 +19,23 @@ import {
   toWorkspaceRelativePath,
   unwrapShellCommand,
 } from '../../presentation.js';
+import {
+  checkinPooledExternalSession,
+  checkoutPooledExternalSession,
+  disposePooledExternalSession,
+} from '../../session-pool.js';
 import type {
   ExternalAgentDriver,
   ExternalDriverTurnContext,
+  ExternalRuntimeCommand,
   ExternalRuntimeModelOption,
   ExternalRuntimeProbeResult,
+  ExternalRuntimeRateLimits,
+  ExternalRuntimeRateLimitWindow,
+  ExternalRuntimeServiceTier,
   ExternalRuntimeToolCall,
   ExternalRuntimeToolResult,
+  ExternalSessionControlContext,
 } from '../../types.js';
 import { CodexAppServer, deferred, record, type CodexRecord } from './app-server.js';
 import { findCodexExecutable } from './executable.js';
@@ -92,6 +102,82 @@ function parseCodexModelThinking(item: CodexRecord): ModelThinkingCapabilities |
   };
 }
 
+function parseCodexServiceTiers(item: CodexRecord): ExternalRuntimeServiceTier[] | undefined {
+  const rawTiers = Array.isArray(item.serviceTiers) ? item.serviceTiers : [];
+  const defaultTier = text(item.defaultServiceTier).trim();
+  const tiers: ExternalRuntimeServiceTier[] = [];
+  const seen = new Set<string>();
+  for (const raw of rawTiers) {
+    const rec = record(raw);
+    const id = text(rec?.id).trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const label = text(rec?.name).trim() || id;
+    const description = text(rec?.description).trim() || undefined;
+    tiers.push({
+      id,
+      label,
+      ...(description ? { description } : {}),
+      ...(defaultTier === id ? { isDefault: true } : {}),
+    });
+  }
+  return tiers.length > 0 ? tiers : undefined;
+}
+
+function parseCodexRateLimitWindow(raw: unknown): ExternalRuntimeRateLimitWindow | undefined {
+  const rec = record(raw);
+  if (!rec || typeof rec.usedPercent !== 'number' || !Number.isFinite(rec.usedPercent)) return undefined;
+  return {
+    usedPercent: Math.max(0, Math.min(100, Math.round(rec.usedPercent))),
+    ...(typeof rec.windowDurationMins === 'number' && Number.isFinite(rec.windowDurationMins)
+      ? { windowDurationMins: rec.windowDurationMins }
+      : {}),
+    ...(typeof rec.resetsAt === 'number' && Number.isFinite(rec.resetsAt)
+      ? { resetsAt: rec.resetsAt > 1e12 ? rec.resetsAt : rec.resetsAt * 1000 }
+      : {}),
+  };
+}
+
+function parseCodexRateLimits(raw: CodexRecord): ExternalRuntimeRateLimits | undefined {
+  const snapshot = record(raw.rateLimits);
+  if (!snapshot) return undefined;
+  const primary = parseCodexRateLimitWindow(snapshot.primary);
+  const secondary = parseCodexRateLimitWindow(snapshot.secondary);
+  const planLabel = text(snapshot.planType).trim() || undefined;
+  if (!primary && !secondary) return undefined;
+  return {
+    ...(planLabel ? { planLabel } : {}),
+    ...(primary ? { primary } : {}),
+    ...(secondary ? { secondary } : {}),
+  };
+}
+
+function parseCodexSkills(raw: CodexRecord): ExternalRuntimeCommand[] {
+  const entries = Array.isArray(raw.data) ? raw.data : [];
+  const out: ExternalRuntimeCommand[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    const rec = record(entry);
+    const skills = Array.isArray(rec?.skills) ? rec.skills : [];
+    for (const rawSkill of skills) {
+      const skill = record(rawSkill);
+      if (!skill || skill.enabled === false) continue;
+      const name = text(skill.name).trim();
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      const iface = record(skill.interface);
+      const rawDescription =
+        text(iface?.shortDescription).trim()
+        || text(skill.description).trim();
+      const description = rawDescription
+        ? (rawDescription.length > 160 ? `${rawDescription.slice(0, 159).trimEnd()}…` : rawDescription)
+        : undefined;
+      out.push({ name, ...(description ? { description } : {}), source: 'skill' });
+    }
+  }
+  return out;
+}
+
 function parseCodexModels(catalog: CodexRecord): ExternalRuntimeModelOption[] {
   const rawModels = Array.isArray(catalog.data) ? catalog.data : [];
   const options: ExternalRuntimeModelOption[] = [];
@@ -104,11 +190,13 @@ function parseCodexModels(catalog: CodexRecord): ExternalRuntimeModelOption[] {
     seen.add(id);
     const label = text(item.displayName).trim() || text(item.title).trim() || id;
     const thinking = parseCodexModelThinking(item);
+    const serviceTiers = parseCodexServiceTiers(item);
     options.push({
       id,
       label,
       ...(item.isDefault === true ? { isDefault: true } : {}),
       ...(thinking ? { thinking } : {}),
+      ...(serviceTiers ? { serviceTiers } : {}),
     });
   }
   return options;
@@ -471,6 +559,109 @@ export const codexExternalDriver: ExternalAgentDriver = {
         return { answers };
       }
 
+      if (method === 'mcpServer/elicitation/request') {
+        const serverName = text(params.serverName).trim() || 'MCP server';
+        const message = text(params.message).trim();
+        const mode = text(params.mode).trim();
+        if (mode === 'url') {
+          const url = text(params.url).trim();
+          const res = await requestInteraction({
+            kind: 'approval',
+            title: `MCP: ${serverName}`,
+            question: message || `Allow ${serverName} to continue in the browser?`,
+            detail: url || undefined,
+            actionKind: 'other',
+          });
+          return {
+            action: res.kind === 'approval' && res.decision === 'approve' ? 'accept' : 'decline',
+            content: null,
+            _meta: null,
+          };
+        }
+
+        const requestedSchema = record(params.requestedSchema);
+        const properties = record(requestedSchema?.properties);
+        const entries = properties ? Object.entries(properties) : [];
+        if (entries.length === 0) {
+          const res = await requestInteraction({
+            kind: 'approval',
+            title: `MCP: ${serverName}`,
+            question: message || `Confirm request from ${serverName}?`,
+            actionKind: 'other',
+          });
+          const accepted = res.kind === 'approval' && res.decision === 'approve';
+          return {
+            action: accepted ? 'accept' : 'decline',
+            content: accepted ? {} : null,
+            _meta: null,
+          };
+        }
+
+        const collected: Record<string, unknown> = {};
+        for (const [fieldKey, rawProp] of entries) {
+          const prop = record(rawProp);
+          if (!prop) continue;
+          const propType = text(prop.type).trim();
+          const fieldTitle = text(prop.title).trim() || fieldKey;
+          const fieldDesc = text(prop.description).trim();
+          const prompt = [
+            entries.length === 1 && message ? message : undefined,
+            fieldTitle,
+            fieldDesc && fieldDesc !== fieldTitle ? fieldDesc : undefined,
+          ].filter(Boolean).join(' — ');
+
+          const choices: Array<{ id: string; label: string; description?: string }> = [];
+          if (propType === 'boolean') {
+            choices.push({ id: 'true', label: 'Yes' }, { id: 'false', label: 'No' });
+          } else if (Array.isArray(prop.oneOf)) {
+            for (const opt of prop.oneOf) {
+              const rec = record(opt);
+              const val = rec?.const !== undefined ? String(rec.const) : '';
+              if (val) choices.push({ id: val, label: text(rec?.title).trim() || val });
+            }
+          } else if (Array.isArray(prop.enum)) {
+            const enumNames = Array.isArray(prop.enumNames) ? prop.enumNames : [];
+            prop.enum.forEach((rawVal, idx) => {
+              const val = String(rawVal);
+              const label = typeof enumNames[idx] === 'string' && enumNames[idx].trim()
+                ? enumNames[idx].trim()
+                : val;
+              choices.push({ id: val, label });
+            });
+          }
+
+          const res = await requestInteraction({
+            kind: 'question',
+            title: `MCP: ${serverName}`,
+            question: prompt || fieldKey,
+            ...(choices.length > 0 ? { choices } : {}),
+            allowFreeText: propType !== 'boolean',
+          });
+          if (res.kind !== 'question' || res.cancelled) {
+            return { action: 'cancel', content: null, _meta: null };
+          }
+          const rawAnswer = (
+            choices.length > 0 && res.choiceId
+              ? res.choiceId
+              : (res.text ?? res.choiceId ?? '')
+          ).trim();
+          if (propType === 'boolean') {
+            collected[fieldKey] = rawAnswer.toLowerCase() === 'true' || rawAnswer.toLowerCase() === 'yes';
+          } else if (propType === 'integer') {
+            const num = Number.parseInt(rawAnswer, 10);
+            collected[fieldKey] = Number.isFinite(num) ? num : rawAnswer;
+          } else if (propType === 'number') {
+            const num = Number(rawAnswer);
+            collected[fieldKey] = Number.isFinite(num) ? num : rawAnswer;
+          } else if (propType === 'array') {
+            collected[fieldKey] = rawAnswer ? rawAnswer.split(',').map((s) => s.trim()).filter(Boolean) : [];
+          } else {
+            collected[fieldKey] = rawAnswer;
+          }
+        }
+        return { action: 'accept', content: collected, _meta: null };
+      }
+
       throw new Error(`Unsupported Codex interactive request: ${method}`);
     };
 
@@ -595,60 +786,94 @@ export const codexExternalDriver: ExternalAgentDriver = {
     };
 
     signal.addEventListener('abort', onAbort, { once: true });
+    type PooledCodexSession = { server: CodexAppServer; threadId: string; model?: string };
+    const buildFingerprint = (boundThreadId: string) => JSON.stringify([
+      'codex',
+      cwd,
+      codexConfig?.binaryPath?.trim() ?? '',
+      codexConfig?.homePath?.trim() ?? '',
+      instructions?.trim() ?? '',
+      boundThreadId,
+    ]);
+    const dispatchNotification = (method: string, params: CodexRecord) => {
+      if (!startingTurn || params.threadId !== threadId) return;
+      if (turnId) {
+        applyNotification(method, params);
+      } else {
+        // Resuming can deliver notifications for previous turns ahead of turn/start's reply.
+        if (earlyEvents.length >= 4_096) throw new Error('Codex sent too many events before acknowledging the turn.');
+        earlyEvents.push({ method, params });
+      }
+    };
+    let effectiveModel: string | undefined;
     try {
-      server = new CodexAppServer(cwd, (method, params) => {
-        if (!startingTurn || params.threadId !== threadId) return;
-        if (turnId) {
-          applyNotification(method, params);
-        } else {
-          // Resuming can deliver notifications for previous turns ahead of turn/start's reply.
-          if (earlyEvents.length >= 4_096) throw new Error('Codex sent too many events before acknowledging the turn.');
-          earlyEvents.push({ method, params });
+      const warm = nativeThread
+        ? await checkoutPooledExternalSession<PooledCodexSession>(context.conversationId, buildFingerprint(nativeThread))
+        : undefined;
+
+      if (warm) {
+        server = warm.server;
+        threadId = warm.threadId;
+        server.setHandlers({
+          onNotification: dispatchNotification,
+          onFailure: terminal.reject,
+          onRequest: handleServerRequest,
+        });
+        effectiveModel = context.modelOverride?.trim() || codexConfig?.model?.trim() || warm.model;
+        emit({ type: 'session_bound', nativeSessionId: threadId, ...(effectiveModel ? { model: effectiveModel } : {}) });
+        signal.throwIfAborted();
+      } else {
+        server = new CodexAppServer(cwd, dispatchNotification, terminal.reject, {
+          binaryPath: codexConfig?.binaryPath,
+          homePath: codexConfig?.homePath,
+          onRequest: handleServerRequest,
+        });
+
+        await server.request('initialize', {
+          clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
+          capabilities: { experimentalApi: true },
+        }, signal);
+        server.notify('initialized');
+        let selectedModel = context.modelOverride?.trim() || codexConfig?.model?.trim();
+        if (!selectedModel) {
+          const catalog = await server.request('model/list', {}, signal);
+          const models = Array.isArray(catalog.data) ? catalog.data.map(record) : [];
+          selectedModel = text((models.find(candidate => candidate?.isDefault === true) ?? models[0])?.model);
         }
-      }, terminal.reject, {
-        binaryPath: codexConfig?.binaryPath,
-        homePath: codexConfig?.homePath,
-        onRequest: handleServerRequest,
-      });
-
-      await server.request('initialize', {
-        clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
-        capabilities: { experimentalApi: true },
-      }, signal);
-      server.notify('initialized');
-      let selectedModel = context.modelOverride?.trim() || codexConfig?.model?.trim();
-      if (!selectedModel) {
-        const catalog = await server.request('model/list', {}, signal);
-        const models = Array.isArray(catalog.data) ? catalog.data.map(record) : [];
-        selectedModel = text((models.find(candidate => candidate?.isDefault === true) ?? models[0])?.model);
+        const opened = await server.request(nativeThread ? 'thread/resume' : 'thread/start', {
+          approvalPolicy: sandboxSettings.approvalPolicy,
+          sandbox: sandboxSettings.sandbox,
+          cwd,
+          ...(nativeThread ? { threadId: nativeThread } : { ephemeral: false }),
+          ...(selectedModel ? { model: selectedModel } : {}),
+          ...(instructions ? { developerInstructions: instructions } : {}),
+        }, signal);
+        threadId = text(record(opened.thread)?.id);
+        if (!threadId || (nativeThread && nativeThread !== threadId)) {
+          throw new Error('Codex did not return the requested thread.');
+        }
+        effectiveModel = text(opened.model) || selectedModel || undefined;
+        emit({ type: 'session_bound', nativeSessionId: threadId, ...(effectiveModel ? { model: effectiveModel } : {}) });
+        signal.throwIfAborted();
       }
+
       const requestedEffort = mapThinkingLevelToCodexEffort(context.thinkingLevel);
-      const opened = await server.request(nativeThread ? 'thread/resume' : 'thread/start', {
-        approvalPolicy: sandboxSettings.approvalPolicy,
-        sandbox: sandboxSettings.sandbox,
-        cwd,
-        ...(nativeThread ? { threadId: nativeThread } : { ephemeral: false }),
-        ...(selectedModel ? { model: selectedModel } : {}),
-        ...(instructions ? { developerInstructions: instructions } : {}),
-      }, signal);
-      threadId = text(record(opened.thread)?.id);
-      if (!threadId || (nativeThread && nativeThread !== threadId)) {
-        throw new Error('Codex did not return the requested thread.');
-      }
-      const model = text(opened.model) || selectedModel || undefined;
-      emit({ type: 'session_bound', nativeSessionId: threadId, ...(model ? { model } : {}) });
-      signal.throwIfAborted();
-
+      const rawServiceTier = context.serviceTierOverride?.trim() || codexConfig?.serviceTier?.trim();
+      const requestedServiceTier = rawServiceTier && rawServiceTier !== 'default' ? rawServiceTier : undefined;
+      const effectivePrompt = sessionPolicy.mode === 'plan'
+        ? `<plan_mode>\n${PLAN_MODE_INSTRUCTIONS}\n</plan_mode>\n\n${content}`
+        : content;
       startingTurn = true;
       const started = await server.request('turn/start', {
         threadId,
         cwd,
         approvalPolicy: sandboxSettings.approvalPolicy,
         sandboxPolicy: sandboxSettings.sandboxPolicy,
-        ...(selectedModel ? { model: selectedModel } : {}),
+        ...(effectiveModel ? { model: effectiveModel } : {}),
         ...(requestedEffort ? { effort: requestedEffort } : {}),
+        ...(requestedServiceTier ? { serviceTier: requestedServiceTier } : {}),
         clientUserMessageId: clientMessageId ?? runId,
-        input: buildCodexTurnInput(content, attachments),
+        input: buildCodexTurnInput(effectivePrompt, attachments),
       }, stopping.signal);
       turnId = text(record(started.turn)?.id);
       if (!turnId) throw new Error('Codex did not return a turn ID.');
@@ -691,7 +916,26 @@ export const codexExternalDriver: ExternalAgentDriver = {
       startingTurn = false;
       signal.removeEventListener('abort', onAbort);
       clearTimeout(stopTimer);
-      await server?.close(Boolean(failed || signal.aborted));
+      const reusable =
+        !failed
+        && !signal.aborted
+        && Boolean(server && threadId)
+        && typeof server?.isAlive === 'function'
+        && typeof server?.setHandlers === 'function'
+        && server.isAlive();
+      if (reusable && server && threadId) {
+        const pooledServer = server;
+        pooledServer.setHandlers({});
+        checkinPooledExternalSession<PooledCodexSession>(context.conversationId, {
+          fingerprint: buildFingerprint(threadId),
+          resource: { server: pooledServer, threadId, model: effectiveModel },
+          isAlive: () => pooledServer.isAlive(),
+          dispose: (force) => pooledServer.close(force),
+        });
+      } else {
+        await disposePooledExternalSession(context.conversationId, true);
+        await server?.close(Boolean(failed || signal.aborted));
+      }
     }
   },
 
@@ -774,6 +1018,22 @@ export const codexExternalDriver: ExternalAgentDriver = {
       if (refreshed) {
         models = await listAllCodexModels(server, abortController.signal);
       }
+
+      let rateLimits: ExternalRuntimeRateLimits | undefined;
+      let commands: ExternalRuntimeCommand[] | undefined;
+      const optionalProbeSignal = AbortSignal.any([abortController.signal, AbortSignal.timeout(2_500)]);
+      const [rateLimitsRes, skillsRes] = await Promise.allSettled([
+        server.request('account/rateLimits/read', {}, optionalProbeSignal),
+        server.request('skills/list', {}, optionalProbeSignal),
+      ]);
+      if (rateLimitsRes.status === 'fulfilled') {
+        rateLimits = parseCodexRateLimits(rateLimitsRes.value);
+      }
+      if (skillsRes.status === 'fulfilled') {
+        const parsedSkills = parseCodexSkills(skillsRes.value);
+        if (parsedSkills.length > 0) commands = parsedSkills;
+      }
+
       return {
         kind: 'codex',
         label: 'Codex',
@@ -782,6 +1042,8 @@ export const codexExternalDriver: ExternalAgentDriver = {
         executablePath,
         ...(version ? { version } : {}),
         ...(accountInfo ? { account: accountInfo } : {}),
+        ...(rateLimits ? { rateLimits } : {}),
+        ...(commands ? { commands } : {}),
         models,
         checkedAt: Date.now(),
       };
@@ -803,6 +1065,98 @@ export const codexExternalDriver: ExternalAgentDriver = {
     } finally {
       clearTimeout(timer);
       await server?.close(true);
+    }
+  },
+
+  async compactSession(context: ExternalSessionControlContext): Promise<{ compacted: boolean; summary?: string }> {
+    const codexConfig = codexOptionsFromExecution(context.execution);
+    const abortController = new AbortController();
+    const signal = context.signal ? AbortSignal.any([context.signal, abortController.signal]) : abortController.signal;
+    const timer = setTimeout(() => abortController.abort(new Error('Codex compaction timed out.')), 45_000);
+    await disposePooledExternalSession(context.conversationId, false);
+    const server = new CodexAppServer(context.cwd, () => {}, () => {}, {
+      binaryPath: codexConfig?.binaryPath,
+      homePath: codexConfig?.homePath,
+    });
+    try {
+      await server.request('initialize', {
+        clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
+        capabilities: { experimentalApi: true },
+      }, signal);
+      server.notify('initialized');
+      await server.request('thread/resume', {
+        threadId: context.nativeSessionId,
+        cwd: context.cwd,
+      }, signal);
+      await server.request('thread/compact/start', { threadId: context.nativeSessionId }, signal);
+      return { compacted: true, summary: 'Codex thread context compacted.' };
+    } finally {
+      clearTimeout(timer);
+      await server.close(false);
+    }
+  },
+
+  async forkSession(
+    context: ExternalSessionControlContext,
+  ): Promise<{ nativeSessionId: string; resumeCursor?: string } | null> {
+    const codexConfig = codexOptionsFromExecution(context.execution);
+    const abortController = new AbortController();
+    const signal = context.signal ? AbortSignal.any([context.signal, abortController.signal]) : abortController.signal;
+    const timer = setTimeout(() => abortController.abort(new Error('Codex fork timed out.')), 20_000);
+    const server = new CodexAppServer(context.cwd, () => {}, () => {}, {
+      binaryPath: codexConfig?.binaryPath,
+      homePath: codexConfig?.homePath,
+    });
+    try {
+      await server.request('initialize', {
+        clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
+        capabilities: { experimentalApi: true },
+      }, signal);
+      server.notify('initialized');
+      const forked = await server.request('thread/fork', {
+        threadId: context.nativeSessionId,
+        cwd: context.cwd,
+        ...(context.instructions ? { developerInstructions: context.instructions } : {}),
+      }, signal);
+      const newThreadId = text(record(forked.thread)?.id).trim();
+      if (!newThreadId) throw new Error('Codex did not return a forked thread ID.');
+      return { nativeSessionId: newThreadId };
+    } finally {
+      clearTimeout(timer);
+      await server.close(false);
+    }
+  },
+
+  async rollbackSession(
+    context: ExternalSessionControlContext & { numTurns: number },
+  ): Promise<{ rolledBack: boolean }> {
+    const codexConfig = codexOptionsFromExecution(context.execution);
+    const abortController = new AbortController();
+    const signal = context.signal ? AbortSignal.any([context.signal, abortController.signal]) : abortController.signal;
+    const timer = setTimeout(() => abortController.abort(new Error('Codex rollback timed out.')), 20_000);
+    await disposePooledExternalSession(context.conversationId, false);
+    const server = new CodexAppServer(context.cwd, () => {}, () => {}, {
+      binaryPath: codexConfig?.binaryPath,
+      homePath: codexConfig?.homePath,
+    });
+    try {
+      await server.request('initialize', {
+        clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
+        capabilities: { experimentalApi: true },
+      }, signal);
+      server.notify('initialized');
+      await server.request('thread/resume', {
+        threadId: context.nativeSessionId,
+        cwd: context.cwd,
+      }, signal);
+      await server.request('thread/rollback', {
+        threadId: context.nativeSessionId,
+        numTurns: Math.max(1, Math.trunc(context.numTurns)),
+      }, signal);
+      return { rolledBack: true };
+    } finally {
+      clearTimeout(timer);
+      await server.close(false);
     }
   },
 };

@@ -165,7 +165,7 @@ export const AgentProfileSchema = z.object({
   instructions: z.string().trim().min(1).optional(),
 }).strict();
 
-export const EXTERNAL_AGENT_KINDS = ['codex', 'agy'] as const;
+export const EXTERNAL_AGENT_KINDS = ['codex', 'agy', 'claude'] as const;
 export type ExternalAgentKind = (typeof EXTERNAL_AGENT_KINDS)[number];
 
 export const EXTERNAL_PERMISSION_MODES = ['full_access', 'auto_edit', 'ask'] as const;
@@ -179,6 +179,7 @@ export const CodexExecutionSchema = z.object({
   binaryPath: z.string().trim().min(1).max(500).optional(),
   homePath: z.string().trim().min(1).max(500).optional(),
   model: z.string().trim().min(1).max(200).optional(),
+  serviceTier: z.string().trim().min(1).max(64).optional(),
   permissionMode: z.enum(EXTERNAL_PERMISSION_MODES).optional(),
 }).strict();
 export type CodexExecution = z.infer<typeof CodexExecutionSchema>;
@@ -193,9 +194,19 @@ export const AgyExecutionSchema = z.object({
 }).strict();
 export type AgyExecution = z.infer<typeof AgyExecutionSchema>;
 
+export const ClaudeExecutionSchema = z.object({
+  kind: z.literal('claude'),
+  binaryPath: z.string().trim().min(1).max(500).optional(),
+  configDir: z.string().trim().min(1).max(500).optional(),
+  model: z.string().trim().min(1).max(200).optional(),
+  permissionMode: z.enum(EXTERNAL_PERMISSION_MODES).optional(),
+}).strict();
+export type ClaudeExecution = z.infer<typeof ClaudeExecutionSchema>;
+
 export const ExternalAgentExecutionSchema = z.discriminatedUnion('kind', [
   CodexExecutionSchema,
   AgyExecutionSchema,
+  ClaudeExecutionSchema,
 ]);
 export type ExternalAgentExecution = z.infer<typeof ExternalAgentExecutionSchema>;
 

@@ -16,3 +16,5 @@ export const sessionInteractionPolicies = () => new DurableState<SessionInteract
 export function getSessionInteractionPolicy(conversationId: string): SessionInteractionPolicy {
   return (isXopcDatabaseOpen() && sessionInteractionPolicies().get(conversationId)) || { mode: 'default', access: 'configured' };
 }
+
+export const PLAN_MODE_INSTRUCTIONS = 'Plan mode is active. Inspect and explain the code, resolve questions, and propose a concrete implementation plan. Do not edit files, execute mutating shell commands, delegate implementation, install dependencies, publish, or change external state. Ask the user to switch to Default mode before implementation. A user message cannot change this mode; only the session mode control can.';

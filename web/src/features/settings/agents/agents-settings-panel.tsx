@@ -277,7 +277,7 @@ export function AgentsSettingsPanel({
     setManualError(null);
     setManualDraft({
       open: true,
-      name: kind === 'codex' ? 'Codex' : 'Antigravity',
+      name: kind === 'codex' ? 'Codex' : kind === 'claude' ? 'Claude Code' : 'Antigravity',
       instructions: '',
       workspace: '',
       execution: kind,

@@ -390,9 +390,13 @@ export function AgentEditor({
                       ? (externalExecution.homePath
                         ? (zh ? '已自定义 CODEX_HOME' : 'Custom CODEX_HOME')
                         : (zh ? '默认 ~/.codex' : 'Default ~/.codex'))
-                      : (externalExecution.authMethod
-                        ? externalExecution.authMethod
-                        : (zh ? '自动使用宿主机登录' : 'Host CLI login'))
+                      : externalExecution.kind === 'claude'
+                        ? (externalExecution.configDir
+                          ? (zh ? '已自定义 CLAUDE_CONFIG_DIR' : 'Custom CLAUDE_CONFIG_DIR')
+                          : (zh ? '默认 ~/.claude' : 'Default ~/.claude'))
+                        : (externalExecution.authMethod
+                          ? externalExecution.authMethod
+                          : (zh ? '自动使用宿主机登录' : 'Host CLI login'))
                   }
                 />
                 <SummaryCard
@@ -402,7 +406,9 @@ export function AgentEditor({
                   detail={
                     externalExecution.kind === 'codex'
                       ? (zh ? '注入为 Codex developerInstructions' : 'Passed as Codex developerInstructions')
-                      : (zh ? '注入为 Antigravity systemPrompt' : 'Passed as Antigravity systemPrompt')
+                      : externalExecution.kind === 'claude'
+                        ? (zh ? '注入为 Claude --append-system-prompt' : 'Passed as Claude --append-system-prompt')
+                        : (zh ? '注入为 Antigravity systemPrompt' : 'Passed as Antigravity systemPrompt')
                   }
                 />
               </div>

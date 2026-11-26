@@ -58,7 +58,9 @@ const AUTO_MODEL_SENTINEL = '__auto__';
 const AUTH_POLL_INTERVAL_MS = 1_200;
 
 export function externalRuntimeDisplayName(kind: ExternalAgentKind): string {
-  return kind === 'codex' ? 'Codex' : 'Antigravity (AGY)';
+  if (kind === 'codex') return 'Codex';
+  if (kind === 'claude') return 'Claude Code';
+  return 'Antigravity (AGY)';
 }
 
 export function externalRuntimeShortDescription(kind: ExternalAgentKind, zh: boolean): string {
@@ -66,6 +68,11 @@ export function externalRuntimeShortDescription(kind: ExternalAgentKind, zh: boo
     return zh
       ? '通过本机 codex app-server 运行，支持在界面中直接完成 ChatGPT / API Key 登录。'
       : 'Runs via local codex app-server with built-in ChatGPT or API key sign-in.';
+  }
+  if (kind === 'claude') {
+    return zh
+      ? '通过本机 Claude Code CLI (stream-json) 运行，支持多轮连接复用、审批卡片与思考级别。'
+      : 'Runs via local Claude Code CLI (stream-json) with warm session reuse, approvals, and effort controls.';
   }
   return zh
     ? '通过本机 agy acp (ACP 协议) 运行，支持在界面中直接完成 Google OAuth 登录。'
@@ -119,6 +126,68 @@ function agyAuthMethodLabel(method: AgyAuthMethod, zh: boolean): string {
     case 'agent-platform':
       return zh ? 'Agent Platform (agent-platform)' : 'Agent Platform (agent-platform)';
   }
+}
+
+function formatWindowLabel(mins: number | undefined, zh: boolean): string {
+  if (!mins || mins <= 0) return zh ? '当前周期' : 'Window';
+  if (mins >= 1440) {
+    const days = Math.round(mins / 1440);
+    return zh ? `${days} 天额度` : `${days}d limit`;
+  }
+  const hours = Math.round(mins / 60);
+  return hours >= 1 ? (zh ? `${hours} 小时额度` : `${hours}h limit`) : `${mins}m`;
+}
+
+function formatResetCountdown(resetsAt: number | undefined, zh: boolean): string | null {
+  if (!resetsAt) return null;
+  const diffMs = resetsAt - Date.now();
+  if (diffMs <= 0) return null;
+  const mins = Math.round(diffMs / 60_000);
+  if (mins < 60) return zh ? `${mins} 分钟后重置` : `resets in ${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 48) return zh ? `${hours} 小时后重置` : `resets in ${hours}h`;
+  const days = Math.round(hours / 24);
+  return zh ? `${days} 天后重置` : `resets in ${days}d`;
+}
+
+function ExternalRuntimeRateLimitsSummary({
+  rateLimits,
+  zh,
+}: {
+  rateLimits?: ExternalRuntimeProbeResult['rateLimits'];
+  zh: boolean;
+}) {
+  if (!rateLimits || (!rateLimits.primary && !rateLimits.secondary)) return null;
+  const windows = [rateLimits.primary, rateLimits.secondary].filter(
+    (w): w is NonNullable<typeof w> => Boolean(w),
+  );
+  return (
+    <div className="mt-2 space-y-1.5 rounded-lg border border-edge-subtle bg-surface-panel/60 px-2.5 py-2">
+      {windows.map((win, idx) => {
+        const pct = Math.max(0, Math.min(100, win.usedPercent));
+        const resetLabel = formatResetCountdown(win.resetsAt, zh);
+        return (
+          <div key={idx} className="space-y-1">
+            <div className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="text-fg-muted">{formatWindowLabel(win.windowDurationMins, zh)}</span>
+              <span className="font-mono text-fg-subtle">
+                {pct}%{resetLabel ? ` · ${resetLabel}` : ''}
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-hover">
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all',
+                  pct >= 90 ? 'bg-red-500' : pct >= 75 ? 'bg-amber-500' : 'bg-accent',
+                )}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function formatAccountBadge(probe?: ExternalRuntimeProbeResult): string | null {
@@ -202,7 +271,7 @@ export function ExternalRuntimeQuickCards({
   onAddRuntime: (kind: ExternalAgentKind) => void;
   onOpenAgent: (agentId: string) => void;
 }) {
-  const kinds: ExternalAgentKind[] = ['codex', 'agy'];
+  const kinds: ExternalAgentKind[] = ['codex', 'agy', 'claude'];
 
   return (
     <section className="rounded-2xl border border-edge bg-surface-panel p-4">
@@ -213,8 +282,8 @@ export function ExternalRuntimeQuickCards({
           </h2>
           <p className="mt-0.5 text-xs leading-5 text-fg-muted">
             {zh
-              ? '将宿主机上的 Codex 或 Antigravity (AGY) 接入为项目 Agent，会话、登录与模型配置统一在 xopc 中完成。'
-              : 'Connect host-installed Codex or Antigravity (AGY) as Project agents with sign-in, models, and sessions managed in xopc.'}
+              ? '将宿主机上的 Codex、Antigravity (AGY) 或 Claude Code 接入为项目 Agent，会话、登录与模型配置统一在 xopc 中完成。'
+              : 'Connect host-installed Codex, Antigravity (AGY), or Claude Code as Project agents with sign-in, models, and sessions managed in xopc.'}
           </p>
         </div>
         <Button variant="ghost" className="h-8 gap-1.5 px-2.5 text-xs" disabled={refreshing || loading} onClick={onRefresh}>
@@ -224,12 +293,13 @@ export function ExternalRuntimeQuickCards({
       </div>
 
       {loading && !runtimes ? (
-        <div className="mt-3.5 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Skeleton className="h-28 rounded-xl" />
           <Skeleton className="h-28 rounded-xl" />
           <Skeleton className="h-28 rounded-xl" />
         </div>
       ) : (
-        <div className="mt-3.5 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {kinds.map((kind) => {
             const probe = runtimes?.find((entry) => entry.kind === kind);
             const configured = agents.filter((agent) => agent.override.execution?.kind === kind);
@@ -269,6 +339,9 @@ export function ExternalRuntimeQuickCards({
                         ].filter(Boolean).join(' · ') || externalRuntimeShortDescription(kind, zh)
                       : (probe?.message ?? externalRuntimeShortDescription(kind, zh))}
                   </p>
+                  {probe?.status === 'ready' ? (
+                    <ExternalRuntimeRateLimitsSummary rateLimits={probe.rateLimits} zh={zh} />
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-edge-subtle pt-2.5">
@@ -659,9 +732,11 @@ export function ExternalRuntimeConfigForm({
                     {authBusy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <LogIn className="size-3.5" aria-hidden />}
                     {value.kind === 'codex'
                       ? (zh ? '使用 ChatGPT 登录' : 'Sign in with ChatGPT')
-                      : agyUsesCredentials
-                        ? (zh ? '验证凭据并连接' : 'Verify & connect')
-                        : (zh ? '使用 Google 账号登录' : 'Sign in with Google')}
+                      : value.kind === 'claude'
+                        ? (zh ? '使用 Claude 登录' : 'Sign in with Claude')
+                        : agyUsesCredentials
+                          ? (zh ? '验证凭据并连接' : 'Verify & connect')
+                          : (zh ? '使用 Google 账号登录' : 'Sign in with Google')}
                   </Button>
                   {value.kind === 'codex' ? (
                     <>
@@ -898,7 +973,13 @@ export function ExternalRuntimeConfigForm({
                 disabled={disabled}
                 value={savedModel}
                 onChange={(event) => updateFields({ model: event.target.value })}
-                placeholder={value.kind === 'codex' ? 'gpt-5.3-codex' : 'gemini-3-pro'}
+                placeholder={
+                  value.kind === 'codex'
+                    ? 'gpt-5.3-codex'
+                    : value.kind === 'claude'
+                      ? 'claude-sonnet-4-6'
+                      : 'gemini-3-pro'
+                }
               />
             ) : null}
           </>
@@ -1005,7 +1086,7 @@ export function ExternalRuntimeConfigForm({
       <details className="rounded-xl border border-edge bg-surface-base p-3.5">
         <summary className="cursor-pointer text-xs font-medium text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           {zh ? '高级 CLI 路径设置' : 'Advanced CLI path settings'}
-          {value.binaryPath || (value.kind === 'agy' && value.geminiDir) ? (
+          {value.binaryPath || (value.kind === 'agy' && value.geminiDir) || (value.kind === 'claude' && value.configDir) ? (
             <span className="ml-2 font-normal text-fg-muted">{zh ? '已自定义' : 'Customized'}</span>
           ) : null}
         </summary>
@@ -1017,9 +1098,25 @@ export function ExternalRuntimeConfigForm({
               disabled={disabled}
               value={value.binaryPath ?? ''}
               onChange={(event) => updateFields({ binaryPath: event.target.value })}
-              placeholder={value.kind === 'codex' ? 'codex' : 'agy'}
+              placeholder={value.kind === 'codex' ? 'codex' : value.kind === 'claude' ? 'claude' : 'agy'}
             />
           </label>
+          {value.kind === 'claude' ? (
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-fg-muted">
+                {zh ? 'CLAUDE_CONFIG_DIR 目录（可选）' : 'CLAUDE_CONFIG_DIR directory (optional)'}
+              </label>
+              <DirectoryPickerPathField
+                value={value.configDir ?? ''}
+                onChange={(configDir) => updateFields({ configDir })}
+                disabled={disabled}
+                wd={workingDirectoryMessages}
+                placeholder="~/.claude"
+                inputAriaLabel="CLAUDE_CONFIG_DIR"
+                inputClassName={`${inputClass} font-mono`}
+              />
+            </div>
+          ) : null}
           {value.kind === 'agy' ? (
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-fg-muted">

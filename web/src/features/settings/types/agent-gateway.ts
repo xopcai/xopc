@@ -51,7 +51,7 @@ export type AgentDefaults = {
     promptCache?: { mode: 'off' | 'auto'; lifetime: 'short' | 'long' };
   };
 };
-export const EXTERNAL_AGENT_KINDS = ['codex', 'agy'] as const;
+export const EXTERNAL_AGENT_KINDS = ['codex', 'agy', 'claude'] as const;
 export type ExternalAgentKind = (typeof EXTERNAL_AGENT_KINDS)[number];
 
 export const EXTERNAL_PERMISSION_MODES = ['full_access', 'auto_edit', 'ask'] as const;
@@ -65,6 +65,7 @@ export type CodexExecution = {
   binaryPath?: string;
   homePath?: string;
   model?: string;
+  serviceTier?: string;
   permissionMode?: ExternalPermissionMode;
 };
 
@@ -77,9 +78,24 @@ export type AgyExecution = {
   permissionMode?: ExternalPermissionMode;
 };
 
-export type ExternalAgentExecution = CodexExecution | AgyExecution;
+export type ClaudeExecution = {
+  kind: 'claude';
+  binaryPath?: string;
+  configDir?: string;
+  model?: string;
+  permissionMode?: ExternalPermissionMode;
+};
+
+export type ExternalAgentExecution = CodexExecution | AgyExecution | ClaudeExecution;
 
 export type ExternalRuntimeStatus = 'ready' | 'not_installed' | 'unauthenticated' | 'warning' | 'error';
+
+export type ExternalRuntimeServiceTier = {
+  id: string;
+  label: string;
+  description?: string;
+  isDefault?: boolean;
+};
 
 export type ExternalRuntimeModelOption = {
   id: string;
@@ -87,6 +103,25 @@ export type ExternalRuntimeModelOption = {
   isDefault?: boolean;
   thinking?: ModelThinkingCapabilities;
   thinkingConfigId?: string;
+  serviceTiers?: ExternalRuntimeServiceTier[];
+};
+
+export type ExternalRuntimeRateLimitWindow = {
+  usedPercent: number;
+  windowDurationMins?: number;
+  resetsAt?: number;
+};
+
+export type ExternalRuntimeRateLimits = {
+  planLabel?: string;
+  primary?: ExternalRuntimeRateLimitWindow;
+  secondary?: ExternalRuntimeRateLimitWindow;
+};
+
+export type ExternalRuntimeCommand = {
+  name: string;
+  description?: string;
+  source: 'skill' | 'command';
 };
 
 export type ExternalRuntimeAccountInfo = {
@@ -102,6 +137,8 @@ export type ExternalRuntimeProbeResult = {
   executablePath?: string;
   version?: string;
   account?: ExternalRuntimeAccountInfo;
+  rateLimits?: ExternalRuntimeRateLimits;
+  commands?: ExternalRuntimeCommand[];
   message?: string;
   hintCommand?: string;
   models: ExternalRuntimeModelOption[];

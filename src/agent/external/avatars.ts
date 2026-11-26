@@ -23,6 +23,9 @@ const CODEX_ROSETTE_PATH =
 const AGY_ARCH_PATH =
   'M21.751 22.607c1.34 1.005 3.35.335 1.508-1.508C17.73 15.74 18.904 1 12.037 1 5.17 1 6.342 15.74.815 21.1c-2.01 2.009.167 2.511 1.507 1.506 5.192-3.517 4.857-9.714 9.715-9.714 4.857 0 4.522 6.197 9.714 9.715z';
 
+const CLAUDE_STARBURST_PATH =
+  'M12 2.2l1.15 6.45 4.95-4.3-2.65 6.0 6.35-1.15-5.65 3.3 5.65 3.3-6.35-1.15 2.65 6.0-4.95-4.3L12 21.8l-1.15-6.45-4.95 4.3 2.65-6.0-6.35 1.15 5.65-3.3-5.65-3.3 6.35 1.15-2.65-6.0 4.95 4.3L12 2.2z';
+
 /** Render a crisp circular SVG brand avatar for PNG rasterization (native/mobile clients). */
 export function renderExternalRuntimeAvatarSvg(kind: ExternalAgentKind, size = 128): string {
   if (kind === 'codex') {
@@ -31,6 +34,16 @@ export function renderExternalRuntimeAvatarSvg(kind: ExternalAgentKind, size = 1
       '<rect width="128" height="128" rx="64" fill="#0F172A"/>',
       '<g transform="translate(24 24) scale(0.1946) translate(-100 -100)">',
       `<path fill="#FFFFFF" fill-rule="evenodd" clip-rule="evenodd" d="${CODEX_ROSETTE_PATH}"/>`,
+      '</g>',
+      '</svg>',
+    ].join('');
+  }
+  if (kind === 'claude') {
+    return [
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 128 128">`,
+      '<rect width="128" height="128" rx="64" fill="#D97757"/>',
+      '<g transform="translate(22 22) scale(3.5)">',
+      `<path fill="#FFFFFF" d="${CLAUDE_STARBURST_PATH}"/>`,
       '</g>',
       '</svg>',
     ].join('');

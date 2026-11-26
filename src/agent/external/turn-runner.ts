@@ -12,7 +12,9 @@ import type { UserTurnAttachment } from '../../gateway/user-turn-input.js';
 import { getProjectForSession } from '../../projects/workspace.js';
 import { projectWorkspacePath } from '../../session/session-workspace.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
-import { getSessionInteractionPolicy } from '../session/interaction-policy.js';
+import { getSessionInteractionPolicy } from '../session/interaction-policy-state.js';
+import { injectSourceContextsIntoUserMessage } from '../source-context/injector.js';
+import { summarizeSourceContext, type AgentSourceContext } from '../source-context/types.js';
 import { AsyncQueue } from '../service/async-queue.js';
 import { prepareExternalAttachments } from './attachments.js';
 import {
@@ -30,6 +32,10 @@ import {
   readExternalSessionBinding,
   updateExternalTranscriptEntry,
 } from './session-binding.js';
+import {
+  disposeAllPooledExternalSessions,
+  disposePooledExternalSession,
+} from './session-pool.js';
 import type {
   ExternalRuntimeEvent,
   ExternalRuntimeToolCall,
@@ -42,10 +48,55 @@ import type {
 
 export type SteerExternalTurnOptions = {
   attachments?: UserTurnAttachment[];
+  sourceContexts?: AgentSourceContext[];
   clientMessageId?: string;
   userTurnDocument?: UserTurnDocument;
   onHandled?: () => void;
 };
+
+function mergeSourceContextPayload(
+  rawText: string,
+  attachments: UserTurnAttachment[] | undefined,
+  sourceContexts: readonly AgentSourceContext[] | undefined,
+): {
+  promptText: string;
+  attachments: UserTurnAttachment[];
+  summaryMetadata?: ReturnType<typeof summarizeSourceContext>[];
+} {
+  const relevant = (sourceContexts ?? []).filter((ctx) => ctx.kind !== 'device_context');
+  const combinedAttachments: UserTurnAttachment[] = [...(attachments ?? [])];
+  for (const ctx of relevant) {
+    if (!ctx.images?.length) continue;
+    for (let i = 0; i < ctx.images.length; i += 1) {
+      const img = ctx.images[i]!;
+      if (!img.data) continue;
+      combinedAttachments.push({
+        type: 'image',
+        name: `${ctx.kind}-${i + 1}.png`,
+        mimeType: img.mimeType || 'image/png',
+        data: img.data,
+      });
+    }
+  }
+  if (relevant.length === 0) {
+    return { promptText: rawText, attachments: combinedAttachments };
+  }
+  const synthetic = injectSourceContextsIntoUserMessage(
+    { role: 'user', content: rawText, timestamp: Date.now() },
+    relevant,
+  );
+  const contentParts = (synthetic as { content?: unknown }).content;
+  const promptText =
+    Array.isArray(contentParts)
+      && typeof (contentParts[0] as { text?: unknown } | undefined)?.text === 'string'
+      ? String((contentParts[0] as { text: string }).text)
+      : rawText;
+  return {
+    promptText,
+    attachments: combinedAttachments,
+    summaryMetadata: relevant.map(summarizeSourceContext),
+  };
+}
 
 type ActiveExternalRun = {
   runId: string;
@@ -74,13 +125,16 @@ export async function steerExternalTurn(
 
 export async function abortExternalTurn(conversationId: string): Promise<void> {
   const run = activeRuns.get(conversationId);
-  if (!run) return;
-  run.stop.abort();
-  await run.finished.catch(() => {});
+  if (run) {
+    run.stop.abort();
+    await run.finished.catch(() => {});
+  }
+  await disposePooledExternalSession(conversationId, true);
 }
 
 export async function abortAllExternalTurns(): Promise<void> {
   await Promise.all(Array.from(activeRuns.keys(), abortExternalTurn));
+  await disposeAllPooledExternalSessions(true);
 }
 
 const NATIVE_STEER_READY_TIMEOUT_MS = 5_000;
@@ -105,7 +159,10 @@ export async function* runExternalProjectTurn(
   }
   const document = parseUserTurnDocument(input.content);
   const content = document ? renderUserTurnDocument(document, () => null) : input.content;
-  if (!content.trim() && !hasAttachments) throw new Error(`Enter a task for ${driver.label}.`);
+  const initialContextMerged = mergeSourceContextPayload(content, input.attachments, input.sourceContexts);
+  if (!content.trim() && !initialContextMerged.attachments.length && !initialContextMerged.summaryMetadata?.length) {
+    throw new Error(`Enter a task for ${driver.label}.`);
+  }
   const cwd = await realpath(workspace!);
   signal.throwIfAborted();
   if (activeRuns.has(conversationId)) throw new Error(`${driver.label} is already running in this session.`);
@@ -437,8 +494,10 @@ export async function* runExternalProjectTurn(
   };
 
   type QueuedRestartSteer = {
-    content: string;
+    displayContent: string;
+    promptContent: string;
     attachments: UserTurnAttachment[] | undefined;
+    sourceContextsSummary?: ReturnType<typeof summarizeSourceContext>[];
     clientMessageId?: string;
     userTurnDocument?: UserTurnDocument;
     onHandled?: () => void;
@@ -457,7 +516,8 @@ export async function* runExternalProjectTurn(
   const pendingRestartSteers: QueuedRestartSteer[] = [];
 
   const emitAndPersistSteeredUser = (steer: {
-    content: string;
+    displayContent: string;
+    sourceContextsSummary?: ReturnType<typeof summarizeSourceContext>[];
     clientMessageId?: string;
     userTurnDocument?: UserTurnDocument;
   }) => {
@@ -467,12 +527,13 @@ export async function* runExternalProjectTurn(
     const seq = ++steerSeq;
     const steeredUser = {
       role: 'user' as const,
-      content: steer.content,
+      content: steer.displayContent,
       timestamp: Date.now(),
       turnId: runId,
       metadata: {
         ...(steer.clientMessageId ? { clientMessageId: steer.clientMessageId, steered: true } : { steered: true }),
         ...(steer.userTurnDocument ? { userTurnDocument: steer.userTurnDocument } : {}),
+        ...(steer.sourceContextsSummary?.length ? { sourceContexts: steer.sourceContextsSummary } : {}),
       },
     };
     if (userPersisted && !transcriptStale) {
@@ -490,8 +551,8 @@ export async function* runExternalProjectTurn(
     if (!acceptingSteers || signal.aborted) return false;
     const steerDoc = options?.userTurnDocument ?? parseUserTurnDocument(rawContent);
     const steerText = steerDoc ? renderUserTurnDocument(steerDoc, () => null) : rawContent;
-    const hasSteerAttachments = Boolean(options?.attachments?.length);
-    if (!steerText.trim() && !hasSteerAttachments) return false;
+    const mergedSteer = mergeSourceContextPayload(steerText, options?.attachments, options?.sourceContexts);
+    if (!steerText.trim() && !mergedSteer.attachments.length && !mergedSteer.summaryMetadata?.length) return false;
 
     if (steeringMode === 'native') {
       // Wait briefly if the driver is still completing initialize / thread/start / turn/start.
@@ -511,7 +572,7 @@ export async function* runExternalProjectTurn(
       if (!nativeSteerHandler || !acceptingSteers || signal.aborted) return false;
 
       const preparedSteerAttachments = prepareExternalAttachments({
-        attachments: options?.attachments,
+        attachments: mergedSteer.attachments,
         cwd,
         runId: `${runId}-steer-${steerSeq + 1}`,
       });
@@ -519,7 +580,7 @@ export async function* runExternalProjectTurn(
 
       try {
         await nativeSteerHandler({
-          content: steerText,
+          content: mergedSteer.promptText,
           attachments: preparedSteerAttachments.attachments,
           clientMessageId: options?.clientMessageId,
         });
@@ -528,7 +589,8 @@ export async function* runExternalProjectTurn(
       }
 
       emitAndPersistSteeredUser({
-        content: steerText,
+        displayContent: steerText,
+        sourceContextsSummary: mergedSteer.summaryMetadata,
         clientMessageId: options?.clientMessageId,
         userTurnDocument: steerDoc ?? undefined,
       });
@@ -539,8 +601,10 @@ export async function* runExternalProjectTurn(
     // `interrupt_restart` steering (ACP/AGY & runtimes without a native mid-turn steer RPC):
     // cancel the active sub-turn and immediately resume the same native session with the steered prompt.
     pendingRestartSteers.push({
-      content: steerText,
-      attachments: options?.attachments,
+      displayContent: steerText,
+      promptContent: mergedSteer.promptText,
+      attachments: mergedSteer.attachments,
+      sourceContextsSummary: mergedSteer.summaryMetadata,
       clientMessageId: options?.clientMessageId,
       userTurnDocument: steerDoc ?? undefined,
       onHandled: options?.onHandled,
@@ -550,7 +614,7 @@ export async function* runExternalProjectTurn(
   };
 
   const preparedAttachments = prepareExternalAttachments({
-    attachments: input.attachments,
+    attachments: initialContextMerged.attachments,
     cwd,
     runId,
   });
@@ -559,18 +623,22 @@ export async function* runExternalProjectTurn(
   const execute = async () => {
     try {
       let existingBinding = readExternalSessionBinding(identity);
+      const userMetadata = {
+        ...(document ? { userTurnDocument: document } : {}),
+        ...(initialContextMerged.summaryMetadata?.length ? { sourceContexts: initialContextMerged.summaryMetadata } : {}),
+      };
       const user = {
         role: 'user' as const,
         content,
         timestamp: Date.now(),
         turnId: runId,
-        ...(document ? { metadata: { userTurnDocument: document } } : {}),
+        ...(Object.keys(userMetadata).length > 0 ? { metadata: userMetadata } : {}),
       };
       persistWithId(runEntry('user'), user);
       userPersisted = true;
       emit('user_message', user);
 
-      let activeContent = content;
+      let activeContent = initialContextMerged.promptText;
       let activeAttachments = preparedAttachments.attachments;
       let activeClientMessageId = input.clientMessageId;
 
@@ -591,6 +659,7 @@ export async function* runExternalProjectTurn(
             sessionPolicy,
             modelOverride: input.modelOverride,
             thinkingLevel: input.thinkingLevel,
+            serviceTierOverride: input.serviceTierOverride,
             runId,
             clientMessageId: activeClientMessageId,
             cwd,
@@ -654,7 +723,7 @@ export async function* runExternalProjectTurn(
             runId: `${runId}-steer-${attemptSeq}`,
           });
           attachmentCleanups.push(preparedNext.cleanup);
-          activeContent = nextSteer.content;
+          activeContent = nextSteer.promptContent;
           activeAttachments = preparedNext.attachments;
           activeClientMessageId = nextSteer.clientMessageId;
           continue;

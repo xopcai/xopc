@@ -2,16 +2,21 @@ import type { ModelThinkingCapabilities } from '@xopcai/gateway-contract';
 
 import type { ExternalAgentExecution, ExternalAgentKind } from '../../agent-config/schema.js';
 import { agyExternalDriver } from './drivers/agy/driver.js';
+import { claudeExternalDriver } from './drivers/claude/driver.js';
 import { codexExternalDriver } from './drivers/codex/driver.js';
 import type {
   ExternalAgentDriver,
+  ExternalRuntimeCommand,
   ExternalRuntimeProbeResult,
+  ExternalRuntimeRateLimits,
+  ExternalRuntimeServiceTier,
   ExternalRuntimeStatus,
 } from './types.js';
 
 const BUILT_IN_DRIVERS: ReadonlyArray<ExternalAgentDriver> = [
   codexExternalDriver,
   agyExternalDriver,
+  claudeExternalDriver,
 ];
 
 const registry = new Map<ExternalAgentKind, ExternalAgentDriver>(
@@ -25,6 +30,9 @@ const probeInflight = new Map<string, Promise<ExternalRuntimeProbeResult>>();
 function probeCacheKey(execution: ExternalAgentExecution): string {
   if (execution.kind === 'codex') {
     return JSON.stringify(['codex', execution.binaryPath?.trim() ?? '', execution.homePath?.trim() ?? '']);
+  }
+  if (execution.kind === 'claude') {
+    return JSON.stringify(['claude', execution.binaryPath?.trim() ?? '', execution.configDir?.trim() ?? '']);
   }
   return JSON.stringify([
     'agy',
@@ -112,6 +120,7 @@ export type ExternalRuntimeCatalogModel = {
   provider: string;
   reasoning?: boolean;
   thinking?: ModelThinkingCapabilities;
+  serviceTiers?: ExternalRuntimeServiceTier[];
   isDefault?: boolean;
 };
 
@@ -121,6 +130,11 @@ export type ExternalRuntimeModelsPayload = {
   status: ExternalRuntimeStatus;
   defaultModel: string;
   models: ExternalRuntimeCatalogModel[];
+  rateLimits?: ExternalRuntimeRateLimits;
+  commands?: ExternalRuntimeCommand[];
+  supportsCompact?: boolean;
+  supportsFork?: boolean;
+  supportsRollback?: boolean;
   message?: string;
 };
 
@@ -138,6 +152,7 @@ export async function resolveExternalRuntimeModelsPayload(
     provider: driver.label,
     reasoning: Boolean(opt.thinking && opt.thinking.mode !== 'none'),
     ...(opt.thinking ? { thinking: opt.thinking } : {}),
+    ...(opt.serviceTiers?.length ? { serviceTiers: opt.serviceTiers } : {}),
     ...(opt.isDefault ? { isDefault: true } : {}),
   }));
 
@@ -162,6 +177,11 @@ export async function resolveExternalRuntimeModelsPayload(
     status: probe.status,
     defaultModel,
     models,
+    ...(probe.rateLimits ? { rateLimits: probe.rateLimits } : {}),
+    ...(probe.commands?.length ? { commands: probe.commands } : {}),
+    supportsCompact: Boolean(driver.compactSession),
+    supportsFork: Boolean(driver.forkSession),
+    supportsRollback: Boolean(driver.rollbackSession),
     ...(probe.message ? { message: probe.message } : {}),
   };
 }

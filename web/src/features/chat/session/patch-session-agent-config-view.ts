@@ -16,6 +16,8 @@ export type SessionAgentConfigView = {
   effectiveWorkspacePath?: string | null;
   workspaceSource?: 'execution_environment' | 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
   userContextMode?: 'enabled' | 'off' | 'temporary';
+  interactionMode?: 'default' | 'plan';
+  serviceTier?: string;
 };
 
 /** Apply resolved session agent settings to the chat session store slice. */
@@ -34,5 +36,7 @@ export function patchSessionAgentConfigView(conversationId: string, cfg: Session
     effectiveWorkspacePath: cfg.effectiveWorkspacePath ?? '',
     workspaceSource: cfg.workspaceSource ?? 'agent_default_root',
     userContextMode: cfg.userContextMode ?? 'enabled',
+    interactionMode: cfg.interactionMode ?? 'default',
+    serviceTier: cfg.serviceTier ?? 'default',
   });
 }

@@ -10,14 +10,19 @@ export type {
   ExternalRuntimeAuthMode,
   ExternalRuntimeAuthPhase,
   ExternalRuntimeCapabilities,
+  ExternalRuntimeCommand,
   ExternalRuntimeEvent,
   ExternalRuntimeModelOption,
   ExternalRuntimeProbeResult,
+  ExternalRuntimeRateLimits,
+  ExternalRuntimeRateLimitWindow,
+  ExternalRuntimeServiceTier,
   ExternalRuntimeStatus,
   ExternalRuntimeToolCall,
   ExternalRuntimeToolResult,
   ExternalRuntimeUsage,
   ExternalSessionBinding,
+  ExternalSessionControlContext,
   ExternalSessionIdentity,
   ExternalSteeringMode,
   ExternalTurnAttachment,
@@ -50,6 +55,11 @@ export {
   XOPC_RUNTIME_AVATAR_PREFIX,
 } from './avatars.js';
 export {
+  compactExternalSession,
+  forkExternalSession,
+  rollbackExternalSession,
+} from './control.js';
+export {
   cancelAllExternalRuntimeAuthFlows,
   cancelExternalRuntimeAuthFlow,
   getExternalRuntimeAuthFlow,
@@ -80,6 +90,13 @@ export {
   readExternalSessionBinding,
   type ExternalStoredAgent,
 } from './session-binding.js';
+export {
+  checkinPooledExternalSession,
+  checkoutPooledExternalSession,
+  disposeAllPooledExternalSessions,
+  disposePooledExternalSession,
+  getPooledExternalSessionCount,
+} from './session-pool.js';
 export {
   abortAllExternalTurns,
   abortExternalTurn,

@@ -54,6 +54,27 @@ rl.on('line', (line) => {
     send({ id: msg.id, result: { data: [{ model: 'gpt-5.3-codex', displayName: 'GPT-5.3 Codex', isDefault: true }] } });
     return;
   }
+  if (msg.method === 'account/rateLimits/read') {
+    send({
+      id: msg.id,
+      result: {
+        rateLimits: {
+          planType: 'pro',
+          primary: { usedPercent: 25, windowDurationMins: 300, resetsAt: Math.floor(Date.now() / 1000) + 3600 },
+        },
+      },
+    });
+    return;
+  }
+  if (msg.method === 'skills/list') {
+    send({
+      id: msg.id,
+      result: {
+        data: [{ skills: [{ name: 'review', description: 'Review current changes', enabled: true }] }],
+      },
+    });
+    return;
+  }
   if (msg.method === 'account/logout') {
     if (existsSync(stateFile)) rmSync(stateFile);
     send({ id: msg.id, result: {} });

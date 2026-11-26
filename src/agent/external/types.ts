@@ -7,10 +7,18 @@ import type {
   ExternalPermissionMode,
 } from '../../agent-config/schema.js';
 import type { SessionInteractionPolicy } from '../session/interaction-policy-state.js';
+import type { AgentSourceContext } from '../source-context/types.js';
 import type { TurnPlanStep } from '../tools/update-plan-tool.js';
 import type { UserTurnAttachment } from '../../gateway/user-turn-input.js';
 
 export type ExternalRuntimeStatus = 'ready' | 'not_installed' | 'unauthenticated' | 'warning' | 'error';
+
+export type ExternalRuntimeServiceTier = {
+  id: string;
+  label: string;
+  description?: string;
+  isDefault?: boolean;
+};
 
 export type ExternalRuntimeModelOption = {
   id: string;
@@ -20,6 +28,26 @@ export type ExternalRuntimeModelOption = {
   thinking?: ModelThinkingCapabilities;
   /** Optional protocol-native config id for thinking effort (e.g. ACP `thought_level` / `effort`). */
   thinkingConfigId?: string;
+  /** Optional speed / service tier options (e.g. Codex `fast`, `priority`, `ultrafast`). */
+  serviceTiers?: ExternalRuntimeServiceTier[];
+};
+
+export type ExternalRuntimeRateLimitWindow = {
+  usedPercent: number;
+  windowDurationMins?: number;
+  resetsAt?: number;
+};
+
+export type ExternalRuntimeRateLimits = {
+  planLabel?: string;
+  primary?: ExternalRuntimeRateLimitWindow;
+  secondary?: ExternalRuntimeRateLimitWindow;
+};
+
+export type ExternalRuntimeCommand = {
+  name: string;
+  description?: string;
+  source: 'skill' | 'command';
 };
 
 export type ExternalRuntimeAccountInfo = {
@@ -35,6 +63,8 @@ export type ExternalRuntimeProbeResult = {
   executablePath?: string;
   version?: string;
   account?: ExternalRuntimeAccountInfo;
+  rateLimits?: ExternalRuntimeRateLimits;
+  commands?: ExternalRuntimeCommand[];
   message?: string;
   hintCommand?: string;
   models: ExternalRuntimeModelOption[];
@@ -205,6 +235,8 @@ export interface ExternalDriverTurnContext {
   modelOverride?: string;
   /** Per-session thinking / reasoning effort level chosen in chat. */
   thinkingLevel?: string;
+  /** Per-session service tier / speed override (e.g. Codex `fast`, `priority`). */
+  serviceTierOverride?: string;
   runId: string;
   clientMessageId?: string;
   cwd: string;
@@ -219,6 +251,15 @@ export interface ExternalDriverTurnContext {
   registerSteerHandler?: (handler: ExternalTurnSteerHandler | null) => void;
 }
 
+export interface ExternalSessionControlContext {
+  conversationId: string;
+  execution: ExternalAgentExecution;
+  cwd: string;
+  nativeSessionId: string;
+  instructions?: string;
+  signal?: AbortSignal;
+}
+
 export interface ExternalAgentDriver {
   readonly kind: ExternalAgentKind;
   readonly label: string;
@@ -228,6 +269,11 @@ export interface ExternalAgentDriver {
   readonly capabilities: ExternalRuntimeCapabilities;
   runTurn(context: ExternalDriverTurnContext): Promise<void>;
   probe(execution?: ExternalAgentExecution): Promise<ExternalRuntimeProbeResult>;
+  compactSession?(context: ExternalSessionControlContext): Promise<{ compacted: boolean; summary?: string }>;
+  forkSession?(context: ExternalSessionControlContext): Promise<{ nativeSessionId: string; resumeCursor?: string } | null>;
+  rollbackSession?(
+    context: ExternalSessionControlContext & { numTurns: number },
+  ): Promise<{ rolledBack: boolean }>;
 }
 
 export type ExternalTurnEvent = { type: string; [key: string]: unknown };
@@ -240,9 +286,11 @@ export interface RunExternalProjectTurnInput {
   instructions?: string;
   modelOverride?: string;
   thinkingLevel?: string;
+  serviceTierOverride?: string;
   onTitleUpdated?: (title: string) => void;
   content: string;
   attachments?: UserTurnAttachment[];
+  sourceContexts?: AgentSourceContext[];
   hasAttachmentsOrContext: boolean;
   runId: string;
   clientMessageId?: string;

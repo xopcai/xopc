@@ -7,9 +7,13 @@ import { ProjectStore } from '../../../projects/project-store.js';
 import { closeXopcDatabase, openXopcDatabase } from '../../../storage/sqlite/connection.js';
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
+import { setSessionInteractionPolicy } from '../../session/interaction-policy.js';
 import { resolveAgySpawnSpec } from '../drivers/agy/driver.js';
 import {
+  disposeAllPooledExternalSessions,
+  disposePooledExternalSession,
   getExternalAgentDriver,
+  getPooledExternalSessionCount,
   hasExternalSessionBinding,
   probeExternalAgentRuntime,
   resolveExternalInteraction,
@@ -302,7 +306,8 @@ rl.on('line', (line) => {
 let root: string | undefined;
 const originalAgyBin = process.env.XOPC_AGY_BIN;
 
-afterEach(() => {
+afterEach(async () => {
+  await disposeAllPooledExternalSessions(true);
   if (originalAgyBin === undefined) delete process.env.XOPC_AGY_BIN;
   else process.env.XOPC_AGY_BIN = originalAgyBin;
   closeXopcDatabase();
@@ -406,6 +411,8 @@ it('falls back to session/load and ignores replayed notifications during load', 
   }));
 
   await run('load-1');
+  // Simulate cold restart/eviction so turn 2 exercises session/load replay filtering.
+  await disposePooledExternalSession(session.key, true);
   const secondEvents = await run('load-2');
   const textDeltas = secondEvents
     .filter(event => event.type === 'message_update')
@@ -821,4 +828,176 @@ rl.on('line', (line) => {
   )).toBe(true);
   const outcome = events.find(e => e.type === 'turn_outcome')?.outcome as { status?: string } | undefined;
   expect(outcome?.status).toBe('succeeded');
+});
+
+it('reuses a warm pooled ACP process across consecutive turns and syncs Plan mode + sourceContexts', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-agy-pool-'));
+  const rpcLog = join(root, 'rpc.jsonl');
+  const binPath = join(root, 'fake-agy-pool.mjs');
+  writeFileSync(binPath, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+import { createInterface } from 'node:readline';
+
+const logPath = ${JSON.stringify(rpcLog)};
+const send = (obj) => process.stdout.write(JSON.stringify(obj) + '\\n');
+const rl = createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  if (!line.trim()) return;
+  const msg = JSON.parse(line);
+  appendFileSync(logPath, JSON.stringify(msg) + '\\n');
+  if (msg.method === 'initialize') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: 1, agentCapabilities: { sessionCapabilities: { resume: {} } } } });
+    return;
+  }
+  if (msg.method === 'session/new') {
+    send({
+      jsonrpc: '2.0',
+      id: msg.id,
+      result: {
+        sessionId: 'agy-warm-1',
+        modes: {
+          currentModeId: 'auto',
+          availableModes: [
+            { id: 'auto', name: 'Auto' },
+            { id: 'plan', name: 'Plan' },
+          ],
+        },
+      },
+    });
+    return;
+  }
+  if (msg.method === 'session/set_mode') {
+    send({ jsonrpc: '2.0', id: msg.id, result: {} });
+    return;
+  }
+  if (msg.method === 'session/prompt') {
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'agy-warm-1',
+        update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Warm reply' } },
+      },
+    });
+    send({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } });
+  }
+});
+`);
+  chmodSync(binPath, 0o755);
+
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'AGY Pool', workspaceRoot: root });
+  const session = createConversation({ agentId: 'agy-coder', projectId: project.id }, root);
+
+  // Turn 1: cold start -> initialize + session/new + session/prompt
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'agy-coder',
+    execution: { kind: 'agy', binaryPath: binPath },
+    runId: 'warm-run-1',
+    content: 'First turn',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+  expect(getPooledExternalSessionCount()).toBe(1);
+
+  // Switch to Plan mode and attach a note context for Turn 2
+  setSessionInteractionPolicy(session.key, { mode: 'plan', access: 'read-only' });
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'agy-coder',
+    execution: { kind: 'agy', binaryPath: binPath },
+    runId: 'warm-run-2',
+    content: 'Plan next step',
+    sourceContexts: [
+      {
+        kind: 'note',
+        sourceId: 'n-1',
+        version: '1',
+        title: 'Roadmap',
+        text: 'Keep API backward compatible.',
+      },
+    ],
+    hasAttachmentsOrContext: true,
+    signal: new AbortController().signal,
+  }));
+
+  const logged = readFileSync(rpcLog, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  // Warm reuse: initialize & session/new happen ONCE; zero session/resume calls!
+  expect(logged.filter(entry => entry.method === 'initialize')).toHaveLength(1);
+  expect(logged.filter(entry => entry.method === 'session/new')).toHaveLength(1);
+  expect(logged.filter(entry => entry.method === 'session/resume')).toHaveLength(0);
+  expect(logged.filter(entry => entry.method === 'session/prompt')).toHaveLength(2);
+  expect(logged.some(entry => entry.method === 'session/set_mode' && entry.params?.modeId === 'plan')).toBe(true);
+  const secondPrompt = logged.filter(entry => entry.method === 'session/prompt')[1];
+  expect(secondPrompt?.params?.prompt?.[0]?.text).toContain('Keep API backward compatible.');
+});
+
+it('discovers ACP available_commands_update on probe and supports session/fork when advertised', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-agy-cmd-fork-'));
+  const rpcLog = join(root, 'rpc.jsonl');
+  const binPath = join(root, 'fake-agy-cmd-fork.mjs');
+  writeFileSync(binPath, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+import { createInterface } from 'node:readline';
+
+const logPath = ${JSON.stringify(rpcLog)};
+const send = (obj) => process.stdout.write(JSON.stringify(obj) + '\\n');
+const rl = createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  if (!line.trim()) return;
+  const msg = JSON.parse(line);
+  appendFileSync(logPath, JSON.stringify(msg) + '\\n');
+  if (msg.method === 'initialize') {
+    send({
+      jsonrpc: '2.0',
+      id: msg.id,
+      result: {
+        protocolVersion: 1,
+        agentCapabilities: { sessionCapabilities: { resume: {}, fork: {} } },
+      },
+    });
+    return;
+  }
+  if (msg.method === 'session/new') {
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'agy-cmd-1',
+        update: {
+          sessionUpdate: 'available_commands_update',
+          availableCommands: [
+            { name: '/review', description: 'Review current diff' },
+            { name: 'test-suite', description: 'Run project tests' },
+          ],
+        },
+      },
+    });
+    send({ jsonrpc: '2.0', id: msg.id, result: { sessionId: 'agy-cmd-1' } });
+    return;
+  }
+  if (msg.method === 'session/fork') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { sessionId: 'agy-forked-2' } });
+  }
+});
+`);
+  chmodSync(binPath, 0o755);
+
+  const probe = await probeExternalAgentRuntime({ kind: 'agy', binaryPath: binPath });
+  expect(probe.commands).toEqual([
+    { name: 'review', description: 'Review current diff', source: 'command' },
+    { name: 'test-suite', description: 'Run project tests', source: 'command' },
+  ]);
+
+  const driver = getExternalAgentDriver('agy');
+  const forked = await driver.forkSession?.({
+    conversationId: 'conv-1',
+    execution: { kind: 'agy', binaryPath: binPath },
+    cwd: root,
+    nativeSessionId: 'agy-cmd-1',
+  });
+  expect(forked).toEqual({ nativeSessionId: 'agy-forked-2' });
 });

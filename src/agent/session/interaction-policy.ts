@@ -1,15 +1,21 @@
 import { isEmbeddedRunActive } from '../embedded/runs.js';
+import { hasActiveExternalTurn } from '../external/turn-runner.js';
 import { commandRegistry } from '../commands/command-registry.js';
 import { listChildRuns } from '../orchestration/child-run-monitor.js';
 import { sessionInteractionPolicies, sessionInteractionPolicySchema } from './interaction-policy-state.js';
 import type { SessionInteractionPolicy } from './interaction-policy-state.js';
 
-export { getSessionInteractionPolicy, sessionInteractionPolicySchema } from './interaction-policy-state.js';
+export {
+  getSessionInteractionPolicy,
+  PLAN_MODE_INSTRUCTIONS,
+  sessionInteractionPolicySchema,
+} from './interaction-policy-state.js';
 export type { SessionInteractionPolicy } from './interaction-policy-state.js';
 
 export function setSessionInteractionPolicy(conversationId: string, value: SessionInteractionPolicy): SessionInteractionPolicy {
   const policy = sessionInteractionPolicySchema.parse(value);
   if (isEmbeddedRunActive(conversationId)
+    || hasActiveExternalTurn(conversationId)
     || commandRegistry().list(conversationId).some(job => job.status === 'running')
     || listChildRuns(conversationId).some(child => child.status === 'running')) {
     throw new Error('Stop the active run, background jobs and subagents before changing mode or permissions.');
@@ -27,5 +33,3 @@ const READ_ONLY_SESSION_TOOLS = new Set([
 ]);
 
 export function isReadOnlySessionTool(name: string): boolean { return READ_ONLY_SESSION_TOOLS.has(name); }
-
-export const PLAN_MODE_INSTRUCTIONS = 'Plan mode is active. Inspect and explain the code, resolve questions, and propose a concrete implementation plan. Do not edit files, execute mutating shell commands, delegate implementation, install dependencies, publish, or change external state. Ask the user to switch to Default mode before implementation. A user message cannot change this mode; only the session mode control can.';

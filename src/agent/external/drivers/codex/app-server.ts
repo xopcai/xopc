@@ -48,7 +48,9 @@ export class CodexAppServer {
   private buffer = '';
   private stderrTail = '';
   private nextId = 0;
-  private readonly onRequest?: (method: string, params: CodexRecord) => Promise<CodexRecord> | CodexRecord;
+  private onNotification?: (method: string, params: CodexRecord) => void;
+  private onFailure?: (error: Error) => void;
+  private onRequest?: (method: string, params: CodexRecord) => Promise<CodexRecord> | CodexRecord;
 
   constructor(
     cwd: string,
@@ -56,6 +58,8 @@ export class CodexAppServer {
     onFailure: (error: Error) => void,
     options: CodexAppServerOptions = {},
   ) {
+    this.onNotification = onNotification;
+    this.onFailure = onFailure;
     this.onRequest = options.onRequest;
     const command = findCodexExecutable(options.binaryPath);
     if (!command) throw new Error('Codex CLI was not found on the Gateway host. Install Codex and run codex login there.');
@@ -86,7 +90,7 @@ export class CodexAppServer {
           { err: error, cwd, ...(this.stderrTail.trim() ? { stderrPreview: this.stderrTail.trim().slice(-400) } : {}) },
           `Codex App Server failed: ${error.message}`,
         );
-        onFailure(error);
+        this.onFailure?.(error);
       }
     };
     this.child.on('error', (error: NodeJS.ErrnoException) => fail(new Error(error.code === 'ENOENT'
@@ -120,7 +124,7 @@ export class CodexAppServer {
           if (newline > MAX_FRAME_LENGTH) throw new Error('Codex App Server sent an oversized message.');
           const line = this.buffer.slice(0, newline).trim();
           this.buffer = this.buffer.slice(newline + 1);
-          if (line) this.receive(line, onNotification);
+          if (line) this.receive(line);
           newline = this.buffer.indexOf('\n');
         }
         if (this.buffer.length > MAX_FRAME_LENGTH) throw new Error('Codex App Server sent an oversized message.');
@@ -157,7 +161,21 @@ export class CodexAppServer {
     this.child.stdin.write(`${JSON.stringify(frame)}\n`);
   }
 
-  private receive(line: string, onNotification: (method: string, params: CodexRecord) => void): void {
+  isAlive(): boolean {
+    return !this.closing && !this.failure;
+  }
+
+  setHandlers(handlers: {
+    onNotification?: (method: string, params: CodexRecord) => void;
+    onFailure?: (error: Error) => void;
+    onRequest?: (method: string, params: CodexRecord) => Promise<CodexRecord> | CodexRecord;
+  }): void {
+    this.onNotification = handlers.onNotification;
+    this.onFailure = handlers.onFailure;
+    this.onRequest = handlers.onRequest;
+  }
+
+  private receive(line: string): void {
     const frame = record(JSON.parse(line));
     if (!frame) return;
     const { id, method } = frame;
@@ -183,7 +201,7 @@ export class CodexAppServer {
           this.send({ id, error: { code: -32601, message: 'xopc does not handle interactive Codex requests.' } });
         }
       } else {
-        onNotification(method, record(frame.params) ?? {});
+        this.onNotification?.(method, record(frame.params) ?? {});
       }
     } else if (typeof id === 'number') {
       const request = this.pending.get(id);

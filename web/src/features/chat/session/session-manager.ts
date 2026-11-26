@@ -45,6 +45,7 @@ export type SessionAgentConfig = {
   configVersion?: number;
   fixedModel?: boolean;
   model: string;
+  serviceTier?: string;
   activityDetail: {
     default: 'off' | 'on' | 'stream';
     override: 'off' | 'on' | 'stream' | null;
@@ -55,6 +56,7 @@ export type SessionAgentConfig = {
   workingDirectoryLocked: boolean;
   workspaceSource: 'execution_environment' | 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
   userContextMode: 'enabled' | 'off' | 'temporary';
+  interactionMode?: 'default' | 'plan';
 };
 
 function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
@@ -97,6 +99,9 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
     configVersion: typeof payload.configVersion === 'number' ? payload.configVersion : undefined,
     fixedModel: payload.fixedModel === true,
     model: payload.model,
+    ...(typeof payload.serviceTier === 'string' && payload.serviceTier.trim()
+      ? { serviceTier: payload.serviceTier.trim() }
+      : {}),
     activityDetail: {
       default: activity.default,
       override: activity.override,
@@ -106,6 +111,7 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
     effectiveWorkspacePath: payload.effectiveWorkspacePath,
     workingDirectoryLocked: payload.workingDirectoryLocked,
     userContextMode: payload.userContextMode,
+    interactionMode: payload.interactionMode === 'plan' ? 'plan' : 'default',
     workspaceSource,
   };
 }
@@ -254,8 +260,10 @@ export class SessionManager {
       thinkingLevel?: string;
       configVersion?: number;
       model?: string | null;
+      serviceTier?: string | null;
       workingDirectory?: string;
       userContextMode?: 'enabled' | 'off' | 'temporary';
+      interactionMode?: 'default' | 'plan';
     },
   ): Promise<SessionAgentConfig> {
     const draft = await readLocalSessionDraft(conversationId);

@@ -300,6 +300,7 @@ export async function *runGatewayAgent(
         }
         let externalSessionModelOverride: string | undefined;
         let externalSessionThinkingLevel: string | undefined = thinking;
+        let externalSessionServiceTier: string | undefined;
         if (externalAgent) {
           agentService.enqueueProvisionalSessionTitle(conversationId, message);
           const sessionCfg = await agentService.sessionInspector.agentConfig(conversationId).catch(() => null);
@@ -311,6 +312,9 @@ export async function *runGatewayAgent(
           if (!externalSessionThinkingLevel && sessionCfg?.thinkingLevel) {
             externalSessionThinkingLevel = sessionCfg.thinkingLevel;
           }
+          if (sessionCfg?.serviceTier?.trim()) {
+            externalSessionServiceTier = sessionCfg.serviceTier.trim();
+          }
         }
         const eventStream = externalAgent && webchatTranscriptId ? runExternalProjectTurn({
           conversationId,
@@ -320,9 +324,11 @@ export async function *runGatewayAgent(
           instructions: externalAgent.profile?.instructions,
           modelOverride: externalSessionModelOverride,
           thinkingLevel: externalSessionThinkingLevel,
+          serviceTierOverride: externalSessionServiceTier,
           onTitleUpdated: (title) => agentService.applyExternalSessionTitle(conversationId, title),
           content: message,
           attachments: cappedAttachments,
+          sourceContexts: runOptions?.sourceContexts,
           hasAttachmentsOrContext: Boolean(runOptions?.sourceContexts?.some(context => context.kind !== 'device_context')),
           runId,
           clientMessageId: runOptions?.inputIdentity?.clientMessageId,

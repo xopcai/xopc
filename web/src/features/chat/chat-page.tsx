@@ -9,7 +9,9 @@ import { serializeUserTurnDocument } from '@xopcai/gateway-contract';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import useSWR from 'swr';
 
+import { agentRuntimeModelsSwrKey, fetchAgentRuntimeModelsCached } from '@/features/chat/api/registry-api';
 import { ReadAloudDock } from '@/features/voice/read-aloud-dock';
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
 import { startsWithRegisteredSlashCommand } from '@/features/chat/palette/slash-command-wire';
@@ -663,6 +665,13 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
       },
     [agents.chatAgents?.items, agents.displayAgentId],
   );
+  const { data: externalRuntimeMeta } = useSWR(
+    welcomeAgent.execution ? agentRuntimeModelsSwrKey(agents.displayAgentId) : null,
+    ([, id]) => fetchAgentRuntimeModelsCached(id),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+  const canEditExternalTurns = !welcomeAgent.execution || externalRuntimeMeta?.supportsRollback === true;
+  const canForkExternalTurns = !welcomeAgent.execution || externalRuntimeMeta?.supportsFork !== false;
   const welcomeSpotlight = useMemo(
     () =>
       buildWelcomeSpotlight(welcomeContextState.context, m.chat.welcomeSpotlight, {
@@ -1333,17 +1342,17 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                       ) : undefined
                     }
                     compactWelcome={embedded}
-                    onDeleteRound={taskId || welcomeAgent.execution ? undefined : stream.deleteMessageRound}
-                    onRetryUserMessageRound={taskId || welcomeAgent.execution ? undefined : stream.retryUserMessageRound}
+                    onDeleteRound={taskId || !canEditExternalTurns ? undefined : stream.deleteMessageRound}
+                    onRetryUserMessageRound={taskId || !canEditExternalTurns ? undefined : stream.retryUserMessageRound}
                     deleteRoundDisabled={stream.streaming || stream.sending}
-                    onEditUserMessage={taskId || welcomeAgent.execution ? undefined : handleEditUserMessage}
+                    onEditUserMessage={taskId || !canEditExternalTurns ? undefined : handleEditUserMessage}
                     editLatestUserOnly
                     editRequiresTurnId
                     onSaveAssistantAsNote={handleSaveAssistantAsNote}
                     onSaveAssistantToSourceNote={sourceNoteId ? handleSaveAssistantToSourceNote : undefined}
                     onExtractAssistantTask={sourceNoteId ? handleExtractAssistantTask : undefined}
                     onForkAssistantTurn={
-                      !taskId && !welcomeAgent.execution && sessionMetadata?.sessionType === 'chat'
+                      !taskId && sessionMetadata?.sessionType === 'chat' && canForkExternalTurns
                         ? handleForkAssistantTurn
                         : undefined
                     }
@@ -1557,6 +1566,18 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                 showModelSelector={!personal}
                 onModelChange={session.onSessionModelChange}
                 externalAgentId={welcomeAgent.execution ? agents.displayAgentId : undefined}
+                interactionMode={session.interactionMode}
+                onInteractionModeChange={
+                  !personal && !session.projectPreparation && session.conversationId
+                    ? session.onSessionInteractionModeChange
+                    : undefined
+                }
+                serviceTier={session.serviceTier}
+                onServiceTierChange={
+                  !personal && !session.projectPreparation && session.conversationId && welcomeAgent.execution
+                    ? session.onSessionServiceTierChange
+                    : undefined
+                }
                 modelDisabled={
                   (isSessionTransitioning && !session.projectPreparation) || projectComposer.busy || session.modelConfigSaving
                 }

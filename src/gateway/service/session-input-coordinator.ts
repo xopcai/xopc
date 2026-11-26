@@ -47,6 +47,7 @@ import {
 import { deleteMediaUrisNoLongerReferenced } from '../../media/session-references.js';
 import { createLogger } from '../../utils/logger.js';
 import { fitSourceContextsToBudget } from '../../agent/source-context/budget.js';
+import { getExternalConversationAgent, rollbackExternalSession } from '../../agent/external/index.js';
 import { TaskApplicationService } from '../../tasks/task-application-service.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 
@@ -407,6 +408,9 @@ export class SessionInputCoordinator {
       if (input.controlVersion !== undefined && input.controlVersion !== controlState.version) throw new SessionInputControlConflict('Queue control changed');
       if ((controlState.paused || input.controlVersion !== undefined) && controlState.phase !== 'idle') return { ok: false, code: 'SESSION_BUSY' };
       await beforeReplace(input.controlVersion === undefined);
+      if (getExternalConversationAgent(conversationId)) {
+        await rollbackExternalSession(conversationId, 1);
+      }
       const result = replaceLatestSessionTurnAndQueueInput({
         conversationId,
         targetTurnId,

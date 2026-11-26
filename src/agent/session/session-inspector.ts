@@ -41,10 +41,12 @@ import { formatSessionContextReport } from '../service/session-context-report.js
 import type { ReasoningLevel, VerboseLevel } from '../transcript/thinking-types.js';
 import { createLogger } from '../../utils/logger.js';
 import {
+  compactExternalSession,
   getCachedExternalDefaultModel,
   getExternalAgentDriver,
   getExternalConversationAgent,
 } from '../external/index.js';
+import { getSessionInteractionPolicy } from './interaction-policy.js';
 import type { SessionHydrator } from './session-hydrator.js';
 import { resolveModel } from '../../providers/index.js';
 
@@ -74,6 +76,7 @@ export interface SessionContextUsage {
 export interface SessionAgentConfigView {
   thinkingLevel: ThinkingLevel;
   model: string;
+  serviceTier?: string;
   configVersion: number;
   fixedModel: boolean;
   activityDetail: {
@@ -87,6 +90,7 @@ export interface SessionAgentConfigView {
   workingDirectoryLocked: boolean;
   workspaceSource: 'execution_environment' | 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
   userContextMode: 'enabled' | 'off' | 'temporary';
+  interactionMode: 'default' | 'plan';
 }
 
 export class SessionInspector {
@@ -122,6 +126,11 @@ export class SessionInspector {
     conversationId: string,
     options?: { instructions?: string; force?: boolean },
   ): Promise<CompactionResult> {
+    if (getExternalConversationAgent(conversationId)) {
+      const result = await compactExternalSession(conversationId);
+      log.info({ conversationId, result }, 'External runtime compaction complete');
+      return result;
+    }
     const messages = await this.opts.sessionStore.load(conversationId);
     await this.ensureEffectiveSessionModel(conversationId);
     const policy = resolveCompactionPolicy(this.opts.getConfig());
@@ -261,9 +270,13 @@ export class SessionInspector {
     const hasSessionWorkspaceOverride = Boolean(sc?.workingDirectoryOverride?.trim());
     const effectiveWorkspacePath = effectiveWorkspacePathForSession(cfg, conversationId, sc, project);
     const isDefaultWorkspaceRoot = effectiveWorkspacePath === resolveDefaultAgentWorkspaceDir();
+    const defaultExternalServiceTier =
+      externalAgent?.execution.kind === 'codex' ? externalAgent.execution.serviceTier?.trim() : undefined;
+    const serviceTier = sc?.serviceTierOverride?.trim() || defaultExternalServiceTier || undefined;
     return {
       thinkingLevel: level,
       model,
+      ...(serviceTier ? { serviceTier } : {}),
       configVersion: sc?.updatedAt ?? 0,
       fixedModel: externalAgent ? true : sc?.fixedModel === true,
       activityDetail: {
@@ -276,6 +289,7 @@ export class SessionInspector {
       effectiveWorkspacePath,
       workingDirectoryLocked: Boolean(environment || projectWorkspace || hasSessionWorkspaceOverride),
       userContextMode: sc?.userContextMode ?? 'enabled',
+      interactionMode: getSessionInteractionPolicy(conversationId).mode,
       workspaceSource: environment
         ? 'execution_environment'
         : projectWorkspace

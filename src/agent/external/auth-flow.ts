@@ -4,11 +4,12 @@ import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { createInterface } from 'node:readline';
 
-import type { AgyExecution, CodexExecution, ExternalAgentExecution } from '../../agent-config/schema.js';
+import type { AgyExecution, ClaudeExecution, CodexExecution, ExternalAgentExecution } from '../../agent-config/schema.js';
 import { spawnStdioProcess } from '../../process/run-process.js';
 import { createLogger } from '../../utils/logger.js';
 import { AcpJsonRpcClient } from './acp/json-rpc-client.js';
 import { findAgyExecutable, resolveAgySpawnSpec } from './drivers/agy/driver.js';
+import { buildClaudeEnv, findClaudeExecutable } from './drivers/claude/executable.js';
 import { CodexAppServer, record, type CodexRecord } from './drivers/codex/app-server.js';
 import { findCodexExecutable } from './drivers/codex/executable.js';
 import { probeExternalAgentRuntime } from './registry.js';
@@ -698,6 +699,109 @@ async function startAgyAuthFlow(
   return startAgyCodeLoginFlow(flow, execution, executablePath);
 }
 
+async function startClaudeAuthFlow(
+  flow: ActiveAuthFlow,
+  execution: ClaudeExecution,
+): Promise<ExternalRuntimeAuthFlowSnapshot> {
+  const executablePath = findClaudeExecutable(execution.binaryPath);
+  if (!executablePath) {
+    await finishFlow(flow, {
+      phase: 'failed',
+      message: execution.binaryPath
+        ? `Claude Code binary was not found at "${execution.binaryPath}".`
+        : 'Claude Code CLI (`claude`) was not found on the Gateway host.',
+    });
+    return { ...flow.snapshot };
+  }
+
+  let child: ChildProcessWithoutNullStreams | undefined;
+  let resolvedInitialUrl: (() => void) | undefined;
+  const firstUrlReady = new Promise<void>((resolve) => {
+    resolvedInitialUrl = resolve;
+  });
+  const URL_PATTERN = /https:\/\/(?:claude\.ai|console\.anthropic\.com)\/[^\s"'<>]+/;
+
+  try {
+    child = spawnStdioProcess({
+      program: executablePath,
+      args: ['auth', 'login'],
+      cwd: tmpdir(),
+      env: buildClaudeEnv(execution.configDir),
+    });
+    const childClosed = new Promise<void>((resolve) => {
+      child!.once('close', () => resolve());
+    });
+
+    flow.cleanup = async () => {
+      const current = child;
+      child = undefined;
+      if (current) await closeRuntimeProcess(current, childClosed, 'ClaudeAuth', true);
+    };
+
+    const handleLine = (line: string) => {
+      const urlMatch = line.match(URL_PATTERN);
+      if (urlMatch && !flow.snapshot.authorizationUrl && !isTerminal(flow.snapshot.phase)) {
+        flow.snapshot = {
+          ...flow.snapshot,
+          phase: 'waiting',
+          authorizationUrl: urlMatch[0],
+          message: 'Complete Claude sign-in in the browser window. Waiting for confirmation…',
+        };
+        resolvedInitialUrl?.();
+      }
+    };
+
+    createInterface({ input: child.stdout, crlfDelay: Infinity }).on('line', handleLine);
+    createInterface({ input: child.stderr, crlfDelay: Infinity }).on('line', handleLine);
+
+    child.on('exit', (code) => {
+      child = undefined;
+      resolvedInitialUrl?.();
+      if (isTerminal(flow.snapshot.phase)) return;
+      void (async () => {
+        if (code === 0) {
+          flow.snapshot = {
+            ...flow.snapshot,
+            phase: 'verifying',
+            message: 'Verifying Claude Code sign-in and loading models…',
+          };
+          const probe = await probeExternalAgentRuntime(execution);
+          await finishFlow(flow, {
+            phase: probe.status === 'ready' ? 'succeeded' : 'failed',
+            message: probe.status === 'ready'
+              ? `Signed in${probe.account?.label ? ` as ${probe.account.label}` : ''}.`
+              : (probe.message || 'Claude Code login did not complete.'),
+            probe,
+          });
+          return;
+        }
+        await finishFlow(flow, {
+          phase: 'failed',
+          message: 'Run `claude auth login` in your terminal to complete sign-in.',
+        });
+      })();
+    });
+
+    await Promise.race([
+      firstUrlReady,
+      new Promise<void>((resolve) => setTimeout(resolve, 4_000)),
+    ]);
+
+    if (flow.snapshot.phase === 'starting') {
+      flow.snapshot = {
+        ...flow.snapshot,
+        phase: 'waiting',
+        message: 'Complete Claude sign-in in the browser window opened by Claude Code…',
+      };
+    }
+    return { ...flow.snapshot };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await finishFlow(flow, { phase: 'failed', message });
+    return { ...flow.snapshot };
+  }
+}
+
 export async function startExternalRuntimeAuth(
   input: StartExternalRuntimeAuthInput,
 ): Promise<ExternalRuntimeAuthFlowSnapshot> {
@@ -711,7 +815,9 @@ export async function startExternalRuntimeAuth(
     phase: 'starting',
     message: input.execution.kind === 'codex'
       ? 'Starting Codex sign-in…'
-      : 'Starting Antigravity Google OAuth sign-in…',
+      : input.execution.kind === 'claude'
+        ? 'Starting Claude Code sign-in…'
+        : 'Starting Antigravity Google OAuth sign-in…',
     expiresAt: new Date(expiresAtMs).toISOString(),
   };
 
@@ -725,6 +831,9 @@ export async function startExternalRuntimeAuth(
 
   if (input.execution.kind === 'codex') {
     return startCodexAuthFlow(flow, input.execution, mode, input.apiKey);
+  }
+  if (input.execution.kind === 'claude') {
+    return startClaudeAuthFlow(flow, input.execution);
   }
   return startAgyAuthFlow(flow, input.execution);
 }
@@ -788,6 +897,31 @@ export async function logoutExternalAgentRuntime(
       } finally {
         await server?.close(true);
       }
+    }
+    return probeExternalAgentRuntime(execution);
+  }
+
+  if (execution.kind === 'claude') {
+    const executablePath = findClaudeExecutable(execution.binaryPath);
+    if (executablePath) {
+      const child = spawnStdioProcess({
+        program: executablePath,
+        args: ['auth', 'logout'],
+        cwd: tmpdir(),
+        env: buildClaudeEnv(execution.configDir),
+      });
+      const childClosed = new Promise<void>((resolve) => {
+        child.once('close', () => resolve());
+      });
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(() => {
+          void closeRuntimeProcess(child, childClosed, 'ClaudeLogout', true).finally(resolve);
+        }, 8_000);
+        child.once('exit', () => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
     }
     return probeExternalAgentRuntime(execution);
   }

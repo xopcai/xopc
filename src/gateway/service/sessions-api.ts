@@ -25,7 +25,7 @@ import type { SessionPatchBody } from '../../session/patch-metadata.js';
 import { collectMediaUrisFromValues, deleteMediaUris } from '../../media/session-references.js';
 import { getDistinctSessionChatIds } from './session-chat-ids.js';
 import { performSessionReset, type SessionResetResult } from '../session-reset-service.js';
-import { abortExternalTurn } from '../../agent/external/index.js';
+import { abortExternalTurn, forkExternalSession, getExternalConversationAgent } from '../../agent/external/index.js';
 import { resolveAgentIdFromConversationId } from '../../routing/agent-session-key.js';
 import type { ActiveExecution } from './active-execution.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
@@ -247,11 +247,13 @@ export class GatewaySessionsApi {
       fixedModel?: boolean;
       configVersion?: number;
       model?: string | null;
+      serviceTier?: string | null;
       activityDetailLevel?: string | null;
       verboseLevel?: string;
       workingDirectory?: string;
       responseLanguage?: string | null;
       userContextMode?: 'enabled' | 'off' | 'temporary';
+      interactionMode?: 'default' | 'plan';
     },
   ) {
     return this.opts.getAgentService().sessionConfig.patch(conversationId, body);
@@ -384,11 +386,20 @@ export class GatewaySessionsApi {
     return this.opts.sessionIndex.importSessionExport(targetKey, jsonContent);
   }
 
-  fork(
+  async fork(
     key: string,
     targetKey: string,
   ): Promise<{ conversationId: string; rowCount: number }> {
-    return this.opts.sessionIndex.forkSession(key, targetKey);
+    const result = await this.opts.sessionIndex.forkSession(key, targetKey);
+    if (getExternalConversationAgent(key)) {
+      try {
+        await forkExternalSession({ sourceConversationId: key, targetConversationId: result.conversationId });
+      } catch (err) {
+        await this.opts.sessionIndex.deleteSession(result.conversationId).catch(() => {});
+        throw err;
+      }
+    }
+    return result;
   }
 
   forkRows(
@@ -438,6 +449,14 @@ export class GatewaySessionsApi {
         },
       },
     });
+    if (getExternalConversationAgent(sourceKey)) {
+      try {
+        await forkExternalSession({ sourceConversationId: sourceKey, targetConversationId: result.conversationId });
+      } catch (err) {
+        await this.opts.sessionIndex.deleteSession(result.conversationId).catch(() => {});
+        throw err;
+      }
+    }
     const session = await this.getSession(result.conversationId);
     if (!session) throw new Error(`Forked session not found: ${result.conversationId}`);
     return { ...result, lastTurnId: normalizedTurnId, session };

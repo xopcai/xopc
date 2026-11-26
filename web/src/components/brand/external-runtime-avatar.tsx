@@ -22,7 +22,10 @@ const CODEX_ROSETTE_PATH =
 const AGY_ARCH_PATH =
   'M21.751 22.607c1.34 1.005 3.35.335 1.508-1.508C17.73 15.74 18.904 1 12.037 1 5.17 1 6.342 15.74.815 21.1c-2.01 2.009.167 2.511 1.507 1.506 5.192-3.517 4.857-9.714 9.715-9.714 4.857 0 4.522 6.197 9.714 9.715z';
 
-/** Circular brand avatar for external coding runtimes (Codex, Antigravity, etc.). */
+const CLAUDE_STARBURST_PATH =
+  'M12 2.2l1.15 6.45 4.95-4.3-2.65 6.0 6.35-1.15-5.65 3.3 5.65 3.3-6.35-1.15 2.65 6.0-4.95-4.3L12 21.8l-1.15-6.45-4.95 4.3 2.65-6.0-6.35 1.15 5.65-3.3-5.65-3.3 6.35 1.15-2.65-6.0 4.95 4.3L12 2.2z';
+
+/** Circular brand avatar for external coding runtimes (Codex, Antigravity, Claude Code, etc.). */
 export function ExternalRuntimeAvatar({
   kind,
   size = 44,
@@ -45,6 +48,23 @@ export function ExternalRuntimeAvatar({
       >
         <svg viewBox="100 100 411 411" className="h-[64%] w-[64%]" fill="none" aria-hidden>
           <path fill="currentColor" fillRule="evenodd" clipRule="evenodd" d={CODEX_ROSETTE_PATH} />
+        </svg>
+      </span>
+    );
+  }
+
+  if (kind === 'claude') {
+    return (
+      <span
+        className={cn(
+          'inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#D97757] text-white ring-1 ring-inset ring-black/10 dark:ring-white/15',
+          className,
+        )}
+        style={{ width: size, height: size }}
+        aria-hidden
+      >
+        <svg viewBox="0 0 24 24" className="h-[64%] w-[64%]" fill="none" aria-hidden>
+          <path fill="currentColor" d={CLAUDE_STARBURST_PATH} />
         </svg>
       </span>
     );

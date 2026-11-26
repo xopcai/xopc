@@ -18,10 +18,18 @@ import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import type { StartupUnavailableGatewayMethod } from '../../startup-readiness.js';
 import { evictEmbeddedSessionRunner } from '../../../agent/embedded/session-runner.js';
 import {
+  compactExternalSession,
   getExternalAgentDriver,
   getExternalConversationAgent,
   hasExternalSessionBinding,
+  rollbackExternalSession,
 } from '../../../agent/external/index.js';
+import { computeTranscriptUserRoundDeleteRange } from '../../../session/user-round-delete.js';
+import {
+  isRuntimeOnlyTranscriptMessage,
+  isTranscriptCompactionEntry,
+} from '../../../session/session-context-for-llm.js';
+import { loadTranscriptRowsForSession } from '../../../storage/sqlite/transcript-repository.js';
 import { SessionEnvironmentService } from '../../../execution-environments/session-environment-service.js';
 import type { Project } from '../../../projects/types.js';
 import { deleteBrowserTabBinding } from '../../../storage/sqlite/browser-tab-binding-repository.js';
@@ -743,7 +751,16 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const external = getExternalConversationAgent(key);
     if (external) {
       const driver = getExternalAgentDriver(external.execution.kind);
-      return c.json({ ok: false, error: `${driver.label} sessions manage their own context window.` }, 400);
+      if (!driver.compactSession) {
+        return c.json({ ok: false, error: `${driver.label} sessions manage their own context window.` }, 400);
+      }
+      try {
+        const result = await compactExternalSession(key);
+        return c.json({ ok: true, payload: { result } });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return c.json({ ok: false, error: msg }, 500);
+      }
     }
     const session = await service.sessions.getSession(key);
     if (!session) {
@@ -916,7 +933,9 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const external = getExternalConversationAgent(key);
     if (external) {
       const driver = getExternalAgentDriver(external.execution.kind);
-      return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new Project session instead.` }, 400);
+      if (!driver.forkSession) {
+        return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new Project session instead.` }, 400);
+      }
     }
     const body = await c.req.json().catch(() => ({}));
     const targetKey = typeof body.targetKey === 'string' ? body.targetKey : '';
@@ -938,7 +957,9 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const external = getExternalConversationAgent(key);
     if (external) {
       const driver = getExternalAgentDriver(external.execution.kind);
-      return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new Project session instead.` }, 400);
+      if (!driver.forkSession) {
+        return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new Project session instead.` }, 400);
+      }
     }
     const body = await c.req.json().catch(() => ({}));
     const lastTurnId = typeof body.lastTurnId === 'string' ? body.lastTurnId.trim() : '';
@@ -986,7 +1007,9 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const external = getExternalConversationAgent(key);
     if (external) {
       const driver = getExternalAgentDriver(external.execution.kind);
-      return c.json({ error: `${driver.label} sessions cannot delete individual turns. Reset or start a new session instead.` }, 400);
+      if (!driver.rollbackSession) {
+        return c.json({ error: `${driver.label} sessions cannot delete individual turns. Reset or start a new session instead.` }, 400);
+      }
     }
     if (service.voiceRealtime?.hasConversation(key)) return c.json({ error: 'End the voice call before editing its history' }, 409);
     const body = await c.req.json().catch(() => ({}));
@@ -999,6 +1022,27 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const target = steerId ? { steerId } : userRoundIndex;
     if (target === undefined || (typeof target === 'number' && (!Number.isInteger(target) || target < 0))) {
       return c.json({ error: 'userRoundIndex must be a non-negative integer' }, 400);
+    }
+
+    if (external) {
+      const driver = getExternalAgentDriver(external.execution.kind);
+      const rows = loadTranscriptRowsForSession(key);
+      const canonicalRows = rows.filter(
+        (row) => !isTranscriptCompactionEntry(row) && !isRuntimeOnlyTranscriptMessage(row),
+      );
+      const range = computeTranscriptUserRoundDeleteRange(canonicalRows, target);
+      if (!range) {
+        return c.json({ error: 'User round index out of range' }, 400);
+      }
+      if (range.startIndex + range.count !== canonicalRows.length) {
+        return c.json({ error: `Only the latest turn can be deleted in ${driver.label} sessions.` }, 400);
+      }
+      try {
+        await rollbackExternalSession(key, 1);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return c.json({ error: msg }, 500);
+      }
     }
 
     const result = await service.sessionIndexInstance.deleteUserRound(key, target);
