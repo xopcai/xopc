@@ -25,6 +25,7 @@ import type { SessionPatchBody } from '../../session/patch-metadata.js';
 import { collectMediaUrisFromValues, deleteMediaUris } from '../../media/session-references.js';
 import { getDistinctSessionChatIds } from './session-chat-ids.js';
 import { performSessionReset, type SessionResetResult } from '../session-reset-service.js';
+import { abortExternalTurn } from '../../agent/external/index.js';
 import { resolveAgentIdFromConversationId } from '../../routing/agent-session-key.js';
 import type { ActiveExecution } from './active-execution.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
@@ -292,6 +293,7 @@ export class GatewaySessionsApi {
 
   async delete(key: string): Promise<{ deleted: boolean }> {
     if (isPersonalConversation(key)) return { deleted: false };
+    await abortExternalTurn(key);
     const transcriptRows = await this.opts.sessionIndex.getStore()
       .loadTranscriptHistoryRows(key)
       .catch(() => []);
@@ -313,10 +315,12 @@ export class GatewaySessionsApi {
     });
   }
 
-  deleteMany(keys: string[]): Promise<{ success: string[]; failed: string[] }> {
+  async deleteMany(keys: string[]): Promise<{ success: string[]; failed: string[] }> {
     const protectedKeys = keys.filter(isPersonalConversation);
-    return this.opts.sessionIndex.deleteSessions(keys.filter(key => !isPersonalConversation(key)))
-      .then(result => ({ success: result.success, failed: [...result.failed, ...protectedKeys] }));
+    const deletableKeys = keys.filter(key => !isPersonalConversation(key));
+    await Promise.all(deletableKeys.map(abortExternalTurn));
+    const result = await this.opts.sessionIndex.deleteSessions(deletableKeys);
+    return { success: result.success, failed: [...result.failed, ...protectedKeys] };
   }
 
   async rename(key: string, name: string): Promise<{ renamed: boolean }> {

@@ -42,7 +42,7 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
     return { error: 'each agent must be an object' };
   }
   const body = raw as Record<string, unknown>;
-  const allowedKeys = new Set(['id', 'workspace', 'profile', 'specialistProfile']);
+  const allowedKeys = new Set(['id', 'workspace', 'profile', 'specialistProfile', 'execution']);
   const unknownKey = Object.keys(body).find((key) => !allowedKeys.has(key));
   if (unknownKey) return { error: `unknown create-agent field "${unknownKey}"` };
   const workspace = typeof body.workspace === 'string' ? body.workspace : undefined;
@@ -50,11 +50,14 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
   if (!profile.success) return { error: `profile ${profile.error.issues[0]?.message ?? 'is required'}` };
   const specialist = AgentEntrySchema.shape.specialistProfile.safeParse(body.specialistProfile);
   if (!specialist.success) return { error: `specialistProfile ${specialist.error.issues[0]?.message ?? 'is invalid'}` };
+  const execution = AgentEntrySchema.shape.execution.safeParse(body.execution);
+  if (!execution.success) return { error: 'Invalid Agent execution type' };
   const id = typeof body.id === 'string' ? body.id : undefined;
   return {
     workspace,
     profile: profile.data,
     ...(specialist.data ? { specialistProfile: specialist.data } : {}),
+    ...(execution.data ? { execution: execution.data } : {}),
     ...(id !== undefined ? { id } : {}),
   };
 }

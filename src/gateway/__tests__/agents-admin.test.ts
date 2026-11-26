@@ -156,4 +156,24 @@ describe('agents admin', () => {
       'xopc_use', 'knowledge_search', 'exec_command',
     ]);
   });
+
+  it('ignores workspace overrides when creating a Codex agent and prevents setting it as default', async () => {
+    const created = await createGatewayAgent({
+      id: 'codex-helper',
+      workspace: '/tmp/should-be-ignored',
+      execution: { kind: 'codex' },
+      profile: { name: 'Codex Helper' },
+    });
+    expect(created.ok).toBe(true);
+    const stored = new AgentCatalogRepository().get('codex-helper');
+    expect(stored?.execution).toEqual({ kind: 'codex' });
+    expect(stored?.workspace).toBeUndefined();
+
+    const setDefaultRes = await updateGatewayAgent('codex-helper', { setDefault: true });
+    expect(setDefaultRes).toEqual({
+      ok: false,
+      error: 'External runtime agents cannot be set as the default agent',
+      status: 400,
+    });
+  });
 });

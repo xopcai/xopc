@@ -83,6 +83,7 @@ export function AgentsSettingsPanel({
     name: '',
     instructions: '',
     workspace: '',
+    execution: 'embedded',
   });
   const editorDirtyRef = useRef(false);
 
@@ -106,9 +107,16 @@ export function AgentsSettingsPanel({
           name: manualDraft.name.trim(),
           ...(manualDraft.instructions.trim() ? { instructions: manualDraft.instructions.trim() } : {}),
         },
-        ...(manualDraft.workspace.trim() ? { workspace: manualDraft.workspace.trim() } : {}),
+        ...(manualDraft.execution !== 'embedded' ? { execution: { kind: manualDraft.execution } } :
+          manualDraft.workspace.trim() ? { workspace: manualDraft.workspace.trim() } : {}),
       });
-      setManualDraft({ open: false, name: '', instructions: '', workspace: '' });
+      const createdExecution = manualDraft.execution;
+      setManualDraft({ open: false, name: '', instructions: '', workspace: '', execution: 'embedded' });
+      void mutate(next, { revalidate: false });
+      if (createdExecution !== 'embedded') {
+        navigate(AGENTS_APP_LIST_PATH);
+        return;
+      }
       rememberSelectedAgent(next.createdAgentId);
       navigate('/chat/new?projectScope=none', {
         state: { forceNewChat: true, agentId: next.createdAgentId, fromAgentEditor: true },
@@ -118,7 +126,7 @@ export function AgentsSettingsPanel({
     } finally {
       setBusy(false);
     }
-  }, [busy, manualDraft, navigate]);
+  }, [busy, manualDraft, mutate, navigate]);
 
   const headerContribution = useMemo(() => ({
     overflow: (

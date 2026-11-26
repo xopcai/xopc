@@ -1333,17 +1333,17 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                       ) : undefined
                     }
                     compactWelcome={embedded}
-                    onDeleteRound={taskId ? undefined : stream.deleteMessageRound}
-                    onRetryUserMessageRound={taskId ? undefined : stream.retryUserMessageRound}
+                    onDeleteRound={taskId || welcomeAgent.execution ? undefined : stream.deleteMessageRound}
+                    onRetryUserMessageRound={taskId || welcomeAgent.execution ? undefined : stream.retryUserMessageRound}
                     deleteRoundDisabled={stream.streaming || stream.sending}
-                    onEditUserMessage={taskId ? undefined : handleEditUserMessage}
+                    onEditUserMessage={taskId || welcomeAgent.execution ? undefined : handleEditUserMessage}
                     editLatestUserOnly
                     editRequiresTurnId
                     onSaveAssistantAsNote={handleSaveAssistantAsNote}
                     onSaveAssistantToSourceNote={sourceNoteId ? handleSaveAssistantToSourceNote : undefined}
                     onExtractAssistantTask={sourceNoteId ? handleExtractAssistantTask : undefined}
                     onForkAssistantTurn={
-                      !taskId && sessionMetadata?.sessionType === 'chat'
+                      !taskId && !welcomeAgent.execution && sessionMetadata?.sessionType === 'chat'
                         ? handleForkAssistantTurn
                         : undefined
                     }
@@ -1512,7 +1512,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                 welcomeSuggestion={!skillDiscovery && compactWelcomeLayout ? welcomeSelection : null}
                 onAcceptWelcomeSuggestion={onPickWelcomePrompt}
                 thinkingLevel={session.thinkingLevel}
-                modelSupportsThinking={session.modelSupportsThinking}
+                modelSupportsThinking={welcomeAgent.execution ? false : session.modelSupportsThinking}
                 onThinkingChange={session.onSessionThinkingLevelChange}
                 onSend={projectComposer.send}
                 composerMode={followUp.composerMode}
@@ -1554,7 +1554,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                 onPendingFollowUpSend={(id) => void followUp.sendQueuedInput(id).catch(() => {})}
                 steeringFollowUpId={followUp.steeringFollowUpId}
                 sessionModel={session.sessionModel}
-                showModelSelector={!personal}
+                showModelSelector={!personal && !welcomeAgent.execution}
                 onModelChange={session.onSessionModelChange}
                 modelDisabled={
                   (isSessionTransitioning && !session.projectPreparation) || projectComposer.busy || session.modelConfigSaving

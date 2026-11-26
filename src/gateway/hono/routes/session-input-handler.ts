@@ -16,6 +16,7 @@ import { resolveModel } from '../../../providers/index.js';
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
 import type { UserTurnAttachment } from '../../user-turn-input.js';
 import { parseTurnContextRefs } from '../../../agent/source-context/types.js';
+import { getExternalAgentDriver, getExternalConversationAgent } from '../../../agent/external/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { browserPageContextToAgentContext } from '../../../agent/source-context/browser-page.js';
 import { isTaskDestructiveCommand } from '../../../session/reset-triggers.js';
@@ -48,6 +49,11 @@ export async function submitSessionInput(
   if (!body || !conversationId) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid request' } }, 400);
   }
+  const externalAgent = getExternalConversationAgent(conversationId);
+  const externalDriver = externalAgent ? getExternalAgentDriver(externalAgent.execution.kind) : undefined;
+  if (externalDriver?.capabilities.requiresWorkspaceWrite && !hasGatewayScope(getGatewayPrincipal(c).scopes, 'workspace.write')) {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: `${externalDriver.label} requires workspace write access` } }, 403);
+  }
   const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
   const contextRefs = parseTurnContextRefs(body.contextRefs, MAX_TURN_CONTEXTS);
   if (contextRefs === null) {
@@ -56,6 +62,10 @@ export async function submitSessionInput(
   const browserContexts = browserPageContextsInputSchema.safeParse(body.browserContexts ?? []);
   if (!browserContexts.success) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid browser page context' } }, 400);
+  }
+  if (externalDriver && !externalDriver.capabilities.supportsAttachments
+    && (attachments?.length || contextRefs.length || browserContexts.data.length || body.appContext !== undefined)) {
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `${externalDriver.label} Project sessions currently accept text messages only.` } }, 400);
   }
   if (contextRefs.some(ref => ref.kind === 'workbook') && !hasGatewayScope(getGatewayPrincipal(c).scopes, 'workspace.read')) {
     return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Workbook context requires workspace access' } }, 403);
@@ -110,17 +120,20 @@ export async function submitSessionInput(
       return c.json({ ok: false, error: { code: 'SESSION_BUSY', message: 'End the voice call before sending text' } }, 409);
     }
     const selection = body.configVersion !== undefined ? await deps.service.sessions.getAgentConfig(conversationId) : undefined;
+    const managesOwnModel = externalDriver?.capabilities.managesOwnModel === true;
     if (selection) {
-      if (!Number.isSafeInteger(body.configVersion) || selection.configVersion !== body.configVersion || !selection.fixedModel) {
+      if (!Number.isSafeInteger(body.configVersion) || selection.configVersion !== body.configVersion || (!managesOwnModel && !selection.fixedModel)) {
         return c.json({ ok: false, error: { code: 'CONFIG_CHANGED', message: 'Model configuration changed. Refresh before sending.' } }, 409);
       }
-      try {
-        const capabilities = getModelThinking(resolveModel(selection.model));
-        if (!capabilities.options.includes(selection.thinkingLevel as ModelThinkingValue)) {
-          return c.json({ ok: false, error: { code: 'INVALID_THINKING', message: 'Select a supported thinking level before sending.' } }, 409);
+      if (!managesOwnModel) {
+        try {
+          const capabilities = getModelThinking(resolveModel(selection.model));
+          if (!capabilities.options.includes(selection.thinkingLevel as ModelThinkingValue)) {
+            return c.json({ ok: false, error: { code: 'INVALID_THINKING', message: 'Select a supported thinking level before sending.' } }, 409);
+          }
+        } catch {
+          return c.json({ ok: false, error: { code: 'MODEL_UNAVAILABLE', message: `Model unavailable: ${selection.model}` } }, 409);
         }
-      } catch {
-        return c.json({ ok: false, error: { code: 'MODEL_UNAVAILABLE', message: `Model unavailable: ${selection.model}` } }, 409);
       }
     }
     const endpoint = deps.service.endpointTools.registry.get(origin.data.endpointId)!;
@@ -178,6 +191,11 @@ export async function replaceLatestSessionTurn(
   conversationId: string,
   targetTurnId: string,
 ) {
+  const externalAgent = getExternalConversationAgent(conversationId);
+  if (externalAgent) {
+    const driver = getExternalAgentDriver(externalAgent.execution.kind);
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `Send a follow-up or start a new ${driver.label} session to revise a task.` } }, 400);
+  }
   const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
   if (!body || !conversationId || !targetTurnId) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid request' } }, 400);

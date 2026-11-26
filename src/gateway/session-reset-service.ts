@@ -1,4 +1,5 @@
 import type { AgentService } from '../agent/service.js';
+import { abortExternalTurn } from '../agent/external/index.js';
 import { cancelPhoneAssistance } from '../phone/assistance.js';
 import { getPhoneRuntime } from '../phone/runtime.js';
 import { isPersonalConversation } from '../personal-agent/repository.js';
@@ -35,7 +36,7 @@ export async function performSessionReset(
     return { ok: false, error: 'Personal AI conversation cannot be reset' };
   }
 
-  await abortEmbeddedRun(key);
+  await Promise.all([abortEmbeddedRun(key), abortExternalTurn(key)]);
 
   try {
     await deps.cancelConfigurationSetups(key);

@@ -6,6 +6,7 @@ import { endpointTurnClaimSchema } from '@xopcai/endpoint-tools-protocol';
 import { deviceTurnSourceContext, endpointClaimBelongsToPrincipal } from '../../../endpoint-tools/turn-context.js';
 import { browserPageContextToAgentContext } from '../../../agent/source-context/browser-page.js';
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
+import { getExternalAgent, getExternalAgentDriver, getExternalConversationAgent } from '../../../agent/external/index.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import { receiveSessionCommand, sessionCommandSnapshot } from '../../service/session-command-service.js';
@@ -37,7 +38,18 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
   if (!id.success || !parsed.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session command' } }, 400);
   const command = parsed.data;
   const principal = getGatewayPrincipal(c);
+  const externalAgent = 'creation' in command
+    ? getExternalAgent(command.creation.agentId)
+    : getExternalConversationAgent(id.data);
+  const externalDriver = externalAgent ? getExternalAgentDriver(externalAgent.execution.kind) : undefined;
+  if (externalDriver?.capabilities.requiresWorkspaceWrite && !hasGatewayScope(principal.scopes, 'workspace.write')) {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: `${externalDriver.label} requires workspace write access` } }, 403);
+  }
   if ('input' in command) {
+    if (externalDriver && !externalDriver.capabilities.supportsAttachments && (command.input.attachments?.length || command.input.contextRefs?.length
+      || command.input.browserContexts?.length || command.input.appContext)) {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `${externalDriver.label} Project sessions currently accept text messages only.` } }, 400);
+    }
     if (command.input.contextRefs?.some(ref => ref.kind === 'workbook') && !hasGatewayScope(principal.scopes, 'workspace.read')) {
       return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Workbook context requires workspace access' } }, 403);
     }

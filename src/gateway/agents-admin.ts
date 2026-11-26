@@ -129,6 +129,7 @@ export type CreateAgentBody = {
   workspace?: string;
   profile: NonNullable<AgentEntry['profile']>;
   specialistProfile?: AgentEntry['specialistProfile'];
+  execution?: AgentEntry['execution'];
 };
 
 export type AgentAdminHttpStatus = 400 | 404 | 409;
@@ -149,7 +150,9 @@ export async function createGatewayAgent(
     return { ok: false, error: `agent "${agentId}" already exists`, status: 409 };
   }
 
-  const workspace = body.workspace?.trim() ? resolveUserPath(body.workspace) : undefined;
+  const workspace = body.execution
+    ? undefined
+    : body.workspace?.trim() ? resolveUserPath(body.workspace) : undefined;
   try {
     await new AgentCatalogService().create({
       id: agentId,
@@ -157,6 +160,7 @@ export async function createGatewayAgent(
       ...(workspace ? { workspace } : {}),
       profile: structuredClone(body.profile),
       ...(body.specialistProfile ? { specialistProfile: body.specialistProfile } : {}),
+      ...(body.execution ? { execution: body.execution } : {}),
     });
     return { ok: true, data: { agentId, workspace: resolveAgentWorkspaceDir(agentId) } };
   } catch (error) {
@@ -182,8 +186,12 @@ export async function updateGatewayAgent(
   body: UpdateAgentBody,
 ): Promise<AgentAdminResult<void>> {
   const agentId = normalizeAgentId(agentIdRaw);
-  if (!new AgentCatalogRepository().get(agentId)) {
+  const existing = new AgentCatalogRepository().get(agentId);
+  if (!existing) {
     return { ok: false, error: `agent "${agentId}" not found`, status: 404 };
+  }
+  if (body.setDefault === true && existing.execution) {
+    return { ok: false, error: 'External runtime agents cannot be set as the default agent', status: 400 };
   }
   const patch: Partial<Omit<AgentEntry, 'id'>> = {};
   if (body.workspace !== undefined) patch.workspace = body.workspace?.trim() ? resolveUserPath(body.workspace) : undefined;

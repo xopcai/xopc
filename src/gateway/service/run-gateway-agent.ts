@@ -36,6 +36,7 @@ import type {
 } from '@xopcai/gateway-contract';
 
 import { formatAgentRunErrorForClient } from '../../agent/client-error-format.js';
+import { getExternalAgent, getExternalAgentDriver, runExternalProjectTurn } from '../../agent/external/index.js';
 
 import { ChatStreamMapper } from '../chat-stream/mapper.js';
 import { coalesceThinkingDeltas } from '../chat-stream/thinking-delta-coalescer.js';
@@ -247,10 +248,10 @@ export async function *runGatewayAgent(
         ...(webchatTranscriptId ? { transcriptId: webchatTranscriptId } : {}),
       });
 
-      const timezone = agentService.resolveUserTimezoneForSession(conversationId);
-      const stampedMessage = message.trimStart().startsWith('/')
+      const externalAgent = webchatMetadata && getExternalAgent(webchatMetadata.agentId);
+      const stampedMessage = externalAgent || message.trimStart().startsWith('/')
         ? message
-        : prependEnvelopeTimestamp(message, timezone);
+        : prependEnvelopeTimestamp(message, agentService.resolveUserTimezoneForSession(conversationId));
 
       const runAbort = runAbortControllers.get(runId);
       if (!runAbort) {
@@ -293,7 +294,22 @@ export async function *runGatewayAgent(
       let streamError: string | undefined;
       let embeddedAborted = false;
       try {
-        const eventStream = agentService.turnDispatcher.processDirectStreaming(
+        if (externalAgent && (!externalAgent.enabled || externalAgent.deletedAt || !webchatTranscriptId)) {
+          const driver = getExternalAgentDriver(externalAgent.execution.kind);
+          throw new Error(`This ${driver.label} Agent is unavailable.`);
+        }
+        const eventStream = externalAgent && webchatTranscriptId ? runExternalProjectTurn({
+          conversationId,
+          transcriptId: webchatTranscriptId,
+          agentId: externalAgent.id,
+          runtimeKind: externalAgent.execution.kind,
+          instructions: externalAgent.profile?.instructions,
+          content: message,
+          hasAttachmentsOrContext: Boolean(cappedAttachments?.length || runOptions?.sourceContexts?.some(context => context.kind !== 'device_context')),
+          runId,
+          clientMessageId: runOptions?.inputIdentity?.clientMessageId,
+          signal: mergedSignal,
+        }) : agentService.turnDispatcher.processDirectStreaming(
           stampedMessage,
           conversationId,
           origin,
@@ -391,9 +407,10 @@ export async function *runGatewayAgent(
           publishRealtime('sessions', 'run.completed', { conversationId, runId, status: terminalStatus, ...runOptions?.inputIdentity });
         }
         runAbortControllers.delete(runId);
-        const assistantPlainText = agentService.getLastAssistantPlainText(conversationId);
+        const assistantPlainText = externalAgent ? mapper.getLastAssistantText() : agentService.getLastAssistantPlainText(conversationId);
         const reviewHint = agentService.takeTaskReviewStreamHint(conversationId);
         try {
+          if (externalAgent) emit('session.transcript_updated', { key: conversationId });
           await agentService.outboundCoordinator.emitSessionTurnComplete({
             conversationId,
             channel: 'webchat',
@@ -402,7 +419,7 @@ export async function *runGatewayAgent(
             assistantPlainText,
             aborted: mergedSignal.aborted,
             ...(streamError !== undefined ? { streamError } : {}),
-            skipTaskReview: terminalStatus === 'suspended' || (reviewHint?.skipTaskReview ?? false),
+            skipTaskReview: Boolean(externalAgent) || terminalStatus === 'suspended' || (reviewHint?.skipTaskReview ?? false),
             outboundMetadata: {},
           });
         } catch (completionErr) {

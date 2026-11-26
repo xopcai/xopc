@@ -4,6 +4,7 @@ import useSWR from 'swr';
 
 import { fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import { fetchGatewayAgentEffectiveConfig } from '@/features/settings/agents-admin-api';
+import type { ExternalAgentKind } from '@/features/settings/types/agent-gateway';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 import { DEFAULT_THINKING } from './chat-session-defaults';
@@ -13,12 +14,15 @@ import type { ProjectSessionPreparation } from './use-chat-session-init';
 type Selection = { model: string; thinkingLevel: string };
 
 /** Resolve a concrete selection before a project chat allocates its session or environment. */
-export function usePreparedSessionModel(preparation: ProjectSessionPreparation | null) {
+export function usePreparedSessionModel(
+  preparation: ProjectSessionPreparation | null,
+  externalRuntime?: ExternalAgentKind,
+) {
   const token = useGatewayStore((state) => state.conversationId);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const [edited, setEdited] = useState<{ preparation: ProjectSessionPreparation; selection: Selection } | null>(null);
   const { data, error } = useSWR(
-    preparation ? ['prepared-session-model', baseUrl, token, preparation.create] : null,
+    preparation && !externalRuntime ? ['prepared-session-model', baseUrl, token, preparation.create] : null,
     async () => {
       const preference = modelPreferenceForAgent(readNewSessionPreferences(), preparation!.agentId);
       const [models, modelRef] = await Promise.all([
@@ -40,9 +44,10 @@ export function usePreparedSessionModel(preparation: ProjectSessionPreparation |
     },
     { revalidateOnFocus: false },
   );
-  const selection = edited?.preparation === preparation ? edited?.selection : data?.selection;
+  const externalSelection: Selection | undefined = externalRuntime ? { model: externalRuntime, thinkingLevel: 'off' } : undefined;
+  const selection = externalSelection ?? (edited?.preparation === preparation ? edited?.selection : data?.selection);
   const selected = data?.models.find((model) => model.id === selection?.model);
-  const ready = Boolean(selection?.model && selected);
+  const ready = Boolean(externalRuntime) || Boolean(selection?.model && selected);
   const explicitlySelected = edited?.preparation === preparation;
   const latest = useRef({ preparation, selection, ready, explicitlySelected });
   latest.current = { preparation, selection, ready, explicitlySelected };

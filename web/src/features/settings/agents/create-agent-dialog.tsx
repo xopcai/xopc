@@ -2,7 +2,9 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
+import { isExternalAgentKind, type ExternalAgentKind } from '@/features/settings/types/agent-gateway';
 import type { AgentsSettingsMessages, MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
@@ -14,6 +16,7 @@ export type ManualAgentDraft = {
   name: string;
   instructions: string;
   workspace: string;
+  execution: 'embedded' | ExternalAgentKind;
 };
 
 export function CreateAgentDialog({
@@ -60,6 +63,17 @@ export function CreateAgentDialog({
 
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
             {error ? <p role="alert" className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
+            <div className="space-y-1.5">
+              <label htmlFor="manual-agent-execution" className="block text-xs font-medium text-fg-muted">{messages.manualCreateExecution}</label>
+              <Select id="manual-agent-execution" value={draft.execution} disabled={busy}
+                onChange={event => onChange({ execution: isExternalAgentKind(event.target.value) ? event.target.value : 'embedded' })}>
+                <SelectOption value="embedded">xopc</SelectOption>
+                <SelectOption value="codex">Codex</SelectOption>
+                <SelectOption value="agy">Antigravity (AGY)</SelectOption>
+              </Select>
+              {draft.execution === 'codex' ? <p className="text-xs leading-5 text-fg-subtle">{messages.manualCreateCodexHint}</p> : null}
+              {draft.execution === 'agy' ? <p className="text-xs leading-5 text-fg-subtle">{messages.manualCreateAgyHint}</p> : null}
+            </div>
             <label htmlFor="manual-agent-name" className="block text-xs font-medium text-fg-muted">
               {messages.manualCreateName}
               <input
@@ -84,7 +98,7 @@ export function CreateAgentDialog({
               />
             </label>
 
-            <div>
+            {draft.execution === 'embedded' ? <div>
               <label htmlFor="manual-agent-workspace" className="block text-xs font-medium text-fg-muted">
                 {messages.manualCreateWorkspace}
               </label>
@@ -100,7 +114,7 @@ export function CreateAgentDialog({
                   inputClassName={`${inputClass} font-mono`}
                 />
               </div>
-            </div>
+            </div> : null}
           </div>
 
           <footer className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">

@@ -94,7 +94,6 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
   const sessionModel = sessionSlice?.model ?? '';
   const modelRegistry = useSWR(CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, { revalidateOnFocus: false });
   const hasConfiguredModels = (modelRegistry.data?.length ?? 0) > 0;
-  const modelConfigReady = isSessionModelReady(sessionSlice, modelRegistry.data);
   const modelConfigSaving = sessionSlice?.modelConfigSaving ?? false;
   const thinkingLevel = sessionSlice?.thinkingLevel ?? DEFAULT_THINKING;
   const reasoningLevel = sessionSlice?.reasoningLevel ?? 'on';
@@ -144,6 +143,10 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
     locationState,
     locationSearch,
   });
+  const currentExternal = chatAgentsData?.items.some(agent => agent.id === displayAgentId && Boolean(agent.execution));
+  const modelConfigReady = currentExternal
+    ? Boolean(sessionSlice && (sessionSlice.localDraft || sessionSlice.configVersion !== undefined))
+    : isSessionModelReady(sessionSlice, modelRegistry.data);
 
   const sessionRoutePending = Boolean(decodedKey !== undefined && focusedConversationId !== decodedKey);
   const sessionContentLoading = Boolean(
@@ -384,7 +387,8 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
     applyAgentConfig,
     patchInitUi,
   });
-  const preparedModel = usePreparedSessionModel(projectPreparation);
+  const preparedExternalRuntime = chatAgentsData?.items.find(agent => agent.id === projectPreparation?.agentId)?.execution;
+  const preparedModel = usePreparedSessionModel(projectPreparation, preparedExternalRuntime);
   useEffect(() => {
     if (projectPreparation && preparedModel.error) {
       useChatSessionStore.getState().setShellError(preparedModel.error instanceof Error

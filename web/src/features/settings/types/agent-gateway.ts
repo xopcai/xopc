@@ -51,6 +51,13 @@ export type AgentDefaults = {
     promptCache?: { mode: 'off' | 'auto'; lifetime: 'short' | 'long' };
   };
 };
+export const EXTERNAL_AGENT_KINDS = ['codex', 'agy'] as const;
+export type ExternalAgentKind = (typeof EXTERNAL_AGENT_KINDS)[number];
+
+export function isExternalAgentKind(value: unknown): value is ExternalAgentKind {
+  return typeof value === 'string' && (EXTERNAL_AGENT_KINDS as readonly string[]).includes(value);
+}
+
 export type AgentOverride = {
   id: string;
   enabled: boolean;
@@ -58,6 +65,7 @@ export type AgentOverride = {
   workspace?: string;
   profile?: AgentProfile;
   specialistProfile?: SpecialistProfile;
+  execution?: { kind: ExternalAgentKind };
   models?: AgentModelsOverride;
   skills?: SkillOverride;
   tools?: Record<string, ToolPolicy>;

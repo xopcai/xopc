@@ -47,6 +47,7 @@ export async function createGatewayAgent(body: {
   id?: string;
   profile: AgentProfile;
   workspace?: string;
+  execution?: AgentOverride['execution'];
 }): Promise<GatewayAgentsPayload & { createdAgentId: string }> {
   const response = await fetchJson<{ payload?: { agentId: string; agents: GatewayAgentsPayload } }>(apiUrl('/api/agents'), {
     method: 'POST',
@@ -60,7 +61,7 @@ export async function createGatewayAgent(body: {
 
 export async function updateGatewayAgent(
   agentId: string,
-  patch: Partial<Omit<AgentOverride, 'id' | 'enabled' | 'workspace' | 'models' | 'skills' | 'tools' | 'toolAllowlist' | 'runtime' | 'specialistProfile'>> & {
+  patch: Partial<Omit<AgentOverride, 'id' | 'enabled' | 'workspace' | 'models' | 'skills' | 'tools' | 'toolAllowlist' | 'runtime' | 'specialistProfile' | 'execution'>> & {
     expectedRevision?: number;
     specialistProfile?: AgentOverride['specialistProfile'] | null;
     workspace?: string | null;

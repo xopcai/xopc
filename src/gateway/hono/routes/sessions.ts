@@ -17,6 +17,11 @@ import { deleteMediaUrisNoLongerReferenced } from '../../../media/session-refere
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import type { StartupUnavailableGatewayMethod } from '../../startup-readiness.js';
 import { evictEmbeddedSessionRunner } from '../../../agent/embedded/session-runner.js';
+import {
+  getExternalAgentDriver,
+  getExternalConversationAgent,
+  hasExternalSessionBinding,
+} from '../../../agent/external/index.js';
 import { SessionEnvironmentService } from '../../../execution-environments/session-environment-service.js';
 import type { Project } from '../../../projects/types.js';
 import { deleteBrowserTabBinding } from '../../../storage/sqlite/browser-tab-binding-repository.js';
@@ -706,6 +711,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.post('/api/sessions/:key/compaction/restore', async (c) => {
     const key = c.req.param('key');
+    const external = getExternalConversationAgent(key);
+    if (external) {
+      const driver = getExternalAgentDriver(external.execution.kind);
+      return c.json({ ok: false, error: `${driver.label} sessions manage their own context window.` }, 400);
+    }
     const body = await c.req.json().catch(() => ({}));
     const compactionId = typeof body.compactionId === 'string' ? body.compactionId.trim() : '';
     if (!compactionId) {
@@ -730,6 +740,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.post('/api/sessions/:key/compaction/run', async (c) => {
     const key = c.req.param('key');
+    const external = getExternalConversationAgent(key);
+    if (external) {
+      const driver = getExternalAgentDriver(external.execution.kind);
+      return c.json({ ok: false, error: `${driver.label} sessions manage their own context window.` }, 400);
+    }
     const session = await service.sessions.getSession(key);
     if (!session) {
       return c.json({ ok: false, error: 'Session not found' }, 404);
@@ -820,12 +835,24 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
         return c.json({ ok: false, error: 'Project not found' }, 404);
       }
       const currentProjectId = (await service.sessions.getSession(key))?.projectId ?? null;
-      if (requestedProjectId !== currentProjectId && environments.get(key)) {
-        return c.json({
-          ok: false,
-          code: 'execution_environment_active',
-          error: 'Release the session execution environment before changing its project',
-        }, 409);
+      if (requestedProjectId !== currentProjectId) {
+        const external = getExternalConversationAgent(key);
+        if (external) {
+          const driver = getExternalAgentDriver(external.execution.kind);
+          if (driver.capabilities.requiresWorkspace && (!requestedProjectId || !service.projects.get(requestedProjectId)?.workspaceRoot?.trim())) {
+            return c.json({ ok: false, error: `${driver.label} requires a Project with a workspace` }, 400);
+          }
+          if (hasExternalSessionBinding(key)) {
+            return c.json({ ok: false, error: `Cannot change the project of an active ${driver.label} session. Reset or start a new session instead.` }, 409);
+          }
+        }
+        if (environments.get(key)) {
+          return c.json({
+            ok: false,
+            code: 'execution_environment_active',
+            error: 'Release the session execution environment before changing its project',
+          }, 409);
+        }
       }
     }
     const result = await service.sessions.patch(key, patch);
@@ -886,6 +913,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.post('/api/sessions/:key/fork', async (c) => {
     const key = c.req.param('key');
+    const external = getExternalConversationAgent(key);
+    if (external) {
+      const driver = getExternalAgentDriver(external.execution.kind);
+      return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new Project session instead.` }, 400);
+    }
     const body = await c.req.json().catch(() => ({}));
     const targetKey = typeof body.targetKey === 'string' ? body.targetKey : '';
     if (!targetKey.trim()) {
@@ -903,6 +935,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // POST /api/sessions/:key/fork-at-turn — server-generated chat session fork.
   authenticated.post('/api/sessions/:key/fork-at-turn', async (c) => {
     const key = c.req.param('key');
+    const external = getExternalConversationAgent(key);
+    if (external) {
+      const driver = getExternalAgentDriver(external.execution.kind);
+      return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new Project session instead.` }, 400);
+    }
     const body = await c.req.json().catch(() => ({}));
     const lastTurnId = typeof body.lastTurnId === 'string' ? body.lastTurnId.trim() : '';
     if (!lastTurnId) {
@@ -920,6 +957,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.post('/api/sessions/:key/fork-row', async (c) => {
     const key = c.req.param('key');
+    const external = getExternalConversationAgent(key);
+    if (external) {
+      const driver = getExternalAgentDriver(external.execution.kind);
+      return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new Project session instead.` }, 400);
+    }
     const body = await c.req.json().catch(() => ({}));
     const targetKey = typeof body.targetKey === 'string' ? body.targetKey : '';
     const throughRow = typeof body.throughRow === 'number' ? Math.trunc(body.throughRow) : NaN;
@@ -941,6 +983,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // DELETE /api/sessions/:key/messages — atomically delete one visible user turn from raw rows.
   authenticated.delete('/api/sessions/:key/messages', async (c) => {
     const key = c.req.param('key');
+    const external = getExternalConversationAgent(key);
+    if (external) {
+      const driver = getExternalAgentDriver(external.execution.kind);
+      return c.json({ error: `${driver.label} sessions cannot delete individual turns. Reset or start a new session instead.` }, 400);
+    }
     if (service.voiceRealtime?.hasConversation(key)) return c.json({ error: 'End the voice call before editing its history' }, 409);
     const body = await c.req.json().catch(() => ({}));
     const userRoundIndex =

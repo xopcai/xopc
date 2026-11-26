@@ -1,11 +1,18 @@
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../../../providers/index.js', () => ({ resolveModel: () => ({ provider: 'test', id: 'one', reasoning: true }) }));
+vi.mock('../../../../providers/index.js', () => ({
+  resolveModel: (ref: string) => {
+    if (ref === 'codex') throw new Error('Model unavailable: codex');
+    return { provider: 'test', id: 'one', reasoning: true };
+  },
+}));
 import { patchChatModelConfig } from '../chat-model-config.js';
 import { submitSessionInput } from '../session-input-handler.js';
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 import type { EndpointConnectionSnapshot } from '../../../../endpoint-tools/registry.js';
+import { AgentCatalogRepository } from '../../../../agent-catalog/repository.js';
+import { createConversation } from '../../../../storage/sqlite/conversation-repository.js';
 import { useTestDatabase } from '../../../../storage/sqlite/__tests__/test-database.js';
 
 useTestDatabase();
@@ -70,5 +77,67 @@ describe('chat model configuration and input acceptance', () => {
     const { patch } = fixture();
     const results = await Promise.all([patch(), patch()]);
     expect(results.map((response) => response.status).sort()).toEqual([200, 409]);
+  });
+
+  it('allows Codex text input with configVersion while rejecting model patches and attachments', async () => {
+    const catalog = new AgentCatalogRepository();
+    catalog.ensureInitialized();
+    catalog.create({ id: 'codex-agent', execution: { kind: 'codex' } }, { ready: true });
+    const session = createConversation({ agentId: 'codex-agent' }, '');
+    const service = {
+      endpointTools: { registry: { verifyTurnClaim: () => true, get: () => ({
+        endpointId: 'tab-1', principalId: 'owner', displayName: 'Browser tab',
+        platform: 'chrome', kind: 'browser', connectionId: 'connection',
+        appVersion: '1', availability: 'foreground', lastHeartbeatAt: Date.now(), tools: [],
+      } satisfies EndpointConnectionSnapshot) } },
+      sessions: {
+        getAgentConfig: vi.fn(async () => ({ model: 'codex', thinkingLevel: 'off', configVersion: 1, fixedModel: true })),
+        patchAgentConfig: vi.fn(),
+      },
+      submitSessionInput: vi.fn(async () => ({ ok: true, state: {} })),
+    };
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      setGatewayPrincipal(c, { kind: 'owner', principalId: 'owner', scopes: ['gateway.admin', 'workspace.write'] });
+      await next();
+    });
+    app.patch('/config', async (c) => patchChatModelConfig(c, service as never, session.key, await c.req.json()));
+    app.post('/input', (c) => submitSessionInput(c, { service } as never, session.key));
+
+    const patchRes = await app.request('/config', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'test/two', configVersion: 1 }),
+    });
+    expect(patchRes.status).toBe(400);
+    expect(service.sessions.patchAgentConfig).not.toHaveBeenCalled();
+
+    const attRes = await app.request('/input', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        content: 'Inspect',
+        attachments: [{ type: 'image', uri: 'file:///tmp/a.png', mimeType: 'image/png' }],
+        clientMessageId: 'codex-att',
+        delivery: 'next',
+        configVersion: 1,
+        origin: { type: 'endpoint', endpointId: 'tab-1', token: 'a'.repeat(32) },
+      }),
+    });
+    expect(attRes.status).toBe(400);
+
+    const textRes = await app.request('/input', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        content: 'Run tests',
+        clientMessageId: 'codex-text',
+        delivery: 'next',
+        configVersion: 1,
+        origin: { type: 'endpoint', endpointId: 'tab-1', token: 'a'.repeat(32) },
+      }),
+    });
+    expect(textRes.status).toBe(202);
+    expect(service.submitSessionInput).toHaveBeenCalledTimes(1);
   });
 });

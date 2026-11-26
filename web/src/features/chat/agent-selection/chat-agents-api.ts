@@ -1,4 +1,5 @@
 import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
+import { isExternalAgentKind, type ExternalAgentKind } from '@/features/settings/types/agent-gateway';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -9,6 +10,7 @@ export type ChatAgentOption = {
   avatar?: string;
   role?: string;
   purpose?: string;
+  execution?: ExternalAgentKind;
   responsibilities?: string[];
   skills?: string[];
 };
@@ -40,7 +42,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
           name?: string;
           description?: string;
           avatar?: string;
-          override?: { purpose?: string };
+          override?: { purpose?: string; execution?: { kind?: string } };
           effective?: { skills?: { mode?: string; include?: string[] } };
         }>;
       };
@@ -54,6 +56,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
         .map((a) => ({
           id: a.id.trim().toLowerCase(),
           ...(a.override?.purpose ? { purpose: a.override.purpose } : {}),
+          ...(isExternalAgentKind(a.override?.execution?.kind) ? { execution: a.override.execution.kind } : {}),
           name: typeof a.name === 'string' && a.name.trim() ? a.name.trim() : undefined,
           description:
             typeof a.description === 'string' && a.description.trim() ? a.description.trim() : undefined,
@@ -71,7 +74,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
   const data = (await fetchGatewayConfigSwrResponse()) as {
     payload?: {
       config?: {
-        agents?: { defaultId?: string; list?: Array<{ id?: string; purpose?: string; enabled?: boolean }> };
+        agents?: { defaultId?: string; list?: Array<{ id?: string; purpose?: string; execution?: { kind?: string }; enabled?: boolean }> };
       };
     };
   };
@@ -85,6 +88,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
     .map((e) => ({
       id: e.id.trim().toLowerCase(),
       ...(e.purpose ? { purpose: e.purpose } : {}),
+      ...(isExternalAgentKind(e.execution?.kind) ? { execution: e.execution.kind } : {}),
     }));
   if (items.length === 0) {
     return { defaultId, items: [{ id: defaultId }] };

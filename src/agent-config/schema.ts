@@ -165,12 +165,21 @@ export const AgentProfileSchema = z.object({
   instructions: z.string().trim().min(1).optional(),
 }).strict();
 
+export const EXTERNAL_AGENT_KINDS = ['codex', 'agy'] as const;
+export type ExternalAgentKind = (typeof EXTERNAL_AGENT_KINDS)[number];
+
+export const ExternalAgentExecutionSchema = z.object({
+  kind: z.enum(EXTERNAL_AGENT_KINDS),
+}).strict();
+export type ExternalAgentExecution = z.infer<typeof ExternalAgentExecutionSchema>;
+
 export const AgentEntrySchema = z.object({
   id: AgentIdSchema,
   enabled: z.boolean().default(true),
   workspace: z.string().trim().min(1).optional(),
   profile: AgentProfileSchema.optional(),
   purpose: z.enum(['specialist', 'task_dispatcher']).optional(),
+  execution: ExternalAgentExecutionSchema.optional(),
   specialistProfile: SpecialistProfileSchema.optional(),
   models: AgentModelsOverrideSchema.optional(),
   skills: SkillOverrideSchema.optional(),

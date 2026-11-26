@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 
+import { getExternalAgentDriver, getExternalConversationAgent } from '../../../agent/external/index.js';
 import { withModelConfigLock } from '../../../session/model-config-lock.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -12,6 +13,11 @@ export async function patchChatModelConfig(
   return withModelConfigLock(conversationId, async () => {
     const changesModel = body.model !== undefined || body.thinkingLevel !== undefined;
     if (changesModel) {
+      const external = getExternalConversationAgent(conversationId);
+      const driver = external ? getExternalAgentDriver(external.execution.kind) : undefined;
+      if (driver?.capabilities.managesOwnModel) {
+        return c.json({ ok: false, error: `${driver.label} sessions manage their own model selection` }, 400);
+      }
       if (body.thinkingLevel !== undefined && typeof body.thinkingLevel !== 'string') {
         return c.json({ ok: false, error: 'Invalid thinking level' }, 400);
       }

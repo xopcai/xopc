@@ -33,6 +33,7 @@ import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profi
 import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
 import { AgentRunSupervisor } from '../orchestration/agent-run-supervisor.js';
 import { projectTurnOutcome } from '../../session/turn-outcome-projector.js';
+import { getExternalAgentDriver, getExternalConversationAgent } from '../external/index.js';
 import { appendDynamicPromptSection } from '../prompt/cache-boundary.js';
 import { prepareNativeMcpConfig } from '../mcp/native-mcp.js';
 import { materializeNativeExternalTools } from './external-tool-discovery.js';
@@ -74,6 +75,11 @@ export type RunEmbeddedForSessionParams = {
 export async function runEmbeddedTurnForSession(
   params: RunEmbeddedForSessionParams,
 ): Promise<RunXopcEmbeddedTurnResult> {
+  const external = getExternalConversationAgent(params.conversationId);
+  if (external) {
+    const driver = getExternalAgentDriver(external.execution.kind);
+    return { ok: false, retryable: false, errorMessage: `Use a Project chat to run this ${driver.label} Agent.` };
+  }
   const input = { ...params, runId: params.runId ?? crypto.randomUUID() };
   return traceRun('agent.run', { conversationId: input.conversationId, runId: input.runId },
     () => withRsiSkillTurn(input.conversationId, input.runId, () => runEmbeddedTurnForSessionInner(input)), input.userMessage);

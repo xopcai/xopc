@@ -1,6 +1,7 @@
 import type { SessionCreation, SessionInputCommand, SessionMaterializeCommand, ModelThinkingValue } from '@xopcai/gateway-contract';
 
 import type { AgentSourceContext } from '../../agent/source-context/types.js';
+import { getExternalAgent, getExternalAgentDriver, getExternalConversationAgent } from '../../agent/external/index.js';
 import { resolveProjectAgentId } from '../../projects/index.js';
 import { resolveModel } from '../../providers/index.js';
 import { getModelThinking } from '../../providers/model-thinking.js';
@@ -27,8 +28,20 @@ function validateCreation(service: GatewayService, creation: SessionCreation): S
     explicitAgentId: creation.agentId, projectId: creation.projectId ?? undefined });
   if (agentId !== creation.agentId) throw new Error('Invalid agent identity');
   if (creation.execution && !project?.workspaceRoot?.trim()) throw new Error('Project requires a workspace');
-  const model = resolveModel(creation.model);
-  if (!getModelThinking(model).options.includes(creation.thinkingLevel as ModelThinkingValue)) throw new Error('Unsupported model thinking level');
+  const externalAgent = getExternalAgent(agentId);
+  if (externalAgent) {
+    const driver = getExternalAgentDriver(externalAgent.execution.kind);
+    if (driver.capabilities.requiresWorkspace && !project?.workspaceRoot?.trim()) {
+      throw new Error(`${driver.label} requires a Project with a workspace`);
+    }
+    if (!driver.capabilities.managesOwnModel) {
+      const model = resolveModel(creation.model);
+      if (!getModelThinking(model).options.includes(creation.thinkingLevel as ModelThinkingValue)) throw new Error('Unsupported model thinking level');
+    }
+  } else {
+    const model = resolveModel(creation.model);
+    if (!getModelThinking(model).options.includes(creation.thinkingLevel as ModelThinkingValue)) throw new Error('Unsupported model thinking level');
+  }
   return project?.workspaceRoot?.trim() ? { mode: 'local_checkout' } : null;
 }
 
@@ -41,7 +54,13 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
     if (personal && 'creation' in command && command.creation.agentId !== personal.agentId) {
       throw new SessionCommandError('BAD_REQUEST', 'Personal AI identity is fixed');
     }
-    const configuredThinking = personal ? undefined : ('creation' in command
+    const externalAgent = 'creation' in command
+      ? getExternalAgent(command.creation.agentId)
+      : getExternalConversationAgent(conversationId);
+    const managesOwnModel = externalAgent
+      ? getExternalAgentDriver(externalAgent.execution.kind).capabilities.managesOwnModel
+      : false;
+    const configuredThinking = personal || managesOwnModel ? undefined : ('creation' in command
       ? resolveEffectiveAgentConfigForAgent(command.creation.agentId)
       : resolveEffectiveAgentConfigForSession(conversationId)).config.runtime.thinkingLevel;
     if (configuredThinking && 'creation' in command && command.creation.thinkingLevel !== configuredThinking) {
