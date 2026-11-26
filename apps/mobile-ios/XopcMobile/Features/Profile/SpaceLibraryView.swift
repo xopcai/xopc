@@ -91,8 +91,11 @@ struct SpaceLibraryView: View {
     let configuration: GatewayConfiguration
     let onOpenSource: (LibraryOrigin) -> Void
     let onUseInChat: (MessageAttachment, LibraryOrigin?) async throws -> Void
+    var onOpenSidebar: (() -> Void)?
+    var retapToken = 0
     @Environment(\.locale) private var locale
     @Environment(\.mobileTheme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("navigation.library-scope") private var scope = LibraryScope.all
     @State private var query = ""
     @AppStorage("navigation.library-kind") private var kind = ""
@@ -178,12 +181,20 @@ struct SpaceLibraryView: View {
         }
         .searchable(text: $query, prompt: Text(verbatim: label("搜索资料", "Search files")))
         .toolbar {
-            Menu {
-                Picker(label("资料类型", "File type"), selection: $kind) {
-                    Text(label("全部类型", "All types")).tag("")
-                    ForEach(kinds, id: \.self) { type in Text(typeName(type)).tag(type) }
+            if let onOpenSidebar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
+                        .accessibilityIdentifier("chat-header-sidebar")
                 }
-            } label: { Label(label("资料类型", "File type"), systemImage: "line.3.horizontal.decrease.circle") }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker(label("资料类型", "File type"), selection: $kind) {
+                        Text(label("全部类型", "All types")).tag("")
+                        ForEach(kinds, id: \.self) { type in Text(typeName(type)).tag(type) }
+                    }
+                } label: { Label(label("资料类型", "File type"), systemImage: "line.3.horizontal.decrease.circle") }
+            }
         }
         .onChange(of: scope) { query = ""; undo = nil }
         .task(id: filters + [String(refresh), ComposerDraftStore.accountScope(configuration)]) {
@@ -202,45 +213,59 @@ struct SpaceLibraryView: View {
     }
 
     private var libraryList: some View {
-        List {
-            Section {
-                if loading, items.isEmpty {
-                    MobileListSkeleton(rows: 5)
+        ScrollViewReader { scroller in
+            List {
+                Section {
+                    Color.clear
+                        .frame(height: 0)
+                        .id("library-list-top")
+                        .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
-                } else if failed {
-                    MobileErrorView(
-                        message: label("加载失败", "Could not load"),
-                        retryLabel: label("重试", "Retry")
-                    ) { refresh += 1 }
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                } else if items.isEmpty {
-                    MobileEmptyState(message: emptyMessage, systemImage: "folder")
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                }
-                ForEach(items) { item in
-                    Button {
-                        selectedItem = item
-                    } label: {
-                        row(item)
+                    if loading, items.isEmpty {
+                        MobileListSkeleton(rows: 5)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    } else if failed {
+                        MobileErrorView(
+                            message: label("加载失败", "Could not load"),
+                            retryLabel: label("重试", "Retry")
+                        ) { refresh += 1 }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    } else if items.isEmpty {
+                        MobileEmptyState(message: emptyMessage, systemImage: "folder")
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("space-item-\(item.id)")
-                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                    ForEach(items) { item in
+                        Button {
+                            selectedItem = item
+                        } label: {
+                            row(item)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("space-item-\(item.id)")
+                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
+                    if let cursor {
+                        Button(label("加载更多", "Load more")) { Task { await load(filters, after: cursor) } }
+                            .disabled(loading)
+                    }
                 }
-                if let cursor {
-                    Button(label("加载更多", "Load more")) { Task { await load(filters, after: cursor) } }
-                        .disabled(loading)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .refreshable { await load(filters) }
+            .onChange(of: retapToken) {
+                guard retapToken > 0 else { return }
+                MobileMotion.perform(MobileMotion.standardDuration, reduceMotion: reduceMotion) {
+                    scroller.scrollTo("library-list-top", anchor: .top)
                 }
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .refreshable { await load(filters) }
     }
 
     private var emptyMessage: String {

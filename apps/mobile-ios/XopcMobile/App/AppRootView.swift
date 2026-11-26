@@ -7,18 +7,21 @@ import UIKit
 struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appState = AppState()
     @State private var push = MobilePush.shared
     @State private var realtimeVoiceCall = RealtimeVoiceCall()
     @State private var projectChat = ProjectChatPresentation()
     @State private var personalAgent = PersonalAgentState()
     @State private var personalReadTarget: PersonalReadTarget?
+    @State private var personalWorking = false
+    @State private var hasPendingRecording = false
     @State private var settingsPresented = false
     @State private var sidebarOpen = false
     @State private var composerFocused = false
+    @State private var keyboardVisible = false
     @State private var phoneVisible = false
     @State private var actionPanelVisible = false
-    @State private var reopenSidebar = false
     @State private var recentConversations: [ConversationSummary]?
     @State private var recentNextOffset: Int?
     @State private var recentScope: String?
@@ -36,7 +39,6 @@ struct AppRootView: View {
     @State private var musicSourceToOpen: GeneratedMusicTrack?
     @AppStorage("app.language") private var language = AppLanguage.system.rawValue
     @AppStorage("app.appearance") private var appearance = AppAppearance.system.rawValue
-
     @AppStorage("app.colorPreset") private var colorPreset = MobileThemePreset.default.rawValue
 
     private var mobileTheme: MobileTheme {
@@ -155,6 +157,12 @@ struct AppRootView: View {
                 music.checkpoint()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            keyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardVisible = false
+        }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { notification in
             if notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ==
                 AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
@@ -182,24 +190,63 @@ struct AppRootView: View {
         guard let track = musicSourceToOpen else { return }
         musicSourceToOpen = nil
         let configuration = appState.gatewayConfiguration
-        guard track.configurationScope == ComposerDraftStore.accountScope(configuration),
-              !appState.homePath.isEmpty || appState.selectedConversation?.id != track.conversationID else { return }
+        guard track.configurationScope == ComposerDraftStore.accountScope(configuration) else { return }
         if let record = personalAgent.record(using: configuration), record.conversationId == track.conversationID {
-            appState.openPersonalConversation(record, remember: true)
-        } else {
-            appState.openConversation(id: track.conversationID, title: track.source, agentId: track.sourceAgentID ?? "main")
+            appState.openPersonalAgent(record)
+        } else if appState.activeSessionConversation?.id != track.conversationID {
+            appState.openConversation(id: track.conversationID, title: track.source, agentId: track.sourceAgentID ?? defaultAgentID)
         }
     }
 
+    private var fullScreenOverlayActive: Bool {
+        settingsPresented
+            || messageLinks.destination != nil
+            || music.expanded
+            || (realtimeVoiceCall.phase != .idle && realtimeVoiceCall.expanded)
+    }
+
+    private var showBottomTabBar: Bool {
+        appState.activeStack.isEmpty
+            && !composerFocused
+            && !keyboardVisible
+            && !phoneVisible
+            && !actionPanelVisible
+            && !fullScreenOverlayActive
+            && projectChat.conversationID == nil
+    }
+
+    private var showsShellMusicDock: Bool {
+        guard projectChat.conversationID == nil else { return false }
+        let showingInlineChatDock = !phoneVisible && (appState.isShowingAdaRoot || appState.activeSessionRoute != nil)
+        return !showingInlineChatDock
+    }
+
     private var homeShell: some View {
-        NavigationStack(path: $appState.homePath) {
-            homeChatRoot
-                .toolbar(.hidden, for: .navigationBar)
-                .navigationDestination(for: HomeDestination.self, destination: destination)
+        ZStack {
+            tabStack(for: .ada) { adaRootContainer }
+            tabStack(for: .workbench) { workbenchRoot }
+            tabStack(for: .notes) { notesRoot }
+            tabStack(for: .library) { libraryRoot }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !appState.homePath.isEmpty || phoneVisible, projectChat.conversationID == nil {
-                GeneratedMusicDock(playback: music)
+            VStack(spacing: 0) {
+                if showsShellMusicDock {
+                    GeneratedMusicDock(playback: music)
+                }
+                if showBottomTabBar {
+                    FloatingTabBar(
+                        configuration: appState.gatewayConfiguration,
+                        selectedTab: appState.selectedTab,
+                        personalAgent: personalAgent.record(using: appState.gatewayConfiguration),
+                        personalUnread: personalAgent.unread(using: appState.gatewayConfiguration)?.unreadCount ?? 0,
+                        personalWorking: personalWorking,
+                        pendingAttention: pendingAttention,
+                        hasPendingRecording: hasPendingRecording,
+                        onSelect: { tab in
+                            appState.switchTab(tab)
+                        }
+                    )
+                }
             }
         }
         .modifier(ChatSidebarPresentation(isOpen: sidebarPresented && !linkedProjectChat, canOpenBySwipe: canDragSidebar,
@@ -220,17 +267,28 @@ struct AppRootView: View {
                 do { try await Task.sleep(for: .seconds(30)) } catch { return }
             }
         }
+        .task(id: PendingRecordingLoad(configuration: appState.gatewayConfiguration, active: scenePhase == .active)) {
+            guard scenePhase == .active else { return }
+            let configuration = appState.gatewayConfiguration
+            let pending = try? await PendingVoiceNoteStore(gatewayURL: configuration.baseURL).load()
+            guard !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
+            hasPendingRecording = pending != nil
+        }
         .task(id: appState.gatewayConfiguration) {
             await loadSidebarAgents(using: appState.gatewayConfiguration)
         }
         .task(id: HomeChatLoad(configuration: appState.gatewayConfiguration,
-                               needsSelection: appState.selectedConversation == nil, retry: homeRetry))
+                               needsSelection: appState.personalConversation == nil, retry: homeRetry))
         {
             let configuration = appState.gatewayConfiguration
             await personalAgent.refresh(using: configuration)
-            guard appState.selectedConversation == nil, !Task.isCancelled,
-                  configuration == appState.gatewayConfiguration, personalAgent.errorMessage == nil else { return }
-            await openPersonalAgent(remember: false)
+            guard !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
+            if let record = personalAgent.record(using: configuration), record.isReady {
+                appState.syncPersonalAgent(record)
+                return
+            }
+            guard personalAgent.errorMessage == nil else { return }
+            await openPersonalAgent(navigateToAda: false)
         }
         .task(id: SidebarLoad(configuration: appState.gatewayConfiguration, revision: recentRevision)) {
             await loadRecent(using: appState.gatewayConfiguration)
@@ -249,7 +307,6 @@ struct AppRootView: View {
         }
         .onChange(of: ComposerDraftStore.accountScope(appState.gatewayConfiguration)) {
             setSidebar(false)
-            reopenSidebar = false
             recentUpdatedAt = nil
             recentConversations = nil
             recentDeleteFailures = []
@@ -257,13 +314,15 @@ struct AppRootView: View {
             recentScope = nil
             recentError = false
             pendingAttention = 0
+            personalWorking = false
+            hasPendingRecording = false
+            personalReadTarget = nil
             defaultAgentID = "main"
             sidebarAgents = [:]
         }
-        .onChange(of: appState.selectedConversation?.isDraft) { wasDraft, isDraft in
-            if wasDraft == true, isDraft == false {
-                recentUpdatedAt = nil
-            }
+        .onChange(of: appState.sessionPromotionRevision) {
+            recentUpdatedAt = nil
+            recentRevision += 1
         }
         .onChange(of: appState.listCacheRevision) {
             recentUpdatedAt = nil
@@ -273,40 +332,59 @@ struct AppRootView: View {
             recentError = false
             recentRevision += 1
         }
-        .onChange(of: appState.homePath) { old, current in
-            guard !old.isEmpty, current.isEmpty else { return }
-            if reopenSidebar {
-                setSidebar(true)
-            }
-            reopenSidebar = false
-        }
     }
 
-    @ViewBuilder private var homeChatRoot: some View {
+    @ViewBuilder
+    private func tabStack(for tab: MobileTab, @ViewBuilder root: () -> some View) -> some View {
+        let isSelected = appState.selectedTab == tab
+        NavigationStack(path: appState.pathBinding(for: tab)) {
+            root()
+                .navigationDestination(for: HomeDestination.self) { route in
+                    destination(route, in: tab)
+                }
+        }
+        .opacity(isSelected ? 1 : 0)
+        .allowsHitTesting(isSelected)
+        .accessibilityHidden(!isSelected)
+        .zIndex(isSelected ? 1 : 0)
+    }
+
+    @ViewBuilder private var adaRootContainer: some View {
         if #available(iOS 18, *) {
-            chatScreen.containerBackground(mobileTheme.canvas, for: .navigation)
+            adaRootScreen
+                .toolbar(.hidden, for: .navigationBar)
+                .containerBackground(mobileTheme.canvas, for: .navigation)
         } else {
-            chatScreen
+            adaRootScreen
+                .toolbar(.hidden, for: .navigationBar)
         }
     }
 
-    private var chatScreen: some View {
+    private var adaRootScreen: some View {
         let configuration = appState.gatewayConfiguration
+        let isAdaRootActive = appState.isShowingAdaRoot
         return AssistantView(
             configuration: configuration,
-            isActive: appState.homePath.isEmpty,
+            isActive: isAdaRootActive,
             realtimeVoiceCall: realtimeVoiceCall,
-            conversation: appState.selectedConversation,
+            conversation: appState.personalConversation,
             personalAgent: personalAgent.record(using: configuration),
             onStartConversation: appState.startConversation,
             onStartScopedConversation: appState.startScopedConversation,
-            onConversationUpdated: appState.updateConversation,
+            onConversationUpdated: appState.updatePersonalConversation,
             onOpenSettings: { settingsPresented = true },
-            onInputFocusChanged: { composerFocused = $0 },
+            onInputFocusChanged: { focused in
+                if isAdaRootActive || !focused {
+                    composerFocused = focused
+                }
+            },
+            bottomComposerSpacing: showBottomTabBar ? 11 : 4,
+            scrollToLatestToken: appState.retapRevision(for: .ada),
+            onRunningStateChanged: { personalWorking = $0 },
             onOpenSidebar: { setSidebar(true) },
-            onOpenProgress: { navigate(.progress) },
-            onOpenPersonalOverview: { navigate(.personalOverview(allowsConversationSharing: $0)) },
-            onConversationUnavailable: { id in await recoverUnavailableConversation(id, using: configuration) },
+            onOpenProgress: { appState.switchTab(.workbench) },
+            onOpenPersonalOverview: { appState.push(.personalOverview(allowsConversationSharing: $0), in: .ada) },
+            onConversationUnavailable: { _ in },
             onPersonalReadTargetChanged: { personalReadTarget = $0 },
             personalUnread: personalUnreadLoad.viewed == nil ? nil : personalAgent.unread(using: configuration),
             pendingAttention: pendingAttention,
@@ -314,50 +392,123 @@ struct AppRootView: View {
             homeChatError: personalAgent.errorMessage,
             onRetryHomeChat: { homeRetry += 1 },
             onPhoneVisibilityChanged: { phoneVisible = $0 },
-            onActionPanelVisibilityChanged: { actionPanelVisible = $0 },
+            onActionPanelVisibilityChanged: { shown in
+                if isAdaRootActive || !shown {
+                    actionPanelVisible = shown
+                }
+            },
             externalIntake: appState.externalIntake,
             onExternalIntakeFinished: appState.externalIntakeFinished
         ) { composer in composer }
     }
 
+    private var workbenchRoot: some View {
+        let configuration = appState.gatewayConfiguration
+        return WorkPagesView(
+            configuration: configuration,
+            initialPage: .progress,
+            isTabActive: appState.selectedTab == .workbench && appState.path(for: .workbench).isEmpty,
+            retapToken: appState.retapRevision(for: .workbench),
+            onOpenSidebar: { setSidebar(true) },
+            onNavigate: { route in appState.push(route, in: .workbench) },
+            onOpenConversation: appState.openConversation
+        ) {
+            appState.switchTab(.library)
+        }
+    }
+
+    private var notesRoot: some View {
+        NotesView(
+            configuration: appState.gatewayConfiguration,
+            onOpenConversation: appState.openConversation,
+            onOpenSidebar: { setSidebar(true) },
+            retapToken: appState.retapRevision(for: .notes),
+            onPendingVoiceNoteChanged: { hasPendingRecording = $0 }
+        )
+    }
+
+    private var libraryRoot: some View {
+        let configuration = appState.gatewayConfiguration
+        return SpaceLibraryView(
+            configuration: configuration,
+            onOpenSource: { source in
+                if source.kind == "task", let taskID = source.taskId {
+                    appState.openTaskChat(taskID: taskID, in: .library)
+                } else if source.kind == "automation", let runID = source.automationRunId {
+                    appState.push(.libraryAutomationRun(runID), in: .library)
+                } else {
+                    appState.openConversation(id: source.conversationId, title: source.label ?? "", agentId: defaultAgentID)
+                }
+            },
+            onUseInChat: { attachment, origin in
+                try await appState.startLibraryConversation(
+                    configuration: configuration,
+                    agentID: defaultAgentID,
+                    attachment: attachment,
+                    origin: origin
+                )
+            },
+            onOpenSidebar: { setSidebar(true) },
+            retapToken: appState.retapRevision(for: .library)
+        )
+    }
+
     private var personalUnreadLoad: PersonalUnreadLoad {
-        let canRead = appState.homePath.isEmpty && !sidebarOpen && !settingsPresented && !phoneVisible &&
+        let canRead = appState.isShowingAdaRoot && !sidebarOpen && !settingsPresented && !phoneVisible &&
             messageLinks.destination == nil && (realtimeVoiceCall.phase == .idle || !realtimeVoiceCall.expanded) && !music.expanded &&
-            personalReadTarget?.conversationID == appState.selectedConversation?.id
+            personalReadTarget?.conversationID == appState.personalConversation?.id
         return PersonalUnreadLoad(configuration: appState.gatewayConfiguration, foreground: scenePhase == .active,
                                   sidebarOpen: sidebarOpen, viewed: canRead ? personalReadTarget : nil)
     }
 
-    private func recoverUnavailableConversation(_ id: String, using configuration: GatewayConfiguration) async {
-        guard configuration == appState.gatewayConfiguration, appState.selectedConversation?.id == id else { return }
-        do {
-            let record: PersonalAgentRecord? = if let current = personalAgent.record(using: configuration) {
-                current
-            } else {
-                try await GatewayClient(configuration: configuration).fetchPersonalAgent()
+    private var recentOrdinaryConversations: [ConversationSummary] {
+        let currentScope = ComposerDraftStore.accountScope(appState.gatewayConfiguration)
+        guard recentScope == currentScope, let recents = recentConversations else { return [] }
+        let personalID = personalAgent.record(using: appState.gatewayConfiguration)?.conversationId
+        return recents.filter { $0.id != personalID && $0.isRecentSidebarCandidate }
+            .sorted {
+                ($0.status == "pinned") == ($1.status == "pinned")
+                    ? $0.updatedAt > $1.updatedAt : $0.status == "pinned"
             }
-            guard record?.conversationId != id, !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
-            appState.conversationUnavailable(id)
-        } catch {
-            // Keep the selection retryable if the Gateway cannot identify the Personal Agent.
-        }
     }
 
     // swiftlint:disable:next cyclomatic_complexity function_body_length
-    @ViewBuilder private func destination(_ route: HomeDestination) -> some View {
+    @ViewBuilder private func destination(_ route: HomeDestination, in tab: MobileTab) -> some View {
         let configuration = appState.gatewayConfiguration
         switch route {
+        case let .sessionChat(sessionRoute):
+            sessionChatScreen(route: sessionRoute, in: tab)
         case .conversations, .conversationSearch:
-            ConversationsView(configuration: configuration, onSelect: selectConversation, onStartNew: startNew,
-                              personalConversationID: personalAgent.record(using: configuration)?.conversationId,
-                              onOpenSettings: { settingsPresented = true }, startSearching: route == .conversationSearch, onDelete: appState.conversationUnavailable)
+            ConversationsView(
+                configuration: configuration,
+                onSelect: { conversation in
+                    appState.openFromSearch(ConversationSelection(summary: conversation))
+                },
+                onStartNew: startNew,
+                personalConversationID: personalAgent.record(using: configuration)?.conversationId,
+                onOpenSettings: { settingsPresented = true },
+                startSearching: route == .conversationSearch,
+                onDelete: appState.conversationUnavailable
+            )
         case .progress:
-            WorkPagesView(configuration: configuration, initialPage: .progress, onOpenConversation: appState.openConversation) {
-                navigate(.library)
+            WorkPagesView(
+                configuration: configuration,
+                initialPage: .progress,
+                isTabActive: appState.selectedTab == tab && appState.path(for: tab).last == .progress,
+                onNavigate: { appState.push($0, in: tab) },
+                onOpenConversation: appState.openConversation
+            ) {
+                appState.switchTab(.library)
             }
         case .projects:
-            WorkPagesView(configuration: configuration, initialPage: .projects, onOpenConversation: appState.openConversation) {
-                navigate(.library)
+            WorkPagesView(
+                configuration: configuration,
+                initialPage: .projects,
+                isTabActive: appState.selectedTab == tab && appState.path(for: tab).last == .projects,
+                onNavigate: { appState.push($0, in: tab) },
+                onOpenConversation: appState.openConversation
+            ) {
+                appState.switchTab(.library)
             }
         case .automations:
             AutomationsView(configuration: configuration, onOpenConversation: appState.openConversation)
@@ -366,9 +517,9 @@ struct AppRootView: View {
         case .library:
             SpaceLibraryView(configuration: configuration, onOpenSource: { source in
                 if source.kind == "task", let taskID = source.taskId {
-                    appState.homePath.append(.libraryTask(taskID))
+                    appState.openTaskChat(taskID: taskID, in: tab)
                 } else if source.kind == "automation", let runID = source.automationRunId {
-                    appState.homePath.append(.libraryAutomationRun(runID))
+                    appState.push(.libraryAutomationRun(runID), in: tab)
                 } else {
                     appState.openConversation(id: source.conversationId, title: source.label ?? "", agentId: defaultAgentID)
                 }
@@ -376,18 +527,34 @@ struct AppRootView: View {
                 try await appState.startLibraryConversation(configuration: configuration, agentID: defaultAgentID,
                                                             attachment: attachment, origin: origin)
             })
-        case let .notificationTask(taskID):
-            TaskConversationView(configuration: configuration, taskID: taskID, opensDetails: true)
-        case let .libraryTask(taskID):
-            TaskConversationView(configuration: configuration, taskID: taskID)
+        case let .taskDetail(taskID), let .notificationTask(taskID):
+            TaskConversationView(configuration: configuration, taskID: taskID, opensDetails: true) { nextTaskID in
+                appState.openTaskChat(taskID: nextTaskID, in: tab)
+            }
+        case let .taskChat(taskID), let .libraryTask(taskID):
+            TaskConversationView(configuration: configuration, taskID: taskID) { nextTaskID in
+                appState.openTaskChat(taskID: nextTaskID, in: tab)
+            }
+        case let .projectDetail(projectID):
+            ProjectDetailView(configuration: configuration, projectID: projectID, onOpenConversation: appState.openConversation)
+        case let .automationDetail(automationID):
+            AutomationDetailView(configuration: configuration, automationID: automationID, onOpenConversation: appState.openConversation)
+        case let .noteDetail(noteID):
+            NoteDetailView(configuration: configuration, noteID: noteID, onOpenConversation: appState.openConversation)
+        case .files:
+            FilesView(configuration: configuration)
         case let .libraryAutomationRun(runID):
             AutomationRunDetailView(configuration: configuration, runID: runID,
                                     initialRun: nil, onOpenConversation: appState.openConversation)
+        case .aboutYou:
+            UserUnderstandingView(configuration: configuration)
+        case .personalGoals:
+            PersonalGoalsView(configuration: configuration)
         case .capabilities:
             CapabilitiesView(configuration: configuration, personal: personalAgent.record(using: configuration),
                              onOpenAgent: { id, personal in
                                  if personal {
-                                     Task { await openPersonalAgent(remember: true) }
+                                     Task { await openPersonalAgent(navigateToAda: true) }
                                  } else {
                                      appState.startConversation(agentId: id)
                                  }
@@ -408,13 +575,17 @@ struct AppRootView: View {
                              onPairDevice: { settingsPresented = true })
         case let .personalOverview(allowsConversationSharing):
             if let agent = personalAgent.record(using: configuration),
-               let conversation = appState.selectedConversation, conversation.id == agent.conversationId
+               let conversation = appState.personalConversation, conversation.id == agent.conversationId
             {
                 PersonalAgentOverview(configuration: configuration, agent: agent, conversation: conversation,
                                       attention: pendingAttention,
                                       allowsConversationSharing: allowsConversationSharing,
-                                      onEdit: { personalAgent.applyProfile($0, using: configuration) },
-                                      onModelSaved: appState.updateConversation, onOpenConversation: appState.openConversation)
+                                      onEdit: { updated in
+                                          personalAgent.applyProfile(updated, using: configuration)
+                                          appState.syncPersonalAgent(updated)
+                                      },
+                                      onModelSaved: appState.updatePersonalConversation,
+                                      onOpenConversation: appState.openConversation)
             }
         case let .settingsSection(section):
             SettingsSectionView(configuration: configuration, section: section)
@@ -425,24 +596,76 @@ struct AppRootView: View {
                             personalAgent: personalAgent.record(using: configuration),
                             personalAgentBusy: personalAgent.isLoading || personalAgent.isOpening,
                             personalAgentError: personalAgent.errorMessage,
-                            onOpenPersonalAgent: { Task { await openPersonalAgent(remember: true) } },
-                            onPersonalAgentSaved: { personalAgent.applyProfile($0, using: configuration) })
+                            onOpenPersonalAgent: { Task { await openPersonalAgent(navigateToAda: true) } },
+                            onPersonalAgentSaved: { updated in
+                                personalAgent.applyProfile(updated, using: configuration)
+                                appState.syncPersonalAgent(updated)
+                            })
         }
+    }
+
+    private func sessionChatScreen(route: SessionChatRoute, in tab: MobileTab) -> some View {
+        let configuration = appState.gatewayConfiguration
+        let conversation = appState.sessionConversation(for: route)
+        let isTopOfActiveTab = appState.selectedTab == tab && appState.path(for: tab).last == .sessionChat(route)
+        return AssistantView(
+            configuration: configuration,
+            isActive: isTopOfActiveTab,
+            realtimeVoiceCall: realtimeVoiceCall,
+            conversation: conversation,
+            personalAgent: nil,
+            onStartConversation: { agentID in
+                appState.replaceTopSessionChat(.draft(agentId: agentID), in: tab)
+            },
+            onStartScopedConversation: { project, mode, agentID in
+                let draft: ConversationSelection = project.map {
+                    .projectDraft(project: $0, executionMode: mode, agentId: agentID)
+                } ?? .draft(agentId: agentID)
+                appState.replaceTopSessionChat(draft, in: tab)
+            },
+            onConversationUpdated: { updated in
+                let sourceID = conversation?.id ?? updated.id
+                appState.promoteSessionDraftInPlace(draftID: sourceID, to: updated)
+                appState.updateSessionConversation(updated, for: route)
+            },
+            onOpenSettings: { settingsPresented = true },
+            onInputFocusChanged: { _ in },
+            bottomComposerSpacing: 4,
+            backAccessibilityID: "session-chat-back",
+            showsSessionConversationTitle: true,
+            recentSwitchConversations: recentOrdinaryConversations,
+            onSwitchConversation: { item in
+                appState.replaceTopSessionChat(ConversationSelection(summary: item), in: tab)
+            },
+            onCreateNewConversation: {
+                appState.replaceTopSessionChat(.draft(agentId: defaultAgentID), in: tab)
+            },
+            onOpenConversationList: { setSidebar(true) },
+            onBack: { appState.pop(in: tab) },
+            onConversationUnavailable: { id in
+                guard configuration == appState.gatewayConfiguration else { return }
+                appState.conversationUnavailable(id)
+            },
+            sidebarOpen: sidebarOpen,
+            onPhoneVisibilityChanged: { phoneVisible = $0 },
+            externalIntake: appState.externalIntake,
+            onExternalIntakeFinished: appState.externalIntakeFinished
+        ) { composer in composer }
+            .toolbar(.hidden, for: .navigationBar)
     }
 
     private var sidebar: some View {
         let configuration = appState.gatewayConfiguration
         let currentScope = ComposerDraftStore.accountScope(configuration)
         let recents = recentScope == currentScope ? recentConversations : nil
-        let selectedID = projectChat.conversationID ?? appState.selectedConversation?.id
-        return ChatSidebarView(configuration: configuration, personal: personalAgent.record(using: configuration),
-                               openingPersonal: personalAgent.isOpening, selectedID: selectedID,
+        let selectedID = projectChat.conversationID ?? appState.activeSessionConversation?.id
+        return ChatSidebarView(configuration: configuration,
+                               personalConversationID: personalAgent.record(using: configuration)?.conversationId,
+                               selectedID: selectedID,
                                recent: recents ?? [], agents: sidebarAgents, recentNextOffset: recents == nil ? nil : recentNextOffset,
                                recentLoading: recentLoading || (recents == nil && !recentError), recentError: recentError,
-                               attention: pendingAttention, personalUnread: personalAgent.unread(using: configuration)?.unreadCount ?? 0,
                                isPresented: sidebarPresented, onClose: { setSidebar(false) },
-                               onNavigate: { route in leaveLinkedProject(); navigate(route) },
-                               onPersonal: { leaveLinkedProject(); Task { await openPersonalAgent(remember: true) } },
+                               onNavigate: { route in leaveLinkedProject(); navigateFromSidebar(route) },
                                onConversation: { conversation in
                                    if projectChat.conversationID == conversation.id {
                                        setSidebar(false)
@@ -484,9 +707,8 @@ struct AppRootView: View {
             }
             return updated
         }
-        if let name, var selected = appState.selectedConversation, selected.id == item.id {
-            selected.title = name
-            appState.updateConversation(selected)
+        if let name {
+            appState.updateSessionConversationTitle(id: item.id, title: name)
         }
         await persistSidebarMutation(scope: scope)
     }
@@ -509,7 +731,7 @@ struct AppRootView: View {
         let deleted = Set(ids).subtracting(failed)
         guard !deleted.isEmpty else { return failed }
         recentConversations?.removeAll { deleted.contains($0.id) }
-        if let id = appState.selectedConversation?.id, deleted.contains(id) {
+        for id in deleted {
             appState.conversationUnavailable(id)
         }
         await persistSidebarMutation(scope: scope)
@@ -539,8 +761,6 @@ struct AppRootView: View {
             guard !Task.isCancelled, appState.activeGatewayProfileID == profile.id else { return }
             defer { push.forget(route) }
             guard let target else { return }
-            reopenSidebar = false
-            appState.homePath.removeAll()
             setSidebar(false)
             openMobilePushTarget(target)
         } catch GatewayClientError.http(statusCode: 404, message: _) {
@@ -549,56 +769,55 @@ struct AppRootView: View {
     }
 
     private func openMobilePushTarget(_ target: MobilePushTarget) {
-        switch target.kind {
-        case "task":
-            if let id = target.taskId, MobilePushClick.validID(id) {
-                navigate(.notificationTask(id))
+        let configuration = appState.gatewayConfiguration
+        let personalID = personalAgent.record(using: configuration)?.conversationId
+        appState.openPushTarget(target, personalConversationID: personalID, defaultAgentID: defaultAgentID)
+        if target.kind == "chat" || target.kind == "work_discovery",
+           let id = target.conversationId, MobilePushClick.validID(id),
+           id != personalID, id != appState.personalConversation?.id
+        {
+            Task {
+                await hydratePushedSessionMetadata(id: id, using: configuration)
             }
-        case "automation_run":
-            if let id = target.runId, MobilePushClick.validID(id) {
-                navigate(.libraryAutomationRun(id))
-            }
-        case "chat", "work_discovery":
-            if let id = target.conversationId, MobilePushClick.validID(id) {
-                messageLinks.open(.route(page: "chat", itemID: id), appState: appState)
-            }
-        default: break
         }
     }
 
-    private func navigate(_ route: HomeDestination) {
-        if appState.homePath.isEmpty {
-            reopenSidebar = sidebarOpen
+    private func hydratePushedSessionMetadata(id: String, using configuration: GatewayConfiguration) async {
+        guard let result: PushedSessionEnvelope = try? await GatewayClient(configuration: configuration)
+            .request(path: "/api/sessions/\(id)/history", queryItems: [
+                URLQueryItem(name: "view", value: "compact"), URLQueryItem(name: "limit", value: "1")
+            ]),
+            !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
+        if let name = result.session.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            appState.updateSessionConversationTitle(id: result.session.key, title: name)
         }
+    }
+
+    private func navigateFromSidebar(_ route: HomeDestination) {
         setSidebar(false)
-        appState.homePath.append(route)
+        appState.openSidebarDestination(route)
     }
 
     private func selectConversation(_ conversation: ConversationSummary) {
-        reopenSidebar = false
         setSidebar(false)
         appState.open(conversation)
     }
 
     private func startNew() {
-        reopenSidebar = false
         setSidebar(false)
         appState.startConversation(agentId: defaultAgentID)
     }
 
-    private func openPersonalAgent(remember: Bool) async {
+    private func openPersonalAgent(navigateToAda: Bool) async {
         let configuration = appState.gatewayConfiguration
-        let selection = appState.selectedConversation?.id
-        let path = appState.homePath
         guard let record = await personalAgent.open(using: configuration), !Task.isCancelled,
-              configuration == appState.gatewayConfiguration,
-              appState.selectedConversation?.id == selection,
-              !remember || appState.homePath == path else { return }
-        if remember {
-            reopenSidebar = false
+              configuration == appState.gatewayConfiguration else { return }
+        if navigateToAda {
             setSidebar(false)
+            appState.openPersonalAgent(record)
+        } else {
+            appState.syncPersonalAgent(record)
         }
-        appState.openPersonalConversation(record, remember: remember)
     }
 
     private var linkedProjectChat: Bool {
@@ -622,7 +841,13 @@ struct AppRootView: View {
     }
 
     private var canDragSidebar: Bool {
-        appState.homePath.isEmpty && !sidebarOpen && !composerFocused && !phoneVisible && !actionPanelVisible
+        appState.activeStack.isEmpty
+            && !sidebarOpen
+            && !composerFocused
+            && !keyboardVisible
+            && !phoneVisible
+            && !actionPanelVisible
+            && !fullScreenOverlayActive
     }
 
     private func loadSidebarAgents(using configuration: GatewayConfiguration) async {
@@ -711,6 +936,11 @@ private struct SidebarAttentionLoad: Hashable {
     let language: String
 }
 
+private struct PendingRecordingLoad: Hashable {
+    let configuration: GatewayConfiguration
+    let active: Bool
+}
+
 private struct PersonalUnreadLoad: Hashable {
     let configuration: GatewayConfiguration
     let foreground: Bool
@@ -721,6 +951,16 @@ private struct PersonalUnreadLoad: Hashable {
 private struct SidebarLoad: Hashable {
     let configuration: GatewayConfiguration
     let revision: Int
+}
+
+private struct PushedSessionIdentity: Decodable {
+    let key: String
+    let name: String?
+    let agentId: String
+}
+
+private struct PushedSessionEnvelope: Decodable {
+    let session: PushedSessionIdentity
 }
 
 #Preview {

@@ -81,7 +81,7 @@ import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
-/** Unified page header with consistent back slot, centered title/menu, and trailing actions. */
+/** Unified page header with consistent back/sidebar slot, centered title/menu, and trailing actions. */
 @Composable
 internal fun XopcPageHeader(
   backTag: String,
@@ -90,6 +90,7 @@ internal fun XopcPageHeader(
   title: String? = null,
   backEnabled: Boolean = true,
   showBack: Boolean = true,
+  leadingContent: (@Composable () -> Unit)? = null,
   titleContent: (@Composable () -> Unit)? = null,
   actions: @Composable RowScope.() -> Unit = {},
 ) {
@@ -100,7 +101,11 @@ internal fun XopcPageHeader(
       .heightIn(min = XopcDesignTokens.ButtonHeightMd),
     content = {
       Box {
-        if (showBack) PageBackButton(backTag, onBack, enabled = backEnabled)
+        if (leadingContent != null) {
+          leadingContent()
+        } else if (showBack) {
+          PageBackButton(backTag, onBack, enabled = backEnabled)
+        }
       }
       Row(
         verticalAlignment = Alignment.CenterVertically,

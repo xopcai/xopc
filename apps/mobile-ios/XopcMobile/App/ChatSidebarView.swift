@@ -4,20 +4,16 @@ struct ChatSidebarView: View {
     @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.locale) private var locale
     let configuration: GatewayConfiguration
-    let personal: PersonalAgentRecord?
-    let openingPersonal: Bool
+    let personalConversationID: String?
     let selectedID: String?
     let recent: [ConversationSummary]
     let agents: [String: AgentSummary]
     let recentNextOffset: Int?
     let recentLoading: Bool
     let recentError: Bool
-    let attention: Int
-    let personalUnread: Int
     let isPresented: Bool
     let onClose: () -> Void
     let onNavigate: (HomeDestination) -> Void
-    let onPersonal: () -> Void
     let onConversation: (ConversationSummary) -> Void
     let onNew: () -> Void
     let onRetry: () -> Void
@@ -36,7 +32,7 @@ struct ChatSidebarView: View {
     @State private var mutationFailed = false
 
     private var visibleRecents: [ConversationSummary] {
-        recent.filter { $0.id != personal?.conversationId && $0.isRecentSidebarCandidate }
+        recent.filter { $0.id != personalConversationID && $0.isRecentSidebarCandidate }
             .sorted {
                 ($0.status == "pinned") == ($1.status == "pinned")
                     ? $0.updatedAt > $1.updatedAt : $0.status == "pinned"
@@ -69,21 +65,21 @@ struct ChatSidebarView: View {
                     Group {
                         row("搜索对话", symbol: "magnifyingglass") { onNavigate(.conversationSearch) }
                             .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(20)))
-                            .padding(.bottom, 4)
+                            .padding(.bottom, 6)
                             .accessibilityIdentifier("chat-sidebar-search")
-                        personalRow
-                        row("工作台", symbol: "square.grid.2x2", badge: attention) { onNavigate(.progress) }
-                            .accessibilityIdentifier("chat-sidebar-workbench")
                         row("自动化", symbol: "clock") { onNavigate(.automations) }
                             .accessibilityIdentifier("chat-sidebar-automations")
-                        row("笔记", symbol: "note.text") { onNavigate(.notes) }
-                            .accessibilityIdentifier("chat-sidebar-notes")
-                        row("资料库", symbol: "doc") { onNavigate(.library) }
-                            .accessibilityIdentifier("chat-sidebar-library")
                         row("capability_title", symbol: "puzzlepiece") { onNavigate(.capabilities) }
                             .accessibilityIdentifier("chat-sidebar-capabilities")
+                        row("关于我与目标", symbol: "person.crop.circle") { onNavigate(.aboutYou) }
+                            .accessibilityIdentifier("chat-sidebar-about-you")
                     }
                     .disabled(selection != nil || busy)
+                    if !visibleRecents.isEmpty {
+                        Divider()
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 10)
+                    }
                     ForEach(visibleRecents) { item in
                         conversationRow(item)
                     }
@@ -290,22 +286,6 @@ extension ChatSidebarView {
         }
     }
 
-    private var personalRow: some View {
-        let title = if let personal, !personal.displayName.isEmpty {
-            Text(verbatim: personal.displayName)
-        } else {
-            Text("个人助理")
-        }
-        return row(title, badge: personalUnread, loading: openingPersonal, unreadBadge: true, action: onPersonal) {
-            PersonalAgentAvatar(configuration: configuration, agent: personal, size: 22, active: false)
-                .accessibilityHidden(true)
-        }
-        .background(personal?.conversationId == selectedID && personal != nil ? mobileTheme.card : .clear,
-                    in: .rect(cornerRadius: mobileTheme.corner(12)))
-        .disabled(openingPersonal)
-        .accessibilityIdentifier("chat-sidebar-personal")
-    }
-
     private func circleButton(_ title: LocalizedStringKey, icon: Image, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             icon.font(.title3)
@@ -367,7 +347,7 @@ struct ChatSidebarPresentation<Sidebar: View>: ViewModifier {
                 GeometryReader { geometry in
                     let width = min(350, geometry.size.width * 0.84)
                     ChatSidebarLayer(width: width, isOpen: isOpen, canOpenBySwipe: canOpenBySwipe,
-                                     animation: reduceMotion ? nil : .easeOut(duration: 0.22),
+                                     animation: MobileMotion.animation(MobileMotion.standardDuration, reduceMotion: reduceMotion),
                                      onSetOpen: onSetOpen, sidebar: sidebar())
                 }
                 .allowsHitTesting(isOpen)

@@ -23,7 +23,7 @@ struct ExternalIntakeModifier: ViewModifier {
             .onChange(of: appState.externalIntakeRevision) { refresh() }
             .sheet(item: $selection) { batch in
                 ExternalIntakeSheet(batch: batch, configuration: appState.gatewayConfiguration,
-                                    current: appState.selectedConversation, importError: appState.externalIntakeError,
+                                    current: appState.activeConversation, importError: appState.externalIntakeError,
                                     onSelect: { batch, conversation in
                                         appState.openExternalIntake(batch, conversation: conversation)
                                         selection = nil

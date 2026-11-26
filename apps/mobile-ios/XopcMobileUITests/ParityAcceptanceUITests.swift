@@ -4110,12 +4110,29 @@ extension XCUIApplication {
     }
 
     func openHomeDestination(_ destination: String) {
-        XCTAssertTrue(openHomeSidebar(), "Could not open navigation")
         if destination == "assistant" {
+            let tab = buttons["bottom-tab-ada"]
+            if tab.waitForExistence(timeout: 3), tab.isHittable {
+                tab.tap()
+                return
+            }
+            XCTAssertTrue(openHomeSidebar(), "Could not open navigation")
             buttons["chat-sidebar-close"].tap()
             return
         }
-        let identifier = ["conversations": "search", "progress": "workbench", "projects": "workbench"][destination] ?? destination
+        let tabMap = ["progress": "bottom-tab-workbench", "projects": "bottom-tab-workbench", "notes": "bottom-tab-notes", "library": "bottom-tab-library"]
+        if let tabID = tabMap[destination] {
+            let tab = buttons[tabID]
+            if tab.waitForExistence(timeout: 5), tab.isHittable {
+                tab.tap()
+                if destination == "projects" {
+                    selectPageOption("work-page-projects", from: "work-page-menu")
+                }
+                return
+            }
+        }
+        XCTAssertTrue(openHomeSidebar(), "Could not open navigation")
+        let identifier = ["conversations": "search"][destination] ?? destination
         let button = buttons["chat-sidebar-\(identifier)"]
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         button.tap()
@@ -4123,8 +4140,6 @@ extension XCUIApplication {
             let closeSearch = navigationBars.firstMatch.buttons["conversations-open-search-close"]
             XCTAssertTrue(closeSearch.waitForExistence(timeout: 5))
             closeSearch.tap()
-        } else if destination == "projects" {
-            selectPageOption("work-page-projects", from: "work-page-menu")
         }
     }
 }

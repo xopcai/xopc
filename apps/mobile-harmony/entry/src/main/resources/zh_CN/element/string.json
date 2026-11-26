@@ -1780,6 +1780,7 @@
     {"name": "task_resume", "value": "继续任务"},
     {"name": "task_stop_run", "value": "停止当前执行"},
     {"name": "task_stop_run_help", "value": "将请求中止当前运行，不会关闭任务。"},
-    {"name": "chat_copy_formula", "value": "复制公式源码"}
+    {"name": "chat_copy_formula", "value": "复制公式源码"},
+    {"name": "chat_switch_conversation", "value": "切换对话"}
   ]
 }

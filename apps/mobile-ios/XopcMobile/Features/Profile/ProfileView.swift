@@ -268,6 +268,16 @@ struct UserUnderstandingView: View {
             }
             .accessibilityIdentifier("about-you-work-memory")
         }
+        overviewMemorySummary(summary)
+        Section("记忆设置") {
+            LabeledContent("使用记忆") { Text(summary.settings.memoryEnabled ? "已开启" : "toggle_off") }
+            LabeledContent("显示记忆引用") { Text(summary.settings.showMemoryReferences ? "已开启" : "toggle_off") }
+            LabeledContent("保存敏感记忆") { Text(memoryWritePolicy(summary.settings.sensitiveWritePolicy)) }
+        }
+    }
+
+    @ViewBuilder
+    private func overviewMemorySummary(_ summary: MobileUserSummary) -> some View {
         Section("xopc 记住的你") {
             if summary.recent.isEmpty {
                 Text("暂无相关记忆").foregroundStyle(.secondary)
@@ -276,6 +286,14 @@ struct UserUnderstandingView: View {
                 UserMemoryRow(configuration: configuration, item: item, onUpdated: memoryUpdated)
             }
             Button("查看全部记忆") { selectSection(1) }
+        }
+        Section {
+            NavigationLink {
+                PersonalGoalsView(configuration: configuration)
+            } label: {
+                Label("目标", systemImage: "flag")
+            }
+            .accessibilityIdentifier("about-you-goals")
         }
         if let focus = summary.primaryFocus {
             Section("最近在关注") {
@@ -287,11 +305,6 @@ struct UserUnderstandingView: View {
         }
         if let rules = summary.rules, !rules.isEmpty {
             Section("我们如何协作") { ForEach(rules) { Text($0.statement) } }
-        }
-        Section("记忆设置") {
-            LabeledContent("使用记忆") { Text(summary.settings.memoryEnabled ? "已开启" : "toggle_off") }
-            LabeledContent("显示记忆引用") { Text(summary.settings.showMemoryReferences ? "已开启" : "toggle_off") }
-            LabeledContent("保存敏感记忆") { Text(memoryWritePolicy(summary.settings.sensitiveWritePolicy)) }
         }
     }
 
@@ -339,7 +352,10 @@ struct UserUnderstandingView: View {
             }
         }
     }
+}
 
+@MainActor
+extension UserUnderstandingView {
     private func refreshSection(_ page: Int) async {
         switch page {
         case 1: await loadAssertions()
@@ -357,7 +373,7 @@ struct UserUnderstandingView: View {
         }
     }
 
-    @MainActor private func loadWork(cursor: String? = nil) async {
+    private func loadWork(cursor: String? = nil) async {
         if cursor != nil, workLoading || cursor != workCursor {
             return
         }
@@ -394,10 +410,7 @@ struct UserUnderstandingView: View {
             }
         }
     }
-}
 
-@MainActor
-extension UserUnderstandingView {
     private func refreshSummary() async {
         do {
             summary = try await GatewayClient(configuration: configuration).fetchMobileUserSummary()

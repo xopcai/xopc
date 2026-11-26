@@ -143,111 +143,111 @@ struct AssistantSessionActionsView: View {
             } label: {
                 optionRow("上下文", value: state.contextSummary?.work.project?.title ?? "Local", symbol: "folder")
             }
-                if !isTaskConversation {
-                    NavigationLink {
-                        List(state.agents) { agent in
-                            if agent.isExternalRuntime, let onStartProjectAgentConversation {
-                                NavigationLink {
-                                    ExternalAgentProjectPickerView(configuration: configuration, agent: agent) { project in
-                                        dismiss()
-                                        onStartProjectAgentConversation(project, agent.id)
-                                    }
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        ConfiguredAgentAvatar(configuration: configuration, agent: agent, size: 36, active: false)
-                                        Text(agent.localizedName(locale))
-                                        if let badge = agent.externalRuntimeBadge {
-                                            AgentRuntimeBadge(label: badge)
-                                        }
-                                        Spacer()
-                                        if agent.id == conversation?.agentId {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }.frame(minHeight: 44)
-                                }
-                            } else {
-                                Button {
+            if !isTaskConversation {
+                NavigationLink {
+                    List(state.agents) { agent in
+                        if agent.isExternalRuntime, let onStartProjectAgentConversation {
+                            NavigationLink {
+                                ExternalAgentProjectPickerView(configuration: configuration, agent: agent) { project in
                                     dismiss()
-                                    onStartConversation(agent.id)
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        ConfiguredAgentAvatar(configuration: configuration, agent: agent, size: 36, active: false)
-                                        Text(agent.localizedName(locale))
-                                        if let badge = agent.externalRuntimeBadge {
-                                            AgentRuntimeBadge(label: badge)
-                                        }
-                                        Spacer()
-                                        if agent.id == conversation?.agentId {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }.frame(minHeight: 44)
+                                    onStartProjectAgentConversation(project, agent.id)
                                 }
-                            }
-                        }.navigationTitle("选择新对话对象")
-                    } label: {
-                        optionRow("对话对象", value: state.agents.first(where: { $0.id == conversation?.agentId })?.localizedName(locale)
-                            ?? state.selectedAgent?.localizedName(locale) ?? conversation?.agentId ?? "Main", symbol: "person.crop.circle")
-                    }
-                }
-                if let conversation {
-                    NavigationLink {
-                        AssistantOptionPicker(configuration: configuration, conversation: conversation,
-                                              state: options, pickingModel: true, onSave: onConversationUpdated)
-                    } label: {
-                        optionRow("模型", value: options.selectedModel?.localizedName(locale) ?? AppLocalization.string("默认模型", locale: locale), symbol: "waveform")
-                    }.disabled(options.isLoading)
-                    NavigationLink {
-                        AssistantOptionPicker(configuration: configuration, conversation: conversation,
-                                              state: options, pickingModel: false, onSave: onConversationUpdated)
-                    } label: {
-                        optionRow("思考档位", value: thinkingLabel(options.thinkingLevel), symbol: "slider.horizontal.3")
-                    }.disabled(options.isLoading)
-                    if options.fastTier != nil {
-                        Toggle(isOn: Binding(
-                            get: { options.isFastModeEnabled },
-                            set: { nextValue in
-                                Task {
-                                    if let updated = await options.toggleFastMode(
-                                        nextValue,
-                                        for: conversation,
-                                        using: GatewayClient(configuration: configuration)
-                                    ) {
-                                        onConversationUpdated(updated)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    ConfiguredAgentAvatar(configuration: configuration, agent: agent, size: 36, active: false)
+                                    Text(agent.localizedName(locale))
+                                    if let badge = agent.externalRuntimeBadge {
+                                        AgentRuntimeBadge(label: badge)
                                     }
+                                    Spacer()
+                                    if agent.id == conversation?.agentId {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }.frame(minHeight: 44)
+                            }
+                        } else {
+                            Button {
+                                dismiss()
+                                onStartConversation(agent.id)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    ConfiguredAgentAvatar(configuration: configuration, agent: agent, size: 36, active: false)
+                                    Text(agent.localizedName(locale))
+                                    if let badge = agent.externalRuntimeBadge {
+                                        AgentRuntimeBadge(label: badge)
+                                    }
+                                    Spacer()
+                                    if agent.id == conversation?.agentId {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }.frame(minHeight: 44)
+                            }
+                        }
+                    }.navigationTitle("选择新对话对象")
+                } label: {
+                    optionRow("对话对象", value: state.agents.first(where: { $0.id == conversation?.agentId })?.localizedName(locale)
+                        ?? state.selectedAgent?.localizedName(locale) ?? conversation?.agentId ?? "Main", symbol: "person.crop.circle")
+                }
+            }
+            if let conversation {
+                NavigationLink {
+                    AssistantOptionPicker(configuration: configuration, conversation: conversation,
+                                          state: options, pickingModel: true, onSave: onConversationUpdated)
+                } label: {
+                    optionRow("模型", value: options.selectedModel?.localizedName(locale) ?? AppLocalization.string("默认模型", locale: locale), symbol: "waveform")
+                }.disabled(options.isLoading)
+                NavigationLink {
+                    AssistantOptionPicker(configuration: configuration, conversation: conversation,
+                                          state: options, pickingModel: false, onSave: onConversationUpdated)
+                } label: {
+                    optionRow("思考档位", value: thinkingLabel(options.thinkingLevel), symbol: "slider.horizontal.3")
+                }.disabled(options.isLoading)
+                if options.fastTier != nil {
+                    Toggle(isOn: Binding(
+                        get: { options.isFastModeEnabled },
+                        set: { nextValue in
+                            Task {
+                                if let updated = await options.toggleFastMode(
+                                    nextValue,
+                                    for: conversation,
+                                    using: GatewayClient(configuration: configuration)
+                                ) {
+                                    onConversationUpdated(updated)
                                 }
                             }
-                        )) {
-                            optionRow("极速模式", value: options.fastModeSubtitle(locale), symbol: "bolt.fill")
                         }
-                        .disabled(options.isLoading || options.isSaving)
-                        .accessibilityIdentifier("assistant-fast-mode-toggle")
+                    )) {
+                        optionRow("极速模式", value: options.fastModeSubtitle(locale), symbol: "bolt.fill")
                     }
-                }
-                if !isTaskConversation {
-                    Button {
-                        dismiss()
-                        onStartConversation(conversation?.agentId ?? state.selectedAgentID ?? "main")
-                    } label: { optionRow("新建会话", symbol: "square.and.pencil") }
-                    NavigationLink {
-                        SessionEnvironmentSettingsView(configuration: configuration, conversation: conversation,
-                                                       summary: state.contextSummary, onStartScopedConversation: { project, mode in
-                                                           dismiss(); onStartScopedConversation(project, mode)
-                                                       }, onDirectoryChanged: reloadContext)
-                    } label: { optionRow("执行环境与范围", symbol: "folder.badge.gearshape") }
-                }
-                if let error = options.errorMessage {
-                    Text(error).foregroundStyle(.red)
-                    Button("重试") { Task { await loadOptions() } }
+                    .disabled(options.isLoading || options.isSaving)
+                    .accessibilityIdentifier("assistant-fast-mode-toggle")
                 }
             }
-            .listStyle(.plain)
-            .navigationTitle("会话选项")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    MobileCloseButton { dismiss() }
-                }
+            if !isTaskConversation {
+                Button {
+                    dismiss()
+                    onStartConversation(conversation?.agentId ?? state.selectedAgentID ?? "main")
+                } label: { optionRow("新建会话", symbol: "square.and.pencil") }
+                NavigationLink {
+                    SessionEnvironmentSettingsView(configuration: configuration, conversation: conversation,
+                                                   summary: state.contextSummary, onStartScopedConversation: { project, mode in
+                                                       dismiss(); onStartScopedConversation(project, mode)
+                                                   }, onDirectoryChanged: reloadContext)
+                } label: { optionRow("执行环境与范围", symbol: "folder.badge.gearshape") }
             }
+            if let error = options.errorMessage {
+                Text(error).foregroundStyle(.red)
+                Button("重试") { Task { await loadOptions() } }
+            }
+        }
+        .listStyle(.plain)
+        .navigationTitle("会话选项")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                MobileCloseButton { dismiss() }
+            }
+        }
     }
 
     private func optionRow(_ title: LocalizedStringKey, value: String? = nil, symbol: String) -> some View {

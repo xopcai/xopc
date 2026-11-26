@@ -21,11 +21,18 @@ struct MobilePushClick: Decodable {
     }
 }
 
-struct MobilePushTarget: Decodable {
+struct MobilePushTarget: Decodable, Equatable, Sendable {
     let kind: String
     let taskId: String?
     let runId: String?
     let conversationId: String?
+
+    init(kind: String, taskId: String? = nil, runId: String? = nil, conversationId: String? = nil) {
+        self.kind = kind
+        self.taskId = taskId
+        self.runId = runId
+        self.conversationId = conversationId
+    }
 }
 
 private struct MobilePushRegistration: Encodable {

@@ -12,12 +12,17 @@ import SwiftUI
         guard case let .route(page, id) = link else { destination = link; return }
         if page == "settings" {
             destination = nil
-            appState.homePath.append(MobileSettingsSection(rawValue: id).map(HomeDestination.settingsSection) ?? .settings)
+            appState.push(MobileSettingsSection(rawValue: id).map(HomeDestination.settingsSection) ?? .settings)
+            return
+        }
+        if page == "tasks" {
+            destination = nil
+            appState.openTaskChat(taskID: id)
             return
         }
         guard page == "chat" else { destination = link; return }
         let configuration = appState.gatewayConfiguration
-        let source = appState.selectedConversation
+        let sourceID = appState.activeConversation?.id
         lookup = Task {
             do {
                 let result: ChatLinkedSession = try await GatewayClient(configuration: configuration)
@@ -25,11 +30,11 @@ import SwiftUI
                         URLQueryItem(name: "view", value: "compact"), URLQueryItem(name: "limit", value: "1")
                     ])
                 guard !Task.isCancelled, configuration == appState.gatewayConfiguration,
-                      source?.id == appState.selectedConversation?.id else { return }
+                      sourceID == appState.activeConversation?.id else { return }
                 appState.openConversation(id: result.session.key, title: result.session.name ?? "对话", agentId: result.session.agentId)
             } catch is CancellationError { } catch {
                 guard !Task.isCancelled, configuration == appState.gatewayConfiguration,
-                      source?.id == appState.selectedConversation?.id else { return }
+                      sourceID == appState.activeConversation?.id else { return }
                 errorMessage = error.localizedDescription
             }
         }
@@ -78,11 +83,11 @@ struct ChatMessageLinkDestination: View {
                                                            initialRun: nil, onOpenConversation: openConversation)
             case "automations": AutomationDetailView(configuration: appState.gatewayConfiguration, automationID: id,
                                                      onOpenConversation: openConversation)
-            default: ChatLinkedFileView(link: link, configuration: appState.gatewayConfiguration, conversationID: appState.selectedConversation?.id)
+            default: ChatLinkedFileView(link: link, configuration: appState.gatewayConfiguration, conversationID: appState.activeConversation?.id)
             }
         case .mcpSetup: EmptyView()
         case .workspaceFile, .managedFile:
-            ChatLinkedFileView(link: link, configuration: appState.gatewayConfiguration, conversationID: appState.selectedConversation?.id)
+            ChatLinkedFileView(link: link, configuration: appState.gatewayConfiguration, conversationID: appState.activeConversation?.id)
         }
     }
 }

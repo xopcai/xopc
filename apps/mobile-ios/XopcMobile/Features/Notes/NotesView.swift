@@ -2,8 +2,12 @@ import SwiftUI
 
 struct NotesView: View {
     @Environment(\.mobileTheme) private var mobileTheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
+    var onOpenSidebar: (() -> Void)?
+    var retapToken = 0
+    var onPendingVoiceNoteChanged: ((Bool) -> Void)?
 
     @State private var notes: [NoteSummary] = []
     @State private var search = ""
@@ -36,50 +40,59 @@ struct NotesView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 8)
             }
-            List {
-                statusPicker
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                if pendingVoiceNote != nil || pendingVoiceNoteLoadFailed {
-                    NotesRecordingRecoveryRow(
-                        pendingVoiceNote: pendingVoiceNote,
-                        pendingVoiceNoteLoadFailed: pendingVoiceNoteLoadFailed
-                    ) {
-                        isSearchFocused = false
-                        presentedSheet = .voice
-                    }
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                }
-                if matchingNotes.isEmpty, isLoading || loadedQuery != currentQuery && error == nil {
-                    loadingRows
-                } else if matchingNotes.isEmpty, error == nil {
-                    ContentUnavailableView(emptyTitle, systemImage: "note.text")
+            ScrollViewReader { scroller in
+                List {
+                    statusPicker
+                        .id("notes-list-top")
                         .listRowBackground(Color.clear)
-                }
-                ForEach(matchingNotes) { note in
-                    Button {
-                        presentedSheet = .detail(note.id)
-                    } label: {
-                        NoteRow(note: note)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
+                        .listRowSeparator(.hidden)
+                    if pendingVoiceNote != nil || pendingVoiceNoteLoadFailed {
+                        NotesRecordingRecoveryRow(
+                            pendingVoiceNote: pendingVoiceNote,
+                            pendingVoiceNoteLoadFailed: pendingVoiceNoteLoadFailed
+                        ) {
+                            isSearchFocused = false
+                            presentedSheet = .voice
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                     }
-                    .buttonStyle(.plain)
-                    .listRowBackground(note.kind == "voice" ? Color.clear : nil)
-                    .listRowSeparator(note.kind == "voice" ? .hidden : .automatic)
-                    .accessibilityIdentifier("note-row-\(note.id)")
+                    if matchingNotes.isEmpty, isLoading || loadedQuery != currentQuery && error == nil {
+                        loadingRows
+                    } else if matchingNotes.isEmpty, error == nil {
+                        ContentUnavailableView(emptyTitle, systemImage: "note.text")
+                            .listRowBackground(Color.clear)
+                    }
+                    ForEach(matchingNotes) { note in
+                        Button {
+                            presentedSheet = .detail(note.id)
+                        } label: {
+                            NoteRow(note: note)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(note.kind == "voice" ? Color.clear : nil)
+                        .listRowSeparator(note.kind == "voice" ? .hidden : .automatic)
+                        .accessibilityIdentifier("note-row-\(note.id)")
+                    }
+                    if loadedQuery == currentQuery, nextOffset != nil {
+                        Button("加载更多") { Task { await loadMore() } }
+                            .disabled(isLoading || isLoadingMore)
+                            .accessibilityIdentifier("notes-load-more")
+                    }
                 }
-                if loadedQuery == currentQuery, nextOffset != nil {
-                    Button("加载更多") { Task { await loadMore() } }
-                        .disabled(isLoading || isLoadingMore)
-                        .accessibilityIdentifier("notes-load-more")
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .contentMargins(.top, 0, for: .scrollContent)
+                .refreshable { await load(); await refreshPendingVoiceNote() }
+                .onChange(of: retapToken) {
+                    guard retapToken > 0 else { return }
+                    MobileMotion.perform(MobileMotion.standardDuration, reduceMotion: reduceMotion) {
+                        scroller.scrollTo("notes-list-top", anchor: .top)
+                    }
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .contentMargins(.top, 0, for: .scrollContent)
-            .refreshable { await load(); await refreshPendingVoiceNote() }
         }
         .background(mobileTheme.canvas)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -93,6 +106,12 @@ struct NotesView: View {
         }
         .mobilePageTitle(Text("笔记")) { Text("笔记").font(.headline) }
         .toolbar {
+            if let onOpenSidebar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
+                        .accessibilityIdentifier("chat-header-sidebar")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 PageSearchButton("搜索笔记", isOpen: $searchOpen, query: $search,
                                  accessibilityID: "notes-open-search")
@@ -139,8 +158,10 @@ struct NotesView: View {
             Button("取消", role: .cancel) {}
         } message: { Text(error ?? "未知错误") }
     }
+}
 
-    private var statusPicker: some View {
+private extension NotesView {
+    var statusPicker: some View {
         SegmentedTabs(options: [
             SegmentOption(id: "", title: "全部", accessibilityID: "library-status-all"),
             SegmentOption(id: "inbox", title: "收件箱", accessibilityID: "library-status-inbox"),
@@ -150,11 +171,11 @@ struct NotesView: View {
             .accessibilityIdentifier("library-status-tabs")
     }
 
-    private var emptyTitle: LocalizedStringResource {
+    var emptyTitle: LocalizedStringResource {
         search.isEmpty ? "暂无笔记" : "没有匹配的笔记"
     }
 
-    private var loadingRows: some View {
+    var loadingRows: some View {
         ForEach(0 ..< 4, id: \.self) { _ in
             VStack(alignment: .leading, spacing: 8) {
                 Text("笔记标题占位").mobileTextStyle(.rowTitle)
@@ -164,7 +185,7 @@ struct NotesView: View {
         }
     }
 
-    private var errorBinding: Binding<Bool> {
+    var errorBinding: Binding<Bool> {
         Binding(get: { error != nil }, set: {
             if !$0 {
                 error = nil
@@ -173,7 +194,7 @@ struct NotesView: View {
     }
 
     @MainActor
-    private func load() async {
+    func load() async {
         notesLoadRevision += 1
         let revision = notesLoadRevision
         let request = currentQuery
@@ -217,7 +238,7 @@ struct NotesView: View {
     }
 
     @MainActor
-    private func loadMore() async {
+    func loadMore() async {
         let request = currentQuery
         guard loadedQuery == request, let offset = nextOffset, !isLoading, !isLoadingMore else { return }
         let revision = notesLoadRevision
@@ -238,13 +259,14 @@ struct NotesView: View {
     }
 
     @MainActor
-    private func refreshPendingVoiceNote() async {
+    func refreshPendingVoiceNote() async {
         do {
             pendingVoiceNote = try await PendingVoiceNoteStore(gatewayURL: configuration.baseURL).load()
             pendingVoiceNoteLoadFailed = false
         } catch {
             pendingVoiceNoteLoadFailed = true
         }
+        onPendingVoiceNoteChanged?(pendingVoiceNote != nil || pendingVoiceNoteLoadFailed)
     }
 }
 

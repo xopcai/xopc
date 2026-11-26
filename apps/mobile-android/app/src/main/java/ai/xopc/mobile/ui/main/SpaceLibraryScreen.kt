@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -77,6 +79,10 @@ private val chineseKinds = listOf("全部类型", "文档", "表格", "演示", 
 internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, access: SpaceLibraryAccess,
   onExit: () -> Unit, onSource: (LibraryOrigin) -> Unit,
   onUse: suspend (String, LibraryVersion, LibraryOrigin?) -> Unit,
+  onOpenSidebar: (() -> Unit)? = null,
+  bottomChromeInset: Dp = 0.dp,
+  scrollToTopRevision: Int = 0,
+  sidebarGesture: Modifier = Modifier,
 ) {
   val zh = LocalConfiguration.current.locales[0].language == "zh"
   fun t(zhText: String, enText: String) = if (zh) zhText else enText
@@ -149,11 +155,20 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
       else scopePager.scrollToPage(targetIndex)
     }
   }
+  val listState = rememberLazyListState()
+  LaunchedEffect(scrollToTopRevision) {
+    if (scrollToTopRevision > 0) {
+      listState.animateScrollToItem(0)
+    }
+  }
+  val isLibraryRoot = onOpenSidebar != null
   val activeID = selected
-  Column(Modifier.fillMaxSize().padding(insets).testTag("space-library")) {
+  Column(Modifier.fillMaxSize().then(if (isLibraryRoot) sidebarGesture else Modifier).padding(insets).testTag("space-library")) {
     XopcPageHeader(
       backTag = "library-back",
       onBack = onExit,
+      showBack = !isLibraryRoot,
+      leadingContent = if (isLibraryRoot) ({ PageSidebarButton("library-sidebar", onOpenSidebar!!) }) else null,
       titleContent = { PageTitleMenu(scopes, view, "space-scope-menu", onSelect = ::selectScope) },
     )
     Row(Modifier.fillMaxWidth().padding(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -198,8 +213,16 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
       onRefresh = { refresh++ },
       modifier = Modifier.fillMaxSize(),
     ) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = XopcDesignTokens.PagePaddingX),
-      verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(
+      Modifier.fillMaxSize(),
+      state = listState,
+      contentPadding = PaddingValues(
+        start = XopcDesignTokens.PagePaddingX,
+        end = XopcDesignTokens.PagePaddingX,
+        bottom = if (isLibraryRoot) bottomChromeInset + 16.dp else 16.dp,
+      ),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
       if (loading && items.isEmpty()) item {
         XopcListSkeleton(rows = 5)
       } else if (failed) item {
@@ -259,7 +282,12 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
           }
         },
         enabled = !undoBusy,
-        modifier = Modifier.padding(horizontal = XopcDesignTokens.PagePaddingX, vertical = 8.dp),
+        modifier = Modifier.padding(
+          start = XopcDesignTokens.PagePaddingX,
+          end = XopcDesignTokens.PagePaddingX,
+          top = 8.dp,
+          bottom = if (isLibraryRoot) bottomChromeInset + 8.dp else 8.dp,
+        ),
       )
     }
   }

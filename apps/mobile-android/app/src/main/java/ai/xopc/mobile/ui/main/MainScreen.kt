@@ -62,6 +62,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.ui.draw.alpha
 import androidx.lifecycle.Lifecycle
@@ -230,14 +231,35 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 
 internal enum class HomeTab { Assistant, Conversations, Progress, Projects, Automations, Notes, Library, Capabilities, Me }
-private data class LinkedDetail(val source: HomeTab, val destination: HomeTab, val id: String)
-private data class MainPageDestination(
+
+private data class MainRenderTarget(
   val stateKey: String,
-  val tab: HomeTab,
-  val detailId: String?,
-  val libraryDelivery: String?,
-) {
-  val contentTab: HomeTab get() = if (libraryDelivery != null) HomeTab.Progress else tab
+  val tab: MobileTab,
+  val route: MobileRoute?,
+)
+
+private fun HomeTab.toNavSnapshot(): MobileNavSnapshot = when (this) {
+  HomeTab.Assistant -> MobileNavSnapshot(selectedTab = MobileTab.Ada)
+  HomeTab.Conversations -> MobileNavSnapshot(
+    selectedTab = MobileTab.Ada,
+    stacks = MobileNavSnapshot.defaultStacks() + (MobileTab.Ada to listOf(MobileRoute.ConversationSearch(autoFocusSearch = false))),
+  )
+  HomeTab.Progress -> MobileNavSnapshot(selectedTab = MobileTab.Workbench)
+  HomeTab.Projects -> MobileNavSnapshot(selectedTab = MobileTab.Workbench)
+  HomeTab.Automations -> MobileNavSnapshot(
+    selectedTab = MobileTab.Workbench,
+    stacks = MobileNavSnapshot.defaultStacks() + (MobileTab.Workbench to listOf(MobileRoute.Automations)),
+  )
+  HomeTab.Notes -> MobileNavSnapshot(selectedTab = MobileTab.Notes)
+  HomeTab.Library -> MobileNavSnapshot(selectedTab = MobileTab.Library)
+  HomeTab.Capabilities -> MobileNavSnapshot(
+    selectedTab = MobileTab.Ada,
+    stacks = MobileNavSnapshot.defaultStacks() + (MobileTab.Ada to listOf(MobileRoute.Capabilities())),
+  )
+  HomeTab.Me -> MobileNavSnapshot(
+    selectedTab = MobileTab.Ada,
+    stacks = MobileNavSnapshot.defaultStacks() + (MobileTab.Ada to listOf(MobileRoute.Settings())),
+  )
 }
 
 private data class WelcomeRecommendation(val title: String, val reason: String, val prompt: String)
@@ -703,20 +725,43 @@ internal fun MainScreen(
       capturePermission.launch(Manifest.permission.CAMERA)
     }
   }
-  var selectedTab by remember { mutableStateOf(HomeTab.Assistant) }
-  ExternalIntakeHost(connection, onSearchExternalConversations, onAppendExternalFiles) { selectedTab = HomeTab.Assistant }
+  val navState = rememberMobileTabNavState()
+  ExternalIntakeHost(connection, onSearchExternalConversations, onAppendExternalFiles) {
+    val targetId = connection.selectedConversationId
+    val personalId = connection.personal.agent?.conversationId
+    if (targetId != null && targetId != personalId) {
+      navState.openOrdinaryChat(conversationId = targetId)
+    } else {
+      navState.openPushTarget(PushNavTarget.AdaHome)
+    }
+  }
   var wasUnpaired by remember { mutableStateOf(connection.profile == null) }
   LaunchedEffect(connection.profile?.gatewayId) {
     if (connection.profile == null) wasUnpaired = true
     else if (wasUnpaired) {
-      if (selectedTab != HomeTab.Me) selectedTab = HomeTab.Assistant
+      if (navState.topRoute !is MobileRoute.Settings) {
+        navState.resetForGatewaySwitch()
+      }
       wasUnpaired = false
     }
   }
   LaunchedEffect(connection.chatNavigationId, connection.selectedConversationId) {
     val id = connection.chatNavigationId
     if (id != null && id == connection.selectedConversationId) {
-      selectedTab = HomeTab.Assistant
+      val personalId = connection.personal.agent?.conversationId
+      val taskId = connection.taskConversationTaskId
+      val top = navState.topRoute
+      when {
+        id == personalId -> navState.openPushTarget(PushNavTarget.AdaHome)
+        taskId != null -> navState.openTaskChat(taskId = taskId, conversationId = id)
+        top is MobileRoute.SessionChat && top.draftId == "pending-draft" ->
+          navState.promoteSessionDraftInPlace("pending-draft", id)
+        else -> navState.openOrdinaryChat(
+          conversationId = id,
+          agentId = connection.selectedAgentId.ifBlank { connection.defaultAgentId },
+          title = connection.conversationSummary(id)?.title,
+        )
+      }
       onChatNavigationHandled(id)
     }
   }
@@ -727,7 +772,7 @@ internal fun MainScreen(
     onMessageNoteFeedbackHandled(feedback)
   }
   BrowserPreviewHost(browserPreviewAccess, connection) {
-  MainContent(phoneRepository = phoneRepository, mobilePush = mobilePush, selectedTab = selectedTab, onSelectTab = { selectedTab = it }, connection = connection,
+  MainContent(navState = navState, phoneRepository = phoneRepository, mobilePush = mobilePush, connection = connection,
     onPair = onPair, onCancelPairing = onCancelPairing, onScanPairing = scanPairingCode,
     pairingScanning = pairingScannerOpen || pairingPermissionRequesting,
     pairingScanError = pairingScanError, onConversationSearchChange = onConversationSearchChange,
@@ -928,8 +973,8 @@ internal fun MainScreen(
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun MainContent(
-  selectedTab: HomeTab,
-  onSelectTab: (HomeTab) -> Unit,
+  selectedTab: HomeTab? = null,
+  onSelectTab: (HomeTab) -> Unit = {},
   connection: ConnectionUiState = ConnectionUiState(),
   phoneRepository: ai.xopc.mobile.gateway.PhoneRepository? = null,
   mobilePush: ai.xopc.mobile.gateway.MobilePushClient? = null,
@@ -1134,11 +1179,44 @@ internal fun MainContent(
   onColorSchemeChange: (String) -> Unit = {},
   language: String = "system",
   onLanguageChange: (String) -> Unit = {},
+  navState: MobileTabNavState = rememberMobileTabNavState(selectedTab?.toNavSnapshot() ?: MobileNavSnapshot()),
   modifier: Modifier = Modifier,
 ) {
   val gatewayId = connection.profile?.gatewayId
   val isPaired = gatewayId != null
-  val conversationId = connection.selectedConversationId
+  val activeTab = navState.selectedTab
+  val topRoute = navState.topRoute
+  val isAdaRoot = activeTab == MobileTab.Ada && topRoute == null
+  val isChatRoute = isAdaRoot ||
+    topRoute is MobileRoute.SessionChat ||
+    topRoute is MobileRoute.TaskChat ||
+    topRoute is MobileRoute.ProjectChat ||
+    topRoute is MobileRoute.AutomationSetupChat
+  val activeChatConnection = if (isAdaRoot) connection.forAdaRoot() else connection
+  val conversationId = activeChatConnection.selectedConversationId
+  val personalConversationId = connection.personal.agent?.conversationId
+
+  // Bridge external legacy HomeTab updates (used in instrumentation tests).
+  var lastExternalTab by remember { mutableStateOf(selectedTab) }
+  LaunchedEffect(selectedTab) {
+    if (selectedTab != null && selectedTab != lastExternalTab) {
+      lastExternalTab = selectedTab
+      when (selectedTab) {
+        HomeTab.Assistant -> navState.openPushTarget(PushNavTarget.AdaHome)
+        HomeTab.Conversations -> navState.openSidebarTool(MobileRoute.ConversationSearch(autoFocusSearch = false))
+        HomeTab.Progress, HomeTab.Projects -> navState.selectTab(MobileTab.Workbench)
+        HomeTab.Automations -> {
+          navState.selectTab(MobileTab.Workbench)
+          navState.push(MobileRoute.Automations, MobileTab.Workbench)
+        }
+        HomeTab.Notes -> navState.selectTab(MobileTab.Notes)
+        HomeTab.Library -> navState.selectTab(MobileTab.Library)
+        HomeTab.Capabilities -> navState.openSidebarTool(MobileRoute.Capabilities())
+        HomeTab.Me -> navState.openSidebarTool(MobileRoute.Settings())
+      }
+    }
+  }
+
   val inputVoicePermissionDeniedText = stringResource(R.string.voice_permission_denied)
   val voiceRecordError = stringResource(R.string.voice_record_error)
   val voiceContext = LocalContext.current
@@ -1166,10 +1244,10 @@ internal fun MainContent(
     try { awaitCancellation() }
     finally { withContext(NonCancellable) { voiceCall.stop() } }
   }
-  val inputVoice = remember(gatewayId, conversationId, selectedTab) {
+  val inputVoice = remember(gatewayId, conversationId, activeTab, topRoute?.routeKey) {
     VoiceMemoRecorder(voiceContext)
   }
-  var inputVoiceMode by remember(gatewayId, conversationId, selectedTab) {
+  var inputVoiceMode by remember(gatewayId, conversationId, activeTab, topRoute?.routeKey) {
     mutableStateOf(false)
   }
   var inputVoiceHeld by remember(inputVoice) { mutableStateOf(false) }
@@ -1239,19 +1317,10 @@ internal fun MainContent(
     activeVoiceConversationId = id
     voiceCall.start(id, mode)
   }
-  var personalPage by rememberSaveable { mutableStateOf("settings") }
-  val taskNavigation = rememberTaskChatNavigation(connection)
+
   var taskDetailsOpen by rememberSaveable(gatewayId, connection.taskConversationTaskId) { mutableStateOf(false) }
-  fun openTaskConversation(taskId: String) {
-    taskNavigation.open(taskId, connection, sourceTab = selectedTab, onOpen = onOpenTaskChat)
-  }
-  var personalOverviewOpen by rememberSaveable(gatewayId) { mutableStateOf(false) }
   var editingOverviewProfile by remember(gatewayId) { mutableStateOf(false) }
   var overviewMedia by remember(gatewayId) { mutableStateOf<MessagePreviewRequest?>(null) }
-  val overviewAgent = connection.personal.agent?.takeIf { it.state == "ready" && it.conversationId == conversationId }
-  val showOverview = personalOverviewOpen && selectedTab == HomeTab.Assistant && overviewAgent != null &&
-    !isTaskChat(connection) && !connection.automationConfigurationChat
-  val overviewState = rememberSaveableStateHolder()
   val playback = MusicPlayback.state.collectAsStateWithLifecycle()
   val currentMusic by remember { derivedStateOf { playback.value?.track } }
   val activeMusic = currentMusic?.takeIf { it.gatewayId == gatewayId }
@@ -1261,128 +1330,199 @@ internal fun MainContent(
   LaunchedEffect(gatewayId, currentMusic?.gatewayId) {
     if (gatewayId != null && currentMusic?.gatewayId?.let { it != gatewayId } == true) MusicPlayback.stop()
   }
-  var automationReturnTab by rememberSaveable(gatewayId) { mutableStateOf(HomeTab.Assistant) }
-  var automationReturnProjectId by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
-  var automationReturnConversation by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
   var openingAutomation by remember(gatewayId) { mutableStateOf(false) }
-  val activeTab by rememberUpdatedState(selectedTab)
-  val activeGateway by rememberUpdatedState(gatewayId)
-  val activeConversation by rememberUpdatedState(conversationId)
-  val activeProject by rememberUpdatedState(connection.progress.projectId)
-  var projectChatReturnTab by rememberSaveable(gatewayId) { mutableStateOf(HomeTab.Projects) }
-  var projectChatReturnConversation by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
   var openingProjectChat by remember(gatewayId) { mutableStateOf(false) }
-  val projectChatOrigin = connection.projectChatOriginId
-  val showingProjectChat = projectChatOrigin != null && selectedTab == HomeTab.Assistant &&
-    !connection.automationConfigurationChat && !isTaskChat(connection)
-  val restoreConversationFromChild: (String) -> Unit = { id ->
-    if (projectChatOrigin != null) onSelectProjectConversation(id, projectChatOrigin)
-    else onRestoreConversation(id)
+  var notesPendingVoiceCount by remember(gatewayId) { mutableIntStateOf(0) }
+  val latestGateway by rememberUpdatedState(gatewayId)
+  val latestConversation by rememberUpdatedState(conversationId)
+  val latestProject by rememberUpdatedState(connection.progress.projectId)
+  val tabStateHolder = rememberSaveableStateHolder()
+  val sidebar = remember(gatewayId) { ChatSidebarState() }
+  fun setSidebarOpen(open: Boolean) {
+    sidebar.open = open
+    navState.setSidebarOpen(open)
   }
+  LaunchedEffect(navState.sidebarOpen) {
+    if (sidebar.open != navState.sidebarOpen) sidebar.open = navState.sidebarOpen
+  }
+
+  fun syncChatForActiveDestination() {
+    val route = navState.topRoute
+    val tab = navState.selectedTab
+    when {
+      tab == MobileTab.Ada && route == null -> {
+        val personalId = connection.personal.agent?.conversationId
+        if (personalId != null && connection.selectedConversationId != personalId) {
+          onRestoreConversation(personalId)
+        } else if (personalId == null && isPaired && !connection.personal.agentCreating) {
+          onOpenPersonalAgent()
+        }
+      }
+      route is MobileRoute.SessionChat -> {
+        val cid = route.effectiveConversationId
+        if (cid != null && cid != "pending-draft" && connection.selectedConversationId != cid) {
+          onRestoreConversation(cid)
+        }
+      }
+      route is MobileRoute.ProjectChat -> {
+        val cid = route.conversationId
+        if (cid != null && connection.selectedConversationId != cid) {
+          onSelectProjectConversation(cid, route.projectId)
+        }
+      }
+      route is MobileRoute.TaskChat -> {
+        val cid = route.conversationId
+        if (cid != null && connection.selectedConversationId != cid) {
+          onOpenTaskChat(route.taskId)
+        }
+      }
+    }
+  }
+
+  // Synchronize selectedConversationId whenever navigating between AdaRoot and L1 chat routes.
+  LaunchedEffect(activeTab, topRoute, personalConversationId) {
+    syncChatForActiveDestination()
+  }
+
+  // In-place draft promotion: update placeholder pending-draft SessionChat without pop+push.
+  LaunchedEffect(connection.selectedConversationId, topRoute) {
+    val currentId = connection.selectedConversationId ?: return@LaunchedEffect
+    val top = topRoute
+    if (top is MobileRoute.SessionChat && top.draftId == "pending-draft" && currentId != personalConversationId) {
+      navState.promoteSessionDraftInPlace("pending-draft", currentId, connection.conversationSummary(currentId)?.title)
+    } else if (top is MobileRoute.SessionChat && top.draftId != null && top.draftId == currentId &&
+      connection.conversationSummary(currentId)?.isLocalDraft == false) {
+      navState.promoteSessionDraftInPlace(top.draftId, currentId, connection.conversationSummary(currentId)?.title)
+    }
+  }
+
+  // Automatically pop deleted / 404 ordinary conversation back to AdaRoot.
+  var handledUnavailableRevision by remember(gatewayId) { mutableIntStateOf(connection.unavailableConversationRevision) }
+  LaunchedEffect(connection.unavailableConversationRevision) {
+    if (connection.unavailableConversationRevision > handledUnavailableRevision) {
+      handledUnavailableRevision = connection.unavailableConversationRevision
+      connection.unavailableConversationId?.let { missingId ->
+        navState.onConversationDeletedOrMissing(missingId)
+      }
+    }
+  }
+
+  fun openConversationRoute(id: String) {
+    if (id == personalConversationId) {
+      navState.openPushTarget(PushNavTarget.AdaHome)
+      onOpenPersonalAgent()
+    } else {
+      navState.openOrdinaryChat(
+        conversationId = id,
+        agentId = connection.conversationSummary(id)?.agentId ?: connection.defaultAgentId,
+        title = connection.conversationSummary(id)?.title,
+      )
+      onSelectConversation(id)
+    }
+  }
+
+  fun openNewOrdinaryDraft() {
+    navState.openOrdinaryChat(
+      conversationId = null,
+      draftId = "pending-draft",
+      agentId = connection.defaultAgentId,
+    )
+    onCreateConversation()
+  }
+
+  fun openTaskConversation(taskId: String) {
+    if (connection.progress.taskChatBusy) return
+    navState.openTaskChat(taskId = taskId)
+    onOpenTaskChat(taskId)
+  }
+
   fun openProjectChat(id: String, projectId: String) {
-    projectChatReturnTab = selectedTab
-    projectChatReturnConversation = conversationId
+    navState.openProjectChat(projectId = projectId, conversationId = id)
     onSelectProjectConversation(id, projectId)
-    onSelectTab(HomeTab.Assistant)
   }
-  fun restoreMainFromProjectChat() {
-    projectChatReturnConversation?.let(onRestoreConversation) ?: onOpenPersonalAgent()
-  }
-  fun closeProjectChat() {
-    restoreMainFromProjectChat()
-    projectChatOrigin?.let(onOpenProgressProject)
-    onSelectTab(projectChatReturnTab)
-  }
+
   val automationLocale = LocalConfiguration.current.locales[0].toLanguageTag()
   fun arrangeAutomation(projectId: String?, personal: Boolean, prompt: String) {
-    if (openingAutomation || gatewayId == null || connection.automationConfigurationChat) return
+    if (openingAutomation || gatewayId == null || topRoute is MobileRoute.AutomationSetupChat) return
     openingAutomation = true
-    val sourceTab = selectedTab
+    val sourceTab = activeTab
     val sourceConversation = conversationId
     voiceScope.launch {
       try {
         val id = onRequestAutomationConfiguration(projectId, automationLocale.takeIf { personal })
-        if (activeTab != sourceTab || activeGateway != gatewayId || activeConversation != sourceConversation ||
-          projectId != null && activeProject != projectId) return@launch
-        automationReturnTab = sourceTab
-        automationReturnProjectId = projectId
-        automationReturnConversation = sourceConversation
+        if (latestGateway != gatewayId || latestConversation != sourceConversation ||
+          projectId != null && latestProject != projectId) return@launch
         onShowAutomationConfiguration(id, prompt)
-        onSelectTab(HomeTab.Assistant)
+        navState.push(
+          MobileRoute.AutomationSetupChat(
+            projectId = projectId,
+            prompt = prompt,
+            personalSchedule = personal,
+            conversationId = id,
+          ),
+          tab = sourceTab,
+        )
       } catch (error: kotlinx.coroutines.CancellationException) {
         throw error
       } catch (error: Exception) {
-        if (activeTab == sourceTab && activeGateway == gatewayId && activeConversation == sourceConversation)
+        if (latestGateway == gatewayId && latestConversation == sourceConversation)
           xopcShowToast(voiceContext, if (personal && (error as? ai.xopc.mobile.gateway.GatewayHttpException)?.status == 400)
             R.string.automation_setup_personal_update_gateway else R.string.automation_create_error)
       } finally { openingAutomation = false }
     }
   }
-  fun closeAutomationConfiguration() {
-    automationReturnConversation?.let(restoreConversationFromChild) ?: onOpenPersonalAgent()
-    when (automationReturnTab) {
-      HomeTab.Progress, HomeTab.Projects -> {
-        automationReturnProjectId?.let(onOpenProgressProject) ?: onLoadAutomations()
-      }
-      else -> Unit
-    }
-    onSelectTab(automationReturnTab)
-  }
-  val libraryDelivery = rememberSaveable(gatewayId) { mutableStateOf("") }
-  val deliveryRoute = libraryDelivery.value
-  val libraryDeliveryKind = deliveryRoute.substringBefore(':')
-  val libraryDeliveryId = deliveryRoute.substringAfter(':', "")
-  var linkedDetails by remember(gatewayId) { mutableStateOf(emptyList<LinkedDetail>()) }
+
   var linkedMcp by remember(gatewayId, conversationId) { mutableStateOf<ConversationTarget?>(null) }
-  val linkedDetailId = linkedDetails.lastOrNull()?.takeIf { it.destination == selectedTab }?.id
-  fun openLinkedDetail(destination: HomeTab, id: String) {
-    if (selectedTab == HomeTab.Assistant) linkedDetails = emptyList()
-    linkedDetails = linkedDetails + LinkedDetail(selectedTab, destination, id)
-    onSelectTab(destination)
-  }
-  var personalReturnPage by rememberSaveable(gatewayId) { mutableStateOf("settings") }
-  var personalStartSection by rememberSaveable(gatewayId) { mutableStateOf("overview") }
-  var personalDetailId by rememberSaveable(gatewayId) { mutableStateOf("") }
   var previousGatewayId by remember { mutableStateOf(gatewayId) }
   LaunchedEffect(gatewayId, connection.gatewayChange) {
     if (connection.gatewayChange == GatewayChange.Switch && previousGatewayId != gatewayId) {
-      personalPage = "settings"
-      onSelectTab(HomeTab.Assistant)
-    } else if (personalPage == "settings-add" && connection.gatewayChange == GatewayChange.Pair) {
-      personalPage = "settings-gateways"
+      navState.resetForGatewaySwitch()
+      sidebar.open = false
+    } else if (topRoute is MobileRoute.Settings && topRoute.section == "add" &&
+      connection.gatewayChange == GatewayChange.Pair) {
+      navState.pop()
     } else if (previousGatewayId != gatewayId &&
-      personalPage != "settings-gateways" && personalPage != "settings-add") {
-      personalPage = "settings"
+      !(topRoute is MobileRoute.Settings && (topRoute.section == "gateways" || topRoute.section == "add"))) {
+      navState.resetForGatewaySwitch()
+      sidebar.open = false
     }
     previousGatewayId = gatewayId
   }
-  fun leavePersonalPage() {
-    val linkedSettings = linkedDetails.lastOrNull()?.takeIf { it.destination == HomeTab.Me && it.id == personalPage }
-    if (linkedSettings != null) {
-      linkedDetails = linkedDetails.dropLast(1)
-      personalPage = "settings"
-      onSelectTab(linkedSettings.source)
-    } else if (personalPage == "detail") {
-      personalPage = personalReturnPage
-      onClosePersonalAssertion()
-    } else if (personalPage == "settings-gateways") {
-      if (!connection.gatewayBusy) personalPage = "settings"
-    } else if (personalPage == "settings-appearance" || personalPage == "settings-language" ||
-      personalPage == "settings-sharing" ||
-      personalPage == "about" || personalPage == "goals" || personalPage == "settings-about" || personalPage == "settings-models" ||
-      personalPage == "settings-notifications") {
-      if (personalPage == "settings-sharing") onCloseShares()
-      personalPage = "settings"
-    } else if (personalPage == "settings-add") {
-      if (!connection.pairing && !pairingScanning) personalPage = "settings-gateways"
-    } else {
-      personalPage = "settings"
+
+  fun onRoutePopped(removed: MobileRoute) {
+    tabStateHolder.removeState("${gatewayId}:${activeTab.key}:${removed.routeKey}")
+    when (removed) {
+      is MobileRoute.ShareCenter -> onCloseShares()
+      is MobileRoute.AboutYou -> if (removed.itemId != null) onClosePersonalAssertion()
+      is MobileRoute.AutomationSetupChat -> {
+        removed.projectId?.let(onOpenProgressProject) ?: onLoadAutomations()
+      }
+      is MobileRoute.ProjectChat -> onOpenProgressProject(removed.projectId)
+      is MobileRoute.NoteEditor -> {
+        removed.projectId?.takeIf { it == connection.progress.projectId }?.let(onOpenProgressProject)
+      }
+      else -> Unit
+    }
+    if (navState.topRoute == null && navState.selectedTab == MobileTab.Ada && selectedTab != null) {
       onSelectTab(HomeTab.Assistant)
     }
   }
+
+  fun popCurrentRoute() {
+    val current = navState.topRoute
+    if (current is MobileRoute.Settings && current.section == "gateways" && connection.gatewayBusy) return
+    if (current is MobileRoute.Settings && current.section == "add" && (connection.pairing || pairingScanning)) return
+    val removed = navState.pop() ?: return
+    onRoutePopped(removed)
+  }
+
   LaunchedEffect(connection.personal.assertionDeletedRevision) {
-    if (personalPage == "detail" && connection.personal.assertionDeletedRevision > 0 &&
-      connection.personal.selectedAssertionId == null) personalPage = personalReturnPage
+    val top = topRoute
+    if (top is MobileRoute.AboutYou && top.itemId != null &&
+      connection.personal.assertionDeletedRevision > 0 &&
+      connection.personal.selectedAssertionId == null) {
+      popCurrentRoute()
+    }
   }
   LaunchedEffect(gatewayId) {
     if (isPaired) {
@@ -1392,28 +1532,26 @@ internal fun MainContent(
       }
     }
   }
-  LaunchedEffect(selectedTab, gatewayId) {
-    if (linkedDetailId == null && selectedTab == HomeTab.Projects && isPaired) onLoadProgressProjects()
-    if (linkedDetailId == null && selectedTab == HomeTab.Automations && isPaired) onLoadAutomations()
-  }
-  LaunchedEffect(selectedTab, gatewayId, linkedDetailId, isPaired) {
-    if (isPaired && selectedTab == HomeTab.Notes) {
-      onLoadNotes(connection.notes.search, connection.notes.status)
+  LaunchedEffect(activeTab, topRoute, gatewayId, isPaired) {
+    if (!isPaired) return@LaunchedEffect
+    if (activeTab == MobileTab.Ada && topRoute == null) onLoadPersonalAgent()
+    if (activeTab == MobileTab.Notes && topRoute == null) onLoadNotes(connection.notes.search, connection.notes.status)
+    when (topRoute) {
+      is MobileRoute.Automations -> onLoadAutomations()
+      is MobileRoute.Settings -> {
+        onLoadPersonal()
+        if (topRoute.section == "gateways") onOpenGatewayProfiles()
+        if (topRoute.section == "sharing") onLoadShares()
+      }
+      is MobileRoute.AboutYou, MobileRoute.PersonalGoals -> onLoadPersonal()
+      MobileRoute.ShareCenter -> onLoadShares()
+      else -> Unit
     }
-  }
-  LaunchedEffect(selectedTab, gatewayId) {
-    if (selectedTab == HomeTab.Me && isPaired) {
-      onLoadPersonal()
-    }
-  }
-  LaunchedEffect(selectedTab, gatewayId) {
-    if (isPaired && selectedTab == HomeTab.Assistant) onLoadPersonalAgent()
   }
   val latestClarificationRefresh by rememberUpdatedState(onRefreshClarification)
   val latestConnectionWaitRefresh by rememberUpdatedState(onRefreshConnectionWait)
-  LaunchedEffect(selectedTab, gatewayId, conversationId) {
-    if (selectedTab == HomeTab.Assistant && isPaired &&
-      conversationId != null) {
+  LaunchedEffect(isChatRoute, gatewayId, conversationId) {
+    if (isChatRoute && isPaired && conversationId != null) {
       while (true) {
         latestConnectionWaitRefresh()
         latestClarificationRefresh()
@@ -1421,14 +1559,10 @@ internal fun MainContent(
       }
     }
   }
-  LaunchedEffect(personalPage, gatewayId) {
-    if (personalPage == "settings-gateways") onOpenGatewayProfiles()
-    if (personalPage == "settings-sharing" && isPaired) onLoadShares()
-  }
-  var assistantActionsOpen by remember(selectedTab, conversationId) { mutableStateOf(false) }
-  var agentPickerOpen by remember(gatewayId, selectedTab, conversationId) { mutableStateOf(false) }
+  var assistantActionsOpen by remember(activeTab, topRoute?.routeKey, conversationId) { mutableStateOf(false) }
+  var agentPickerOpen by remember(gatewayId, activeTab, topRoute?.routeKey, conversationId) { mutableStateOf(false) }
   var assistantComposerValue by remember(conversationId) {
-    mutableStateOf(TextFieldValue(connection.draftText, selection = TextRange(connection.draftText.length)))
+    mutableStateOf(TextFieldValue(activeChatConnection.draftText, selection = TextRange(activeChatConnection.draftText.length)))
   }
   val assistantComposerFocus = remember(conversationId) { FocusRequester() }
   var assistantFocusRevision by remember(conversationId) { mutableIntStateOf(0) }
@@ -1439,8 +1573,8 @@ internal fun MainContent(
     mutableStateOf("")
   }
   val keyboardController = LocalSoftwareKeyboardController.current
-  val currentTab by rememberUpdatedState(selectedTab)
-  val currentComposerConnection by rememberUpdatedState(connection)
+  val currentTabState by rememberUpdatedState(activeTab)
+  val currentComposerConnection by rememberUpdatedState(activeChatConnection)
   var restoreInputKeyboard by remember(inputVoice) { mutableStateOf(false) }
   LaunchedEffect(inputVoiceMode) {
     if (!inputVoiceMode && restoreInputKeyboard) {
@@ -1470,7 +1604,7 @@ internal fun MainContent(
   }
   fun deliverInputVoice(destination: String) {
     if (inputVoiceBusy || inputVoice.phase != "ready") return
-    val targetTab = selectedTab
+    val targetTab = activeTab
     inputVoiceRetryDestination = destination
     inputVoiceNotice.clear()
     inputVoiceBusy = true
@@ -1480,7 +1614,7 @@ internal fun MainContent(
         if (destination == "text") {
           val lang = when { language.startsWith("zh") -> "zh"; language.startsWith("en") -> "en"; else -> "" }
           val transcript = onTranscribeAudio(bytes, lang)
-          if (inputVoice.phase != "ready" || !currentComposerConnection.matchesComposer(gatewayId, conversationId) || currentTab != targetTab) return@launch
+          if (inputVoice.phase != "ready" || !currentComposerConnection.matchesComposer(gatewayId, conversationId) || currentTabState != targetTab) return@launch
           val next = if (assistantComposerValue.text.isBlank()) transcript
             else assistantComposerValue.text + "\n" + transcript
           assistantComposerValue = TextFieldValue(next, selection = TextRange(next.length))
@@ -1488,7 +1622,7 @@ internal fun MainContent(
           restoreInputKeyboard = true
           inputVoiceMode = false
         } else {
-          if (inputVoice.phase != "ready" || !currentComposerConnection.matchesComposer(gatewayId, conversationId) || currentTab != targetTab) return@launch
+          if (inputVoice.phase != "ready" || !currentComposerConnection.matchesComposer(gatewayId, conversationId) || currentTabState != targetTab) return@launch
           onSendVoiceRecording(bytes, seconds)
         }
         inputVoice.cancel()
@@ -1501,7 +1635,7 @@ internal fun MainContent(
     }
   }
   fun startInputVoice(): Boolean {
-    if (inputVoiceBusy || inputVoice.phase != "idle" || connection.sending) return false
+    if (inputVoiceBusy || inputVoice.phase != "idle" || activeChatConnection.sending) return false
     inputVoiceNotice.clear(); inputVoiceDestination = "send"; inputVoiceElapsed = 0
     inputVoice.start()
     inputVoiceHeld = inputVoice.phase == "recording"
@@ -1537,14 +1671,26 @@ internal fun MainContent(
     musicPlayerOpen = true
   }
   var phonePage by remember(gatewayId, conversationId) { mutableStateOf(false) }
-  var messageSearchOpen by remember(gatewayId, conversationId, selectedTab, phonePage) { mutableStateOf(false) }
+  var messageSearchOpen by remember(gatewayId, conversationId, activeTab, topRoute?.routeKey, phonePage) { mutableStateOf(false) }
   val phoneController = rememberPhoneWorkspace(phoneRepository, conversationId,
-    gatewayId, selectedTab == HomeTab.Assistant, phonePage)
+    gatewayId, isChatRoute, phonePage)
   val phoneUi = phoneWorkspaceState(phoneController)
+  val imeVisible = WindowInsets.isImeVisible
+  var voiceExpanded by remember(voiceCall) { mutableStateOf(true) }
+  val fullScreenOverlayActive = phonePage || musicPlayerOpen || (voiceCall.phase != "idle" && voiceExpanded)
+  val showBottomTabBar = isPaired && navState.showBottomTabBar(
+    imeVisible = imeVisible,
+    fullScreenOverlayActive = fullScreenOverlayActive,
+  )
+  val allowSidebarEdgeSwipe = isPaired &&
+    navState.allowSidebarEdgeSwipe(fullScreenOverlayActive = fullScreenOverlayActive) &&
+    !assistantActionsOpen && !messageSearchOpen && !inputVoiceHeld
+  val bottomTabBarInset = if (showBottomTabBar) FLOATING_TAB_BAR_TOTAL_INSET else 0.dp
+  val showOverview = topRoute is MobileRoute.PersonalOverview
   val showMusicMini = activeMusic != null &&
-    (selectedTab != HomeTab.Assistant || phonePage || inlineMusicKey != activeMusic.key || activeMusic.conversationId != conversationId)
-  val showBottomChrome = isPaired && selectedTab == HomeTab.Assistant && !phonePage && !showOverview &&
-    (conversationId != null || !connection.restoringHomeChat)
+    (!isChatRoute || phonePage || inlineMusicKey != activeMusic.key || activeMusic.conversationId != conversationId)
+  val showBottomChrome = isPaired && isChatRoute && !phonePage && !showOverview &&
+    (conversationId != null || !activeChatConnection.restoringHomeChat)
   LaunchedEffect(showBottomChrome) {
     if (!showBottomChrome) {
       inputVoiceNotice.clear(); inputVoice.cancel(); inputVoiceHeld = false; inputVoiceMode = false
@@ -1553,34 +1699,33 @@ internal fun MainContent(
       keyboardController?.hide()
     }
   }
-  LaunchedEffect(conversationId, connection.draftText) {
-    if (assistantComposerValue.text != connection.draftText) assistantComposerValue =
-      TextFieldValue(connection.draftText, selection = TextRange(connection.draftText.length))
+  LaunchedEffect(conversationId, activeChatConnection.draftText) {
+    if (assistantComposerValue.text != activeChatConnection.draftText) assistantComposerValue =
+      TextFieldValue(activeChatConnection.draftText, selection = TextRange(activeChatConnection.draftText.length))
   }
   LaunchedEffect(conversationId, assistantFocusRevision) {
-    if (assistantFocusRevision > 0 && selectedTab == HomeTab.Assistant) {
+    if (assistantFocusRevision > 0 && isChatRoute) {
       assistantComposerFocus.requestFocus()
       keyboardController?.show()
     }
   }
-  LaunchedEffect(assistantReferenceKind, assistantReferenceQuery, gatewayId,
-    conversationId) {
+  LaunchedEffect(assistantReferenceKind, assistantReferenceQuery, gatewayId, conversationId) {
     val kind = assistantReferenceKind ?: return@LaunchedEffect
     if (kind == "file") return@LaunchedEffect
     if (assistantReferenceQuery.isNotEmpty()) delay(250)
     onLoadReferences(kind, assistantReferenceQuery)
   }
-  val imeVisible = WindowInsets.isImeVisible
   val layoutDirection = LocalLayoutDirection.current
-  val tabStateHolder = rememberSaveableStateHolder()
-  val sidebar = remember(gatewayId) { ChatSidebarState() }
   val refreshPersonalUnread by rememberUpdatedState(onRefreshPersonalUnread)
-  val personalTranscript = connection.historyTranscriptId?.takeIf {
-    selectedTab == HomeTab.Assistant && linkedDetailId == null && !sidebar.open && !phonePage &&
-      !showOverview && !messageSearchOpen && !connection.historyLoading && !connection.chatError &&
-      conversationId == connection.personal.agent?.conversationId
+  val canMarkPersonalRead = navState.shouldMarkPersonalRead(
+    appInForeground = true,
+    fullScreenOverlayActive = fullScreenOverlayActive || messageSearchOpen,
+  )
+  val personalTranscript = activeChatConnection.historyTranscriptId?.takeIf {
+    canMarkPersonalRead && !activeChatConnection.historyLoading && !activeChatConnection.chatError &&
+      conversationId == personalConversationId
   }
-  val personalLastSeq = if (personalTranscript != null) connection.historyLastSeq else null
+  val personalLastSeq = if (personalTranscript != null) activeChatConnection.historyLastSeq else null
   LaunchedEffect(connection.profile?.deviceId, gatewayId, sidebar.open, personalTranscript, personalLastSeq,
     connection.realtimeStatus) {
     if (gatewayId == null) return@LaunchedEffect
@@ -1621,17 +1766,42 @@ internal fun MainContent(
       while (true) {
         try {
           val target = mobilePush.acknowledge(click)
-          sidebar.open = false
+          setSidebarOpen(false)
           when (target?.optString("kind")) {
-            "task" -> openLinkedDetail(HomeTab.Progress, target.getString("taskId"))
+            "task" -> {
+              val tid = target.getString("taskId")
+              navState.openPushTarget(PushNavTarget.TaskDetail(tid))
+              onOpenProgressTask(tid)
+            }
+            "task_chat" -> {
+              val tid = target.getString("taskId")
+              navState.openPushTarget(PushNavTarget.TaskChat(tid))
+              onOpenTaskChat(tid)
+            }
             "chat", "work_discovery" -> {
-              onSelectConversation(target.getString("conversationId")); onSelectTab(HomeTab.Assistant)
+              val cid = target.getString("conversationId")
+              if (cid == personalConversationId) {
+                navState.openPushTarget(PushNavTarget.AdaHome)
+                onOpenPersonalAgent()
+              } else {
+                navState.openPushTarget(PushNavTarget.OrdinaryChat(cid))
+                onSelectConversation(cid)
+              }
             }
             "automation_run" -> {
-              libraryDelivery.value = "automation:" + target.getString("runId")
-              onSelectTab(HomeTab.Library)
+              val rid = target.getString("runId")
+              navState.openPushTarget(PushNavTarget.AutomationRun(rid))
+              onOpenAutomationRun(rid)
             }
-            "home" -> onSelectTab(HomeTab.Assistant)
+            "note" -> {
+              val nid = target.getString("noteId")
+              navState.openPushTarget(PushNavTarget.NoteDetail(nid))
+              onOpenNote(nid)
+            }
+            "home" -> {
+              navState.openPushTarget(PushNavTarget.AdaHome)
+              onOpenPersonalAgent()
+            }
           }
           inbox.forget(voiceContext, route)
           return@LaunchedEffect
@@ -1647,8 +1817,6 @@ internal fun MainContent(
       }
     }
   }
-  var returnToSidebar by rememberSaveable(gatewayId) { mutableStateOf(false) }
-  var startConversationSearch by rememberSaveable(gatewayId) { mutableStateOf(false) }
   val conversationsSearch by rememberUpdatedState(connection.conversationSearch)
   val clearConversationSearch by rememberUpdatedState(onConversationSearchChange)
   val refreshSidebarConversations by rememberUpdatedState(onRefreshRecentConversations)
@@ -1661,67 +1829,100 @@ internal fun MainContent(
     closeKeyboard()
     if (conversationsSearch.isNotEmpty()) clearConversationSearch("")
     refreshSidebarConversations()
-    sidebar.open = true
+    setSidebarOpen(true)
   }
-  val exitDestination: () -> Unit = {
-    val linkedDetail = linkedDetails.lastOrNull()?.takeIf { it.destination == selectedTab }
-    if (linkedDetail != null) {
-      linkedDetails = linkedDetails.dropLast(1)
-      onSelectTab(linkedDetail.source)
-    } else {
-      onSelectTab(HomeTab.Assistant)
-      if (returnToSidebar && selectedTab in listOf(HomeTab.Conversations, HomeTab.Progress, HomeTab.Automations)) openSidebar()
-      returnToSidebar = false
+  val workbenchAttention = connection.progress.needsUser.size.takeIf {
+    connection.progress.gatewayId == gatewayId
+  } ?: 0
+  val adaRunning = (connection.selectedConversationId == personalConversationId &&
+    (connection.activeRunId != null || connection.sending)) ||
+    (connection.personalChatSnapshot?.activeRunId != null)
+
+  // Single unified BackHandler following strict 5-level priority:
+  // 1. IME (handled by Android) / composer action panel / L2 overlays / multi-select
+  // 2. Sidebar drawer
+  // 3. Active tab stack non-empty -> pop()
+  // 4. Non-Ada root -> switch to Ada
+  // 5. Ada root -> disabled (system backgrounds app)
+  val hasTransientUi = assistantActionsOpen || messageSearchOpen || musicPlayerOpen ||
+    linkedMcp != null || phonePage || (sidebar.open && sidebar.selecting)
+  val canHandleBack = (isPaired && (
+    hasTransientUi ||
+    sidebar.open ||
+    navState.activeStack.isNotEmpty() ||
+    activeTab != MobileTab.Ada
+  )) || (!isPaired && topRoute != null)
+  BackHandler(enabled = canHandleBack) {
+    if (hasTransientUi) {
+      when {
+        sidebar.open && sidebar.selecting -> sidebar.onCancelSelection?.invoke()
+        linkedMcp != null -> linkedMcp = null
+        musicPlayerOpen -> musicPlayerOpen = false
+        messageSearchOpen -> messageSearchOpen = false
+        assistantActionsOpen -> assistantActionsOpen = false
+        phonePage -> phonePage = false
+      }
+      return@BackHandler
+    }
+    if (topRoute is MobileRoute.Settings) {
+      if (topRoute.section == "gateways" && connection.gatewayBusy) return@BackHandler
+      if (topRoute.section == "add" && (connection.pairing || pairingScanning)) return@BackHandler
+    }
+    when (val action = navState.handleBack(hasTransientUi = false)) {
+      BackAction.ClosedSidebar -> sidebar.open = false
+      is BackAction.PoppedRoute -> onRoutePopped(action.route)
+      BackAction.SwitchedToAda -> if (selectedTab != null) onSelectTab(HomeTab.Assistant)
+      BackAction.DismissTransientUi, BackAction.SystemBack -> Unit
     }
   }
-  LaunchedEffect(selectedTab) {
-    if (selectedTab == HomeTab.Assistant) returnToSidebar = false
-    if (selectedTab != HomeTab.Assistant) sidebar.open = false
-    if (selectedTab != HomeTab.Conversations) startConversationSearch = false
+
+  val floatingTabBarSlot: @Composable () -> Unit = {
+    FloatingTabBar(
+      selectedTab = activeTab,
+      onSelectTab = { tab ->
+        closeKeyboard()
+        navState.selectTab(tab)
+      },
+      personalName = connection.personal.agent?.displayName,
+      personalAvatar = connection.personal.agentAvatar,
+      personalAppearance = connection.personal.agent?.appearance ?: "loopi",
+      personalUnread = connection.personal.unreadCount,
+      personalActive = adaRunning,
+      workbenchAttention = workbenchAttention,
+      notesPendingRecording = notesPendingVoiceCount > 0,
+    )
   }
-  BackHandler(enabled = selectedTab != HomeTab.Assistant && isPaired) { exitDestination() }
-  BackHandler(enabled = sidebar.open) { sidebar.open = false }
-  BackHandler(enabled = selectedTab == HomeTab.Assistant && isTaskChat(connection) && !imeVisible) {
-    taskNavigation.close(restoreConversationFromChild, onSelectTab)
-  }
-  BackHandler(enabled = selectedTab == HomeTab.Assistant && connection.automationConfigurationChat && !imeVisible) {
-    closeAutomationConfiguration()
-  }
-  BackHandler(enabled = showingProjectChat && !sidebar.open && !imeVisible, onBack = ::closeProjectChat)
-  BackHandler(enabled = showOverview) { personalOverviewOpen = false }
-  BackHandler(enabled = assistantActionsOpen) { assistantActionsOpen = false }
-  BackHandler(enabled = selectedTab == HomeTab.Me) { leavePersonalPage() }
+
   MainScaffoldLayout(
     modifier = modifier,
     sidebar = sidebar,
     layoutDirection = layoutDirection,
-    sidebarGestureEnabled = !assistantActionsOpen && !messageSearchOpen && !inputVoiceHeld &&
-      !isTaskChat(connection) && !connection.automationConfigurationChat &&
-      !showOverview && !phonePage,
+    sidebarGestureEnabled = allowSidebarEdgeSwipe,
     onCloseKeyboard = closeKeyboard,
     onOpenSidebar = openSidebar,
     bottomBar = {
       if (showBottomChrome) Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
           if (conversationId != null) ChatConnectionNotice(
-            connection.realtimeStatus, connection.realtimeNoticeStage, connection.chatSyncError, onRetryChatNetwork)
+            activeChatConnection.realtimeStatus, activeChatConnection.realtimeNoticeStage,
+            activeChatConnection.chatSyncError, onRetryChatNetwork)
           if (showMusicMini) MusicMiniPlayer(activeMusic, openMusicPlayer,
             Modifier.padding(horizontal = 12.dp).padding(bottom = 4.dp))
           if (conversationId != null) ConversationMcpAction(conversationId,
-            connection.sending || connection.activeRunId != null, onCapabilityPanel)
-          if (isTaskChat(connection)) TaskDetailsTip(
+            activeChatConnection.sending || activeChatConnection.activeRunId != null, onCapabilityPanel)
+          if (topRoute is MobileRoute.TaskChat) TaskDetailsTip(
             onOpen = { closeKeyboard(); taskDetailsOpen = true },
             modifier = Modifier.align(Alignment.Start).padding(start = 16.dp))
-          val activeClarification = connection.clarification
+          val activeClarification = activeChatConnection.clarification
           if (activeClarification != null) {
             ClarificationCard(
               activeClarification,
-              connection.clarificationBusy,
-              connection.clarificationError,
+              activeChatConnection.clarificationBusy,
+              activeChatConnection.clarificationError,
               onRespondToClarification,
               Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
             )
           } else MainBottomSurface("assistant-bottom-surface", assistantActionsOpen) {
-            AssistantComposer(connection, assistantComposerValue, { value ->
+            AssistantComposer(activeChatConnection, assistantComposerValue, { value ->
               inputVoiceNotice.clear()
               onDismissComposerErrors(gatewayId, conversationId)
               assistantComposerValue = value
@@ -1745,18 +1946,16 @@ internal fun MainContent(
               enter = xopcExpandPanelEnter(panelMotionAllowed, Alignment.Bottom),
               exit = xopcExpandPanelExit(panelMotionAllowed, Alignment.Bottom), label = "assistant-actions") {
               AssistantActionPanel(
-                canSwitchAgent = !connection.automationConfigurationChat &&
-                  !isTaskChat(connection) && connection.personal.agent?.let {
-                    it.state == "ready" && it.conversationId == conversationId
-                  } != true,
+                canSwitchAgent = topRoute !is MobileRoute.AutomationSetupChat &&
+                  topRoute !is MobileRoute.TaskChat && !isAdaRoot,
                 onOpenAgentPicker = {
                   assistantActionsOpen = false
                   agentPickerOpen = true
                 },
-                canRecord = !inputVoiceBusy && !inputVoiceMode && inputVoice.phase == "idle" && !connection.sending,
-                canReference = !connection.sending && connection.pendingInput == null,
-                canPick = !connection.sending && !connection.attachmentLoading &&
-                  connection.pendingInput == null && connection.draftAttachments.size < 10,
+                canRecord = !inputVoiceBusy && !inputVoiceMode && inputVoice.phase == "idle" && !activeChatConnection.sending,
+                canReference = !activeChatConnection.sending && activeChatConnection.pendingInput == null,
+                canPick = !activeChatConnection.sending && !activeChatConnection.attachmentLoading &&
+                  activeChatConnection.pendingInput == null && activeChatConnection.draftAttachments.size < 10,
                 onPick = { kind ->
                   assistantActionsOpen = false
                   onPickDraftAttachment(kind)
@@ -1770,439 +1969,834 @@ internal fun MainContent(
                 })
             }
           }
-        Spacer(Modifier.fillMaxWidth().navigationBarsPadding().testTag("bottom-content-mask"))
-      } else if (showMusicMini && !showOverview) {
+          if (showBottomTabBar) {
+            Spacer(Modifier.height(FLOATING_TAB_BAR_COMPOSER_GAP))
+            floatingTabBarSlot()
+          } else {
+            Spacer(Modifier.fillMaxWidth().navigationBarsPadding().testTag("bottom-content-mask"))
+          }
+      } else if (showMusicMini && !showOverview && !showBottomTabBar) {
         MusicMiniPlayer(activeMusic, openMusicPlayer, Modifier.navigationBarsPadding()
           .padding(horizontal = 12.dp, vertical = 7.dp))
       }
     },
     page = { insets, sidebarGesture ->
     val readingPosition = rememberChatReadingPosition(connection.profile?.gatewayId,
-      connection.profile?.deviceId, connection.selectedConversationId)
+      connection.profile?.deviceId, conversationId)
     val rootInsets = if (showBottomChrome) PaddingValues(
       start = insets.calculateLeftPadding(layoutDirection),
-      top = if (selectedTab == HomeTab.Assistant) 0.dp else insets.calculateTopPadding(),
+      top = if (isChatRoute) 0.dp else insets.calculateTopPadding(),
       end = insets.calculateRightPadding(layoutDirection)) else insets
-    if (!isPaired && selectedTab != HomeTab.Me) {
+    val allowUnpairedRoute = topRoute is MobileRoute.Settings || topRoute is MobileRoute.AboutYou ||
+      topRoute is MobileRoute.PersonalGoals || topRoute is MobileRoute.ShareCenter
+    if (!isPaired && !allowUnpairedRoute) {
       PairingScreen(stringResource(R.string.pairing_title), connection, onPair, onCancelPairing,
         onScanPairing, pairingScanning, pairingScanError, insets,
-        onSettings = {
-          personalPage = "settings"
-          onSelectTab(HomeTab.Me)
-        })
+        onSettings = { navState.push(MobileRoute.Settings()) })
     } else {
-    val showLibraryDelivery = selectedTab == HomeTab.Library && libraryDeliveryId.isNotEmpty()
-    val tabStateKey = when {
-      showLibraryDelivery -> "library-delivery-${gatewayId}-$libraryDeliveryKind-$libraryDeliveryId"
-      selectedTab == HomeTab.Library -> "library-root-${gatewayId}"
-      linkedDetailId != null -> "linked-detail-$gatewayId-${selectedTab.name}-$linkedDetailId"
-      else -> "${gatewayId}:${selectedTab.name}"
-    }
-    val pageMotionAllowed = rememberMotionAllowed()
-    AnimatedContent(
-      targetState = MainPageDestination(tabStateKey, selectedTab, linkedDetailId, deliveryRoute.takeIf { showLibraryDelivery }),
-      transitionSpec = { xopcScreenTransition(pageMotionAllowed) },
-      contentKey = { it.stateKey },
-      label = "main-destination",
-    ) { destination ->
-    val detailId = destination.detailId
-    tabStateHolder.SaveableStateProvider(destination.stateKey) {
-    when (destination.contentTab) {
-      HomeTab.Assistant, HomeTab.Conversations -> {
-        val title = stringResource(R.string.pairing_title)
-        if (!isPaired) PairingScreen(title, connection, onPair, onCancelPairing,
-          onScanPairing,
-          pairingScanning, pairingScanError, insets)
-        else if (destination.tab == HomeTab.Assistant) PhoneConversationPager(phoneController, phonePage, { phonePage = it }) {
-          AssistantScreen(connection, readingPosition,
-          rootInsets, insets, onRetryConversation,
-          onCreateConversation, onLoadOlderHistory, onLoadReferences, onAddDraftRef,
-          onNoteFileContent,
-          onRetryPendingInput,
-          onReloadModels, onSelectModel, onSelectThinking, onSelectServiceTier,
-          onReloadAgents, onSwitchAgent, onSwitchAgentInProject,
-          onReloadContext,
-          onLoadContextPanel, onSetContextDirectory, onAddContextFile, onCreateContextConversation,
-          onRefreshClarification, onRespondToClarification, onRefreshConnectionWait, onConnectionWaitAction,
-          onOpenExecution, onRetryExecution, onCloseExecution,
-          onCopyMessageText, onSaveMessageAsNote, onReuseMessage, onRegenerateMessage,
-          onLoadMessageMedia, reader, onOpenMessageTarget = { target ->
-            when (target.kind) {
-              "note" -> openLinkedDetail(HomeTab.Notes, target.id)
-              "progress" -> onSelectTab(HomeTab.Progress)
-              "task" -> taskNavigation.open(target.id, connection, onOpen = onOpenTaskChat)
-              "project" -> openLinkedDetail(HomeTab.Projects, target.id)
-              "automation" -> openLinkedDetail(HomeTab.Automations, target.id)
-              "automation-run" -> openLinkedDetail(HomeTab.Automations, "run:${target.id}")
-              "mcp-setup" -> linkedMcp = target
-              "session" -> { onSelectConversation(target.id); onSelectTab(HomeTab.Assistant) }
-              "user_assertion" -> {
-                personalReturnPage = "settings"; personalDetailId = target.id; personalPage = "detail"
-                onOpenPersonalAssertion(target.id); onSelectTab(HomeTab.Me)
-              }
-              "settings" -> {
-                personalPage = if (target.id.isEmpty()) "settings" else "settings-${target.id}"
-                openLinkedDetail(HomeTab.Me, personalPage)
-              }
-            }
-          },
-          { value ->
-            assistantComposerValue = value
-            onDraftChange(value.text)
-          }, { assistantFocusRevision++ },
-          assistantReferenceKind, { assistantReferenceKind = it },
-          assistantReferenceQuery, { assistantReferenceQuery = it },
-          agentPickerOpen, { agentPickerOpen = it },
-          { assistantActionsOpen = it },
-          phoneAvailable = phoneUi.summary?.available == true, phoneNeedsUser = phoneUi.summary?.access != "none" && phoneUi.attention,
-          onOpenPhone = { phonePage = true },
-          onShareConversation = onBeginConversationShare,
-          messageSearchOpen = messageSearchOpen,
-          onMessageSearchOpenChange = { messageSearchOpen = it },
-          onOpenSidebar = openSidebar, onRetryHomeChat = onOpenPersonalAgent,
-          onCloseAutomationConfiguration = ::closeAutomationConfiguration,
-          onCloseProjectChat = if (showingProjectChat) {
-            { closeKeyboard(); closeProjectChat() }
-          } else null,
-          onOpenPersonalOverview = {
-            closeKeyboard()
-            overviewState.removeState("personal-overview-$gatewayId")
-            personalOverviewOpen = true
-          },
-          sidebarGesture = sidebarGesture,
-          canStartVoiceCall = voiceCall.phase == "idle" && pendingVoiceMode == null &&
-            !connection.creatingConversation && conversationId != null && !connection.sending,
-          onReselectConnectedComputer = onReselectConnectedComputer,
-          onStartVoiceCall = {
-            assistantActionsOpen = false
-            requestVoice("auto")
-          },
-          generatedMediaAccess = generatedMediaAccess.takeUnless { phonePage },
-          activeMusic = activeMusic,
-          onInlineMusic = { inlineMusicKey = it },
-          onExpandMusic = openMusicPlayer,
-          taskChrome = { search, options ->
-            TaskConversationChrome(connection, taskNavigation, restoreConversationFromChild, onSelectTab,
-              onOpenProgressTask, onProgressTaskCommand, onStartProgressTask, onSaveProgressTask,
-              onLoadProgressProjects, search, options, taskDetailsOpen, { taskDetailsOpen = false })
-          })
-        }
-        else ConversationsScreen(connection, rootInsets,
-          onConversationSearchChange,
-          onRefreshConversations, onLoadMoreConversations, {
-          onCreateConversation()
-          onSelectTab(HomeTab.Assistant)
-        }, { id ->
-          onSelectConversation(id)
-          onSelectTab(HomeTab.Assistant)
-        }, { taskId, id ->
-          taskNavigation.open(taskId, connection, sourceTab = HomeTab.Conversations, waitsForResult = false) {
-            onSelectTaskChildConversation(taskId, id)
-            onSelectTab(HomeTab.Assistant)
-          }
-        }, onBeginRename,
-          onTogglePin, onToggleArchive, onBatchConversations,
-          onBeginConversationShare, onScheduleDelete, onUndoDelete, exitDestination, startConversationSearch,
-          onConversationScope, onLoadProgressProjects, onFetchConversationExperts)
+      val renderKey = if (topRoute == null) {
+        "${gatewayId}:root:${activeTab.key}"
+      } else {
+        "${gatewayId}:${activeTab.key}:${topRoute.routeKey}"
       }
-      HomeTab.Progress, HomeTab.Projects, HomeTab.Automations -> if (!isPaired) PairingScreen(
-        stringResource(R.string.tab_progress), connection, onPair, onCancelPairing, onScanPairing,
-        pairingScanning, pairingScanError, insets)
-      else {
-        ProgressScreen(connection.progress.takeIf { it.gatewayId == gatewayId }
-          ?: ProgressUiState(gatewayId = gatewayId, loading = true),
-          rootInsets, onRefreshProgressHome, onRefreshProgressTasks, onLoadMoreProgressTasks,
-          onOpenProgressTask, onProgressTaskSearchChange, onSubmitProgressTaskSearch,
-          onProgressTaskCommand, onStartProgressTask, onCreateTaskWithChat,
-          onLoadProgressProjects, onOpenProgressProject, onCreateProgressTask,
-          ::openTaskConversation,
-          onSaveProgressTask, onHomeAction = onProgressHomeAction,
-          onLoadAutomations = onLoadAutomations, onOpenAutomation = onOpenAutomation,
-          onOpenAutomationRun = onOpenAutomationRun, onAutomationAction = onAutomationAction,
-          onArrangeAutomation = { id, prompt -> arrangeAutomation(id, false, prompt) },
-          onWriteProject = onWriteProgressProject,
-          onCreateProjectNote = { projectId ->
-            onCreateProjectNote(projectId)
-            openLinkedDetail(HomeTab.Notes, "project-note-$projectId")
-          },
-          onUpdateAutomation = onUpdateAutomation,
-          onDeleteAutomation = onDeleteAutomation,
-          onAutomationRunAction = onAutomationRunAction,
-          onOpenChat = { id ->
-          onSelectConversation(id)
-          onSelectTab(HomeTab.Assistant)
-        }, onOpenProjectChat = { session ->
-          connection.progress.projectId?.let { openProjectChat(session.id, it) }
-        }, onOpenNote = { id -> openLinkedDetail(HomeTab.Notes, id) }, onCreateProjectChat = { projectId ->
-          if (!openingProjectChat && !connection.creatingConversation && connection.progress.project?.id == projectId) {
-            openingProjectChat = true
-            val sourceTab = selectedTab
-            val sourceConversation = conversationId
-            voiceScope.launch {
-              fun sourceActive() = activeGateway == gatewayId && activeTab == sourceTab &&
-                activeConversation == sourceConversation && activeProject == projectId
-              try {
-                val id = onCreateProjectConversation(projectId)
-                if (sourceActive()) openProjectChat(id, projectId)
-              } catch (error: kotlinx.coroutines.CancellationException) {
-                throw error
-              } catch (_: Exception) {
-                if (sourceActive())
-                  xopcShowToast(voiceContext, R.string.project_save_error)
-              } finally { openingProjectChat = false }
+      val pageMotionAllowed = rememberMotionAllowed()
+      AnimatedContent(
+        targetState = MainRenderTarget(renderKey, activeTab, topRoute),
+        transitionSpec = { xopcScreenTransition(pageMotionAllowed) },
+        contentKey = { it.stateKey },
+        label = "main-destination",
+      ) { target ->
+        tabStateHolder.SaveableStateProvider(target.stateKey) {
+          val route = target.route
+          @Composable
+          fun renderChatSurface(
+            chatConn: ConnectionUiState,
+            isAdaRootSurface: Boolean,
+            sessionChatRoute: MobileRoute.SessionChat? = null,
+            taskChatRoute: MobileRoute.TaskChat? = null,
+            projectChatRoute: MobileRoute.ProjectChat? = null,
+            automationSetupRoute: MobileRoute.AutomationSetupChat? = null,
+          ) {
+            PhoneConversationPager(phoneController, phonePage, { phonePage = it }) {
+              AssistantScreen(
+                connection = chatConn,
+                readingPosition = readingPosition,
+                insets = rootInsets,
+                bottomChromeInsets = insets,
+                onRetryConversation = onRetryConversation,
+                onCreateConversation = ::openNewOrdinaryDraft,
+                onLoadOlderHistory = onLoadOlderHistory,
+                onLoadReferences = onLoadReferences,
+                onAddDraftRef = onAddDraftRef,
+                onSessionFileContent = onNoteFileContent,
+                onRetryPendingInput = onRetryPendingInput,
+                onReloadModels = onReloadModels,
+                onSelectModel = onSelectModel,
+                onSelectThinking = onSelectThinking,
+                onSelectServiceTier = onSelectServiceTier,
+                onReloadAgents = onReloadAgents,
+                onSwitchAgent = onSwitchAgent,
+                onSwitchAgentInProject = onSwitchAgentInProject,
+                onReloadContext = onReloadContext,
+                onLoadContextPanel = onLoadContextPanel,
+                onSetContextDirectory = onSetContextDirectory,
+                onAddContextFile = onAddContextFile,
+                onCreateContextConversation = onCreateContextConversation,
+                onRefreshClarification = onRefreshClarification,
+                onRespondToClarification = onRespondToClarification,
+                onRefreshConnectionWait = onRefreshConnectionWait,
+                onConnectionWaitAction = onConnectionWaitAction,
+                onOpenExecution = onOpenExecution,
+                onRetryExecution = onRetryExecution,
+                onCloseExecution = onCloseExecution,
+                onCopyMessageText = onCopyMessageText,
+                onSaveMessageAsNote = onSaveMessageAsNote,
+                onReuseMessage = onReuseMessage,
+                onRegenerateMessage = onRegenerateMessage,
+                onLoadMessageMedia = onLoadMessageMedia,
+                reader = reader,
+                onOpenMessageTarget = { msgTarget ->
+                  when (msgTarget.kind) {
+                    "note" -> { onOpenNote(msgTarget.id); navState.push(MobileRoute.NoteDetail(msgTarget.id)) }
+                    "progress" -> navState.selectTab(MobileTab.Workbench)
+                    "task" -> openTaskConversation(msgTarget.id)
+                    "project" -> { onOpenProgressProject(msgTarget.id); navState.push(MobileRoute.ProjectDetail(msgTarget.id)) }
+                    "automation" -> { onOpenAutomation(msgTarget.id); navState.push(MobileRoute.AutomationDetail(msgTarget.id)) }
+                    "automation-run" -> { onOpenAutomationRun(msgTarget.id); navState.push(MobileRoute.AutomationRun(msgTarget.id)) }
+                    "mcp-setup" -> linkedMcp = msgTarget
+                    "session" -> openConversationRoute(msgTarget.id)
+                    "user_assertion" -> {
+                      onOpenPersonalAssertion(msgTarget.id)
+                      navState.push(MobileRoute.AboutYou(itemId = msgTarget.id))
+                    }
+                    "settings" -> navState.push(MobileRoute.Settings(section = msgTarget.id.ifEmpty { null }))
+                  }
+                },
+                onComposerValueChange = { value ->
+                  assistantComposerValue = value
+                  onDraftChange(value.text)
+                },
+                onFocusDraft = { assistantFocusRevision++ },
+                referenceKind = assistantReferenceKind,
+                onReferenceKindChange = { assistantReferenceKind = it },
+                referenceQuery = assistantReferenceQuery,
+                onReferenceQueryChange = { assistantReferenceQuery = it },
+                agentPickerOpen = agentPickerOpen,
+                onAgentPickerOpenChange = { agentPickerOpen = it },
+                onActionsOpenChange = { assistantActionsOpen = it },
+                phoneAvailable = phoneUi.summary?.available == true,
+                phoneNeedsUser = phoneUi.summary?.access != "none" && phoneUi.attention,
+                onOpenPhone = { phonePage = true },
+                onShareConversation = onBeginConversationShare,
+                messageSearchOpen = messageSearchOpen,
+                onMessageSearchOpenChange = { messageSearchOpen = it },
+                onOpenSidebar = openSidebar,
+                onRetryHomeChat = onOpenPersonalAgent,
+                onCloseAutomationConfiguration = {
+                  closeKeyboard()
+                  popCurrentRoute()
+                },
+                onCloseProjectChat = if (projectChatRoute != null) {
+                  { closeKeyboard(); popCurrentRoute() }
+                } else null,
+                onOpenPersonalOverview = {
+                  closeKeyboard()
+                  val allowsShare = chatConn.messages.any { it.role == "user" || it.role == "assistant" }
+                  navState.push(MobileRoute.PersonalOverview(allowsConversationSharing = allowsShare))
+                },
+                sidebarGesture = if (isAdaRootSurface) sidebarGesture else Modifier,
+                canStartVoiceCall = voiceCall.phase == "idle" && pendingVoiceMode == null &&
+                  !chatConn.creatingConversation && chatConn.selectedConversationId != null && !chatConn.sending,
+                onReselectConnectedComputer = onReselectConnectedComputer,
+                onStartVoiceCall = {
+                  assistantActionsOpen = false
+                  requestVoice("auto")
+                },
+                generatedMediaAccess = generatedMediaAccess.takeUnless { phonePage },
+                activeMusic = activeMusic,
+                onInlineMusic = { inlineMusicKey = it },
+                onExpandMusic = openMusicPlayer,
+                isAdaRoot = isAdaRootSurface,
+                scrollToTopRevision = if (isAdaRootSurface) navState.scrollToTopRevision(MobileTab.Ada) else 0,
+                onBackFromChat = if (sessionChatRoute != null) {
+                  { closeKeyboard(); popCurrentRoute() }
+                } else null,
+                onSwitchConversation = if (sessionChatRoute != null) openSidebar else null,
+                sessionTitleOverride = sessionChatRoute?.title,
+                isTaskChatRoute = taskChatRoute != null,
+                isAutomationSetupRoute = automationSetupRoute != null,
+                taskChrome = { search, options ->
+                  val tid = taskChatRoute?.taskId ?: chatConn.taskConversationTaskId
+                  if (tid != null) {
+                    val title = chatConn.context?.task?.title ?: chatConn.taskWelcome?.taskTitle ?: taskChatRoute?.title.orEmpty()
+                    val returnTabHint = when (target.tab) {
+                      MobileTab.Ada -> HomeTab.Assistant
+                      MobileTab.Workbench -> HomeTab.Progress
+                      MobileTab.Notes -> HomeTab.Notes
+                      MobileTab.Library, is MobileTab.PinnedSpace -> HomeTab.Library
+                    }
+                    TaskChatChrome(
+                      taskId = tid,
+                      title = title,
+                      state = chatConn.progress,
+                      onClose = { closeKeyboard(); popCurrentRoute() },
+                      onReload = { onOpenProgressTask(tid) },
+                      onCommand = onProgressTaskCommand,
+                      onStart = onStartProgressTask,
+                      onSave = onSaveProgressTask,
+                      onLoadProjects = onLoadProgressProjects,
+                      onSearch = search,
+                      onOptions = options,
+                      detailsOpen = taskDetailsOpen,
+                      onDismissDetails = { taskDetailsOpen = false },
+                      returnTab = returnTabHint,
+                    )
+                  }
+                },
+              )
             }
           }
-        }, chatBusy = connection.creatingConversation || openingProjectChat,
-          initialPage = when (destination.tab) {
-            HomeTab.Projects -> if (detailId == null) "projects" else "project"
-            HomeTab.Automations -> when {
-              detailId == null -> "automations"
-              detailId.startsWith("run:") -> "automation-run"
-              else -> "automation"
-            }
-            else -> if (detailId == null) "overview" else "detail"
-          },
-          initialItemId = detailId?.removePrefix("run:"),
-          onExit = {
-            if (detailId != null) tabStateHolder.removeState(destination.stateKey)
-            exitDestination()
-          },
-          initialDeliveryKind = destination.libraryDelivery?.substringBefore(':'),
-          initialDeliveryId = destination.libraryDelivery?.substringAfter(':'),
-          onCloseDelivery = {
-            tabStateHolder.removeState(destination.stateKey)
-            libraryDelivery.value = ""
-          },
-          onOpenLibrary = { openLinkedDetail(HomeTab.Library, "workbench-library") },
-        )
-      }
-      HomeTab.Capabilities -> CapabilitiesScreen(rootInsets, connection.personal, connection.agentAvatars, onLoadCapabilities,
-        onOpenAgent = { item ->
-          if (item.personal) onOpenPersonalAgent() else onCreateAgentConversation(item.id)
-          onSelectTab(HomeTab.Assistant)
-        }, onExit = exitDestination,
-        onPanel = onCapabilityPanel, onSetupChat = onCapabilitySetupChat,
-        onLoadDevices = onLoadCapabilityDevices, onSetDeviceCapability = onSetDeviceCapability, onUseComputer = onUseConnectedComputer,
-        onShareDeviceFile = onShareDeviceConnectionFile, onPairDevice = onScanPairing,
-        deviceScope = connection.profile?.let { it.gatewayId + ':' + it.deviceId })
-      HomeTab.Library -> if (!isPaired) PairingScreen(
-        stringResource(R.string.library_title), connection, onPair, onCancelPairing, onScanPairing,
-        pairingScanning, pairingScanError, insets)
-      else {
-        val profile = connection.profile
-        if (spaceLibraryAccess != null) {
-          SpaceLibraryScreen(rootInsets, profile, spaceLibraryAccess, onExit = exitDestination,
-            onSource = { source ->
-              when {
-                source.kind == "task" && source.taskId != null -> openTaskConversation(source.taskId)
-                source.kind == "automation" && source.automationRunId != null -> libraryDelivery.value = "automation:${source.automationRunId}"
-                else -> {
-                  onSelectConversation(source.conversationId)
-                  onSelectTab(HomeTab.Assistant)
+
+          if (route == null) {
+            // L0 Tab Roots (4 preserved tabs + future PinnedSpace)
+            when (target.tab) {
+              MobileTab.Ada -> renderChatSurface(
+                chatConn = connection.forAdaRoot(),
+                isAdaRootSurface = true,
+              )
+              MobileTab.Workbench -> ProgressScreen(
+                state = connection.progress.takeIf { it.gatewayId == gatewayId }
+                  ?: ProgressUiState(gatewayId = gatewayId, loading = true),
+                insets = rootInsets,
+                onRefreshHome = onRefreshProgressHome,
+                onRefreshTasks = onRefreshProgressTasks,
+                onLoadMore = onLoadMoreProgressTasks,
+                onOpenTask = onOpenProgressTask,
+                onSearchChange = onProgressTaskSearchChange,
+                onSubmitSearch = onSubmitProgressTaskSearch,
+                onTaskCommand = onProgressTaskCommand,
+                onStartTask = onStartProgressTask,
+                onCreateTaskWithChat = onCreateTaskWithChat,
+                onLoadProjects = onLoadProgressProjects,
+                onOpenProject = onOpenProgressProject,
+                onCreateTask = onCreateProgressTask,
+                onOpenTaskChat = ::openTaskConversation,
+                onSaveTask = onSaveProgressTask,
+                onHomeAction = onProgressHomeAction,
+                onLoadAutomations = onLoadAutomations,
+                onOpenAutomation = onOpenAutomation,
+                onOpenAutomationRun = onOpenAutomationRun,
+                onAutomationAction = onAutomationAction,
+                onArrangeAutomation = { id, prompt -> arrangeAutomation(id, false, prompt) },
+                onWriteProject = onWriteProgressProject,
+                onCreateProjectNote = { projectId ->
+                  onCreateProjectNote(projectId)
+                  navState.push(MobileRoute.NoteEditor(projectId = projectId))
+                },
+                onUpdateAutomation = onUpdateAutomation,
+                onDeleteAutomation = onDeleteAutomation,
+                onAutomationRunAction = onAutomationRunAction,
+                onOpenChat = ::openConversationRoute,
+                onOpenProjectChat = { session ->
+                  connection.progress.projectId?.let { openProjectChat(session.id, it) }
+                },
+                onOpenNote = { id -> onOpenNote(id); navState.push(MobileRoute.NoteDetail(id)) },
+                onCreateProjectChat = { projectId ->
+                  if (!openingProjectChat && !connection.creatingConversation && connection.progress.project?.id == projectId) {
+                    openingProjectChat = true
+                    val sourceConversation = conversationId
+                    voiceScope.launch {
+                      fun sourceActive() = latestGateway == gatewayId &&
+                        latestConversation == sourceConversation && latestProject == projectId
+                      try {
+                        val id = onCreateProjectConversation(projectId)
+                        if (sourceActive()) openProjectChat(id, projectId)
+                      } catch (error: kotlinx.coroutines.CancellationException) {
+                        throw error
+                      } catch (_: Exception) {
+                        if (sourceActive()) xopcShowToast(voiceContext, R.string.project_save_error)
+                      } finally { openingProjectChat = false }
+                    }
+                  }
+                },
+                chatBusy = connection.creatingConversation || openingProjectChat,
+                initialPage = "overview",
+                onExit = null,
+                onOpenLibrary = { navState.selectTab(MobileTab.Library) },
+                onOpenSidebar = openSidebar,
+                bottomChromeInset = bottomTabBarInset + if (showMusicMini) 68.dp else 0.dp,
+                scrollToTopRevision = navState.scrollToTopRevision(MobileTab.Workbench),
+                onNavigateRoute = { nextRoute -> navState.push(nextRoute) },
+                sidebarGesture = sidebarGesture,
+              )
+              MobileTab.Notes -> NotesScreen(
+                state = connection.notes.takeIf { it.gatewayId == gatewayId }
+                  ?: NotesUiState(gatewayId = gatewayId),
+                insets = rootInsets,
+                onSearch = onLoadNotes,
+                onLoadMore = onLoadMoreNotes,
+                onOpen = onOpenNote,
+                onNew = onNewNote,
+                onDraftChange = onNoteDraftChange,
+                onSaveDraft = onSaveNoteDraft,
+                onCreatedHandled = onCreatedNoteHandled,
+                onOpenDraft = onOpenNoteDraft,
+                onEditNote = onEditNote,
+                onResolveConflict = onResolveNoteConflict,
+                onMetadataChange = onNoteMetadataChange,
+                onLoadHistory = onLoadNoteHistory,
+                onLoadSnapshot = onLoadNoteSnapshot,
+                onRestoreSnapshot = onRestoreNoteSnapshot,
+                onRestorationHandled = onNoteRestorationHandled,
+                onDeleteNote = onDeleteNote,
+                onDeletionHandled = onNoteDeletionHandled,
+                onShareNote = onShareNote,
+                onDismissShare = onDismissNoteShare,
+                onAiPreview = onNoteAiPreview,
+                onApplyAi = onApplyNoteAi,
+                onContinueChat = onContinueNoteChat,
+                onOpenChat = ::openConversationRoute,
+                onAttachFile = onAttachNoteFile,
+                onAttachVoice = onAttachNoteVoice,
+                onLoadAttachment = onLoadNoteAttachment,
+                onNoteFileSpaces = onNoteFileSpaces,
+                onNoteFiles = onNoteFiles,
+                onNoteFileContent = onNoteFileContent,
+                onUploadSpaceFile = onUploadSpaceFile,
+                voiceNotes = voiceNotes,
+                onExit = null,
+                onOpenSidebar = openSidebar,
+                bottomChromeInset = bottomTabBarInset + if (showMusicMini) 68.dp else 0.dp,
+                scrollToTopRevision = navState.scrollToTopRevision(MobileTab.Notes),
+                onNavigateRoute = { nextRoute -> navState.push(nextRoute) },
+                onPendingVoiceCountChange = { notesPendingVoiceCount = it },
+                sidebarGesture = sidebarGesture,
+              )
+              MobileTab.Library, is MobileTab.PinnedSpace -> {
+                val profile = connection.profile
+                if (profile != null && spaceLibraryAccess != null) {
+                  SpaceLibraryScreen(
+                    insets = rootInsets,
+                    profile = profile,
+                    access = spaceLibraryAccess,
+                    onExit = {},
+                    onSource = { source ->
+                      when {
+                        source.kind == "task" && source.taskId != null -> openTaskConversation(source.taskId)
+                        source.kind == "automation" && source.automationRunId != null -> {
+                          onOpenAutomationRun(source.automationRunId)
+                          navState.push(MobileRoute.AutomationRun(source.automationRunId))
+                        }
+                        else -> openConversationRoute(source.conversationId)
+                      }
+                    },
+                    onUse = onUseLibraryFile,
+                    onOpenSidebar = openSidebar,
+                    bottomChromeInset = bottomTabBarInset + if (showMusicMini) 68.dp else 0.dp,
+                    scrollToTopRevision = navState.scrollToTopRevision(target.tab),
+                    sidebarGesture = sidebarGesture,
+                  )
                 }
               }
-            }, onUse = onUseLibraryFile)
+            }
+          } else {
+            // L1 Pushed Routes (bottom tab bar automatically hidden, `< Back` shown)
+            when (route) {
+              is MobileRoute.SessionChat -> renderChatSurface(
+                chatConn = connection,
+                isAdaRootSurface = false,
+                sessionChatRoute = route,
+              )
+              is MobileRoute.TaskChat -> renderChatSurface(
+                chatConn = connection,
+                isAdaRootSurface = false,
+                taskChatRoute = route,
+              )
+              is MobileRoute.ProjectChat -> renderChatSurface(
+                chatConn = connection,
+                isAdaRootSurface = false,
+                projectChatRoute = route,
+              )
+              is MobileRoute.AutomationSetupChat -> renderChatSurface(
+                chatConn = connection,
+                isAdaRootSurface = false,
+                automationSetupRoute = route,
+              )
+              is MobileRoute.PersonalOverview -> {
+                val overviewAgent = connection.personal.agent?.takeIf { it.state == "ready" }
+                if (overviewAgent != null) {
+                  Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    PersonalAgentOverview(
+                      access = personalOverviewAccess,
+                      agent = overviewAgent,
+                      avatar = connection.personal.agentAvatar,
+                      clarification = connection.clarification?.question,
+                      onClose = ::popCurrentRoute,
+                      onEdit = { editingOverviewProfile = true },
+                      onTask = ::openTaskConversation,
+                      onSchedule = { prompt -> arrangeAutomation(null, true, prompt) },
+                      onOpenSchedule = { id ->
+                        onOpenAutomation(id)
+                        navState.push(MobileRoute.AutomationDetail(id))
+                      },
+                      onDelivery = { delivery ->
+                        val source = delivery.conversationId ?: overviewAgent.conversationId
+                        val media = delivery.media
+                        val deliveryTarget = delivery.target
+                        when {
+                          delivery.musicJob != null && gatewayId != null && generatedMediaAccess != null -> {
+                            if (activeMusic == null || activeMusic.conversationId != source || activeMusic.id != delivery.musicJob)
+                              playGeneratedMusic(voiceContext, generatedMediaAccess, MusicTrack(gatewayId, source, delivery.musicJob,
+                                delivery.title, delivery.taskTitle ?: overviewAgent.displayName))
+                            musicPlayerOpen = true
+                          }
+                          media != null -> overviewMedia = MessagePreviewRequest(source, media)
+                          deliveryTarget?.kind == "note" -> {
+                            onOpenNote(deliveryTarget.id)
+                            navState.push(MobileRoute.NoteDetail(deliveryTarget.id))
+                          }
+                          deliveryTarget?.kind == "task" -> openTaskConversation(deliveryTarget.id)
+                          deliveryTarget?.kind == "automation" -> {
+                            onOpenAutomation(deliveryTarget.id)
+                            navState.push(MobileRoute.AutomationDetail(deliveryTarget.id))
+                          }
+                          deliveryTarget?.kind == "project" -> {
+                            onOpenProgressProject(deliveryTarget.id)
+                            navState.push(MobileRoute.ProjectDetail(deliveryTarget.id))
+                          }
+                          else -> {
+                            val cid = if (deliveryTarget?.kind == "session") deliveryTarget.id else source
+                            openConversationRoute(cid)
+                          }
+                        }
+                      },
+                      modifier = Modifier.weight(1f),
+                    )
+                    if (activeMusic != null) MusicMiniPlayer(activeMusic, openMusicPlayer,
+                      Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
+                    Spacer(Modifier.navigationBarsPadding())
+                  }
+                  if (editingOverviewProfile) PersonalAgentProfileSheet(connection.personal, { editingOverviewProfile = false },
+                    onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
+                    onUploadAvatar = onUploadPersonalAvatar, onLoadModel = onLoadPersonalModel, onSaveModel = onSavePersonalModel,
+                    modelBusy = connection.sending || connection.activeRunId != null || connection.pendingInput != null,
+                    onShare = { onBeginConversationShare(overviewAgent.conversationId) }.takeIf {
+                      route.allowsConversationSharing
+                    })
+                  overviewMedia?.let { request ->
+                    MobilePreviewSheet(onClose = { overviewMedia = null }, heightFraction = 0.95f) {
+                      MessageMediaPreview(request, onLoadMessageMedia) { overviewMedia = null }
+                    }
+                  }
+                }
+              }
+              is MobileRoute.ConversationSearch -> ConversationsScreen(
+                connection = connection,
+                insets = rootInsets,
+                onSearchChange = onConversationSearchChange,
+                onRefresh = onRefreshConversations,
+                onLoadMore = onLoadMoreConversations,
+                onCreateConversation = ::openNewOrdinaryDraft,
+                onSelectConversation = { id ->
+                  val isPersonal = id == personalConversationId
+                  navState.openFromSearch(
+                    conversationId = id,
+                    isPersonalAgent = isPersonal,
+                    agentId = connection.conversationSummary(id)?.agentId ?: connection.defaultAgentId,
+                    title = connection.conversationSummary(id)?.title,
+                  )
+                  if (isPersonal) onOpenPersonalAgent() else onSelectConversation(id)
+                },
+                onSelectTaskChild = { taskId, cid ->
+                  navState.openTaskChat(taskId = taskId, conversationId = cid)
+                  onSelectTaskChildConversation(taskId, cid)
+                },
+                onBeginRename = onBeginRename,
+                onTogglePin = onTogglePin,
+                onToggleArchive = onToggleArchive,
+                onBatchConversations = onBatchConversations,
+                onBeginShare = onBeginConversationShare,
+                onScheduleDelete = onScheduleDelete,
+                onUndoDelete = onUndoDelete,
+                onExit = ::popCurrentRoute,
+                startSearching = route.autoFocusSearch,
+                onScope = onConversationScope,
+                onLoadProjects = onLoadProgressProjects,
+                onFetchExperts = onFetchConversationExperts,
+              )
+              is MobileRoute.TaskDetail, is MobileRoute.TaskEditor, is MobileRoute.ProjectDetail,
+              MobileRoute.Automations, is MobileRoute.AutomationDetail, is MobileRoute.AutomationRun -> {
+                val initialPage = when (route) {
+                  is MobileRoute.TaskDetail -> "detail"
+                  is MobileRoute.TaskEditor -> "create"
+                  is MobileRoute.ProjectDetail -> "project"
+                  MobileRoute.Automations -> "automations"
+                  is MobileRoute.AutomationDetail -> "automation"
+                  is MobileRoute.AutomationRun -> "automation-run"
+                  else -> "overview"
+                }
+                val initialItemId = when (route) {
+                  is MobileRoute.TaskDetail -> route.taskId
+                  is MobileRoute.TaskEditor -> route.projectId
+                  is MobileRoute.ProjectDetail -> route.projectId
+                  is MobileRoute.AutomationDetail -> route.automationId
+                  is MobileRoute.AutomationRun -> route.runId
+                  else -> null
+                }
+                ProgressScreen(
+                  state = connection.progress.takeIf { it.gatewayId == gatewayId }
+                    ?: ProgressUiState(gatewayId = gatewayId, loading = true),
+                  insets = rootInsets,
+                  onRefreshHome = onRefreshProgressHome,
+                  onRefreshTasks = onRefreshProgressTasks,
+                  onLoadMore = onLoadMoreProgressTasks,
+                  onOpenTask = onOpenProgressTask,
+                  onSearchChange = onProgressTaskSearchChange,
+                  onSubmitSearch = onSubmitProgressTaskSearch,
+                  onTaskCommand = onProgressTaskCommand,
+                  onStartTask = onStartProgressTask,
+                  onCreateTaskWithChat = onCreateTaskWithChat,
+                  onLoadProjects = onLoadProgressProjects,
+                  onOpenProject = onOpenProgressProject,
+                  onCreateTask = onCreateProgressTask,
+                  onOpenTaskChat = ::openTaskConversation,
+                  onSaveTask = onSaveProgressTask,
+                  onHomeAction = onProgressHomeAction,
+                  onLoadAutomations = onLoadAutomations,
+                  onOpenAutomation = onOpenAutomation,
+                  onOpenAutomationRun = onOpenAutomationRun,
+                  onAutomationAction = onAutomationAction,
+                  onArrangeAutomation = { id, prompt -> arrangeAutomation(id, false, prompt) },
+                  onWriteProject = onWriteProgressProject,
+                  onCreateProjectNote = { projectId ->
+                    onCreateProjectNote(projectId)
+                    navState.push(MobileRoute.NoteEditor(projectId = projectId))
+                  },
+                  onUpdateAutomation = onUpdateAutomation,
+                  onDeleteAutomation = onDeleteAutomation,
+                  onAutomationRunAction = onAutomationRunAction,
+                  onOpenChat = ::openConversationRoute,
+                  onOpenProjectChat = { session ->
+                    connection.progress.projectId?.let { openProjectChat(session.id, it) }
+                  },
+                  onOpenNote = { id -> onOpenNote(id); navState.push(MobileRoute.NoteDetail(id)) },
+                  onCreateProjectChat = { projectId ->
+                    if (!openingProjectChat && !connection.creatingConversation && connection.progress.project?.id == projectId) {
+                      openingProjectChat = true
+                      val sourceConversation = conversationId
+                      voiceScope.launch {
+                        fun sourceActive() = latestGateway == gatewayId &&
+                          latestConversation == sourceConversation && latestProject == projectId
+                        try {
+                          val id = onCreateProjectConversation(projectId)
+                          if (sourceActive()) openProjectChat(id, projectId)
+                        } catch (error: kotlinx.coroutines.CancellationException) {
+                          throw error
+                        } catch (_: Exception) {
+                          if (sourceActive()) xopcShowToast(voiceContext, R.string.project_save_error)
+                        } finally { openingProjectChat = false }
+                      }
+                    }
+                  },
+                  chatBusy = connection.creatingConversation || openingProjectChat,
+                  initialPage = initialPage,
+                  initialItemId = initialItemId,
+                  onExit = ::popCurrentRoute,
+                  onCloseDelivery = ::popCurrentRoute,
+                  onOpenLibrary = { navState.selectTab(MobileTab.Library) },
+                )
+              }
+              is MobileRoute.NoteDetail, is MobileRoute.NoteEditor, is MobileRoute.DiscussionNote,
+              is MobileRoute.VoiceNoteCapture, MobileRoute.NoteFiles -> NotesScreen(
+                state = connection.notes.takeIf { it.gatewayId == gatewayId }
+                  ?: NotesUiState(gatewayId = gatewayId),
+                insets = rootInsets,
+                onSearch = onLoadNotes,
+                onLoadMore = onLoadMoreNotes,
+                onOpen = onOpenNote,
+                onNew = onNewNote,
+                onDraftChange = onNoteDraftChange,
+                onSaveDraft = onSaveNoteDraft,
+                onCreatedHandled = onCreatedNoteHandled,
+                onOpenDraft = onOpenNoteDraft,
+                onEditNote = onEditNote,
+                onResolveConflict = onResolveNoteConflict,
+                onMetadataChange = onNoteMetadataChange,
+                onLoadHistory = onLoadNoteHistory,
+                onLoadSnapshot = onLoadNoteSnapshot,
+                onRestoreSnapshot = onRestoreNoteSnapshot,
+                onRestorationHandled = onNoteRestorationHandled,
+                onDeleteNote = onDeleteNote,
+                onDeletionHandled = onNoteDeletionHandled,
+                onShareNote = onShareNote,
+                onDismissShare = onDismissNoteShare,
+                onAiPreview = onNoteAiPreview,
+                onApplyAi = onApplyNoteAi,
+                onContinueChat = onContinueNoteChat,
+                onOpenChat = ::openConversationRoute,
+                onAttachFile = onAttachNoteFile,
+                onAttachVoice = onAttachNoteVoice,
+                onLoadAttachment = onLoadNoteAttachment,
+                onNoteFileSpaces = onNoteFileSpaces,
+                onNoteFiles = onNoteFiles,
+                onNoteFileContent = onNoteFileContent,
+                onUploadSpaceFile = onUploadSpaceFile,
+                voiceNotes = voiceNotes,
+                initialNoteId = when (route) {
+                  is MobileRoute.NoteDetail -> route.noteId
+                  is MobileRoute.DiscussionNote -> route.noteId
+                  is MobileRoute.NoteEditor -> route.noteId
+                  else -> null
+                },
+                initialProjectDraft = route is MobileRoute.NoteEditor && route.projectId != null,
+                initialEditorOpen = route is MobileRoute.NoteEditor,
+                initialVoiceCapture = route is MobileRoute.VoiceNoteCapture,
+                initialVoiceRecoveryOnly = route is MobileRoute.VoiceNoteCapture && route.recoveryOnly,
+                initialFileBrowser = route is MobileRoute.NoteFiles,
+                onExit = ::popCurrentRoute,
+              )
+              is MobileRoute.FileDetail, is MobileRoute.SessionFiles, is MobileRoute.SpaceDetail,
+              MobileRoute.LibraryBrowse -> {
+                val profile = connection.profile
+                if (profile != null && spaceLibraryAccess != null) {
+                  SpaceLibraryScreen(
+                    insets = rootInsets,
+                    profile = profile,
+                    access = spaceLibraryAccess,
+                    onExit = ::popCurrentRoute,
+                    onSource = { source ->
+                      when {
+                        source.kind == "task" && source.taskId != null -> openTaskConversation(source.taskId)
+                        source.kind == "automation" && source.automationRunId != null -> {
+                          onOpenAutomationRun(source.automationRunId)
+                          navState.push(MobileRoute.AutomationRun(source.automationRunId))
+                        }
+                        else -> openConversationRoute(source.conversationId)
+                      }
+                    },
+                    onUse = onUseLibraryFile,
+                  )
+                }
+              }
+              is MobileRoute.Capabilities -> CapabilitiesScreen(
+                insets = rootInsets,
+                personal = connection.personal,
+                agentAvatars = connection.agentAvatars,
+                onLoad = onLoadCapabilities,
+                onOpenAgent = { item ->
+                  if (item.personal) {
+                    navState.openPushTarget(PushNavTarget.AdaHome)
+                    onOpenPersonalAgent()
+                  } else {
+                    navState.openOrdinaryChat(
+                      conversationId = null,
+                      draftId = "pending-draft",
+                      agentId = item.id,
+                    )
+                    onCreateAgentConversation(item.id)
+                  }
+                },
+                onExit = ::popCurrentRoute,
+                onPanel = onCapabilityPanel,
+                onSetupChat = onCapabilitySetupChat,
+                onLoadDevices = onLoadCapabilityDevices,
+                onSetDeviceCapability = onSetDeviceCapability,
+                onUseComputer = onUseConnectedComputer,
+                onShareDeviceFile = onShareDeviceConnectionFile,
+                onPairDevice = onScanPairing,
+                deviceScope = connection.profile?.let { it.gatewayId + ':' + it.deviceId },
+              )
+              is MobileRoute.AboutYou -> {
+                val profile = connection.profile
+                val personal = if (profile == null) PersonalUiState(gatewayId = "")
+                  else connection.personal.takeIf { it.gatewayId == profile.gatewayId }
+                    ?: PersonalUiState(gatewayId = profile.gatewayId, loading = true)
+                AboutYouScreen(
+                  state = personal,
+                  page = if (route.itemId != null) "detail" else "about",
+                  insets = insets,
+                  initialSection = route.startSection,
+                  onBack = ::popCurrentRoute,
+                  onOpenList = {},
+                  onOpenDetail = { id ->
+                    onOpenPersonalAssertion(id)
+                    navState.push(MobileRoute.AboutYou(itemId = id))
+                  },
+                  onLoadList = onLoadPersonalAssertions,
+                  onRetryDetail = { route.itemId?.let(onOpenPersonalAssertion) },
+                  loadWorkMemory = loadWorkMemory,
+                  onSaveProfile = onSavePersonalProfile,
+                  onSaveStatement = onSavePersonalStatement,
+                  onDeleteAssertion = onDeletePersonalAssertion,
+                  onStartChat = onStartUnderstandingChat,
+                  chatBusy = connection.creatingConversation,
+                )
+              }
+              MobileRoute.PersonalGoals -> {
+                val profile = connection.profile
+                val personal = if (profile == null) PersonalUiState(gatewayId = "")
+                  else connection.personal.takeIf { it.gatewayId == profile.gatewayId }
+                    ?: PersonalUiState(gatewayId = profile.gatewayId, loading = true)
+                PersonalGoalsScreen(personal, rootInsets, onLoadPersonal, onSavePersonalGoal, ::popCurrentRoute)
+              }
+              MobileRoute.ShareCenter -> {
+                val profile = connection.profile
+                ShareCenterScreen(
+                  state = connection.shares.takeIf { it.gatewayId == profile?.gatewayId }
+                    ?: ShareCenterUiState(gatewayId = profile?.gatewayId, loading = profile != null),
+                  connected = profile != null,
+                  insets = insets,
+                  onBack = ::popCurrentRoute,
+                  onRefresh = onLoadShares,
+                  onRevoke = onRevokeShare,
+                  onExtend = onExtendShare,
+                )
+              }
+              is MobileRoute.Settings -> {
+                val profile = connection.profile
+                val personal = if (profile == null) PersonalUiState(gatewayId = "")
+                  else connection.personal.takeIf { it.gatewayId == profile.gatewayId }
+                    ?: PersonalUiState(gatewayId = profile.gatewayId, loading = true)
+                when (route.section) {
+                  "models" -> if (profile != null && modelSettingsAccess != null) {
+                    ModelSettingsScreen(profile, modelSettingsAccess, rootInsets, ::popCurrentRoute)
+                  }
+                  "gateways" -> GatewayProfilesScreen(
+                    connection, insets,
+                    onBack = ::popCurrentRoute,
+                    onAdd = { navState.push(MobileRoute.Settings("add")) },
+                    onProbe = onProbeGateway,
+                    onActivate = onActivateGateway,
+                    onRename = onRenameGateway,
+                    onRemove = onRemoveGateway,
+                  )
+                  "add" -> PairingScreen(
+                    stringResource(R.string.gateways_add), connection, onPair, onCancelPairing, onScanPairing,
+                    pairingScanning, pairingScanError, insets, onBack = ::popCurrentRoute,
+                  )
+                  "sharing" -> ShareCenterScreen(
+                    state = connection.shares.takeIf { it.gatewayId == profile?.gatewayId }
+                      ?: ShareCenterUiState(gatewayId = profile?.gatewayId, loading = profile != null),
+                    connected = profile != null,
+                    insets = insets,
+                    onBack = { onCloseShares(); popCurrentRoute() },
+                    onRefresh = onLoadShares,
+                    onRevoke = onRevokeShare,
+                    onExtend = onExtendShare,
+                  )
+                  else -> SettingsScreen(
+                    profile = connection.profile,
+                    appearanceMode = appearanceMode,
+                    colorScheme = colorScheme,
+                    language = language,
+                    section = route.section ?: "root",
+                    insets = insets,
+                    onBack = ::popCurrentRoute,
+                    onOpenGateways = { navState.push(MobileRoute.Settings("gateways")) },
+                    onOpenModelSettings = modelSettingsAccess?.let { { navState.push(MobileRoute.Settings("models")) } },
+                    onOpenAppAbout = { navState.push(MobileRoute.Settings("about")) },
+                    onOpenNotifications = if (profile != null && mobilePush != null) {
+                      { navState.push(MobileRoute.Settings("notifications")) }
+                    } else null,
+                    notifications = {
+                      if (profile != null && mobilePush != null) MobilePushSettings(profile, mobilePush)
+                    },
+                    onOpenAbout = { navState.push(MobileRoute.AboutYou(startSection = "overview")) },
+                    onOpenGoals = { navState.push(MobileRoute.PersonalGoals) },
+                    personalAgent = {
+                      PersonalAgentSettings(personal, {
+                        navState.openPushTarget(PushNavTarget.AdaHome)
+                        onOpenPersonalAgent()
+                      }, onLoadPersonalVoiceChoices,
+                        onUpdatePersonalAgentProfile, onUploadPersonalAvatar, onLoadPersonalModel, onSavePersonalModel)
+                    },
+                    onOpenSharing = { navState.push(MobileRoute.ShareCenter) },
+                    onOpenAppearance = { navState.push(MobileRoute.Settings("appearance")) },
+                    onOpenLanguage = { navState.push(MobileRoute.Settings("language")) },
+                    onAppearanceModeChange = onAppearanceModeChange,
+                    onColorSchemeChange = onColorSchemeChange,
+                    onLanguageChange = onLanguageChange,
+                  )
+                }
+              }
+            }
+          }
         }
       }
-      HomeTab.Notes -> if (!isPaired) PairingScreen(
-        stringResource(R.string.tab_notes), connection, onPair, onCancelPairing, onScanPairing,
-        pairingScanning, pairingScanError, insets)
-      else {
-        NotesScreen(connection.notes.takeIf { it.gatewayId == gatewayId }
-        ?: NotesUiState(gatewayId = gatewayId), rootInsets,
-        onLoadNotes, onLoadMoreNotes, onOpenNote, onNewNote,
-        onNoteDraftChange, onSaveNoteDraft, onCreatedNoteHandled, onOpenNoteDraft,
-        onEditNote, onResolveNoteConflict, onNoteMetadataChange,
-        onLoadNoteHistory, onLoadNoteSnapshot, onRestoreNoteSnapshot,
-        onNoteRestorationHandled, onDeleteNote, onNoteDeletionHandled,
-        onShareNote, onDismissNoteShare,
-        onAiPreview = onNoteAiPreview, onApplyAi = onApplyNoteAi,
-        onContinueChat = onContinueNoteChat,
-        onAttachFile = onAttachNoteFile,
-        onAttachVoice = onAttachNoteVoice,
-        onLoadAttachment = onLoadNoteAttachment,
-        onOpenChat = { onSelectTab(HomeTab.Assistant) },
-        onNoteFileSpaces = onNoteFileSpaces,
-        onNoteFiles = onNoteFiles,
-        onNoteFileContent = onNoteFileContent, onUploadSpaceFile = onUploadSpaceFile, voiceNotes = voiceNotes,
-        initialNoteId = detailId?.takeUnless { it.startsWith("project-note-") },
-        initialProjectDraft = detailId?.startsWith("project-note-") == true,
-        onExit = {
-          detailId?.takeIf { it.startsWith("project-note-") }?.removePrefix("project-note-")
-            ?.takeIf { it == connection.progress.projectId }?.let(onOpenProgressProject)
-          tabStateHolder.removeState(destination.stateKey)
-          exitDestination()
-        })
-      }
-      HomeTab.Me -> {
-        val profile = connection.profile
-        val personal = if (profile == null) PersonalUiState(gatewayId = "")
-          else connection.personal.takeIf { it.gatewayId == profile.gatewayId }
-            ?: PersonalUiState(gatewayId = profile.gatewayId, loading = true)
-        if (personalPage == "goals") PersonalGoalsScreen(personal, rootInsets, onLoadPersonal,
-          onSavePersonalGoal, ::leavePersonalPage)
-        else if (personalPage == "settings-models" && profile != null && modelSettingsAccess != null)
-          ModelSettingsScreen(profile, modelSettingsAccess, rootInsets, ::leavePersonalPage)
-        else if (personalPage == "settings-gateways") GatewayProfilesScreen(connection, insets,
-          onBack = ::leavePersonalPage, onAdd = { personalPage = "settings-add" },
-          onProbe = onProbeGateway,
-          onActivate = onActivateGateway, onRename = onRenameGateway,
-          onRemove = onRemoveGateway)
-        else if (personalPage == "settings-add") PairingScreen(
-          stringResource(R.string.gateways_add), connection, onPair, onCancelPairing, onScanPairing,
-          pairingScanning, pairingScanError, insets,
-          onBack = ::leavePersonalPage)
-        else if (personalPage == "settings-sharing") ShareCenterScreen(
-          state = connection.shares.takeIf { it.gatewayId == profile?.gatewayId }
-            ?: ShareCenterUiState(gatewayId = profile?.gatewayId, loading = profile != null),
-          connected = profile != null, insets = insets, onBack = ::leavePersonalPage,
-          onRefresh = onLoadShares, onRevoke = onRevokeShare, onExtend = onExtendShare)
-        else if (personalPage.startsWith("settings")) SettingsScreen(
-          profile = connection.profile, appearanceMode = appearanceMode, colorScheme = colorScheme,
-          language = language, section = when (personalPage) {
-            "settings-appearance" -> "appearance"
-            "settings-language" -> "language"
-            "settings-about" -> "about"
-            "settings-notifications" -> "notifications"
-            else -> "root"
-          }, insets = insets,
-          onBack = ::leavePersonalPage,
-          onOpenGateways = { personalPage = "settings-gateways" },
-          onOpenModelSettings = modelSettingsAccess?.let { { personalPage = "settings-models" } },
-          onOpenAppAbout = { personalPage = "settings-about" },
-          onOpenNotifications = if (profile != null && mobilePush != null) {
-            { personalPage = "settings-notifications" }
-          } else null,
-          notifications = {
-            if (profile != null && mobilePush != null) MobilePushSettings(profile, mobilePush)
-          },
-          onOpenAbout = { personalStartSection = "overview"; personalPage = "about" },
-          onOpenGoals = { personalPage = "goals" },
-          personalAgent = {
-            PersonalAgentSettings(personal, onOpenPersonalAgent, onLoadPersonalVoiceChoices,
-              onUpdatePersonalAgentProfile, onUploadPersonalAvatar, onLoadPersonalModel, onSavePersonalModel)
-          },
-          onOpenSharing = { personalPage = "settings-sharing" },
-          onOpenAppearance = { personalPage = "settings-appearance" },
-          onOpenLanguage = { personalPage = "settings-language" },
-          onAppearanceModeChange = onAppearanceModeChange,
-          onColorSchemeChange = onColorSchemeChange,
-          onLanguageChange = onLanguageChange)
-        else AboutYouScreen(personal, personalPage, insets, personalStartSection,
-          onBack = ::leavePersonalPage, onOpenList = {}, onOpenDetail = { id ->
-            personalReturnPage = "about"
-            personalDetailId = id
-            personalPage = "detail"
-            onOpenPersonalAssertion(id)
-          }, onLoadList = onLoadPersonalAssertions,
-          onRetryDetail = { if (personalDetailId.isNotBlank()) onOpenPersonalAssertion(personalDetailId) },
-          loadWorkMemory = loadWorkMemory,
-          onSaveProfile = onSavePersonalProfile,
-          onSaveStatement = onSavePersonalStatement,
-          onDeleteAssertion = onDeletePersonalAssertion,
-          onStartChat = onStartUnderstandingChat,
-          chatBusy = connection.creatingConversation)
-      }
-    }
-    }
-    }
     }
     },
     overlays = { sidebarWidth ->
-    linkedMcp?.let { target ->
-      target.summary?.let { address ->
-        val origin = connection.profile?.let { current ->
-          current.routes.firstOrNull { it.id == current.activeRouteId }?.url
-        }
-        LinkedMcpSetupSheet(target.id, address, origin,
-          request = { onCapabilityPanel("connections", "mcp:setup", it) },
-          onClose = { linkedMcp = null }, onUseInChat = { prompt ->
-            linkedMcp = null
-            onCapabilitySetupChat(prompt, false)
-          })
-      }
-    }
-    if (showOverview) {
-      overviewState.SaveableStateProvider("personal-overview-$gatewayId") {
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        PersonalAgentOverview(personalOverviewAccess, overviewAgent, connection.personal.agentAvatar,
-          connection.clarification?.question, onClose = { personalOverviewOpen = false },
-          onEdit = { editingOverviewProfile = true },
-          onTask = ::openTaskConversation,
-          onSchedule = { prompt -> arrangeAutomation(null, true, prompt) },
-          onOpenSchedule = { id -> openLinkedDetail(HomeTab.Automations, id) },
-          onDelivery = { delivery ->
-            val source = delivery.conversationId ?: overviewAgent.conversationId
-            val media = delivery.media
-            val target = delivery.target
-            when {
-              delivery.musicJob != null && gatewayId != null && generatedMediaAccess != null -> {
-                if (activeMusic == null || activeMusic.conversationId != source || activeMusic.id != delivery.musicJob)
-                  playGeneratedMusic(voiceContext, generatedMediaAccess, MusicTrack(gatewayId, source, delivery.musicJob,
-                    delivery.title, delivery.taskTitle ?: overviewAgent.displayName))
-                musicPlayerOpen = true
-              }
-              media != null -> overviewMedia = MessagePreviewRequest(source, media)
-              target?.kind == "note" -> openLinkedDetail(HomeTab.Notes, target.id)
-              target?.kind == "task" -> openTaskConversation(target.id)
-              target?.kind == "automation" -> openLinkedDetail(HomeTab.Automations, target.id)
-              target?.kind == "project" -> openLinkedDetail(HomeTab.Projects, target.id)
-              else -> {
-                personalOverviewOpen = false
-                onSelectConversation(if (target?.kind == "session") target.id else source)
-              }
-            }
-          }, modifier = Modifier.weight(1f))
-          if (activeMusic != null) MusicMiniPlayer(activeMusic, openMusicPlayer,
-            Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
-          Spacer(Modifier.navigationBarsPadding())
+      // Floating bottom pill for non-chat tab roots (Workbench / Notes / Library).
+      // On AdaRoot, the pill sits inside bottomBar directly beneath the composer (10dp gap).
+      if (showBottomTabBar && !showBottomChrome) {
+        Column(
+          modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+          horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+          if (showMusicMini && !showOverview) {
+            MusicMiniPlayer(
+              activeMusic,
+              openMusicPlayer,
+              Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp),
+            )
+          }
+          floatingTabBarSlot()
         }
       }
-      if (editingOverviewProfile) PersonalAgentProfileSheet(connection.personal, { editingOverviewProfile = false },
-        onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
-        onUploadAvatar = onUploadPersonalAvatar, onLoadModel = onLoadPersonalModel, onSaveModel = onSavePersonalModel,
-        modelBusy = connection.sending || connection.activeRunId != null || connection.pendingInput != null,
-        onShare = { onBeginConversationShare(overviewAgent.conversationId) }.takeIf {
-          connection.messages.any { message -> message.role == "user" || message.role == "assistant" }
-        })
-      overviewMedia?.let { request ->
-        MobilePreviewSheet(onClose = { overviewMedia = null }, heightFraction = 0.95f) {
-          MessageMediaPreview(request, onLoadMessageMedia) { overviewMedia = null }
+      linkedMcp?.let { target ->
+        target.summary?.let { address ->
+          val origin = connection.profile?.let { current ->
+            current.routes.firstOrNull { it.id == current.activeRouteId }?.url
+          }
+          LinkedMcpSetupSheet(target.id, address, origin,
+            request = { onCapabilityPanel("connections", "mcp:setup", it) },
+            onClose = { linkedMcp = null }, onUseInChat = { prompt ->
+              linkedMcp = null
+              onCapabilitySetupChat(prompt, false)
+            })
         }
       }
-    }
-    ChatSidebar(sidebar, sidebarWidth, connection, onClose = { sidebar.open = false }, onRetry = onRefreshRecentConversations,
-      onLoadMore = onLoadMoreRecentConversations, onRename = onBeginRename, onTogglePin = onTogglePin,
-      onDelete = { onBatchConversations(it, "delete") },
-      onDestination = { destination ->
-        sidebar.open = false
-        if (showingProjectChat) restoreMainFromProjectChat()
-        linkedDetails = emptyList()
-        returnToSidebar = destination in listOf(HomeTab.Conversations, HomeTab.Progress, HomeTab.Automations)
-        if (destination == HomeTab.Progress) tabStateHolder.removeState("${gatewayId}:${destination.name}")
-        if (destination == HomeTab.Me) personalPage = "settings"
-        onSelectTab(destination)
-      },
-      onSearch = {
-        sidebar.open = false
-        if (showingProjectChat) restoreMainFromProjectChat()
-        linkedDetails = emptyList()
-        returnToSidebar = true
-        startConversationSearch = true
-        onSelectTab(HomeTab.Conversations)
-      },
-      onPersonal = {
-        sidebar.open = false
-        onOpenPersonalAgent()
-      },
-      onNew = {
-        sidebar.open = false
-        if (showingProjectChat) onCreateAgentConversation(connection.defaultAgentId) else onCreateConversation()
-      },
-      onConversation = { id ->
-        sidebar.open = false
-        if (!showingProjectChat || id != conversationId) onSelectConversation(id)
-      })
+      val activeSessionId = (topRoute as? MobileRoute.SessionChat)?.effectiveConversationId
+      ChatSidebar(
+        state = sidebar,
+        width = sidebarWidth,
+        connection = connection,
+        activeSessionId = activeSessionId,
+        onClose = { setSidebarOpen(false) },
+        onRetry = onRefreshRecentConversations,
+        onLoadMore = onLoadMoreRecentConversations,
+        onAutomations = {
+          setSidebarOpen(false)
+          navState.openSidebarTool(MobileRoute.Automations)
+        },
+        onCapabilities = {
+          setSidebarOpen(false)
+          navState.openSidebarTool(MobileRoute.Capabilities())
+        },
+        onAboutYou = {
+          setSidebarOpen(false)
+          navState.openSidebarTool(MobileRoute.AboutYou())
+        },
+        onSettings = {
+          setSidebarOpen(false)
+          navState.openSidebarTool(MobileRoute.Settings())
+        },
+        onSearch = {
+          setSidebarOpen(false)
+          navState.openSidebarTool(MobileRoute.ConversationSearch(autoFocusSearch = true))
+        },
+        onNew = {
+          setSidebarOpen(false)
+          openNewOrdinaryDraft()
+        },
+        onConversation = { id ->
+          setSidebarOpen(false)
+          openConversationRoute(id)
+        },
+        onRename = onBeginRename,
+        onTogglePin = onTogglePin,
+        onDelete = { onBatchConversations(it, "delete") },
+      )
     },
   )
   if (connection.renameDraftId != null) AlertDialog(
@@ -2230,12 +2824,9 @@ internal fun MainContent(
   if (musicPlayerOpen && activeMusic != null) MusicPlayerSheet(activeMusic, { musicPlayerOpen = false },
     onSource = {
       musicPlayerOpen = false
-      personalOverviewOpen = false
-      if (conversationId != activeMusic.conversationId) onSelectConversation(activeMusic.conversationId)
-      onSelectTab(HomeTab.Assistant)
+      openConversationRoute(activeMusic.conversationId)
     }, onDownload = { downloadMusic(activeMusic) })
   LaunchedEffect(activeMusic) { if (activeMusic == null) musicPlayerOpen = false }
-  var voiceExpanded by remember(voiceCall) { mutableStateOf(true) }
   var voiceMiniX by remember(voiceCall) { mutableStateOf(0f) }
   var voiceMiniY by remember(voiceCall) { mutableStateOf(0f) }
   val miniDensity = LocalDensity.current
@@ -2372,7 +2963,7 @@ private fun MainScaffoldLayout(
   onOpenSidebar: () -> Unit,
   bottomBar: @Composable () -> Unit,
   page: @Composable (PaddingValues, Modifier) -> Unit,
-  overlays: @Composable (Dp) -> Unit,
+  overlays: @Composable androidx.compose.foundation.layout.BoxScope.(Dp) -> Unit,
 ) {
   // Pass independent slots so the layout lambda does not capture every screen callback.
   val scope = rememberCoroutineScope()
@@ -2952,6 +3543,13 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   activeMusic: MusicTrack? = null,
   onInlineMusic: (String?) -> Unit = {},
   onExpandMusic: () -> Unit = {},
+  isAdaRoot: Boolean = false,
+  scrollToTopRevision: Int = 0,
+  onBackFromChat: (() -> Unit)? = null,
+  onSwitchConversation: (() -> Unit)? = null,
+  sessionTitleOverride: String? = null,
+  isTaskChatRoute: Boolean = false,
+  isAutomationSetupRoute: Boolean = false,
   taskChrome: @Composable (() -> Unit, () -> Unit) -> Unit = { _, _ -> }) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -3241,6 +3839,17 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
           generatedMedia.items.isNotEmpty())) scrollMessagesToBottom()
     }
   }
+  LaunchedEffect(scrollToTopRevision) {
+    if (scrollToTopRevision > 0 && displayMessages.isNotEmpty()) {
+      val layout = messageListState.layoutInfo
+      if (latestRowIndex < layout.totalItemsCount) {
+        val bottomOffset = (layout.viewportEndOffset - bottomChromePx - latestMarkerPx).coerceAtLeast(0)
+        messageListState.animateScrollToItem(latestRowIndex, -bottomOffset)
+        followBottom = true
+        positionedAtLatest = true
+      }
+    }
+  }
   val statusIssue = when {
     connection.chatError -> R.string.chat_load_error
     connection.contextError && connection.taskScopeLoading -> R.string.assistant_task_scope_error
@@ -3257,8 +3866,8 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
     else -> { { connection.selectedConversationId?.let(onRetryConversation) } }
   }
   val chatTopInset = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
-  val scopedHeader = connection.automationConfigurationChat
-  val taskHeader = isTaskChat(connection)
+  val scopedHeader = isAutomationSetupRoute || connection.automationConfigurationChat
+  val taskHeader = isTaskChatRoute || isTaskChat(connection)
   var headerHeightPx by remember(scopedHeader, taskHeader, isPersonalChat) { mutableIntStateOf(0) }
   val headerClearance = if (headerHeightPx > 0) with(LocalDensity.current) { headerHeightPx.toDp() }
     else chatTopInset + if (isPersonalChat) 110.dp else 72.dp
@@ -3613,25 +4222,65 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (personalAgent != null) {
-          Box(Modifier.fillMaxWidth().height(64.dp)) {
-            Row(Modifier.align(Alignment.TopStart), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+          val collapsePersonalHeader by remember(messageListState, displayMessages.size, followBottom) {
+            derivedStateOf {
+              displayMessages.isNotEmpty() && !followBottom && messageListState.firstVisibleItemIndex >= 0
+            }
+          }
+          val headerMotionAllowed = rememberMotionAllowed()
+          val avatarSize by animateDpAsState(
+            targetValue = if (collapsePersonalHeader) 32.dp else 62.dp,
+            animationSpec = tween(xopcMotionDuration(XopcMotionTokens.StandardMs, headerMotionAllowed)),
+            label = "ada-avatar-size",
+          )
+          val headerRowHeight by animateDpAsState(
+            targetValue = if (collapsePersonalHeader) 48.dp else 64.dp,
+            animationSpec = tween(xopcMotionDuration(XopcMotionTokens.StandardMs, headerMotionAllowed)),
+            label = "ada-header-height",
+          )
+          Box(Modifier.fillMaxWidth().height(headerRowHeight)) {
+            Row(Modifier.align(Alignment.CenterStart), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
               if (onCloseProjectChat != null) IconButton(onClick = onCloseProjectChat,
                 modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("project-chat-close")) {
                 Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
               }
-              IconButton(onClick = onOpenSidebar,
+              if (onBackFromChat != null) IconButton(onClick = onBackFromChat,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("session-chat-back")) {
+                Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+              } else IconButton(onClick = onOpenSidebar,
                 modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-sidebar")) {
                 Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
               }
             }
-            IconButton(onClick = onOpenPersonalOverview,
-              modifier = Modifier.align(Alignment.TopCenter).size(62.dp).background(LocalChatColors.current.card, CircleShape).semantics {
-                contentDescription = personalOverviewLabel
-              }.testTag("chat-personal-overview")) {
-              PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, 62.dp,
-                active = !messageSearchOpen)
+            if (collapsePersonalHeader) {
+              Row(
+                modifier = Modifier
+                  .align(Alignment.Center)
+                  .clip(CircleShape)
+                  .background(LocalChatColors.current.card)
+                  .clickable(role = Role.Button, onClick = onOpenPersonalOverview)
+                  .padding(start = 6.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)
+                  .semantics { contentDescription = personalOverviewLabel }
+                  .testTag("chat-personal-overview"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+              ) {
+                PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, avatarSize,
+                  active = !messageSearchOpen)
+                Text(personalAgent.displayName, Modifier.testTag("chat-personal-name"),
+                  style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                  maxLines = 1, overflow = TextOverflow.Ellipsis)
+              }
+            } else {
+              IconButton(onClick = onOpenPersonalOverview,
+                modifier = Modifier.align(Alignment.TopCenter).size(avatarSize).background(LocalChatColors.current.card, CircleShape).semantics {
+                  contentDescription = personalOverviewLabel
+                }.testTag("chat-personal-overview")) {
+                PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, avatarSize,
+                  active = !messageSearchOpen)
+              }
             }
-            Row(Modifier.align(Alignment.TopEnd),
+            Row(Modifier.align(Alignment.CenterEnd),
               horizontalArrangement = Arrangement.spacedBy(if (onCloseProjectChat == null) 3.dp else 0.dp)) {
               LocalBrowserPreviewOpen.current?.let { openPreview ->
                 IconButton(onClick = openPreview,
@@ -3658,18 +4307,49 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
               }
             }
           }
+          if (!collapsePersonalHeader) {
+            val attention = connection.progress.needsUser.size
+            val attentionColors = LocalAttentionColors.current
+            Column(horizontalAlignment = Alignment.CenterHorizontally,
+              modifier = Modifier.clip(themedCorners(14))
+                .background(if (attention > 0) attentionColors.fill else LocalChatColors.current.card)
+                .then(if (attention > 0) Modifier.clickable {
+                  onOpenMessageTarget(ConversationTarget("progress", "", ""))
+                } else Modifier)
+                .padding(horizontal = 12.dp, vertical = 2.dp)) {
+              Text(personalAgent.displayName, Modifier.testTag("chat-personal-name"),
+                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+              if (attention > 0) Text(stringResource(R.string.progress_attention_count, attention),
+                style = MaterialTheme.typography.labelSmall, color = attentionColors.foreground)
+            }
+          }
         } else {
+          val resolvedTitle = selected?.title?.takeIf { it.isNotBlank() && !selected.isLocalDraft }
+            ?: sessionTitleOverride?.takeIf { it.isNotBlank() }
+          val identityPrimary = if (onBackFromChat != null && resolvedTitle != null) resolvedTitle else headerAgentName
+          val identitySubtitle = if (onBackFromChat != null && resolvedTitle != null) {
+            listOfNotNull(headerAgentName, headerModelSubtitle).joinToString(" · ")
+          } else {
+            headerModelSubtitle
+          }
           Row(Modifier.fillMaxWidth().heightIn(min = 48.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-              if (onCloseProjectChat != null) IconButton(onClick = onCloseProjectChat,
-                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("project-chat-close")) {
-                Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
-              }
-              IconButton(onClick = onOpenSidebar,
-                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-sidebar")) {
-                Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
+              when {
+                onCloseProjectChat != null -> IconButton(onClick = onCloseProjectChat,
+                  modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("project-chat-close")) {
+                  Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+                }
+                onBackFromChat != null -> IconButton(onClick = onBackFromChat,
+                  modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("session-chat-back")) {
+                  Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+                }
+                else -> IconButton(onClick = onOpenSidebar,
+                  modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-sidebar")) {
+                  Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
+                }
               }
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -3677,14 +4357,20 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
                 agentAvatar = connection.agentAvatars[headerAgentId],
                 agentAvatarRef = headerAgent?.avatar.orEmpty(),
                 agentId = headerAgentId,
-                agentName = headerAgentName,
+                agentName = identityPrimary,
                 runtimeBadge = headerAgent?.externalRuntimeBadge,
-                modelSubtitle = headerModelSubtitle,
+                modelSubtitle = identitySubtitle,
                 onClick = { optionsOpen = true },
               )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(if (onCloseProjectChat == null) 3.dp else 0.dp),
               verticalAlignment = Alignment.CenterVertically) {
+              if (onSwitchConversation != null) {
+                IconButton(onClick = onSwitchConversation,
+                  modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("session-chat-switch")) {
+                  Icon(painterResource(R.drawable.tab_conversations), stringResource(R.string.chat_switch_conversation), Modifier.size(20.dp))
+                }
+              }
               LocalBrowserPreviewOpen.current?.let { openPreview ->
                 IconButton(onClick = openPreview,
                   modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-browser-preview")) {
@@ -3741,26 +4427,9 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
             maxLines = 2, modifier = Modifier.testTag("chat-execution-device").background(LocalChatColors.current.card, themedCorners(12))
               .padding(horizontal = 10.dp, vertical = 5.dp))
         }
-        if (personalAgent != null) {
-          val attention = connection.progress.needsUser.size
-          val attentionColors = LocalAttentionColors.current
-          Column(horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clip(themedCorners(14))
-              .background(if (attention > 0) attentionColors.fill else LocalChatColors.current.card)
-              .then(if (attention > 0) Modifier.clickable {
-                onOpenMessageTarget(ConversationTarget("progress", "", ""))
-              } else Modifier)
-              .padding(horizontal = 12.dp, vertical = 2.dp)) {
-            Text(personalAgent.displayName, Modifier.testTag("chat-personal-name"),
-              style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-              maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (attention > 0) Text(stringResource(R.string.progress_attention_count, attention),
-              style = MaterialTheme.typography.labelSmall, color = attentionColors.foreground)
-          }
-        }
       }
     }
-  if (isTaskChat(connection)) taskChrome({ onMessageSearchOpenChange(true) }, { optionsOpen = true })
+  if (taskHeader) taskChrome({ onMessageSearchOpenChange(true) }, { optionsOpen = true })
   if (showConnectionWait && connection.clarification == null) Box(modifier = Modifier.align(Alignment.BottomCenter)
     .padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
     ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait, onConnectionWaitAction)

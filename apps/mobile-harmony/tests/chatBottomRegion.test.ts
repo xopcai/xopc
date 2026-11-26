@@ -31,7 +31,7 @@ describe('chat bottom region composition', () => {
     expect(projectDestination).not.toContain('embedded: true');
     expect(projectDestination).not.toContain('XopcPageHeader');
     const closeProject = home.slice(home.indexOf('  private closeProjectChat()'), home.indexOf('  private async openTaskChat('));
-    expect(closeProject).toContain('this.pathStack.pop();');
+    expect(closeProject).toContain('this.popActiveStack();');
     expect(closeProject).not.toContain('this.switchToChat(');
     const navigation = chat.slice(chat.indexOf('  navigationButtons()'), chat.indexOf('  private isStandaloneDraft()'));
     expect(navigation).toContain(".id('project-chat-close')");
@@ -43,7 +43,7 @@ describe('chat bottom region composition', () => {
       home.indexOf("} else if (page === 'task-detail')"));
     expect(taskDestination).toContain("requestedId: (param as XopcMobileRoute).prompt ?? ''");
     expect(taskDestination).toContain('taskId: (param as XopcMobileRoute).itemId');
-    expect(taskDestination).toContain('this.pathStack.pop(); return true;');
+    expect(taskDestination).toContain('this.popActiveStack(); return true;');
     expect(taskDestination).not.toContain('task_open_conversation');
     expect(home).toContain("route.page === 'task-chat' || (route.page === 'tasks' && route.itemId)");
     const tip = chat.indexOf(".id('task-chat-details-tip')");
@@ -58,7 +58,7 @@ describe('chat bottom region composition', () => {
       home.indexOf("} else if (page === 'task-edit'"));
     expect(detailDestination).toContain("XopcWorkspaceView({ section: 'tasks'");
     expect(detailDestination).toContain('initialId: (param as XopcMobileRoute).itemId');
-    expect(detailDestination).toContain('onExit: (): void => { this.pathStack.pop(); }');
+    expect(detailDestination).toContain('onExit: (): void => { this.popActiveStack(); }');
     expect(taskChatHeader).not.toContain('.bindSheet(');
     expect(taskChatHeader).not.toContain('task-chat-summary-toggle');
   });
@@ -117,15 +117,13 @@ describe('chat bottom region composition', () => {
     expect(chat).not.toContain(".id('chat-composer-voice-call')");
   });
 
-  it('opens the configured personal conversation and ordinary drafts from distinct sidebar controls', () => {
-    expect(sidebar).toContain('this.personalAgent?.displayName');
-    expect(sidebar).toContain("this.shortcut($r('app.string.chat_personal_agent'), undefined, 'personal')");
+  it('keeps slimmed sidebar shortcuts and opens ordinary drafts on session-chat', () => {
+    expect(sidebar).not.toContain("this.shortcut($r('app.string.chat_personal_agent')");
     expect(sidebar).toContain(".id('chat-sidebar-' + page)");
     expect(sidebar).toContain("id('chat-sidebar-new')");
     expect(sidebar).toContain("item.key !== this.personalAgent?.conversationId");
     expect(home).toContain('this.personalAgent.openOrCreate()');
-    expect(home).toContain('this.openConversationFromList(record.conversationId)');
-    expect(home).toContain('this.openConversationFromList(id)');
+    expect(home).toContain('this.openSessionChatFromSidebar(id');
     expect(home).toContain('this.chatRepository.create()');
     expect(chat).toContain('this.chat.localDraft && !this.chat.rows.length');
     const profile = sidebar.slice(sidebar.indexOf("id('chat-sidebar-new')"));
@@ -159,12 +157,14 @@ describe('chat bottom region composition', () => {
     expect(personal).not.toContain("padding({ left: 20, right: 20, bottom: 28 })");
   });
 
-  it('scrolls search and Personal Agent with the paginated sidebar list and reserves the system back edge', () => {
+  it('scrolls search and low-frequency shortcuts with the paginated sidebar list and reserves the system back edge', () => {
     const list = sidebar.slice(sidebar.indexOf('List({ space: 2 })'), sidebar.indexOf(".id('chat-sidebar-list')"));
     expect(list).toMatch(/List\(\{ space: 2 \}\) \{\s*ListItem\(\) \{\s*Column\(\{ space: 6 \}\)/);
     expect(list).toContain(".id('chat-sidebar-search')");
     expect(list).toContain("this.go('sessions-search')");
-    expect(list).toContain("this.shortcut($r('app.string.chat_personal_agent'), undefined, 'personal')");
+    expect(list).toContain("this.shortcut($r('app.string.automations'), $r('sys.symbol.clock'), 'automations')");
+    expect(list).toContain("this.shortcut($r('app.string.capability_title'), $r('sys.symbol.square_grid_2x2'), 'capabilities')");
+    expect(list).toContain("this.shortcut($r('app.string.about_you'), $r('sys.symbol.person'), 'about-you')");
     expect(list).not.toContain('.sticky(');
     expect(sidebar).not.toContain("$r('app.string.chat_recent_conversations')");
     expect(sidebar).not.toContain(".id('chat-sidebar-sessions')");
@@ -174,11 +174,11 @@ describe('chat bottom region composition', () => {
     expect(home).toContain("startSearching: page === 'sessions-search'");
     expect(sessions).toContain('this.searchOpen = this.startSearching');
     expect(sessions).toContain("searchId: 'sessions-open-search'");
-    expect(home).toContain('onExit: (): void => { this.pathStack.pop(); this.openSidebar(); }');
+    expect(home).toContain('onExit: (): void => { this.popActiveStack(); }');
     expect(home).toContain('layoutState.dismissSidebar = (): boolean => this.closeSidebar();');
     expect(sessions).toContain('.virtualScroll({ totalCount: this.rows.length })');
     expect(sessions).toContain('.cachedCount(5)');
-    expect(home).toContain("}.hideTitleBar(true).onBackPressed((): boolean => { if (layoutState.dismissChatOverlay?.()) return true; this.pathStack.pop(); return true; })");
+    expect(home).toContain("}.hideTitleBar(true).onBackPressed((): boolean => { if (layoutState.dismissChatOverlay?.()) return true; this.popActiveStack(); return true; })");
     expect(chat).toContain('canStartChatSidebarPan(finger.globalX - event.offsetX');
   });
 
@@ -252,11 +252,11 @@ describe('chat bottom region composition', () => {
     expect(ordinary).not.toContain('this.options.agentName()');
     expect(ordinary).not.toContain('this.agentPickerButton()');
     expect(ordinary).toContain('this.conversationActions()');
-    const mainChat = home.slice(home.indexOf('XopcChatView({ requestedId: this.requestedChatId'),
+    const mainChat = home.slice(home.indexOf('requestedId: this.adaConversationId'),
       home.indexOf(".id('home-chat-viewport')"));
     expect(mainChat).not.toContain('pendingAttention');
     expect(home).toContain('return this.attention.pendingCount;');
-    expect(home).toContain('XopcWorkbenchView({ progress: this.attention');
+    expect(home).toContain('XopcWorkbenchView({');
     expect(options).toContain("heading: $r('app.string.chat_model')");
     expect(options).toContain("onOpen: (): void => { this.onMode('model'); }");
   });

@@ -2,9 +2,7 @@ package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ConversationSummary
-import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.theme.LocalChatColors
-import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.Animatable
@@ -34,7 +32,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -98,6 +95,8 @@ internal fun Modifier.horizontalSwipe(
 @Stable
 internal class ChatSidebarState {
   var open by mutableStateOf(false)
+  var selecting by mutableStateOf(false)
+  var onCancelSelection: (() -> Unit)? = null
   var dragFraction by mutableStateOf<Float?>(null)
   val settled = Animatable(0f)
   val visible: Boolean get() = open || dragFraction != null || settled.value > 0f
@@ -105,11 +104,25 @@ internal class ChatSidebarState {
 }
 
 @Composable
-internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: ConnectionUiState,
-  onClose: () -> Unit, onRetry: () -> Unit, onLoadMore: () -> Unit,
-  onDestination: (HomeTab) -> Unit, onPersonal: () -> Unit,
-  onNew: () -> Unit, onConversation: (String) -> Unit, onSearch: () -> Unit,
-  onRename: (String) -> Unit, onTogglePin: (String) -> Unit, onDelete: (List<String>) -> Unit) {
+internal fun ChatSidebar(
+  state: ChatSidebarState,
+  width: Dp,
+  connection: ConnectionUiState,
+  activeSessionId: String? = connection.selectedConversationId,
+  onClose: () -> Unit,
+  onRetry: () -> Unit,
+  onLoadMore: () -> Unit,
+  onAutomations: () -> Unit,
+  onCapabilities: () -> Unit,
+  onAboutYou: () -> Unit,
+  onSettings: () -> Unit,
+  onNew: () -> Unit,
+  onConversation: (String) -> Unit,
+  onSearch: () -> Unit,
+  onRename: (String) -> Unit,
+  onTogglePin: (String) -> Unit,
+  onDelete: (List<String>) -> Unit,
+) {
   val motionAllowed = rememberMotionAllowed()
   LaunchedEffect(state.open, state.dragFraction != null, motionAllowed) {
     val fraction = state.dragFraction
@@ -119,7 +132,11 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
     if (duration == 0) state.settled.snapTo(target)
     else state.settled.animateTo(target, tween(duration, easing = XopcMotionTokens.StandardEasing))
   }
-  if (!state.visible) return
+  if (!state.visible) {
+    state.selecting = false
+    state.onCancelSelection = null
+    return
+  }
   val agents = remember(connection.agents) { connection.agents.associateBy { it.id } }
   var menuId by remember { mutableStateOf<String?>(null) }
   var selecting by remember { mutableStateOf(false) }
@@ -131,6 +148,10 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
     selecting = false
     selectedIds = emptySet()
     deleteFailureCount = 0
+  }
+  SideEffect {
+    state.selecting = selecting
+    state.onCancelSelection = ::cancelSelection
   }
   LaunchedEffect(state.open) {
     if (!state.open) {
@@ -160,7 +181,6 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
       if (selecting) cancelSelection() else onClose()
     }
   }
-  BackHandler(enabled = state.open, onBack = close)
   if (deleteTargets.isNotEmpty()) XopcConfirmDialog(
     onDismiss = { deleteTargets = emptyList() },
     onConfirm = {
@@ -243,9 +263,6 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
         Modifier.padding(horizontal = 10.dp, vertical = 4.dp), color = scheme.error,
         style = MaterialTheme.typography.bodySmall)
       val personal = connection.personal.agent
-      val attention = connection.progress.needsUser.size.takeIf {
-        connection.progress.gatewayId == connection.profile?.gatewayId
-      } ?: 0
       val recent = remember(connection.recentConversations, personal?.conversationId, connection.pendingDeleteId) {
         connection.recentConversations.orEmpty().filter {
           it.id != personal?.conversationId && it.id != connection.pendingDeleteId && it.isRecentSidebarCandidate
@@ -261,36 +278,24 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
             Modifier.padding(bottom = 4.dp).clip(MaterialTheme.shapes.large).background(scheme.surfaceContainer),
             enabled = shortcutsEnabled, onClick = onSearch)
         }
-        item("personal") {
-          SidebarRow(personal?.displayName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.personal_agent_title),
-            "chat-sidebar-personal",
-            Modifier.clip(MaterialTheme.shapes.medium)
-              .background(if (personal != null && personal.conversationId == connection.selectedConversationId)
-                scheme.surfaceContainerHigh else Color.Transparent),
-            badge = connection.personal.unreadCount, unreadBadge = true,
-            enabled = shortcutsEnabled && !connection.personal.agentCreating, onClick = onPersonal) {
-            PersonalAgentAvatar(connection.personal.agentAvatar, personal?.appearance ?: "loopi", 24.dp, active = false)
-          }
-        }
-        item("workbench") {
-          SidebarRow(R.string.tab_workbench, R.drawable.tab_progress, "chat-sidebar-workbench", badge = attention, enabled = shortcutsEnabled) {
-            onDestination(HomeTab.Progress)
-          }
-        }
         item("automations") {
-          SidebarRow(R.string.progress_automations, R.drawable.action_clock, "chat-sidebar-automations", enabled = shortcutsEnabled) {
-            onDestination(HomeTab.Automations)
-          }
-        }
-        item("notes") {
-          SidebarRow(R.string.tab_notes, R.drawable.tab_notes, "chat-sidebar-notes", enabled = shortcutsEnabled) { onDestination(HomeTab.Notes) }
-        }
-        item("library") {
-          SidebarRow(R.string.library_title, R.drawable.action_folder, "chat-sidebar-library", enabled = shortcutsEnabled) { onDestination(HomeTab.Library) }
+          SidebarRow(R.string.progress_automations, R.drawable.action_clock, "chat-sidebar-automations",
+            enabled = shortcutsEnabled, onClick = onAutomations)
         }
         item("capabilities") {
-          SidebarRow(R.string.capability_title, R.drawable.action_capabilities, "chat-sidebar-capabilities", enabled = shortcutsEnabled) {
-            onDestination(HomeTab.Capabilities)
+          SidebarRow(R.string.capability_title, R.drawable.action_capabilities, "chat-sidebar-capabilities",
+            enabled = shortcutsEnabled, onClick = onCapabilities)
+        }
+        item("about") {
+          SidebarRow(R.string.sidebar_about_you, R.drawable.tab_me, "chat-sidebar-about",
+            enabled = shortcutsEnabled, onClick = onAboutYou)
+        }
+        if (recent.isNotEmpty() || connection.recentConversationsLoading || connection.recentConversationsError) {
+          item("divider") {
+            HorizontalDivider(
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+              color = scheme.outlineVariant.copy(alpha = 0.45f),
+            )
           }
         }
         items(recent, key = { "conversation-${it.id}" }) { item ->
@@ -299,7 +304,7 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
           val agentName = agent?.let { agentDisplayName(it) } ?: agentId
           val avatarReference = agent?.avatar.orEmpty()
           SidebarConversationRow(item, selecting,
-            selected = if (selecting) item.id in selectedIds else item.id == connection.selectedConversationId,
+            selected = if (selecting) item.id in selectedIds else item.id == activeSessionId,
             enabled = !operationBusy, menuOpen = menuId == item.id, canDelete = canDelete(listOf(item.id)),
             onOpenMenu = { menuId = item.id }, onDismissMenu = { menuId = null },
             onClick = {
@@ -356,7 +361,7 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
             Text(stringResource(R.string.assistant_action_new_chat))
           }
           Spacer(Modifier.weight(1f))
-          IconButton(onClick = { onDestination(HomeTab.Me) }, enabled = shortcutsEnabled, modifier = Modifier
+          IconButton(onClick = onSettings, enabled = shortcutsEnabled, modifier = Modifier
             .background(scheme.surfaceContainer, CircleShape).testTag("chat-sidebar-profile")) {
             Icon(painterResource(R.drawable.action_settings), stringResource(R.string.settings_title), Modifier.size(22.dp),
               tint = scheme.onSurface)
@@ -425,33 +430,15 @@ private fun SidebarMenuItem(@StringRes label: Int, @DrawableRes icon: Int, tag: 
 
 @Composable
 private fun SidebarRow(@StringRes label: Int, @DrawableRes icon: Int, tag: String,
-  modifier: Modifier = Modifier, badge: Int = 0, enabled: Boolean = true, onClick: () -> Unit) {
-  SidebarRow(stringResource(label), tag, modifier, badge, enabled, onClick = onClick) {
-    Icon(painterResource(icon), null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-  }
-}
-
-@Composable
-private fun SidebarRow(label: String, tag: String, modifier: Modifier = Modifier, badge: Int = 0,
-  enabled: Boolean = true, unreadBadge: Boolean = false, onClick: () -> Unit, icon: @Composable () -> Unit) {
+  modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
   Row(modifier.fillMaxWidth().heightIn(min = 46.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
     .padding(horizontal = 10.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { icon() }
-    Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
+    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+      Icon(painterResource(icon), null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    Text(stringResource(label), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
       maxLines = 1, overflow = TextOverflow.Ellipsis,
       color = MaterialTheme.colorScheme.onSurface)
-    if (badge > 0) {
-      val fill = if (unreadBadge) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-        else LocalAttentionColors.current.fill
-      val foreground = if (unreadBadge) MaterialTheme.colorScheme.primary else LocalAttentionColors.current.foreground
-      val accessibility = if (unreadBadge) {
-        val unreadLabel = pluralStringResource(R.plurals.personal_unread_messages, badge, badge)
-        Modifier.semantics { contentDescription = unreadLabel }.testTag("personal-unread-badge")
-      } else Modifier.testTag("progress-attention-badge")
-      Text(if (badge > 99) "99+" else badge.toString(),
-        Modifier.background(fill, CircleShape).padding(horizontal = 8.dp, vertical = 4.dp).then(accessibility),
-        color = foreground, style = MaterialTheme.typography.labelMedium)
-    }
   }
 }

@@ -6,6 +6,7 @@ struct TaskConversationView: View {
     let taskID: String
     var returnLabel: LocalizedStringKey?
     var opensDetails = false
+    var onOpenTaskChat: ((String) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -109,7 +110,11 @@ struct TaskConversationView: View {
         .environment(\.openURL, OpenURLAction { url in
             if case let .route("tasks", id) = ChatMessageLink.resolve(url.absoluteString) {
                 if id != taskID {
-                    nestedTaskID = id
+                    if let onOpenTaskChat {
+                        onOpenTaskChat(id)
+                    } else {
+                        nestedTaskID = id
+                    }
                 }
             } else {
                 openURL(url)
@@ -183,7 +188,13 @@ struct TaskConversationView: View {
     private func taskActions(_ task: TaskRecord) -> some View {
         HStack(spacing: 8) {
             if opensDetails {
-                Button { showingConversation = true } label: {
+                Button {
+                    if let onOpenTaskChat {
+                        onOpenTaskChat(taskID)
+                    } else {
+                        showingConversation = true
+                    }
+                } label: {
                     Text("任务对话").frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.bordered)

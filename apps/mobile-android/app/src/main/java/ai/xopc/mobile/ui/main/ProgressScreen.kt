@@ -71,6 +71,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -123,6 +124,11 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   initialDeliveryId: String? = null,
   onCloseDelivery: () -> Unit = {},
   onOpenLibrary: (() -> Unit)? = null,
+  onOpenSidebar: (() -> Unit)? = null,
+  bottomChromeInset: Dp = 0.dp,
+  scrollToTopRevision: Int = 0,
+  onNavigateRoute: ((MobileRoute) -> Unit)? = null,
+  sidebarGesture: Modifier = Modifier,
   ) {
   var pendingHomeAction by remember(state.gatewayId) { mutableStateOf<ProgressHomeAction?>(null) }
   val navigation = rememberNavigationPreferences()
@@ -276,11 +282,25 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   LaunchedEffect(workPager) {
     snapshotFlow { workPager.settledPage }.collect { selectWorkPage(it) }
   }
+  LaunchedEffect(scrollToTopRevision) {
+    if (scrollToTopRevision > 0 && workPageIndex >= 0) {
+      if (workPager.currentPage != 0) {
+        workPager.animateScrollToPage(0)
+      }
+      page = "overview"
+      onRefreshHome()
+    }
+  }
   LaunchedEffect(page, state.gatewayId) {
     if (page == "tasks") onRefreshTasks()
   }
   var automationListReturnPage by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   fun openAutomationsFromOverview() {
+    if (onNavigateRoute != null && workPageIndex >= 0) {
+      onLoadAutomations()
+      onNavigateRoute(MobileRoute.Automations)
+      return
+    }
     automationListReturnPage = "overview"
     page = "automations"
     onLoadAutomations()
@@ -323,7 +343,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       else -> onExit?.invoke()
     }
   }
-  BackHandler(enabled = page != "overview" || onExit != null) {
+  val isWorkbenchRoot = onOpenSidebar != null && workPageIndex >= 0
+  BackHandler(enabled = !isWorkbenchRoot && (page != "overview" || onExit != null)) {
     goBack()
   }
   BackHandler(enabled = page == "tasks" && taskSearchOpen) { closeTaskSearch() }
@@ -393,6 +414,11 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   }
   val selectedTask = state.detailTask.takeIf { state.detailTaskId == selectedTaskId }
   fun openProject(id: String) {
+    if (onNavigateRoute != null && workPageIndex >= 0) {
+      onOpenProject(id)
+      onNavigateRoute(MobileRoute.ProjectDetail(id))
+      return
+    }
     selectedProjectId = id
     page = "project"
     onOpenProject(id)
@@ -400,6 +426,11 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   fun createTask(projectId: String?) {
     focusManager.clearFocus(force = true)
     keyboardController?.hide()
+    if (onNavigateRoute != null && workPageIndex >= 0) {
+      if (state.projects.isEmpty() && !state.projectsLoading) onLoadProjects()
+      onNavigateRoute(MobileRoute.TaskEditor(projectId = projectId))
+      return
+    }
     createTitle = ""
     createBody = ""
     createSourceProjectId = projectId
@@ -429,6 +460,11 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     }
   }
   fun openAutomation(id: String) {
+    if (onNavigateRoute != null && workPageIndex >= 0) {
+      onOpenAutomation(id)
+      onNavigateRoute(MobileRoute.AutomationDetail(id))
+      return
+    }
     pendingAutomationEditId = null
     automationReturnPage = page
     selectedAutomationId = id
@@ -455,6 +491,11 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     }
   }
   fun openRun(id: String) {
+    if (onNavigateRoute != null && workPageIndex >= 0) {
+      onOpenAutomationRun(id)
+      onNavigateRoute(MobileRoute.AutomationRun(id))
+      return
+    }
     if (page != "automation-run") runReturnPage = page
     selectedRunId = id
     page = "automation-run"
@@ -479,13 +520,14 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     }
   }
   val motionAllowed = rememberMotionAllowed()
-  Column(modifier = Modifier.fillMaxSize().padding(insets)) {
+  Column(modifier = Modifier.fillMaxSize().then(if (isWorkbenchRoot) sidebarGesture else Modifier).padding(insets)) {
     val automationName = state.automations.detail?.takeIf { page == "automation" && it.id == selectedAutomationId }?.name
     XopcPageHeader(
       backTag = "progress-back",
       onBack = ::goBack,
       backEnabled = !state.commandBusy && !state.editBusy,
-      showBack = page != "overview" || onExit != null,
+      showBack = !isWorkbenchRoot && (page != "overview" || onExit != null),
+      leadingContent = if (isWorkbenchRoot) ({ PageSidebarButton("workbench-sidebar", onOpenSidebar!!) }) else null,
       title = if (page == "automations" || page == "automation") (automationName ?: stringResource(R.string.progress_automations)) else null,
       titleContent = when {
         workPageIndex >= 0 -> ({ PageTitleMenu(workPages, page, "work-page-menu", Modifier.fillMaxWidth(), ::scrollToWorkPage) })
@@ -534,7 +576,9 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         }
       }
     }
-    Column(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.PagePaddingX)) {
+    Column(modifier = Modifier.weight(1f).fillMaxWidth()
+      .padding(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX,
+        bottom = if (isWorkbenchRoot) bottomChromeInset else 0.dp)) {
     if (state.createTaskChatError && page == "tasks") Text(
       stringResource(R.string.progress_create_chat_error), color = MaterialTheme.colorScheme.error,
       modifier = Modifier.testTag("progress-create-task-error"))

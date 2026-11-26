@@ -117,6 +117,9 @@ export struct XopcPageHeader {
   @Param backId: string = '';
   @Param backEnabled: boolean = true;
   @Event onBack: () => void = (): void => {};
+  @Param drawerVisible: boolean = false;
+  @Param drawerId: string = '';
+  @Event onOpenDrawer: () => void = (): void => {};
   @Param searchId: string = '';
   @Param searchOpen: boolean = false;
   @Param searchLabel: Resource = $r('app.string.search');
@@ -158,6 +161,13 @@ export struct XopcPageHeader {
           .backgroundColor(this.colors.panel).enabled(this.backEnabled)
           .clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.back')).onClick((): void => { this.onBack(); })
+      } else if (this.drawerVisible) {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.line_3_horizontal')).fontSize(22).fontColor([this.colors.foreground])
+        }.id(this.drawerId).width(44).height(44).padding(0)
+          .backgroundColor(this.colors.panel)
+          .clickEffect(xopcClickEffect())
+          .accessibilityText($r('app.string.chat_open_drawer')).onClick((): void => { this.onOpenDrawer(); })
       }
       if (this.selectionTitle !== '') {
         Text(this.selectionTitle).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)

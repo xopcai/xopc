@@ -67,6 +67,14 @@ internal fun PageBackButton(tag: String, onClick: () -> Unit, enabled: Boolean =
 }
 
 @Composable
+internal fun PageSidebarButton(tag: String, onClick: () -> Unit, enabled: Boolean = true) {
+  IconButton(onClick = onClick, modifier = Modifier.size(44.dp).testTag(tag), enabled = enabled,
+    colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    ActionIcon(R.drawable.action_menu, contentDescription = stringResource(R.string.chat_open_drawer))
+  }
+}
+
+@Composable
 internal fun <T> PageTitleMenu(options: List<SegmentOption<T>>, selected: T, tag: String,
   modifier: Modifier = Modifier, onSelect: (T) -> Unit) {
   var expanded by remember { mutableStateOf(false) }

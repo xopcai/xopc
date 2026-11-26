@@ -17,13 +17,13 @@ function handler(file: string, start: string, end: string, deps: Record<string, 
 
 describe('chat entry handoff', () => {
   function home() {
-    const view = handler('HomeView', '  private async openOrdinaryChat(', '  private openConversationFromList(', {
+    const view = handler('HomeView', '  private async openOrdinaryChat(', '  private async useLibraryFile(', {
       userErrorMessage: (message: string) => message,
       appSettings: { effectiveLanguage: () => 'en' },
     });
     Object.assign(view, {
       ordinaryOpening: false, navigationRevision: 1, disposed: false,
-      chatRepository: { create: vi.fn(async () => 'conversation') }, openConversationFromList: vi.fn(),
+      chatRepository: { create: vi.fn(async () => 'conversation') }, openSessionChatFromSidebar: vi.fn(),
       getUIContext: () => ({ getPromptAction: () => ({ showToast: vi.fn() }) }),
     });
     return view;
@@ -33,7 +33,7 @@ describe('chat entry handoff', () => {
     const view = home();
     await Promise.all([view.openOrdinaryChat(), view.openOrdinaryChat()]);
     expect(view.chatRepository.create).toHaveBeenCalledOnce();
-    expect(view.openConversationFromList).toHaveBeenCalledExactlyOnceWith('conversation');
+    expect(view.openSessionChatFromSidebar).toHaveBeenCalledExactlyOnceWith('conversation', '', true);
   });
 
   it('ignores an outgoing draft request after the user changes destination', async () => {
@@ -41,7 +41,7 @@ describe('chat entry handoff', () => {
     const pending = view.openOrdinaryChat();
     view.navigationRevision++;
     await pending;
-    expect(view.openConversationFromList).not.toHaveBeenCalled();
+    expect(view.openSessionChatFromSidebar).not.toHaveBeenCalled();
     expect(view.ordinaryOpening).toBe(false);
   });
 

@@ -83,6 +83,7 @@ import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { XopcPersonalChatActivity } from './PersonalChatActivity';
 import { agentDisplayName, agentExternalRuntimeBadge } from '../common/agentPresentation';
 import { chatContextStrip, chatModelSubtitle, shouldShowRuntimeBadge, XopcChatContextStrip } from '../common/chatHeaderPresentation';
+import { FLOATING_TAB_BAR_COMPOSER_GAP_VP } from '../common/mobileTabNavigation';
 
 interface XopcChatReadingAnchor { rowId: string; offset: number; }
 const chatReadingAnchors: Map<string, XopcChatReadingAnchor> = new Map<string, XopcChatReadingAnchor>();
@@ -154,6 +155,12 @@ export struct XopcChatView {
   @Param automationSetup: boolean = false;
   @Param projectChat: boolean = false;
   @Event onProjectClose: () => void = (): void => {};
+  @Param sessionChat: boolean = false;
+  @Event onSessionClose: () => void = (): void => {};
+  @Event onOpenSessionSwitcher: () => void = (): void => {};
+  @Param bottomChromeInset: number = 0;
+  @Param scrollToLatestRevision: number = 0;
+  @Event onOverlayActiveChange: (active: boolean) => void = (_active: boolean): void => {};
   @Param scopedProjectName: string = '';
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
   @Local searchOpen: boolean = false;
@@ -164,7 +171,10 @@ export struct XopcChatView {
     return this.embedded ? 0 : this.getUIContext().px2vp(this.layout.systemTopInsetPx);
   }
   @Computed get personalConversation(): boolean {
-    return this.personalAgent?.state === 'ready' && this.chat.selectedId === this.personalAgent.conversationId;
+    return !this.sessionChat && this.personalAgent?.state === 'ready' && this.chat.selectedId === this.personalAgent.conversationId;
+  }
+  @Computed get compactPersonalHeader(): boolean {
+    return this.personalConversation && !this.atBottom && this.presentationRows.length > 0;
   }
   @Local floatingHeaderHeight: number = 0;
   @Local connectionBannerHeight: number = 0;
@@ -894,18 +904,32 @@ export struct XopcChatView {
   }
 
   aboutToAppear(): void {
-    shareIntake.liveDraftScope = (): string => this.restoringDraft || this.disposed ? '' : this.draftScope;
-    shareIntake.readLiveDraft = (): XopcChatDraft => ({ text: this.draft, files: this.attachments, refs: this.refs, intakeReceipts: this.intakeReceipts });
-    shareIntake.applyLiveDraft = (draft: XopcChatDraft): void => {
-      this.draft = draft.text; this.attachments = draft.files; this.intakeReceipts = draft.intakeReceipts ?? []; this.cursor = this.draft.length;
-    };
     this.visible = this.activePage;
     if (this.visible) { this.bindBack(); }
     this.appliedRequestRevision = this.requestRevision;
     this.chat.taskId = this.taskId;
     this.chat.start(this.requestedId, this.onConversationUnavailable);
   }
-  private bindBack(): void { layoutState.dismissChatOverlay = (): boolean => { return this.dismissOverlay(); }; }
+  private bindBack(): void {
+    layoutState.dismissChatOverlay = (): boolean => { return this.dismissOverlay(); };
+    shareIntake.liveDraftScope = (): string => this.restoringDraft || this.disposed ? '' : this.draftScope;
+    shareIntake.readLiveDraft = (): XopcChatDraft => ({ text: this.draft, files: this.attachments, refs: this.refs, intakeReceipts: this.intakeReceipts });
+    shareIntake.applyLiveDraft = (draft: XopcChatDraft): void => {
+      this.draft = draft.text; this.attachments = draft.files; this.intakeReceipts = draft.intakeReceipts ?? []; this.cursor = this.draft.length;
+    };
+  }
+  @Monitor('scrollToLatestRevision')
+  onScrollToLatestRequest(): void {
+    if (this.scrollToLatestRevision > 0 && this.activePage && !this.disposed) {
+      this.resetMessagePosition();
+      this.saveReadingPosition();
+      this.onMessageChange();
+    }
+  }
+  @Monitor('phonePage', 'searchOpen', 'generatedVideoOpen', 'activePage')
+  onOverlayStateChange(): void {
+    this.onOverlayActiveChange(this.activePage && (this.phonePage === 1 || this.searchOpen || this.generatedVideoOpen));
+  }
   private dismissOverlay(): boolean {
     if (this.selectingMessageId) { this.selectingMessageId = ''; return true; }
     if (this.phonePage === 1) { this.phonePage = 0; return true; }
@@ -1995,6 +2019,7 @@ export struct XopcChatView {
     }.id('chat-bottom-surface').width('100%').backgroundColor(Color.Transparent)
       .borderRadius(this.colors.corner(24)).clip(true)
     }.id('chat-bottom-region').width('100%')
+      .padding({ bottom: this.bottomChromeInset > 0 ? this.bottomChromeInset + FLOATING_TAB_BAR_COMPOSER_GAP_VP : 0 })
       .margin({ top: 4, bottom: 0 })
       .onAreaChange((_previous: Area, current: Area): void => { this.bottomRegionHeight = Number(current.height); })
     if (this.voiceHeld) { this.voiceGestureFeedback() }
@@ -2242,6 +2267,13 @@ export struct XopcChatView {
       }
       this.voiceCallButton()
       this.continuousReadButton()
+      if (this.sessionChat) {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.ellipsis_bubble')).fontSize(20).fontColor([this.colors.foreground])
+        }.id('chat-header-switch-session').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+          .accessibilityText($r('app.string.chat_switch_conversation'))
+          .onClick((): void => { this.dismissComposer(); this.onOpenSessionSwitcher(); })
+      }
       if (!this.personalConversation) {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.slider_horizontal_2')).fontSize(21).fontColor([this.colors.foreground])
@@ -2255,18 +2287,26 @@ export struct XopcChatView {
   @Builder
   navigationButtons() {
     Row({ space: 3 }) {
-      if (this.projectChat) {
+      if (this.sessionChat) {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground])
-        }.id('project-chat-close').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+        }.id('session-chat-back').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
           .accessibilityText($r('app.string.back'))
-          .onClick((): void => { this.dismissComposer(); this.onProjectClose(); })
+          .onClick((): void => { this.dismissComposer(); this.onSessionClose(); })
+      } else {
+        if (this.projectChat) {
+          Button({ type: ButtonType.Circle }) {
+            SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground])
+          }.id('project-chat-close').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+            .accessibilityText($r('app.string.back'))
+            .onClick((): void => { this.dismissComposer(); this.onProjectClose(); })
+        }
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.line_3_horizontal')).fontSize(22).fontColor([this.colors.foreground])
+        }.id('chat-header-sidebar').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+          .accessibilityText($r('app.string.chat_open_drawer'))
+          .onClick((): void => { this.dismissComposer(); this.onOpenSidebar(); })
       }
-      Button({ type: ButtonType.Circle }) {
-        SymbolGlyph($r('sys.symbol.line_3_horizontal')).fontSize(22).fontColor([this.colors.foreground])
-      }.id('chat-header-sidebar').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
-        .accessibilityText($r('app.string.chat_open_drawer'))
-        .onClick((): void => { this.dismissComposer(); this.onOpenSidebar(); })
     }
   }
 
@@ -2442,25 +2482,84 @@ export struct XopcChatView {
   }
 
   @Builder
+  sessionChatTitlePill() {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 1 }) {
+        Text(this.chat.title || $r('app.string.new_chat'))
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.colors.foreground)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Row({ space: 4 }) {
+          Text(this.currentChatAgentName())
+            .fontSize(11)
+            .fontColor(this.colors.secondary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          if (this.currentChatModelSubtitle()) {
+            Text('·').fontSize(11).fontColor(this.colors.tertiary)
+            Text(this.currentChatModelSubtitle())
+              .fontSize(11)
+              .fontColor(this.colors.secondary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+        }.justifyContent(FlexAlign.Center).alignItems(VerticalAlign.Center)
+      }.alignItems(HorizontalAlign.Center).constraintSize({ maxWidth: '100%' })
+    }
+    .id('session-chat-header-title')
+    .constraintSize({ minHeight: 44, maxWidth: '100%' })
+    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+    .borderRadius(this.colors.corner(18))
+    .clipShape(this.colors.cornerClip(18))
+    .backgroundColor(this.colors.chat.card)
+    .onClick((): void => { this.dismissComposer(); this.openSheet('actions'); })
+  }
+
+  @Builder
   conversationHeader() {
     Column() {
       if (this.personalConversation) {
-        Stack({ alignContent: Alignment.Top }) {
-          Row() {
+        if (this.compactPersonalHeader) {
+          Row({ space: 6 }) {
             this.navigationButtons()
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 6 }) {
+                XopcPersonalAgentAvatar({ extent: 28, compact: true,
+                  activePage: this.activePage && this.phonePage === 0 && !this.searchOpen && !this.sheetOpen,
+                  moodOverride: this.prompt.prompt ? 'care' : this.chat.runId || this.chat.sending ? 'work' : undefined,
+                  agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi',
+                  revision: this.personalAgent?.revision ?? 0 })
+                Text(this.personalAgent?.displayName || 'Ada')
+                  .fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              }.alignItems(VerticalAlign.Center)
+            }.id('chat-personal-overview-compact').constraintSize({ minHeight: 44 }).padding({ left: 8, right: 12 })
+              .borderRadius(22).backgroundColor(this.colors.chat.card)
+              .accessibilityText($r('app.string.personal_overview_open'))
+              .onClick((): void => { this.openPersonalOverview(); })
             Blank().layoutWeight(1)
             this.conversationActions()
-          }.width('100%').padding({ left: 12, right: 12, top: 3 })
-          Button({ type: ButtonType.Circle }) {
-            XopcPersonalAgentAvatar({ extent: 62,
-              activePage: this.activePage && this.phonePage === 0 && !this.searchOpen && !this.sheetOpen,
-              moodOverride: this.prompt.prompt ? 'care' : this.chat.runId || this.chat.sending ? 'work' : undefined,
-              agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi',
-              revision: this.personalAgent?.revision ?? 0 })
-          }.id('chat-personal-overview').width(62).height(62).padding(0).backgroundColor(this.colors.chat.card)
-            .accessibilityText($r('app.string.personal_overview_open'))
-            .onClick((): void => { this.openPersonalOverview(); })
-        }.width('100%').height(64)
+          }.width('100%').padding({ left: 12, right: 12, top: 3 }).alignItems(VerticalAlign.Center)
+        } else {
+          Stack({ alignContent: Alignment.Top }) {
+            Row() {
+              this.navigationButtons()
+              Blank().layoutWeight(1)
+              this.conversationActions()
+            }.width('100%').padding({ left: 12, right: 12, top: 3 })
+            Button({ type: ButtonType.Circle }) {
+              XopcPersonalAgentAvatar({ extent: 62,
+                activePage: this.activePage && this.phonePage === 0 && !this.searchOpen && !this.sheetOpen,
+                moodOverride: this.prompt.prompt ? 'care' : this.chat.runId || this.chat.sending ? 'work' : undefined,
+                agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi',
+                revision: this.personalAgent?.revision ?? 0 })
+            }.id('chat-personal-overview').width(62).height(62).padding(0).backgroundColor(this.colors.chat.card)
+              .accessibilityText($r('app.string.personal_overview_open'))
+              .onClick((): void => { this.openPersonalOverview(); })
+          }.width('100%').height(64)
+        }
         XopcPersonalChatActivity({ conversationId: this.chat.selectedId, displayName: this.personalAgent?.displayName ?? '',
           activePage: this.activePage && this.layout.foreground && this.phonePage === 0 && !this.searchOpen && !this.sheetOpen
             && !this.chat.cachedHistory && !this.hasConnectionIssue(),
@@ -2468,6 +2567,12 @@ export struct XopcChatView {
           promptId: this.prompt.prompt?.conversationId === this.chat.selectedId ? this.prompt.prompt?.id ?? '' : '',
           onOpenAttention: (): void => { this.openPersonalOverview(); },
           onOpenTask: (taskId: string): void => { this.dismissComposer(); this.onNavigate({ page: 'tasks', itemId: taskId }); } })
+      } else if (this.sessionChat) {
+        Row({ space: 6 }) {
+          this.navigationButtons()
+          Row() { this.sessionChatTitlePill() }.layoutWeight(1).justifyContent(FlexAlign.Center)
+          this.conversationActions()
+        }.width('100%').padding({ left: 12, right: 12 }).alignItems(VerticalAlign.Center)
       } else if (this.isStandaloneDraft()) {
         Row({ space: 6 }) {
           this.navigationButtons()

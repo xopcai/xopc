@@ -12,11 +12,9 @@ describe('mobile destination loading experience', () => {
     expect(open.indexOf('void this.restoreCachedHistory(id, selection)')).toBeLessThan(open.indexOf('await this.recover()'));
   });
 
-  it('keeps list-to-chat navigation behind one stable branded loading surface', () => {
+  it('keeps initial Ada loading behind one stable branded loading surface', () => {
     const home = read('../entry/src/main/ets/view/HomeView.ets');
-    expect(home).toContain("if (id === this.activeChatId && this.chatReady");
-    expect(home).toContain('this.pendingChatId = id;');
-    expect(home).toContain("if (this.pendingChatId === id) this.pendingChatId = ''");
+    expect(home).toContain('if (!this.adaChatReady)');
     expect(home).toContain(".id('chat-navigation-loading')");
     expect(home).toContain('XopcBrandLoading({ reduceMotion: this.layout.reduceMotion })');
   });

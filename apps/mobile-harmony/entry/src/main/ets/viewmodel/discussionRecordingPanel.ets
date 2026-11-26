@@ -17,6 +17,7 @@ export class XopcDiscussionRecordingPanel {
   @Trace positionMenu: boolean = false;
   @Trace windowWidth: number = 0;
   @Trace windowHeight: number = 0;
+  @Trace bottomInset: number = 0;
   @Trace panelX: number = 12;
   @Trace panelY: number = 12;
   @Trace finishing: boolean = false;
@@ -33,18 +34,19 @@ export class XopcDiscussionRecordingPanel {
   get cardWidth(): number { return Math.max(0,Math.min(this.small ? 348 : 400,this.windowWidth - 24)); }
   get cardHeight(): number {
     const preferred = this.positionMenu ? 152 : this.small ? (this.narrow ? 156 : 108) + (this.notice ? 36 : 0) : 432;
-    return Math.max(0,Math.min(preferred,this.windowHeight - 24));
+    return Math.max(0,Math.min(preferred,this.windowHeight - 24 - this.bottomInset));
   }
-  resize(width: number,height: number): void {
+  resize(width: number,height: number,bottomInset: number = 0): void {
     if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
     this.dragging = false;
     this.windowWidth = width; this.windowHeight = height;
-    if (!this.placed) { this.panelX = width - this.cardWidth - 12; this.panelY = height - this.cardHeight - 12; this.placed = true; }
+    this.bottomInset = Number.isFinite(bottomInset) && bottomInset > 0 ? bottomInset : 0;
+    if (!this.placed) { this.panelX = width - this.cardWidth - 12; this.panelY = height - this.cardHeight - 12 - this.bottomInset; this.placed = true; }
     this.fit();
   }
   fit(): void {
     this.panelX = Math.max(12,Math.min(this.panelX,Math.max(12,this.windowWidth - this.cardWidth - 12)));
-    this.panelY = Math.max(12,Math.min(this.panelY,Math.max(12,this.windowHeight - this.cardHeight - 12)));
+    this.panelY = Math.max(12,Math.min(this.panelY,Math.max(12,this.windowHeight - this.cardHeight - 12 - this.bottomInset)));
   }
   setCompact(compact: boolean): void { this.compact = compact; this.positionMenu = false; this.dragging = false; this.fit(); }
   fresh(): void { this.dismissed = false; this.setCompact(false); this.detailsOpen = false; this.transcriptOpen = false; }
@@ -56,7 +58,7 @@ export class XopcDiscussionRecordingPanel {
   corner(right: boolean,bottom: boolean): void {
     this.positionMenu = false; this.dragging = false;
     this.panelX = right ? this.windowWidth - this.cardWidth - 12 : 12;
-    this.panelY = bottom ? this.windowHeight - this.cardHeight - 12 : 12; this.fit();
+    this.panelY = bottom ? this.windowHeight - this.cardHeight - 12 - this.bottomInset : 12; this.fit();
   }
   dragStart(): void {
     this.positionMenu = false; this.originX = this.panelX; this.originY = this.panelY; this.dragging = true;

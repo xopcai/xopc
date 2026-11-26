@@ -100,7 +100,13 @@ class XopcLibraryScopeState {
 @ComponentV2
 export struct XopcSpaceLibraryView {
   @Param initialId: string = '';
+  @Param rootTab: boolean = false;
+  @Param activePage: boolean = true;
+  @Param bottomChromeInset: number = 0;
+  @Param scrollTopRevision: number = 0;
   @Event onExit: () => void = (): void => {};
+  @Event onOpenSidebar: () => void = (): void => {};
+  @Event onDetailOpenChange: (open: boolean) => void = (_open: boolean): void => {};
   @Event onBackHandler: (handler?: () => boolean) => void = (_handler?: () => boolean): void => {};
   @Event onOpenSource: (source: XopcLibraryOrigin) => void = (_source: XopcLibraryOrigin): void => {};
   @Event onUseInChat: (file: XopcChatAttachment, source?: XopcLibraryOrigin) => Promise<void> =
@@ -125,6 +131,8 @@ export struct XopcSpaceLibraryView {
   private leavingForSource: boolean = false;
   private searchTimer: number = -1;
   private pager: SwiperController = new SwiperController();
+  private listScrollers: Scroller[] = LIBRARY_SCOPES.map((): Scroller => new Scroller());
+  private initialized: boolean = false;
   private pages: XopcLibraryScopeState[] = LIBRARY_SCOPES.map((scope: string): XopcLibraryScopeState => new XopcLibraryScopeState(scope));
 
   @Computed get scopeIndex(): number { return Math.max(0, LIBRARY_SCOPES.indexOf(this.scope)); }
@@ -138,8 +146,30 @@ export struct XopcSpaceLibraryView {
       this.back();
       return true;
     });
-    void this.load();
+    if (this.activePage || this.initialId) {
+      this.initialized = true;
+      void this.load();
+    }
     if (this.initialId) void this.open(this.initialId);
+  }
+
+  @Monitor('activePage')
+  onActivePageChange(): void {
+    if (!this.activePage) return;
+    if (!this.initialized) {
+      this.initialized = true;
+      void this.load();
+    }
+  }
+
+  @Monitor('scrollTopRevision')
+  onScrollTop(): void {
+    if (this.scrollTopRevision > 0) this.listScrollers[this.scopeIndex]?.scrollEdge(Edge.Top);
+  }
+
+  @Monitor('detailOpen')
+  onDetailStateChange(): void {
+    this.onDetailOpenChange(this.detailOpen);
   }
 
   aboutToDisappear(): void {
@@ -372,7 +402,9 @@ export struct XopcSpaceLibraryView {
   listHeader() {
     XopcPageHeader({ heading: this.scope === 'favorites' ? this.t('收藏', 'Favorites')
       : this.scope === 'trash' ? this.t('回收站', 'Trash') : this.t('全部资料', 'All files'),
-      backVisible: true, onBack: (): void => { this.back(); }, selectedTitle: this.scope, titleMenuId: 'space-scope-menu',
+      backVisible: !this.rootTab, onBack: (): void => { this.back(); },
+      drawerVisible: this.rootTab, drawerId: 'library-header-sidebar', onOpenDrawer: this.onOpenSidebar,
+      selectedTitle: this.scope, titleMenuId: 'space-scope-menu',
       titleOptions: [{ key: 'all', label: this.t('全部资料', 'All files'), id: 'space-tab-all' },
         { key: 'favorites', label: this.t('收藏', 'Favorites'), id: 'space-tab-favorites' },
         { key: 'trash', label: this.t('回收站', 'Trash'), id: 'space-tab-trash' }],
@@ -543,7 +575,7 @@ export struct XopcSpaceLibraryView {
   @Builder
   fileList(page: XopcLibraryScopeState) {
     Refresh({ refreshing: page.loading && page.items.length > 0 }) {
-      List({ space: 8 }) {
+      List({ space: 8, scroller: this.listScrollers[Math.max(0, LIBRARY_SCOPES.indexOf(page.scope))] }) {
         if (page.loading && !page.items.length) {
           ListItem() { XopcListSkeleton() }
         } else if (page.listFailed) {
@@ -570,7 +602,8 @@ export struct XopcSpaceLibraryView {
               onLoad: (): void => { if (page.scope === this.scope) void this.load(page.cursor); } })
           }
         }
-      }.id('space-list-' + page.scope).height('100%').width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).cachedCount(5)
+      }.id('space-list-' + page.scope).height('100%').width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X })
+        .contentEndOffset(this.bottomChromeInset + 12).cachedCount(5)
     }.layoutWeight(1).width('100%').pullToRefresh(!page.loading && !this.busy).onRefreshing((): void => { void this.load(); })
   }
 
@@ -597,11 +630,11 @@ export struct XopcSpaceLibraryView {
               if (this.undo) void this.change('restore', this.undo.id, { revision: this.undo.revision });
             },
           })
-        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 + this.bottomChromeInset })
       } else if (!this.detailOpen && this.error) {
         Column() {
           XopcInlineBanner({ message: this.error })
-        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 + this.bottomChromeInset })
       }
     }.id('space-library').width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.detailOpen, this.previewSheet, xopcSheetOptions('immersive', {

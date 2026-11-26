@@ -35,11 +35,15 @@ export struct XopcNotesTabView {
   @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
   @Local capture: XopcDiscussionCapture = discussionCapture;
   @Param activePage: boolean = false;
+  @Param rootTab: boolean = false;
+  @Param bottomChromeInset: number = 0;
+  @Param scrollTopRevision: number = 0;
   @Param recordingAvailable: boolean = false;
   @Param initialStatus: XopcNoteStatus | '' = '';
   @Local searchText: string = '';
   @Local searchOpen: boolean = false;
   @Event onExit: () => void = (): void => {};
+  @Event onOpenSidebar: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onStartVoice: () => void = (): void => {};
   @Local model: XopcNoteViewModel = new XopcNoteViewModel();
@@ -47,6 +51,7 @@ export struct XopcNotesTabView {
   @Local selectedId: string = '';
   @Local recoveriesOpen: boolean = false;
   private initialized: boolean = false;
+  private listScroller: Scroller = new Scroller();
   private pager: SwiperController = new SwiperController();
   private pagerProgress: XopcPagerProgress = new XopcPagerProgress();
   private readonly statusOptions: XopcSegmentOption[] = [
@@ -113,6 +118,11 @@ export struct XopcNotesTabView {
     if (this.activePage && this.initialized && this.capture.phase === 'completed') void this.model.list(false, true);
   }
 
+  @Monitor('scrollTopRevision')
+  onScrollTop(): void {
+    if (this.scrollTopRevision > 0) this.listScroller.scrollEdge(Edge.Top);
+  }
+
   private recordingLabel(): Resource {
     if (!this.recordingAvailable) return $r('app.string.notes_action_record');
     switch (this.capture.phase) {
@@ -162,7 +172,7 @@ export struct XopcNotesTabView {
             this.onNavigate({ page: 'note-create', itemId: '' });
           })
       }
-    }.id('notes-capture-actions').padding(5).margin({ bottom: 12 })
+    }.id('notes-capture-actions').padding(5).margin({ bottom: 12 + this.bottomChromeInset })
       .borderRadius(30).backgroundColor(this.colors.panel).shadow(ShadowStyle.OUTER_DEFAULT_SM)
   }
 
@@ -266,7 +276,7 @@ export struct XopcNotesTabView {
   @Builder
   private notesListBody() {
     Refresh({ refreshing: this.model.loading && this.model.items.length > 0 }) {
-      List({ space: 8 }) {
+      List({ space: 8, scroller: this.listScroller }) {
         if (this.capture.pendingRecordings.length && this.capture.phase !== 'recording' && this.capture.phase !== 'paused') {
           ListItem() { this.recoveryHeader() }
           if (this.recoveriesOpen) {
@@ -344,7 +354,7 @@ export struct XopcNotesTabView {
           }
         }
       }.width('100%').height('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).scrollBar(BarState.Off)
-        .contentEndOffset(!this.model.selecting || this.recordingAvailable ? 72 : 0)
+        .contentEndOffset((!this.model.selecting || this.recordingAvailable ? 72 : 0) + this.bottomChromeInset)
     }.width('100%').height('100%').pullToRefresh(!this.model.loading)
       .onRefreshing((): void => { void this.model.list(false, true); })
   }
@@ -352,7 +362,9 @@ export struct XopcNotesTabView {
   @Builder
   listPane() {
     Column() {
-      XopcPageHeader({ heading: $r('app.string.notes'), showStaticTitle: true, backVisible: true, onBack: this.onExit,
+      XopcPageHeader({ heading: $r('app.string.notes'), showStaticTitle: true,
+        backVisible: !this.rootTab, onBack: this.onExit,
+        drawerVisible: this.rootTab, drawerId: 'notes-header-sidebar', onOpenDrawer: this.onOpenSidebar,
         searchId: 'notes-open-search', searchOpen: this.searchOpen, searchLabel: $r('app.string.search_notes'),
         onSearch: (): void => { this.toggleSearch(); } })
       if (this.searchOpen) {
@@ -415,7 +427,8 @@ export struct XopcNotesTabView {
         }
       }
       if (this.activePage && this.music.track) {
-        XopcMusicMiniPlayer()
+        Column() { XopcMusicMiniPlayer() }.width('100%')
+          .padding({ top: 4, bottom: this.bottomChromeInset > 0 ? this.bottomChromeInset + 8 : 4 })
       }
     }.id('notes-tab-list-pane').width(this.contentWidth >= 840 ? 400 : '100%').height('100%')
       .backgroundColor(this.contentWidth >= 840 ? this.colors.grouped : Color.Transparent)

@@ -90,6 +90,7 @@ export struct XopcWorkspaceView {
   @Param embeddedInWorkbench: boolean = false;
   @Param workbenchSearchOpen: boolean = false;
   @Param workbenchRefresh: number = 0;
+  @Param bottomChromeInset: number = 0;
   @Event onExit: () => void = (): void => {};
   @Event onCreated: (page: string, id: string) => void = (_page: string, _id: string): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
@@ -832,7 +833,7 @@ export struct XopcWorkspaceView {
             onLoad: (): void => { void this.model.list(this.model.loadedSearch, true); } })
         }
       }
-    }.layoutWeight(1).padding({ left: 20, right: 20, bottom: 20 }).width('100%').scrollBar(BarState.Off)
+    }.layoutWeight(1).padding({ left: 20, right: 20, bottom: 20 }).contentEndOffset(this.bottomChromeInset).width('100%').scrollBar(BarState.Off)
   }
 
   private async editAutomation(item: XopcWorkspaceItem, fromList: boolean): Promise<void> {

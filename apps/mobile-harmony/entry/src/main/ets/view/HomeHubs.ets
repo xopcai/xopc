@@ -17,8 +17,11 @@ export struct XopcProgressView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param activePage: boolean = false;
   @Param model: XopcProgressViewModel = new XopcProgressViewModel();
+  @Param bottomChromeInset: number = 0;
+  @Param scrollTopRevision: number = 0;
   @Local pulling: boolean = false;
   @Local actionInFlight: boolean = false;
+  private listScroller: Scroller = new Scroller();
   @Computed get runningItems(): XopcHomeItem[] {
     return this.model.background.filter((item: XopcHomeItem): boolean => item.kind !== 'scheduled');
   }
@@ -29,6 +32,10 @@ export struct XopcProgressView {
   @Event onSelectWorkPage: (page: string) => void = (_page: string): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   aboutToAppear(): void { if (this.activePage) void this.model.refresh(); }
+  @Monitor('scrollTopRevision')
+  onScrollTop(): void {
+    if (this.scrollTopRevision > 0) this.listScroller.scrollEdge(Edge.Top);
+  }
   private openPage(page: string, itemId: string = ''): void { this.onNavigate({ page, itemId }); }
   private automationTime(timestamp: number): string {
     const date = new Date(timestamp);
@@ -136,7 +143,7 @@ export struct XopcProgressView {
           .width('100%').padding({ left: 20, right: 20, bottom: 12 })
       }
       Refresh({ refreshing: this.pulling }) {
-        List() {
+        List({ scroller: this.listScroller }) {
           if (this.model.loading) { ListItem() { XopcListSkeleton() } }
           else {
             if (this.model.homeError) {
@@ -194,7 +201,7 @@ export struct XopcProgressView {
               ListItem() { XopcEmptyHint({ message: $r('app.string.progress_empty') }) }
             }
           }
-        }.width('100%').height('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
+        }.width('100%').height('100%').padding({ left: 20, right: 20 }).contentEndOffset(this.bottomChromeInset + 12).scrollBar(BarState.Off)
       }.layoutWeight(1).onRefreshing((): void => {
         this.pulling = true; this.model.refresh().finally((): void => { this.pulling = false; });
       })

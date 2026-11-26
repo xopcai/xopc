@@ -3,17 +3,30 @@ import Observation
 
 @MainActor
 @Observable
-// swiftlint:disable:next type_body_length
 final class AppState {
-    var homePath: [HomeDestination] = []
-    private(set) var externalIntake: ExternalIntakeBatch?
+    var selectedTab: MobileTab = .ada
+    var tabPaths: [MobileTab: [HomeDestination]] = [:]
+    var sessionConversations: [UUID: ConversationSelection] = [:]
+    var personalConversation: ConversationSelection?
+    var tabRetapRevision: [MobileTab: Int] = [:]
+    var sessionPromotionRevision = 0
+
+    var externalIntake: ExternalIntakeBatch?
     private(set) var externalIntakeRevision = 0
     private(set) var listCacheRevision = 0
-    private(set) var externalIntakeError: String?
+    var externalIntakeError: String?
+
     func openExternalIntake(_ batch: ExternalIntakeBatch, conversation: ConversationSelection) {
-        guard batch.target?.scope == ComposerDraftStore.accountScope(gatewayConfiguration) else { externalIntakeRevision += 1; return }
+        guard batch.target?.scope == ComposerDraftStore.accountScope(gatewayConfiguration) else {
+            externalIntakeRevision += 1
+            return
+        }
         externalIntakeError = nil
-        selectHomeConversation(conversation)
+        if let personalID = personalConversation?.id, conversation.id == personalID {
+            openPersonalAgent()
+        } else {
+            openOrdinaryConversation(conversation)
+        }
         externalIntake = batch
     }
 
@@ -25,11 +38,8 @@ final class AppState {
     }
 
     private(set) var gatewayConfiguration: GatewayConfiguration {
-        didSet { restoreConversationSelection() }
+        didSet { handleGatewayScopeChangeIfNeeded() }
     }
-
-    private(set) var selectedConversation: ConversationSelection?
-    private var remembersCurrentConversation = false
 
     private var selectionScope = ""
     private(set) var connectionStorageError: String?
@@ -52,7 +62,7 @@ final class AppState {
         #else
             gatewayConfiguration = configurationStore.load()
         #endif
-        restoreConversationSelection()
+        selectionScope = ComposerDraftStore.accountScope(gatewayConfiguration)
     }
 
     #if DEBUG
@@ -68,7 +78,6 @@ final class AppState {
             try? store.save(configuration)
             return configuration
         }
-
     #endif
 
     func pairGateway(link: String, onCode: @escaping @MainActor (String) -> Void) async throws {
@@ -106,6 +115,7 @@ final class AppState {
             gatewayProfiles = configurationStore.loadProfiles()
             activeGatewayProfileID = profile.id
             connectionStorageError = nil
+            clearAllStacksForGatewaySwitch()
             GatewayPairingService.shared.clearJournal()
             gatewayTokenExpiries[profile.id] = connection.accessTokenExpiresAt
             scheduleGatewayRefresh(expiry: connection.accessTokenExpiresAt)
@@ -177,12 +187,12 @@ final class AppState {
             gatewayConfiguration = try configurationStore.activateProfile(id: id)
             activeGatewayProfileID = id
             connectionStorageError = nil
+            clearAllStacksForGatewaySwitch()
             if let expiry = gatewayTokenExpiries[id] {
                 scheduleGatewayRefresh(expiry: expiry)
             } else {
                 Task { await refreshActiveGateway() }
             }
-            homePath.removeAll()
             return true
         } catch {
             connectionStorageError = error.localizedDescription
@@ -191,8 +201,9 @@ final class AppState {
     }
 
     func removeGatewayProfile(id: String) {
+        let wasActive = activeGatewayProfileID == id
         do {
-            if activeGatewayProfileID == id {
+            if wasActive {
                 gatewayRefreshTask?.cancel()
                 gatewayTokenExpiry = nil
             }
@@ -205,6 +216,9 @@ final class AppState {
             gatewayProfiles = configurationStore.loadProfiles()
             activeGatewayProfileID = configurationStore.activeProfileID()
             gatewayConfiguration = configurationStore.load()
+            if wasActive {
+                clearAllStacksForGatewaySwitch()
+            }
             connectionStorageError = nil
             Task { await refreshActiveGateway() }
         } catch {
@@ -214,6 +228,9 @@ final class AppState {
             if !gatewayProfiles.contains(where: { $0.id == id }) {
                 GatewayPairingService.shared.remove(profileID: id)
                 gatewayTokenExpiries.removeValue(forKey: id)
+            }
+            if wasActive {
+                clearAllStacksForGatewaySwitch()
             }
             connectionStorageError = error.localizedDescription
         }
@@ -228,61 +245,80 @@ final class AppState {
             connectionStorageError = nil
         } catch { connectionStorageError = error.localizedDescription }
     }
+}
 
-    private func selectHomeConversation(_ conversation: ConversationSelection, remember: Bool = true) {
-        selectedConversation = conversation
-        remembersCurrentConversation = remember
-        if remember {
-            persistSelection(conversation)
-            homePath = []
+extension AppState {
+    func syncPersonalAgent(_ record: PersonalAgentRecord?) {
+        guard let record, record.isReady else {
+            personalConversation = nil
+            return
+        }
+        if var existing = personalConversation, existing.id == record.conversationId {
+            existing.title = record.displayName
+            personalConversation = existing
+        } else {
+            personalConversation = .existing(id: record.conversationId, title: record.displayName, agentId: record.agentId)
         }
     }
 
-    private func persistSelection(_ conversation: ConversationSelection) {
-        do { try ComposerDraftStore().saveSelection(conversation, configuration: gatewayConfiguration) }
-        catch { connectionStorageError = error.localizedDescription }
+    func updatePersonalConversation(_ conversation: ConversationSelection) {
+        guard personalConversation?.id == conversation.id else { return }
+        personalConversation = conversation
     }
 
     func open(_ conversation: ConversationSummary) {
-        selectHomeConversation(ConversationSelection(summary: conversation))
+        openOrdinaryConversation(ConversationSelection(summary: conversation))
     }
 
     func openConversation(id: String, title: String, agentId: String) {
-        selectHomeConversation(.existing(id: id, title: title, agentId: agentId))
-    }
-
-    func openPersonalConversation(_ record: PersonalAgentRecord, remember: Bool) {
-        selectHomeConversation(.existing(id: record.conversationId, title: record.displayName, agentId: record.agentId),
-                               remember: remember)
+        openOrdinaryConversation(.existing(id: id, title: title, agentId: agentId))
     }
 
     func conversationUnavailable(_ id: String) {
-        guard selectedConversation?.id == id else { return }
-        do { try ComposerDraftStore().clearSelection(configuration: gatewayConfiguration) }
-        catch { connectionStorageError = error.localizedDescription }
-        selectedConversation = nil
-        remembersCurrentConversation = false
+        guard id != personalConversation?.id else { return }
+        let draftScope = ComposerDraftStore.scope(gatewayConfiguration, conversationID: id)
+        try? ComposerDraftStore().save(SavedComposerDraft(), scope: draftScope)
+        let tabs = Array(tabPaths.keys)
+        for tab in tabs {
+            guard var stack = tabPaths[tab] else { continue }
+            let previousCount = stack.count
+            stack.removeAll { destination in
+                guard let route = destination.sessionChatRoute else { return false }
+                return sessionConversations[route.slotID]?.id == id
+            }
+            if stack.count != previousCount {
+                if stack.isEmpty {
+                    tabPaths.removeValue(forKey: tab)
+                } else {
+                    tabPaths[tab] = stack
+                }
+            }
+        }
+        pruneOrphanedSessionConversations()
     }
 
     func startConversation(agentId: String) {
-        selectHomeConversation(.draft(agentId: agentId))
+        openOrdinaryConversation(.draft(agentId: agentId))
     }
 
     func startCapabilityChat(agentId: String, prompt: String, agentSetupLanguage: String?) {
         let draft = ConversationSelection.draft(agentId: agentId, agentSetupLanguage: agentSetupLanguage)
         do {
-            try ComposerDraftStore().save(SavedComposerDraft(text: prompt),
-                                          scope: ComposerDraftStore.scope(gatewayConfiguration, conversationID: draft.id))
-            selectHomeConversation(draft)
+            try ComposerDraftStore().save(
+                SavedComposerDraft(text: prompt),
+                scope: ComposerDraftStore.scope(gatewayConfiguration, conversationID: draft.id)
+            )
+            openOrdinaryConversation(draft)
         } catch {
             connectionStorageError = error.localizedDescription
         }
     }
 
     func startScopedConversation(project: ProjectRecord?, executionMode: String?, agentId: String) {
-        selectHomeConversation(project.map {
+        let draft: ConversationSelection = project.map {
             .projectDraft(project: $0, executionMode: executionMode, agentId: agentId)
-        } ?? .draft(agentId: agentId))
+        } ?? .draft(agentId: agentId)
+        openOrdinaryConversation(draft)
     }
 
     func startLibraryConversation(configuration: GatewayConfiguration, agentID: String, attachment: MessageAttachment,
@@ -294,37 +330,31 @@ final class AppState {
             draft = .projectDraft(project: project)
         }
         guard configuration == gatewayConfiguration else { throw CancellationError() }
-        try ComposerDraftStore().save(SavedComposerDraft(attachments: [attachment]),
-                                      scope: ComposerDraftStore.scope(configuration, conversationID: draft.id))
-        selectHomeConversation(draft)
+        try ComposerDraftStore().save(
+            SavedComposerDraft(attachments: [attachment]),
+            scope: ComposerDraftStore.scope(configuration, conversationID: draft.id)
+        )
+        openOrdinaryConversation(draft)
     }
 
-    func updateConversation(_ conversation: ConversationSelection) {
-        guard selectedConversation?.id == conversation.id else { return }
-        selectedConversation = conversation
-        if remembersCurrentConversation {
-            persistSelection(conversation)
+    func pruneOrphanedSessionConversations() {
+        var liveSlots = Set<UUID>()
+        for stack in tabPaths.values {
+            for destination in stack {
+                if let route = destination.sessionChatRoute {
+                    liveSlots.insert(route.slotID)
+                }
+            }
         }
+        sessionConversations = sessionConversations.filter { liveSlots.contains($0.key) }
     }
 }
 
 private extension AppState {
-    func restoreConversationSelection() {
+    func handleGatewayScopeChangeIfNeeded() {
         let scope = ComposerDraftStore.accountScope(gatewayConfiguration)
         guard scope != selectionScope else { return }
         selectionScope = scope
-        if !homePath.isEmpty {
-            homePath = [.settings]
-        }
-        do { selectedConversation = try ComposerDraftStore().readSelection(configuration: gatewayConfiguration) }
-        catch { selectedConversation = nil; connectionStorageError = error.localizedDescription }
-        remembersCurrentConversation = selectedConversation != nil
+        clearAllStacksForGatewaySwitch()
     }
-}
-
-enum HomeDestination: Hashable {
-    case conversations, conversationSearch, progress, projects, automations, notes, library, capabilities, settings
-    case settingsSection(MobileSettingsSection)
-    case personalOverview(allowsConversationSharing: Bool)
-    case libraryTask(String), libraryAutomationRun(String), notificationTask(String)
 }

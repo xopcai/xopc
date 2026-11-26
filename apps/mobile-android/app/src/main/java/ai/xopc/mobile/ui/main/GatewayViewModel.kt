@@ -273,6 +273,40 @@ data class PersonalUiState(val gatewayId: String? = null, val summary: PersonalS
 
 enum class GatewayChange { Switch, Pair }
 
+data class ChatSessionSnapshot(
+  val conversationId: String,
+  val messages: List<ConversationMessage> = emptyList(),
+  val liveMessages: List<ConversationMessage> = emptyList(),
+  val activeRunId: String? = null,
+  internal val runProgress: AssistantRunProgress = AssistantRunProgress(),
+  val historyTranscriptId: String? = null,
+  val historyLastSeq: Long? = null,
+  val historyBefore: String? = null,
+  val draftText: String = "",
+  val draftRefs: List<ConversationContextRef> = emptyList(),
+  val draftAttachments: List<ChatAttachment> = emptyList(),
+  val pendingInput: PendingInput? = null,
+  val sending: Boolean = false,
+  val optimisticText: String = "",
+  val chatSendMessageId: String? = null,
+  val optimisticPreviousUserId: String? = null,
+  val models: List<ConversationModel> = emptyList(),
+  val selectedModelId: String = "",
+  val thinkingLevel: String = "off",
+  val serviceTier: String = "default",
+  val modelConfigVersion: Long? = null,
+  val agents: List<ConversationAgent> = emptyList(),
+  val agentAvatars: Map<String, Bitmap> = emptyMap(),
+  val selectedAgentId: String = "",
+  val context: ConversationContext? = null,
+  val clarification: ClarificationRequest? = null,
+  val connectionWait: ConnectionWaitUiState = ConnectionWaitUiState(),
+  val taskWelcome: TaskWelcomeInfo? = null,
+  val projectWelcome: ProjectWelcomeInfo? = null,
+  val desktopChatTarget: DesktopChatTarget? = null,
+  val draftModelReady: Boolean = true,
+)
+
 data class ConnectionUiState(
   val clarification: ClarificationRequest? = null,
   val clarificationBusy: Boolean = false,
@@ -398,11 +432,120 @@ data class ConnectionUiState(
   val notes: NotesUiState = NotesUiState(),
   val shares: ShareCenterUiState = ShareCenterUiState(),
   val personal: PersonalUiState = PersonalUiState(),
+  val personalChatSnapshot: ChatSessionSnapshot? = null,
+  val unavailableConversationId: String? = null,
+  val unavailableConversationRevision: Int = 0,
 ) {
   val liveText: String = liveMessages.joinToString("\n\n") { it.text }
 
   internal fun conversationSummary(id: String?): ConversationSummary? =
     conversations.firstOrNull { it.id == id } ?: recentConversations?.firstOrNull { it.id == id }
+
+  internal fun snapshotCurrentChat(): ChatSessionSnapshot? {
+    val id = selectedConversationId ?: return null
+    return ChatSessionSnapshot(
+      conversationId = id,
+      messages = messages,
+      liveMessages = liveMessages,
+      activeRunId = activeRunId,
+      runProgress = runProgress,
+      historyTranscriptId = historyTranscriptId,
+      historyLastSeq = historyLastSeq,
+      historyBefore = historyBefore,
+      draftText = draftText,
+      draftRefs = draftRefs,
+      draftAttachments = draftAttachments,
+      pendingInput = pendingInput,
+      sending = sending,
+      optimisticText = optimisticText,
+      chatSendMessageId = chatSendMessageId,
+      optimisticPreviousUserId = optimisticPreviousUserId,
+      models = models,
+      selectedModelId = selectedModelId,
+      thinkingLevel = thinkingLevel,
+      serviceTier = serviceTier,
+      modelConfigVersion = modelConfigVersion,
+      agents = agents,
+      agentAvatars = agentAvatars,
+      selectedAgentId = selectedAgentId,
+      context = context,
+      clarification = clarification,
+      connectionWait = connectionWait,
+      taskWelcome = taskWelcome,
+      projectWelcome = projectWelcome,
+      desktopChatTarget = desktopChatTarget,
+      draftModelReady = draftModelReady,
+    )
+  }
+
+  /**
+   * Returns a view strictly bound to Ada's personal conversation so AdaRoot (L0)
+   * never displays an ordinary chat's messages, draft, or active run while SessionChat (L1) is pushed.
+   */
+  internal fun forAdaRoot(): ConnectionUiState {
+    val personalId = personal.agent?.conversationId ?: return this
+    if (selectedConversationId == personalId) return this
+    val snap = personalChatSnapshot?.takeIf { it.conversationId == personalId }
+    return if (snap != null) {
+      copy(
+        selectedConversationId = personalId,
+        taskConversationTaskId = null,
+        automationConfigurationChat = false,
+        projectChatOriginId = null,
+        messages = snap.messages,
+        liveMessages = snap.liveMessages,
+        activeRunId = snap.activeRunId,
+        runProgress = snap.runProgress,
+        historyLoading = false,
+        historyTranscriptId = snap.historyTranscriptId,
+        historyLastSeq = snap.historyLastSeq,
+        historyBefore = snap.historyBefore,
+        draftText = snap.draftText,
+        draftRefs = snap.draftRefs,
+        draftAttachments = snap.draftAttachments,
+        pendingInput = snap.pendingInput,
+        sending = snap.sending,
+        optimisticText = snap.optimisticText,
+        chatSendMessageId = snap.chatSendMessageId,
+        optimisticPreviousUserId = snap.optimisticPreviousUserId,
+        models = snap.models,
+        selectedModelId = snap.selectedModelId,
+        thinkingLevel = snap.thinkingLevel,
+        serviceTier = snap.serviceTier,
+        modelConfigVersion = snap.modelConfigVersion,
+        agents = snap.agents,
+        agentAvatars = snap.agentAvatars,
+        selectedAgentId = snap.selectedAgentId,
+        context = snap.context,
+        clarification = snap.clarification,
+        connectionWait = snap.connectionWait,
+        taskWelcome = null,
+        projectWelcome = null,
+        desktopChatTarget = snap.desktopChatTarget,
+        draftModelReady = snap.draftModelReady,
+        chatError = false,
+      )
+    } else {
+      copy(
+        selectedConversationId = personalId,
+        taskConversationTaskId = null,
+        automationConfigurationChat = false,
+        projectChatOriginId = null,
+        messages = emptyList(),
+        liveMessages = emptyList(),
+        activeRunId = null,
+        runProgress = AssistantRunProgress(),
+        historyLoading = true,
+        draftText = "",
+        draftRefs = emptyList(),
+        draftAttachments = emptyList(),
+        pendingInput = null,
+        sending = false,
+        optimisticText = "",
+        chatError = false,
+      )
+    }
+  }
 }
 
 internal fun ConnectionUiState.canSuggestNextTurn(): Boolean =
@@ -478,6 +621,7 @@ class GatewayViewModel internal constructor(application: Application, private va
   private val realtime = RealtimeClient(session, ai.xopc.mobile.gateway.DeviceTools(application, session))
   internal val browserPreview = ai.xopc.mobile.gateway.BrowserPreviewAccess(session, realtime)
   private val mutableState = MutableStateFlow(ConnectionUiState())
+  private val cachedChatSnapshots = LinkedHashMap<String, ChatSessionSnapshot>()
   private val streamBuffer = ChatStreamBuffer()
   private val closedNarrations = hashSetOf<String>()
   private var streamCommitJob: Job? = null
@@ -2922,11 +3066,12 @@ class GatewayViewModel internal constructor(application: Application, private va
       session.savedProfiles() to profile?.let(conversations::cachedRecent)
     }
     unfilteredNotes = null
+    cachedChatSnapshots.clear()
     mutableState.value = ConnectionUiState(profile = profile, gatewayProfiles = profiles,
       gatewayChange = change, recentConversations = recent, conversationsLoading = profile != null,
       progress = ProgressUiState(gatewayId = profile?.gatewayId), restoringHomeChat = profile != null)
     if (profile == null) return
-    val selectedId = withContext(Dispatchers.IO) {
+    withContext(Dispatchers.IO) {
       try {
         conversations.migrateQuickComposerDraft()
       } catch (error: CancellationException) {
@@ -2934,15 +3079,12 @@ class GatewayViewModel internal constructor(application: Application, private va
       } catch (error: Exception) {
         Log.w("XopcAndroid", "Quick-composer migration deferred: ${error.javaClass.simpleName}")
       }
-      session.mainConversationId()
     }
     connectRealtime()
     loadConversations()
     if (mutableState.value.profile?.gatewayId != profile.gatewayId || mutableState.value.selectedConversationId != null) return
-    if (selectedId == null) openPersonalAgent(remember = false) else {
-      selectConversationScoped(selectedId, null, remember = false, fallbackToPersonal = true)
-      loadPersonalAgent()
-    }
+    // Cold start always defaults to AdaRoot (bottom tab bar visible).
+    openPersonalAgent(remember = false)
   }
 
   fun openGatewayProfiles() {
@@ -3355,12 +3497,30 @@ class GatewayViewModel internal constructor(application: Application, private va
     if (available) selectConversationScoped(conversationId, taskId)
   }
 
+  private fun saveCurrentChatSnapshot() {
+    val current = mutableState.value
+    val snap = current.snapshotCurrentChat() ?: return
+    if (current.historyLoading && snap.messages.isEmpty() && snap.draftText.isEmpty()) return
+    cachedChatSnapshots.remove(snap.conversationId)
+    cachedChatSnapshots[snap.conversationId] = snap
+    if (cachedChatSnapshots.size > 12) {
+      cachedChatSnapshots.remove(cachedChatSnapshots.keys.first())
+    }
+    if (snap.conversationId == current.personal.agent?.conversationId) {
+      mutableState.update { it.copy(personalChatSnapshot = snap) }
+    }
+  }
+
   private fun selectConversationScoped(id: String, taskId: String?, remember: Boolean = taskId == null,
     fallbackToPersonal: Boolean = taskId == null, automationConfiguration: Boolean = false,
     initialDraft: String = "", projectChatOriginId: String? = null) {
     discardStream()
     if (mutableState.value.profile == null || mutableState.value.discardingDraftId == id ||
       mutableState.value.pendingDeleteId == id) return
+    val previousId = mutableState.value.selectedConversationId
+    if (previousId != null && previousId != id) {
+      saveCurrentChatSnapshot()
+    }
     historyJob?.cancel()
     olderHistoryJob?.cancel()
     executionJob?.cancel()
@@ -3381,30 +3541,49 @@ class GatewayViewModel internal constructor(application: Application, private va
     realtime.watchRun(null)
     val revision = ++historyRevision
     val connectionRevision = realtimeReadyRevision
-    mutableState.update { it.copy(selectedConversationId = id, desktopChatTarget = null, taskConversationTaskId = taskId, restoringHomeChat = false,
+    val cached = cachedChatSnapshots[id]
+    val hasCachedContent = cached != null && (cached.messages.isNotEmpty() || cached.historyTranscriptId != null)
+    mutableState.update { it.copy(selectedConversationId = id, desktopChatTarget = cached?.desktopChatTarget,
+      taskConversationTaskId = taskId, restoringHomeChat = false,
       automationConfigurationChat = automationConfiguration,
       projectChatOriginId = projectChatOriginId ?: it.projectChatOriginId.takeIf { taskId != null || automationConfiguration },
-      clarification = null, clarificationBusy = false, clarificationError = null,
-      taskScopeLoading = taskId == null, messages = emptyList(), draftText = "", draftRefs = emptyList(),
-      draftAttachments = emptyList(), attachmentLoading = false, attachmentError = false, historyLoading = true,
-      historyTranscriptId = null, historyLastSeq = null, historyBefore = null, historyLoadingOlder = false,
+      clarification = cached?.clarification, clarificationBusy = false, clarificationError = null,
+      taskScopeLoading = taskId == null && !hasCachedContent,
+      messages = cached?.messages.orEmpty(),
+      draftText = if (initialDraft.isNotBlank()) initialDraft else cached?.draftText.orEmpty(),
+      draftRefs = cached?.draftRefs.orEmpty(),
+      draftAttachments = cached?.draftAttachments.orEmpty(),
+      attachmentLoading = false, attachmentError = false,
+      historyLoading = !hasCachedContent,
+      historyTranscriptId = cached?.historyTranscriptId,
+      historyLastSeq = cached?.historyLastSeq,
+      historyBefore = cached?.historyBefore,
+      historyLoadingOlder = false,
       historyOlderError = false,
       executionMessageId = null, executionDetail = null, executionLoading = false, executionError = false,
-      draftModelLoading = false, draftModelReady = false, chatError = false, chatSyncError = false, activeRunId = null,
-      stoppingRun = false, stopError = false, runError = false, liveMessages = emptyList(),
-      runProgress = AssistantRunProgress(),
-      pendingInput = null, sendError = false, sendErrorDetail = null, sendRejected = false,
-      optimisticText = "", optimisticPreviousUserId = null, chatSendMessageId = null,
+      draftModelLoading = false, draftModelReady = cached?.draftModelReady ?: false,
+      chatError = false, chatSyncError = false,
+      activeRunId = cached?.activeRunId,
+      stoppingRun = false, stopError = false, runError = false,
+      liveMessages = cached?.liveMessages.orEmpty(),
+      runProgress = cached?.runProgress ?: AssistantRunProgress(),
+      pendingInput = cached?.pendingInput, sendError = false, sendErrorDetail = null, sendRejected = false,
+      optimisticText = cached?.optimisticText.orEmpty(),
+      optimisticPreviousUserId = cached?.optimisticPreviousUserId,
+      chatSendMessageId = cached?.chatSendMessageId,
       referencePicker = ReferencePickerUiState(),
       contextPanel = ContextPanelUiState()) }
-    mutableState.update { it.copy(models = emptyList(), selectedModelId = "", thinkingLevel = "off",
-      modelConfigVersion = null,
+    mutableState.update { it.copy(models = cached?.models.orEmpty(),
+      selectedModelId = cached?.selectedModelId.orEmpty(),
+      thinkingLevel = cached?.thinkingLevel ?: "off",
+      serviceTier = cached?.serviceTier ?: "default",
+      modelConfigVersion = cached?.modelConfigVersion,
       modelsLoading = false, modelSaving = false, modelError = false,
-      agents = emptyList(), agentAvatars = emptyMap(),
-      selectedAgentId = "", agentsLoading = false, agentError = false) }
-    mutableState.update { it.copy(context = null, contextLoading = false, contextError = false,
-      connectionWait = ConnectionWaitUiState(it.profile?.gatewayId, id),
-      taskWelcome = null, projectWelcome = null) }
+      agents = cached?.agents.orEmpty(), agentAvatars = cached?.agentAvatars.orEmpty(),
+      selectedAgentId = cached?.selectedAgentId.orEmpty(), agentsLoading = false, agentError = false) }
+    mutableState.update { it.copy(context = cached?.context, contextLoading = false, contextError = false,
+      connectionWait = cached?.connectionWait ?: ConnectionWaitUiState(it.profile?.gatewayId, id),
+      taskWelcome = cached?.taskWelcome, projectWelcome = cached?.projectWelcome) }
     refreshDesktopTarget(id)
     historyJob = viewModelScope.launch {
       try {
@@ -3459,7 +3638,11 @@ class GatewayViewModel internal constructor(application: Application, private va
         }
         if (fallbackToPersonal && id != mutableState.value.personal.agent?.conversationId &&
           error is ai.xopc.mobile.gateway.GatewayHttpException && error.status == 404) {
+          cachedChatSnapshots.remove(id)
           withContext(Dispatchers.IO) { session.clearMainConversationId(id) }
+          mutableState.update {
+            it.copy(unavailableConversationId = id, unavailableConversationRevision = it.unavailableConversationRevision + 1)
+          }
           if (revision == historyRevision) openPersonalAgent(remember = false)
         }
       }
@@ -4639,6 +4822,7 @@ class GatewayViewModel internal constructor(application: Application, private va
           session.clearMainConversationId(id)
         }
         if (mutableState.value.selectedConversationId == id) {
+          cachedChatSnapshots.remove(id)
           runStateJob?.cancel()
           modelJob?.cancel()
           agentJob?.cancel()
@@ -4650,8 +4834,11 @@ class GatewayViewModel internal constructor(application: Application, private va
             activeRunId = null, liveMessages = emptyList(), pendingInput = null,
             runProgress = AssistantRunProgress(),
             models = emptyList(), selectedModelId = "", agents = emptyList(), agentAvatars = emptyMap(), selectedAgentId = "",
-            context = null, contextLoading = false, taskWelcome = null, projectWelcome = null) }
+            context = null, contextLoading = false, taskWelcome = null, projectWelcome = null,
+            unavailableConversationId = id, unavailableConversationRevision = it.unavailableConversationRevision + 1) }
           openPersonalAgent(remember = false)
+        } else {
+          cachedChatSnapshots.remove(id)
         }
         mutableState.update { it.copy(discardingDraftId = null) }
         loadConversations()
@@ -4795,6 +4982,9 @@ class GatewayViewModel internal constructor(application: Application, private va
           catch (_: Exception) { failed += item.id }
         }
         if (mutableState.value.profile?.gatewayId == gatewayId) {
+          if (action == "delete") {
+            completed.forEach { cachedChatSnapshots.remove(it) }
+          }
           if (action == "delete" && mutableState.value.selectedConversationId in completed) {
             val selectedId = mutableState.value.selectedConversationId!!
             runCatching { runInterruptible(Dispatchers.IO) { session.clearMainConversationId(selectedId) } }
@@ -4802,7 +4992,9 @@ class GatewayViewModel internal constructor(application: Application, private va
             mutableState.update { it.copy(selectedConversationId = null, messages = emptyList(),
               draftText = "", draftRefs = emptyList(), draftAttachments = emptyList(),
               activeRunId = null, liveMessages = emptyList(), pendingInput = null,
-              runProgress = AssistantRunProgress()) }
+              runProgress = AssistantRunProgress(),
+              unavailableConversationId = selectedId,
+              unavailableConversationRevision = it.unavailableConversationRevision + 1) }
             openPersonalAgent(remember = false)
           }
           val removesRecents = completed.isNotEmpty() && (action == "delete" || action == "archive")
@@ -4860,6 +5052,7 @@ class GatewayViewModel internal constructor(application: Application, private va
         }
         if (mutableState.value.profile?.gatewayId != gatewayId) return@launch
         if (mutableState.value.selectedConversationId == id) {
+          cachedChatSnapshots.remove(id)
           historyJob?.cancel()
           executionJob?.cancel()
           executionRevision++
@@ -4876,8 +5069,12 @@ class GatewayViewModel internal constructor(application: Application, private va
             runProgress = AssistantRunProgress(),
             pendingInput = null, models = emptyList(), selectedModelId = "", agents = emptyList(), agentAvatars = emptyMap(),
             selectedAgentId = "", context = null, contextLoading = false,
-            taskWelcome = null, projectWelcome = null) }
+            taskWelcome = null, projectWelcome = null,
+            unavailableConversationId = id,
+            unavailableConversationRevision = it.unavailableConversationRevision + 1) }
           openPersonalAgent(remember = false)
+        } else {
+          cachedChatSnapshots.remove(id)
         }
         mutableState.update { it.copy(pendingDeleteId = null, deleteCommitting = false,
           recentConversations = it.recentConversations?.filterNot { row -> row.id == id },

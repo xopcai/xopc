@@ -246,7 +246,7 @@ struct ChatHeaderIdentityButton: View {
         }
         .buttonStyle(MobilePressStyle(radius: mobileTheme.corner(18), restingBackground: mobileTheme.card))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(verbatim: [agentName, modelSubtitle].compactMap { $0 }.joined(separator: "，")))
+        .accessibilityLabel(Text(verbatim: [agentName, modelSubtitle].compactMap(\.self).joined(separator: "，")))
         .accessibilityIdentifier("chat-header-identity")
     }
 }

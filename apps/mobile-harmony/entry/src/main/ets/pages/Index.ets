@@ -62,6 +62,9 @@ struct XopcIndex {
     if (!this.connection.connected && !this.connection.busy && (this.manualEntry || this.showHelp)) {
       this.closeSecondary(); return true;
     }
+    if (this.connection.connected && layoutState.handleBackPress) {
+      return layoutState.handleBackPress();
+    }
     if (layoutState.dismissChatOverlay?.()) return true;
     return layoutState.dismissSidebar?.() ?? false;
   }
@@ -238,8 +241,8 @@ struct XopcIndex {
     Stack({ alignContent: Alignment.TopStart }) {
     Column() {
       if (this.connection.connected) {
-        ForEach([this.connection.activeGatewayId], (_gatewayId: string): void => {
-          XopcHomeView({ openSettingsOnMount: this.connection.gatewayPage !== 'hidden' })
+        ForEach([this.connection.activeGatewayId], (gatewayId: string): void => {
+          XopcHomeView({ gatewayId, openSettingsOnMount: this.connection.gatewayPage !== 'hidden' })
         }, (gatewayId: string): string => gatewayId)
       } else if (this.showSettings) {
         XopcSettingsView({ section: this.settingsSection, onExit: (): void => { this.backFromSettings(); },

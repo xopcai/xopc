@@ -44,6 +44,7 @@ export struct XopcDiscussionRecordingPanelView {
   @Require @Param panel: XopcDiscussionRecordingPanel;
   @Param viewportWidth: number = 0;
   @Param viewportHeight: number = 0;
+  @Param bottomChromeInset: number = 0;
   @Param docked: boolean = false;
   @Event onOpenNote: (id: string) => void = (_id: string): void => {};
   @Event onRecovery: () => void = (): void => {};
@@ -78,10 +79,10 @@ export struct XopcDiscussionRecordingPanelView {
     else if (mode === 'sync') void this.finishRecording();
     else void this.outcomeModel.retryOutcome(mode);
   }
-  @Monitor('viewportWidth','viewportHeight','docked')
+  @Monitor('viewportWidth','viewportHeight','docked','bottomChromeInset')
   resizePanel(): void {
     this.sheetDragOffset = 0;
-    this.panel.resize(this.viewportWidth,this.viewportHeight);
+    this.panel.resize(this.viewportWidth,this.viewportHeight,this.bottomChromeInset);
   }
   @Monitor('capture.captureInterrupted','capture.shutdownIncomplete','capture.error','capture.markerError','capture.backgroundAvailable','capture.phase','capture.interruptionCount')
   updateNotice(): void {
@@ -391,7 +392,7 @@ export struct XopcDiscussionRecordingPanelView {
       .shadow(ShadowStyle.OUTER_DEFAULT_SM).clip(true)
       .position({
         x: this.docked ? (this.viewportWidth - this.panel.cardWidth) / 2 : this.panel.panelX,
-        y: this.docked ? this.viewportHeight - this.panelHeight - 8 : this.panel.panelY
+        y: this.docked ? this.viewportHeight - this.panelHeight - 8 - this.bottomChromeInset : this.panel.panelY
       }).translate({ y: this.docked ? this.sheetDragOffset : 0 })
       .transition(this.docked
         ? xopcRevealTransition(TransitionEdge.BOTTOM, this.layout.reduceMotion)

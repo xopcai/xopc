@@ -17,13 +17,24 @@ struct WorkPagesView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
     let onOpenLibrary: () -> Void
+    var isTabActive = true
+    var retapToken = 0
+    var onOpenSidebar: (() -> Void)?
+    var onNavigate: ((HomeDestination) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var page: WorkPage
 
     init(configuration: GatewayConfiguration, initialPage: WorkPage = .progress,
+         isTabActive: Bool = true, retapToken: Int = 0,
+         onOpenSidebar: (() -> Void)? = nil,
+         onNavigate: ((HomeDestination) -> Void)? = nil,
          onOpenConversation: @escaping (String, String, String) -> Void, onOpenLibrary: @escaping () -> Void)
     {
         self.configuration = configuration
+        self.isTabActive = isTabActive
+        self.retapToken = retapToken
+        self.onOpenSidebar = onOpenSidebar
+        self.onNavigate = onNavigate
         self.onOpenConversation = onOpenConversation
         self.onOpenLibrary = onOpenLibrary
         _page = State(initialValue: initialPage)
@@ -32,34 +43,53 @@ struct WorkPagesView: View {
     var body: some View {
         TabView(selection: $page) {
             ProgressHubView(configuration: configuration, onOpenConversation: onOpenConversation, onSelectPage: selectPage,
-                            onOpenLibrary: onOpenLibrary, isActive: page == .progress)
+                            onOpenLibrary: onOpenLibrary, onNavigate: onNavigate,
+                            isActive: isTabActive && page == .progress, scrollToTopToken: retapToken)
                 .tag(WorkPage.progress)
-            TasksView(configuration: configuration, isActive: page == .tasks)
+            TasksView(configuration: configuration, isActive: isTabActive && page == .tasks, onNavigate: onNavigate)
                 .tag(WorkPage.tasks)
-            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation, isActive: page == .projects)
+            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation,
+                         isActive: isTabActive && page == .projects, onNavigate: onNavigate)
                 .tag(WorkPage.projects)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .accessibilityIdentifier("work-page-pager")
+        .onChange(of: retapToken) {
+            guard retapToken > 0 else { return }
+            if page != .progress {
+                selectPage(.progress)
+            }
+        }
         .mobilePageTitle(Text(page.title)) {
             MobilePageTitleMenu(options: WorkPage.allCases.map {
                 SegmentOption(id: $0, title: $0.title, accessibilityID: "work-page-\($0.rawValue)")
             }, selected: page, identifier: "work-page-menu", onSelect: selectPage)
         }
+        .toolbar {
+            if let onOpenSidebar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
+                        .accessibilityIdentifier("chat-header-sidebar")
+                }
+            }
+        }
     }
 
     private func selectPage(_ selection: WorkPage) {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.23)) { page = selection }
+        MobileMotion.perform(MobileMotion.pagerDuration, reduceMotion: reduceMotion) { page = selection }
     }
 }
 
 private struct ProgressHubView: View {
     @Environment(\.mobileTheme) private var mobileTheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
     let onSelectPage: (WorkPage) -> Void
     let onOpenLibrary: () -> Void
+    var onNavigate: ((HomeDestination) -> Void)?
     let isActive: Bool
+    var scrollToTopToken = 0
 
     @Environment(\.locale) private var locale
     @State private var home: HomeSnapshot?
@@ -75,70 +105,92 @@ private struct ProgressHubView: View {
         let running = runningItems
         let scheduled = scheduledItems
         let delivered = deliveries
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                if isLoading, home == nil {
-                    ProgressListSkeleton()
-                }
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
-                    Button("重试") { Task { await load() } }.frame(minHeight: 44)
-                }
-                if let home, !home.needsUser.isEmpty {
-                    HStack {
-                        workSectionHeading("需要你处理")
-                        Spacer()
-                        Text("\(home.needsUser.count)")
-                            .mobileTextStyle(.footnote)
-                            .foregroundStyle(.secondary)
+        ScrollViewReader { scroller in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    Color.clear.frame(height: 0).id("progress-hub-top")
+                    if isLoading, home == nil {
+                        ProgressListSkeleton()
                     }
-                    ForEach(home.needsUser) { item in homeRow(item, showsActions: true) }
-                }
-                if !delivered.isEmpty {
-                    HStack {
-                        workSectionHeading("已交付")
-                        Spacer()
-                        Button("查看资料库", action: onOpenLibrary).frame(minHeight: 44)
-                            .accessibilityIdentifier("progress-open-library")
+                    if let error {
+                        Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+                        Button("重试") { Task { await load() } }.frame(minHeight: 44)
                     }
-                    ForEach(delivered.prefix(5)) { item in
-                        HomeDeliveryLink(item: item, configuration: configuration, onOpenConversation: onOpenConversation,
-                                         progressCard: true)
-                    }
-                }
-                if !running.isEmpty {
-                    workSectionHeading("正在进行")
-                    ForEach(running.prefix(5)) { item in homeRow(item, showsActions: false) }
-                }
-                if !scheduled.isEmpty || nextAutomation != nil {
-                    HStack {
-                        workSectionHeading("接下来")
-                        Spacer()
-                        NavigationLink("查看自动化") {
-                            AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation)
+                    if let home, !home.needsUser.isEmpty {
+                        HStack {
+                            workSectionHeading("需要你处理")
+                            Spacer()
+                            Text("\(home.needsUser.count)")
+                                .mobileTextStyle(.footnote)
+                                .foregroundStyle(.secondary)
                         }
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("progress-open-automations")
+                        ForEach(home.needsUser) { item in homeRow(item, showsActions: true) }
                     }
-                    if !scheduled.isEmpty {
-                        ForEach(scheduled.prefix(5)) { item in homeRow(item, showsActions: false) }
-                    } else if let nextAutomation {
-                        NavigationLink {
-                            AutomationDetailView(configuration: configuration, automationID: nextAutomation.automationId,
-                                                 onOpenConversation: onOpenConversation)
-                        } label: {
-                            compactRow(title: nextAutomation.name,
-                                       subtitle: nextAutomation.runAtMs.millisecondsDate.formatted(date: .abbreviated, time: .shortened), symbol: "clock")
-                        }.buttonStyle(.plain)
+                    if !delivered.isEmpty {
+                        HStack {
+                            workSectionHeading("已交付")
+                            Spacer()
+                            Button("查看资料库", action: onOpenLibrary).frame(minHeight: 44)
+                                .accessibilityIdentifier("progress-open-library")
+                        }
+                        ForEach(delivered.prefix(5)) { item in
+                            HomeDeliveryLink(item: item, configuration: configuration, onOpenConversation: onOpenConversation,
+                                             progressCard: true, onNavigate: onNavigate)
+                        }
+                    }
+                    if !running.isEmpty {
+                        workSectionHeading("正在进行")
+                        ForEach(running.prefix(5)) { item in homeRow(item, showsActions: false) }
+                    }
+                    if !scheduled.isEmpty || nextAutomation != nil {
+                        HStack {
+                            workSectionHeading("接下来")
+                            Spacer()
+                            if let onNavigate {
+                                Button("查看自动化") { onNavigate(.automations) }
+                                    .frame(minHeight: 44)
+                                    .accessibilityIdentifier("progress-open-automations")
+                            } else {
+                                NavigationLink("查看自动化") {
+                                    AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation)
+                                }
+                                .frame(minHeight: 44)
+                                .accessibilityIdentifier("progress-open-automations")
+                            }
+                        }
+                        if !scheduled.isEmpty {
+                            ForEach(scheduled.prefix(5)) { item in homeRow(item, showsActions: false) }
+                        } else if let nextAutomation {
+                            if let onNavigate {
+                                Button { onNavigate(.automationDetail(nextAutomation.automationId)) } label: {
+                                    compactRow(title: nextAutomation.name,
+                                               subtitle: nextAutomation.runAtMs.millisecondsDate.formatted(date: .abbreviated, time: .shortened), symbol: "clock")
+                                }.buttonStyle(.plain)
+                            } else {
+                                NavigationLink {
+                                    AutomationDetailView(configuration: configuration, automationID: nextAutomation.automationId,
+                                                         onOpenConversation: onOpenConversation)
+                                } label: {
+                                    compactRow(title: nextAutomation.name,
+                                               subtitle: nextAutomation.runAtMs.millisecondsDate.formatted(date: .abbreviated, time: .shortened), symbol: "clock")
+                                }.buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    if !isLoading, error == nil, home?.needsUser.isEmpty == true, delivered.isEmpty,
+                       running.isEmpty, scheduled.isEmpty, nextAutomation == nil
+                    {
+                        ContentUnavailableView("暂无进展", systemImage: "checklist")
                     }
                 }
-                if !isLoading, error == nil, home?.needsUser.isEmpty == true, delivered.isEmpty,
-                   running.isEmpty, scheduled.isEmpty, nextAutomation == nil
-                {
-                    ContentUnavailableView("暂无进展", systemImage: "checklist")
+                .padding(.horizontal, 20).padding(.vertical, 12)
+            }
+            .onChange(of: scrollToTopToken) {
+                guard scrollToTopToken > 0, isActive else { return }
+                MobileMotion.perform(MobileMotion.standardDuration, reduceMotion: reduceMotion) {
+                    scroller.scrollTo("progress-hub-top", anchor: .top)
                 }
             }
-            .padding(.horizontal, 20).padding(.vertical, 12)
         }
         .refreshable { await load() }
         .task(id: isActive ? ProgressLoadScope(configuration: configuration, language: locale.identifier) : nil) {
@@ -174,31 +226,33 @@ private struct ProgressHubView: View {
         )) { Button("好", role: .cancel) { actionError = nil } }
         message: { Text(actionError ?? "未知错误") }
     }
+}
 
-    private var runningItems: [HomeItem] {
+private extension ProgressHubView {
+    var runningItems: [HomeItem] {
         home?.background.filter { $0.kind != "scheduled" } ?? []
     }
 
-    private var scheduledItems: [HomeItem] {
+    var scheduledItems: [HomeItem] {
         home?.background.filter { $0.kind == "scheduled" } ?? []
     }
 
-    private var deliveries: [HomeDelivery] {
+    var deliveries: [HomeDelivery] {
         home?.recentDeliveries?.filter { $0.destination != nil } ?? []
     }
 
-    private func workSectionHeading(_ title: LocalizedStringKey) -> some View {
+    func workSectionHeading(_ title: LocalizedStringKey) -> some View {
         Text(title).mobileTextStyle(.rowTitle).frame(minHeight: 44).accessibilityAddTraits(.isHeader)
     }
 
-    private func workItemSubtitle(_ item: HomeItem) -> String {
+    func workItemSubtitle(_ item: HomeItem) -> String {
         [item.statusLabel, item.summary].compactMap { value in
             guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
             return trimmed
         }.joined(separator: " · ")
     }
 
-    private func attentionSummary(_ summary: String) -> String {
+    func attentionSummary(_ summary: String) -> String {
         if summary.contains("provider_setup_required") {
             return AppLocalization.string("请先完成模型服务配置后再继续。", locale: locale)
         }
@@ -209,7 +263,7 @@ private struct ProgressHubView: View {
     }
 
     @ViewBuilder
-    private func homeRow(_ item: HomeItem, showsActions: Bool) -> some View {
+    func homeRow(_ item: HomeItem, showsActions: Bool) -> some View {
         if !showsActions {
             let subtitle = workItemSubtitle(item)
             if let route = item.openAction?.href.flatMap({ HomeOpenRoute(href: $0) }) {
@@ -219,6 +273,10 @@ private struct ProgressHubView: View {
                     }.buttonStyle(.plain)
                 } else if let page = route.workPage {
                     Button { onSelectPage(page) } label: {
+                        compactRow(title: item.title, subtitle: subtitle, symbol: "clock")
+                    }.buttonStyle(.plain)
+                } else if let onNavigate, let dest = route.homeDestination {
+                    Button { onNavigate(dest) } label: {
                         compactRow(title: item.title, subtitle: subtitle, symbol: "clock")
                     }.buttonStyle(.plain)
                 } else {
@@ -258,7 +316,7 @@ private struct ProgressHubView: View {
     }
 
     @ViewBuilder
-    private func actionControl(_ action: HomeAction) -> some View {
+    func actionControl(_ action: HomeAction) -> some View {
         if let page = action.route?.workPage {
             Button(action.label) { onSelectPage(page) }.buttonStyle(.bordered)
         } else if let route = action.route {
@@ -267,8 +325,13 @@ private struct ProgressHubView: View {
                 Button(action.label) { onOpenConversation(id, "会话", "main") }
                     .buttonStyle(.bordered)
             default:
-                NavigationLink(action.label) { destination(for: route) }
-                    .buttonStyle(.bordered)
+                if let onNavigate, let dest = route.homeDestination {
+                    Button(action.label) { onNavigate(dest) }
+                        .buttonStyle(.bordered)
+                } else {
+                    NavigationLink(action.label) { destination(for: route) }
+                        .buttonStyle(.bordered)
+                }
             }
         } else if action.command != nil {
             Button(action.label) { pendingAction = action }
@@ -281,7 +344,7 @@ private struct ProgressHubView: View {
     }
 
     @ViewBuilder
-    private func destination(for route: HomeOpenRoute) -> some View {
+    func destination(for route: HomeOpenRoute) -> some View {
         switch route {
         case let .task(id):
             TaskConversationView(configuration: configuration, taskID: id)
@@ -306,9 +369,7 @@ private struct ProgressHubView: View {
             EmptyView()
         }
     }
-}
 
-private extension ProgressHubView {
     func compactRow(title: String, subtitle: String, symbol: String, navigable: Bool = true) -> some View {
         HStack(spacing: 12) {
             Image(systemName: symbol).frame(width: 24).foregroundStyle(.tint).accessibilityHidden(true)
@@ -388,38 +449,53 @@ struct HomeDeliveryLink: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
     var progressCard = false
+    var onNavigate: ((HomeDestination) -> Void)?
 
     var body: some View {
         if let route = item.destination {
-            NavigationLink {
-                switch route {
-                case let .task(id):
-                    TaskConversationView(configuration: configuration, taskID: id)
-                case let .automationRun(id):
-                    AutomationRunDetailView(configuration: configuration, runID: id, initialRun: nil,
-                                            onOpenConversation: onOpenConversation)
-                default:
-                    EmptyView()
-                }
-            } label: {
-                if progressCard {
-                    HStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle").font(.headline)
-                            .frame(width: 36, height: 36)
-                            .background(.primary.opacity(0.06), in: .rect(cornerRadius: mobileTheme.corner(9)))
-                            .foregroundStyle(.secondary).accessibilityHidden(true)
-                        deliveryLabel.frame(maxWidth: .infinity, alignment: .leading)
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                            .accessibilityHidden(true)
+            Group {
+                if let onNavigate, let dest = route.homeDestination {
+                    Button { onNavigate(dest) } label: {
+                        deliveryRowLabel
                     }
-                    .padding(16)
-                    .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
-                    .foregroundStyle(.primary)
+                    .buttonStyle(.plain)
                 } else {
-                    deliveryLabel
+                    NavigationLink {
+                        switch route {
+                        case let .task(id):
+                            TaskConversationView(configuration: configuration, taskID: id)
+                        case let .automationRun(id):
+                            AutomationRunDetailView(configuration: configuration, runID: id, initialRun: nil,
+                                                    onOpenConversation: onOpenConversation)
+                        default:
+                            EmptyView()
+                        }
+                    } label: {
+                        deliveryRowLabel
+                    }
                 }
             }
             .accessibilityIdentifier("delivery-\(item.id)")
+        }
+    }
+
+    @ViewBuilder
+    private var deliveryRowLabel: some View {
+        if progressCard {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.circle").font(.headline)
+                    .frame(width: 36, height: 36)
+                    .background(.primary.opacity(0.06), in: .rect(cornerRadius: mobileTheme.corner(9)))
+                    .foregroundStyle(.secondary).accessibilityHidden(true)
+                deliveryLabel.frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .padding(16)
+            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
+            .foregroundStyle(.primary)
+        } else {
+            deliveryLabel
         }
     }
 
@@ -442,6 +518,20 @@ enum HomeOpenRoute: Equatable {
         case .tasks: .tasks
         case .projects: .projects
         default: nil
+        }
+    }
+
+    var homeDestination: HomeDestination? {
+        switch self {
+        case let .task(id): .taskChat(id)
+        case let .project(id): .projectDetail(id)
+        case .automations: .automations
+        case let .automation(id): .automationDetail(id)
+        case let .automationRun(id): .libraryAutomationRun(id)
+        case .notes: .notes
+        case let .note(id): .noteDetail(id)
+        case .files: .files
+        case .chat, .tasks, .projects: nil
         }
     }
 
@@ -525,6 +615,7 @@ private struct TasksView: View {
     @Environment(\.mobileTheme) private var theme
     let configuration: GatewayConfiguration
     let isActive: Bool
+    var onNavigate: ((HomeDestination) -> Void)?
 
     @State private var items: [TaskListItem] = []
     @State private var filter = "all"
@@ -561,7 +652,13 @@ private struct TasksView: View {
                     .listRowBackground(Color.clear)
             }
             ForEach(visible) { item in
-                Button { selectedTaskID = item.id } label: {
+                Button {
+                    if let onNavigate {
+                        onNavigate(.taskChat(item.id))
+                    } else {
+                        selectedTaskID = item.id
+                    }
+                } label: {
                     ProgressRow(
                         title: item.task.title,
                         subtitle: item.presentation?.reason ?? item.task.contract?.objective ?? item.task.body,
@@ -619,7 +716,11 @@ private struct TasksView: View {
         .sheet(isPresented: $creating, onDismiss: {
             guard let taskID = createdTaskID else { return }
             createdTaskID = nil
-            selectedTaskID = taskID
+            if let onNavigate {
+                onNavigate(.taskChat(taskID))
+            } else {
+                selectedTaskID = taskID
+            }
             Task { await load(search: query) }
         }) {
             TaskEditorView(configuration: configuration) { createdTaskID = $0.id }
@@ -675,6 +776,7 @@ struct ProjectsView: View {
     let onOpenConversation: (String, String, String) -> Void
 
     var isActive = true
+    var onNavigate: ((HomeDestination) -> Void)?
 
     @State private var items: [ProjectRecord] = []
     @State private var filter = "active"
@@ -703,27 +805,48 @@ struct ProjectsView: View {
                     .listRowBackground(Color.clear)
             } else {
                 ForEach(visible) { project in
-                    NavigationLink {
-                        ProjectDetailView(
-                            configuration: configuration,
-                            projectID: project.id,
-                            onOpenConversation: onOpenConversation,
-                            onProjectUpdated: { updated in
-                                if let index = items.firstIndex(where: { $0.id == updated.id }) {
-                                    items[index] = updated
-                                }
+                    if let onNavigate {
+                        Button { onNavigate(.projectDetail(project.id)) } label: {
+                            HStack(spacing: 8) {
+                                ProgressRow(
+                                    title: project.name,
+                                    subtitle: project.brief ?? project.description,
+                                    state: "project_status_" + project.status,
+                                    date: project.updatedAt.millisecondsDate,
+                                    symbol: "folder"
+                                )
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                                    .accessibilityHidden(true)
                             }
-                        )
-                    } label: {
-                        ProgressRow(
-                            title: project.name,
-                            subtitle: project.brief ?? project.description,
-                            state: "project_status_" + project.status,
-                            date: project.updatedAt.millisecondsDate,
-                            symbol: "folder"
-                        )
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("project-\(project.id)")
+                    } else {
+                        NavigationLink {
+                            ProjectDetailView(
+                                configuration: configuration,
+                                projectID: project.id,
+                                onOpenConversation: onOpenConversation,
+                                onProjectUpdated: { updated in
+                                    if let index = items.firstIndex(where: { $0.id == updated.id }) {
+                                        items[index] = updated
+                                    }
+                                }
+                            )
+                        } label: {
+                            ProgressRow(
+                                title: project.name,
+                                subtitle: project.brief ?? project.description,
+                                state: "project_status_" + project.status,
+                                date: project.updatedAt.millisecondsDate,
+                                symbol: "folder"
+                            )
+                        }
+                        .accessibilityIdentifier("project-\(project.id)")
                     }
-                    .accessibilityIdentifier("project-\(project.id)")
                 }
             }
         }

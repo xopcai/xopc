@@ -16,6 +16,15 @@ struct AssistantView<Dock: View>: View {
     let onOpenSettings: () -> Void
     let onInputFocusChanged: (Bool) -> Void
     var showsFloatingHeader = true
+    var bottomComposerSpacing: CGFloat = 4
+    var backAccessibilityID = "project-chat-close"
+    var showsSessionConversationTitle = false
+    var recentSwitchConversations: [ConversationSummary] = []
+    var onSwitchConversation: ((ConversationSummary) -> Void)?
+    var onCreateNewConversation: (() -> Void)?
+    var onOpenConversationList: (() -> Void)?
+    var scrollToLatestToken = 0
+    var onRunningStateChanged: ((Bool) -> Void)?
     var onBack: (() -> Void)?
     var onOpenSidebar: (() -> Void)?
     var onOpenProgress: () -> Void = {}
@@ -127,6 +136,7 @@ struct AssistantView<Dock: View>: View {
                 phone.setVisible(showingPhone)
                 onPhoneVisibilityChanged(showingPhone)
             }
+            .onChange(of: state.isRunActive, initial: true) { onRunningStateChanged?(state.isRunActive) }
             .onChange(of: conversation?.id) { showingPhone = false }
             .onChange(of: personalReadTarget, initial: true) { onPersonalReadTargetChanged(personalReadTarget) }
             .task(id: unreadHistoryToLoad) {
@@ -248,7 +258,7 @@ struct AssistantView<Dock: View>: View {
                             .padding(.bottom, 8)
                             .onAppear { composerFocused = false }
                     } else {
-                        bottomDock(composer).padding(.bottom, 4)
+                        bottomDock(composer).padding(.bottom, bottomComposerSpacing)
                     }
                 }
             }
@@ -829,6 +839,10 @@ struct AssistantView<Dock: View>: View {
                     restoreTimeline(scroller)
                     scheduleBottomScroll(scroller)
                 }
+                .onChange(of: scrollToLatestToken) {
+                    guard scrollToLatestToken > 0, isActive else { return }
+                    scrollToLatestMessage(scroller)
+                }
                 .modifier(timelineScrollInteraction())
                 .overlay(alignment: .bottom) { jumpToBottomButton(scroller) }
             }
@@ -897,6 +911,27 @@ struct AssistantView<Dock: View>: View {
             .accessibilityValue(AppLocalization.string(state.isRunActive ? "正在回答" : "最新消息", locale: locale))
             .accessibilityIdentifier("chat-jump-bottom")
             .padding(.bottom, 8)
+        }
+    }
+
+    private func scrollToLatestMessage(_ scroller: ScrollViewProxy) {
+        readingHistory.bottomScrollTask?.cancel()
+        readingHistory.bottomScrollTask = nil
+        userScrollingMessages = false
+        followingBottom = true
+        if let scope = timelineReadingScope {
+            readingHistory.removeAnchor(for: scope)
+        }
+        let jumpID = UUID()
+        bottomJumpID = jumpID
+        if #available(iOS 18, *) {
+            timelineScrollCommands.scrollToBottom(jumpID: jumpID)
+        } else {
+            withAnimation(MobileMotion.animation(MobileMotion.standardDuration, reduceMotion: reduceMotion)) {
+                scroller.scrollTo("chat-bottom", anchor: .bottom)
+            } completion: {
+                finishBottomJump(jumpID, scroller: scroller)
+            }
         }
     }
 
@@ -1229,9 +1264,13 @@ struct AssistantView<Dock: View>: View {
 
     private var currentProjectTitle: String? {
         let fromSummary = state.contextSummary?.work.project?.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let fromSummary, !fromSummary.isEmpty { return fromSummary }
+        if let fromSummary, !fromSummary.isEmpty {
+            return fromSummary
+        }
         let fromDraft = draftProjectName?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let fromDraft, !fromDraft.isEmpty { return fromDraft }
+        if let fromDraft, !fromDraft.isEmpty {
+            return fromDraft
+        }
         return nil
     }
 
@@ -1495,13 +1534,42 @@ struct AssistantView<Dock: View>: View {
         }
     }
 
+    private var compactPersonalHeader: Bool {
+        isPersonalConversation && !state.messages.isEmpty && positionedTimeline && ((!followingBottom && !isAtBottom) || composerFocused)
+    }
+
+    private var sessionHeaderTitle: String {
+        guard showsSessionConversationTitle, let conversation else {
+            return currentAgentName
+        }
+        let trimmed = conversation.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !conversation.isDraft, !trimmed.isEmpty {
+            return trimmed
+        }
+        return currentAgentName
+    }
+
+    private var sessionHeaderSubtitle: String? {
+        guard showsSessionConversationTitle else {
+            return currentModelSubtitle
+        }
+        var parts: [String] = []
+        if sessionHeaderTitle != currentAgentName {
+            parts.append(currentAgentName)
+        }
+        if let model = currentModelSubtitle, !model.isEmpty {
+            parts.append(model)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     private var floatingHeader: some View {
         VStack(spacing: 6) {
             ZStack(alignment: .top) {
                 HStack(spacing: 6) {
                     if let onBack {
                         headerButton("返回", icon: Image(systemName: "chevron.backward"), action: onBack)
-                            .accessibilityIdentifier("project-chat-close")
+                            .accessibilityIdentifier(backAccessibilityID)
                     }
                     if let onOpenSidebar {
                         headerButton("打开导航", icon: Image(systemName: "line.3.horizontal"), action: onOpenSidebar)
@@ -1514,8 +1582,8 @@ struct AssistantView<Dock: View>: View {
                         ChatHeaderIdentityButton(
                             configuration: configuration,
                             agent: currentAgent,
-                            agentName: currentAgentName,
-                            modelSubtitle: currentModelSubtitle,
+                            agentName: sessionHeaderTitle,
+                            modelSubtitle: sessionHeaderSubtitle,
                             isActive: isActive && !showingMessageSearch
                         ) {
                             sessionSheetDestination = .actions
@@ -1527,6 +1595,9 @@ struct AssistantView<Dock: View>: View {
                     }
                     if phone.summary?.available == true, !isPersonalConversation {
                         phoneWorkspaceButton
+                    }
+                    if !isPersonalConversation, let onSwitchConversation {
+                        sessionSwitcherMenu(onSwitchConversation: onSwitchConversation)
                     }
                     headerButton("语音通话", icon: Image(systemName: "phone"), action: startRealtimeVoice)
                         .disabled(!canStartRealtimeVoice)
@@ -1540,43 +1611,7 @@ struct AssistantView<Dock: View>: View {
                     }
                 }
                 if isPersonalConversation {
-                    VStack(spacing: 4) {
-                        Button {
-                            onOpenPersonalOverview(conversation?.isDraft == false && !state.messages.isEmpty)
-                        } label: {
-                            VStack(spacing: 4) {
-                                PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 62,
-                                                    active: isActive && !showingMessageSearch,
-                                                    working: state.isRunActive || state.isSending)
-                                    .background(mobileTheme.card, in: Circle())
-                                    .accessibilityHidden(true)
-                            }
-                            .frame(maxWidth: 120)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("助理概览")
-                        .accessibilityIdentifier("chat-header-personal")
-                        if pendingAttention > 0 {
-                            Button(action: onOpenProgress) {
-                                VStack(spacing: 2) {
-                                    Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
-                                    Label {
-                                        Text("有 \(pendingAttention) 项待你处理").lineLimit(1)
-                                    } icon: { Circle().fill(mobileTheme.onAttention).frame(width: 6, height: 6) }
-                                        .font(.caption).foregroundStyle(mobileTheme.onAttention)
-                                }
-                                .padding(.horizontal, 12).frame(minHeight: 44)
-                                .background(mobileTheme.attention, in: .rect(cornerRadius: mobileTheme.corner(15)))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("chat-header-attention")
-                        } else {
-                            Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
-                                .foregroundStyle(mobileTheme.foreground)
-                                .padding(.horizontal, 12).padding(.vertical, 4)
-                                .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(14)))
-                        }
-                    }
+                    personalFloatingCenterHeader
                 }
             }
             if !isPersonalConversation {
@@ -1591,8 +1626,114 @@ struct AssistantView<Dock: View>: View {
                 }
             }
         }
+        .animation(MobileMotion.animation(MobileMotion.standardDuration, reduceMotion: reduceMotion), value: compactPersonalHeader)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat-floating-header")
+    }
+
+    @ViewBuilder
+    private var personalFloatingCenterHeader: some View {
+        if compactPersonalHeader {
+            Button {
+                onOpenPersonalOverview(conversation?.isDraft == false && !state.messages.isEmpty)
+            } label: {
+                HStack(spacing: 8) {
+                    PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 28,
+                                        active: isActive && !showingMessageSearch,
+                                        working: state.isRunActive || state.isSending)
+                        .accessibilityHidden(true)
+                    Text(verbatim: currentAgentName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(mobileTheme.foreground)
+                        .lineLimit(1)
+                    if pendingAttention > 0 {
+                        Circle()
+                            .fill(mobileTheme.onAttention)
+                            .frame(width: 6, height: 6)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .frame(minHeight: 44)
+                .background(mobileTheme.card, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("助理概览")
+            .accessibilityIdentifier("chat-header-personal")
+        } else {
+            VStack(spacing: 4) {
+                Button {
+                    onOpenPersonalOverview(conversation?.isDraft == false && !state.messages.isEmpty)
+                } label: {
+                    VStack(spacing: 4) {
+                        PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 62,
+                                            active: isActive && !showingMessageSearch,
+                                            working: state.isRunActive || state.isSending)
+                            .background(mobileTheme.card, in: Circle())
+                            .accessibilityHidden(true)
+                    }
+                    .frame(maxWidth: 120)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("助理概览")
+                .accessibilityIdentifier("chat-header-personal")
+                if pendingAttention > 0 {
+                    Button(action: onOpenProgress) {
+                        VStack(spacing: 2) {
+                            Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
+                            Label {
+                                Text("有 \(pendingAttention) 项待你处理").lineLimit(1)
+                            } icon: { Circle().fill(mobileTheme.onAttention).frame(width: 6, height: 6) }
+                                .font(.caption).foregroundStyle(mobileTheme.onAttention)
+                        }
+                        .padding(.horizontal, 12).frame(minHeight: 44)
+                        .background(mobileTheme.attention, in: .rect(cornerRadius: mobileTheme.corner(15)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("chat-header-attention")
+                } else {
+                    Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
+                        .foregroundStyle(mobileTheme.foreground)
+                        .padding(.horizontal, 12).padding(.vertical, 4)
+                        .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(14)))
+                }
+            }
+        }
+    }
+
+    private func sessionSwitcherMenu(onSwitchConversation: @escaping (ConversationSummary) -> Void) -> some View {
+        Menu {
+            if let onCreateNewConversation {
+                Button("新建对话", systemImage: "square.and.pencil", action: onCreateNewConversation)
+            }
+            if let onOpenConversationList {
+                Button("全部对话", systemImage: "sidebar.left", action: onOpenConversationList)
+            }
+            if !recentSwitchConversations.isEmpty {
+                Section("最近对话") {
+                    ForEach(recentSwitchConversations.prefix(8)) { item in
+                        Button {
+                            onSwitchConversation(item)
+                        } label: {
+                            if item.id == conversation?.id {
+                                Label(item.displayName, systemImage: "checkmark")
+                            } else {
+                                Text(verbatim: item.displayName)
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.title3)
+                .frame(width: 44, height: 44)
+                .foregroundStyle(mobileTheme.foreground)
+                .background(mobileTheme.card, in: Circle())
+                .contentShape(.rect)
+        }
+        .accessibilityLabel("切换对话")
+        .accessibilityIdentifier("session-chat-switcher")
     }
 
     private var phoneWorkspaceButton: some View {

@@ -150,7 +150,17 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   voiceNotes: VoiceNotesGateway? = null,
   onExit: (() -> Unit)? = null,
   initialNoteId: String? = null,
-  initialProjectDraft: Boolean = false) {
+  initialProjectDraft: Boolean = false,
+  initialEditorOpen: Boolean = initialProjectDraft,
+  initialVoiceCapture: Boolean = false,
+  initialVoiceRecoveryOnly: Boolean = false,
+  initialFileBrowser: Boolean = false,
+  onOpenSidebar: (() -> Unit)? = null,
+  bottomChromeInset: Dp = 0.dp,
+  scrollToTopRevision: Int = 0,
+  onNavigateRoute: ((MobileRoute) -> Unit)? = null,
+  onPendingVoiceCountChange: (Int) -> Unit = {},
+  sidebarGesture: Modifier = Modifier) {
   val context = LocalContext.current
   val focusManager = LocalFocusManager.current
   val lifecycleOwner = LocalLifecycleOwner.current
@@ -209,8 +219,8 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     }
   }
   var selectedId by rememberSaveable(state.gatewayId) { mutableStateOf(initialNoteId) }
-  var voiceCapture by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
-  var recoveryOnly by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  var voiceCapture by rememberSaveable(state.gatewayId) { mutableStateOf(initialVoiceCapture) }
+  var recoveryOnly by rememberSaveable(state.gatewayId) { mutableStateOf(initialVoiceRecoveryOnly) }
   var openedVoice by remember(state.gatewayId) { mutableStateOf<VoiceNoteDetail?>(null) }
   var voiceRevision by remember(state.gatewayId, selectedId) { mutableStateOf(0) }
   var voiceBusy by remember(state.gatewayId, selectedId) { mutableStateOf(false) }
@@ -231,6 +241,9 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         0
       }
     }
+  }
+  LaunchedEffect(pendingVoiceCount) {
+    onPendingVoiceCountChange(pendingVoiceCount)
   }
   var discussion by remember(voiceScope, voiceId) {
     mutableStateOf(openedVoice?.takeIf { it.noteId == voiceId })
@@ -253,8 +266,13 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     catch (_: Exception) { voiceError = true }
   }
   val detailScroll = key(state.gatewayId, selectedId) { rememberScrollState() }
-  var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(initialProjectDraft) }
-  var fileBrowserOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(initialEditorOpen) }
+  var fileBrowserOpen by rememberSaveable(state.gatewayId) { mutableStateOf(initialFileBrowser) }
+  LaunchedEffect(scrollToTopRevision) {
+    if (scrollToTopRevision > 0 && selectedId == null && !editorOpen && !fileBrowserOpen && !voiceCapture) {
+      notesListState.animateScrollToItem(0)
+    }
+  }
   var fileSpaceId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var filePath by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var fileSearch by rememberSaveable(state.gatewayId) { mutableStateOf("") }
@@ -370,12 +388,12 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     val draft = state.draft
     if (draft == null || (draft.id.startsWith("local-") &&
       draft.title.isBlank() && draft.markdown.isBlank())) {
-      if (initialProjectDraft && onExit != null) onExit() else editorOpen = false
+      if ((initialProjectDraft || initialEditorOpen) && onExit != null) onExit() else editorOpen = false
     }
     else onSaveDraft()
   }
   val closeNote = {
-    if ((initialProjectDraft || initialNoteId != null && selectedId == initialNoteId) && onExit != null) onExit()
+    if ((initialProjectDraft || initialEditorOpen || initialNoteId != null && selectedId == initialNoteId) && onExit != null) onExit()
     else selectedId = null
   }
   val closeFile = {
@@ -384,6 +402,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       selectedFile != null -> selectedFile = null
       filePath.isNotEmpty() -> filePath = filePath.substringBeforeLast('/', "")
       fileSpaceId != null -> fileSpaceId = null
+      initialFileBrowser && onExit != null -> onExit()
       else -> fileBrowserOpen = false
     }
   }
@@ -435,7 +454,9 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     onDismissShare()
   }
   if (voiceCapture && voiceNotes != null && voiceScope != null) {
-    VoiceNoteCapture(voiceScope, voiceNotes, insets, recoveryOnly = recoveryOnly, onClose = { voiceCapture = false }) { result ->
+    VoiceNoteCapture(voiceScope, voiceNotes, insets, recoveryOnly = recoveryOnly, onClose = {
+      if (initialVoiceCapture && onExit != null) onExit() else voiceCapture = false
+    }) { result ->
       openedVoice = result
       selectedId = result.noteId
       voiceCapture = false
@@ -458,7 +479,8 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         modifier = Modifier.testTag("notes-file-upload-rename")) { Text(stringResource(R.string.file_space_upload)) }
     },
     dismissButton = { TextButton(enabled = !uploadBusy, onClick = { conflictUri = null }) { Text(stringResource(R.string.progress_cancel)) } })
-  Column(modifier = Modifier.fillMaxSize().padding(insets),
+  val isNotesRoot = onOpenSidebar != null && !fileBrowserOpen && !editorOpen && selectedId == null
+  Column(modifier = Modifier.fillMaxSize().then(if (isNotesRoot) sidebarGesture else Modifier).padding(insets),
     verticalArrangement = Arrangement.spacedBy(8.dp)) {
     val back = when {
       fileBrowserOpen -> closeFile
@@ -469,7 +491,8 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     XopcPageHeader(
       backTag = "notes-back",
       onBack = back,
-      showBack = onExit != null,
+      showBack = !isNotesRoot && (onExit != null || fileBrowserOpen || editorOpen || selectedId != null),
+      leadingContent = if (isNotesRoot) ({ PageSidebarButton("notes-sidebar", onOpenSidebar!!) }) else null,
       title = if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
     ) {
       if (fileBrowserOpen || editorOpen || selectedId != null) {
@@ -494,11 +517,15 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         PageSearchButton(searchOpen, R.string.notes_search, "notes-open-search", ::toggleSearch)
         IconButton(onClick = {
           focusManager.clearFocus(force = true)
-          fileSpaceId = null
-          filePath = ""
-          fileSearch = ""
-          selectedFile = null
-          fileBrowserOpen = true
+          if (onNavigateRoute != null && isNotesRoot) {
+            onNavigateRoute(MobileRoute.NoteFiles)
+          } else {
+            fileSpaceId = null
+            filePath = ""
+            fileSearch = ""
+            selectedFile = null
+            fileBrowserOpen = true
+          }
         }, modifier = Modifier.testTag("notes-open-files")) {
           ActionIcon(R.drawable.action_folder, size = 24.dp, contentDescription = stringResource(R.string.notes_files))
         }
@@ -523,18 +550,37 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       Modifier.weight(1f), onResolveConflict, onAddAttachment = { attachmentSheetOpen = true },
       attachmentBusy = attachmentBusy, attachmentError = attachmentError)
     else if (selectedId == null) {
+      val effectiveBottomInset = if (isNotesRoot) bottomChromeInset else 0.dp
       Box(Modifier.weight(1f).fillMaxWidth()) {
         NotesListContent(state, query, { query = it },
           { onSearch(query.trim(), state.status) }, { status -> onSearch(query.trim(), status) },
-          { id -> selectedId = id; onOpen(id) }, onLoadMore, Modifier.fillMaxSize(),
-          { id -> editorOpen = true; onOpenDraft(id) }, searchOpen = searchOpen,
-          listState = notesListState, filtersOpen = filtersOpen, bottomContentPadding = 76.dp,
+          { id ->
+            if (onNavigateRoute != null && isNotesRoot) {
+              onOpen(id)
+              onNavigateRoute(MobileRoute.NoteDetail(id))
+            } else {
+              selectedId = id; onOpen(id)
+            }
+          }, onLoadMore, Modifier.fillMaxSize(),
+          { id ->
+            if (onNavigateRoute != null && isNotesRoot) {
+              onOpenDraft(id)
+              onNavigateRoute(MobileRoute.NoteEditor(noteId = id))
+            } else {
+              editorOpen = true; onOpenDraft(id)
+            }
+          }, searchOpen = searchOpen,
+          listState = notesListState, filtersOpen = filtersOpen, bottomContentPadding = 76.dp + effectiveBottomInset,
           pendingVoiceCount = pendingVoiceCount, onRecoverVoice = {
             focusManager.clearFocus(force = true)
-            recoveryOnly = true
-            voiceCapture = true
+            if (onNavigateRoute != null && isNotesRoot) {
+              onNavigateRoute(MobileRoute.VoiceNoteCapture(recoveryOnly = true))
+            } else {
+              recoveryOnly = true
+              voiceCapture = true
+            }
           })
-        Surface(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp)
+        Surface(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = effectiveBottomInset + 8.dp)
           .testTag("notes-capture-actions"), shape = CircleShape,
           color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 4.dp) {
           Row(Modifier.padding(5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -542,8 +588,12 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
             if (voiceNotes != null && voiceScope != null) {
               TextButton(onClick = {
                 focusManager.clearFocus(force = true)
-                recoveryOnly = false
-                voiceCapture = true
+                if (onNavigateRoute != null && isNotesRoot) {
+                  onNavigateRoute(MobileRoute.VoiceNoteCapture(recoveryOnly = false))
+                } else {
+                  recoveryOnly = false
+                  voiceCapture = true
+                }
               },
                 modifier = Modifier.heightIn(min = 46.dp).testTag("notes-new-voice"),
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
@@ -553,7 +603,15 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
                 }
               }
             }
-            Button(onClick = { focusManager.clearFocus(force = true); editorOpen = true; onNew() },
+            Button(onClick = {
+              focusManager.clearFocus(force = true)
+              if (onNavigateRoute != null && isNotesRoot) {
+                onNew()
+                onNavigateRoute(MobileRoute.NoteEditor())
+              } else {
+                editorOpen = true; onNew()
+              }
+            },
               modifier = Modifier.heightIn(min = 46.dp).testTag("notes-new"),
               enabled = !state.draftLoading && !state.draftSaving, shape = CircleShape,
               colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer,

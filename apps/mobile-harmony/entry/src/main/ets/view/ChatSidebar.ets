@@ -28,17 +28,13 @@ export struct XopcChatSidebar {
   @Local renameOpen: boolean = false;
   @Local renameText: string = '';
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
-  @Param personalBusy: boolean = false;
   @Param currentId: string = '';
-  @Param pendingAttention: number = 0;
-  @Param personalUnread: number = 0;
   @Param reveal: number = 1;
   @Param drawerWidth: number = 0;
   @Param interactive: boolean = false;
   @Event onClose: () => void = (): void => {};
   @Event onDismissDrag: (offset: number) => void = (_offset: number): void => {};
   @Event onDismissEnd: (offset: number, velocity: number) => void = (_offset: number, _velocity: number): void => {};
-  @Event onPersonal: () => void = (): void => {};
   @Event onNew: () => void = (): void => {};
   @Event onConversation: (id: string) => void = (_id: string): void => {};
   @Event onDelete: (id: string) => void = (_id: string): void => {};
@@ -155,40 +151,20 @@ export struct XopcChatSidebar {
   }
 
   @Builder
-  shortcut(label: Resource, icon: Resource | undefined, page: string, count: number = 0) {
+  shortcut(label: Resource, icon: Resource, page: string) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 12 }) {
         Row() {
-          if (page === 'personal') {
-            XopcPersonalAgentAvatar({ extent: 22, compact: true, activePage: false,
-              agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi',
-              revision: this.personalAgent?.revision ?? 0 })
-          } else if (icon) {
-            SymbolGlyph(icon).fontSize(19).fontColor([this.colors.secondary])
-          }
+          SymbolGlyph(icon).fontSize(19).fontColor([this.colors.secondary])
         }.width(28).height(28).justifyContent(FlexAlign.Center).accessibilityLevel('no-hide-descendants')
-        Text(page === 'personal' ? this.personalAgent?.displayName || label : label)
+        Text(label)
           .fontSize(15).fontColor(this.colors.foreground).layoutWeight(1)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        if (page === 'personal' && this.personalUnread > 0) {
-          Text(this.personalUnread > 99 ? '99+' : this.personalUnread.toString()).fontSize(12)
-            .fontColor(this.colors.accent)
-            .padding({ left: 8, right: 8 }).height(24).borderRadius(12)
-            .backgroundColor(this.colors.accentSoft)
-            .accessibilityText($r('app.string.personal_unread_messages', this.personalUnread))
-        } else if (count > 0) {
-          Text(count > 99 ? '99+' : count.toString()).fontSize(12)
-            .fontColor(this.colors.attentionForeground)
-            .padding({ left: 8, right: 8 }).height(24).borderRadius(12)
-            .backgroundColor(this.colors.attentionFill)
-        }
       }.width('100%').constraintSize({ minHeight: 44 }).padding({ left: 10, right: 10 })
     }.id('chat-sidebar-' + page).width('100%').padding(0).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
-      .backgroundColor(page === 'personal' && this.currentId && this.personalAgent?.conversationId === this.currentId
-        ? this.colors.active : Color.Transparent)
-      .enabled(!this.sessions.selecting && !this.sessions.busy && (page !== 'personal' || !this.personalBusy)).onClick((): void => {
-        if (page === 'personal') this.onPersonal();
-        else this.go(page);
+      .backgroundColor(Color.Transparent)
+      .enabled(!this.sessions.selecting && !this.sessions.busy).onClick((): void => {
+        this.go(page);
       }, SIDEBAR_TAP_SLOP_VP)
   }
 
@@ -234,23 +210,19 @@ export struct XopcChatSidebar {
                 .borderRadius(this.colors.corner(22)).clipShape(this.colors.cornerClip(22))
                 .enabled(!this.sessions.selecting && !this.sessions.busy)
                 .onClick((): void => { this.go('sessions-search'); }, SIDEBAR_TAP_SLOP_VP)
-              this.shortcut($r('app.string.chat_personal_agent'), undefined, 'personal')
             }.width('100%').padding({ bottom: 4 })
-          }
-          ListItem() {
-            this.shortcut($r('app.string.workbench'), $r('sys.symbol.square_grid_2x2'), 'workbench', this.pendingAttention)
           }
           ListItem() {
             this.shortcut($r('app.string.automations'), $r('sys.symbol.clock'), 'automations')
           }
           ListItem() {
-            this.shortcut($r('app.string.notes'), $r('sys.symbol.doc_text'), 'notes-list')
-          }
-          ListItem() {
-            this.shortcut($r('app.string.library_title'), $r('sys.symbol.doc'), 'library')
-          }
-          ListItem() {
             this.shortcut($r('app.string.capability_title'), $r('sys.symbol.square_grid_2x2'), 'capabilities')
+          }
+          ListItem() {
+            this.shortcut($r('app.string.about_you'), $r('sys.symbol.person'), 'about-you')
+          }
+          ListItem() {
+            Column().width('100%').height(1).backgroundColor(this.colors.border).margin({ top: 6, bottom: 6 })
           }
           if (this.sessions.loading && !this.sessions.hasSnapshot) {
             ListItem() { XopcListSkeleton() }

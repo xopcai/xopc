@@ -37,14 +37,30 @@ export default class EntryAbility extends UIAbility {
     }
   }
   private onAvoidArea = (data: window.AvoidAreaOptions): void => {
-    if (data.type === window.AvoidAreaType.TYPE_SYSTEM) layoutState.systemTopInsetPx = data.area.topRect.height;
+    if (data.type === window.AvoidAreaType.TYPE_SYSTEM) {
+      layoutState.systemTopInsetPx = data.area.topRect.height;
+      layoutState.systemBottomInsetPx = data.area.bottomRect.height;
+    } else if (data.type === window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR) {
+      layoutState.systemBottomInsetPx = data.area.bottomRect.height;
+    } else if (data.type === window.AvoidAreaType.TYPE_KEYBOARD) {
+      layoutState.keyboardHeightPx = data.area.bottomRect.height;
+    }
+  };
+  private onKeyboardHeightChange = (height: number): void => {
+    layoutState.keyboardHeightPx = Math.max(0, height);
   };
   onWindowStageDestroy(): void {
     cancelAllDeviceLocations(); cancelAllDevicePersonalTools();
     appSettings.onColorModeChanged = undefined;
     try { this.mainWindow?.off('avoidAreaChange', this.onAvoidArea); }
     catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Window listener cleanup failed'); }
-    this.mainWindow = undefined; layoutState.systemTopInsetPx = 0;
+    try { this.mainWindow?.off('keyboardHeightChange', this.onKeyboardHeightChange); }
+    catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Keyboard listener cleanup failed'); }
+    this.mainWindow = undefined;
+    layoutState.systemTopInsetPx = 0;
+    layoutState.systemBottomInsetPx = 0;
+    layoutState.keyboardHeightPx = 0;
+    layoutState.bottomChromeInset = 0;
   }
   private receiveWant(want: Want): void {
     if (want.uri === MUSIC_OPEN_URI) {
@@ -149,7 +165,10 @@ export default class EntryAbility extends UIAbility {
           attachDevicePersonalTools(this.context, this.mainWindow.getUIContext());
           this.mainWindow.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
           this.mainWindow.on('avoidAreaChange', this.onAvoidArea);
+          this.mainWindow.on('keyboardHeightChange', this.onKeyboardHeightChange);
           layoutState.systemTopInsetPx = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM).topRect.height;
+          layoutState.systemBottomInsetPx = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR).bottomRect.height;
+          layoutState.keyboardHeightPx = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD).bottomRect.height;
           appSettings.onColorModeChanged = (dark: boolean): void => { this.updateStatusBar(dark); };
           this.updateStatusBar(appSettings.isDark(this.context));
         } catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Keyboard layout initialization failed'); }
