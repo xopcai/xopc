@@ -1,17 +1,21 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
-import { getGatewayPrincipal } from '../../security/gateway-principal.js';
-import { hasGatewayScope } from '../../security/gateway-scopes.js';
+
+import type { DiscussionRecordingPreflight } from '@xopcai/gateway-contract';
+import type { Context, Hono } from 'hono';
+
 import { convertMeetingAction, meetingActionTasks, type ConvertMeetingActionOverrides } from '../../../discussions/action-tasks.js';
 import { MeetingEditSchema } from '../../../discussions/edits.js';
 import { exportDiscussion } from '../../../discussions/export.js';
-import type { Context, Hono } from 'hono';
-
-import { DISCUSSION_STATUSES, DiscussionServiceError } from '../../../discussions/index.js';
-import type { DiscussionStatus } from '../../../discussions/index.js';
-
+import { DISCUSSION_STATUSES, DiscussionServiceError, type DiscussionStatus } from '../../../discussions/index.js';
+import { createLogger } from '../../../utils/logger.js';
+import { getAudioDecoderStatus } from '../../../voice/audio/normalize.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+
+const log = createLogger('Hono:Discussions');
 
 function errorResponse(error: unknown): { body: { error: string; code?: string }; status: 400 | 404 | 409 } | null {
   if (!(error instanceof DiscussionServiceError)) return null;
@@ -100,6 +104,15 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
   });
 
   authenticated.get('/api/discussions/metrics', (c) => c.json(service.discussions.metrics()));
+
+  authenticated.get('/api/discussion-capture/preflight', strictRateLimitMiddleware, async (c) => {
+    const signal = c.req.raw.signal;
+    const { available, command, error } = await getAudioDecoderStatus(signal);
+    const platform = process.platform;
+    if (!available && !signal.aborted) log.warn({ command, platform, errorMessage: error }, 'FFmpeg startup check failed before recording');
+    c.header('Cache-Control', 'no-store');
+    return c.json({ available, platform } satisfies DiscussionRecordingPreflight);
+  });
 
   authenticated.get('/api/discussions/by-note/:noteId', async (c) => {
     const detail = await service.discussions.getByNoteId(c.req.param('noteId'));

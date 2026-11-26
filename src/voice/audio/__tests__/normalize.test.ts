@@ -75,7 +75,7 @@ describe('audio normalization', () => {
     const previous = process.env.XOPC_FFMPEG_PATH;
     process.env.XOPC_FFMPEG_PATH = '/definitely/missing/xopc-ffmpeg';
     try {
-      expect(getAudioDecoderStatus()).toMatchObject({
+      expect(await getAudioDecoderStatus()).toMatchObject({
         available: false,
         command: '/definitely/missing/xopc-ffmpeg',
       });

@@ -80,3 +80,17 @@ it('projects imported HTTP and timeout fields to native pi and blocks unsupporte
   expect(inspectMcp(base, 'events', { type: 'sse', url: 'https://example.com/sse' }).compatibility).toBe('blocked');
   expect(inspectMcp(base, 'startup', { command: 'node', startup_timeout_sec: 30 }).compatibility).toBe('blocked');
 });
+
+it('scans Antigravity skills, rules, and MCP configs', async () => {
+  skill(join(home, '.gemini/config/skills/hyperframes'));
+  mkdirSync(join(home, '.gemini/antigravity/rules'), { recursive: true });
+  writeFileSync(join(home, '.gemini/antigravity/rules/style.md'), 'Keep answers concise');
+  writeFileSync(
+    join(home, '.gemini/antigravity/mcp_config.json'),
+    JSON.stringify({ mcpServers: { docs: { command: 'node', args: ['server.js'] } } }),
+  );
+  const scan = await scanLocal({ source: 'antigravity', home });
+  expect(scan.candidates.some(c => c.kind === 'skill' && c.name === 'report' && c.compatibility === 'compatible')).toBe(true);
+  expect(scan.candidates.some(c => c.kind === 'rule' && c.name === 'style.md' && c.content === 'Keep answers concise')).toBe(true);
+  expect(scan.candidates.some(c => c.kind === 'mcp' && c.name === 'docs')).toBe(true);
+});

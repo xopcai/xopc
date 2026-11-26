@@ -486,10 +486,11 @@ describe('lazy route bundles', () => {
     }
   });
   it('maps meeting capture and nested upload resources without swallowing notes or voice', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/discussion-capture/preflight')?.id).toBe('discussions');
     for (const path of ['/api/discussions', '/api/discussion-capture/settings', '/api/discussions/metrics', '/api/discussions/by-note/id', '/api/discussions/id/recording/chunks/0', '/api/discussions/id/capture/seal', '/api/discussions/id/recording/job', '/api/discussions/id/audio', '/api/discussions/id/export', '/api/discussions/id/actions/action/convert', '/api/discussions/id/transcript', '/api/discussions/id/annotations', '/api/discussions/id/annotations/annotation', '/api/discussions/id/evidence', '/api/discussions/id/review', '/api/discussions/id/audio-clip', '/api/discussions/id/organize', '/api/discussions/id/summary', '/api/discussions/id/retry']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('discussions');
     }
-    for (const path of ['/api/discussions-other', '/api/notes/id', '/api/voice']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('discussions');
+    for (const path of ['/api/discussions-other', '/api/discussion-capture/preflight-other', '/api/notes/id', '/api/voice']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('discussions');
   });
   it('maps browser sessions without swallowing browser control routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/browser-session')?.id).toBe('browser-session');
@@ -742,6 +743,7 @@ it('maps external runtime probe and auth endpoints through the agents bundle', (
   for (const path of [
     '/api/agents/external-runtimes',
     '/api/agents/external-runtimes/probe',
+    '/api/agents/external-runtimes/quick-setup',
     '/api/agents/external-runtimes/auth/start',
     '/api/agents/external-runtimes/auth/flow-123',
     '/api/agents/external-runtimes/auth/flow-123/respond',
@@ -752,4 +754,5 @@ it('maps external runtime probe and auth endpoints through the agents bundle', (
     expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('agents');
   }
   expect(findAuthenticatedLazyRouteBundle('/api/agents-other/external-runtimes')).toBeUndefined();
+  expect(findAuthenticatedLazyRouteBundle('/api/agents-other/external-runtimes/quick-setup')).toBeUndefined();
 });

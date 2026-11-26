@@ -11,7 +11,10 @@ import type {
   ExternalAgentExecution,
   ExternalRuntimeAuthFlowSnapshot,
   ExternalRuntimeAuthMode,
+  ExternalRuntimeFastDetection,
   ExternalRuntimeProbeResult,
+  QuickSetupExternalRuntimeItem,
+  QuickSetupExternalRuntimesPayload,
   SkillOverride,
   ToolPolicy,
   GatewayAgentEffectiveConfigPayload,
@@ -138,14 +141,51 @@ export async function saveAgentProfileFileContent(agentId: string, name: string,
   });
 }
 
-export async function fetchExternalAgentRuntimes(): Promise<ExternalRuntimeProbeResult[]> {
+export async function fetchExternalAgentRuntimesFast(): Promise<ExternalRuntimeFastDetection[]> {
+  const response = await fetchJson<{ payload?: { runtimes?: ExternalRuntimeFastDetection[] } }>(
+    apiUrl('/api/agents/external-runtimes?mode=fast'),
+  );
+  if (!Array.isArray(response.payload?.runtimes)) {
+    throw new Error('Invalid /api/agents/external-runtimes?mode=fast response');
+  }
+  return response.payload.runtimes;
+}
+
+export async function fetchExternalAgentRuntimes(options?: {
+  refresh?: boolean;
+  timeoutMs?: number;
+}): Promise<ExternalRuntimeProbeResult[]> {
+  const params = new URLSearchParams();
+  if (options?.refresh) params.set('refresh', '1');
+  if (typeof options?.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)) {
+    params.set('timeoutMs', String(Math.round(options.timeoutMs)));
+  }
+  const query = params.toString();
   const response = await fetchJson<{ payload?: { runtimes?: ExternalRuntimeProbeResult[] } }>(
-    apiUrl('/api/agents/external-runtimes'),
+    apiUrl(`/api/agents/external-runtimes${query ? `?${query}` : ''}`),
   );
   if (!Array.isArray(response.payload?.runtimes)) {
     throw new Error('Invalid /api/agents/external-runtimes response');
   }
   return response.payload.runtimes;
+}
+
+export async function quickSetupExternalAgentRuntimes(
+  items: QuickSetupExternalRuntimeItem[],
+): Promise<QuickSetupExternalRuntimesPayload> {
+  const response = await fetchJson<{ payload?: QuickSetupExternalRuntimesPayload }>(
+    apiUrl('/api/agents/external-runtimes/quick-setup'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    },
+  );
+  if (!response.payload?.agents || !Array.isArray(response.payload.results)) {
+    throw new Error('Invalid /api/agents/external-runtimes/quick-setup response');
+  }
+  await refresh(response.payload.agents);
+  return response.payload;
 }
 
 export async function probeExternalAgentRuntime(

@@ -19,6 +19,7 @@ import {
   getDiscussion,
   retryDiscussion,
   getDiscussionCaptureSettings,
+  getDiscussionRecordingPreflight,
   getDiscussionTranscript,
   unlinkDiscussionProject,
   uploadDiscussionSegment,
@@ -58,6 +59,8 @@ function formatDuration(durationMs: number): string {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+type RecordingStart = { projectId?: string; audioMode?: DiscussionAudioCaptureMode };
+
 export function GlobalDiscussionCaptureHost() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -75,10 +78,13 @@ export function GlobalDiscussionCaptureHost() {
   }, []);
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).notes.discussionCapture;
+  const preparingTitle = language === 'zh' ? '准备录音' : 'Preparing to record';
   const recorder = useDiscussionRecorder();
   const openedResultNote = useRef(false);
   const startInFlight = useRef(false);
   const [preparing, setPreparing] = useState(false);
+  const [startIssue, setStartIssue] = useState<(RecordingStart & { message: string }) | null>(null);
+  const [sharedAudioStart, setSharedAudioStart] = useState<{ projectId?: string; policyVersion: number } | null>(null);
   const [compact, setCompact] = useState(false);
   const [visible, setVisible] = useState(false);
   const [consentVersion, setConsentVersion] = useState<number | null>(null);
@@ -190,7 +196,19 @@ export function GlobalDiscussionCaptureHost() {
     }
   }, []);
 
-  const beginRecording = useCallback(async (projectId: string | undefined, policyVersion: number, audioMode?: DiscussionAudioCaptureMode) => {
+  const requireRecordingDecoder = useCallback(async () => {
+    const result = await getDiscussionRecordingPreflight().catch(() => {
+      throw new Error(copy.preflight.unreachable);
+    });
+    if (result.available === true) return;
+    const platform = result.platform;
+    const guidance = platform === 'darwin' ? copy.preflight.macos
+      : platform === 'win32' ? copy.preflight.windows
+        : platform === 'linux' ? copy.preflight.linux : copy.preflight.other;
+    throw new Error(`${copy.preflight.unavailable} ${guidance}`);
+  }, [copy.preflight]);
+
+  const beginRecording = useCallback(async (projectId: string | undefined, policyVersion: number, acquiredAudio?: AcquiredDiscussionAudio) => {
     openedResultNote.current = false; setCaptureSyncError(null);
     setCompact(false);
     setConsentVersion(null);
@@ -207,7 +225,7 @@ export function GlobalDiscussionCaptureHost() {
     setLocalReleased(false); setAnnotationSyncFailed(false); setLocallyFinalized(null); setSyncStage('pending');
     const draft = await recorder.start({
       ...(projectId ? { projectId } : {}),
-      ...(audioMode && audioMode !== 'microphone' ? { audioMode } : {}),
+      ...(acquiredAudio ? { audioMode: acquiredAudio.mode, acquiredAudio } : {}),
       consentPolicyVersion: policyVersion,
       gatewayUrl,
       onLiveSegment: uploadLiveSegment,
@@ -237,6 +255,32 @@ export function GlobalDiscussionCaptureHost() {
     }
   }, [connectSegmentQueue, copy.saveFailed, flushLiveOutline, recorder, uploadLiveSegment, gatewayUrl, language]);
 
+  const startCheckedRecording = useCallback(async (projectId: string | undefined, policyVersion: number, audioMode?: DiscussionAudioCaptureMode) => {
+    try {
+      await requireRecordingDecoder();
+      if (audioMode === 'meeting_mix') {
+        // The browser's share picker needs a user gesture after the network request.
+        setSharedAudioStart({ projectId, policyVersion });
+        return;
+      }
+      await beginRecording(projectId, policyVersion);
+    } catch (error) {
+      setStartIssue({ projectId, audioMode, message: error instanceof Error ? error.message : copy.saveFailed });
+    }
+  }, [beginRecording, copy.saveFailed, requireRecordingDecoder]);
+
+  const startSharedAudio = async () => {
+    if (!sharedAudioStart || startInFlight.current) return;
+    startInFlight.current = true; setPreparing(true); setSharedAudioStart(null);
+    const { projectId, policyVersion } = sharedAudioStart;
+    try {
+      const acquiredAudio = await acquireDiscussionAudioStream('meeting_mix');
+      await beginRecording(projectId, policyVersion, acquiredAudio);
+    } catch (error) {
+      setStartIssue({ projectId, audioMode: 'meeting_mix', message: error instanceof Error ? error.message : copy.saveFailed });
+    } finally { startInFlight.current = false; setPreparing(false); }
+  };
+
   useEffect(() => () => segmentQueueAbortRef.current?.abort(), []);
 
   useEffect(() => {
@@ -249,10 +293,13 @@ export function GlobalDiscussionCaptureHost() {
   }, [detail?.note.id, flushLiveOutline, liveOutline]);
 
   const prepareStart = useCallback(async (projectId?: string, audioMode?: DiscussionAudioCaptureMode) => {
-    if (!token || startInFlight.current || finishing) return;
+    if (!token || startInFlight.current || busyRecovery.current || finishing) return;
     if (['recording', 'waiting_for_audio', 'requesting_permission', 'paused', 'stopping'].includes(recorder.phase)) { setVisible(true); setCompact(false); return; }
     startInFlight.current = true; setPreparing(true);
     setVisible(true);
+    setCompact(false);
+    setStartIssue(null);
+    setSharedAudioStart(null);
     setOperationError(null);
     try {
       const settings = readDiscussionConsent() ?? await getDiscussionCaptureSettings();
@@ -263,11 +310,11 @@ export function GlobalDiscussionCaptureHost() {
         setConsentVersion(settings.consentPolicyVersion);
         return;
       }
-      await beginRecording(projectId, settings.consentPolicyVersion, audioMode);
+      await startCheckedRecording(projectId, settings.consentPolicyVersion, audioMode);
     } catch (error) {
-      setOperationError(error instanceof Error ? error.message : copy.saveFailed);
+      setStartIssue({ projectId, audioMode, message: error instanceof Error ? error.message : copy.saveFailed });
     } finally { startInFlight.current = false; setPreparing(false); }
-  }, [beginRecording, copy.saveFailed, finishing, recorder.phase, token]);
+  }, [startCheckedRecording, copy.saveFailed, finishing, recorder.phase, token]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -326,7 +373,7 @@ export function GlobalDiscussionCaptureHost() {
         setPendingRecovery(null);
         await recoverDraft(candidate);
       } else {
-        await beginRecording(pendingProjectId, consentVersion, pendingAudioMode);
+        await startCheckedRecording(pendingProjectId, consentVersion, pendingAudioMode);
       }
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
@@ -572,7 +619,7 @@ export function GlobalDiscussionCaptureHost() {
   };
 
   const continueDraft = async (candidate: DiscussionDraft) => {
-    if (busyRecovery.current || finishInFlightRef.current || ['recording', 'waiting_for_audio', 'paused', 'requesting_permission', 'stopping'].includes(recorder.phase)) return;
+    if (startInFlight.current || busyRecovery.current || finishInFlightRef.current || activeRecording) return;
     busyRecovery.current = true; setRecovering(true); setOperationError(null);
     try {
       if (candidate.gatewayUrl !== gatewayUrl) throw new Error('Return to the original Gateway before continuing.');
@@ -580,10 +627,12 @@ export function GlobalDiscussionCaptureHost() {
       if (candidate.sealRequested) throw new Error('Recover and sync this submitted recording first.');
       const existing = candidate.serverDiscussionId ? await getDiscussion(candidate.serverDiscussionId) : null;
       if (existing && (existing.discussion.audioAttachmentId || existing.recordingJob || !['recording', 'needs_attention'].includes(existing.discussion.status))) throw new Error('Recover and sync this submitted recording first.');
+      await requireRecordingDecoder();
       const resumed = await recorder.start({ continuation: candidate, gatewayUrl, onLiveSegment: uploadLiveSegment });
       if (!resumed) return;
       createPromiseRef.current = existing ? Promise.resolve(existing) : null;
       setDetail(existing); setTranscript(null); setLocalReleased(false); setAnnotationSyncFailed(false); setLocallyFinalized(null); setSyncStage('pending');
+      setStartIssue(null); setSharedAudioStart(null);
       setShowRecoveries(false); setVisible(true); recordingSessionRef.current = true;
     } catch (error) { setOperationError(error instanceof Error ? error.message : copy.saveFailed); }
     finally { busyRecovery.current = false; setRecovering(false); }
@@ -680,8 +729,20 @@ export function GlobalDiscussionCaptureHost() {
     );
   }
 
-  if (preparing && !['recording','paused','waiting_for_audio','requesting_permission'].includes(recorder.phase)) return <RecordingFloatingPanel compact={compact} onCompactChange={setCompact} language={language} title={language === 'zh' ? '准备录音' : 'Preparing to record'}>
+  if (preparing && !['recording','paused','waiting_for_audio','requesting_permission'].includes(recorder.phase)) return <RecordingFloatingPanel compact={compact} onCompactChange={setCompact} language={language} title={preparingTitle}>
     <div className="space-y-3 p-4" role="status"><Skeleton className="h-7 w-24" /><Skeleton className="h-3 w-3/4" /></div>
+  </RecordingFloatingPanel>;
+
+  if (startIssue || sharedAudioStart) return <RecordingFloatingPanel compact={compact} onCompactChange={setCompact} language={language}
+    title={startIssue ? copy.preflight.blocked : preparingTitle}>
+    <div className="space-y-3 p-4">
+      {startIssue ? <p role="alert" className="text-sm text-fg">{startIssue.message}</p> : null}
+      <div className="flex justify-end gap-2">
+        <Button onClick={() => { setStartIssue(null); setSharedAudioStart(null); setVisible(false); }}>{copy.close}</Button>
+        {startIssue ? <Button variant="primary" onClick={() => void prepareStart(startIssue.projectId, startIssue.audioMode)}>{copy.preflight.retry}</Button>
+          : <Button variant="primary" onClick={() => void startSharedAudio()}>{copy.preflight.shareAudio}</Button>}
+      </div>
+    </div>
   </RecordingFloatingPanel>;
 
   const active = ['recording', 'paused', 'requesting_permission', 'waiting_for_audio'].includes(recorder.phase);

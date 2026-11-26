@@ -1,9 +1,8 @@
-import { accessSync, constants as fsConstants, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { delimiter, extname, isAbsolute, join, resolve } from 'node:path';
+import { join } from 'node:path';
 
 import { readProcessStdoutSync } from '../../../../process/run-process.js';
-import { resolveUserPath } from '../../../agent-scope.js';
+import { collectHostExecutableCandidates } from '../../executable-search.js';
 
 type ParsedCodexVersion = {
   major: number;
@@ -14,21 +13,6 @@ type ParsedCodexVersion = {
 };
 
 const versionCache = new Map<string, ParsedCodexVersion | null>();
-
-function executableStat(candidate: string): { mtimeMs: number } | undefined {
-  try {
-    const stat = statSync(candidate);
-    if (!stat.isFile()) return undefined;
-    if (process.platform !== 'win32') accessSync(candidate, fsConstants.X_OK);
-    return { mtimeMs: stat.mtimeMs };
-  } catch {
-    return undefined;
-  }
-}
-
-function isExecutableFile(candidate: string): boolean {
-  return Boolean(executableStat(candidate));
-}
 
 export function parseCodexVersion(raw: string): ParsedCodexVersion | null {
   const match = raw.match(/(\d+)\.(\d+)\.(\d+)(?:-([\w.-]+))?/);
@@ -79,46 +63,13 @@ function macOsBundledCodexCandidates(): string[] {
 }
 
 export function findCodexExecutable(configuredPath?: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const raw = configuredPath?.trim() || env.XOPC_CODEX_BIN?.trim();
-  if (raw) {
-    const resolved = raw.includes('/') || raw.includes('\\') || raw.startsWith('~')
-      ? resolveUserPath(raw)
-      : raw;
-    if (isAbsolute(resolved)) return isExecutableFile(resolved) ? resolved : undefined;
-    const exts = process.platform === 'win32' && !extname(resolved)
-      ? ['', ...(env.PATHEXT ?? '.EXE;.CMD;.BAT').split(';').filter(Boolean)]
-      : [''];
-    for (const dir of (env.PATH ?? '').split(delimiter).filter(Boolean)) {
-      for (const ext of exts) {
-        const candidate = resolve(dir, `${resolved}${ext}`);
-        if (isExecutableFile(candidate)) return candidate;
-      }
-    }
-    return undefined;
-  }
-
-  const exts = process.platform === 'win32'
-    ? ['', ...(env.PATHEXT ?? '.EXE;.CMD;.BAT').split(';').filter(Boolean)]
-    : [''];
-  const candidates: Array<{ path: string; mtimeMs: number }> = [];
-  const seen = new Set<string>();
-  const addCandidate = (candidatePath: string) => {
-    const normalized = resolve(candidatePath);
-    if (seen.has(normalized)) return;
-    const stat = executableStat(normalized);
-    if (!stat) return;
-    seen.add(normalized);
-    candidates.push({ path: normalized, mtimeMs: stat.mtimeMs });
-  };
-
-  for (const dir of (env.PATH ?? '').split(delimiter).filter(Boolean)) {
-    for (const ext of exts) {
-      addCandidate(resolve(dir, `codex${ext}`));
-    }
-  }
-  for (const bundled of macOsBundledCodexCandidates()) {
-    addCandidate(bundled);
-  }
+  const candidates = collectHostExecutableCandidates({
+    names: ['codex'],
+    configuredPath,
+    envVar: 'XOPC_CODEX_BIN',
+    extraExecutablePaths: macOsBundledCodexCandidates(),
+    env,
+  });
 
   if (candidates.length === 0) return undefined;
   if (candidates.length === 1) return candidates[0]!.path;

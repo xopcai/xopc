@@ -46,10 +46,12 @@ private struct AvatarLoadKey: Hashable {
 }
 
 struct ConfiguredAgentAvatar: View {
+    @Environment(\.locale) private var locale
     let configuration: GatewayConfiguration
     let agent: AgentSummary?
     let size: CGFloat
     let active: Bool
+    var resolveUnconfigured = true
     @State private var picture: UIImage?
 
     var body: some View {
@@ -61,7 +63,9 @@ struct ConfiguredAgentAvatar: View {
             } else if let name = agent?.builtInAvatar {
                 Image(name).resizable().scaledToFit().frame(width: size, height: size).clipShape(Circle())
             } else {
-                Text(verbatim: String((agent?.id ?? "").prefix(1)).uppercased())
+                Text(verbatim: (agent?.localizedName(locale).uppercased().first).map(String.init) ?? "?")
+                    .font(size <= 24 ? .caption2.weight(.medium) : .body)
+                    .lineLimit(1)
                     .frame(width: size, height: size).background(Color.accentColor.opacity(0.12), in: Circle())
             }
         }
@@ -69,6 +73,7 @@ struct ConfiguredAgentAvatar: View {
         .task(id: ConfiguredAvatarKey(configuration: configuration, agentID: agent?.id, reference: agent?.avatar)) {
             picture = nil
             guard let agent, !agent.id.isEmpty, agent.avatar?.hasPrefix("xopc:loopi:") != true else { return }
+            guard resolveUnconfigured || agent.avatar?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
             do {
                 let data: Data
                 if let reference = agent.avatar, let url = URL(string: reference), url.scheme == "https" {

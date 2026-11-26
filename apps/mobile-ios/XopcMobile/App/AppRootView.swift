@@ -30,6 +30,7 @@ struct AppRootView: View {
     @State private var homeRetry = 0
     @State private var pendingAttention = 0
     @State private var defaultAgentID = "main"
+    @State private var sidebarAgents: [String: AgentSummary] = [:]
     @State private var messageLinks = ChatMessageLinkRouter()
     @State private var music = GeneratedMusicPlayback.shared
     @State private var musicSourceToOpen: GeneratedMusicTrack?
@@ -220,12 +221,7 @@ struct AppRootView: View {
             }
         }
         .task(id: appState.gatewayConfiguration) {
-            let configuration = appState.gatewayConfiguration
-            if let catalog = try? await GatewayClient(configuration: configuration).fetchAgents(),
-               !Task.isCancelled, configuration == appState.gatewayConfiguration
-            {
-                defaultAgentID = catalog.defaultId
-            }
+            await loadSidebarAgents(using: appState.gatewayConfiguration)
         }
         .task(id: HomeChatLoad(configuration: appState.gatewayConfiguration,
                                needsSelection: appState.selectedConversation == nil, retry: homeRetry))
@@ -246,7 +242,10 @@ struct AppRootView: View {
             if !recentLoading, recentsAreStale {
                 recentRevision += 1
             }
-            await loadAttention(using: appState.gatewayConfiguration)
+            let configuration = appState.gatewayConfiguration
+            async let agents: Void = loadSidebarAgents(using: configuration)
+            await loadAttention(using: configuration)
+            await agents
         }
         .onChange(of: ComposerDraftStore.accountScope(appState.gatewayConfiguration)) {
             setSidebar(false)
@@ -259,6 +258,7 @@ struct AppRootView: View {
             recentError = false
             pendingAttention = 0
             defaultAgentID = "main"
+            sidebarAgents = [:]
         }
         .onChange(of: appState.selectedConversation?.isDraft) { wasDraft, isDraft in
             if wasDraft == true, isDraft == false {
@@ -437,7 +437,7 @@ struct AppRootView: View {
         let selectedID = projectChat.conversationID ?? appState.selectedConversation?.id
         return ChatSidebarView(configuration: configuration, personal: personalAgent.record(using: configuration),
                                openingPersonal: personalAgent.isOpening, selectedID: selectedID,
-                               recent: recents ?? [], recentNextOffset: recents == nil ? nil : recentNextOffset,
+                               recent: recents ?? [], agents: sidebarAgents, recentNextOffset: recents == nil ? nil : recentNextOffset,
                                recentLoading: recentLoading || (recents == nil && !recentError), recentError: recentError,
                                attention: pendingAttention, personalUnread: personalAgent.unread(using: configuration)?.unreadCount ?? 0,
                                isPresented: sidebarPresented, onClose: { setSidebar(false) },
@@ -623,6 +623,13 @@ struct AppRootView: View {
 
     private var canDragSidebar: Bool {
         appState.homePath.isEmpty && !sidebarOpen && !composerFocused && !phoneVisible && !actionPanelVisible
+    }
+
+    private func loadSidebarAgents(using configuration: GatewayConfiguration) async {
+        guard let catalog = try? await GatewayClient(configuration: configuration).fetchAgents(),
+              !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
+        defaultAgentID = catalog.defaultId
+        sidebarAgents = Dictionary(catalog.agents.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     private func restoreRecents(using configuration: GatewayConfiguration) async {

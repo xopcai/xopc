@@ -967,6 +967,18 @@ export const codexExternalDriver: ExternalAgentDriver = {
     }
   },
 
+  detectInstalled(execution?: ExternalAgentExecution) {
+    const codexConfig = codexOptionsFromExecution(execution);
+    const executablePath = findCodexExecutable(codexConfig?.binaryPath);
+    return {
+      kind: 'codex' as const,
+      label: 'Codex',
+      installed: Boolean(executablePath),
+      ...(executablePath ? { executablePath } : {}),
+      checkedAt: Date.now(),
+    };
+  },
+
   async probe(execution?: ExternalAgentExecution): Promise<ExternalRuntimeProbeResult> {
     const checkedAt = Date.now();
     const codexConfig = codexOptionsFromExecution(execution);

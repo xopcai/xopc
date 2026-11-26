@@ -59,6 +59,14 @@ export type ExternalRuntimeAccountInfo = {
   authMode?: string;
 };
 
+export type ExternalRuntimeFastDetection = {
+  kind: ExternalAgentKind;
+  label: string;
+  installed: boolean;
+  executablePath?: string;
+  checkedAt: number;
+};
+
 export type ExternalRuntimeProbeResult = {
   kind: ExternalAgentKind;
   label: string;
@@ -274,6 +282,7 @@ export interface ExternalAgentDriver {
   readonly defaultModelName: string;
   readonly capabilities: ExternalRuntimeCapabilities;
   runTurn(context: ExternalDriverTurnContext): Promise<void>;
+  detectInstalled?(execution?: ExternalAgentExecution): ExternalRuntimeFastDetection;
   probe(execution?: ExternalAgentExecution): Promise<ExternalRuntimeProbeResult>;
   compactSession?(context: ExternalSessionControlContext): Promise<{ compacted: boolean; summary?: string }>;
   forkSession?(context: ExternalSessionControlContext): Promise<{ nativeSessionId: string; resumeCursor?: string } | null>;

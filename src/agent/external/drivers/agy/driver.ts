@@ -1,11 +1,12 @@
-import { accessSync, constants as fsConstants, statSync } from 'node:fs';
-import { delimiter, isAbsolute, join } from 'node:path';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 import type { AgyExecution, ExternalAgentExecution } from '../../../../agent-config/schema.js';
 import { resolveUserPath } from '../../../agent-scope.js';
-import { buildExternalRuntimeEnv } from '../../runtime-env.js';
 import { createAcpExternalDriver } from '../../acp/acp-driver.js';
 import { AcpRpcError, asRecord } from '../../acp/json-rpc-client.js';
+import { findHostExecutable } from '../../executable-search.js';
+import { buildExternalRuntimeEnv } from '../../runtime-env.js';
 
 const ANTIGRAVITY_AUTH_STDOUT_PREFIX = 'Open the following link to authenticate the ACP server: ';
 const NATIVE_CLI_NO_BROWSER_PREFIX = 'No browser is available here';
@@ -14,47 +15,33 @@ const SIGN_IN_REQUIRED_MESSAGE =
 const NOT_FOUND_MESSAGE =
   'Antigravity CLI (agy) was not found on the Gateway host. Install agy and sign in there, or set a custom binary path.';
 
-function isExecutableFile(candidate: string): boolean {
-  try {
-    if (!statSync(candidate).isFile()) return false;
-    if (process.platform !== 'win32') accessSync(candidate, fsConstants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function findInPath(names: ReadonlyArray<string>, env: NodeJS.ProcessEnv): string | undefined {
-  const pathEnv = env.PATH ?? '';
-  const dirs = pathEnv.split(delimiter).filter(Boolean);
-  const exts = process.platform === 'win32'
-    ? (env.PATHEXT ?? '.EXE;.CMD;.BAT').split(';').filter(Boolean)
-    : [''];
-  for (const name of names) {
-    for (const dir of dirs) {
-      for (const ext of exts) {
-        const candidate = join(dir, `${name}${ext}`);
-        if (isExecutableFile(candidate)) return candidate;
-      }
-    }
-  }
-  return undefined;
-}
-
 function agyConfigFromExecution(execution?: ExternalAgentExecution): AgyExecution | undefined {
   return execution?.kind === 'agy' ? execution : undefined;
 }
 
-export function findAgyExecutable(configuredPath?: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const raw = configuredPath?.trim() || env.XOPC_AGY_BIN?.trim();
-  if (raw) {
-    const resolved = raw.includes('/') || raw.includes('\\') || raw.startsWith('~')
-      ? resolveUserPath(raw)
-      : raw;
-    if (isAbsolute(resolved)) return isExecutableFile(resolved) ? resolved : undefined;
-    return findInPath([resolved], env);
+function extraAgySearchDirs(): string[] {
+  const home = homedir();
+  const dirs = [
+    join(home, '.antigravity', 'bin'),
+    join(home, '.gemini', 'antigravity', 'bin'),
+  ];
+  if (process.platform === 'darwin') {
+    dirs.push(
+      '/Applications/Antigravity.app/Contents/Resources/app/bin',
+      join(home, 'Applications', 'Antigravity.app', 'Contents', 'Resources', 'app', 'bin'),
+    );
   }
-  return findInPath(['agy', 'antigravity'], env);
+  return dirs;
+}
+
+export function findAgyExecutable(configuredPath?: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return findHostExecutable({
+    names: ['agy', 'antigravity'],
+    configuredPath,
+    envVar: 'XOPC_AGY_BIN',
+    extraSearchDirs: extraAgySearchDirs(),
+    env,
+  });
 }
 
 export function resolveAgyCommand(configuredPath?: string, env: NodeJS.ProcessEnv = process.env): string {
@@ -64,7 +51,7 @@ export function resolveAgyCommand(configuredPath?: string, env: NodeJS.ProcessEn
       ? resolveUserPath(raw)
       : raw;
   }
-  return findInPath(['agy', 'antigravity'], env) ?? 'agy';
+  return findAgyExecutable(undefined, env) ?? 'agy';
 }
 
 export function buildAgyEnv(baseEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {

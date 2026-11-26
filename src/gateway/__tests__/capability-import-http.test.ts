@@ -40,7 +40,7 @@ it('imports only selected content through authenticated real Gateway HTTP and la
       return result.data;
     };
     expect((await fetch(base + '/sources')).status).toBe(401);
-    expect((await request('/sources')).sources).toHaveLength(2);
+    expect((await request('/sources')).sources).toHaveLength(3);
     mkdirSync(join(dir, '.claude/skills/http-import-fixture'), { recursive: true });
     writeFileSync(join(dir, '.claude/skills/http-import-fixture/SKILL.md'), '---\nname: http-import-fixture\ndescription: Test import\n---\nRead a file.');
     writeFileSync(join(dir, '.claude/CLAUDE.md'), 'Prefer concise weekly reports.');

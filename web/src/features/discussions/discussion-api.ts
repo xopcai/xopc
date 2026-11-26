@@ -1,4 +1,4 @@
-import type { DiscussionRecordingJob, DiscussionRecordingManifest } from '@xopcai/gateway-contract';
+import type { DiscussionRecordingJob, DiscussionRecordingManifest, DiscussionRecordingPreflight } from '@xopcai/gateway-contract';
 
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -11,6 +11,10 @@ import type {
 
 export function getDiscussionCaptureSettings(): Promise<DiscussionCaptureSettings> {
   return fetchJson(apiUrl('/api/discussion-capture/settings'));
+}
+
+export function getDiscussionRecordingPreflight(): Promise<DiscussionRecordingPreflight> {
+  return fetchJson(apiUrl('/api/discussion-capture/preflight'), { cache: 'no-store', signal: AbortSignal.timeout(10_000) });
 }
 
 export function acknowledgeDiscussionConsent(consentPolicyVersion: number): Promise<DiscussionCaptureSettings> {

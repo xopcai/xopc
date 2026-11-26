@@ -1257,6 +1257,17 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
       }
     },
 
+    detectInstalled(execution?: ExternalAgentExecution) {
+      const executablePath = config.findExecutable?.(execution);
+      return {
+        kind: config.kind,
+        label: config.label,
+        installed: config.findExecutable ? Boolean(executablePath) : true,
+        ...(executablePath ? { executablePath } : {}),
+        checkedAt: Date.now(),
+      };
+    },
+
     async probe(execution?: ExternalAgentExecution): Promise<ExternalRuntimeProbeResult> {
       const checkedAt = Date.now();
       const cwd = tmpdir();

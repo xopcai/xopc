@@ -1,7 +1,8 @@
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
+import { delimiter, dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -305,9 +306,76 @@ export interface GatewayProcessOptions {
   onUnexpectedExit?: (code: number | null, signal: string | null) => void;
 }
 
+let cachedHydratedUnixPath: string | undefined;
+
+/**
+ * Packaged macOS/Linux Electron apps launched from Dock/GUI inherit a minimal launchd PATH
+ * (typically `/usr/bin:/bin:/usr/sbin:/sbin`), hiding Homebrew, nvm, volta, pnpm, and `~/.local/bin`.
+ * Merge login-shell PATH (best-effort, bounded timeout) with common user tool directories once per process.
+ */
+function resolveGatewayChildPath(basePath: string | undefined): string | undefined {
+  if (process.platform === 'win32') return basePath;
+  if (cachedHydratedUnixPath !== undefined) return cachedHydratedUnixPath;
+
+  const entries: string[] = [];
+  const seen = new Set<string>();
+  const appendPathString = (raw: string | undefined) => {
+    if (!raw) return;
+    for (const part of raw.split(delimiter)) {
+      const trimmed = part.trim();
+      if (!trimmed || seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      entries.push(trimmed);
+    }
+  };
+
+  appendPathString(basePath);
+
+  if (app.isPackaged) {
+    const shell = process.env.SHELL?.trim() || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash');
+    const marker = '__XOPC_LOGIN_PATH__';
+    try {
+      const res = spawnSync(shell, ['-lc', `printf '${marker}%s${marker}' "$PATH"`], {
+        encoding: 'utf8',
+        timeout: 1_500,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      if (res && res.status === 0 && typeof res.stdout === 'string') {
+        const start = res.stdout.indexOf(marker);
+        const end = start >= 0 ? res.stdout.indexOf(marker, start + marker.length) : -1;
+        if (start >= 0 && end > start) {
+          appendPathString(res.stdout.slice(start + marker.length, end));
+        }
+      }
+    } catch {
+      // Fall back silently to static well-known tool directories.
+    }
+  }
+
+  const home = homedir();
+  for (const fallback of [
+    '/opt/homebrew/bin',
+    '/opt/homebrew/sbin',
+    '/usr/local/bin',
+    join(home, '.local', 'bin'),
+    join(home, '.npm-global', 'bin'),
+    join(home, '.pnpm-global', 'bin'),
+    ...(process.platform === 'darwin' ? [join(home, 'Library', 'pnpm')] : [join(home, '.local', 'share', 'pnpm')]),
+    join(home, '.volta', 'bin'),
+    join(home, '.bun', 'bin'),
+    join(home, '.cargo', 'bin'),
+  ]) {
+    appendPathString(fallback);
+  }
+
+  cachedHydratedUnixPath = entries.length > 0 ? entries.join(delimiter) : basePath;
+  return cachedHydratedUnixPath;
+}
+
 export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
   const cli = resolveCliEntry();
   const isPackaged = app.isPackaged;
+  const childPath = resolveGatewayChildPath(process.env.PATH);
   clearGatewayLogBuffer();
   const logDir = process.env.XOPC_LOG_DIR || join(dirname(opts.configPath), 'logs');
   const writeDiagnostic = createProcessDiagnosticWriter(join(logDir, 'gateway-supervisor.log'));
@@ -332,6 +400,7 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
     {
       env: {
         ...process.env,
+        ...(childPath ? { PATH: childPath } : {}),
         ...(!process.env.HTTPS_PROXY && !process.env.https_proxy && opts.proxyUrl
           ? { HTTPS_PROXY: opts.proxyUrl, HTTP_PROXY: opts.proxyUrl }
           : {}),

@@ -8,9 +8,11 @@ import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { closeXopcDatabase } from '../../storage/sqlite/index.js';
 import {
   createGatewayAgent,
+  deleteGatewayAgent,
   getGatewayAgentEffectiveConfig,
   listAgentProfileFiles,
   listGatewayAgents,
+  quickSetupExternalGatewayAgents,
   readAgentProfileFile,
   resolveAgentAvatarImage,
   updateGatewayAgent,
@@ -253,5 +255,54 @@ describe('agents admin', () => {
       expect(codexImg.data.buffer.equals(agyImg.data.buffer)).toBe(false);
       expect(codexImg.data.buffer.equals(legacyImg.data.buffer)).toBe(true);
     }
+  });
+
+  it('idempotently provisions external runtime agents with full_access and read_write defaults and avoids soft-delete id collisions', async () => {
+    const first = await quickSetupExternalGatewayAgents([
+      { kind: 'codex' },
+      { kind: 'claude' },
+      { kind: 'codex' }, // duplicate kind in same batch is ignored
+    ]);
+    expect(first).toEqual([
+      { kind: 'codex', agentId: 'codex', created: true, status: 'ok' },
+      { kind: 'claude', agentId: 'claude-code', created: true, status: 'ok' },
+    ]);
+
+    const repo = new AgentCatalogRepository();
+    expect(repo.get('codex')).toMatchObject({
+      id: 'codex',
+      profile: { name: 'Codex', avatar: 'xopc:runtime:codex' },
+      execution: { kind: 'codex', permissionMode: 'full_access', contextAccess: 'read_write' },
+    });
+    expect(repo.get('claude-code')).toMatchObject({
+      id: 'claude-code',
+      profile: { name: 'Claude Code', avatar: 'xopc:runtime:claude' },
+      execution: { kind: 'claude', permissionMode: 'full_access', contextAccess: 'read_write' },
+    });
+
+    // Second call reuses existing active agents without duplicating
+    const second = await quickSetupExternalGatewayAgents([
+      { kind: 'codex', permissionMode: 'ask' },
+      { kind: 'agy', permissionMode: 'auto_edit', contextAccess: 'read_only' },
+    ]);
+    expect(second).toEqual([
+      { kind: 'codex', agentId: 'codex', created: false, reusedExisting: true, status: 'ok' },
+      { kind: 'agy', agentId: 'antigravity', created: true, status: 'ok' },
+    ]);
+    expect(repo.get('antigravity')?.execution).toEqual({
+      kind: 'agy',
+      permissionMode: 'auto_edit',
+      contextAccess: 'read_only',
+    });
+
+    // Deleting codex and re-running quick-setup succeeds cleanly; if id 'codex' is already taken by another agent, allocates 'codex-2'.
+    const deleted = await deleteGatewayAgent('codex');
+    expect(deleted.ok).toBe(true);
+    const nonExternal = await createGatewayAgent({ id: 'codex', profile: { name: 'Custom Codex' } });
+    expect(nonExternal.ok).toBe(true);
+    const recreated = await quickSetupExternalGatewayAgents([{ kind: 'codex' }]);
+    expect(recreated).toEqual([
+      { kind: 'codex', agentId: 'codex-2', created: true, status: 'ok' },
+    ]);
   });
 });

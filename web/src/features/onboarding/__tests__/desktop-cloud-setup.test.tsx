@@ -19,6 +19,7 @@ vi.mock('@/components/brand/loopi', () => ({ Loopi: () => null }));
 vi.mock('@/features/onboarding/desktop-onboarding-bootstrap', () => ({
   ensureDefaultPersonalAgent: api.ensurePersonal,
   prefetchDesktopOnboardingContext: api.prefetch,
+  prefetchExternalRuntimesFast: vi.fn(async () => []),
 }));
 vi.mock('@/features/settings/models-hub/connected-providers-grid', () => ({
   useConnectedProviders: () => ({ cards: [{ id: 'xopc-cloud', configured: api.connected }], builtinRows: [], loading: false }),

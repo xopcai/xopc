@@ -14,25 +14,16 @@ import {
   Terminal,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { mutate as globalMutate } from 'swr';
 
 import { ExternalRuntimeAvatar } from '@/components/brand/external-runtime-avatar';
 import { externalRuntimeLabel } from '@/components/brand/external-runtime-badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { invalidateAgentRuntimeModelsCache } from '@/features/chat/api/registry-api';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
+import { probeExternalAgentRuntime } from '@/features/settings/agents-admin-api';
+import { useExternalRuntimeAuth } from '@/features/settings/agents/use-external-runtime-auth';
 import {
-  cancelExternalRuntimeAuthFlow,
-  fetchExternalRuntimeAuthFlow,
-  logoutExternalAgentRuntime,
-  probeExternalAgentRuntime,
-  respondExternalRuntimeAuthFlow,
-  startExternalRuntimeAuth,
-} from '@/features/settings/agents-admin-api';
-import {
-  closeOAuthAuthorizationWindow,
   openOAuthAuthorizationUrl,
   reserveOAuthAuthorizationWindow,
 } from '@/features/settings/oauth-authorization-window';
@@ -45,8 +36,6 @@ import {
   type ExternalAgentKind,
   type ExternalContextAccess,
   type ExternalPermissionMode,
-  type ExternalRuntimeAuthFlowSnapshot,
-  type ExternalRuntimeAuthMode,
   type ExternalRuntimeProbeResult,
   type ExternalRuntimeStatus,
   type GatewayAgentRow,
@@ -59,7 +48,6 @@ const inputClass =
 
 const CUSTOM_MODEL_SENTINEL = '__custom__';
 const AUTO_MODEL_SENTINEL = '__auto__';
-const AUTH_POLL_INTERVAL_MS = 1_200;
 
 export function externalRuntimeDisplayName(kind: ExternalAgentKind): string {
   if (kind === 'codex') return 'Codex';
@@ -477,27 +465,34 @@ export function ExternalRuntimeConfigForm({
   const [probeError, setProbeError] = useState<string | null>(null);
   const [customModelMode, setCustomModelMode] = useState(false);
 
-  // In-UI OAuth / login state
-  const [authFlow, setAuthFlow] = useState<ExternalRuntimeAuthFlowSnapshot | null>(null);
-  const [authBusy, setAuthBusy] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authSuccessNotice, setAuthSuccessNotice] = useState<string | null>(null);
-  const [responseInput, setResponseInput] = useState('');
-  const [submittingResponse, setSubmittingResponse] = useState(false);
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [loggingOut, setLoggingOut] = useState(false);
-
   const requestSeq = useRef(0);
   const latestValueRef = useRef(value);
   latestValueRef.current = value;
-  const popupRef = useRef<Window | null>(null);
-  const openedUrlRef = useRef<string | null>(null);
 
-  const syncGlobalRuntimeCache = useCallback(() => {
-    void globalMutate('settings-external-agent-runtimes');
-    void invalidateAgentRuntimeModelsCache();
-  }, []);
+  const {
+    authFlow,
+    authBusy,
+    authError,
+    authSuccessNotice,
+    responseInput,
+    setResponseInput,
+    submittingResponse,
+    showApiKeyInput,
+    setShowApiKeyInput,
+    apiKeyInput,
+    setApiKeyInput,
+    loggingOut,
+    isAuthInProgress,
+    handleStartAuth,
+    handleSubmitAuthResponse,
+    handleCancelAuth,
+    handleLogout,
+  } = useExternalRuntimeAuth({
+    execution: value,
+    disabled,
+    zh,
+    onProbeUpdated: setProbe,
+  });
 
   const runProbe = useCallback(async (target: ExternalAgentExecution) => {
     const seq = ++requestSeq.current;
@@ -516,174 +511,11 @@ export function ExternalRuntimeConfigForm({
   }, []);
 
   useEffect(() => {
-    setAuthFlow(null);
-    setAuthError(null);
-    setAuthSuccessNotice(null);
-    setResponseInput('');
-    setShowApiKeyInput(false);
-    setApiKeyInput('');
-    openedUrlRef.current = null;
-    closeOAuthAuthorizationWindow(popupRef.current);
-    popupRef.current = null;
     if (initialProbe && initialProbe.kind === value.kind) {
       setProbe(initialProbe);
     }
     void runProbe(latestValueRef.current);
   }, [initialProbe, runProbe, value.kind]);
-
-  // Clean up reserved popup on unmount
-  useEffect(() => () => {
-    closeOAuthAuthorizationWindow(popupRef.current);
-    popupRef.current = null;
-  }, []);
-
-  // Automatically open OAuth authorization URL once received from backend
-  useEffect(() => {
-    const url = authFlow?.authorizationUrl;
-    if (!url || openedUrlRef.current === url) return;
-    openedUrlRef.current = url;
-    void openOAuthAuthorizationUrl(url, popupRef.current);
-  }, [authFlow?.authorizationUrl]);
-
-  // Poll active auth flow until it reaches a terminal state
-  const activeFlowId =
-    authFlow && (authFlow.phase === 'starting' || authFlow.phase === 'waiting' || authFlow.phase === 'verifying')
-      ? authFlow.flowId
-      : null;
-
-  useEffect(() => {
-    if (!activeFlowId) return;
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const next = await fetchExternalRuntimeAuthFlow(activeFlowId);
-        if (cancelled) return;
-        setAuthFlow(next);
-        if (next.phase === 'succeeded') {
-          closeOAuthAuthorizationWindow(popupRef.current);
-          popupRef.current = null;
-          if (next.probe) setProbe(next.probe);
-          setAuthSuccessNotice(next.message ?? (zh ? '登录成功，已同步可用模型。' : 'Signed in and loaded available models.'));
-          setAuthFlow(null);
-          setResponseInput('');
-          syncGlobalRuntimeCache();
-        } else if (next.phase === 'failed' || next.phase === 'cancelled') {
-          closeOAuthAuthorizationWindow(popupRef.current);
-          popupRef.current = null;
-          if (next.probe) setProbe(next.probe);
-        }
-      } catch (cause) {
-        if (!cancelled) {
-          setAuthError(cause instanceof Error ? cause.message : String(cause));
-          setAuthFlow(null);
-          closeOAuthAuthorizationWindow(popupRef.current);
-          popupRef.current = null;
-        }
-      }
-    };
-    const timer = window.setInterval(() => {
-      void poll();
-    }, AUTH_POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [activeFlowId, syncGlobalRuntimeCache, zh]);
-
-  const handleStartAuth = async (mode: ExternalRuntimeAuthMode, apiKey?: string) => {
-    if (disabled || authBusy) return;
-    setAuthBusy(true);
-    setAuthError(null);
-    setAuthSuccessNotice(null);
-    setResponseInput('');
-    openedUrlRef.current = null;
-
-    const usesBrowserWindow = mode === 'browser' || mode === 'device_code';
-    const agyUsesCredentials =
-      value.kind === 'agy' && (value.authMethod === 'gemini-api-key' || value.authMethod === 'agent-platform');
-    if (usesBrowserWindow && !agyUsesCredentials) {
-      closeOAuthAuthorizationWindow(popupRef.current);
-      popupRef.current = reserveOAuthAuthorizationWindow();
-    }
-
-    try {
-      const flow = await startExternalRuntimeAuth({
-        execution: latestValueRef.current,
-        mode,
-        ...(apiKey ? { apiKey } : {}),
-      });
-      if (flow.phase === 'succeeded') {
-        closeOAuthAuthorizationWindow(popupRef.current);
-        popupRef.current = null;
-        if (flow.probe) setProbe(flow.probe);
-        setAuthSuccessNotice(flow.message ?? (zh ? '登录成功。' : 'Signed in successfully.'));
-        setAuthFlow(null);
-        setShowApiKeyInput(false);
-        setApiKeyInput('');
-        syncGlobalRuntimeCache();
-      } else if (flow.phase === 'failed') {
-        closeOAuthAuthorizationWindow(popupRef.current);
-        popupRef.current = null;
-        if (flow.probe) setProbe(flow.probe);
-        setAuthFlow(flow);
-      } else {
-        setAuthFlow(flow);
-        if (flow.authorizationUrl) {
-          openedUrlRef.current = flow.authorizationUrl;
-          void openOAuthAuthorizationUrl(flow.authorizationUrl, popupRef.current);
-        }
-      }
-    } catch (cause) {
-      closeOAuthAuthorizationWindow(popupRef.current);
-      popupRef.current = null;
-      setAuthError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setAuthBusy(false);
-    }
-  };
-
-  const handleSubmitAuthResponse = async () => {
-    if (!authFlow || !responseInput.trim() || submittingResponse) return;
-    setSubmittingResponse(true);
-    setAuthError(null);
-    try {
-      const next = await respondExternalRuntimeAuthFlow(authFlow.flowId, responseInput.trim());
-      setAuthFlow(next);
-      setResponseInput('');
-    } catch (cause) {
-      setAuthError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSubmittingResponse(false);
-    }
-  };
-
-  const handleCancelAuth = async () => {
-    const id = authFlow?.flowId;
-    setAuthFlow(null);
-    setAuthError(null);
-    setResponseInput('');
-    closeOAuthAuthorizationWindow(popupRef.current);
-    popupRef.current = null;
-    if (id) {
-      await cancelExternalRuntimeAuthFlow(id).catch(() => {});
-    }
-  };
-
-  const handleLogout = async () => {
-    if (disabled || loggingOut) return;
-    setLoggingOut(true);
-    setAuthError(null);
-    setAuthSuccessNotice(null);
-    try {
-      const nextProbe = await logoutExternalAgentRuntime(latestValueRef.current);
-      setProbe(nextProbe);
-      syncGlobalRuntimeCache();
-    } catch (cause) {
-      setAuthError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setLoggingOut(false);
-    }
-  };
 
   const discoveredModels = probe?.kind === value.kind ? probe.models : [];
   const savedModel = value.model ?? '';
@@ -703,9 +535,6 @@ export function ExternalRuntimeConfigForm({
   };
 
   const accountBadge = formatAccountBadge(probe);
-  const isAuthInProgress =
-    authFlow !== null
-    && (authFlow.phase === 'starting' || authFlow.phase === 'waiting' || authFlow.phase === 'verifying');
   const canSignIn = Boolean(probe?.installed) && probe?.status !== 'ready' && !isAuthInProgress;
   const agyUsesCredentials =
     value.kind === 'agy' && (value.authMethod === 'gemini-api-key' || value.authMethod === 'agent-platform');

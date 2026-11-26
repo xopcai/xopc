@@ -8,6 +8,7 @@ interface SourceLayout {
   name: string;
   directory: string;
   environment: string;
+  detectPaths?: string[];
   skills: Array<{ base: 'home' | 'root'; path: string; shared: boolean }>;
   projectSkills: string;
   instructions: string[][];
@@ -37,6 +38,20 @@ export const IMPORT_SOURCES: readonly SourceLayout[] = [
     config: { path: '../.claude.json', format: 'json', mcpKey: 'mcpServers' },
     projectConfig: '.mcp.json',
   },
+  {
+    id: 'antigravity', name: 'Antigravity', directory: '.gemini/antigravity', environment: 'XOPC_AGY_GEMINI_DIR',
+    detectPaths: ['.gemini/config/skills', '.gemini/GEMINI.md'],
+    skills: [
+      { base: 'home', path: '.gemini/config/skills', shared: true },
+      { base: 'root', path: 'skills', shared: false },
+    ],
+    projectSkills: '.agent/skills',
+    instructions: [['GEMINI.md'], ['../GEMINI.md']],
+    projectInstructions: [['GEMINI.md'], ['.agent/rules/GEMINI.md']],
+    rules: 'rules', projectRules: '.agent/rules',
+    config: { path: 'mcp_config.json', format: 'json', mcpKey: 'mcpServers' },
+    projectConfig: '.agent/mcp_config.json',
+  },
 ];
 
 export function sourceLayout(source: ImportSource, home?: string, root?: string) {
@@ -46,8 +61,11 @@ export function sourceLayout(source: ImportSource, home?: string, root?: string)
 }
 export function detectImportSources() {
   return IMPORT_SOURCES.map(s => {
-    const { root } = sourceLayout(s.id);
-    return { id: s.id, name: s.name, detected: existsSync(root) || existsSync(join(root, s.config.path)) };
+    const { home, root } = sourceLayout(s.id);
+    const detected = existsSync(root)
+      || existsSync(join(root, s.config.path))
+      || (s.detectPaths?.some(rel => existsSync(join(home, rel))) ?? false);
+    return { id: s.id, name: s.name, detected };
   });
 }
 

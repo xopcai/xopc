@@ -23,7 +23,17 @@ import {
   parseExternalRuntimeAvatar,
   renderExternalRuntimeAvatarSvg,
 } from '../agent/external/index.js';
-import type { AgentEntry, AgentModelsOverride, EffectiveAgentConfig, SkillOverride } from '../agent-config/index.js';
+import type {
+  AgentEntry,
+  AgentModelsOverride,
+  AgyAuthMethod,
+  EffectiveAgentConfig,
+  ExternalAgentExecution,
+  ExternalAgentKind,
+  ExternalContextAccess,
+  ExternalPermissionMode,
+  SkillOverride,
+} from '../agent-config/index.js';
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { AgentCatalogService } from '../agent-catalog/service.js';
 import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
@@ -178,6 +188,131 @@ export async function createGatewayAgent(
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error), status: 400 };
   }
+}
+
+export type QuickSetupExternalRuntimeItem = {
+  kind: ExternalAgentKind;
+  name?: string;
+  model?: string;
+  permissionMode?: ExternalPermissionMode;
+  contextAccess?: ExternalContextAccess;
+  authMethod?: AgyAuthMethod;
+};
+
+export type QuickSetupExternalRuntimeResultItem = {
+  kind: ExternalAgentKind;
+  agentId?: string;
+  created: boolean;
+  reusedExisting?: boolean;
+  status: 'ok' | 'error';
+  error?: string;
+};
+
+const QUICK_SETUP_DEFAULTS: Record<ExternalAgentKind, { baseId: string; name: string }> = {
+  codex: { baseId: 'codex', name: 'Codex' },
+  agy: { baseId: 'antigravity', name: 'Antigravity' },
+  claude: { baseId: 'claude-code', name: 'Claude Code' },
+};
+
+function allocateUniqueExternalAgentId(repo: AgentCatalogRepository, baseId: string): string {
+  if (!repo.get(baseId, { includeDeleted: true })) return baseId;
+  for (let suffix = 2; suffix < 100; suffix += 1) {
+    const candidate = `${baseId}-${suffix}`;
+    if (!repo.get(candidate, { includeDeleted: true })) return candidate;
+  }
+  return `${baseId}-${Date.now().toString(36)}`;
+}
+
+function buildQuickSetupExecution(item: QuickSetupExternalRuntimeItem): ExternalAgentExecution {
+  const permissionMode: ExternalPermissionMode = item.permissionMode ?? 'full_access';
+  const contextAccess: ExternalContextAccess = item.contextAccess ?? 'read_write';
+  const model = item.model?.trim() || undefined;
+  if (item.kind === 'agy') {
+    return {
+      kind: 'agy',
+      permissionMode,
+      contextAccess,
+      ...(model ? { model } : {}),
+      ...(item.authMethod ? { authMethod: item.authMethod } : {}),
+    };
+  }
+  if (item.kind === 'claude') {
+    return {
+      kind: 'claude',
+      permissionMode,
+      contextAccess,
+      ...(model ? { model } : {}),
+    };
+  }
+  return {
+    kind: 'codex',
+    permissionMode,
+    contextAccess,
+    ...(model ? { model } : {}),
+  };
+}
+
+/**
+ * Idempotently provision one or more host-installed external runtime agents for onboarding.
+ * Reuses an active agent of the same kind when present, and avoids 409 collisions with soft-deleted ids.
+ */
+export async function quickSetupExternalGatewayAgents(
+  items: ReadonlyArray<QuickSetupExternalRuntimeItem>,
+): Promise<QuickSetupExternalRuntimeResultItem[]> {
+  const repo = new AgentCatalogRepository();
+  const catalogService = new AgentCatalogService();
+  const seenKinds = new Set<ExternalAgentKind>();
+  const results: QuickSetupExternalRuntimeResultItem[] = [];
+
+  for (const item of items) {
+    if (seenKinds.has(item.kind)) continue;
+    seenKinds.add(item.kind);
+
+    const existing = listAgentEntries().find(
+      (entry) => entry.enabled !== false && entry.execution?.kind === item.kind,
+    );
+    if (existing) {
+      results.push({
+        kind: item.kind,
+        agentId: normalizeAgentId(existing.id),
+        created: false,
+        reusedExisting: true,
+        status: 'ok',
+      });
+      continue;
+    }
+
+    const defaults = QUICK_SETUP_DEFAULTS[item.kind];
+    const name = item.name?.trim() || defaults.name;
+    const agentId = allocateUniqueExternalAgentId(repo, defaults.baseId);
+    const execution = buildQuickSetupExecution(item);
+    try {
+      await catalogService.create({
+        id: agentId,
+        enabled: true,
+        profile: {
+          name,
+          avatar: externalRuntimeDefaultAvatar(item.kind),
+        },
+        execution,
+      });
+      results.push({
+        kind: item.kind,
+        agentId,
+        created: true,
+        status: 'ok',
+      });
+    } catch (error) {
+      results.push({
+        kind: item.kind,
+        created: false,
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return results;
 }
 
 export type UpdateAgentBody = {

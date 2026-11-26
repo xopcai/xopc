@@ -2,11 +2,13 @@ import SwiftUI
 
 struct ChatSidebarView: View {
     @Environment(\.mobileTheme) private var mobileTheme
+    @Environment(\.locale) private var locale
     let configuration: GatewayConfiguration
     let personal: PersonalAgentRecord?
     let openingPersonal: Bool
     let selectedID: String?
     let recent: [ConversationSummary]
+    let agents: [String: AgentSummary]
     let recentNextOffset: Int?
     let recentLoading: Bool
     let recentError: Bool
@@ -151,6 +153,8 @@ struct ChatSidebarView: View {
 extension ChatSidebarView {
     private func conversationRow(_ item: ConversationSummary) -> some View {
         let selected = selection?.contains(item.id) ?? (selectedID == item.id)
+        let agent = agents[item.agentId] ?? AgentSummary(id: item.agentId, name: nil, description: nil,
+                                                        language: nil, avatar: nil, isDefault: nil)
         return Button {
             if var selection {
                 if !selection.insert(item.id).inserted {
@@ -167,7 +171,9 @@ extension ChatSidebarView {
                         .foregroundStyle(selected ? mobileTheme.action : Color.secondary)
                         .accessibilityHidden(true)
                 }
-                Text(verbatim: item.displayName).lineLimit(1)
+                ConfiguredAgentAvatar(configuration: configuration, agent: agent, size: 22, active: false,
+                                      resolveUnconfigured: false)
+                Text(verbatim: item.displayName).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 0)
                 if item.status == "pinned" {
                     Image(systemName: "pin").font(.footnote).foregroundStyle(.secondary)
@@ -181,6 +187,7 @@ extension ChatSidebarView {
         }
         .buttonStyle(.plain)
         .disabled(busy)
+        .accessibilityValue(Text(verbatim: agent.localizedName(locale)))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("chat-sidebar-session-\(item.id)")
         .contextMenu {

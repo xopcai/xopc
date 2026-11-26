@@ -1,8 +1,9 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { mkdtemp, open, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { runProcess } from '../../process/run-process.js';
 import {
   decodeWavToMonoFloat32,
   type DecodedPcmAudio,
@@ -37,18 +38,13 @@ function ffmpegCommand(): string {
 }
 
 /** Reports whether compressed browser/mobile recordings can be decoded on this host. */
-export function getAudioDecoderStatus(): AudioDecoderStatus {
+export async function getAudioDecoderStatus(signal?: AbortSignal): Promise<AudioDecoderStatus> {
   const command = ffmpegCommand();
-  const result = spawnSync(command, ['-version'], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'ignore', 'pipe'],
-    timeout: 5_000,
-  });
-  if (!result.error && result.status === 0) return { available: true, command };
+  const result = await runProcess({ program: command, args: ['-version'], timeoutMs: 5_000, maxOutputBytes: 2_048, signal });
+  if (result.exitCode === 0 && !result.timedOut && !result.aborted) return { available: true, command };
 
-  const cause = result.error instanceof Error
-    ? result.error.message
-    : result.stderr?.trim() || `decoder exited with status ${String(result.status)}`;
+  const cause = result.timedOut ? 'decoder startup timed out'
+    : result.stderr.trim() || `decoder exited with ${result.signal ?? `status ${String(result.exitCode)}`}`;
   return {
     available: false,
     command,

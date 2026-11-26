@@ -1,9 +1,9 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
+import ai.xopc.mobile.gateway.ConversationSummary
 import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.theme.LocalChatColors
-import ai.xopc.mobile.gateway.ConversationSummary
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
@@ -120,6 +120,7 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
     else state.settled.animateTo(target, tween(duration, easing = XopcMotionTokens.StandardEasing))
   }
   if (!state.visible) return
+  val agents = remember(connection.agents) { connection.agents.associateBy { it.id } }
   var menuId by remember { mutableStateOf<String?>(null) }
   var selecting by remember { mutableStateOf(false) }
   var selectedIds by remember { mutableStateOf(emptySet<String>()) }
@@ -293,6 +294,10 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
           }
         }
         items(recent, key = { "conversation-${it.id}" }) { item ->
+          val agentId = item.agentId.orEmpty()
+          val agent = agents[agentId]
+          val agentName = agent?.let { agentDisplayName(it) } ?: agentId
+          val avatarReference = agent?.avatar.orEmpty()
           SidebarConversationRow(item, selecting,
             selected = if (selecting) item.id in selectedIds else item.id == connection.selectedConversationId,
             enabled = !operationBusy, menuOpen = menuId == item.id, canDelete = canDelete(listOf(item.id)),
@@ -303,7 +308,11 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
             },
             onRename = { onRename(item.id) }, onTogglePin = { onTogglePin(item.id) },
             onStartSelection = { selectedIds = setOf(item.id); selecting = true; deleteFailureCount = 0 },
-            onDelete = { deleteTargets = listOf(item.id) })
+            onDelete = { deleteTargets = listOf(item.id) }) {
+            AgentAvatar(connection.agentAvatars[agentId].takeIf { avatarReference.isNotBlank() },
+              avatarReference, agentId, 22.dp, active = false, fallbackName = agentName,
+              modifier = Modifier.semantics { if (agentName.isNotEmpty()) contentDescription = agentName })
+          }
         }
         if (connection.recentConversationsLoading) {
           item("loading") { BrandLoadingIndicator(Modifier.padding(10.dp), extent = 24.dp) }
@@ -361,7 +370,8 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
 @Composable
 private fun SidebarConversationRow(item: ConversationSummary, selecting: Boolean, selected: Boolean, enabled: Boolean,
   menuOpen: Boolean, canDelete: Boolean, onOpenMenu: () -> Unit, onDismissMenu: () -> Unit,
-  onClick: () -> Unit, onRename: () -> Unit, onTogglePin: () -> Unit, onStartSelection: () -> Unit, onDelete: () -> Unit) {
+  onClick: () -> Unit, onRename: () -> Unit, onTogglePin: () -> Unit, onStartSelection: () -> Unit, onDelete: () -> Unit,
+  avatar: @Composable () -> Unit) {
   val scheme = MaterialTheme.colorScheme
   val pinned = item.status == "pinned"
   val menuLabel = stringResource(R.string.conversations_more_actions)
@@ -375,6 +385,7 @@ private fun SidebarConversationRow(item: ConversationSummary, selecting: Boolean
       verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       if (selecting) Checkbox(checked = selected, onCheckedChange = null, enabled = enabled,
         modifier = Modifier.size(22.dp))
+      avatar()
       Text(item.title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
         style = MaterialTheme.typography.bodyLarge, color = scheme.onSurface)
       if (pinned) Icon(painterResource(R.drawable.action_pin), stringResource(R.string.conversations_pinned),

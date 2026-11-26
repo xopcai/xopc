@@ -817,6 +817,18 @@ export const claudeExternalDriver: ExternalAgentDriver = {
     }
   },
 
+  detectInstalled(execution?: ExternalAgentExecution) {
+    const claudeConfig = claudeOptionsFromExecution(execution);
+    const executablePath = findClaudeExecutable(claudeConfig?.binaryPath);
+    return {
+      kind: 'claude' as const,
+      label: 'Claude Code',
+      installed: Boolean(executablePath),
+      ...(executablePath ? { executablePath } : {}),
+      checkedAt: Date.now(),
+    };
+  },
+
   async probe(execution?: ExternalAgentExecution): Promise<ExternalRuntimeProbeResult> {
     const checkedAt = Date.now();
     const claudeConfig = claudeOptionsFromExecution(execution);

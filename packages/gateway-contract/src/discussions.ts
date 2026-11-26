@@ -5,6 +5,10 @@ export const DISCUSSION_MAX_SAVED_DURATION_MS = DISCUSSION_MAX_DURATION_MS + 5_0
 export const DISCUSSION_AUDIO_MAX_BYTES = 1024 * 1024 * 1024;
 export const DISCUSSION_CHUNK_MAX_BYTES = 8 * 1024 * 1024;
 export const DISCUSSION_SEGMENT_MAX_BYTES = 2 * 1024 * 1024;
+export interface DiscussionRecordingPreflight {
+  available: boolean;
+  platform: string;
+}
 export interface DiscussionRecordingChunk { sequence: number; sha256: string; bytes: number }
 export interface DiscussionRecordingManifest {
   chunkCount: number;

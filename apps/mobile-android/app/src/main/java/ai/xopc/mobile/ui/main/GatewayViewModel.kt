@@ -3180,6 +3180,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     val profile = current.profile ?: return
     if (current.gatewayBusy || current.pairing || recentConversationsJob?.isActive == true) return
     val offset = if (more) current.recentConversationsNextOffset ?: return else 0
+    if (!more && current.agents.isEmpty() && agentJob?.isActive != true) loadAgents(current.selectedConversationId)
     val requestedAt = System.currentTimeMillis()
     mutableState.update { it.copy(recentConversationsLoading = true, recentConversationsError = false,
       recentConversationsNextOffset = offset.takeIf { more }) }
@@ -3833,38 +3834,40 @@ class GatewayViewModel internal constructor(application: Application, private va
     return result.authorizationUrl
   }
 
-  fun loadAgents() {
-    val id = mutableState.value.selectedConversationId ?: return
-    loadAgents(id)
-  }
+  fun loadAgents() = loadAgents(mutableState.value.selectedConversationId)
 
-  private fun loadAgents(id: String) {
+  private fun loadAgents(id: String?) {
     if (mutableState.value.selectedConversationId != id) return
+    val profile = mutableState.value.profile ?: return
+    fun isCurrent(): Boolean {
+      val state = mutableState.value
+      return state.selectedConversationId == id && state.profile?.gatewayId == profile.gatewayId &&
+        state.profile.deviceId == profile.deviceId
+    }
     agentJob?.cancel()
     mutableState.update { it.copy(agentsLoading = true, agentError = false, agentAvatars = emptyMap()) }
-    val catalogGatewayId = mutableState.value.profile?.gatewayId
     agentJob = viewModelScope.launch {
       try {
         val catalog = runInterruptible(Dispatchers.IO) { conversations.agents() }
-        if (mutableState.value.selectedConversationId == id && mutableState.value.profile?.gatewayId == catalogGatewayId) mutableState.update { it.copy(
+        if (!isCurrent()) return@launch
+        mutableState.update { it.copy(
           agents = catalog.agents, defaultAgentId = catalog.defaultId, agentsLoading = false,
-          selectedAgentId = it.selectedAgentId.ifBlank { catalog.defaultId }) }
-        val gatewayId = catalogGatewayId
+          selectedAgentId = if (id == null) it.selectedAgentId else it.selectedAgentId.ifBlank { catalog.defaultId }) }
         val ordered = catalog.agents.sortedBy { it.id != mutableState.value.selectedAgentId }
         for (agent in ordered) {
-          if (mutableState.value.selectedConversationId != id || mutableState.value.profile?.gatewayId != gatewayId) break
+          if (!isCurrent()) break
           val bitmap = try {
             runInterruptible(Dispatchers.IO) {
               conversations.agentAvatar(agent)?.let { bytes -> android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
             }
           } catch (error: CancellationException) { throw error } catch (_: Exception) { null }
-          if (bitmap != null && mutableState.value.selectedConversationId == id && mutableState.value.profile?.gatewayId == gatewayId)
+          if (bitmap != null && isCurrent())
             mutableState.update { it.copy(agentAvatars = it.agentAvatars + (agent.id to bitmap)) }
         }
       } catch (error: CancellationException) {
         throw error
       } catch (_: Exception) {
-        if (mutableState.value.selectedConversationId == id) mutableState.update {
+        if (isCurrent()) mutableState.update {
           it.copy(agentsLoading = false, agentError = true)
         }
       }

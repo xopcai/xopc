@@ -135,6 +135,14 @@ export type ExternalRuntimeAccountInfo = {
   authMode?: string;
 };
 
+export type ExternalRuntimeFastDetection = {
+  kind: ExternalAgentKind;
+  label: string;
+  installed: boolean;
+  executablePath?: string;
+  checkedAt: number;
+};
+
 export type ExternalRuntimeProbeResult = {
   kind: ExternalAgentKind;
   label: string;
@@ -228,6 +236,29 @@ export type GatewayConfigBinding = {
   priority?: number;
   match: { channel: string; accountId?: string; peerKind?: string; peerId?: string };
   enabled?: boolean;
+};
+
+export type QuickSetupExternalRuntimeItem = {
+  kind: ExternalAgentKind;
+  name?: string;
+  model?: string;
+  permissionMode?: ExternalPermissionMode;
+  contextAccess?: ExternalContextAccess;
+  authMethod?: AgyAuthMethod;
+};
+
+export type QuickSetupExternalRuntimeResultItem = {
+  kind: ExternalAgentKind;
+  agentId?: string;
+  created: boolean;
+  reusedExisting?: boolean;
+  status: 'ok' | 'error';
+  error?: string;
+};
+
+export type QuickSetupExternalRuntimesPayload = {
+  results: QuickSetupExternalRuntimeResultItem[];
+  agents: GatewayAgentsPayload;
 };
 
 export type AgentProfileFileEntry = { name: string; missing: boolean; size?: number; updatedAtMs?: number };

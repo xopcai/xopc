@@ -157,6 +157,17 @@
     "noteDiscussionFallback": "笔记讨论",
     "messageCount": "{{count}} 条消息",
     "discussionCapture": {
+      "preflight": {
+        "blocked": "尚未开始录音",
+        "unreachable": "无法检查 Gateway 的音频工具。请检查连接后重试。",
+        "unavailable": "Gateway 上的 FFmpeg 无法启动。",
+        "macos": "请在运行 Gateway 的 Mac 上用 Homebrew 安装或重装 FFmpeg，然后重试。",
+        "windows": "请在运行 Gateway 的电脑上安装或修复 FFmpeg，将 ffmpeg.exe 所在目录加入 Gateway 的 PATH，再重启 Gateway。",
+        "linux": "请在运行 Gateway 的机器上用系统包管理器安装或重装 FFmpeg，然后重试。",
+        "other": "请在 Gateway 上安装可运行的 FFmpeg，或将 XOPC_FFMPEG_PATH 指向它的可执行文件。",
+        "retry": "重新检查",
+        "shareAudio": "选择要共享的音频"
+      },
       "status": {
         "label": "录音状态",
         "captureLabel": "采集",

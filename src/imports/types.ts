@@ -1,4 +1,4 @@
-export type ImportSource = 'codex' | 'claude-code';
+export type ImportSource = 'codex' | 'claude-code' | 'antigravity';
 export type ImportScope = 'user' | 'project';
 export type Compatibility = 'compatible' | 'needs_setup' | 'blocked' | 'unsupported';
 export interface ImportFile { path: string; data: string; executable: boolean }

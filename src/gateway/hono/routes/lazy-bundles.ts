@@ -506,7 +506,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'discussions',
-    match: (path) => path === '/api/discussions' || path.startsWith('/api/discussions/') || path === '/api/discussion-capture/settings',
+    match: (path) => path === '/api/discussions' || path.startsWith('/api/discussions/') || path === '/api/discussion-capture/settings' || path === '/api/discussion-capture/preflight',
     load: async () => {
       const { registerDiscussionRoutes } = await import('./discussions.js');
       return { register: registerDiscussionRoutes };

@@ -6,8 +6,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -47,6 +50,12 @@ internal fun AgentAvatar(avatar: Bitmap?, reference: String, agentId: String, ex
     contentScale = ContentScale.Crop, modifier = modifier.size(extent).clip(CircleShape))
   else Box(modifier.size(extent).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
     contentAlignment = Alignment.Center) {
-    androidx.compose.material3.Text(fallbackName.take(1).uppercase(), color = MaterialTheme.colorScheme.onSecondaryContainer)
+    val initial = remember(fallbackName, agentId) {
+      val name = fallbackName.trim().ifBlank { agentId.ifBlank { "?" } }.uppercase()
+      val characters = android.icu.text.BreakIterator.getCharacterInstance().apply { setText(name) }
+      name.substring(0, characters.next())
+    }
+    Text(initial, color = MaterialTheme.colorScheme.onSecondaryContainer, maxLines = 1,
+      style = if (extent.value <= 24) MaterialTheme.typography.labelSmall else LocalTextStyle.current)
   }
 }

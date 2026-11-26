@@ -138,7 +138,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
     return methodScope(method, 'workspace.read', 'workspace.write');
   }
   if (
-    path === '/api/discussions' || path.startsWith('/api/discussions/') || path === '/api/discussion-capture/settings'
+    path === '/api/discussions' || path.startsWith('/api/discussions/') || path === '/api/discussion-capture/settings' || path === '/api/discussion-capture/preflight'
     || path.startsWith('/api/workspace')
     || path.startsWith('/api/files')
     || path === '/api/spaces/items' || path.startsWith('/api/spaces/items/')

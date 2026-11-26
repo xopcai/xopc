@@ -5,15 +5,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   const recorder: Record<string, unknown> = {};
-  return { recorder, pathname: '/notes', create: vi.fn(), settings: vi.fn(), get: vi.fn(),
+  return { recorder, pathname: '/notes', create: vi.fn(), settings: vi.fn(), preflight: vi.fn(), get: vi.fn(),
+    acquireAudio: vi.fn(),
     acknowledge: vi.fn(), upload: vi.fn(), cancel: vi.fn(), navigate: vi.fn(), drain: vi.fn(), annotations: vi.fn(async () => {}) };
 });
 vi.mock('../discussion-annotation-sync', () => ({ syncDiscussionAnnotations: mocks.annotations }));
 vi.mock('../use-discussion-recorder', () => ({ useDiscussionRecorder: () => mocks.recorder }));
 vi.mock('../discussion-api', () => ({
   createDiscussion: mocks.create, getDiscussionCaptureSettings: mocks.settings, getDiscussion: mocks.get,
+  getDiscussionRecordingPreflight: mocks.preflight,
   getDiscussionTranscript: vi.fn(async () => ({ text: '' })),
   acknowledgeDiscussionConsent: mocks.acknowledge, cancelDiscussion: mocks.cancel, unlinkDiscussionProject: vi.fn(), uploadDiscussionSegment: vi.fn(),
+}));
+vi.mock('../audio-capture-mixer', async importOriginal => ({
+  ...await importOriginal<typeof import('../audio-capture-mixer')>(),
+  acquireDiscussionAudioStream: mocks.acquireAudio,
 }));
 vi.mock('../recording-upload', () => ({ uploadDraftRecording: mocks.upload }));
 vi.mock('../discussion-draft-store', () => ({
@@ -53,6 +59,7 @@ beforeEach(async () => {
     markUploadFailed: vi.fn(async () => {}), refreshRecoverableDrafts: vi.fn(), pause: vi.fn(), resume: vi.fn(),
   });
   mocks.settings.mockResolvedValue({ consentPolicyVersion: 1, consentAcknowledgedAt: 1 });
+  mocks.preflight.mockResolvedValue({ available: true, platform: 'darwin' });
   mocks.acknowledge.mockImplementation(async (version) => {
     const settings = { consentPolicyVersion: version, consentAcknowledgedAt: 2 };
     mocks.settings.mockResolvedValue(settings);
@@ -66,6 +73,42 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
 describe('recording completion and recovery orchestration', () => {
+  it.each([
+    ['darwin', copy.preflight.macos], ['win32', copy.preflight.windows], ['linux', copy.preflight.linux],
+  ])('blocks capture when FFmpeg cannot start on %s and starts after a successful recheck', async (platform, guidance) => {
+    mocks.preflight.mockResolvedValueOnce({ available: false, platform });
+    await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
+    expect(container.querySelector('[role=alert]')?.textContent).toContain(guidance);
+    expect(mocks.recorder.start).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+    await click(copy.preflight.retry);
+    expect(mocks.preflight).toHaveBeenCalledTimes(2);
+    expect(mocks.recorder.start).toHaveBeenCalledOnce();
+  });
+
+  it('waits for the Gateway check after consent before starting the recorder', async () => {
+    localStorage.clear();
+    mocks.settings.mockResolvedValue({ consentPolicyVersion: 1 });
+    mocks.preflight.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await act(async () => { window.dispatchEvent(new Event(OPEN_DISCUSSION_CAPTURE_EVENT)); });
+    expect(mocks.preflight).not.toHaveBeenCalled();
+    await click(copy.consentAction);
+    expect(container.querySelector('[role=alert]')?.textContent).toBe(copy.preflight.unreachable);
+    expect(mocks.recorder.start).not.toHaveBeenCalled();
+  });
+
+  it('opens the shared audio picker from a user click after preflight', async () => {
+    const acquired = { mode: 'meeting_mix', stream: {}, cleanup: vi.fn() };
+    mocks.acquireAudio.mockResolvedValueOnce(acquired);
+    await act(async () => { window.dispatchEvent(new CustomEvent(OPEN_DISCUSSION_CAPTURE_EVENT, { detail: { audioMode: 'meeting_mix' } })); });
+    expect(mocks.preflight).toHaveBeenCalledOnce();
+    expect(mocks.acquireAudio).not.toHaveBeenCalled();
+    expect(mocks.recorder.start).not.toHaveBeenCalled();
+    await click(copy.preflight.shareAudio);
+    expect(mocks.acquireAudio).toHaveBeenCalledWith('meeting_mix');
+    expect(mocks.recorder.start).toHaveBeenCalledWith(expect.objectContaining({ acquiredAudio: acquired }));
+  });
+
   it('reconfirms stale consent and uploads the retained recording without starting another capture', async () => {
     mocks.settings.mockResolvedValue({ consentPolicyVersion: 2 });
     await click(copy.recover);
@@ -74,6 +117,7 @@ describe('recording completion and recovery orchestration', () => {
     expect(mocks.recorder.discard).not.toHaveBeenCalled();
     await click('Confirm and sync recording');
     expect(mocks.acknowledge).toHaveBeenCalledWith(2);
+    expect(mocks.preflight).not.toHaveBeenCalled();
     expect(mocks.recorder.start).not.toHaveBeenCalled();
     expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ clientRequestId: 'local', recordedAt: 42, consentPolicyVersion: 2 }));
     expect(mocks.recorder.discard).toHaveBeenCalledWith('local');
@@ -144,6 +188,16 @@ describe('recording completion and recovery orchestration', () => {
     expect(mocks.create).not.toHaveBeenCalled();
     await act(async () => { window.dispatchEvent(new Event('open-recording-recoveries')); });
     for (const button of container.querySelectorAll('article button')) expect((button as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('keeps the saved draft available when the decoder blocks continuation', async () => {
+    mocks.preflight.mockResolvedValueOnce({ available: false, platform: 'linux' });
+    await act(async () => { window.dispatchEvent(new Event('open-recording-recoveries')); });
+    await click('Continue recording');
+    expect(container.querySelector('[role=alert]')?.textContent).toContain(copy.preflight.linux);
+    expect(mocks.recorder.start).not.toHaveBeenCalled();
+    expect(mocks.recorder.discard).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Export originals');
   });
 
   it('keeps interrupted audio open for continuation instead of automatically sealing it', async () => {

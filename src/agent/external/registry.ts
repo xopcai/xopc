@@ -7,6 +7,7 @@ import { codexExternalDriver } from './drivers/codex/driver.js';
 import type {
   ExternalAgentDriver,
   ExternalRuntimeCommand,
+  ExternalRuntimeFastDetection,
   ExternalRuntimeProbeResult,
   ExternalRuntimeRateLimits,
   ExternalRuntimeServiceTier,
@@ -156,10 +157,99 @@ export async function probeExternalAgentRuntimeCached(
   return pending;
 }
 
+export function detectExternalAgentRuntimeFast(
+  execution: ExternalAgentExecution,
+): ExternalRuntimeFastDetection {
+  const driver = getExternalAgentDriver(execution.kind);
+  if (driver.detectInstalled) {
+    return driver.detectInstalled(execution);
+  }
+  return {
+    kind: driver.kind,
+    label: driver.label,
+    installed: false,
+    checkedAt: Date.now(),
+  };
+}
+
+export function detectAllExternalAgentRuntimesFast(): ExternalRuntimeFastDetection[] {
+  return BUILT_IN_DRIVERS.map((driver) =>
+    detectExternalAgentRuntimeFast({ kind: driver.kind } as ExternalAgentExecution),
+  );
+}
+
+async function probeWithOptionalTimeout(
+  driver: ExternalAgentDriver,
+  execution: ExternalAgentExecution,
+  forceRefresh: boolean,
+  timeoutMs?: number,
+): Promise<ExternalRuntimeProbeResult> {
+  const fast = driver.detectInstalled?.(execution);
+  if (fast && !fast.installed) {
+    return probeExternalAgentRuntimeCached(execution, forceRefresh);
+  }
+  const pending = probeExternalAgentRuntimeCached(execution, forceRefresh);
+  if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return pending;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<ExternalRuntimeProbeResult>((resolve) => {
+    timer = setTimeout(() => {
+      resolve({
+        kind: driver.kind,
+        label: driver.label,
+        installed: true,
+        status: 'warning',
+        ...(fast?.executablePath ? { executablePath: fast.executablePath } : {}),
+        message: `${driver.label} health check timed out.`,
+        models: [],
+        checkedAt: Date.now(),
+      });
+    }, timeoutMs);
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([pending, timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function probeAllExternalAgentRuntimes(): Promise<ExternalRuntimeProbeResult[]> {
   return Promise.all(
     BUILT_IN_DRIVERS.map((driver) => probeExternalAgentRuntime({ kind: driver.kind } as ExternalAgentExecution)),
   );
+}
+
+export async function probeAllExternalAgentRuntimesCached(
+  options: { forceRefresh?: boolean; timeoutMs?: number } = {},
+): Promise<ExternalRuntimeProbeResult[]> {
+  const forceRefresh = options.forceRefresh === true;
+  const settled = await Promise.allSettled(
+    BUILT_IN_DRIVERS.map((driver) =>
+      probeWithOptionalTimeout(
+        driver,
+        { kind: driver.kind } as ExternalAgentExecution,
+        forceRefresh,
+        options.timeoutMs,
+      ),
+    ),
+  );
+  return settled.map((result, index) => {
+    if (result.status === 'fulfilled') return result.value;
+    const driver = BUILT_IN_DRIVERS[index]!;
+    const fast = driver.detectInstalled?.({ kind: driver.kind } as ExternalAgentExecution);
+    return {
+      kind: driver.kind,
+      label: driver.label,
+      installed: Boolean(fast?.installed),
+      status: fast?.installed ? 'warning' : 'error',
+      ...(fast?.executablePath ? { executablePath: fast.executablePath } : {}),
+      message: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      models: [],
+      checkedAt: Date.now(),
+    };
+  });
 }
 
 export type ExternalRuntimeCatalogModel = {

@@ -1,9 +1,14 @@
 import type { Hono } from 'hono';
+import { z } from 'zod';
 
 import {
+  AGY_AUTH_METHODS,
   AgentModelsOverrideSchema,
   AgentEntrySchema,
   AgentProfileSchema,
+  EXTERNAL_AGENT_KINDS,
+  EXTERNAL_CONTEXT_ACCESS_MODES,
+  EXTERNAL_PERMISSION_MODES,
   ExternalAgentExecutionSchema,
   RuntimePolicySchema,
   SkillOverrideSchema,
@@ -12,10 +17,11 @@ import {
 } from '../../../agent-config/index.js';
 import {
   cancelExternalRuntimeAuthFlow,
+  detectAllExternalAgentRuntimesFast,
   getExternalAgent,
   getExternalRuntimeAuthFlow,
   logoutExternalAgentRuntime,
-  probeAllExternalAgentRuntimes,
+  probeAllExternalAgentRuntimesCached,
   probeExternalAgentRuntime,
   resolveExternalRuntimeModelsPayload,
   respondExternalRuntimeAuthFlow,
@@ -31,6 +37,7 @@ import {
   getGatewayAgentEffectiveConfig,
   listAgentProfileFiles,
   listGatewayAgents,
+  quickSetupExternalGatewayAgents,
   readAgentAvatarFile,
   resolveAgentAvatarImage,
   readAgentProfileFile,
@@ -91,6 +98,19 @@ function parsePatchModels(raw: unknown): PatchModels | null | undefined | { erro
   return parsed.success ? parsed.data : { error: `models ${parsed.error.issues[0]?.message ?? 'is invalid'}` };
 }
 
+const QuickSetupExternalRuntimeItemSchema = z.strictObject({
+  kind: z.enum(EXTERNAL_AGENT_KINDS),
+  name: z.string().trim().min(1).max(80).optional(),
+  model: z.string().trim().min(1).max(200).optional(),
+  permissionMode: z.enum(EXTERNAL_PERMISSION_MODES).optional(),
+  contextAccess: z.enum(EXTERNAL_CONTEXT_ACCESS_MODES).optional(),
+  authMethod: z.enum(AGY_AUTH_METHODS).optional(),
+});
+
+const QuickSetupExternalRuntimesBodySchema = z.strictObject({
+  items: z.array(QuickSetupExternalRuntimeItemSchema).min(1).max(10),
+});
+
 export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
 
@@ -129,8 +149,39 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.get('/api/agents/external-runtimes', async (c) => {
-    const runtimes = await probeAllExternalAgentRuntimes();
-    return c.json({ ok: true, payload: { runtimes } });
+    const mode = c.req.query('mode')?.trim().toLowerCase();
+    if (mode === 'fast') {
+      const runtimes = detectAllExternalAgentRuntimesFast();
+      return c.json({ ok: true, payload: { mode: 'fast', runtimes } });
+    }
+    const forceRefresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
+    const rawTimeout = Number(c.req.query('timeoutMs'));
+    const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout >= 1_000 && rawTimeout <= 60_000
+      ? rawTimeout
+      : undefined;
+    const runtimes = await probeAllExternalAgentRuntimesCached({ forceRefresh, timeoutMs });
+    return c.json({ ok: true, payload: { mode: 'full', runtimes } });
+  });
+
+  authenticated.post('/api/agents/external-runtimes/quick-setup', strictRateLimitMiddleware, async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const parsed = QuickSetupExternalRuntimesBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({
+        ok: false,
+        error: { message: parsed.error.issues[0]?.message ?? 'Invalid quick-setup payload' },
+      }, 400);
+    }
+    const results = await quickSetupExternalGatewayAgents(parsed.data.items);
+    service.refreshAgentCatalog();
+    const locale = c.req.query('locale') || c.req.header('Accept-Language')?.split(',')[0]?.trim();
+    const agents = await listGatewayAgents({ locale });
+    return c.json({ ok: true, payload: { results, agents } });
   });
 
   authenticated.post('/api/agents/external-runtimes/probe', strictRateLimitMiddleware, async (c) => {

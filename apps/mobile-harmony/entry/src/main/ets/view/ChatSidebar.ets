@@ -1,12 +1,15 @@
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI';
 
+import { agentDisplayName } from '../common/agentPresentation';
 import { xopcConfirmDialog, xopcSheetOptions } from '../common/dialogActions';
 import { xopcClickEffect } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
-import { XopcSessionItem } from '../model/chat';
+import { XopcChatAgent, XopcSessionItem } from '../model/chat';
 import { XopcMobileRoute } from '../model/home';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
+import { XopcChatRepository } from '../repository/chatRepository';
+import { gatewaySession } from '../service/gatewaySession';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcSessionsViewModel } from '../viewmodel/sessionsViewModel';
 import { XopcListSkeleton, XopcPaginationFooter } from './MobileComponents';
@@ -21,6 +24,7 @@ export struct XopcChatSidebar {
   @Local colors: XopcThemeColors = appThemeColors;
   @Local layout: XopcLayoutState = layoutState;
   @Local sessions: XopcSessionsViewModel = new XopcSessionsViewModel(true);
+  @Local agents: Map<string, XopcChatAgent> = new Map<string, XopcChatAgent>();
   @Local renameOpen: boolean = false;
   @Local renameText: string = '';
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
@@ -42,6 +46,7 @@ export struct XopcChatSidebar {
   private renameId: string = '';
   private menuTargetId: string = '';
   private pendingAction: XopcSidebarSessionAction = '';
+  private agentLoadRevision: number = 0;
 
   @Computed get recentConversations(): XopcSessionItem[] {
     return this.sessions.items.filter((item: XopcSessionItem): boolean =>
@@ -51,8 +56,39 @@ export struct XopcChatSidebar {
           || (Date.parse(second.updatedAt || '') || 0) - (Date.parse(first.updatedAt || '') || 0));
   }
 
-  aboutToAppear(): void { void this.sessions.load(); }
-  aboutToDisappear(): void { this.sessions.dispose(); }
+  aboutToAppear(): void {
+    void this.sessions.load();
+    void this.loadAgents();
+  }
+
+  aboutToDisappear(): void {
+    this.agentLoadRevision++;
+    this.sessions.dispose();
+  }
+
+  private async loadAgents(): Promise<void> {
+    const revision = ++this.agentLoadRevision;
+    const connection = gatewaySession.connectionRevision();
+    try {
+      const catalog = await new XopcChatRepository().agents();
+      if (revision !== this.agentLoadRevision || connection !== gatewaySession.connectionRevision()) return;
+      const agents = new Map<string, XopcChatAgent>();
+      catalog.agents.forEach((agent: XopcChatAgent): void => { agents.set(agent.id, agent); });
+      this.agents = agents;
+    } catch (_) { /* Conversations can still open if the Agent catalog is unavailable. */ }
+  }
+
+  private agentName(agentId: string): string {
+    if (!agentId) return '';
+    const label = agentDisplayName(this.agents.get(agentId) ?? { id: agentId });
+    return typeof label === 'string' ? label : this.getUIContext().getHostContext()?.resourceManager.getStringSync(label.id) ?? agentId;
+  }
+
+  private avatarAppearance(agentId: string): string {
+    const reference = this.agents.get(agentId)?.avatar ?? '';
+    if (!reference.startsWith('xopc:loopi:')) return 'configured';
+    return reference.endsWith(':care') ? 'loopi-care' : 'loopi';
+  }
 
   private finishSessionMenu(): void {
     const id = this.menuTargetId;
@@ -236,6 +272,10 @@ export struct XopcChatSidebar {
                       .fontSize(20).fontColor([this.sessions.selected.includes(row.item.key) ? this.colors.accent : this.colors.tertiary])
                       .accessibilityLevel('no')
                   }
+                  XopcPersonalAgentAvatar({ agentId: row.item.agentId ?? '',
+                    avatarReference: this.agents.get(row.item.agentId ?? '')?.avatar ?? '',
+                    appearance: this.avatarAppearance(row.item.agentId ?? ''), fallbackLabel: this.agentName(row.item.agentId ?? ''),
+                    resolveUnconfigured: false, extent: 22, activePage: false, compact: true })
                   Text(row.item.displayName || row.item.name || row.item.title || $r('app.string.untitled')).fontSize(15)
                     .fontWeight(row.item.key === this.currentId ? FontWeight.Medium : FontWeight.Normal)
                     .fontColor(this.colors.light && row.item.key === this.currentId ? this.colors.accent : this.colors.foreground)
@@ -250,6 +290,7 @@ export struct XopcChatSidebar {
                 .padding({ left: 10, right: 10 }).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
                 .backgroundColor((this.sessions.selecting ? this.sessions.selected.includes(row.item.key)
                   : row.item.key === this.currentId) ? this.colors.active : Color.Transparent)
+                .accessibilityDescription(this.agentName(row.item.agentId ?? ''))
                 .accessibilitySelected(this.sessions.selecting ? this.sessions.selected.includes(row.item.key) : row.item.key === this.currentId)
                 .enabled(!this.sessions.busy)
                 .onClick((): void => {

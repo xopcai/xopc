@@ -157,6 +157,17 @@
     "noteDiscussionFallback": "Note discussion",
     "messageCount": "{{count}} messages",
     "discussionCapture": {
+      "preflight": {
+        "blocked": "Recording hasn’t started",
+        "unreachable": "Couldn’t check the audio tools on the Gateway. Check the connection and try again.",
+        "unavailable": "FFmpeg couldn’t start on the Gateway.",
+        "macos": "Install or reinstall FFmpeg with Homebrew on the Mac running the Gateway, then try again.",
+        "windows": "Install or repair FFmpeg on the computer running the Gateway. Add the folder containing ffmpeg.exe to the Gateway’s PATH, then restart the Gateway.",
+        "linux": "Install or reinstall FFmpeg with your distribution’s package manager on the machine running the Gateway, then try again.",
+        "other": "Install a working FFmpeg on the Gateway or set XOPC_FFMPEG_PATH to its executable.",
+        "retry": "Check again",
+        "shareAudio": "Choose audio to share"
+      },
       "status": {
         "label": "Recording status",
         "captureLabel": "Capture",

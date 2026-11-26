@@ -9,7 +9,7 @@ import { register } from '../registry.js';
 
 export function createImportCommand(): Command {
   return new Command('import').description('Select skills, context and projects to import from another AI app')
-    .argument('[source]', 'codex or claude-code; omit to list detected apps')
+    .argument('[source]', 'codex, claude-code, or antigravity; omit to list detected apps')
     .option('--inventory <id>', 'Previously scanned inventory')
     .option('--items <ids>', 'Explicit comma-separated candidate IDs')
     .option('--request-id <id>', 'Unique request ID; reuse when retrying a network request')

@@ -3,13 +3,17 @@ import type { ModelSetupPreview } from '@xopcai/gateway-contract';
 import { Check, CheckCircle2, ChevronRight, LoaderCircle, Pencil } from 'lucide-react';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
+import { ExternalRuntimeAvatar } from '@/components/brand/external-runtime-avatar';
+import { externalRuntimeLabel } from '@/components/brand/external-runtime-badge';
 import { Loopi } from '@/components/brand/loopi';
 import { APP_CHROME_BAR_CLASS, APP_CHROME_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
 import {
   ensureDefaultPersonalAgent,
   prefetchDesktopOnboardingContext,
+  prefetchExternalRuntimesFast,
 } from '@/features/onboarding/desktop-onboarding-bootstrap';
+import type { ExternalRuntimeFastDetection } from '@/features/settings/types/agent-gateway';
 import { OnboardingLanguageSwitch } from '@/features/onboarding/onboarding-language-switch';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
 import { cn } from '@/lib/cn';
@@ -102,12 +106,21 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
   const applyingCloud = useRef(false);
   const [cloudAuthorized, setCloudAuthorized] = useState(false);
   const [cloudSetup, setCloudSetup] = useState<ModelSetupPreview | null>(null);
+  const [detectedRuntimes, setDetectedRuntimes] = useState<ExternalRuntimeFastDetection[]>([]);
   const cloudConnected = cloudAuthorized || providerData.cards.some(provider => provider.id === 'xopc-cloud' && provider.configured);
   const {
     step, selectedProvider, busy, error, callName,
   } = state;
 
   useEffect(() => { onPendingChange?.(busy); return () => onPendingChange?.(false); }, [busy, onPendingChange]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void prefetchExternalRuntimesFast().then((items) => {
+      if (!cancelled) setDetectedRuntimes(items.filter((entry) => entry.installed));
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const stepLabel = useMemo(
     () => o.stepOf.replace('{{current}}', String(stepNumber(step))).replace('{{total}}', String(STEP_ORDER.length)),
@@ -361,6 +374,24 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
             >
               {zh ? '使用 API Key 或本地模型' : 'Use an API key or local model'}
             </button>
+
+            {detectedRuntimes.length > 0 ? (
+              <div
+                data-onboarding-detected-runtimes-hint
+                className="mt-5 inline-flex max-w-full items-center gap-2 rounded-full border border-edge bg-surface-panel/75 px-3.5 py-1.5 text-xs text-fg-muted"
+              >
+                <span className="flex shrink-0 items-center -space-x-1">
+                  {detectedRuntimes.map((entry) => (
+                    <ExternalRuntimeAvatar key={entry.kind} kind={entry.kind} size={16} />
+                  ))}
+                </span>
+                <span className="truncate">
+                  {zh
+                    ? `已检测到本机 ${detectedRuntimes.map((entry) => externalRuntimeLabel(entry.kind, 'short')).join('、')}，下一步可一键接入`
+                    : `Detected ${detectedRuntimes.map((entry) => externalRuntimeLabel(entry.kind, 'short')).join(', ')} — connect in the next step`}
+                </span>
+              </div>
+            ) : null}
           </div>
         </main>
 
@@ -467,6 +498,23 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true, onPen
                     browseDisabled={providerData.loading}
                   />
                 </div>
+                {detectedRuntimes.length > 0 ? (
+                  <div
+                    data-onboarding-detected-runtimes-hint
+                    className="mt-4 flex items-center gap-2 rounded-xl border border-edge bg-surface-base/70 px-3 py-2 text-xs text-fg-muted"
+                  >
+                    <span className="flex shrink-0 items-center gap-1">
+                      {detectedRuntimes.map((entry) => (
+                        <ExternalRuntimeAvatar key={entry.kind} kind={entry.kind} size={16} />
+                      ))}
+                    </span>
+                    <span className="min-w-0 truncate">
+                      {language === 'zh'
+                        ? `已检测到本机 ${detectedRuntimes.map((entry) => externalRuntimeLabel(entry.kind, 'short')).join('、')}，完成模型配置后可一键接入`
+                        : `Detected ${detectedRuntimes.map((entry) => externalRuntimeLabel(entry.kind, 'short')).join(', ')} locally — connect in the next step`}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="mt-3 min-h-5">{error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}</div>
                 <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-8">
                   <Button variant="ghost" className="justify-self-start" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'callName', error: null } })}>{o.back}</Button>

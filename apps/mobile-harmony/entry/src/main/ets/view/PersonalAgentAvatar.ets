@@ -10,6 +10,7 @@ export struct XopcPersonalAgentAvatar {
   @Param appearance: string = 'loopi';
   @Param avatarReference: string = '';
   @Param fallbackLabel: string = '';
+  @Param resolveUnconfigured: boolean = true;
   @Param revision: number = 0;
   @Param extent: number = 48;
   @Param activePage: boolean = true;
@@ -32,6 +33,7 @@ export struct XopcPersonalAgentAvatar {
     const generation = ++this.generation;
     this.picture = '';
     if ((this.appearance !== 'custom' && this.appearance !== 'configured') || !this.agentId) return;
+    if (this.appearance === 'configured' && !this.resolveUnconfigured && !this.avatarReference.trim()) return;
     try {
       const picture = await fetchPersonalAgentAvatar(this.agentId, this.appearance === 'configured' ? this.avatarReference : undefined);
       if (generation === this.generation) this.picture = picture;
@@ -43,7 +45,7 @@ export struct XopcPersonalAgentAvatar {
       Image(this.picture || this.defaultAvatar).width(this.extent).height(this.extent).objectFit(ImageFit.Cover)
         .borderRadius(this.extent / 2).backgroundColor(this.colors.accentSoft).accessibilityLevel('no-hide-descendants')
     } else if (this.appearance === 'configured') {
-      Text((this.fallbackLabel || this.agentId).slice(0, 1).toUpperCase()).fontSize(this.extent * 0.4)
+      Text(Array.from((this.fallbackLabel.trim() || this.agentId).toUpperCase())[0] ?? '?').fontSize(this.extent * 0.5)
         .width(this.extent).height(this.extent).textAlign(TextAlign.Center).borderRadius(this.extent / 2)
         .backgroundColor(this.colors.accentSoft).fontColor(this.colors.foreground).accessibilityLevel('no-hide-descendants')
     } else {

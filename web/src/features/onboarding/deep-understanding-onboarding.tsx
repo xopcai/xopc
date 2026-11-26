@@ -30,6 +30,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ExternalRuntimePill } from '@/components/brand/external-runtime-badge';
 import { Loopi } from '@/components/brand/loopi';
 import { APP_CHROME_BAR_CLASS, APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
@@ -57,8 +58,27 @@ import {
 import { ImportSelectionDialog } from '@/features/imports/import-selection-dialog';
 import { toggleItems } from '@/features/imports/selection';
 import { markDesktopHabitAnchorPending } from '@/features/onboarding/desktop-habit-toast';
+import {
+  importSafeAiToolConfigs,
+  prefetchExternalRuntimesFast,
+  prefetchExternalRuntimesFull,
+} from '@/features/onboarding/desktop-onboarding-bootstrap';
+import {
+  EXTERNAL_KIND_TO_IMPORT_SOURCE,
+  ExternalRuntimesOnboardingSection,
+} from '@/features/onboarding/external-runtimes-onboarding-section';
 import { OnboardingLanguageSwitch } from '@/features/onboarding/onboarding-language-switch';
 import { fetchProject, resolveWorkspaceProject, type Project } from '@/features/projects/api';
+import {
+  fetchGatewayAgents,
+  quickSetupExternalAgentRuntimes,
+  type ExternalAgentKind,
+  type ExternalContextAccess,
+  type ExternalPermissionMode,
+  type ExternalRuntimeFastDetection,
+  type ExternalRuntimeProbeResult,
+  type GatewayAgentRow,
+} from '@/features/settings/agents-admin-api';
 import {
   fetchProjectUnderstanding,
   isProjectUnderstandingRunning,
@@ -286,7 +306,24 @@ export function DeepUnderstandingOnboarding({
   const [projectsCreating, setProjectsCreating] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
 
-  // Page 2: External AI tool imports (Codex / Claude Code)
+  // Page 2: External coding runtimes (Codex / Antigravity / Claude Code)
+  const [loadingExternalFast, setLoadingExternalFast] = useState(true);
+  const [loadingExternalFull, setLoadingExternalFull] = useState(false);
+  const [refreshingExternal, setRefreshingExternal] = useState(false);
+  const [externalFast, setExternalFast] = useState<ExternalRuntimeFastDetection[]>([]);
+  const [externalProbes, setExternalProbes] = useState<ExternalRuntimeProbeResult[]>([]);
+  const [existingAgents, setExistingAgents] = useState<GatewayAgentRow[]>([]);
+  const [selectedExternalKinds, setSelectedExternalKinds] = useState<Set<ExternalAgentKind>>(() => new Set());
+  const [externalPermissionMode, setExternalPermissionMode] = useState<ExternalPermissionMode>('full_access');
+  const [externalContextAccess, setExternalContextAccess] = useState<ExternalContextAccess>('read_write');
+  const [syncExternalConfigs, setSyncExternalConfigs] = useState(true);
+  const [projectDefaultRuntime, setProjectDefaultRuntime] = useState<'embedded' | ExternalAgentKind>('embedded');
+  const [connectedExternalKinds, setConnectedExternalKinds] = useState<Array<{ kind: ExternalAgentKind; agentId: string }>>([]);
+  const [externalSyncSummary, setExternalSyncSummary] = useState<{ importedCount: number; skills: number; context: number; projects: number } | null>(null);
+  const externalSelectionTouchedRef = useRef(false);
+  const projectDefaultTouchedRef = useRef(false);
+
+  // Page 2: External AI tool imports (Codex / Claude Code / Antigravity)
   const [importSources, setImportSources] = useState<DetectedImportSource[]>([]);
   const [importSource, setImportSource] = useState<ImportSource | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -349,6 +386,66 @@ export function DeepUnderstandingOnboarding({
     }
   }, []);
 
+  const loadExternalRuntimes = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) {
+      setRefreshingExternal(true);
+    } else {
+      setLoadingExternalFast(true);
+    }
+    try {
+      const [fastResult, agentsResult] = await Promise.allSettled([
+        prefetchExternalRuntimesFast(forceRefresh),
+        fetchGatewayAgents(),
+      ]);
+      if (!mountedRef.current) return;
+
+      const detections = fastResult.status === 'fulfilled' ? fastResult.value : [];
+      const currentAgents = agentsResult.status === 'fulfilled' ? agentsResult.value.agents : [];
+      setExternalFast(detections);
+      if (agentsResult.status === 'fulfilled') {
+        setExistingAgents(currentAgents);
+      }
+      setLoadingExternalFast(false);
+
+      const hasInstalled = detections.some((entry) => entry.installed);
+      if (!hasInstalled) {
+        setExternalProbes([]);
+        setLoadingExternalFull(false);
+        return;
+      }
+
+      setLoadingExternalFull(true);
+      const probes = await prefetchExternalRuntimesFull(forceRefresh);
+      if (!mountedRef.current) return;
+      setExternalProbes(probes);
+
+      const configuredKinds = new Set<ExternalAgentKind>(
+        currentAgents
+          .filter((agent) => agent.override.enabled !== false)
+          .map((agent) => agent.override.execution?.kind)
+          .filter((kind): kind is ExternalAgentKind => Boolean(kind)),
+      );
+      const readyUnconfigured = probes
+        .filter((entry) => entry.installed && entry.status === 'ready' && !configuredKinds.has(entry.kind))
+        .map((entry) => entry.kind);
+
+      if (!externalSelectionTouchedRef.current) {
+        setSelectedExternalKinds(new Set(readyUnconfigured));
+      }
+      if (!projectDefaultTouchedRef.current) {
+        const firstReady = probes.find((entry) => entry.installed && entry.status === 'ready')?.kind
+          ?? [...configuredKinds][0];
+        if (firstReady) setProjectDefaultRuntime(firstReady);
+      }
+    } finally {
+      if (mountedRef.current) {
+        setLoadingExternalFast(false);
+        setLoadingExternalFull(false);
+        setRefreshingExternal(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const store = useUnderstandingActivityStore.getState();
     if (store.deepRun?.status === 'running') {
@@ -362,6 +459,7 @@ export function DeepUnderstandingOnboarding({
     void refreshLocalSources([]);
     void refreshWorkCandidates();
     void loadConnectorInstances();
+    void loadExternalRuntimes(false);
     void importRequest<{ sources: DetectedImportSource[] }>('/sources')
       .then((data) => {
         if (mountedRef.current) setImportSources(data.sources);
@@ -374,7 +472,7 @@ export function DeepUnderstandingOnboarding({
         }
       })
       .catch(() => {});
-  }, [loadConnectorInstances, refreshLocalSources, refreshWorkCandidates]);
+  }, [loadConnectorInstances, loadExternalRuntimes, refreshLocalSources, refreshWorkCandidates]);
 
   const picker = useDirectoryPicker({
     onPicked: (pickedPath) => {
@@ -571,6 +669,47 @@ export function DeepUnderstandingOnboarding({
     });
   };
 
+  const toggleExternalKind = (kind: ExternalAgentKind) => {
+    externalSelectionTouchedRef.current = true;
+    setSelectedExternalKinds((prev) => {
+      const next = new Set(prev);
+      if (next.has(kind)) next.delete(kind);
+      else next.add(kind);
+      if (!projectDefaultTouchedRef.current) {
+        if (next.size > 0 && (projectDefaultRuntime === 'embedded' || !next.has(projectDefaultRuntime))) {
+          const first = [...next][0];
+          if (first) setProjectDefaultRuntime(first);
+        } else if (next.size === 0) {
+          const fallbackConfigured = existingAgents.find(
+            (agent) => agent.override.enabled !== false && agent.override.execution?.kind,
+          )?.override.execution?.kind;
+          setProjectDefaultRuntime(fallbackConfigured ?? 'embedded');
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleExternalRuntimeSignedIn = useCallback((kind: ExternalAgentKind, probe?: ExternalRuntimeProbeResult) => {
+    if (probe) {
+      setExternalProbes((prev) => {
+        const rest = prev.filter((entry) => entry.kind !== kind);
+        return [...rest, probe];
+      });
+    } else {
+      void loadExternalRuntimes(true);
+    }
+    const alreadyConfigured = existingAgents.some(
+      (agent) => agent.override.enabled !== false && agent.override.execution?.kind === kind,
+    );
+    if (!alreadyConfigured) {
+      setSelectedExternalKinds((prev) => new Set(prev).add(kind));
+      if (!projectDefaultTouchedRef.current && projectDefaultRuntime === 'embedded') {
+        setProjectDefaultRuntime(kind);
+      }
+    }
+  }, [existingAgents, loadExternalRuntimes, projectDefaultRuntime]);
+
   const leaveToApp = useCallback((destination?: { projectId?: string; prompt?: string }) => {
     markDesktopHabitAnchorPending();
     if (destination?.projectId) {
@@ -699,46 +838,116 @@ export function DeepUnderstandingOnboarding({
     }
   }, [aboutDecisions, calibrationAnswers, customRules, deepRun, leaveToApp, understandConfirming, writingDecisions, zh]);
 
-  // Page 2: Fast multi-project creation + async background project understanding (never blocks chat entry!)
+  // Page 2: Fast external runtime quick-setup + multi-project creation + async background understanding (never blocks chat entry!)
   const launchProjectCreation = useCallback(async () => {
     const paths = [...selectedFolderPaths];
-    if (paths.length === 0 || projectsCreating) return;
+    const externalKinds = [...selectedExternalKinds];
+    if ((paths.length === 0 && externalKinds.length === 0) || projectsCreating) return;
     setProjectsCreating(true);
     setProjectError(null);
     try {
-      const settled = await Promise.allSettled(
-        paths.map(async (workspacePath) => {
-          const resolved = await resolveWorkspaceProject({ workspacePath, autoCreate: true });
-          if (!resolved.project) {
-            throw new Error(zh
-              ? `目录不可作为项目根目录：${compactPath(workspacePath)}`
-              : `Folder cannot be used as a project root: ${compactPath(workspacePath)}`);
-          }
-          const project = resolved.project;
-          window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
-          let understandingStatus: ProjectUnderstanding['status'] = 'queued';
-          try {
-            const started = await startProjectUnderstanding(project.id);
-            understandingStatus = started.status;
-          } catch {
-            understandingStatus = 'failed';
-          }
-          return {
-            project,
-            created: resolved.created !== false,
-            understandingStatus,
-            overview: null,
-          } satisfies CreatedOnboardingProject;
-        }),
-      );
+      const failures: string[] = [];
+      const agentIdByKind = new Map<ExternalAgentKind, string>();
+      for (const agent of existingAgents) {
+        const kind = agent.override.execution?.kind;
+        if (kind && agent.override.enabled !== false && !agentIdByKind.has(kind)) {
+          agentIdByKind.set(kind, agent.id);
+        }
+      }
 
-      if (!mountedRef.current) return;
+      const newlyConnected: Array<{ kind: ExternalAgentKind; agentId: string }> = [];
+      if (externalKinds.length > 0) {
+        try {
+          const setupPayload = await quickSetupExternalAgentRuntimes(
+            externalKinds.map((kind) => ({
+              kind,
+              permissionMode: externalPermissionMode,
+              contextAccess: externalContextAccess,
+            })),
+          );
+          if (!mountedRef.current) return;
+          setExistingAgents(setupPayload.agents.agents);
+          for (const item of setupPayload.results) {
+            if (item.status === 'ok' && item.agentId) {
+              agentIdByKind.set(item.kind, item.agentId);
+              newlyConnected.push({ kind: item.kind, agentId: item.agentId });
+            } else if (item.error) {
+              failures.push(item.error);
+            }
+          }
+          if (newlyConnected.length > 0) {
+            setConnectedExternalKinds((prev) => {
+              const byKind = new Map(prev.map((entry) => [entry.kind, entry]));
+              for (const entry of newlyConnected) byKind.set(entry.kind, entry);
+              return [...byKind.values()];
+            });
+            setSelectedExternalKinds((prev) => {
+              const next = new Set(prev);
+              for (const entry of newlyConnected) next.delete(entry.kind);
+              return next;
+            });
+          }
+        } catch (cause) {
+          failures.push(cause instanceof Error ? cause.message : String(cause));
+        }
+      }
+
+      const resolvedProjectDefaultAgentId =
+        projectDefaultRuntime !== 'embedded'
+          ? agentIdByKind.get(projectDefaultRuntime)
+          : undefined;
 
       const succeeded: CreatedOnboardingProject[] = [];
-      const failures: string[] = [];
-      for (const result of settled) {
-        if (result.status === 'fulfilled') succeeded.push(result.value);
-        else failures.push(result.reason instanceof Error ? result.reason.message : String(result.reason));
+      if (paths.length > 0) {
+        const settled = await Promise.allSettled(
+          paths.map(async (workspacePath) => {
+            const resolved = await resolveWorkspaceProject({
+              workspacePath,
+              autoCreate: true,
+              ...(resolvedProjectDefaultAgentId ? { defaultAgentId: resolvedProjectDefaultAgentId } : {}),
+            });
+            if (!resolved.project) {
+              throw new Error(zh
+                ? `目录不可作为项目根目录：${compactPath(workspacePath)}`
+                : `Folder cannot be used as a project root: ${compactPath(workspacePath)}`);
+            }
+            const project = resolved.project;
+            window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
+            let understandingStatus: ProjectUnderstanding['status'] = 'queued';
+            try {
+              const started = await startProjectUnderstanding(project.id);
+              understandingStatus = started.status;
+            } catch {
+              understandingStatus = 'failed';
+            }
+            return {
+              project,
+              created: resolved.created !== false,
+              understandingStatus,
+              overview: null,
+            } satisfies CreatedOnboardingProject;
+          }),
+        );
+        if (!mountedRef.current) return;
+
+        for (const result of settled) {
+          if (result.status === 'fulfilled') succeeded.push(result.value);
+          else failures.push(result.reason instanceof Error ? result.reason.message : String(result.reason));
+        }
+      }
+
+      // Extension layer 1: non-blocking safe sync of Skills & Rules for connected runtimes
+      if (syncExternalConfigs && newlyConnected.length > 0) {
+        const matchingSources = newlyConnected
+          .map((entry) => EXTERNAL_KIND_TO_IMPORT_SOURCE[entry.kind])
+          .filter((sourceId) => importSources.some((src) => src.id === sourceId && src.detected && !src.lastImport));
+        if (matchingSources.length > 0) {
+          void importSafeAiToolConfigs(matchingSources).then((summary) => {
+            if (mountedRef.current && summary.importedCount > 0) {
+              setExternalSyncSummary(summary);
+            }
+          });
+        }
       }
 
       if (failures.length > 0) {
@@ -751,12 +960,26 @@ export function DeepUnderstandingOnboarding({
           for (const entry of succeeded) byId.set(entry.project.id, entry);
           return [...byId.values()];
         });
+      }
+
+      if (succeeded.length > 0 || newlyConnected.length > 0) {
         setProjectView('created');
       }
     } finally {
       if (mountedRef.current) setProjectsCreating(false);
     }
-  }, [projectsCreating, selectedFolderPaths, zh]);
+  }, [
+    existingAgents,
+    externalContextAccess,
+    externalPermissionMode,
+    importSources,
+    projectDefaultRuntime,
+    projectsCreating,
+    selectedExternalKinds,
+    selectedFolderPaths,
+    syncExternalConfigs,
+    zh,
+  ]);
 
   const retryProjectUnderstanding = useCallback(async (projectId: string) => {
     setCreatedProjects((prev) => prev.map((entry) => (
@@ -920,7 +1143,30 @@ export function DeepUnderstandingOnboarding({
   };
 
   const stageKey = `${step}:${step === 'understand' ? understandView : projectView}`;
-  const detectedImportSources = importSources.filter((item) => item.detected || item.lastImport);
+  const installedExternalImportSourceIds = useMemo(() => {
+    const ids = new Set<ImportSource>();
+    for (const entry of externalFast) {
+      if (entry.installed) ids.add(EXTERNAL_KIND_TO_IMPORT_SOURCE[entry.kind]);
+    }
+    for (const entry of externalProbes) {
+      if (entry.installed) ids.add(EXTERNAL_KIND_TO_IMPORT_SOURCE[entry.kind]);
+    }
+    return ids;
+  }, [externalFast, externalProbes]);
+  const detectedImportSources = importSources.filter(
+    (item) => (item.detected || item.lastImport) && !installedExternalImportSourceIds.has(item.id),
+  );
+  const agentKindById = useMemo(() => {
+    const map = new Map<string, ExternalAgentKind>();
+    for (const agent of existingAgents) {
+      const kind = agent.override.execution?.kind;
+      if (kind) map.set(agent.id, kind);
+    }
+    for (const connected of connectedExternalKinds) {
+      map.set(connected.agentId, connected.kind);
+    }
+    return map;
+  }, [connectedExternalKinds, existingAgents]);
 
   return (
     <div className="xopc-onboarding-experience flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-base text-fg">
@@ -1550,6 +1796,36 @@ export function DeepUnderstandingOnboarding({
                     </p>
                   </div>
 
+                  {/* Group 0: Host-installed external coding runtimes (Codex / Antigravity / Claude Code) */}
+                  <ExternalRuntimesOnboardingSection
+                    zh={zh}
+                    loadingFast={loadingExternalFast}
+                    loadingFull={loadingExternalFull}
+                    refreshing={refreshingExternal}
+                    fastDetections={externalFast}
+                    probes={externalProbes}
+                    existingAgents={existingAgents}
+                    selectedKinds={selectedExternalKinds}
+                    permissionMode={externalPermissionMode}
+                    contextAccess={externalContextAccess}
+                    syncConfigs={syncExternalConfigs}
+                    importSources={importSources}
+                    hasSelectedProjects={selectedFolderPaths.size > 0}
+                    projectDefaultRuntime={projectDefaultRuntime}
+                    disabled={projectsCreating}
+                    onToggleKind={toggleExternalKind}
+                    onRefresh={() => void loadExternalRuntimes(true)}
+                    onRuntimeSignedIn={handleExternalRuntimeSignedIn}
+                    onPermissionModeChange={setExternalPermissionMode}
+                    onContextAccessChange={setExternalContextAccess}
+                    onSyncConfigsChange={setSyncExternalConfigs}
+                    onProjectDefaultRuntimeChange={(value) => {
+                      projectDefaultTouchedRef.current = true;
+                      setProjectDefaultRuntime(value);
+                    }}
+                    onCustomizeImport={(source) => void startToolImportScan(source)}
+                  />
+
                   {/* Group 1: Local folders (macOS Sequoia inset grouped list) */}
                   <div className="xopc-apple-card space-y-2" style={{ animationDelay: '35ms' }}>
                     <div className="flex items-center justify-between px-1">
@@ -1675,21 +1951,25 @@ export function DeepUnderstandingOnboarding({
                 </>
               ) : null}
 
-              {projectView === 'created' && createdProjects.length > 0 ? (
+              {projectView === 'created' && (createdProjects.length > 0 || connectedExternalKinds.length > 0) ? (
                 <div className="space-y-6">
                   <div className="flex flex-col items-center text-center">
                     <span className={cn(
                       'xopc-check-pop mb-3 flex size-12 items-center justify-center rounded-full',
-                      allProjectsUnderstood ? 'bg-success-soft text-success' : 'bg-surface-panel text-fg shadow-surface ring-1 ring-edge/80',
+                      (allProjectsUnderstood || (createdProjects.length === 0 && connectedExternalKinds.length > 0))
+                        ? 'bg-success-soft text-success'
+                        : 'bg-surface-panel text-fg shadow-surface ring-1 ring-edge/80',
                     )}>
                       <CheckCircle2 className="size-5" aria-hidden />
                     </span>
                     <h2 className="text-[1.5rem] font-semibold tracking-[-0.03em] text-fg">
-                      {allProjectsUnderstood
-                        ? (zh ? '项目已就绪' : 'Projects ready')
-                        : (createdProjects.length === 1
-                          ? (zh ? '项目已创建' : 'Project created')
-                          : (zh ? `已创建 ${createdProjects.length} 个项目` : `${createdProjects.length} projects created`))}
+                      {createdProjects.length === 0
+                        ? (zh ? '编程助手已就绪' : 'Coding agents ready')
+                        : allProjectsUnderstood
+                          ? (zh ? '项目已就绪' : 'Projects ready')
+                          : (createdProjects.length === 1
+                            ? (zh ? '项目已创建' : 'Project created')
+                            : (zh ? `已创建 ${createdProjects.length} 个项目` : `${createdProjects.length} projects created`))}
                     </h2>
                     {anyProjectUnderstandingRunning ? (
                       <p className="mt-1 text-xs text-fg-muted">
@@ -1698,6 +1978,30 @@ export function DeepUnderstandingOnboarding({
                     ) : null}
                   </div>
 
+                  {connectedExternalKinds.length > 0 ? (
+                    <div
+                      data-onboarding-connected-runtimes
+                      className="xopc-apple-card flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-edge/80 bg-surface-panel/95 px-4 py-3 shadow-surface"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium text-fg-muted">
+                          {zh ? '已接入助手' : 'Connected'}
+                        </span>
+                        {connectedExternalKinds.map((entry) => (
+                          <ExternalRuntimePill key={entry.agentId} kind={entry.kind} />
+                        ))}
+                      </div>
+                      {externalSyncSummary && externalSyncSummary.importedCount > 0 ? (
+                        <span className="text-[11px] text-success">
+                          {zh
+                            ? `已同步 ${externalSyncSummary.importedCount} 项技能与规则`
+                            : `Synced ${externalSyncSummary.importedCount} skills & rules`}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {createdProjects.length > 0 ? (
                   <div className="xopc-apple-card overflow-hidden rounded-2xl border border-edge/80 bg-surface-panel/95 shadow-surface" style={{ animationDelay: '40ms' }}>
                     <div className="divide-y divide-edge-subtle">
                       {createdProjects.map((entry) => {
@@ -1705,6 +2009,9 @@ export function DeepUnderstandingOnboarding({
                         const completed = entry.understandingStatus === 'completed';
                         const failed = entry.understandingStatus === 'failed' || entry.understandingStatus === 'canceled';
                         const snippet = compactOverviewSnippet(entry.overview);
+                        const boundExternalKind = entry.project.defaultAgentId
+                          ? agentKindById.get(entry.project.defaultAgentId)
+                          : undefined;
                         return (
                           <div key={entry.project.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
                             <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -1714,6 +2021,7 @@ export function DeepUnderstandingOnboarding({
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="truncate text-[13.5px] font-medium text-fg">{entry.project.name}</span>
+                                  {boundExternalKind ? <ExternalRuntimePill kind={boundExternalKind} /> : null}
                                   {running ? (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-surface-inset px-2 py-0.5 text-[11px] font-medium text-fg-muted">
                                       <Loader2 className="size-2.5 animate-spin text-accent-fg" aria-hidden />
@@ -1754,6 +2062,7 @@ export function DeepUnderstandingOnboarding({
                       })}
                     </div>
                   </div>
+                  ) : null}
                 </div>
               ) : null}
             </section>
@@ -1872,21 +2181,25 @@ export function DeepUnderstandingOnboarding({
               </div>
               <Button
                 type="button"
-                disabled={projectsCreating || selectedFolderPaths.size === 0}
+                disabled={projectsCreating || (selectedFolderPaths.size === 0 && selectedExternalKinds.size === 0)}
                 onClick={() => void launchProjectCreation()}
                 className="h-9 gap-1.5 rounded-full px-5 text-[13px] font-medium transition-transform duration-150 active:scale-[0.98]"
               >
                 {projectsCreating ? (
                   <>
                     <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                    <span>{zh ? '创建中…' : 'Creating…'}</span>
+                    <span>{zh ? '配置中…' : 'Setting up…'}</span>
                   </>
                 ) : (
                   <>
                     <span>
-                      {selectedFolderPaths.size > 1
-                        ? (zh ? `创建 ${selectedFolderPaths.size} 个项目` : `Create ${selectedFolderPaths.size} projects`)
-                        : (zh ? '创建项目' : 'Create project')}
+                      {selectedFolderPaths.size > 0 && selectedExternalKinds.size > 0
+                        ? (zh ? '创建并接入助手' : 'Create & connect')
+                        : selectedFolderPaths.size > 1
+                          ? (zh ? `创建 ${selectedFolderPaths.size} 个项目` : `Create ${selectedFolderPaths.size} projects`)
+                          : selectedFolderPaths.size === 1
+                            ? (zh ? '创建项目' : 'Create project')
+                            : (zh ? `接入 ${selectedExternalKinds.size} 个助手` : `Connect ${selectedExternalKinds.size} agent${selectedExternalKinds.size > 1 ? 's' : ''}`)}
                     </span>
                     <ArrowRight className="size-3.5" aria-hidden />
                   </>
@@ -1895,8 +2208,8 @@ export function DeepUnderstandingOnboarding({
             </>
           ) : null}
 
-          {step === 'projects' && projectView === 'created' && createdProjects[0] ? (() => {
-            const primaryProject = createdProjects[0].project;
+          {step === 'projects' && projectView === 'created' && (createdProjects[0] || connectedExternalKinds.length > 0) ? (() => {
+            const primaryProject = createdProjects[0]?.project;
             return (
               <>
                 <Button
@@ -1910,13 +2223,18 @@ export function DeepUnderstandingOnboarding({
                 </Button>
                 <Button
                   type="button"
-                  onClick={() => handleOpenProjectChat(primaryProject.id)}
+                  onClick={() => {
+                    if (primaryProject) handleOpenProjectChat(primaryProject.id);
+                    else void handleSkipToChat();
+                  }}
                   className="h-9 gap-1.5 rounded-full px-5 text-[13px] font-medium transition-transform duration-150 active:scale-[0.98]"
                 >
                   <span>
-                    {createdProjects.length === 1
-                      ? (zh ? `进入「${primaryProject.name}」对话` : `Open ${primaryProject.name}`)
-                      : (zh ? '进入对话' : 'Open chat')}
+                    {primaryProject
+                      ? (createdProjects.length === 1
+                        ? (zh ? `进入「${primaryProject.name}」对话` : `Open ${primaryProject.name}`)
+                        : (zh ? '进入对话' : 'Open chat'))
+                      : (zh ? '开始使用 XOPC' : 'Start using XOPC')}
                   </span>
                   <ArrowRight className="size-3.5" aria-hidden />
                 </Button>

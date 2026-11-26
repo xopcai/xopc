@@ -12,6 +12,7 @@ export type {
   ExternalRuntimeCapabilities,
   ExternalRuntimeCommand,
   ExternalRuntimeEvent,
+  ExternalRuntimeFastDetection,
   ExternalRuntimeModelOption,
   ExternalRuntimeProbeResult,
   ExternalRuntimeRateLimits,
@@ -102,6 +103,8 @@ export {
   startExternalRuntimeAuth,
 } from './auth-flow.js';
 export {
+  detectAllExternalAgentRuntimesFast,
+  detectExternalAgentRuntimeFast,
   getCachedExternalDefaultModel,
   resolveValidExternalSessionModel,
   getCachedExternalRuntimeProbe,
@@ -109,6 +112,7 @@ export {
   invalidateExternalRuntimeProbeCache,
   listExternalAgentDrivers,
   probeAllExternalAgentRuntimes,
+  probeAllExternalAgentRuntimesCached,
   probeExternalAgentRuntime,
   probeExternalAgentRuntimeCached,
   resolveExternalContextWindow,

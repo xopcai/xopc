@@ -280,6 +280,7 @@ export async function resolveWorkspaceProject(input: {
   workspacePath: string;
   autoCreate?: boolean;
   projectKind?: ProjectKindSelection;
+  defaultAgentId?: string;
 }): Promise<ResolveWorkspaceProjectResult> {
   return fetchJson<ResolveWorkspaceProjectResult>(apiUrl('/api/projects/resolve-workspace'), {
     method: 'POST',
@@ -288,6 +289,7 @@ export async function resolveWorkspaceProject(input: {
       workspacePath: input.workspacePath,
       autoCreate: input.autoCreate ?? true,
       ...(input.projectKind ? { projectKind: input.projectKind } : {}),
+      ...(input.defaultAgentId ? { defaultAgentId: input.defaultAgentId } : {}),
     }),
   });
 }
