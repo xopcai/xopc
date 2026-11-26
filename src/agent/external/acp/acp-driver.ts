@@ -1,10 +1,14 @@
+import { tmpdir } from 'node:os';
+
 import type { ToolCall } from '@earendil-works/pi-ai';
 
-import type { ExternalAgentKind } from '../../../agent-config/schema.js';
+import type { ExternalAgentExecution, ExternalAgentKind } from '../../../agent-config/schema.js';
 import type {
   ExternalAgentDriver,
   ExternalDriverTurnContext,
   ExternalRuntimeCapabilities,
+  ExternalRuntimeModelOption,
+  ExternalRuntimeProbeResult,
   ExternalRuntimeToolCall,
   ExternalRuntimeToolResult,
 } from '../types.js';
@@ -12,6 +16,7 @@ import { AcpJsonRpcClient, AcpRpcError, asRecord, type AcpRecord } from './json-
 
 const MAX_TOOL_TEXT = 32_000;
 const STOP_TIMEOUT_MS = 5_000;
+const PROBE_TIMEOUT_MS = 10_000;
 
 export interface AcpSpawnConfig {
   command: string;
@@ -25,11 +30,15 @@ export interface AcpDriverConfig {
   transcriptProvider: string;
   defaultModelName: string;
   capabilities?: Partial<ExternalRuntimeCapabilities>;
-  resolveSpawn: (cwd: string) => AcpSpawnConfig;
+  resolveSpawn: (cwd: string, execution?: ExternalAgentExecution) => AcpSpawnConfig;
+  /** Resolve an installed executable path for probe checks; returns undefined if not installed. */
+  findExecutable?: (execution?: ExternalAgentExecution) => string | undefined;
   notFoundMessage: string;
   signInRequiredMessage: string;
+  installHintCommand?: string;
+  loginHintCommand?: string;
   /** Optional auth method id passed to `authenticate` (either eagerly or on -32000). */
-  authMethodId?: () => string | undefined;
+  authMethodId?: (execution?: ExternalAgentExecution) => string | undefined;
   /** Whether to call `authenticate` before `session/new` when authMethodId is available. */
   authenticateEagerly?: boolean;
   /** Optional `_meta` payload attached to `session/new` / `session/resume` / `session/load`. */
@@ -288,6 +297,48 @@ function extractCurrentModel(sessionResult: AcpRecord): string | undefined {
   return undefined;
 }
 
+function extractAvailableModels(sessionResult: AcpRecord): ExternalRuntimeModelOption[] {
+  const current = extractCurrentModel(sessionResult);
+  const options: ExternalRuntimeModelOption[] = [];
+  const seen = new Set<string>();
+  const pushOption = (idRaw: unknown, labelRaw?: unknown) => {
+    const id = str(idRaw).trim();
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    const label = str(labelRaw).trim() || id;
+    options.push({ id, label, ...(current === id ? { isDefault: true } : {}) });
+  };
+
+  if (Array.isArray(sessionResult.configOptions)) {
+    for (const raw of sessionResult.configOptions) {
+      const opt = asRecord(raw);
+      if (opt?.id !== 'model' || opt.type !== 'select' || !Array.isArray(opt.options)) continue;
+      for (const entry of opt.options) {
+        const rec = asRecord(entry);
+        if (!rec) continue;
+        if ('value' in rec) {
+          pushOption(rec.value, rec.name ?? rec.label);
+        } else if (Array.isArray(rec.options)) {
+          for (const nested of rec.options) {
+            const nestedRec = asRecord(nested);
+            if (nestedRec) pushOption(nestedRec.value, nestedRec.name ?? nestedRec.label);
+          }
+        }
+      }
+    }
+  }
+
+  const models = asRecord(sessionResult.models);
+  if (options.length === 0 && Array.isArray(models?.availableModels)) {
+    for (const entry of models.availableModels) {
+      const rec = asRecord(entry);
+      if (rec) pushOption(rec.modelId ?? rec.id, rec.name ?? rec.label);
+    }
+  }
+
+  return options;
+}
+
 function selectAuthMethodId(initializeResult: AcpRecord, preferred?: string): string | undefined {
   if (preferred?.trim()) return preferred.trim();
   const methods = Array.isArray(initializeResult.authMethods)
@@ -319,8 +370,8 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
     capabilities,
 
     async runTurn(context: ExternalDriverTurnContext): Promise<void> {
-      const { cwd, content, instructions, existingBinding, signal, emit } = context;
-      const spawnConfig = config.resolveSpawn(cwd);
+      const { cwd, content, instructions, existingBinding, execution, signal, emit } = context;
+      const spawnConfig = config.resolveSpawn(cwd, execution);
       const tools = new Map<string, TrackedTool>();
       const finishedTools = new Set<string>();
       const ignoredTools = new Set<string>();
@@ -481,7 +532,7 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
           signal,
         );
 
-        const configuredAuthMethod = config.authMethodId?.();
+        const configuredAuthMethod = config.authMethodId?.(execution);
         if (config.authenticateEagerly && configuredAuthMethod) {
           await client.request('authenticate', { methodId: configuredAuthMethod }, signal);
         }
@@ -536,7 +587,20 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
         }
 
         sessionId = opened.id;
-        const resolvedModel = extractCurrentModel(opened.result);
+        let resolvedModel = extractCurrentModel(opened.result);
+        const requestedModel = execution.model?.trim();
+        if (requestedModel && requestedModel !== resolvedModel) {
+          try {
+            await client.request(
+              'session/set_config_option',
+              { sessionId, configId: 'model', value: requestedModel },
+              signal,
+            );
+            resolvedModel = requestedModel;
+          } catch {
+            // Fall back to the agent's negotiated model if set_config_option is unsupported.
+          }
+        }
         emit({
           type: 'session_bound',
           nativeSessionId: sessionId,
@@ -595,6 +659,115 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
         signal.removeEventListener('abort', onAbort);
         clearTimeout(stopTimer);
         await client?.close(Boolean(failed || signal.aborted));
+      }
+    },
+
+    async probe(execution?: ExternalAgentExecution): Promise<ExternalRuntimeProbeResult> {
+      const checkedAt = Date.now();
+      const cwd = tmpdir();
+      const executablePath = config.findExecutable?.(execution);
+      if (config.findExecutable && !executablePath) {
+        return {
+          kind: config.kind,
+          label: config.label,
+          installed: false,
+          status: 'not_installed',
+          message: execution?.binaryPath
+            ? `${config.label} binary was not found at "${execution.binaryPath}".`
+            : config.notFoundMessage,
+          ...(config.installHintCommand ? { hintCommand: config.installHintCommand } : {}),
+          models: [],
+          checkedAt,
+        };
+      }
+
+      const spawnConfig = config.resolveSpawn(cwd, execution);
+      const abortController = new AbortController();
+      const timer = setTimeout(
+        () => abortController.abort(new Error(`${config.label} health check timed out.`)),
+        PROBE_TIMEOUT_MS,
+      );
+      let client: AcpJsonRpcClient | undefined;
+      let version: string | undefined;
+      try {
+        client = new AcpJsonRpcClient({
+          command: spawnConfig.command,
+          args: spawnConfig.args,
+          cwd,
+          env: spawnConfig.env,
+          label: config.label,
+          notFoundMessage: config.notFoundMessage,
+          onNotification: () => {},
+          onRequest: (method, params) => {
+            if (method === 'session/request_permission') return { outcome: { outcome: 'cancelled' } };
+            throw new AcpRpcError(-32601, `xopc does not implement ACP client method ${method}.`);
+          },
+          onNonJsonLine: config.onNonJsonLine,
+          onStderrLine: config.onStderrLine,
+        });
+
+        const initializeResult = await client.request(
+          'initialize',
+          {
+            protocolVersion: 1,
+            clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+            clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
+          },
+          abortController.signal,
+          PROBE_TIMEOUT_MS,
+        );
+        const agentInfo = asRecord(initializeResult.agentInfo);
+        if (typeof agentInfo?.version === 'string' && agentInfo.version.trim()) {
+          version = agentInfo.version.trim();
+        }
+
+        const configuredAuthMethod = config.authMethodId?.(execution);
+        if (config.authenticateEagerly && configuredAuthMethod) {
+          await client.request('authenticate', { methodId: configuredAuthMethod }, abortController.signal, PROBE_TIMEOUT_MS);
+        }
+
+        let created: AcpRecord;
+        try {
+          created = await client.request('session/new', { cwd, mcpServers: [] }, abortController.signal, PROBE_TIMEOUT_MS);
+        } catch (error) {
+          if (!isAuthRequiredRpcError(error)) throw error;
+          const authMethodId = selectAuthMethodId(initializeResult, configuredAuthMethod);
+          if (!authMethodId) throw error;
+          await client.request('authenticate', { methodId: authMethodId }, abortController.signal, PROBE_TIMEOUT_MS);
+          created = await client.request('session/new', { cwd, mcpServers: [] }, abortController.signal, PROBE_TIMEOUT_MS);
+        }
+
+        const models = extractAvailableModels(created);
+        return {
+          kind: config.kind,
+          label: config.label,
+          installed: true,
+          status: 'ready',
+          ...(executablePath ? { executablePath } : {}),
+          ...(version ? { version } : {}),
+          models,
+          checkedAt: Date.now(),
+        };
+      } catch (error) {
+        const signInRequired = config.isSignInRequiredError?.(error) || isAuthRequiredRpcError(error);
+        const message = signInRequired
+          ? config.signInRequiredMessage
+          : error instanceof Error ? error.message : String(error);
+        return {
+          kind: config.kind,
+          label: config.label,
+          installed: true,
+          status: signInRequired ? 'unauthenticated' : 'warning',
+          ...(executablePath ? { executablePath } : {}),
+          ...(version ? { version } : {}),
+          message,
+          ...(signInRequired && config.loginHintCommand ? { hintCommand: config.loginHintCommand } : {}),
+          models: [],
+          checkedAt: Date.now(),
+        };
+      } finally {
+        clearTimeout(timer);
+        await client?.close(true);
       }
     },
   };

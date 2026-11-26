@@ -39,7 +39,8 @@ export async function abortAllExternalTurns(): Promise<void> {
 export async function* runExternalProjectTurn(
   input: RunExternalProjectTurnInput,
 ): AsyncGenerator<ExternalTurnEvent> {
-  const { conversationId, transcriptId, runId, agentId, runtimeKind } = input;
+  const { conversationId, transcriptId, runId, agentId, execution } = input;
+  const runtimeKind = execution.kind;
   const driver = getExternalAgentDriver(runtimeKind);
   const stop = new AbortController();
   const signal = AbortSignal.any([input.signal, stop.signal]);
@@ -262,6 +263,7 @@ export async function* runExternalProjectTurn(
         conversationId,
         transcriptId,
         agentId,
+        execution,
         runId,
         clientMessageId: input.clientMessageId,
         cwd,
@@ -298,15 +300,15 @@ export async function* runExternalProjectTurn(
     if (failure) emit('error', { content: failure });
   };
 
-  const execution = execute().finally(() => queue.close());
-  activeRuns.set(conversationId, { stop, finished: execution });
-  void execution.catch(() => {});
+  const runPromise = execute().finally(() => queue.close());
+  activeRuns.set(conversationId, { stop, finished: runPromise });
+  void runPromise.catch(() => {});
   try {
     yield* queue;
-    await execution;
+    await runPromise;
   } finally {
     stop.abort();
-    await execution.catch(() => {});
+    await runPromise.catch(() => {});
     activeRuns.delete(conversationId);
   }
 }

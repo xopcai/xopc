@@ -7,6 +7,10 @@ import type {
   AgentProfileFileEntry,
   AgentModelsOverride,
   AgentProfile,
+  ExternalAgentExecution,
+  ExternalRuntimeAuthFlowSnapshot,
+  ExternalRuntimeAuthMode,
+  ExternalRuntimeProbeResult,
   SkillOverride,
   ToolPolicy,
   GatewayAgentEffectiveConfigPayload,
@@ -70,6 +74,7 @@ export async function updateGatewayAgent(
     tools?: Record<string, ToolPolicy> | null;
     toolAllowlist?: string[] | null;
     runtime?: AgentOverride['runtime'] | null;
+    execution?: ExternalAgentExecution;
     setDefault?: boolean;
   },
 ): Promise<GatewayAgentsPayload> {
@@ -129,6 +134,103 @@ export async function saveAgentProfileFileContent(agentId: string, name: string,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
   });
+}
+
+export async function fetchExternalAgentRuntimes(): Promise<ExternalRuntimeProbeResult[]> {
+  const response = await fetchJson<{ payload?: { runtimes?: ExternalRuntimeProbeResult[] } }>(
+    apiUrl('/api/agents/external-runtimes'),
+  );
+  if (!Array.isArray(response.payload?.runtimes)) {
+    throw new Error('Invalid /api/agents/external-runtimes response');
+  }
+  return response.payload.runtimes;
+}
+
+export async function probeExternalAgentRuntime(
+  execution: ExternalAgentExecution,
+): Promise<ExternalRuntimeProbeResult> {
+  const response = await fetchJson<{ payload?: { runtime?: ExternalRuntimeProbeResult } }>(
+    apiUrl('/api/agents/external-runtimes/probe'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ execution }),
+    },
+  );
+  if (!response.payload?.runtime) {
+    throw new Error('Invalid /api/agents/external-runtimes/probe response');
+  }
+  return response.payload.runtime;
+}
+
+export async function startExternalRuntimeAuth(input: {
+  execution: ExternalAgentExecution;
+  mode?: ExternalRuntimeAuthMode;
+  apiKey?: string;
+}): Promise<ExternalRuntimeAuthFlowSnapshot> {
+  const response = await fetchJson<{ payload?: { flow?: ExternalRuntimeAuthFlowSnapshot } }>(
+    apiUrl('/api/agents/external-runtimes/auth/start'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!response.payload?.flow) {
+    throw new Error('Invalid /api/agents/external-runtimes/auth/start response');
+  }
+  return response.payload.flow;
+}
+
+export async function fetchExternalRuntimeAuthFlow(flowId: string): Promise<ExternalRuntimeAuthFlowSnapshot> {
+  const response = await fetchJson<{ payload?: { flow?: ExternalRuntimeAuthFlowSnapshot } }>(
+    apiUrl(`/api/agents/external-runtimes/auth/${encodeURIComponent(flowId)}`),
+  );
+  if (!response.payload?.flow) {
+    throw new Error('Invalid external runtime auth status response');
+  }
+  return response.payload.flow;
+}
+
+export async function respondExternalRuntimeAuthFlow(
+  flowId: string,
+  value: string,
+): Promise<ExternalRuntimeAuthFlowSnapshot> {
+  const response = await fetchJson<{ payload?: { flow?: ExternalRuntimeAuthFlowSnapshot } }>(
+    apiUrl(`/api/agents/external-runtimes/auth/${encodeURIComponent(flowId)}/respond`),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    },
+  );
+  if (!response.payload?.flow) {
+    throw new Error('Invalid external runtime auth respond response');
+  }
+  return response.payload.flow;
+}
+
+export async function cancelExternalRuntimeAuthFlow(flowId: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/agents/external-runtimes/auth/${encodeURIComponent(flowId)}/cancel`), {
+    method: 'POST',
+  });
+}
+
+export async function logoutExternalAgentRuntime(
+  execution: ExternalAgentExecution,
+): Promise<ExternalRuntimeProbeResult> {
+  const response = await fetchJson<{ payload?: { runtime?: ExternalRuntimeProbeResult } }>(
+    apiUrl('/api/agents/external-runtimes/auth/logout'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ execution }),
+    },
+  );
+  if (!response.payload?.runtime) {
+    throw new Error('Invalid /api/agents/external-runtimes/auth/logout response');
+  }
+  return response.payload.runtime;
 }
 
 export function agentDisplayName(agent: GatewayAgentRow): string {

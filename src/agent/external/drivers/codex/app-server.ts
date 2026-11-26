@@ -1,11 +1,17 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
+import { resolveUserPath } from '../../../agent-scope.js';
 import { createLogger } from '../../../../utils/logger.js';
 
 const log = createLogger('CodexAppServer');
 
 export type CodexRecord = Record<string, unknown>;
+
+export type CodexAppServerOptions = {
+  binaryPath?: string;
+  homePath?: string;
+};
 
 export function record(value: unknown): CodexRecord | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as CodexRecord : undefined;
@@ -37,9 +43,22 @@ export class CodexAppServer {
   private stderrTail = '';
   private nextId = 0;
 
-  constructor(cwd: string, onNotification: (method: string, params: CodexRecord) => void, onFailure: (error: Error) => void) {
-    this.child = spawn(process.env.XOPC_CODEX_BIN?.trim() || 'codex', ['app-server', '--listen', 'stdio://'], {
+  constructor(
+    cwd: string,
+    onNotification: (method: string, params: CodexRecord) => void,
+    onFailure: (error: Error) => void,
+    options: CodexAppServerOptions = {},
+  ) {
+    const command = options.binaryPath?.trim()
+      ? resolveUserPath(options.binaryPath.trim())
+      : process.env.XOPC_CODEX_BIN?.trim() || 'codex';
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    if (options.homePath?.trim()) {
+      env.CODEX_HOME = resolveUserPath(options.homePath.trim());
+    }
+    this.child = spawn(command, ['app-server', '--listen', 'stdio://'], {
       cwd,
+      env,
       detached: process.platform !== 'win32',
       windowsHide: true,
     });

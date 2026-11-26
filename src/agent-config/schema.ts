@@ -168,9 +168,30 @@ export const AgentProfileSchema = z.object({
 export const EXTERNAL_AGENT_KINDS = ['codex', 'agy'] as const;
 export type ExternalAgentKind = (typeof EXTERNAL_AGENT_KINDS)[number];
 
-export const ExternalAgentExecutionSchema = z.object({
-  kind: z.enum(EXTERNAL_AGENT_KINDS),
+export const AGY_AUTH_METHODS = ['oauth-personal', 'oauth-business', 'gemini-api-key', 'agent-platform'] as const;
+export type AgyAuthMethod = (typeof AGY_AUTH_METHODS)[number];
+
+export const CodexExecutionSchema = z.object({
+  kind: z.literal('codex'),
+  binaryPath: z.string().trim().min(1).max(500).optional(),
+  homePath: z.string().trim().min(1).max(500).optional(),
+  model: z.string().trim().min(1).max(200).optional(),
 }).strict();
+export type CodexExecution = z.infer<typeof CodexExecutionSchema>;
+
+export const AgyExecutionSchema = z.object({
+  kind: z.literal('agy'),
+  binaryPath: z.string().trim().min(1).max(500).optional(),
+  geminiDir: z.string().trim().min(1).max(500).optional(),
+  authMethod: z.enum(AGY_AUTH_METHODS).optional(),
+  model: z.string().trim().min(1).max(200).optional(),
+}).strict();
+export type AgyExecution = z.infer<typeof AgyExecutionSchema>;
+
+export const ExternalAgentExecutionSchema = z.discriminatedUnion('kind', [
+  CodexExecutionSchema,
+  AgyExecutionSchema,
+]);
 export type ExternalAgentExecution = z.infer<typeof ExternalAgentExecutionSchema>;
 
 export const AgentEntrySchema = z.object({

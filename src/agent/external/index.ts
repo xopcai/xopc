@@ -1,8 +1,16 @@
 export type {
   ExternalAgentDriver,
   ExternalDriverTurnContext,
+  ExternalRuntimeAccountInfo,
+  ExternalRuntimeAuthFlowSnapshot,
+  ExternalRuntimeAuthInputKind,
+  ExternalRuntimeAuthMode,
+  ExternalRuntimeAuthPhase,
   ExternalRuntimeCapabilities,
   ExternalRuntimeEvent,
+  ExternalRuntimeModelOption,
+  ExternalRuntimeProbeResult,
+  ExternalRuntimeStatus,
   ExternalRuntimeToolCall,
   ExternalRuntimeToolResult,
   ExternalRuntimeUsage,
@@ -10,8 +18,21 @@ export type {
   ExternalSessionIdentity,
   ExternalTurnEvent,
   RunExternalProjectTurnInput,
+  StartExternalRuntimeAuthInput,
 } from './types.js';
-export { getExternalAgentDriver, listExternalAgentDrivers } from './registry.js';
+export {
+  cancelExternalRuntimeAuthFlow,
+  getExternalRuntimeAuthFlow,
+  logoutExternalAgentRuntime,
+  respondExternalRuntimeAuthFlow,
+  startExternalRuntimeAuth,
+} from './auth-flow.js';
+export {
+  getExternalAgentDriver,
+  listExternalAgentDrivers,
+  probeAllExternalAgentRuntimes,
+  probeExternalAgentRuntime,
+} from './registry.js';
 export {
   appendExternalTranscriptEntry,
   bindExternalSession,

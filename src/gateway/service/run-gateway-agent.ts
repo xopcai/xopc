@@ -302,7 +302,7 @@ export async function *runGatewayAgent(
           conversationId,
           transcriptId: webchatTranscriptId,
           agentId: externalAgent.id,
-          runtimeKind: externalAgent.execution.kind,
+          execution: externalAgent.execution,
           instructions: externalAgent.profile?.instructions,
           content: message,
           hasAttachmentsOrContext: Boolean(cappedAttachments?.length || runOptions?.sourceContexts?.some(context => context.kind !== 'device_context')),

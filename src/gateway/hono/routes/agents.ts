@@ -4,11 +4,22 @@ import {
   AgentModelsOverrideSchema,
   AgentEntrySchema,
   AgentProfileSchema,
+  ExternalAgentExecutionSchema,
   RuntimePolicySchema,
   SkillOverrideSchema,
   ToolPoliciesSchema,
   type AgentEntry,
 } from '../../../agent-config/index.js';
+import {
+  cancelExternalRuntimeAuthFlow,
+  getExternalRuntimeAuthFlow,
+  logoutExternalAgentRuntime,
+  probeAllExternalAgentRuntimes,
+  probeExternalAgentRuntime,
+  respondExternalRuntimeAuthFlow,
+  startExternalRuntimeAuth,
+  type ExternalRuntimeAuthMode,
+} from '../../../agent/external/index.js';
 import { getVoiceModelsConfig } from '../../../config/voice.js';
 import { normalizeAgentId } from '../../../agent/agent-scope.js';
 import {
@@ -115,6 +126,99 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     });
   });
 
+  authenticated.get('/api/agents/external-runtimes', async (c) => {
+    const runtimes = await probeAllExternalAgentRuntimes();
+    return c.json({ ok: true, payload: { runtimes } });
+  });
+
+  authenticated.post('/api/agents/external-runtimes/probe', strictRateLimitMiddleware, async (c) => {
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const parsed = ExternalAgentExecutionSchema.safeParse(body.execution);
+    if (!parsed.success) {
+      return c.json({ ok: false, error: { message: 'Invalid external runtime configuration' } }, 400);
+    }
+    const result = await probeExternalAgentRuntime(parsed.data);
+    return c.json({ ok: true, payload: { runtime: result } });
+  });
+
+  authenticated.post('/api/agents/external-runtimes/auth/start', strictRateLimitMiddleware, async (c) => {
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const parsed = ExternalAgentExecutionSchema.safeParse(body.execution);
+    if (!parsed.success) {
+      return c.json({ ok: false, error: { message: 'Invalid external runtime configuration' } }, 400);
+    }
+    const rawMode = body.mode;
+    const mode: ExternalRuntimeAuthMode =
+      rawMode === 'device_code' || rawMode === 'api_key' || rawMode === 'browser' ? rawMode : 'browser';
+    const apiKey = typeof body.apiKey === 'string' ? body.apiKey : undefined;
+    const flow = await startExternalRuntimeAuth({ execution: parsed.data, mode, apiKey });
+    return c.json({ ok: true, payload: { flow } });
+  });
+
+  authenticated.get('/api/agents/external-runtimes/auth/:flowId', async (c) => {
+    const flowId = c.req.param('flowId')?.trim() ?? '';
+    const flow = getExternalRuntimeAuthFlow(flowId);
+    if (!flow) {
+      return c.json({ ok: false, error: { message: 'Sign-in session not found or expired' } }, 404);
+    }
+    return c.json({ ok: true, payload: { flow } });
+  });
+
+  authenticated.post('/api/agents/external-runtimes/auth/:flowId/respond', strictRateLimitMiddleware, async (c) => {
+    const flowId = c.req.param('flowId')?.trim() ?? '';
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const value = typeof body.value === 'string' ? body.value : '';
+    if (!value.trim()) {
+      return c.json({ ok: false, error: { message: 'Sign-in code or callback URL is required' } }, 400);
+    }
+    try {
+      const flow = await respondExternalRuntimeAuthFlow(flowId, value);
+      return c.json({ ok: true, payload: { flow } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({ ok: false, error: { message } }, 400);
+    }
+  });
+
+  authenticated.post('/api/agents/external-runtimes/auth/:flowId/cancel', strictRateLimitMiddleware, async (c) => {
+    const flowId = c.req.param('flowId')?.trim() ?? '';
+    const flow = await cancelExternalRuntimeAuthFlow(flowId);
+    if (!flow) {
+      return c.json({ ok: false, error: { message: 'Sign-in session not found or expired' } }, 404);
+    }
+    return c.json({ ok: true, payload: { flow } });
+  });
+
+  authenticated.post('/api/agents/external-runtimes/auth/logout', strictRateLimitMiddleware, async (c) => {
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const parsed = ExternalAgentExecutionSchema.safeParse(body.execution);
+    if (!parsed.success) {
+      return c.json({ ok: false, error: { message: 'Invalid external runtime configuration' } }, 400);
+    }
+    const runtime = await logoutExternalAgentRuntime(parsed.data);
+    return c.json({ ok: true, payload: { runtime } });
+  });
+
   authenticated.get('/api/agents/:id/effective-config', async (c) => {
     const id = normalizeAgentId(c.req.param('id') ?? '');
     const res = getGatewayAgentEffectiveConfig(id);
@@ -137,6 +241,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       'specialistProfile',
       'expectedRevision',
       'profile',
+      'execution',
       'models',
       'skills',
       'tools',
@@ -192,6 +297,12 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (profilePatch && profilePatch !== null && !profilePatch.success) {
       return c.json({ ok: false, error: { message: `profile ${profilePatch.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
     }
+    const executionPatch = Object.hasOwn(body, 'execution')
+      ? ExternalAgentExecutionSchema.safeParse(body.execution)
+      : undefined;
+    if (executionPatch && !executionPatch.success) {
+      return c.json({ ok: false, error: { message: `execution ${executionPatch.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
+    }
 
     const runtimePatch = body.runtime === null
       ? null
@@ -217,6 +328,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       ...(specialistPatch !== undefined ? { specialistProfile: specialistPatch === null ? null : specialistPatch.data } : {}),
       ...(workspacePatch !== undefined ? { workspace: workspacePatch } : {}),
       ...(profilePatch !== undefined ? { profile: profilePatch === null ? null : profilePatch.data } : {}),
+      ...(executionPatch !== undefined ? { execution: executionPatch.data } : {}),
       ...(modelsPatch !== undefined ? { models: modelsPatch } : {}),
       setDefault: body.setDefault === true,
       ...(skillsPatch !== undefined ? { skills: skillsPatch === null ? null : skillsPatch.data } : {}),

@@ -173,6 +173,7 @@ export type UpdateAgentBody = {
   specialistProfile?: AgentEntry['specialistProfile'] | null;
   workspace?: string | null;
   profile?: AgentEntry['profile'] | null;
+  execution?: AgentEntry['execution'];
   models?: AgentModelsOverride | null;
   setDefault?: boolean;
   skills?: SkillOverride | null;
@@ -193,9 +194,15 @@ export async function updateGatewayAgent(
   if (body.setDefault === true && existing.execution) {
     return { ok: false, error: 'External runtime agents cannot be set as the default agent', status: 400 };
   }
+  if (body.execution !== undefined) {
+    if (!existing.execution || body.execution.kind !== existing.execution.kind) {
+      return { ok: false, error: 'Agent execution runtime kind cannot be changed after creation', status: 400 };
+    }
+  }
   const patch: Partial<Omit<AgentEntry, 'id'>> = {};
   if (body.workspace !== undefined) patch.workspace = body.workspace?.trim() ? resolveUserPath(body.workspace) : undefined;
   if (body.profile !== undefined) patch.profile = body.profile ?? undefined;
+  if (body.execution !== undefined) patch.execution = body.execution;
   if (body.specialistProfile !== undefined) patch.specialistProfile = body.specialistProfile ?? undefined;
   if (body.models !== undefined) patch.models = body.models ?? undefined;
   if (body.skills !== undefined) patch.skills = body.skills ?? undefined;

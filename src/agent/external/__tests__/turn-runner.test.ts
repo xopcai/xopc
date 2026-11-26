@@ -72,7 +72,7 @@ it('records native items once and resumes the same external session after reopen
     conversationId: session.key,
     transcriptId: session.transcriptId!,
     agentId: 'codex',
-    runtimeKind: 'codex',
+    execution: { kind: 'codex' },
     runId,
     content: 'Show the working directory',
     hasAttachmentsOrContext: false,
@@ -117,7 +117,7 @@ it('does not write orphaned outcome rows if binding validation fails before user
     conversationId: session.key,
     transcriptId: session.transcriptId!,
     agentId: 'codex',
-    runtimeKind: 'codex',
+    execution: { kind: 'codex' },
     runId: 'mismatch-run',
     content: 'Hello',
     hasAttachmentsOrContext: false,
@@ -145,7 +145,7 @@ it('finishes cleanly without crashing if the active transcript changes mid-turn'
     conversationId: session.key,
     transcriptId: session.transcriptId!,
     agentId: 'codex',
-    runtimeKind: 'codex',
+    execution: { kind: 'codex' },
     runId: 'reset-run',
     content: 'Hello',
     hasAttachmentsOrContext: false,
@@ -154,6 +154,29 @@ it('finishes cleanly without crashing if the active transcript changes mid-turn'
 
   expect(events.some(event => event.type === 'turn_outcome')).toBe(true);
   expect(events.some(event => event.type === 'error')).toBe(true);
+});
+
+it('uses explicit execution.model directly without querying model/list', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-external-model-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'Codex custom model', workspaceRoot: root });
+  const session = createConversation({ agentId: 'codex', projectId: project.id }, root);
+
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'codex',
+    execution: { kind: 'codex', model: 'gpt-5.3-codex' },
+    runId: 'custom-model-run',
+    content: 'Hello',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+
+  expect(requests).not.toHaveBeenCalledWith('model/list', expect.anything());
+  expect(requests).toHaveBeenCalledWith('thread/start', expect.objectContaining({
+    model: 'gpt-5.3-codex',
+  }));
 });
 
 it('persists resume cursor and supports controlled native session rotation', () => {

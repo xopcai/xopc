@@ -19,13 +19,15 @@ import { agentListDisplayName } from '@/features/settings/agents/agent-display-n
 import { AgentsEditorModal } from '@/features/settings/agents/agents-editor-modal';
 import { agentDirectoryGrid, AgentsListGrid } from '@/features/settings/agents/agents-list-grid';
 import { CreateAgentDialog, type ManualAgentDraft } from '@/features/settings/agents/create-agent-dialog';
+import { ExternalRuntimeQuickCards } from '@/features/settings/agents/external-runtime-config';
 import { SettingsPageFrame } from '@/features/settings/settings-page-layout';
 import {
   createGatewayAgent,
   deleteGatewayAgent,
+  fetchExternalAgentRuntimes,
   fetchGatewayAgents,
 } from '@/features/settings/agents-admin-api';
-import type { GatewayAgentRow } from '@/features/settings/types/agent-gateway';
+import type { ExternalAgentKind, GatewayAgentRow } from '@/features/settings/types/agent-gateway';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -71,6 +73,16 @@ export function AgentsSettingsPanel({
   const navigate = useNavigate();
   const { profile: personalProfile } = usePersonalProfile();
   const { data, error, isLoading, mutate } = useSWR(token ? 'settings-gateway-agents' : null, fetchGatewayAgents);
+  const {
+    data: externalRuntimes,
+    isLoading: externalRuntimesLoading,
+    mutate: mutateExternalRuntimes,
+  } = useSWR(
+    token ? 'settings-external-agent-runtimes' : null,
+    fetchExternalAgentRuntimes,
+    { revalidateOnFocus: false },
+  );
+  const [refreshingRuntimes, setRefreshingRuntimes] = useState(false);
   const { data: gatewayConfigData } = useGatewayConfigSwr(Boolean(token));
   const config = gatewayConfigData?.payload?.config as { tui?: { defaultAgent?: string } } | undefined;
   const tuiDefaultAgentId = config?.tui?.defaultAgent?.trim();
@@ -84,6 +96,7 @@ export function AgentsSettingsPanel({
     instructions: '',
     workspace: '',
     execution: 'embedded',
+    executionConfig: undefined,
   });
   const editorDirtyRef = useRef(false);
 
@@ -107,11 +120,12 @@ export function AgentsSettingsPanel({
           name: manualDraft.name.trim(),
           ...(manualDraft.instructions.trim() ? { instructions: manualDraft.instructions.trim() } : {}),
         },
-        ...(manualDraft.execution !== 'embedded' ? { execution: { kind: manualDraft.execution } } :
-          manualDraft.workspace.trim() ? { workspace: manualDraft.workspace.trim() } : {}),
+        ...(manualDraft.execution !== 'embedded'
+          ? { execution: manualDraft.executionConfig?.kind === manualDraft.execution ? manualDraft.executionConfig : { kind: manualDraft.execution } }
+          : manualDraft.workspace.trim() ? { workspace: manualDraft.workspace.trim() } : {}),
       });
       const createdExecution = manualDraft.execution;
-      setManualDraft({ open: false, name: '', instructions: '', workspace: '', execution: 'embedded' });
+      setManualDraft({ open: false, name: '', instructions: '', workspace: '', execution: 'embedded', executionConfig: undefined });
       void mutate(next, { revalidate: false });
       if (createdExecution !== 'embedded') {
         navigate(AGENTS_APP_LIST_PATH);
@@ -235,6 +249,27 @@ export function AgentsSettingsPanel({
     editorDirtyRef.current = dirty;
   }, []);
 
+  const refreshExternalRuntimes = useCallback(async () => {
+    setRefreshingRuntimes(true);
+    try {
+      await mutateExternalRuntimes();
+    } finally {
+      setRefreshingRuntimes(false);
+    }
+  }, [mutateExternalRuntimes]);
+
+  const openQuickAddRuntime = useCallback((kind: ExternalAgentKind) => {
+    setManualError(null);
+    setManualDraft({
+      open: true,
+      name: kind === 'codex' ? 'Codex' : 'Antigravity',
+      instructions: '',
+      workspace: '',
+      execution: kind,
+      executionConfig: { kind },
+    });
+  }, []);
+
   if (!token) {
     return <SettingsPageFrame className={capabilityPageWidth} padding={capabilityPagePadding}><p className="text-sm text-fg-muted">{zh ? '需要本机服务令牌。' : 'Local service token required.'}</p></SettingsPageFrame>;
   }
@@ -250,6 +285,17 @@ export function AgentsSettingsPanel({
       padding={capabilityPagePadding}
     >
       {(error || actionError) && !selected ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{actionError ?? String(error)}</p> : null}
+
+      <ExternalRuntimeQuickCards
+        runtimes={externalRuntimes}
+        loading={externalRuntimesLoading}
+        refreshing={refreshingRuntimes}
+        agents={data.agents}
+        zh={zh}
+        onRefresh={() => void refreshExternalRuntimes()}
+        onAddRuntime={openQuickAddRuntime}
+        onOpenAgent={openAgent}
+      />
 
       <AgentsListGrid
         agents={data.agents}
@@ -272,6 +318,7 @@ export function AgentsSettingsPanel({
             key={selected.id}
             agent={selected}
             toolIds={data.builtinToolIds}
+            externalRuntimes={externalRuntimes}
             zh={zh}
             messages={agentsMessages}
             externalError={actionError}
@@ -292,6 +339,8 @@ export function AgentsSettingsPanel({
         draft={manualDraft}
         busy={busy}
         error={manualError}
+        zh={zh}
+        externalRuntimes={externalRuntimes}
         messages={agentsMessages}
         workingDirectoryMessages={messageBundle.chat.workingDirectory}
         onChange={(patch) => setManualDraft((current) => ({ ...current, ...patch }))}

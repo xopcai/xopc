@@ -1,4 +1,4 @@
-import type { ExternalAgentKind } from '../../agent-config/schema.js';
+import type { ExternalAgentExecution } from '../../agent-config/schema.js';
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import type { StoredAgent } from '../../agent-catalog/types.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
@@ -10,7 +10,7 @@ import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repositor
 import type { ExternalSessionBinding, ExternalSessionIdentity } from './types.js';
 
 export type ExternalStoredAgent = StoredAgent & {
-  execution: { kind: ExternalAgentKind };
+  execution: ExternalAgentExecution;
 };
 
 export function getExternalAgent(agentId: string): ExternalStoredAgent | undefined {

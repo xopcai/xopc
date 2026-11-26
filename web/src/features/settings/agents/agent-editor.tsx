@@ -19,10 +19,18 @@ import { agentListDisplayName, agentListDisplayDescription } from '@/features/se
 import { ModelRouteEditor } from '@/features/settings/agents/agent-model-route-editor';
 import { updateGatewayAgent, uploadGatewayAgentAvatar } from '@/features/settings/agents-admin-api';
 import { CREATURE_PRESETS } from '@/features/settings/agents/agent-profile-markdown';
+import {
+  ExternalRuntimeConfigForm,
+  ExternalRuntimeStatusDot,
+  externalRuntimeDisplayName,
+  externalRuntimeShortDescription,
+  externalRuntimeStatusLabel,
+} from '@/features/settings/agents/external-runtime-config';
 import type {
   AgentModelsOverride,
   AgentOverride,
   AgentProfile,
+  ExternalRuntimeProbeResult,
   GatewayAgentRow,
   ModelIntent,
   ModelRoute,
@@ -36,7 +44,7 @@ import { AgentAvatarField, type PendingAgentAvatar } from './agent-avatar-field'
 import { bumpAgentAvatarCacheRevision } from './agent-avatar-cache';
 import { SpecialistProfileEditor } from './specialist-profile-editor';
 
-type AgentPanel = 'overview' | 'profile' | 'capabilities' | 'work';
+type AgentPanel = 'overview' | 'runtime' | 'profile' | 'capabilities' | 'work';
 type CapabilityPanel = 'specialties' | 'models' | 'tools';
 type WorkPanel = 'directory' | 'instructions' | 'tools' | 'runtime';
 
@@ -92,6 +100,7 @@ function cleanObject<T extends Record<string, unknown>>(value: T): T | undefined
 export function AgentEditor({
   agent,
   toolIds,
+  externalRuntimes,
   zh,
   messages,
   externalError,
@@ -103,6 +112,7 @@ export function AgentEditor({
 }: {
   agent: GatewayAgentRow;
   toolIds: string[];
+  externalRuntimes?: ExternalRuntimeProbeResult[];
   zh: boolean;
   messages: AgentsSettingsMessages;
   externalError?: string | null;
@@ -132,9 +142,14 @@ export function AgentEditor({
   const [pendingAvatar, setPendingAvatar] = useState<PendingAgentAvatar | null>(null);
   const [avatarReading, setAvatarReading] = useState(false);
 
+  const externalExecution = draft.execution;
+  const isExternal = Boolean(externalExecution);
+  const externalProbe = externalExecution
+    ? externalRuntimes?.find((entry) => entry.kind === externalExecution.kind)
+    : undefined;
   const configDirty = JSON.stringify(draft) !== JSON.stringify(agent.override);
-  const dirty = configDirty || profileFilesDirty || pendingAvatar !== null;
-  const invalidModelOverride = [
+  const dirty = configDirty || (!isExternal && profileFilesDirty) || pendingAvatar !== null;
+  const invalidModelOverride = !isExternal && [
     draft.models?.chat,
     ...Object.values(draft.models?.intents ?? {}),
     draft.models?.imageUnderstanding,
@@ -191,28 +206,39 @@ export function AgentEditor({
     setSaving(true);
     setError(null);
     try {
-      await profileEditorRef.current?.save();
-      if (documentDirty.soul) completed.push(zh ? '个性与边界' : 'Personality & boundaries');
-      await workEditorRef.current?.save();
-      if (documentDirty.agents) completed.push(zh ? '工作规范' : 'Working instructions');
-      await toolEditorRef.current?.save();
-      if (documentDirty.tools) completed.push(zh ? '工具使用约定' : 'Tool guidance');
+      if (!isExternal) {
+        await profileEditorRef.current?.save();
+        if (documentDirty.soul) completed.push(zh ? '个性与边界' : 'Personality & boundaries');
+        await workEditorRef.current?.save();
+        if (documentDirty.agents) completed.push(zh ? '工作规范' : 'Working instructions');
+        await toolEditorRef.current?.save();
+        if (documentDirty.tools) completed.push(zh ? '工具使用约定' : 'Tool guidance');
+      }
       if (pendingAvatar) {
         await uploadGatewayAgentAvatar(agent.id, pendingAvatar);
         bumpAgentAvatarCacheRevision(agent.id);
         completed.push(zh ? '头像图片' : 'Avatar image');
       }
-      const next = await updateGatewayAgent(agent.id, {
-        expectedRevision: agent.revision,
-        specialistProfile: draft.specialistProfile ?? null,
-        workspace: draft.workspace ?? null,
-        profile: draft.profile,
-        models: draft.models ?? null,
-        skills: draft.skills ?? null,
-        tools: draft.tools ?? null,
-        toolAllowlist: draft.toolAllowlist ?? null,
-        runtime: draft.runtime ?? null,
-      });
+      const next = await updateGatewayAgent(
+        agent.id,
+        isExternal
+          ? {
+              expectedRevision: agent.revision,
+              profile: draft.profile,
+              execution: draft.execution,
+            }
+          : {
+              expectedRevision: agent.revision,
+              specialistProfile: draft.specialistProfile ?? null,
+              workspace: draft.workspace ?? null,
+              profile: draft.profile,
+              models: draft.models ?? null,
+              skills: draft.skills ?? null,
+              tools: draft.tools ?? null,
+              toolAllowlist: draft.toolAllowlist ?? null,
+              runtime: draft.runtime ?? null,
+            },
+      );
       const saved = next.agents.find((candidate) => candidate.id === agent.id);
       if (saved) setDraft(structuredClone(saved.override));
       setDocumentDirty({ soul: false, agents: false, tools: false });
@@ -278,13 +304,21 @@ export function AgentEditor({
   const profileDirty = identityChanged || documentDirty.soul || pendingAvatar !== null;
   const capabilityDirty = differs(['models', 'skills', 'tools', 'toolAllowlist', 'specialistProfile']);
   const workDirty = differs(['workspace', 'runtime']) || draft.profile?.instructions !== agent.override.profile?.instructions || documentDirty.agents || documentDirty.tools;
+  const executionDirty = differs(['execution']);
+  const externalProfileDirty = JSON.stringify(draft.profile) !== JSON.stringify(agent.override.profile) || pendingAvatar !== null;
   const dirtySuffix = (value: boolean) => value ? <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label={zh ? '有未保存的更改' : 'Unsaved changes'} /> : undefined;
-  const navItems = [
-    { id: 'overview' as const, label: zh ? '概览' : 'Overview' },
-    { id: 'profile' as const, label: zh ? '个性' : 'Personality', suffix: dirtySuffix(profileDirty) },
-    { id: 'capabilities' as const, label: zh ? '能力' : 'Capabilities', suffix: dirtySuffix(capabilityDirty) },
-    { id: 'work' as const, label: zh ? '工作设置' : 'Work settings', suffix: dirtySuffix(workDirty) },
-  ];
+  const navItems: Array<{ id: AgentPanel; label: string; suffix?: React.ReactNode }> = isExternal
+    ? [
+        { id: 'overview', label: zh ? '概览' : 'Overview' },
+        { id: 'runtime', label: zh ? '运行时' : 'Runtime', suffix: dirtySuffix(executionDirty) },
+        { id: 'profile', label: zh ? '资料与指令' : 'Profile', suffix: dirtySuffix(externalProfileDirty) },
+      ]
+    : [
+        { id: 'overview', label: zh ? '概览' : 'Overview' },
+        { id: 'profile', label: zh ? '个性' : 'Personality', suffix: dirtySuffix(profileDirty) },
+        { id: 'capabilities', label: zh ? '能力' : 'Capabilities', suffix: dirtySuffix(capabilityDirty) },
+        { id: 'work', label: zh ? '工作设置' : 'Work settings', suffix: dirtySuffix(workDirty) },
+      ];
   const scrollKey = panel === 'capabilities' ? `${panel}:${capabilityPanel}` : panel === 'work' ? `${panel}:${workPanel}` : panel;
   const switchPanel = (next: AgentPanel, capability = capabilityPanel, work = workPanel) => {
     scrollPositions.current[scrollKey] = mainRef.current?.scrollTop ?? 0;
@@ -304,7 +338,8 @@ export function AgentEditor({
         <PageTabs items={navItems} activeTab={panel} onChange={switchPanel}
           ariaLabel={zh ? '智能体设置' : 'Agent settings'} tabIdPrefix="agent-tab" panelIdPrefix="agent-panel"
           orientation={desktopNavigation ? 'vertical' : 'horizontal'}
-          className="m-0 grid grid-cols-4 overflow-visible p-0 sm:flex sm:flex-col" buttonClassName="min-w-0 justify-center px-1 text-xs sm:justify-start sm:px-3 sm:py-3 sm:text-sm [&>span]:min-w-0 [&>span]:break-words"
+          className={cn('m-0 grid overflow-visible p-0 sm:flex sm:flex-col', isExternal ? 'grid-cols-3' : 'grid-cols-4')}
+          buttonClassName="min-w-0 justify-center px-1 text-xs sm:justify-start sm:px-3 sm:py-3 sm:text-sm [&>span]:min-w-0 [&>span]:break-words"
           selectedClassName="bg-accent-soft text-accent-fg" />
       </aside>
 
@@ -312,7 +347,174 @@ export function AgentEditor({
         <main ref={mainRef} role="tabpanel" id={`agent-panel-${panel}`} aria-labelledby={`agent-tab-${panel}`} tabIndex={0} className="min-h-0 flex-1 overflow-y-auto p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:p-6">
           {error || externalError ? <p role="alert" className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600">{error ?? externalError}</p> : null}
 
-          {panel === 'overview' ? (
+          {panel === 'overview' && isExternal && externalExecution ? (
+            <div className="space-y-6">
+              <SectionTitle
+                title={agentListDisplayName({ id: agent.id, name: profileName }, messages)}
+                description={externalRuntimeShortDescription(externalExecution.kind, zh)}
+                action={<Button onClick={onChat}><MessageSquarePlus className="size-4" />{zh ? '开始对话' : 'Start chat'}</Button>}
+              />
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-edge bg-surface-base p-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ExternalRuntimeStatusDot status={externalProbe?.status} />
+                    <p className="text-sm font-semibold text-fg">
+                      {externalRuntimeDisplayName(externalExecution.kind)}
+                    </p>
+                    <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted">
+                      {externalRuntimeStatusLabel(externalProbe?.status, zh)}
+                    </span>
+                    {externalProbe?.version ? (
+                      <span className="rounded-md bg-surface-hover px-1.5 py-0.5 font-mono text-[10px] text-fg-muted">
+                        {externalProbe.version}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1.5 text-xs leading-5 text-fg-muted">
+                    {zh
+                      ? '在项目会话中自动绑定项目目录作为工作区，工具调用和上下文由外部 CLI 驱动。'
+                      : 'Runs inside Project chats using the project directory as its working tree; tools and execution are driven by the external CLI.'}
+                  </p>
+                </div>
+                <Button onClick={() => switchPanel('runtime')}>
+                  {zh ? '配置运行时' : 'Configure runtime'}
+                </Button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <SummaryCard
+                  onClick={() => switchPanel('runtime')}
+                  label={zh ? '运行时模型' : 'Runtime model'}
+                  value={externalExecution.model || (zh ? '跟随 CLI 默认' : 'Auto (CLI default)')}
+                  detail={
+                    externalExecution.kind === 'codex'
+                      ? (externalExecution.homePath
+                        ? (zh ? '已自定义 CODEX_HOME' : 'Custom CODEX_HOME')
+                        : (zh ? '默认 ~/.codex' : 'Default ~/.codex'))
+                      : (externalExecution.authMethod
+                        ? externalExecution.authMethod
+                        : (zh ? '自动使用宿主机登录' : 'Host CLI login'))
+                  }
+                />
+                <SummaryCard
+                  onClick={() => switchPanel('profile')}
+                  label={zh ? '工作指令' : 'Working instructions'}
+                  value={draft.profile?.instructions?.trim() ? (zh ? '已自定义' : 'Configured') : (zh ? '未设置' : 'Not set')}
+                  detail={
+                    externalExecution.kind === 'codex'
+                      ? (zh ? '注入为 Codex developerInstructions' : 'Passed as Codex developerInstructions')
+                      : (zh ? '注入为 Antigravity systemPrompt' : 'Passed as Antigravity systemPrompt')
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-red-500/25 bg-red-500/5 p-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-red-600">{zh ? '删除智能体' : 'Delete agent'}</h4>
+                  <p className="mt-1 text-xs text-fg-muted">
+                    {zh ? '配置条目会被移除，删除前仍会再次确认。' : 'The configuration entry will be removed after confirmation.'}
+                  </p>
+                </div>
+                <Button variant="ghost" className="text-red-600" onClick={onDelete}>
+                  <AlertTriangle className="size-4" />
+                  {zh ? '删除' : 'Delete'}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {panel === 'runtime' && isExternal && externalExecution ? (
+            <div className="space-y-6">
+              <SectionTitle
+                title={zh ? '外部运行时配置' : 'External runtime configuration'}
+                description={
+                  zh
+                    ? '调整 CLI 路径、认证目录与默认模型，并可随时检测宿主机连接与可用模型列表。'
+                    : 'Configure CLI paths, auth settings, and default model, then test host connectivity and available models.'
+                }
+              />
+              <ExternalRuntimeConfigForm
+                value={externalExecution}
+                initialProbe={externalProbe}
+                disabled={saving}
+                zh={zh}
+                workingDirectoryMessages={workingDirectoryMessages}
+                onChange={(next) => setDraft((current) => ({ ...current, execution: next }))}
+              />
+            </div>
+          ) : null}
+
+          {panel === 'profile' && isExternal && externalExecution ? (
+            <div className="space-y-6">
+              <SectionTitle
+                title={zh ? '资料与指令' : 'Identity & instructions'}
+                description={
+                  zh
+                    ? '设置智能体名称、头像和每次会话附加给外部运行时的工作指令。'
+                    : 'Configure display identity and the working instructions injected into each external runtime session.'
+                }
+              />
+              <section className="rounded-2xl border border-edge bg-surface-base p-4 sm:p-5">
+                <div className="grid items-center gap-4 sm:grid-cols-2">
+                  <div className="min-w-0">
+                    <AgentAvatarField
+                      agentId={agent.id}
+                      avatar={draft.profile?.avatar}
+                      zh={zh}
+                      disabled={saving}
+                      pending={pendingAvatar}
+                      onPendingChange={setPendingAvatar}
+                      onReadingChange={setAvatarReading}
+                      onChange={(avatar) => updateIdentity('avatar', avatar)}
+                    />
+                  </div>
+                  <label className="text-xs font-medium text-fg-muted">
+                    {zh ? '名称' : 'Name'}
+                    <input
+                      className={`${inputClass} mt-1.5`}
+                      value={profileName}
+                      onChange={(event) => updateIdentity('name', event.target.value)}
+                      placeholder={externalExecution.kind === 'codex' ? 'Codex' : 'Antigravity'}
+                    />
+                  </label>
+                </div>
+                <div className="mt-4">
+                  <label className="block text-xs font-medium text-fg-muted">
+                    {zh ? '介绍' : 'Description'}
+                    <textarea
+                      rows={2}
+                      className={`${inputClass} mt-1.5 resize-y leading-6`}
+                      value={draft.profile?.description ?? ''}
+                      onChange={(event) => updateIdentity('description', event.target.value)}
+                      placeholder={zh ? '例如：用于仓库重构、代码审查和自动化修复。' : 'e.g. Dedicated coding agent for refactors, reviews, and fixes.'}
+                    />
+                  </label>
+                </div>
+              </section>
+              <section className="rounded-2xl border border-edge bg-surface-base p-4 sm:p-5">
+                <h4 className="text-sm font-semibold text-fg">{zh ? '工作指令' : 'Working instructions'}</h4>
+                <p className="mt-1 text-xs leading-5 text-fg-muted">
+                  {externalExecution.kind === 'codex'
+                    ? (zh ? '会在创建或恢复 Codex 会话时作为 developerInstructions 传入。' : 'Sent as developerInstructions when starting or resuming Codex sessions.')
+                    : (zh ? '会在创建 Antigravity ACP 会话时作为 systemPrompt.append 传入。' : 'Sent as systemPrompt.append when creating Antigravity ACP sessions.')}
+                </p>
+                <textarea
+                  rows={6}
+                  className={`${inputClass} mt-3 resize-y leading-6`}
+                  value={draft.profile?.instructions ?? ''}
+                  onChange={(event) => setDraft((current) => ({
+                    ...current,
+                    profile: {
+                      ...current.profile,
+                      name: current.profile?.name || agent.name || agent.id,
+                      instructions: event.target.value || undefined,
+                    },
+                  }))}
+                  placeholder={zh ? '可选：代码风格约束、提交规范、测试要求…' : 'Optional: coding conventions, testing expectations, review style…'}
+                />
+              </section>
+            </div>
+          ) : null}
+
+          {panel === 'overview' && !isExternal ? (
             <div className="space-y-6">
               <SectionTitle
                 title={agentListDisplayName({ id: agent.id, name: profileName }, messages)}
@@ -353,7 +555,7 @@ export function AgentEditor({
             </div>
           ) : null}
 
-          {profileVisited ? (
+          {!isExternal && profileVisited ? (
             <div className={cn('space-y-6', panel !== 'profile' && 'hidden')}>
               <SectionTitle title={zh ? '资料与个性' : 'Identity and personality'} description={zh ? '设置它是谁，以及如何与你交流。' : 'Define who this agent is and how it communicates.'} />
               <section className="rounded-2xl border border-edge bg-surface-base p-4 sm:p-5">

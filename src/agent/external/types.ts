@@ -1,6 +1,64 @@
 import type { ToolCall } from '@earendil-works/pi-ai';
 
-import type { ExternalAgentKind } from '../../agent-config/schema.js';
+import type { ExternalAgentExecution, ExternalAgentKind } from '../../agent-config/schema.js';
+
+export type ExternalRuntimeStatus = 'ready' | 'not_installed' | 'unauthenticated' | 'warning' | 'error';
+
+export type ExternalRuntimeModelOption = {
+  id: string;
+  label: string;
+  isDefault?: boolean;
+};
+
+export type ExternalRuntimeAccountInfo = {
+  label?: string;
+  authMode?: string;
+};
+
+export type ExternalRuntimeProbeResult = {
+  kind: ExternalAgentKind;
+  label: string;
+  installed: boolean;
+  status: ExternalRuntimeStatus;
+  executablePath?: string;
+  version?: string;
+  account?: ExternalRuntimeAccountInfo;
+  message?: string;
+  hintCommand?: string;
+  models: ExternalRuntimeModelOption[];
+  checkedAt: number;
+};
+
+export type ExternalRuntimeAuthMode = 'browser' | 'device_code' | 'api_key';
+
+export type ExternalRuntimeAuthPhase =
+  | 'starting'
+  | 'waiting'
+  | 'verifying'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
+
+export type ExternalRuntimeAuthInputKind = 'code_or_url' | 'callback_url';
+
+export type ExternalRuntimeAuthFlowSnapshot = {
+  flowId: string;
+  kind: ExternalAgentKind;
+  mode: ExternalRuntimeAuthMode;
+  phase: ExternalRuntimeAuthPhase;
+  authorizationUrl?: string;
+  userCode?: string;
+  inputKind?: ExternalRuntimeAuthInputKind;
+  message?: string;
+  probe?: ExternalRuntimeProbeResult;
+  expiresAt: string;
+};
+
+export type StartExternalRuntimeAuthInput = {
+  execution: ExternalAgentExecution;
+  mode?: ExternalRuntimeAuthMode;
+  apiKey?: string;
+};
 
 export type ExternalRuntimeCapabilities = {
   /** Whether the runtime accepts file/image attachments or extra turn context refs. */
@@ -77,6 +135,7 @@ export interface ExternalDriverTurnContext {
   conversationId: string;
   transcriptId: string;
   agentId: string;
+  execution: ExternalAgentExecution;
   runId: string;
   clientMessageId?: string;
   cwd: string;
@@ -95,6 +154,7 @@ export interface ExternalAgentDriver {
   readonly defaultModelName: string;
   readonly capabilities: ExternalRuntimeCapabilities;
   runTurn(context: ExternalDriverTurnContext): Promise<void>;
+  probe(execution?: ExternalAgentExecution): Promise<ExternalRuntimeProbeResult>;
 }
 
 export type ExternalTurnEvent = { type: string; [key: string]: unknown };
@@ -103,7 +163,7 @@ export interface RunExternalProjectTurnInput {
   conversationId: string;
   transcriptId: string;
   agentId: string;
-  runtimeKind: ExternalAgentKind;
+  execution: ExternalAgentExecution;
   instructions?: string;
   content: string;
   hasAttachmentsOrContext: boolean;

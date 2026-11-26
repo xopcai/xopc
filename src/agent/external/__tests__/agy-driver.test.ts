@@ -10,6 +10,7 @@ import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import {
   getExternalAgentDriver,
   hasExternalSessionBinding,
+  probeExternalAgentRuntime,
   runExternalProjectTurn,
 } from '../index.js';
 
@@ -58,8 +59,24 @@ rl.on('line', (line) => {
       id: msg.id,
       result: {
         sessionId: 'agy-session-1',
-        configOptions: [{ id: 'model', type: 'select', currentValue: 'gemini-3-pro' }],
+        configOptions: [{
+          id: 'model',
+          type: 'select',
+          currentValue: 'gemini-3-pro',
+          options: [
+            { value: 'gemini-3-pro', name: 'Gemini 3 Pro' },
+            { value: 'gemini-3-flash', name: 'Gemini 3 Flash' },
+          ],
+        }],
       },
+    });
+    return;
+  }
+  if (msg.method === 'session/set_config_option') {
+    send({
+      jsonrpc: '2.0',
+      id: msg.id,
+      result: {},
     });
     return;
   }
@@ -270,7 +287,7 @@ it('registers agy driver and runs multi-turn ACP session with resume across SQLi
     conversationId: session.key,
     transcriptId: session.transcriptId!,
     agentId: 'agy-coder',
-    runtimeKind: 'agy',
+    execution: { kind: 'agy' },
     instructions: 'Be concise.',
     runId,
     content: 'Inspect workspace',
@@ -335,7 +352,7 @@ it('falls back to session/load and ignores replayed notifications during load', 
     conversationId: session.key,
     transcriptId: session.transcriptId!,
     agentId: 'agy-coder',
-    runtimeKind: 'agy',
+    execution: { kind: 'agy' },
     runId,
     content: 'Hello',
     hasAttachmentsOrContext: false,
@@ -366,7 +383,7 @@ it('surfaces a clear sign-in error when agy prints an OAuth URL to stdout', asyn
     conversationId: session.key,
     transcriptId: session.transcriptId!,
     agentId: 'agy-coder',
-    runtimeKind: 'agy',
+    execution: { kind: 'agy' },
     runId: 'auth-run',
     content: 'Hello',
     hasAttachmentsOrContext: false,
@@ -392,7 +409,7 @@ it('sends session/cancel on abort and settles turn as partial/aborted', async ()
     conversationId: session.key,
     transcriptId: session.transcriptId!,
     agentId: 'agy-coder',
-    runtimeKind: 'agy',
+    execution: { kind: 'agy' },
     runId: 'cancel-run',
     content: 'Long task',
     hasAttachmentsOrContext: false,
@@ -408,4 +425,61 @@ it('sends session/cancel on abort and settles turn as partial/aborted', async ()
 
   const logged = readFileSync(rpcLog, 'utf8').trim().split('\n').map(line => JSON.parse(line));
   expect(logged.some(entry => entry.method === 'session/cancel' && entry.params?.sessionId === 'agy-session-1')).toBe(true);
+});
+
+it('probes AGY readiness, discovered models, unauthenticated state, and missing binary', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-agy-probe-'));
+  const rpcLog = join(root, 'rpc.jsonl');
+  const normalBin = createFakeAgyBinary(root, rpcLog, 'normal');
+
+  const ready = await probeExternalAgentRuntime({ kind: 'agy', binaryPath: normalBin });
+  expect(ready.kind).toBe('agy');
+  expect(ready.status).toBe('ready');
+  expect(ready.version).toBe('1.5.8');
+  expect(ready.models).toEqual([
+    { id: 'gemini-3-pro', label: 'Gemini 3 Pro', isDefault: true },
+    { id: 'gemini-3-flash', label: 'Gemini 3 Flash' },
+  ]);
+
+  const authDir = mkdtempSync(join(tmpdir(), 'xopc-agy-probe-auth-'));
+  try {
+    const authBin = createFakeAgyBinary(authDir, join(authDir, 'rpc.jsonl'), 'auth_url');
+    const unauth = await probeExternalAgentRuntime({ kind: 'agy', binaryPath: authBin });
+    expect(unauth.status).toBe('unauthenticated');
+    expect(unauth.hintCommand).toBe('agy acp --login');
+  } finally {
+    rmSync(authDir, { force: true, recursive: true });
+  }
+
+  const missing = await probeExternalAgentRuntime({ kind: 'agy', binaryPath: join(root, 'does-not-exist') });
+  expect(missing.status).toBe('not_installed');
+});
+
+it('applies execution.model via session/set_config_option when overriding AGY default model', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-agy-model-'));
+  const rpcLog = join(root, 'rpc.jsonl');
+  const bin = createFakeAgyBinary(root, rpcLog, 'normal');
+
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'AGY model project', workspaceRoot: root });
+  const session = createConversation({ agentId: 'agy-coder', projectId: project.id }, root);
+
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'agy-coder',
+    execution: { kind: 'agy', binaryPath: bin, model: 'gemini-3-flash' },
+    runId: 'model-override-run',
+    content: 'Use flash model',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+
+  const logged = readFileSync(rpcLog, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  expect(logged.some(entry =>
+    entry.method === 'session/set_config_option'
+    && entry.params?.sessionId === 'agy-session-1'
+    && entry.params?.configId === 'model'
+    && entry.params?.value === 'gemini-3-flash',
+  )).toBe(true);
 });

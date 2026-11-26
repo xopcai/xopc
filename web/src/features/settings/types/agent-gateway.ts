@@ -54,6 +54,78 @@ export type AgentDefaults = {
 export const EXTERNAL_AGENT_KINDS = ['codex', 'agy'] as const;
 export type ExternalAgentKind = (typeof EXTERNAL_AGENT_KINDS)[number];
 
+export const AGY_AUTH_METHODS = ['oauth-personal', 'oauth-business', 'gemini-api-key', 'agent-platform'] as const;
+export type AgyAuthMethod = (typeof AGY_AUTH_METHODS)[number];
+
+export type CodexExecution = {
+  kind: 'codex';
+  binaryPath?: string;
+  homePath?: string;
+  model?: string;
+};
+
+export type AgyExecution = {
+  kind: 'agy';
+  binaryPath?: string;
+  geminiDir?: string;
+  authMethod?: AgyAuthMethod;
+  model?: string;
+};
+
+export type ExternalAgentExecution = CodexExecution | AgyExecution;
+
+export type ExternalRuntimeStatus = 'ready' | 'not_installed' | 'unauthenticated' | 'warning' | 'error';
+
+export type ExternalRuntimeModelOption = {
+  id: string;
+  label: string;
+  isDefault?: boolean;
+};
+
+export type ExternalRuntimeAccountInfo = {
+  label?: string;
+  authMode?: string;
+};
+
+export type ExternalRuntimeProbeResult = {
+  kind: ExternalAgentKind;
+  label: string;
+  installed: boolean;
+  status: ExternalRuntimeStatus;
+  executablePath?: string;
+  version?: string;
+  account?: ExternalRuntimeAccountInfo;
+  message?: string;
+  hintCommand?: string;
+  models: ExternalRuntimeModelOption[];
+  checkedAt: number;
+};
+
+export type ExternalRuntimeAuthMode = 'browser' | 'device_code' | 'api_key';
+
+export type ExternalRuntimeAuthPhase =
+  | 'starting'
+  | 'waiting'
+  | 'verifying'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
+
+export type ExternalRuntimeAuthInputKind = 'code_or_url' | 'callback_url';
+
+export type ExternalRuntimeAuthFlowSnapshot = {
+  flowId: string;
+  kind: ExternalAgentKind;
+  mode: ExternalRuntimeAuthMode;
+  phase: ExternalRuntimeAuthPhase;
+  authorizationUrl?: string;
+  userCode?: string;
+  inputKind?: ExternalRuntimeAuthInputKind;
+  message?: string;
+  probe?: ExternalRuntimeProbeResult;
+  expiresAt: string;
+};
+
 export function isExternalAgentKind(value: unknown): value is ExternalAgentKind {
   return typeof value === 'string' && (EXTERNAL_AGENT_KINDS as readonly string[]).includes(value);
 }
@@ -65,7 +137,7 @@ export type AgentOverride = {
   workspace?: string;
   profile?: AgentProfile;
   specialistProfile?: SpecialistProfile;
-  execution?: { kind: ExternalAgentKind };
+  execution?: ExternalAgentExecution;
   models?: AgentModelsOverride;
   skills?: SkillOverride;
   tools?: Record<string, ToolPolicy>;

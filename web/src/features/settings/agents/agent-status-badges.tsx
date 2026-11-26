@@ -1,4 +1,5 @@
 import { isPersonalAgentId } from '@/features/settings/agents/agent-display-names';
+import type { ExternalAgentExecution } from '@/features/settings/types/agent-gateway';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 
 export function AgentStatusBadges({
@@ -8,7 +9,7 @@ export function AgentStatusBadges({
   showCustom = true,
   className = '',
 }: {
-  agent: { id: string; isDefault: boolean };
+  agent: { id: string; isDefault: boolean; override?: { execution?: ExternalAgentExecution } };
   tuiDefaultAgentId?: string;
   messages: AgentsSettingsMessages;
   showCustom?: boolean;
@@ -16,11 +17,17 @@ export function AgentStatusBadges({
 }) {
   const isPersonal = isPersonalAgentId(agent.id);
   const isTuiDefault = agent.id === tuiDefaultAgentId;
-  const isCustom = !agent.isDefault && !isTuiDefault && !isPersonal;
+  const executionKind = agent.override?.execution?.kind;
+  const isCustom = !agent.isDefault && !isTuiDefault && !isPersonal && !executionKind;
   if (isCustom && !showCustom) return null;
 
   return (
     <div className={`flex flex-wrap gap-1 ${className}`}>
+      {executionKind ? (
+        <span className="rounded-full border border-accent/25 bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+          {executionKind === 'codex' ? 'Codex' : 'AGY'}
+        </span>
+      ) : null}
       {agent.isDefault ? (
         <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
           {messages.listDefaultBadge}

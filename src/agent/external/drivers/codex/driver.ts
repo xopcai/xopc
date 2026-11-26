@@ -1,14 +1,81 @@
+import { execFile } from 'node:child_process';
+import { accessSync, constants as fsConstants, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { delimiter, isAbsolute, join } from 'node:path';
+import { promisify } from 'node:util';
+
+import type { CodexExecution, ExternalAgentExecution } from '../../../../agent-config/schema.js';
+import { resolveUserPath } from '../../../agent-scope.js';
 import type {
   ExternalAgentDriver,
   ExternalDriverTurnContext,
+  ExternalRuntimeModelOption,
+  ExternalRuntimeProbeResult,
   ExternalRuntimeToolCall,
   ExternalRuntimeToolResult,
 } from '../../types.js';
 import { CodexAppServer, deferred, record, type CodexRecord } from './app-server.js';
 
+const execFileAsync = promisify(execFile);
 const fullAccess = { approvalPolicy: 'never', sandbox: 'danger-full-access' };
 const MAX_TOOL_TEXT = 32_000;
 const STOP_TIMEOUT_MS = 5_000;
+const PROBE_TIMEOUT_MS = 8_000;
+
+function isExecutableFile(candidate: string): boolean {
+  try {
+    if (!statSync(candidate).isFile()) return false;
+    if (process.platform !== 'win32') accessSync(candidate, fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function findCodexExecutable(configuredPath?: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const raw = configuredPath?.trim() || env.XOPC_CODEX_BIN?.trim();
+  if (raw) {
+    const resolved = raw.includes('/') || raw.includes('\\') || raw.startsWith('~')
+      ? resolveUserPath(raw)
+      : raw;
+    if (isAbsolute(resolved)) return isExecutableFile(resolved) ? resolved : undefined;
+    const dirs = (env.PATH ?? '').split(delimiter).filter(Boolean);
+    for (const dir of dirs) {
+      const candidate = join(dir, resolved);
+      if (isExecutableFile(candidate)) return candidate;
+    }
+    return undefined;
+  }
+  const exts = process.platform === 'win32'
+    ? (env.PATHEXT ?? '.EXE;.CMD;.BAT').split(';').filter(Boolean)
+    : [''];
+  for (const dir of (env.PATH ?? '').split(delimiter).filter(Boolean)) {
+    for (const ext of exts) {
+      const candidate = join(dir, `codex${ext}`);
+      if (isExecutableFile(candidate)) return candidate;
+    }
+  }
+  return undefined;
+}
+
+function parseCodexModels(catalog: CodexRecord): ExternalRuntimeModelOption[] {
+  const rawModels = Array.isArray(catalog.data) ? catalog.data : [];
+  const options: ExternalRuntimeModelOption[] = [];
+  const seen = new Set<string>();
+  for (const entry of rawModels) {
+    const item = record(entry);
+    const id = text(item?.model).trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const label = text(item?.displayName).trim() || text(item?.title).trim() || id;
+    options.push({ id, label, ...(item?.isDefault === true ? { isDefault: true } : {}) });
+  }
+  return options;
+}
+
+function codexOptionsFromExecution(execution?: ExternalAgentExecution): CodexExecution | undefined {
+  return execution?.kind === 'codex' ? execution : undefined;
+}
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
@@ -96,7 +163,8 @@ export const codexExternalDriver: ExternalAgentDriver = {
   },
 
   async runTurn(context: ExternalDriverTurnContext): Promise<void> {
-    const { cwd, content, instructions, existingBinding, runId, clientMessageId, signal, emit } = context;
+    const { cwd, content, instructions, existingBinding, execution, runId, clientMessageId, signal, emit } = context;
+    const codexConfig = codexOptionsFromExecution(execution);
     const nativeThread = existingBinding?.nativeSessionId;
     const tools = new Map<string, { tool: ExternalRuntimeToolCall; output: string }>();
     const finishedTools = new Set<string>();
@@ -180,25 +248,31 @@ export const codexExternalDriver: ExternalAgentDriver = {
           if (earlyEvents.length >= 4_096) throw new Error('Codex sent too many events before acknowledging the turn.');
           earlyEvents.push({ method, params });
         }
-      }, terminal.reject);
+      }, terminal.reject, {
+        binaryPath: codexConfig?.binaryPath,
+        homePath: codexConfig?.homePath,
+      });
 
       await server.request('initialize', { clientInfo: { name: 'xopc', title: 'xopc', version: '1' } }, signal);
       server.notify('initialized');
-      const catalog = await server.request('model/list', {}, signal);
-      const models = Array.isArray(catalog.data) ? catalog.data.map(record) : [];
-      const defaultModel = text((models.find(candidate => candidate?.isDefault === true) ?? models[0])?.model);
+      let selectedModel = codexConfig?.model?.trim();
+      if (!selectedModel) {
+        const catalog = await server.request('model/list', {}, signal);
+        const models = Array.isArray(catalog.data) ? catalog.data.map(record) : [];
+        selectedModel = text((models.find(candidate => candidate?.isDefault === true) ?? models[0])?.model);
+      }
       const opened = await server.request(nativeThread ? 'thread/resume' : 'thread/start', {
         ...fullAccess,
         cwd,
         ...(nativeThread ? { threadId: nativeThread } : { ephemeral: false }),
-        ...(defaultModel ? { model: defaultModel } : {}),
+        ...(selectedModel ? { model: selectedModel } : {}),
         ...(instructions ? { developerInstructions: instructions } : {}),
       }, signal);
       threadId = text(record(opened.thread)?.id);
       if (!threadId || (nativeThread && nativeThread !== threadId)) {
         throw new Error('Codex did not return the requested thread.');
       }
-      const model = text(opened.model) || defaultModel || undefined;
+      const model = text(opened.model) || selectedModel || undefined;
       emit({ type: 'session_bound', nativeSessionId: threadId, ...(model ? { model } : {}) });
       signal.throwIfAborted();
 
@@ -237,6 +311,110 @@ export const codexExternalDriver: ExternalAgentDriver = {
       signal.removeEventListener('abort', onAbort);
       clearTimeout(stopTimer);
       await server?.close(Boolean(failed || signal.aborted));
+    }
+  },
+
+  async probe(execution?: ExternalAgentExecution): Promise<ExternalRuntimeProbeResult> {
+    const checkedAt = Date.now();
+    const codexConfig = codexOptionsFromExecution(execution);
+    const executablePath = findCodexExecutable(codexConfig?.binaryPath);
+    if (!executablePath) {
+      return {
+        kind: 'codex',
+        label: 'Codex',
+        installed: false,
+        status: 'not_installed',
+        message: codexConfig?.binaryPath
+          ? `Codex binary was not found at "${codexConfig.binaryPath}".`
+          : 'Codex CLI was not found in PATH on the Gateway host.',
+        hintCommand: 'npm i -g @openai/codex && codex login',
+        models: [],
+        checkedAt,
+      };
+    }
+
+    let version: string | undefined;
+    try {
+      const { stdout } = await execFileAsync(executablePath, ['--version'], { timeout: 3_000 });
+      const parsed = stdout.trim().match(/\d+\.\d+\.\d+[\w.-]*/)?.[0] || stdout.trim().split('\n')[0]?.trim();
+      if (parsed) version = parsed;
+    } catch {
+      // Version detection is best-effort.
+    }
+
+    const abortController = new AbortController();
+    const timer = setTimeout(() => abortController.abort(new Error('Codex health check timed out.')), PROBE_TIMEOUT_MS);
+    let server: CodexAppServer | undefined;
+    try {
+      server = new CodexAppServer(tmpdir(), () => {}, () => {}, {
+        binaryPath: executablePath,
+        homePath: codexConfig?.homePath,
+      });
+      await server.request('initialize', { clientInfo: { name: 'xopc', title: 'xopc', version: '1' } }, abortController.signal);
+      server.notify('initialized');
+
+      let accountInfo: ExternalRuntimeProbeResult['account'];
+      try {
+        const accountRes = await server.request('account/read', { refreshToken: false }, abortController.signal);
+        const account = record(accountRes.account);
+        if (!account && accountRes.requiresOpenaiAuth === true) {
+          return {
+            kind: 'codex',
+            label: 'Codex',
+            installed: true,
+            status: 'unauthenticated',
+            executablePath,
+            ...(version ? { version } : {}),
+            message: 'Codex is not signed in. Sign in with ChatGPT or an OpenAI API key to continue.',
+            hintCommand: 'codex login',
+            models: [],
+            checkedAt: Date.now(),
+          };
+        }
+        if (account) {
+          const type = text(account.type);
+          const email = text(account.email).trim();
+          const planType = text(account.planType).trim();
+          accountInfo = {
+            label: email || (type === 'apiKey' ? 'OpenAI API key' : type || 'Signed in'),
+            ...(planType ? { authMode: planType } : type ? { authMode: type } : {}),
+          };
+        }
+      } catch {
+        // Older Codex builds may not implement account/read; fall back to model/list.
+      }
+
+      const catalog = await server.request('model/list', {}, abortController.signal);
+      const models = parseCodexModels(catalog);
+      return {
+        kind: 'codex',
+        label: 'Codex',
+        installed: true,
+        status: 'ready',
+        executablePath,
+        ...(version ? { version } : {}),
+        ...(accountInfo ? { account: accountInfo } : {}),
+        models,
+        checkedAt: Date.now(),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const unauthenticated = /auth|login|sign.?in|unauthorized|401|token/i.test(message);
+      return {
+        kind: 'codex',
+        label: 'Codex',
+        installed: true,
+        status: unauthenticated ? 'unauthenticated' : 'warning',
+        executablePath,
+        ...(version ? { version } : {}),
+        message,
+        ...(unauthenticated ? { hintCommand: 'codex login' } : {}),
+        models: [],
+        checkedAt: Date.now(),
+      };
+    } finally {
+      clearTimeout(timer);
+      await server?.close(true);
     }
   },
 };

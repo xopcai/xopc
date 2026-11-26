@@ -584,6 +584,8 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/image-generation/default/setup')?.id).toBe('image-generation');
     expect(findAuthenticatedLazyRouteBundle('/api/agents/main/image-generation')?.id).toBe('image-generation');
     expect(findAuthenticatedLazyRouteBundle('/api/agents')?.id).toBe('agents');
+    expect(findAuthenticatedLazyRouteBundle('/api/agents/external-runtimes')?.id).toBe('agents');
+    expect(findAuthenticatedLazyRouteBundle('/api/agents/external-runtimes/probe')?.id).toBe('agents');
   });
 
   it('routes gateway auth secret reveal to config, not extension-gateway', () => {
@@ -732,4 +734,19 @@ it('maps personal one-shot follow-up detail, stop, and home acknowledge routes w
   expect(findAuthenticatedLazyRouteBundle('/api/personal-agent-other/attention/thread-1')).toBeUndefined();
   expect(findAuthenticatedLazyRouteBundle('/api/home/attention/acknowledge')?.id).toBe('home');
   expect(findAuthenticatedLazyRouteBundle('/api/home-other/attention/acknowledge')).toBeUndefined();
+});
+
+it('maps external runtime probe and auth endpoints through the agents bundle', () => {
+  for (const path of [
+    '/api/agents/external-runtimes',
+    '/api/agents/external-runtimes/probe',
+    '/api/agents/external-runtimes/auth/start',
+    '/api/agents/external-runtimes/auth/flow-123',
+    '/api/agents/external-runtimes/auth/flow-123/respond',
+    '/api/agents/external-runtimes/auth/flow-123/cancel',
+    '/api/agents/external-runtimes/auth/logout',
+  ]) {
+    expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('agents');
+  }
+  expect(findAuthenticatedLazyRouteBundle('/api/agents-other/external-runtimes')).toBeUndefined();
 });

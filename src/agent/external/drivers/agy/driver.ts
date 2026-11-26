@@ -1,6 +1,8 @@
 import { accessSync, constants as fsConstants, statSync } from 'node:fs';
 import { delimiter, isAbsolute, join, resolve } from 'node:path';
 
+import type { AgyExecution, ExternalAgentExecution } from '../../../../agent-config/schema.js';
+import { resolveUserPath } from '../../../agent-scope.js';
 import { createAcpExternalDriver } from '../../acp/acp-driver.js';
 import { AcpRpcError, asRecord } from '../../acp/json-rpc-client.js';
 
@@ -9,7 +11,7 @@ const NATIVE_CLI_NO_BROWSER_PREFIX = 'No browser is available here';
 const SIGN_IN_REQUIRED_MESSAGE =
   'Antigravity is not signed in on the Gateway host. Run agy login (or agy acp --login) on the Gateway host and try again.';
 const NOT_FOUND_MESSAGE =
-  'Antigravity CLI (agy) was not found on the Gateway host. Install agy and sign in there, or set XOPC_AGY_BIN.';
+  'Antigravity CLI (agy) was not found on the Gateway host. Install agy and sign in there, or set a custom binary path.';
 
 const STRIPPED_ENV_KEYS = new Set([
   'ELECTRON_RUN_AS_NODE',
@@ -43,16 +45,33 @@ function findInPath(names: ReadonlyArray<string>, env: NodeJS.ProcessEnv): strin
   return undefined;
 }
 
-export function resolveAgyCommand(env: NodeJS.ProcessEnv = process.env): string {
-  const configured = env.XOPC_AGY_BIN?.trim();
-  if (configured) return isAbsolute(configured) ? configured : configured;
-  const candidates = process.platform === 'win32'
-    ? ['agy', 'antigravity']
-    : ['agy', 'antigravity'];
-  return findInPath(candidates, env) ?? 'agy';
+function agyConfigFromExecution(execution?: ExternalAgentExecution): AgyExecution | undefined {
+  return execution?.kind === 'agy' ? execution : undefined;
 }
 
-function buildAgyEnv(baseEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+export function findAgyExecutable(configuredPath?: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const raw = configuredPath?.trim() || env.XOPC_AGY_BIN?.trim();
+  if (raw) {
+    const resolved = raw.includes('/') || raw.includes('\\') || raw.startsWith('~')
+      ? resolveUserPath(raw)
+      : raw;
+    if (isAbsolute(resolved)) return isExecutableFile(resolved) ? resolved : undefined;
+    return findInPath([resolved], env);
+  }
+  return findInPath(['agy', 'antigravity'], env);
+}
+
+export function resolveAgyCommand(configuredPath?: string, env: NodeJS.ProcessEnv = process.env): string {
+  const raw = configuredPath?.trim() || env.XOPC_AGY_BIN?.trim();
+  if (raw) {
+    return raw.includes('/') || raw.includes('\\') || raw.startsWith('~')
+      ? resolveUserPath(raw)
+      : raw;
+  }
+  return findInPath(['agy', 'antigravity'], env) ?? 'agy';
+}
+
+export function buildAgyEnv(baseEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(baseEnv)) {
     if (!STRIPPED_ENV_KEYS.has(key.toUpperCase())) env[key] = value;
@@ -60,6 +79,29 @@ function buildAgyEnv(baseEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEn
   env.AGY_CLI_DISABLE_AUTO_UPDATE = 'true';
   env.PYTHONUNBUFFERED = '1';
   return env;
+}
+
+export function resolveAgySpawnSpec(
+  cwd: string,
+  execution?: ExternalAgentExecution,
+  baseEnv: NodeJS.ProcessEnv = process.env,
+): { command: string; args: string[]; env: NodeJS.ProcessEnv } {
+  const agyConfig = agyConfigFromExecution(execution);
+  const command = resolveAgyCommand(agyConfig?.binaryPath, baseEnv);
+  const rawGeminiDir = agyConfig?.geminiDir?.trim() || baseEnv.XOPC_AGY_GEMINI_DIR?.trim();
+  const geminiDir = rawGeminiDir
+    ? rawGeminiDir.startsWith('~') || isAbsolute(rawGeminiDir)
+      ? resolveUserPath(rawGeminiDir)
+      : resolve(cwd, rawGeminiDir)
+    : undefined;
+  const args = geminiDir
+    ? ['acp', '--gemini-dir', geminiDir, '--app-data-dir', 'antigravity-acp']
+    : ['acp'];
+  return {
+    command,
+    args,
+    env: buildAgyEnv(baseEnv),
+  };
 }
 
 function supportsAntigravitySystemPromptAppend(initializeResult: Record<string, unknown>): boolean {
@@ -77,20 +119,14 @@ export const agyExternalDriver = createAcpExternalDriver({
   defaultModelName: 'antigravity',
   notFoundMessage: NOT_FOUND_MESSAGE,
   signInRequiredMessage: SIGN_IN_REQUIRED_MESSAGE,
-  authMethodId: () => process.env.XOPC_AGY_AUTH_METHOD?.trim() || undefined,
+  installHintCommand: 'agy acp --login',
+  loginHintCommand: 'agy acp --login',
+  findExecutable: (execution) => findAgyExecutable(agyConfigFromExecution(execution)?.binaryPath, process.env),
+  authMethodId: (execution) =>
+    agyConfigFromExecution(execution)?.authMethod
+    ?? (process.env.XOPC_AGY_AUTH_METHOD?.trim() || undefined),
   authenticateEagerly: true,
-  resolveSpawn: (cwd) => {
-    const command = resolveAgyCommand(process.env);
-    const geminiDir = process.env.XOPC_AGY_GEMINI_DIR?.trim();
-    const args = geminiDir
-      ? ['acp', '--gemini-dir', resolve(cwd, geminiDir), '--app-data-dir', 'antigravity-acp']
-      : ['acp'];
-    return {
-      command,
-      args,
-      env: buildAgyEnv(process.env),
-    };
-  },
+  resolveSpawn: (cwd, execution) => resolveAgySpawnSpec(cwd, execution, process.env),
   buildSessionMeta: (initializeResult, instructions) =>
     instructions && supportsAntigravitySystemPromptAppend(initializeResult)
       ? { antigravity: { systemPrompt: { append: instructions } } }
@@ -100,8 +136,9 @@ export const agyExternalDriver = createAcpExternalDriver({
   onStderrLine: (line) =>
     line.startsWith(ANTIGRAVITY_AUTH_STDOUT_PREFIX) ? new Error(SIGN_IN_REQUIRED_MESSAGE) : undefined,
   isSignInRequiredError: (error) =>
-    error instanceof AcpRpcError
-    && (error.code === -32000 || (error.code === -32603 && error.message.startsWith(NATIVE_CLI_NO_BROWSER_PREFIX))),
+    (error instanceof Error && error.message === SIGN_IN_REQUIRED_MESSAGE)
+    || (error instanceof AcpRpcError
+      && (error.code === -32000 || (error.code === -32603 && error.message.startsWith(NATIVE_CLI_NO_BROWSER_PREFIX)))),
   ignoreToolCall: (update) =>
     update.title === 'Run update_steps' && (!update.kind || update.kind === 'other'),
 });

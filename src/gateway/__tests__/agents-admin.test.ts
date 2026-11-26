@@ -176,4 +176,41 @@ describe('agents admin', () => {
       status: 400,
     });
   });
+
+  it('updates external runtime configuration options while blocking runtime kind changes', async () => {
+    const created = await createGatewayAgent({
+      id: 'codex-pro',
+      execution: { kind: 'codex', model: 'gpt-5.3-codex' },
+      profile: { name: 'Codex Pro' },
+    });
+    expect(created.ok).toBe(true);
+
+    const updated = await updateGatewayAgent('codex-pro', {
+      execution: {
+        kind: 'codex',
+        model: 'gpt-5.4',
+        homePath: '~/.codex-work',
+        binaryPath: '/usr/local/bin/codex',
+      },
+    });
+    expect(updated.ok).toBe(true);
+    expect(new AgentCatalogRepository().get('codex-pro')?.execution).toEqual({
+      kind: 'codex',
+      model: 'gpt-5.4',
+      homePath: '~/.codex-work',
+      binaryPath: '/usr/local/bin/codex',
+    });
+
+    const switchKind = await updateGatewayAgent('codex-pro', {
+      execution: { kind: 'agy', authMethod: 'oauth-personal' },
+    });
+    expect(switchKind.ok).toBe(false);
+    if (!switchKind.ok) expect(switchKind.status).toBe(400);
+
+    const convertEmbedded = await updateGatewayAgent('main', {
+      execution: { kind: 'codex' },
+    });
+    expect(convertEmbedded.ok).toBe(false);
+    if (!convertEmbedded.ok) expect(convertEmbedded.status).toBe(400);
+  });
 });
