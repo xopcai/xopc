@@ -121,12 +121,14 @@ describe('SessionManager local drafts', () => {
     const saved = drafts.save.mock.lastCall![0] as LocalSessionDraft;
     expect(saved.creation.workingDirectory).toBe('/tmp/chosen');
     expect(config).toMatchObject({ effectiveWorkspacePath: '/tmp/chosen', workspaceSource: 'session_override' });
+    expect(mockedApiFetch).not.toHaveBeenCalled();
     drafts.read.mockResolvedValue(structuredClone(saved));
+    mockedApiFetch.mockResolvedValueOnce(jsonResponse({ ok: true, payload: { defaultId: 'main', agents: [{ id: 'main' }] } }));
     expect(await new SessionManager().loadSessionAgentConfig(draft.conversationId)).toMatchObject({
       effectiveWorkspacePath: '/tmp/chosen', workspaceSource: 'session_override',
     });
     expect(draftAgentConfig(saved).workingDirectoryLocked).toBe(false);
-    expect(mockedApiFetch).not.toHaveBeenCalled();
+    expect(mockedApiFetch).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(/\/api\/agents$/));
   });
 
   it('rejects folder changes for a project draft', async () => {
