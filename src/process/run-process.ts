@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 
 import { createBoundedOutput } from './bounded-output.js';
 import { terminateProcess } from './kill-tree.js';
@@ -98,4 +98,14 @@ export async function runProcessChecked(spec: ProcessSpec): Promise<ProcessResul
   const result = await runProcess(spec);
   if (result.exitCode !== 0) throw new ProcessExitError(spec, result);
   return result;
+}
+
+/** Read stdout for a bounded probe used during synchronous executable discovery. */
+export function readProcessStdoutSync(spec: Pick<ProcessSpec, 'program' | 'args' | 'timeoutMs'>): string {
+  return execFileSync(spec.program, [...(spec.args ?? [])], {
+    encoding: 'utf8',
+    timeout: spec.timeoutMs ?? undefined,
+    maxBuffer: DEFAULT_MAX_OUTPUT_BYTES,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
 }

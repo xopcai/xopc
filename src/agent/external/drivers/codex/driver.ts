@@ -1,13 +1,12 @@
-import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 
 import type { ModelThinkingCapabilities, ModelThinkingValue } from '@xopcai/gateway-contract';
 
 import { buildExternalRuntimeEnv } from '../../runtime-env.js';
 import type { CodexExecution, ExternalAgentExecution, ExternalPermissionMode } from '../../../../agent-config/schema.js';
+import { runProcessChecked } from '../../../../process/run-process.js';
 import { resolveUserPath } from '../../../agent-scope.js';
 import { PLAN_MODE_INSTRUCTIONS, type SessionInteractionPolicy } from '../../../session/interaction-policy-state.js';
 import { normalizeThinkLevel } from '../../../transcript/thinking-types.js';
@@ -44,7 +43,6 @@ import { findCodexExecutable } from './executable.js';
 
 export { findCodexExecutable };
 
-const execFileAsync = promisify(execFile);
 const STOP_TIMEOUT_MS = 5_000;
 const PROBE_TIMEOUT_MS = 10_000;
 const CATALOG_REFRESH_WAIT_MS = 3_000;
@@ -990,7 +988,12 @@ export const codexExternalDriver: ExternalAgentDriver = {
 
     let version: string | undefined;
     try {
-      const { stdout } = await execFileAsync(executablePath, ['--version'], { timeout: 3_000, env: buildExternalRuntimeEnv('codex') });
+      const { stdout } = await runProcessChecked({
+        program: executablePath,
+        args: ['--version'],
+        timeoutMs: 3_000,
+        env: buildExternalRuntimeEnv('codex'),
+      });
       const parsed = stdout.trim().match(/\d+\.\d+\.\d+[\w.-]*/)?.[0] || stdout.trim().split('\n')[0]?.trim();
       if (parsed) version = parsed;
     } catch {

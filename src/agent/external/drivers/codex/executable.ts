@@ -1,8 +1,8 @@
-import { execFileSync } from 'node:child_process';
 import { accessSync, constants as fsConstants, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, extname, isAbsolute, join, resolve } from 'node:path';
 
+import { readProcessStdoutSync } from '../../../../process/run-process.js';
 import { resolveUserPath } from '../../../agent-scope.js';
 
 type ParsedCodexVersion = {
@@ -57,11 +57,7 @@ function readCodexBinaryVersion(candidate: string, mtimeMs: number): ParsedCodex
   const key = `${candidate}:${mtimeMs}`;
   if (versionCache.has(key)) return versionCache.get(key) ?? null;
   try {
-    const stdout = execFileSync(candidate, ['--version'], {
-      encoding: 'utf8',
-      timeout: 2_000,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
+    const stdout = readProcessStdoutSync({ program: candidate, args: ['--version'], timeoutMs: 2_000 });
     const parsed = parseCodexVersion(stdout.trim());
     versionCache.set(key, parsed);
     return parsed;

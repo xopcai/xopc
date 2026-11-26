@@ -1,8 +1,6 @@
-import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { promisify } from 'node:util';
 
 import type { ToolCall } from '@earendil-works/pi-ai';
 import type { ModelThinkingCapabilities } from '@xopcai/gateway-contract';
@@ -12,6 +10,7 @@ import type {
   ExternalAgentExecution,
   ExternalPermissionMode,
 } from '../../../../agent-config/schema.js';
+import { runProcessChecked } from '../../../../process/run-process.js';
 import { PLAN_MODE_INSTRUCTIONS } from '../../../session/interaction-policy-state.js';
 import {
   buildNormalizedApplyPatchResult,
@@ -37,8 +36,6 @@ import type {
 } from '../../types.js';
 import { buildClaudeEnv, findClaudeExecutable } from './executable.js';
 import { ClaudeStreamClient, claudeRecord, type ClaudeRecord } from './stream-client.js';
-
-const execFileAsync = promisify(execFile);
 
 const PROBE_TIMEOUT_MS = 15_000;
 const STOP_TIMEOUT_MS = 5_000;
@@ -841,8 +838,10 @@ export const claudeExternalDriver: ExternalAgentDriver = {
 
     let version: string | undefined;
     try {
-      const { stdout } = await execFileAsync(executablePath, ['--version'], {
-        timeout: 3_000,
+      const { stdout } = await runProcessChecked({
+        program: executablePath,
+        args: ['--version'],
+        timeoutMs: 3_000,
         env: buildClaudeEnv(claudeConfig?.configDir),
       });
       const parsed = stdout.trim().match(/\d+\.\d+\.\d+[\w.-]*/)?.[0] || stdout.trim().split('\n')[0]?.trim();
