@@ -451,7 +451,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.get('/api/projects/:id/sessions', async (c) => {
     try {
       const keys = service.projects.listConversationIds(c.req.param('id'), parseLimit(c.req.query('limit'), 100));
-      const sessions = await Promise.all(keys.map((key) => service.sessions.getSession(key)));
+      const sessions = await Promise.all(keys.map((key) => service.sessions.getSessionMetadata(key)));
       return c.json({
         ok: true,
         sessions: sessions.filter((session) => session && !session.hiddenFromSessionList),

@@ -1,7 +1,9 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,13 +15,18 @@ import { ConfigSchema } from '../../../../config/schema.js';
 import { ExecutionEnvironmentStore } from '../../../../execution-environments/store.js';
 import { ProjectService } from '../../../../projects/index.js';
 import { listKnowledgeItems } from '../../../../knowledge-memory/index.js';
+import { SessionIndex } from '../../../../session/manager.js';
 import {
+  appendTranscriptEntry,
   closeXopcDatabase,
+  ensureSessionRecord,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
 import { defineTaskContract, TaskApplicationService } from '../../../../tasks/index.js';
 import type { GatewayService } from '../../../service.js';
+import { GatewaySessionsApi } from '../../../service/sessions-api.js';
+import { createHonoApp } from '../../app.js';
 import { registerActivityRoutes } from '../activity.js';
 import { registerProjectsRoutes } from '../projects.js';
 import { registerSearchRoutes } from '../search.js';
@@ -517,6 +524,55 @@ describe('project association routes', () => {
     expect(patch).not.toHaveBeenCalled();
   });
 
+  it('serves a small project session list over authenticated HTTP even when history exceeds the mobile response limit', async () => {
+    const token = 'project-sessions-test-token';
+    const currentConfig = ConfigSchema.parse({ gateway: { auth: { mode: 'token', token } } });
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Long conversations' });
+    const key = crypto.randomUUID();
+    const { transcriptId } = ensureSessionRecord(key, stateDir, {
+      agentId: 'main', name: 'Long conversation', projectId: project.id,
+    });
+    const content = 'x'.repeat(1024 * 1024);
+    for (let i = 0; i < 6; i++) {
+      appendTranscriptEntry(key, { role: 'user', content, timestamp: Date.now() });
+    }
+
+    const service = {
+      currentConfig, projects,
+      sessions: new GatewaySessionsApi({
+        sessionIndex: new SessionIndex({ config: currentConfig }),
+        getAgentService: () => { throw new Error('Unexpected agent access'); },
+        getActiveWebchatRunId: () => undefined,
+        listActiveWebchatRuns: () => [],
+        listActiveExecutions: () => [],
+      }),
+      getResolvedAuth: () => ({ mode: 'token', token }),
+      getExtensionLoader: () => null,
+    } as unknown as GatewayService;
+    const app = createHonoApp({ service });
+    const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
+    try {
+      if (!server.listening) await once(server, 'listening');
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Missing test Gateway address');
+      const url = `http://127.0.0.1:${address.port}/api/projects/${project.id}/sessions?limit=100`;
+      const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(Buffer.byteLength(body)).toBeLessThan(5 * 1024 * 1024);
+      const { ok, sessions } = JSON.parse(body);
+      expect(ok).toBe(true);
+      expect(sessions).toEqual([expect.objectContaining({
+        key, transcriptId, projectId: project.id, agentId: 'main', name: 'Long conversation',
+        messageCount: 6, status: expect.any(String), updatedAt: expect.any(String),
+      })]);
+      expect(sessions[0]).not.toHaveProperty('messages');
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  });
+
   it.each(['webchat', 'automation', 'understanding'])('omits hidden %s sessions from project session lists', async (source) => {
     const hiddenKey = crypto.randomUUID();
     const visibleKey = "f6220a1c-2b77-40ac-8386-fd31474221a9";
@@ -525,7 +581,7 @@ describe('project association routes', () => {
         listConversationIds: vi.fn(() => [hiddenKey, visibleKey]),
       } as unknown as GatewayService['projects'],
       sessions: {
-        getSession: vi.fn(async (key: string) => key === hiddenKey
+        getSessionMetadata: vi.fn(async (key: string) => key === hiddenKey
           ? {
               key,
               messageCount: 0,

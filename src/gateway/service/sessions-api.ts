@@ -65,6 +65,10 @@ export class GatewaySessionsApi {
     return this.opts.sessionIndex.listSubagents(query);
   }
 
+  getSessionMetadata(key: string) {
+    return this.opts.sessionIndex.getSessionMetadata(key);
+  }
+
   getSession(
     key: string,
     options?: { includeTranscriptSummary?: boolean; includeTranscriptRows?: boolean },
