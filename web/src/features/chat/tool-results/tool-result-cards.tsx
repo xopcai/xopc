@@ -157,6 +157,48 @@ function DiffBody({ lines }: { lines: DiffLine[] }) {
   );
 }
 
+type ChangeSummaryItem = {
+  path: string;
+  kind?: string;
+  added?: number;
+  removed?: number;
+};
+
+function extractChangeItems(details: Record<string, unknown>): ChangeSummaryItem[] {
+  if (!Array.isArray(details.changes)) return [];
+  const items: ChangeSummaryItem[] = [];
+  for (const raw of details.changes) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const rec = raw as Record<string, unknown>;
+    const path = typeof rec.path === 'string' ? rec.path.trim() : '';
+    if (!path) continue;
+    items.push({
+      path,
+      ...(typeof rec.kind === 'string' ? { kind: rec.kind } : {}),
+      ...(typeof rec.added === 'number' && Number.isFinite(rec.added) ? { added: rec.added } : {}),
+      ...(typeof rec.removed === 'number' && Number.isFinite(rec.removed) ? { removed: rec.removed } : {}),
+    });
+  }
+  return items;
+}
+
+function changeKindGlyph(kind?: string): { glyph: string; tone: string } {
+  switch ((kind ?? '').toLowerCase()) {
+    case 'create':
+    case 'add':
+    case 'added':
+      return { glyph: 'A', tone: 'text-emerald-600 dark:text-emerald-400' };
+    case 'delete':
+    case 'deleted':
+      return { glyph: 'D', tone: 'text-red-600 dark:text-red-400' };
+    case 'rename':
+    case 'renamed':
+      return { glyph: 'R', tone: 'text-amber-600 dark:text-amber-400' };
+    default:
+      return { glyph: 'M', tone: 'text-accent-fg' };
+  }
+}
+
 export const EditFileCard = memo(function EditFileCard({
   block,
   labels,
@@ -164,23 +206,55 @@ export const EditFileCard = memo(function EditFileCard({
   block: ToolUseContent;
   labels: ToolCardLabels;
 }) {
-  const path = extractPathPreview(block.input);
+  const inputPath = extractPathPreview(block.input);
   const parsed = useMemo(() => parseToolResult(block.result), [block.result]);
+  const details = useMemo(() => detailsAsRecord(parsed), [parsed]);
+  const changeItems = useMemo(() => extractChangeItems(details), [details]);
   const diff = useMemo(() => extractEditDiff(parsed), [parsed]);
+  const displayPath = inputPath || (
+    changeItems.length === 1
+      ? changeItems[0].path
+      : changeItems.length > 1
+        ? `${changeItems[0].path} (+${changeItems.length - 1})`
+        : ''
+  );
 
   return (
     <div className="content-block-action-scope space-y-1.5">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-        {path ? <ToolCardPath title={path}>{path}</ToolCardPath> : null}
+        {displayPath ? <ToolCardPath title={displayPath}>{displayPath}</ToolCardPath> : null}
         {diff ? (
           <ToolCardBadge tone="accent">
             {interpolate(labels.diffStats, { added: diff.added, removed: diff.removed })}
           </ToolCardBadge>
         ) : null}
-        {path ? (
-          <ToolCardCopyButton text={path} label={labels.copyPath} copiedLabel={labels.copied} />
+        {displayPath ? (
+          <ToolCardCopyButton text={changeItems.length > 1 ? changeItems.map((c) => c.path).join('\n') : displayPath} label={labels.copyPath} copiedLabel={labels.copied} />
         ) : null}
       </div>
+      {changeItems.length > 1 ? (
+        <div className="space-y-0.5 rounded-md border border-edge-subtle/70 bg-surface-hover/35 px-2 py-1.5 text-xs">
+          {changeItems.slice(0, 8).map((item) => {
+            const { glyph, tone } = changeKindGlyph(item.kind);
+            return (
+              <div key={item.path} className="flex min-w-0 items-center gap-2 font-mono">
+                <span className={cn('w-3 shrink-0 text-center text-[10px] font-semibold', tone)}>{glyph}</span>
+                <span className="min-w-0 flex-1 truncate text-fg-muted" title={item.path}>{item.path}</span>
+                {item.added || item.removed ? (
+                  <span className="shrink-0 text-[11px] tabular-nums">
+                    {item.added ? <span className="text-emerald-600 dark:text-emerald-400">+{item.added}</span> : null}
+                    {item.added && item.removed ? ' ' : null}
+                    {item.removed ? <span className="text-red-600 dark:text-red-400">-{item.removed}</span> : null}
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
+          {changeItems.length > 8 ? (
+            <div className="pt-0.5 text-[11px] text-fg-subtle">+{changeItems.length - 8} more files</div>
+          ) : null}
+        </div>
+      ) : null}
       {diff ? (
         <ToolCardCollapsible summary={labels.viewDiff} defaultOpen>
           <DiffBody lines={diff.lines} />
@@ -240,6 +314,12 @@ function commandOutputPreview(text: string): { preview: string; truncated: boole
   };
 }
 
+function formatCommandDuration(durationMs: unknown): string | null {
+  if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) return null;
+  if (durationMs < 1_000) return `${Math.round(durationMs)}ms`;
+  return `${(durationMs / 1_000).toFixed(1)}s`;
+}
+
 export const CommandCard = memo(function CommandCard({
   block,
   labels,
@@ -247,13 +327,16 @@ export const CommandCard = memo(function CommandCard({
   block: ToolUseContent;
   labels: ToolCardLabels;
 }) {
-  const command = extractCommandPreview(block.input);
   const parsed = useMemo(() => parseToolResult(block.result), [block.result]);
   const liveDetails = block.details && typeof block.details === 'object' && !Array.isArray(block.details)
     ? (block.details as Record<string, unknown>)
     : null;
   const details = liveDetails ?? detailsAsRecord(parsed);
+  const command = (typeof details.command === 'string' && details.command.trim()) || extractCommandPreview(block.input);
   const truncated = Boolean(details.truncated);
+  const timedOut = details.timedOut === true;
+  const exitCode = typeof details.exitCode === 'number' && Number.isFinite(details.exitCode) ? details.exitCode : null;
+  const durationLabel = formatCommandDuration(details.durationMs);
   const output =
     typeof details.aggregatedOutput === 'string' && details.aggregatedOutput.length > 0
       ? details.aggregatedOutput
@@ -268,6 +351,18 @@ export const CommandCard = memo(function CommandCard({
             <span className="mr-1 text-fg-disabled">$</span>
             {command}
           </ToolCardPath>
+        ) : null}
+        {timedOut ? (
+          <ToolCardBadge tone="negative">{labels.timedOut}</ToolCardBadge>
+        ) : exitCode !== null && block.status !== 'running' ? (
+          <ToolCardBadge tone={exitCode === 0 ? 'positive' : 'negative'}>
+            {exitCode === 0
+              ? labels.exitCodeOk
+              : interpolate(labels.exitCodeNonZero, { code: exitCode })}
+          </ToolCardBadge>
+        ) : null}
+        {durationLabel && block.status !== 'running' ? (
+          <ToolCardBadge>{durationLabel}</ToolCardBadge>
         ) : null}
         {truncated ? <ToolCardBadge>{labels.truncatedBadge}</ToolCardBadge> : null}
         {command ? (

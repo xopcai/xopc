@@ -23,6 +23,7 @@ import { isTaskDestructiveCommand } from '../../../session/reset-triggers.js';
 import { commandRegistry } from '../../../chat-commands/registry.js';
 import { isVoiceLikeAttachment } from '../../../channels/attachments/voice-stt-webchat.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { externalAgentAccessError } from '../../security/external-agent-access.js';
 import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
 import { createLogger } from '../../../utils/logger.js';
@@ -51,9 +52,8 @@ export async function submitSessionInput(
   }
   const externalAgent = getExternalConversationAgent(conversationId);
   const externalDriver = externalAgent ? getExternalAgentDriver(externalAgent.execution.kind) : undefined;
-  if (externalDriver?.capabilities.requiresWorkspaceWrite && !hasGatewayScope(getGatewayPrincipal(c).scopes, 'workspace.write')) {
-    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: `${externalDriver.label} requires workspace write access` } }, 403);
-  }
+  const forbidden = externalAgentAccessError(externalAgent, getGatewayPrincipal(c));
+  if (forbidden) return c.json({ ok: false, error: { code: 'FORBIDDEN', message: forbidden } }, 403);
   const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
   const contextRefs = parseTurnContextRefs(body.contextRefs, MAX_TURN_CONTEXTS);
   if (contextRefs === null) {

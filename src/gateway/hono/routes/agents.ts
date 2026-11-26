@@ -12,10 +12,12 @@ import {
 } from '../../../agent-config/index.js';
 import {
   cancelExternalRuntimeAuthFlow,
+  getExternalAgent,
   getExternalRuntimeAuthFlow,
   logoutExternalAgentRuntime,
   probeAllExternalAgentRuntimes,
   probeExternalAgentRuntime,
+  resolveExternalRuntimeModelsPayload,
   respondExternalRuntimeAuthFlow,
   startExternalRuntimeAuth,
   type ExternalRuntimeAuthMode,
@@ -217,6 +219,17 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
     const runtime = await logoutExternalAgentRuntime(parsed.data);
     return c.json({ ok: true, payload: { runtime } });
+  });
+
+  authenticated.get('/api/agents/:id/runtime-models', async (c) => {
+    const id = normalizeAgentId(c.req.param('id') ?? '');
+    const externalAgent = getExternalAgent(id);
+    if (!externalAgent) {
+      return c.json({ ok: false, error: { message: `External runtime agent "${id}" not found` } }, 404);
+    }
+    const refresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
+    const payload = await resolveExternalRuntimeModelsPayload(externalAgent.execution, refresh);
+    return c.json({ ok: true, payload });
   });
 
   authenticated.get('/api/agents/:id/effective-config', async (c) => {

@@ -108,6 +108,7 @@ export function useAtMentionPicker(
   options: {
     conversationId: string | null;
     currentAgentId?: string;
+    externalAgentsAvailable?: boolean;
     capabilities?: Readonly<ComposerCapabilities>;
     slashPaletteOpen: boolean;
     isComposing?: boolean;
@@ -156,6 +157,7 @@ export function useAtMentionPicker(
     const context = {
       conversationId,
       currentAgentId: options.currentAgentId,
+      externalAgentsAvailable: options.externalAgentsAvailable,
       language,
       selectedContextKeys: new Set(selectedContextKeysKey ? selectedContextKeysKey.split('\0') : []),
       recentPaths: new Set(getRecentAtPaths(conversationId)),
@@ -223,6 +225,7 @@ export function useAtMentionPicker(
     debouncedQuery,
     language,
     options.currentAgentId,
+    options.externalAgentsAvailable,
     options.prepareSession,
     selectedContextKeysKey,
     capabilities.skills,

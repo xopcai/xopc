@@ -85,3 +85,79 @@ export async function fetchConfiguredModelsCached(forceRefresh = false): Promise
 
   return pending;
 }
+
+export type ExternalAgentRuntimeModelsPayload = {
+  runtimeKind: string;
+  runtimeLabel: string;
+  status: string;
+  defaultModel: string;
+  models: ConfiguredModel[];
+  message?: string;
+};
+
+const _externalModelsCache = new Map<string, { payload: ExternalAgentRuntimeModelsPayload; expiresAt: number }>();
+const _externalModelsInflight = new Map<string, Promise<ExternalAgentRuntimeModelsPayload>>();
+let _externalModelsCacheGen = 0;
+
+export function agentRuntimeModelsSwrKey(agentId: string): readonly [string, string] {
+  return ['gateway-agent-runtime-models', agentId] as const;
+}
+
+export async function invalidateAgentRuntimeModelsCache(agentId?: string): Promise<void> {
+  _externalModelsCacheGen += 1;
+  const { mutate } = await import('swr');
+  if (agentId) {
+    _externalModelsCache.delete(agentId);
+    _externalModelsInflight.delete(agentId);
+    await mutate(agentRuntimeModelsSwrKey(agentId));
+    return;
+  }
+  _externalModelsCache.clear();
+  _externalModelsInflight.clear();
+  await mutate((key) => Array.isArray(key) && key[0] === 'gateway-agent-runtime-models');
+}
+
+async function fetchAgentRuntimeModels(agentId: string, forceRefresh = false): Promise<ExternalAgentRuntimeModelsPayload> {
+  const qs = forceRefresh ? '?refresh=1' : '';
+  const res = await apiFetchWithStartupRetry(apiUrl(`/api/agents/${encodeURIComponent(agentId)}/runtime-models${qs}`));
+  if (!res.ok) throw new Error(`Runtime models: HTTP ${res.status}`);
+  const data = (await res.json()) as { payload?: ExternalAgentRuntimeModelsPayload };
+  if (!data.payload) throw new Error('Missing runtime models payload');
+  return data.payload;
+}
+
+export async function fetchAgentRuntimeModelsCached(
+  agentId: string,
+  forceRefresh = false,
+): Promise<ExternalAgentRuntimeModelsPayload> {
+  const now = Date.now();
+  const cached = _externalModelsCache.get(agentId);
+  if (!forceRefresh && cached && now < cached.expiresAt) {
+    return cached.payload;
+  }
+  const gen = _externalModelsCacheGen;
+  if (forceRefresh) {
+    const payload = await fetchAgentRuntimeModels(agentId, true);
+    if (gen === _externalModelsCacheGen) {
+      _externalModelsCache.set(agentId, { payload, expiresAt: Date.now() + MODELS_CACHE_TTL_MS });
+    }
+    return payload;
+  }
+  const inflight = _externalModelsInflight.get(agentId);
+  if (inflight) return inflight;
+
+  const pending = fetchAgentRuntimeModels(agentId, false)
+    .then((payload) => {
+      if (gen === _externalModelsCacheGen) {
+        _externalModelsCache.set(agentId, { payload, expiresAt: Date.now() + MODELS_CACHE_TTL_MS });
+      }
+      return payload;
+    })
+    .finally(() => {
+      if (_externalModelsInflight.get(agentId) === pending) {
+        _externalModelsInflight.delete(agentId);
+      }
+    });
+  _externalModelsInflight.set(agentId, pending);
+  return pending;
+}

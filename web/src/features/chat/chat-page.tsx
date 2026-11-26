@@ -1079,7 +1079,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
         <ChatRealtimeStatus />
         <ChatPageHeaderRegistration
           chatHeadline={m.chat.sessionNotFoundTitle}
-          chatAgents={agents.chatAgents?.items ?? []}
+          chatAgents={agents.selectableAgents}
           showChatAgentSelector={false}
           chatAgentId={agents.displayAgentId}
           onChatAgentChange={agents.onChatAgentChange}
@@ -1102,7 +1102,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
       {!embedded || automationWorkspace ? <ChatPageHeaderRegistration
         inline={automationWorkspace}
         chatHeadline={agentSetup ? m.agentsSettings.setupTitle : skillDiscovery && msgSlice.items.length === 0 ? m.skills.findTitle : chatHeadline}
-        chatAgents={agents.chatAgents?.items ?? []}
+        chatAgents={agents.selectableAgents}
         showChatAgentSelector={!automationWorkspace && !agentSetup && agents.showChatAgentSelector}
         chatAgentId={agents.displayAgentId}
         onChatAgentChange={agents.onChatAgentChange}
@@ -1512,7 +1512,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                 welcomeSuggestion={!skillDiscovery && compactWelcomeLayout ? welcomeSelection : null}
                 onAcceptWelcomeSuggestion={onPickWelcomePrompt}
                 thinkingLevel={session.thinkingLevel}
-                modelSupportsThinking={welcomeAgent.execution ? false : session.modelSupportsThinking}
+                modelSupportsThinking={session.modelSupportsThinking}
                 onThinkingChange={session.onSessionThinkingLevelChange}
                 onSend={projectComposer.send}
                 composerMode={followUp.composerMode}
@@ -1554,8 +1554,9 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                 onPendingFollowUpSend={(id) => void followUp.sendQueuedInput(id).catch(() => {})}
                 steeringFollowUpId={followUp.steeringFollowUpId}
                 sessionModel={session.sessionModel}
-                showModelSelector={!personal && !welcomeAgent.execution}
+                showModelSelector={!personal}
                 onModelChange={session.onSessionModelChange}
+                externalAgentId={welcomeAgent.execution ? agents.displayAgentId : undefined}
                 modelDisabled={
                   (isSessionTransitioning && !session.projectPreparation) || projectComposer.busy || session.modelConfigSaving
                 }
@@ -1563,6 +1564,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                   !personal && !agentSetup && !taskId && agents.showChatAgentSelector ? agents.onChatAgentChange : undefined
                 }
                 currentAgentId={agents.displayAgentId}
+                externalAgentsAvailable={Boolean(scopedProject?.workspaceRoot?.trim())}
                 voiceAgentName={personal && personalWelcome ? personalWelcome.name : welcomeAgent.name}
                 voiceTaskId={taskId ?? undefined}
                 prepareVoiceSession={session.projectPreparation ? projectComposer.prepareSession : undefined}

@@ -1,6 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
+import { ExternalRuntimeAvatar } from '@/components/brand/external-runtime-avatar';
 import { Button } from '@/components/ui/button';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import {
@@ -150,7 +151,10 @@ export function CreateAgentDialog({
                       )}
                     >
                       <div className="flex w-full items-center justify-between gap-1.5">
-                        <span className="truncate text-sm font-semibold">{option.label}</span>
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                          {option.id !== 'embedded' ? <ExternalRuntimeAvatar kind={option.id} size={20} /> : null}
+                          <span className="truncate text-sm font-semibold">{option.label}</span>
+                        </span>
                         {option.id !== 'embedded' ? (
                           <ExternalRuntimeStatusDot status={option.probe?.status} />
                         ) : null}

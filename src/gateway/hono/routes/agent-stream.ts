@@ -10,7 +10,10 @@ import { replaceLatestSessionTurn } from './session-input-handler.js';
 import { handleSessionCommand, handleSessionInputReceipt, handleSessionPreparationRetry } from './session-command-handler.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { hasGatewayScope } from '../../security/gateway-scopes.js';
-import { deviceExecutionPrincipalId } from '../../../endpoint-tools/execution-actor.js';
+import { deviceExecutionPrincipalId, isDeviceExecutionInputOwner } from '../../../endpoint-tools/execution-actor.js';
+import { getExternalAgentDriver, getExternalConversationAgent } from '../../../agent/external/index.js';
+import { getSessionInputById } from '../../../storage/sqlite/session-input-repository.js';
+import { externalAgentAccessError } from '../../security/external-agent-access.js';
 
 export function registerAgentStreamRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, chatRateLimitMiddleware } = deps;
@@ -55,12 +58,26 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     const inputId = c.req.param('inputId')?.trim() ?? '';
     const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
     if (!body || typeof body.version !== 'number') return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing version' } }, 400);
+    const principal = getGatewayPrincipal(c);
+    const externalAgent = getExternalConversationAgent(conversationId);
+    const forbidden = externalAgentAccessError(externalAgent, principal);
+    if (forbidden) return c.json({ ok: false, error: { code: 'FORBIDDEN', message: forbidden } }, 403);
     const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
     const contextRefs = body.contextRefs === undefined
       ? undefined
       : parseTurnContextRefs(body.contextRefs);
     if (contextRefs === null) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid source context references' } }, 400);
-    if (contextRefs?.some(ref => ref.kind === 'workbook') && !hasGatewayScope(getGatewayPrincipal(c).scopes, 'workspace.read')) {
+    if (externalAgent) {
+      const input = getSessionInputById(conversationId, inputId);
+      if (!input || !isDeviceExecutionInputOwner(conversationId, input.clientMessageId, principal)) {
+        return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Only the sender can edit this external Agent input' } }, 403);
+      }
+      const driver = getExternalAgentDriver(externalAgent.execution.kind);
+      if (!driver.capabilities.supportsAttachments && (attachments?.length || contextRefs?.length)) {
+        return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `${driver.label} Project sessions currently accept text messages only.` } }, 400);
+      }
+    }
+    if (contextRefs?.some(ref => ref.kind === 'workbook') && !hasGatewayScope(principal.scopes, 'workspace.read')) {
       return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Workbook context requires workspace access' } }, 403);
     }
     if (typeof body.content === 'string') {

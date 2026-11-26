@@ -6,7 +6,12 @@ import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Skeleton } from '@/components/ui/skeleton';
-import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
+import {
+  agentRuntimeModelsSwrKey,
+  CONFIGURED_MODELS_SWR_KEY,
+  fetchAgentRuntimeModelsCached,
+  fetchConfiguredModelsCached,
+} from '@/features/chat/api/registry-api';
 import type { ThinkingLevel } from '@/features/chat/composer/composer.types';
 import { ThinkingEffortSlider } from '@/features/chat/model/thinking-effort-slider';
 import { ModelPickerList } from '@/features/chat/model/model-selector';
@@ -18,7 +23,7 @@ import { interaction } from '@/lib/interaction';
 import { APP_PORTALED_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 
 export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisabled, onModelChange,
-  thinkingLevel, thinkingDisabled, onThinkingChange,
+  thinkingLevel, thinkingDisabled, onThinkingChange, externalAgentId,
 }: {
   chat: MessageBundle['chat'];
   sessionModel: string;
@@ -27,21 +32,46 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
   thinkingLevel: string;
   thinkingDisabled: boolean;
   onThinkingChange: (level: string) => void | Promise<void>;
+  /** When set, loads models and thinking capabilities from this external runtime agent instead of built-in providers. */
+  externalAgentId?: string;
 }) {
   const language = useLocaleStore((s) => s.language);
-  const registry = useSWR(CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, { revalidateOnFocus: false });
+  const builtinRegistry = useSWR(
+    externalAgentId ? null : CONFIGURED_MODELS_SWR_KEY,
+    fetchConfiguredModelsCached,
+    { revalidateOnFocus: false },
+  );
+  const externalRegistry = useSWR(
+    externalAgentId ? agentRuntimeModelsSwrKey(externalAgentId) : null,
+    () => fetchAgentRuntimeModelsCached(externalAgentId!),
+    { revalidateOnFocus: false },
+  );
+  const registryLoading = externalAgentId ? externalRegistry.isLoading : builtinRegistry.isLoading;
+  const registryError = externalAgentId ? externalRegistry.error : builtinRegistry.error;
+  const registryLoaded = externalAgentId ? Boolean(externalRegistry.data) : Boolean(builtinRegistry.data);
+  const revalidateRegistry = () => (externalAgentId ? externalRegistry.mutate() : builtinRegistry.mutate());
+
   const [view, setView] = useState<'config' | 'models'>('config');
   const modelButtonRef = useRef<HTMLButtonElement>(null);
   const backButtonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { (view === 'models' ? backButtonRef : modelButtonRef).current?.focus(); }, [view]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const models = registry.data ?? [];
-  const selected = models.find((model) => model.id === sessionModel);
-  const unavailable = Boolean(sessionModel && registry.data && !selected);
-  const modelLabel = selected ? modelDisplayName(selected, language) : sessionModel.slice(sessionModel.indexOf('/') + 1) || m.modelConfigure;
+  const models = externalAgentId ? (externalRegistry.data?.models ?? []) : (builtinRegistry.data ?? []);
+  const externalDefaultId = externalAgentId ? externalRegistry.data?.defaultModel : undefined;
+  const isExternalPlaceholder = Boolean(
+    externalAgentId
+    && (!sessionModel || sessionModel === externalRegistry.data?.runtimeKind || sessionModel === 'antigravity'),
+  );
+  const resolvedSessionModel = isExternalPlaceholder && externalDefaultId ? externalDefaultId : sessionModel;
+  const selected = models.find((model) => model.id === resolvedSessionModel)
+    ?? (externalAgentId && isExternalPlaceholder ? models.find((model) => model.id === externalDefaultId) ?? models[0] : undefined);
+  const activeModelId = selected?.id ?? resolvedSessionModel;
+  const unavailable = Boolean(resolvedSessionModel && registryLoaded && !selected && models.length > 0);
+  const modelLabel = selected ? modelDisplayName(selected, language) : resolvedSessionModel.slice(resolvedSessionModel.indexOf('/') + 1) || m.modelConfigure;
   const title = modelLabel.split('/').at(-1) || modelLabel;
-  const provider = selected?.provider || (sessionModel.includes('/') ? sessionModel.slice(0, sessionModel.indexOf('/')) : '');
+  const provider = selected?.provider
+    || (externalAgentId ? (externalRegistry.data?.runtimeLabel ?? '') : (resolvedSessionModel.includes('/') ? resolvedSessionModel.slice(0, resolvedSessionModel.indexOf('/')) : ''));
   const modelIdentity = provider ? `${title} · ${provider}` : title;
   const thinking = selected?.thinking;
   const adjustable = thinking?.mode === 'levels' || thinking?.mode === 'toggle';
@@ -69,7 +99,7 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
   }
 
   const modelControl = <button ref={modelButtonRef} type="button" disabled={busy || !models.length} onClick={() => setView('models')}
-    title={sessionModel} className={cn('mx-auto flex min-h-8 max-w-full items-center justify-center gap-1 rounded-lg px-2 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg', interaction.focusRingPanel)}>
+    title={activeModelId} className={cn('mx-auto flex min-h-8 max-w-full items-center justify-center gap-1 rounded-lg px-2 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg', interaction.focusRingPanel)}>
     <span className="min-w-0 truncate">{title}{provider && <span className="text-fg-subtle"> · {provider}</span>}</span><ChevronRight className="size-3.5 shrink-0" aria-hidden />
   </button>;
 
@@ -78,7 +108,7 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
       <Popover.Trigger asChild>
         <button type="button" aria-label={`${m.modelConfigLabel}: ${modelIdentity}${effort ? ` · ${effort}` : ''}`} title={modelIdentity}
           className={cn('inline-flex h-8 min-w-0 max-w-[min(18rem,calc(100vw-10rem))] items-center gap-1.5 rounded-lg bg-surface-hover/70 px-2.5 text-[13px] text-fg hover:bg-surface-hover', interaction.focusRingPanel, interaction.transition)}>
-          {registry.isLoading || (!sessionModel && models.length > 0) ? <Skeleton className="h-4 w-28" /> : <>
+          {registryLoading || (!activeModelId && models.length > 0) ? <Skeleton className="h-4 w-28" /> : <>
             <span className="min-w-0 truncate font-medium">{title}</span>
             {unavailable ? <span className="shrink-0 text-fg-muted">{m.modelUnavailable}</span>
               : effort && <span className="shrink-0 text-fg-muted">· {effort}</span>}
@@ -94,7 +124,7 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
             <button ref={backButtonRef} type="button" onClick={() => setView('config')} className={cn('mb-2 flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-2 text-sm text-fg hover:bg-surface-hover', interaction.focusRingPanel)}>
               <ArrowLeft className="size-4" aria-hidden />{m.modelBack}
             </button>
-            <ModelPickerList models={models} value={sessionModel} disabled={busy} groupByProvider
+            <ModelPickerList models={models} value={activeModelId} disabled={busy} groupByProvider={!externalAgentId}
               searchPlaceholder={m.modelSearchPlaceholder} noMatches={m.modelNoMatches}
               onChange={(id) => {
                 const nextModel = models.find((model) => model.id === id);
@@ -104,14 +134,21 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
                 void save(() => onModelChange(id, nextThinking), true);
               }} />
           </> : <div className="min-w-0 shrink-0">
-            {registry.isLoading ? <div className="space-y-4 p-3"><Skeleton className="h-6 w-40" /><Skeleton className="h-4 w-24" /><Skeleton className="h-11 w-full" /></div> : <>
+            {registryLoading ? <div className="space-y-4 p-3"><Skeleton className="h-6 w-40" /><Skeleton className="h-4 w-24" /><Skeleton className="h-11 w-full" /></div> : <>
               {!adjustable && modelControl}
               {unavailable && <p className="px-3 py-2 text-sm text-fg-muted">{m.modelUnavailable}</p>}
+              {externalAgentId && !models.length && externalRegistry.data?.message && (
+                <p className="px-3 py-2 text-center text-xs text-fg-muted">{externalRegistry.data.message}</p>
+              )}
               {selected && <div>
                 {adjustable ? <ThinkingEffortSlider options={thinking.options} value={effectiveThinkingLevel}
                   label={m.modelThinkingLabel} levelLabel={levelLabel} disabled={busy || thinkingDisabled}
                   modelControl={modelControl} resetLabel={m.modelThinkingReset} defaultValue={thinking.initialValue}
-                  onCommit={level => save(() => onThinkingChange(level))} /> : <p className="px-1 pb-2 text-center text-xs text-fg-muted">{
+                  onCommit={level => save(() => (
+                    externalAgentId && activeModelId && activeModelId !== sessionModel
+                      ? onModelChange(activeModelId, level)
+                      : onThinkingChange(level)
+                  ))} /> : <p className="px-1 pb-2 text-center text-xs text-fg-muted">{
                   thinking?.mode === 'none' ? m.thinkingUnsupported
                     : thinking?.mode === 'fixed' ? m.modelThinkingFixed
                       : m.modelThinkingUnknown
@@ -120,11 +157,11 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
             </>}
           </div>}
           {pending && <span className="sr-only" role="status">{m.modelConfigSaving}</span>}
-          {(error || registry.error) && <div className="shrink-0 break-words px-1 py-2 text-xs" aria-live="polite">
+          {(error || registryError) && <div className="shrink-0 break-words px-1 py-2 text-xs" aria-live="polite">
             {error ? <span role="alert" className="text-danger">{error}</span>
-              : <button type="button" onClick={() => void registry.mutate()} className={cn('text-accent-fg', interaction.focusRingPanel)}>{m.modelRetry}</button>}
+              : <button type="button" onClick={() => void revalidateRegistry()} className={cn('text-accent-fg', interaction.focusRingPanel)}>{m.modelRetry}</button>}
           </div>}
-          {view === 'models' && <Link to="/settings/capabilities/models" className={cn('shrink-0 rounded-lg border-t border-edge-subtle px-3 py-3 text-sm text-fg-muted hover:bg-surface-hover', interaction.focusRingPanel)}>
+          {view === 'models' && <Link to={externalAgentId ? '/settings/agents' : '/settings/capabilities/models'} className={cn('shrink-0 rounded-lg border-t border-edge-subtle px-3 py-3 text-sm text-fg-muted hover:bg-surface-hover', interaction.focusRingPanel)}>
             {models.length ? m.modelManage : m.modelConfigure}
           </Link>}
         </Popover.Content>

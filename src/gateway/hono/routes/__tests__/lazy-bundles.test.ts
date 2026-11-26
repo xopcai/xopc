@@ -745,6 +745,7 @@ it('maps external runtime probe and auth endpoints through the agents bundle', (
     '/api/agents/external-runtimes/auth/flow-123/respond',
     '/api/agents/external-runtimes/auth/flow-123/cancel',
     '/api/agents/external-runtimes/auth/logout',
+    '/api/agents/codex-agent/runtime-models',
   ]) {
     expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('agents');
   }

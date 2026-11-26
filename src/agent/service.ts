@@ -6,6 +6,7 @@ import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../gateway/chat-limits.js';
 import type { MessageBus } from '../infra/bus/index.js';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import {
+  maybeApplyExternalSessionTitle,
   maybeRefineSessionTitleWithLlm,
   maybeSetProvisionalSessionTitle,
 } from '../session/session-title.js';
@@ -916,6 +917,27 @@ export class AgentService {
         log.warn({ err, conversationId }, 'Provisional session title failed');
       }
     })();
+  }
+
+  /** Apply a title emitted by an external runtime (e.g. Codex thread/name/updated). */
+  applyExternalSessionTitle(conversationId: string, rawTitle: string): void {
+    void (async () => {
+      try {
+        await maybeApplyExternalSessionTitle(
+          this.sessionStore,
+          conversationId,
+          rawTitle,
+          (sk, name) => this.notifySessionTitleUpdated(sk, name),
+        );
+      } catch (err) {
+        log.warn({ err, conversationId }, 'External session title update failed');
+      }
+    })();
+  }
+
+  /** Fire-and-forget post-turn title refinement (LLM when available, else fallback). */
+  enqueueAutoSessionTitleAfterTurn(conversationId: string): void {
+    this.enqueueMaybeAutoTitleAfterPersist(conversationId);
   }
 
   /**

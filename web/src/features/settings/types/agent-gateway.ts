@@ -1,4 +1,4 @@
-import type { SpecialistProfile } from '@xopcai/gateway-contract';
+import type { ModelThinkingCapabilities, SpecialistProfile } from '@xopcai/gateway-contract';
 
 export type ModelRoute = { primary: string; fallbacks: string[] };
 export type ModelIntent = 'fast' | 'reasoning' | 'coding' | 'review' | 'vision' | 'understanding';
@@ -54,6 +54,9 @@ export type AgentDefaults = {
 export const EXTERNAL_AGENT_KINDS = ['codex', 'agy'] as const;
 export type ExternalAgentKind = (typeof EXTERNAL_AGENT_KINDS)[number];
 
+export const EXTERNAL_PERMISSION_MODES = ['full_access', 'auto_edit', 'ask'] as const;
+export type ExternalPermissionMode = (typeof EXTERNAL_PERMISSION_MODES)[number];
+
 export const AGY_AUTH_METHODS = ['oauth-personal', 'oauth-business', 'gemini-api-key', 'agent-platform'] as const;
 export type AgyAuthMethod = (typeof AGY_AUTH_METHODS)[number];
 
@@ -62,6 +65,7 @@ export type CodexExecution = {
   binaryPath?: string;
   homePath?: string;
   model?: string;
+  permissionMode?: ExternalPermissionMode;
 };
 
 export type AgyExecution = {
@@ -70,6 +74,7 @@ export type AgyExecution = {
   geminiDir?: string;
   authMethod?: AgyAuthMethod;
   model?: string;
+  permissionMode?: ExternalPermissionMode;
 };
 
 export type ExternalAgentExecution = CodexExecution | AgyExecution;
@@ -80,6 +85,8 @@ export type ExternalRuntimeModelOption = {
   id: string;
   label: string;
   isDefault?: boolean;
+  thinking?: ModelThinkingCapabilities;
+  thinkingConfigId?: string;
 };
 
 export type ExternalRuntimeAccountInfo = {

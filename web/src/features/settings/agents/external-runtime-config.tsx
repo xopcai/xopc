@@ -15,9 +15,11 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { mutate as globalMutate } from 'swr';
 
+import { ExternalRuntimeAvatar } from '@/components/brand/external-runtime-avatar';
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { invalidateAgentRuntimeModelsCache } from '@/features/chat/api/registry-api';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import {
   cancelExternalRuntimeAuthFlow,
@@ -34,9 +36,11 @@ import {
 } from '@/features/settings/oauth-authorization-window';
 import {
   AGY_AUTH_METHODS,
+  EXTERNAL_PERMISSION_MODES,
   type AgyAuthMethod,
   type ExternalAgentExecution,
   type ExternalAgentKind,
+  type ExternalPermissionMode,
   type ExternalRuntimeAuthFlowSnapshot,
   type ExternalRuntimeAuthMode,
   type ExternalRuntimeProbeResult,
@@ -90,6 +94,17 @@ export function externalRuntimeStatusLabel(status: ExternalRuntimeStatus | undef
       return zh ? '不可用' : 'Unavailable';
     default:
       return zh ? '检测中…' : 'Checking…';
+  }
+}
+
+function permissionModeLabel(mode: ExternalPermissionMode, zh: boolean): string {
+  switch (mode) {
+    case 'full_access':
+      return zh ? '完全放行（自动执行命令与改文件）' : 'Full access (auto-run commands & edits)';
+    case 'auto_edit':
+      return zh ? '自动改文件，执行命令前确认' : 'Auto-accept edits, ask before commands';
+    case 'ask':
+      return zh ? '逐项确认（改文件与命令均需审批）' : 'Ask before edits & commands';
   }
 }
 
@@ -229,7 +244,7 @@ export function ExternalRuntimeQuickCards({
                 <div className="min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
-                      <ExternalRuntimeStatusDot status={probe?.status} />
+                      <ExternalRuntimeAvatar kind={kind} size={22} />
                       <h3 className="truncate text-sm font-semibold text-fg">
                         {externalRuntimeDisplayName(kind)}
                       </h3>
@@ -239,7 +254,8 @@ export function ExternalRuntimeQuickCards({
                         </span>
                       ) : null}
                     </div>
-                    <span className="shrink-0 text-[11px] font-medium text-fg-muted">
+                    <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-fg-muted">
+                      <ExternalRuntimeStatusDot status={probe?.status} />
                       {externalRuntimeStatusLabel(probe?.status, zh)}
                     </span>
                   </div>
@@ -334,6 +350,7 @@ export function ExternalRuntimeConfigForm({
 
   const syncGlobalRuntimeCache = useCallback(() => {
     void globalMutate('settings-external-agent-runtimes');
+    void invalidateAgentRuntimeModelsCache();
   }, []);
 
   const runProbe = useCallback(async (target: ExternalAgentExecution) => {
@@ -899,6 +916,33 @@ export function ExternalRuntimeConfigForm({
           {zh
             ? '留空时自动跟随本机 CLI 的默认模型；完成登录后会自动拉取可用模型列表。'
             : 'Leave blank to use the CLI default model. Live models load automatically after sign-in.'}
+        </p>
+      </div>
+
+      {/* Permission & approval mode */}
+      <div className="space-y-1.5">
+        <label htmlFor={`ext-perm-${value.kind}`} className="block text-xs font-medium text-fg-muted">
+          {zh ? '权限与审批模式' : 'Permission & approval mode'}
+        </label>
+        <Select
+          id={`ext-perm-${value.kind}`}
+          value={value.permissionMode ?? 'full_access'}
+          disabled={disabled}
+          onChange={(event) => {
+            const next = event.target.value;
+            updateFields({ permissionMode: next === 'full_access' ? undefined : next });
+          }}
+        >
+          {EXTERNAL_PERMISSION_MODES.map((mode) => (
+            <SelectOption key={mode} value={mode}>
+              {permissionModeLabel(mode, zh)}
+            </SelectOption>
+          ))}
+        </Select>
+        <p className="text-xs leading-5 text-fg-subtle">
+          {zh
+            ? '需要审批时会在对话输入框上方弹出确认卡；若会话处于「计划模式 / 只读」，会自动收紧为只读并弹窗确认。'
+            : 'When approvals are required, a confirmation card appears above the chat composer. Plan/read-only sessions automatically tighten access.'}
         </p>
       </div>
 

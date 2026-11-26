@@ -231,6 +231,7 @@ export function useCommandPalette(
     capabilities?: Readonly<ComposerCapabilities>;
     isComposing?: boolean;
     currentAgentId?: string;
+    externalAgentsAvailable?: boolean;
     conversationId?: string | null;
   },
 ) {
@@ -306,10 +307,11 @@ export function useCommandPalette(
       });
       // Agents: only when there is more than one (matches header `showChatAgentSelector`).
       const agentsMessages = messages(language).agentsSettings;
-      const agentsPayload = agentsResult.status === 'fulfilled' ? agentsResult.value : null;
+      const selectableAgents = agentsResult.status === 'fulfilled'
+        ? agentsResult.value.items.filter(agent => options?.externalAgentsAvailable || !agent.execution) : [];
       const agentItems: PaletteItem[] =
-        agentsPayload && agentsPayload.items.length > 1
-          ? agentsPayload.items.map((a) => ({
+        selectableAgents.length > 1
+          ? selectableAgents.map((a) => ({
               kind: 'agent' as const,
               id: `agent:${a.id}`,
               agentId: a.id,
@@ -322,7 +324,7 @@ export function useCommandPalette(
           : [];
       return { items: [...skillItems, ...commandItems, ...agentItems], failedKinds };
     },
-    [language, options?.currentAgentId, options?.conversationId, skillsVersion],
+    [language, options?.currentAgentId, options?.conversationId, options?.externalAgentsAvailable, skillsVersion],
     {
       enabled: paletteActive,
       initial: { items: [] as PaletteItem[], failedKinds: [] as PaletteItemKind[] },

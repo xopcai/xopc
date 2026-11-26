@@ -1,6 +1,8 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const DEFAULT_GRACE_MS = 3000;
+const POST_KILL_WAIT_MS = 1000;
 
 function processAlive(pid: number): boolean {
   try {
@@ -9,13 +11,6 @@ function processAlive(pid: number): boolean {
   } catch {
     return false;
   }
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => {
-    const timer = setTimeout(resolve, ms);
-    timer.unref();
-  });
 }
 
 function taskkill(pid: number, force: boolean): Promise<void> {
@@ -29,35 +24,46 @@ function taskkill(pid: number, force: boolean): Promise<void> {
   });
 }
 
+async function waitForExit(target: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (processAlive(target)) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return false;
+    await delay(Math.min(remaining, 50));
+  }
+  return true;
+}
+
 /** Terminates a child and optionally its process tree, escalating after a grace period. */
 export async function terminateProcess(
   child: ChildProcess,
   options: { tree?: boolean; detached?: boolean; graceMs?: number } = {},
 ): Promise<boolean> {
   const pid = child.pid;
-  if (!pid || child.exitCode !== null || child.signalCode !== null) return true;
+  if (!pid) return true;
   const graceMs = Math.max(0, Math.min(60_000, Math.floor(options.graceMs ?? DEFAULT_GRACE_MS)));
 
   if (process.platform === 'win32' && options.tree) {
+    if (!processAlive(pid)) return true;
     await taskkill(pid, false);
-    if (graceMs > 0 && processAlive(pid)) await delay(graceMs);
-    if (processAlive(pid)) await taskkill(pid, true);
-    return !processAlive(pid);
+    if (!await waitForExit(pid, graceMs)) await taskkill(pid, true);
+    return waitForExit(pid, POST_KILL_WAIT_MS);
   }
 
-  const target = options.tree && options.detached ? -pid : pid;
+  const ownsGroup = options.tree && options.detached && process.platform !== 'win32';
+  if (!ownsGroup && (child.exitCode !== null || child.signalCode !== null)) return true;
+  const target = ownsGroup ? -pid : pid;
   try {
     process.kill(target, 'SIGTERM');
-  } catch {
-    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') return true;
+    return false;
   }
-  if (graceMs > 0 && processAlive(pid)) await delay(graceMs);
-  if (processAlive(pid)) {
-    try {
-      process.kill(target, 'SIGKILL');
-    } catch {
-      try { child.kill('SIGKILL'); } catch { /* already exited */ }
-    }
+  if (await waitForExit(target, graceMs)) return true;
+  try {
+    process.kill(target, 'SIGKILL');
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ESRCH';
   }
-  return !processAlive(pid);
+  return waitForExit(target, POST_KILL_WAIT_MS);
 }

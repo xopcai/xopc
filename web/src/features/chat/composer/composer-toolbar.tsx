@@ -41,8 +41,9 @@ export interface ComposerToolbarProps {
 
   sessionModel: string;
   showModelSelector: boolean;
-  onModelChange: (modelId: string) => void | Promise<void>;
+  onModelChange: (modelId: string, thinkingLevel?: string) => void | Promise<void>;
   modelDisabled: boolean;
+  externalAgentId?: string;
 }
 
 export function ComposerAttachButton({
@@ -183,6 +184,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   showModelSelector,
   onModelChange,
   modelDisabled,
+  externalAgentId,
 }: ComposerToolbarProps) {
   if (voiceActive) return null;
   return (
@@ -207,6 +209,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
             thinkingLevel={thinkingLevel}
             thinkingDisabled={disabled || modelDisabled}
             onThinkingChange={onThinkingChange}
+            externalAgentId={externalAgentId}
           />
         ) : null}
         <div className="flex shrink-0 items-center gap-1">

@@ -1,8 +1,12 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { setTimeout as delay } from 'node:timers/promises';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 
 import { resolveUserPath } from '../../../agent-scope.js';
+import { spawnStdioProcess } from '../../../../process/run-process.js';
 import { createLogger } from '../../../../utils/logger.js';
+
+import { findCodexExecutable } from './executable.js';
+
+import { closeRuntimeProcess } from '../../runtime-process.js';
 
 const log = createLogger('CodexAppServer');
 
@@ -11,6 +15,7 @@ export type CodexRecord = Record<string, unknown>;
 export type CodexAppServerOptions = {
   binaryPath?: string;
   homePath?: string;
+  onRequest?: (method: string, params: CodexRecord) => Promise<CodexRecord> | CodexRecord;
 };
 
 export function record(value: unknown): CodexRecord | undefined {
@@ -38,10 +43,12 @@ export class CodexAppServer {
   private readonly closed = deferred<void>();
   private failure: Error | undefined;
   private closing = false;
-  private exited = false;
+  private exitTimer?: NodeJS.Timeout;
+  private closingProcess?: Promise<void>;
   private buffer = '';
   private stderrTail = '';
   private nextId = 0;
+  private readonly onRequest?: (method: string, params: CodexRecord) => Promise<CodexRecord> | CodexRecord;
 
   constructor(
     cwd: string,
@@ -49,14 +56,19 @@ export class CodexAppServer {
     onFailure: (error: Error) => void,
     options: CodexAppServerOptions = {},
   ) {
-    const command = options.binaryPath?.trim()
-      ? resolveUserPath(options.binaryPath.trim())
-      : process.env.XOPC_CODEX_BIN?.trim() || 'codex';
-    const env: NodeJS.ProcessEnv = { ...process.env };
+    this.onRequest = options.onRequest;
+    const command = findCodexExecutable(options.binaryPath);
+    if (!command) throw new Error('Codex CLI was not found on the Gateway host. Install Codex and run codex login there.');
+    const env: NodeJS.ProcessEnv = {
+      CODEX_INTERNAL_ORIGINATOR_OVERRIDE: 'xopc',
+      ...process.env,
+    };
     if (options.homePath?.trim()) {
       env.CODEX_HOME = resolveUserPath(options.homePath.trim());
     }
-    this.child = spawn(command, ['app-server', '--listen', 'stdio://'], {
+    this.child = spawnStdioProcess({
+      program: command,
+      args: ['app-server', '--listen', 'stdio://'],
       cwd,
       env,
       detached: process.platform !== 'win32',
@@ -80,18 +92,23 @@ export class CodexAppServer {
     this.child.on('error', (error: NodeJS.ErrnoException) => fail(new Error(error.code === 'ENOENT'
       ? 'Codex CLI was not found on the Gateway host. Install Codex and run codex login there.'
       : 'Could not start Codex App Server.', { cause: error })));
-    this.child.on('exit', () => { this.exited = true; });
+    const disconnected = () => {
+      const stderrHint = this.stderrTail.trim().split('\n').pop()?.trim().slice(0, 200);
+      return new Error(stderrHint
+        ? `Codex App Server disconnected (${stderrHint}). Check the Codex installation and login on the Gateway host.`
+        : 'Codex App Server disconnected. Check the Codex installation and login on the Gateway host.');
+    };
+    this.child.on('exit', () => {
+      if (!this.closing) this.exitTimer = setTimeout(() => fail(disconnected()), 250).unref();
+    });
     this.child.on('close', () => {
-      this.exited = true;
+      clearTimeout(this.exitTimer);
       this.closed.resolve();
       if (this.closing) {
         for (const request of this.pending.values()) request.reject(new Error('Codex App Server closed.'));
-        return;
+      } else {
+        fail(disconnected());
       }
-      const stderrHint = this.stderrTail.trim().split('\n').pop()?.trim().slice(0, 200);
-      fail(new Error(stderrHint
-        ? `Codex App Server disconnected (${stderrHint}). Check the Codex installation and login on the Gateway host.`
-        : 'Codex App Server disconnected. Check the Codex installation and login on the Gateway host.'));
     });
     this.child.stdin.on('error', () => fail(new Error('Could not send a message to Codex App Server.')));
     this.child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
@@ -146,7 +163,25 @@ export class CodexAppServer {
     const { id, method } = frame;
     if (typeof method === 'string') {
       if (typeof id === 'number' || typeof id === 'string') {
-        this.send({ id, error: { code: -32601, message: 'xopc does not handle interactive Codex requests.' } });
+        if (this.onRequest) {
+          void Promise.resolve(this.onRequest(method, record(frame.params) ?? {}))
+            .then((result) => {
+              if (!this.closing && !this.failure) this.send({ id, result });
+            })
+            .catch((error: unknown) => {
+              if (!this.closing && !this.failure) {
+                this.send({
+                  id,
+                  error: {
+                    code: -32603,
+                    message: error instanceof Error ? error.message : String(error),
+                  },
+                });
+              }
+            });
+        } else {
+          this.send({ id, error: { code: -32601, message: 'xopc does not handle interactive Codex requests.' } });
+        }
       } else {
         onNotification(method, record(frame.params) ?? {});
       }
@@ -162,26 +197,9 @@ export class CodexAppServer {
     }
   }
 
-  async close(force = false): Promise<void> {
+  close(force = false): Promise<void> {
     this.closing = true;
-    if (this.exited) return;
-    this.child.stdin.end();
-    if (!force) await Promise.race([this.closed.promise, delay(1_000, undefined, { ref: false })]);
-    if (!this.exited) this.kill('SIGTERM');
-    await Promise.race([this.closed.promise, delay(1_000, undefined, { ref: false })]);
-    if (!this.exited) {
-      this.kill('SIGKILL');
-      await Promise.race([this.closed.promise, delay(1_000, undefined, { ref: false })]);
-    }
-  }
-
-  private kill(signal: NodeJS.Signals): void {
-    const pid = this.child.pid;
-    if (pid === undefined) return;
-    try {
-      process.kill(process.platform === 'win32' ? pid : -pid, signal);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-    }
+    clearTimeout(this.exitTimer);
+    return this.closingProcess ??= closeRuntimeProcess(this.child, this.closed.promise, 'Codex App Server', force);
   }
 }

@@ -11,7 +11,8 @@ import type { NavigateFunction } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
-import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
+import { useChatProjectScope } from '@/features/chat/scope/use-chat-project-scope';
+import { newChatHrefForProject, projectIntentForNewChatHandoff } from '@/features/chat/session/composer-handoff-params';
 import {
   readNewSessionPreferences,
   rememberLastChatScope,
@@ -41,6 +42,16 @@ export function useChatSessionAgents(opts: {
 
   const { data: currentSessionContext } = useChatSessionAgentContext(conversationId);
   const currentSessionAgentId = currentSessionContext?.agentId ?? '';
+  const projectIntent = projectIntentForNewChatHandoff(locationSearch);
+  const lastScope = readNewSessionPreferences().lastChatScope;
+  const draftProjectId = !isNewRoute ? null : projectIntent.kind === 'project' ? projectIntent.projectId
+    : projectIntent.kind === 'remember-last' && lastScope.kind === 'project' ? lastScope.projectId : null;
+  const project = useChatProjectScope(isNewRoute ? null : conversationId, draftProjectId);
+  const externalAgentsAvailable = Boolean(project?.workspaceRoot?.trim());
+  const selectableAgents = useMemo(
+    () => chatAgentsData?.items.filter(agent => externalAgentsAvailable || !agent.execution) ?? [],
+    [chatAgentsData, externalAgentsAvailable],
+  );
 
   useEffect(() => {
     const onConfigReload = (event: Event) => {
@@ -91,6 +102,8 @@ export function useChatSessionAgents(opts: {
   const onChatAgentChange = useCallback(
     (id: string) => {
       const next = id.trim().toLowerCase();
+      const target = chatAgentsData?.items.find(agent => agent.id === next);
+      if (target?.execution && !externalAgentsAvailable) return;
       const curKey = conversationIdRef.current;
       const curAgent = curKey ? currentSessionAgentId || preferredAgentIdRef.current : null;
       preferredAgentIdRef.current = next;
@@ -107,7 +120,7 @@ export function useChatSessionAgents(opts: {
         });
       }
     },
-    [currentSessionContext?.projectId, currentSessionAgentId, isNewRoute, locationSearch, locationState, navigate, conversationIdRef],
+    [chatAgentsData, externalAgentsAvailable, currentSessionContext?.projectId, currentSessionAgentId, isNewRoute, locationSearch, locationState, navigate, conversationIdRef],
   );
 
   useEffect(() => {
@@ -154,7 +167,7 @@ export function useChatSessionAgents(opts: {
     [currentSessionAgentId, preferredAgentId, chatAgentsData],
   );
 
-  const showChatAgentSelector = (chatAgentsData?.items.length ?? 0) > 1;
+  const showChatAgentSelector = selectableAgents.length > 1;
 
   return {
     token,
@@ -163,6 +176,7 @@ export function useChatSessionAgents(opts: {
     onChatAgentChange,
     displayAgentId,
     showChatAgentSelector,
+    selectableAgents,
     currentSessionProjectId: currentSessionContext?.projectId ?? null,
   };
 }

@@ -1,7 +1,7 @@
 import { beginJourney } from '@/lib/performance/diagnostics';
 import { SessionLoadQueue } from './session-load-queue';
 
-import { fetchConfiguredModelsCached } from '../api/registry-api';
+import { fetchAgentRuntimeModelsCached, fetchConfiguredModelsCached } from '../api/registry-api';
 import { patchSessionAgentConfigView } from './patch-session-agent-config-view';
 import { useCallback, useRef, type RefObject } from 'react';
 
@@ -40,6 +40,7 @@ export function useChatSessionLoad(deps: {
 
   conversationId: string | null;
   sessionAgentId: string;
+  externalAgentId?: string;
   currentProjectId: string | null;
   taskId?: string;
   hasMore: boolean;
@@ -57,6 +58,7 @@ export function useChatSessionLoad(deps: {
     detachForNewConversation,
     conversationId,
     sessionAgentId,
+    externalAgentId,
     currentProjectId,
     taskId,
     hasMore,
@@ -71,7 +73,7 @@ export function useChatSessionLoad(deps: {
 
   const refreshModelThinkingSupport = useCallback((modelId: string): Promise<void> => {
     const key = store().focusedConversationId;
-    if (!modelId.trim()) {
+    if (!modelId.trim() && !externalAgentId) {
       const gen = ++thinkingSupportGenRef.current;
       if (gen === thinkingSupportGenRef.current && key) {
         store().patchSessionMeta(key, { modelSupportsThinking: false });
@@ -79,12 +81,14 @@ export function useChatSessionLoad(deps: {
       return Promise.resolve();
     }
     const gen = ++thinkingSupportGenRef.current;
-    return modelSupportsReasoning(modelId).then((supports) => {
+    return modelSupportsReasoning(modelId, externalAgentId).then((supports) => {
       if (gen !== thinkingSupportGenRef.current) return;
       const focused = store().focusedConversationId;
-      if (focused && store().sessions[focused]?.model === modelId) store().patchSessionMeta(focused, { modelSupportsThinking: supports });
+      if (focused && (store().sessions[focused]?.model === modelId || Boolean(externalAgentId))) {
+        store().patchSessionMeta(focused, { modelSupportsThinking: supports });
+      }
     });
-  }, [thinkingSupportGenRef]);
+  }, [thinkingSupportGenRef, externalAgentId]);
 
   const applySessionAgentConfig = useCallback(
     async (key: string) => {
@@ -306,7 +310,10 @@ export function useChatSessionLoad(deps: {
     try {
       store().setShellError(null);
       if (level === undefined) {
-        const model = (await fetchConfiguredModelsCached()).find((item) => item.id === modelId);
+        const models = externalAgentId
+          ? (await fetchAgentRuntimeModelsCached(externalAgentId)).models
+          : await fetchConfiguredModelsCached();
+        const model = models.find((item) => item.id === modelId);
         if (model?.thinking) {
           const remembered = modelPreferenceForAgent(readNewSessionPreferences(), sessionAgentId)?.thinkingByModel?.[modelId];
           level = chooseModelThinking(model.thinking, current?.thinkingLevel, remembered);
@@ -329,7 +336,7 @@ export function useChatSessionLoad(deps: {
     } finally {
       store().patchSessionMeta(conversationId, { modelConfigSaving: false });
     }
-  }, [conversationId, sessionAgentId, taskId, sessionMgrRef, refreshModelThinkingSupport]);
+  }, [conversationId, sessionAgentId, externalAgentId, taskId, sessionMgrRef, refreshModelThinkingSupport]);
 
   const onSessionModelChange = updateModelConfig;
   const onSessionThinkingLevelChange = useCallback(async (level: string) => {

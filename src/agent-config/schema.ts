@@ -168,6 +168,9 @@ export const AgentProfileSchema = z.object({
 export const EXTERNAL_AGENT_KINDS = ['codex', 'agy'] as const;
 export type ExternalAgentKind = (typeof EXTERNAL_AGENT_KINDS)[number];
 
+export const EXTERNAL_PERMISSION_MODES = ['full_access', 'auto_edit', 'ask'] as const;
+export type ExternalPermissionMode = (typeof EXTERNAL_PERMISSION_MODES)[number];
+
 export const AGY_AUTH_METHODS = ['oauth-personal', 'oauth-business', 'gemini-api-key', 'agent-platform'] as const;
 export type AgyAuthMethod = (typeof AGY_AUTH_METHODS)[number];
 
@@ -176,6 +179,7 @@ export const CodexExecutionSchema = z.object({
   binaryPath: z.string().trim().min(1).max(500).optional(),
   homePath: z.string().trim().min(1).max(500).optional(),
   model: z.string().trim().min(1).max(200).optional(),
+  permissionMode: z.enum(EXTERNAL_PERMISSION_MODES).optional(),
 }).strict();
 export type CodexExecution = z.infer<typeof CodexExecutionSchema>;
 
@@ -185,6 +189,7 @@ export const AgyExecutionSchema = z.object({
   geminiDir: z.string().trim().min(1).max(500).optional(),
   authMethod: z.enum(AGY_AUTH_METHODS).optional(),
   model: z.string().trim().min(1).max(200).optional(),
+  permissionMode: z.enum(EXTERNAL_PERMISSION_MODES).optional(),
 }).strict();
 export type AgyExecution = z.infer<typeof AgyExecutionSchema>;
 

@@ -12,18 +12,33 @@ import {
   bindExternalSession,
   hasExternalSessionBinding,
   readExternalSessionBinding,
+  resolveExternalInteraction,
   runExternalProjectTurn,
+  steerExternalTurn,
 } from '../index.js';
-import type { CodexRecord } from '../drivers/codex/app-server.js';
+import type { CodexAppServerOptions, CodexRecord } from '../drivers/codex/app-server.js';
 
 const requests = vi.hoisted(() => vi.fn());
-const onTurnStartHook = vi.hoisted(() => ({ fn: undefined as (() => void) | undefined }));
+const onTurnStartHook = vi.hoisted(() => ({ fn: undefined as ((ctx: {
+  emit: (method: string, params: CodexRecord) => void;
+  onRequest?: CodexAppServerOptions['onRequest'];
+  params: CodexRecord;
+}) => void) | undefined }));
+const serverReplyLog = vi.hoisted(() => ({ replies: [] as CodexRecord[] }));
 vi.mock('../drivers/codex/app-server.js', async importOriginal => {
   const original = await importOriginal<typeof import('../drivers/codex/app-server.js')>();
   return {
     ...original,
     CodexAppServer: class {
-      constructor(_cwd: string, private readonly emit: (method: string, params: CodexRecord) => void) {}
+      private readonly onRequest?: CodexAppServerOptions['onRequest'];
+      constructor(
+        _cwd: string,
+        private readonly emit: (method: string, params: CodexRecord) => void,
+        _onFailure?: (err: Error) => void,
+        options?: CodexAppServerOptions,
+      ) {
+        this.onRequest = options?.onRequest;
+      }
 
       notify() {}
       async close() {}
@@ -32,7 +47,10 @@ vi.mock('../drivers/codex/app-server.js', async importOriginal => {
         if (method === 'model/list') return { data: [{ isDefault: true, model: 'test-codex-model' }] };
         if (method === 'thread/start' || method === 'thread/resume') return { thread: { id: 'native-thread' } };
         if (method === 'turn/start') {
-          onTurnStartHook.fn?.();
+          if (onTurnStartHook.fn) {
+            onTurnStartHook.fn({ emit: this.emit, onRequest: this.onRequest, params });
+            return { turn: { id: 'native-turn' } };
+          }
           const scope = { threadId: 'native-thread', turnId: 'native-turn' };
           this.emit('item/agentMessage/delta', { ...scope, turnId: 'previous-turn', itemId: 'previous-reply', delta: 'Old text.' });
           const command = { type: 'commandExecution', id: 'command-1', command: 'pwd', cwd: params.cwd };
@@ -57,6 +75,7 @@ let root: string | undefined;
 afterEach(() => {
   requests.mockClear();
   onTurnStartHook.fn = undefined;
+  serverReplyLog.replies = [];
   closeXopcDatabase();
   if (root) rmSync(root, { force: true, recursive: true });
 });
@@ -85,16 +104,21 @@ it('records native items once and resumes the same external session after reopen
   ]);
   expect(hasExternalSessionBinding(session.key)).toBe(true);
   expect(requests).toHaveBeenCalledWith('thread/start', expect.objectContaining({
-    approvalPolicy: 'never', sandbox: 'danger-full-access', model: 'test-codex-model',
+    approvalPolicy: 'never', sandbox: 'workspace-write', model: 'test-codex-model',
   }));
   expect(requests).toHaveBeenCalledWith('turn/start', expect.objectContaining({
-    approvalPolicy: 'never', sandboxPolicy: { type: 'dangerFullAccess' },
+    approvalPolicy: 'never', sandboxPolicy: {
+      type: 'workspaceWrite', writableRoots: [expect.any(String)], networkAccess: false,
+      excludeTmpdirEnvVar: true, excludeSlashTmp: true,
+    },
   }));
   closeXopcDatabase();
   openXopcDatabase({ path });
 
   await run('follow-up');
-  expect(requests).toHaveBeenCalledWith('thread/resume', expect.objectContaining({ threadId: 'native-thread' }));
+  expect(requests).toHaveBeenCalledWith('thread/resume', expect.objectContaining({
+    threadId: 'native-thread', approvalPolicy: 'never', sandbox: 'workspace-write',
+  }));
   const rows = getSqliteDatabase().prepare('SELECT role FROM transcript_entries WHERE transcript_id = ? ORDER BY seq').all(session.transcriptId!);
   expect(rows.map(row => row.role)).toEqual([
     'user', 'assistant', 'toolResult', 'assistant', null,
@@ -134,11 +158,15 @@ it('finishes cleanly without crashing if the active transcript changes mid-turn'
   openXopcDatabase({ path: join(root, 'xopc.db') });
   const project = new ProjectStore().create({ name: 'Codex project', workspaceRoot: root });
   const session = createConversation({ agentId: 'codex', projectId: project.id }, root);
-  onTurnStartHook.fn = () => {
+  onTurnStartHook.fn = ({ emit, params }) => {
     const db = getSqliteDatabase();
     db.prepare(`INSERT INTO transcripts (transcript_id, conversation_id, created_at, archived_at) VALUES ('next-transcript', ?, ?, NULL)`)
       .run(session.key, Date.now());
     db.prepare(`UPDATE sessions SET active_transcript_id = 'next-transcript' WHERE conversation_id = ?`).run(session.key);
+    const scope = { threadId: 'native-thread', turnId: 'native-turn' };
+    const command = { type: 'commandExecution', id: 'command-1', command: 'pwd', cwd: params.cwd };
+    emit('item/started', { ...scope, item: command });
+    emit('turn/completed', { ...scope, turn: { id: 'native-turn', status: 'completed' } });
   };
 
   const events = await Array.fromAsync(runExternalProjectTurn({
@@ -225,4 +253,221 @@ it('persists resume cursor and supports controlled native session rotation', () 
   });
   expect(readExternalSessionBinding(identity)?.nativeSessionId).toBe('native-2');
   expect(readExternalSessionBinding(identity)?.resumeCursor).toBe('cursor-2');
+});
+
+it('persists Codex reasoning, plans, token usage, unwrapped commands, turn changeSet/evidence, live approvals, and attachments', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-external-rich-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'Codex rich', workspaceRoot: root });
+  const session = createConversation({ agentId: 'codex', projectId: project.id }, root);
+
+  onTurnStartHook.fn = ({ emit, onRequest, params }) => {
+    const scope = { threadId: 'native-thread', turnId: 'native-turn' };
+    void (async () => {
+      emit('item/reasoning/summaryTextDelta', { ...scope, itemId: 'reason-1', delta: 'Inspecting workspace' });
+      emit('item/completed', { ...scope, item: { type: 'reasoning', id: 'reason-1', summary: ['Inspecting workspace'] } });
+      emit('turn/plan/updated', {
+        ...scope,
+        explanation: 'Fix and test',
+        plan: [
+          { step: 'Edit src/app.ts', status: 'inProgress' },
+          { step: 'Run vitest', status: 'pending' },
+        ],
+      });
+      if (onRequest) {
+        const approval = await onRequest('item/commandExecution/requestApproval', {
+          command: '/bin/zsh -lc "pnpm vitest run"',
+          cwd: params.cwd,
+        });
+        serverReplyLog.replies.push(approval);
+      }
+      const cmd = { type: 'commandExecution', id: 'cmd-test', command: '/bin/zsh -lc "pnpm vitest run"', cwd: params.cwd };
+      emit('item/started', { ...scope, item: cmd });
+      emit('item/completed', { ...scope, item: { ...cmd, exitCode: 0, durationMs: 420, aggregatedOutput: 'PASS' } });
+
+      const patch = {
+        type: 'fileChange',
+        id: 'patch-1',
+        changes: [
+          { path: join(String(params.cwd), 'src/app.ts'), kind: { type: 'update' }, diff: '--- src/app.ts\n+++ src/app.ts\n-old\n+new\n+more' },
+        ],
+      };
+      emit('item/started', { ...scope, item: patch });
+      emit('item/completed', { ...scope, item: { ...patch, status: 'completed' } });
+
+      emit('thread/tokenUsage/updated', {
+        threadId: 'native-thread',
+        tokenUsage: { total: { inputTokens: 500, cachedInputTokens: 100, outputTokens: 120, totalTokens: 620 } },
+      });
+      emit('item/agentMessage/delta', { ...scope, itemId: 'msg-1', delta: 'All green.' });
+      emit('item/completed', { ...scope, item: { type: 'agentMessage', id: 'msg-1', text: 'All green.' } });
+      emit('turn/completed', { ...scope, turn: { id: 'native-turn', status: 'completed' } });
+    })();
+  };
+
+  const events: Array<{ type: string; [key: string]: unknown }> = [];
+  for await (const event of runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'codex',
+    execution: { kind: 'codex', permissionMode: 'ask' },
+    runId: 'rich-run',
+    content: 'Fix the bug',
+    attachments: [
+      { type: 'image', name: 'shot.png', mimeType: 'image/png', data: 'data:image/png;base64,iVBORw0KGgo=' },
+    ],
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  })) {
+    events.push(event);
+    if (event.type === 'clarify_request' && typeof event.requestId === 'string') {
+      resolveExternalInteraction({
+        id: event.requestId,
+        expectedVersion: 1,
+        action: 'answer',
+        decision: 'approve',
+      });
+    }
+  }
+
+  expect(serverReplyLog.replies).toEqual([{ decision: 'accept' }]);
+  expect(requests).toHaveBeenCalledWith('turn/start', expect.objectContaining({
+    approvalPolicy: 'on-request',
+    sandboxPolicy: expect.objectContaining({ type: 'workspaceWrite' }),
+    input: expect.arrayContaining([
+      expect.objectContaining({ type: 'text', text: 'Fix the bug' }),
+      expect.objectContaining({ type: 'localImage' }),
+    ]),
+  }));
+
+  const outcome = events.find((e) => e.type === 'turn_outcome')?.outcome as {
+    changeSet?: { files: Array<{ path: string; status?: string }>; added: number; removed: number };
+    evidence?: Array<{ label: string; status: string }>;
+  };
+  expect(outcome?.changeSet?.files).toEqual([{ path: 'src/app.ts', status: 'modified' }]);
+  expect(outcome?.changeSet?.added).toBe(2);
+  expect(outcome?.changeSet?.removed).toBe(1);
+  expect(outcome?.evidence).toEqual([
+    expect.objectContaining({ label: 'pnpm vitest run', status: 'passed' }),
+  ]);
+
+  const rows = getSqliteDatabase()
+    .prepare('SELECT payload_json FROM transcript_entries WHERE transcript_id = ? ORDER BY seq')
+    .all(session.transcriptId!) as Array<{ payload_json: string }>;
+  const payloads = rows.map((r) => JSON.parse(r.payload_json));
+  expect(payloads.some((p) => p.role === 'assistant' && p.content?.[0]?.type === 'thinking' && p.content[0].thinking === 'Inspecting workspace')).toBe(true);
+  expect(payloads.some((p) => p.role === 'toolResult' && p.toolName === 'update_plan')).toBe(true);
+  expect(payloads.some((p) => p.role === 'assistant' && p.content?.[0]?.type === 'text' && p.usage?.input === 500)).toBe(true);
+});
+
+it('forwards per-session modelOverride, thinkingLevel effort, and Codex thread/name/updated title sync', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-codex-model-title-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'Codex Title', workspaceRoot: root });
+  const session = createConversation({ agentId: 'codex', projectId: project.id }, root);
+
+  onTurnStartHook.fn = ({ emit }) => {
+    const scope = { threadId: 'native-thread', turnId: 'native-turn' };
+    queueMicrotask(() => {
+      emit('thread/name/updated', { threadId: 'native-thread', threadName: 'Refactor auth flow' });
+      emit('item/agentMessage/delta', { ...scope, itemId: 'msg-1', delta: 'Done.' });
+      emit('item/completed', { ...scope, item: { id: 'msg-1', type: 'agentMessage', text: 'Done.' } });
+      emit('turn/completed', { ...scope, turn: { id: 'native-turn', status: 'completed' } });
+    });
+  };
+
+  const receivedTitles: string[] = [];
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'codex',
+    execution: { kind: 'codex', model: 'gpt-5.3-codex' },
+    modelOverride: 'gpt-5.4-codex',
+    thinkingLevel: 'high',
+    onTitleUpdated: (title) => receivedTitles.push(title),
+    runId: 'title-run',
+    content: 'Please refactor the auth flow',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+
+  expect(receivedTitles).toEqual(['Refactor auth flow']);
+  expect(requests).toHaveBeenCalledWith('thread/start', expect.objectContaining({
+    model: 'gpt-5.4-codex',
+  }));
+  expect(requests).toHaveBeenCalledWith('turn/start', expect.objectContaining({
+    model: 'gpt-5.4-codex',
+    effort: 'high',
+  }));
+});
+
+it('delivers mid-turn steering to Codex via native turn/steer and persists steered user row', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-codex-steer-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'Codex Steer', workspaceRoot: root });
+  const session = createConversation({ agentId: 'codex', projectId: project.id }, root);
+
+  let finishTurn: (() => void) | undefined;
+  onTurnStartHook.fn = ({ emit }) => {
+    const scope = { threadId: 'native-thread', turnId: 'native-turn' };
+    queueMicrotask(() => {
+      emit('item/agentMessage/delta', { ...scope, itemId: 'msg-1', delta: 'Working on A...' });
+    });
+    finishTurn = () => {
+      emit('item/completed', { ...scope, item: { id: 'msg-1', type: 'agentMessage', text: 'Working on A...' } });
+      emit('item/agentMessage/delta', { ...scope, itemId: 'msg-2', delta: 'Switched to B.' });
+      emit('item/completed', { ...scope, item: { id: 'msg-2', type: 'agentMessage', text: 'Switched to B.' } });
+      emit('turn/completed', { ...scope, turn: { id: 'native-turn', status: 'completed' } });
+    };
+  };
+
+  let handled = false;
+  let steered = false;
+  const events: Array<{ type: string; [key: string]: unknown }> = [];
+  for await (const event of runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'codex',
+    execution: { kind: 'codex' },
+    runId: 'steer-run',
+    content: 'Work on task A',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  })) {
+    events.push(event);
+    if (!steered && event.type === 'message_update') {
+      steered = true;
+      const accepted = await steerExternalTurn(session.key, 'Actually focus on task B', 'steer-run', {
+        clientMessageId: 'steer-msg-1',
+        onHandled: () => { handled = true; },
+      });
+      expect(accepted).toBe(true);
+      finishTurn?.();
+    }
+  }
+
+  expect(handled).toBe(true);
+  expect(requests).toHaveBeenCalledWith('turn/steer', expect.objectContaining({
+    threadId: 'native-thread',
+    expectedTurnId: 'native-turn',
+    clientUserMessageId: 'steer-msg-1',
+    input: [expect.objectContaining({ type: 'text', text: 'Actually focus on task B' })],
+  }));
+  expect(events.some((e) =>
+    e.type === 'user_message'
+    && e.content === 'Actually focus on task B'
+    && (e.metadata as { steered?: boolean; clientMessageId?: string } | undefined)?.steered === true
+    && (e.metadata as { clientMessageId?: string } | undefined)?.clientMessageId === 'steer-msg-1',
+  )).toBe(true);
+
+  const rows = getSqliteDatabase()
+    .prepare('SELECT payload_json FROM transcript_entries WHERE transcript_id = ? ORDER BY seq')
+    .all(session.transcriptId!) as Array<{ payload_json: string }>;
+  const payloads = rows.map((r) => JSON.parse(r.payload_json));
+  expect(payloads.some((p) =>
+    p.role === 'user'
+    && p.content === 'Actually focus on task B'
+    && p.metadata?.steered === true
+    && p.metadata?.clientMessageId === 'steer-msg-1',
+  )).toBe(true);
 });

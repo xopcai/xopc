@@ -86,6 +86,7 @@ export type { CompactionConfig, CompactionResult } from '../agent/memory/compact
 export type { WindowConfig } from '../agent/memory/window.js';
 
 export {
+  maybeApplyExternalSessionTitle,
   maybeSetProvisionalSessionTitle,
   maybeRefineSessionTitleWithLlm,
   generateSessionTitleFromMessages,

@@ -1,16 +1,18 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { createInterface } from 'node:readline';
 
 import type { AgyExecution, CodexExecution, ExternalAgentExecution } from '../../agent-config/schema.js';
+import { spawnStdioProcess } from '../../process/run-process.js';
 import { createLogger } from '../../utils/logger.js';
 import { AcpJsonRpcClient } from './acp/json-rpc-client.js';
 import { findAgyExecutable, resolveAgySpawnSpec } from './drivers/agy/driver.js';
 import { CodexAppServer, record, type CodexRecord } from './drivers/codex/app-server.js';
-import { findCodexExecutable } from './drivers/codex/driver.js';
+import { findCodexExecutable } from './drivers/codex/executable.js';
 import { probeExternalAgentRuntime } from './registry.js';
+import { closeRuntimeProcess } from './runtime-process.js';
 import type {
   ExternalRuntimeAuthFlowSnapshot,
   ExternalRuntimeAuthMode,
@@ -271,6 +273,7 @@ async function startCodexAuthFlow(
     flow.respond = undefined;
     await cleanup?.().catch(() => {});
     const probe = await probeExternalAgentRuntime(execution);
+    if (isTerminal(flow.snapshot.phase)) return;
     if (probe.status === 'ready') {
       flow.snapshot = {
         ...flow.snapshot,
@@ -317,7 +320,7 @@ async function startCodexAuthFlow(
       server = undefined;
       activeLoginId = undefined;
       if (currentServer && loginId) {
-        await currentServer.request('account/login/cancel', { loginId }).catch(() => {});
+        await currentServer.request('account/login/cancel', { loginId }, AbortSignal.timeout(2_000)).catch(() => {});
       }
       await currentServer?.close(true);
     };
@@ -396,7 +399,7 @@ async function startAgyCodeLoginFlow(
   execution: AgyExecution,
   executablePath: string,
 ): Promise<ExternalRuntimeAuthFlowSnapshot> {
-  const spawnSpec = resolveAgySpawnSpec(tmpdir(), { ...execution, binaryPath: executablePath });
+  const spawnSpec = resolveAgySpawnSpec({ ...execution, binaryPath: executablePath });
   const env = { ...spawnSpec.env };
   // Suppress local browser spawning inside agy so the OAuth URL is printed cleanly for xopc UI.
   delete env.DISPLAY;
@@ -410,10 +413,13 @@ async function startAgyCodeLoginFlow(
   });
 
   try {
-    child = spawn(spawnSpec.command, [...spawnSpec.args, '--login'], {
+    child = spawnStdioProcess({
+      program: spawnSpec.command,
+      args: [...spawnSpec.args, '--login'],
       cwd: tmpdir(),
       env,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
+      windowsHide: true,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -421,23 +427,11 @@ async function startAgyCodeLoginFlow(
     return { ...flow.snapshot };
   }
 
+  const closed = new Promise<void>(resolve => child!.once('close', resolve));
   flow.cleanup = async () => {
     const current = child;
     child = undefined;
-    if (!current || current.exitCode !== null || current.killed) return;
-    current.kill('SIGTERM');
-    await new Promise<void>((resolve) => {
-      const killTimer = setTimeout(() => {
-        try {
-          current.kill('SIGKILL');
-        } catch {}
-        resolve();
-      }, 2_000);
-      current.once('exit', () => {
-        clearTimeout(killTimer);
-        resolve();
-      });
-    });
+    if (current) await closeRuntimeProcess(current, closed, 'Antigravity sign-in', true);
   };
 
   const handleOutputLine = (rawLine: string) => {
@@ -521,9 +515,12 @@ async function startAgyCodeLoginFlow(
           inputKind: undefined,
           message: 'Checking Antigravity access and loading available models…',
         };
+        const cleanup = flow.cleanup;
         flow.cleanup = undefined;
         flow.respond = undefined;
+        await cleanup?.();
         const probe = await probeExternalAgentRuntime(execution);
+        if (isTerminal(flow.snapshot.phase)) return;
         if (probe.status === 'ready') {
           flow.snapshot = {
             ...flow.snapshot,
@@ -562,7 +559,7 @@ async function startAgyAcpAuthenticateFlow(
   execution: AgyExecution,
   executablePath: string,
 ): Promise<ExternalRuntimeAuthFlowSnapshot> {
-  const spawnSpec = resolveAgySpawnSpec(tmpdir(), { ...execution, binaryPath: executablePath });
+  const spawnSpec = resolveAgySpawnSpec({ ...execution, binaryPath: executablePath });
   let client: AcpJsonRpcClient | undefined;
   let resolvedInitialUrl: (() => void) | undefined;
   const firstUrlReady = new Promise<void>((resolve) => {
@@ -645,6 +642,7 @@ async function startAgyAcpAuthenticateFlow(
       flow.respond = undefined;
       await cleanup?.().catch(() => {});
       const probe = await probeExternalAgentRuntime(execution);
+      if (isTerminal(flow.snapshot.phase)) return;
       if (probe.status === 'ready') {
         flow.snapshot = { ...flow.snapshot, phase: 'succeeded', probe, message: 'Signed in to Antigravity.' };
       } else {
@@ -765,6 +763,10 @@ export async function cancelExternalRuntimeAuthFlow(
   return { ...flow.snapshot };
 }
 
+export async function cancelAllExternalRuntimeAuthFlows(): Promise<void> {
+  await Promise.all([...activeFlows.keys()].map(cancelExternalRuntimeAuthFlow));
+}
+
 export async function logoutExternalAgentRuntime(
   execution: ExternalAgentExecution,
 ): Promise<ExternalRuntimeProbeResult> {
@@ -792,7 +794,7 @@ export async function logoutExternalAgentRuntime(
 
   const executablePath = findAgyExecutable(execution.binaryPath);
   if (executablePath) {
-    const spawnSpec = resolveAgySpawnSpec(tmpdir(), { ...execution, binaryPath: executablePath });
+    const spawnSpec = resolveAgySpawnSpec({ ...execution, binaryPath: executablePath });
     let client: AcpJsonRpcClient | undefined;
     try {
       client = new AcpJsonRpcClient({

@@ -382,3 +382,34 @@ export async function maybeRefineSessionTitleWithLlm(
     log.warn({ err, conversationId }, 'Session title: refine updateMetadata failed');
   }
 }
+
+/**
+ * Apply a session title supplied natively by an external runtime (e.g. Codex `thread/name/updated`).
+ * Respects user-locked titles (`titleSource === 'user'`).
+ */
+export async function maybeApplyExternalSessionTitle(
+  sessionStore: SessionStore,
+  conversationId: string,
+  rawTitle: string,
+  onUpdated?: SessionTitleUpdatedHook,
+): Promise<void> {
+  if (!shouldAutoTitleConversationId(conversationId)) return;
+  const title = sanitizeGeneratedSessionTitle(rawTitle);
+  if (!title) return;
+
+  const meta = await sessionStore.getMetadata(conversationId);
+  if (!meta) return;
+  const source = getSessionTitleSource(meta);
+  if (source === 'user') return;
+  if (meta.name?.trim() === title && source === 'llm') return;
+
+  try {
+    await sessionStore.updateMetadata(conversationId, {
+      name: title,
+      customData: { ...(meta.customData ?? {}), titleSource: 'llm' },
+    });
+    await onUpdated?.(conversationId, title);
+  } catch (err) {
+    log.warn({ err, conversationId }, 'Session title: external updateMetadata failed');
+  }
+}

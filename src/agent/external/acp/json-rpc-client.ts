@@ -1,7 +1,9 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { setTimeout as delay } from 'node:timers/promises';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 
+import { spawnStdioProcess } from '../../../process/run-process.js';
 import { createLogger } from '../../../utils/logger.js';
+
+import { closeRuntimeProcess } from '../runtime-process.js';
 
 const log = createLogger('AcpJsonRpcClient');
 
@@ -64,7 +66,8 @@ export class AcpJsonRpcClient {
   private readonly onFailure?: (error: Error) => void;
   private failure: Error | undefined;
   private closing = false;
-  private exited = false;
+  private exitTimer?: NodeJS.Timeout;
+  private closingProcess?: Promise<void>;
   private stdoutBuffer = '';
   private stderrLineBuffer = '';
   private stderrTail = '';
@@ -77,7 +80,9 @@ export class AcpJsonRpcClient {
     this.onNonJsonLine = options.onNonJsonLine;
     this.onFailure = options.onFailure;
 
-    this.child = spawn(options.command, [...options.args], {
+    this.child = spawnStdioProcess({
+      program: options.command,
+      args: options.args,
       cwd: options.cwd,
       env: options.env,
       detached: process.platform !== 'win32',
@@ -112,26 +117,23 @@ export class AcpJsonRpcClient {
         ),
       );
     });
+    const disconnected = () => {
+      const stderrHint = this.stderrTail.trim().split('\n').pop()?.trim().slice(0, 200);
+      return new Error(stderrHint
+        ? `${this.label} ACP server disconnected (${stderrHint}).`
+        : `${this.label} ACP server disconnected.`);
+    };
     this.child.on('exit', () => {
-      this.exited = true;
+      if (!this.closing) this.exitTimer = setTimeout(() => this.fail(disconnected()), 250).unref();
     });
     this.child.on('close', () => {
-      this.exited = true;
+      clearTimeout(this.exitTimer);
       this.closed.resolve();
       if (this.closing) {
-        for (const request of this.pending.values()) {
-          request.reject(new Error(`${this.label} ACP server closed.`));
-        }
-        return;
+        for (const request of this.pending.values()) request.reject(new Error(`${this.label} ACP server closed.`));
+      } else {
+        this.fail(disconnected());
       }
-      const stderrHint = this.stderrTail.trim().split('\n').pop()?.trim().slice(0, 200);
-      this.fail(
-        new Error(
-          stderrHint
-            ? `${this.label} ACP server disconnected (${stderrHint}).`
-            : `${this.label} ACP server disconnected.`,
-        ),
-      );
     });
     this.child.stdin.on('error', () => {
       if (!this.closing) {
@@ -210,7 +212,7 @@ export class AcpJsonRpcClient {
 
   private send(frame: AcpRecord): void {
     if (this.failure) throw this.failure;
-    if (this.closing || this.exited) return;
+    if (this.closing) throw new Error(`${this.label} ACP server closed.`);
     this.child.stdin.write(`${JSON.stringify(frame)}\n`);
   }
 
@@ -275,26 +277,9 @@ export class AcpJsonRpcClient {
     }
   }
 
-  async close(force = false): Promise<void> {
+  close(force = false): Promise<void> {
     this.closing = true;
-    if (this.exited) return;
-    this.child.stdin.end();
-    if (!force) await Promise.race([this.closed.promise, delay(1_000, undefined, { ref: false })]);
-    if (!this.exited) this.kill('SIGTERM');
-    await Promise.race([this.closed.promise, delay(1_000, undefined, { ref: false })]);
-    if (!this.exited) {
-      this.kill('SIGKILL');
-      await Promise.race([this.closed.promise, delay(1_000, undefined, { ref: false })]);
-    }
-  }
-
-  private kill(signal: NodeJS.Signals): void {
-    const pid = this.child.pid;
-    if (pid === undefined) return;
-    try {
-      process.kill(process.platform === 'win32' ? pid : -pid, signal);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-    }
+    clearTimeout(this.exitTimer);
+    return this.closingProcess ??= closeRuntimeProcess(this.child, this.closed.promise, this.label, force);
   }
 }

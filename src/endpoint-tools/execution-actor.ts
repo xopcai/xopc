@@ -12,6 +12,10 @@ interface AcceptedActor { principal: GatewayPrincipal; acceptedAt: number }
 const actors = new DurableState<AcceptedActor>('device.input-actors');
 const actorKey = (conversationId: string, clientMessageId: string) => JSON.stringify([conversationId, clientMessageId]);
 
+export function isDeviceExecutionInputOwner(conversationId: string, clientMessageId: string, principal: GatewayPrincipal): boolean {
+  return actors.get(actorKey(conversationId, clientMessageId))?.principal.principalId === deviceExecutionPrincipalId(principal);
+}
+
 /** Only authenticated input handlers may establish the identity of a queued request. */
 export function recordDeviceExecutionActor(conversationId: string, clientMessageId: string, principal: GatewayPrincipal): void {
   principal = { ...principal, principalId: deviceExecutionPrincipalId(principal) };

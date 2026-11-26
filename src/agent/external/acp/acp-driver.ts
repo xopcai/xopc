@@ -1,8 +1,23 @@
 import { tmpdir } from 'node:os';
 
 import type { ToolCall } from '@earendil-works/pi-ai';
+import type { ModelThinkingCapabilities, ModelThinkingValue } from '@xopcai/gateway-contract';
 
-import type { ExternalAgentExecution, ExternalAgentKind } from '../../../agent-config/schema.js';
+import type {
+  ExternalAgentExecution,
+  ExternalAgentKind,
+  ExternalPermissionMode,
+} from '../../../agent-config/schema.js';
+import type { SessionInteractionPolicy } from '../../session/interaction-policy-state.js';
+import { normalizeThinkLevel } from '../../transcript/thinking-types.js';
+import { formatFileAttachmentsContext } from '../attachments.js';
+import {
+  buildNormalizedApplyPatchResult,
+  buildNormalizedExecCommandResult,
+  MAX_EXTERNAL_TOOL_TEXT,
+  toWorkspaceRelativePath,
+  unwrapShellCommand,
+} from '../presentation.js';
 import type {
   ExternalAgentDriver,
   ExternalDriverTurnContext,
@@ -14,7 +29,6 @@ import type {
 } from '../types.js';
 import { AcpJsonRpcClient, AcpRpcError, asRecord, type AcpRecord } from './json-rpc-client.js';
 
-const MAX_TOOL_TEXT = 32_000;
 const STOP_TIMEOUT_MS = 5_000;
 const PROBE_TIMEOUT_MS = 10_000;
 
@@ -57,6 +71,7 @@ type TrackedTool = {
   tool: ExternalRuntimeToolCall;
   kind: string;
   output: string;
+  startedAtMs: number;
   diffChanges: Array<{ path: string; kind: string; diff: string }>;
 };
 
@@ -67,6 +82,13 @@ function str(value: unknown): string {
 function firstNonEmpty(...values: Array<unknown>): string {
   for (const value of values) {
     if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
+function firstNonEmptyRaw(...values: Array<unknown>): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value.length > 0) return value;
   }
   return '';
 }
@@ -140,42 +162,142 @@ function extractDiffChanges(
   return changes;
 }
 
-function normalizeToolCall(id: string, update: AcpRecord): { tool: ExternalRuntimeToolCall; kind: string } {
+function extractFirstLocationPath(locations: unknown): string {
+  if (!Array.isArray(locations)) return '';
+  for (const loc of locations) {
+    const rec = asRecord(loc);
+    if (rec && typeof rec.path === 'string' && rec.path.trim()) return rec.path.trim();
+  }
+  return '';
+}
+
+function isWebSearchCall(name: string, title: string, rawInput: AcpRecord | undefined): boolean {
+  const combined = `${name} ${title}`.toLowerCase();
+  if (/\b(?:web|internet|online|google|bing|duckduckgo)\b/.test(combined)) return true;
+  if (rawInput && (typeof rawInput.url === 'string' || typeof rawInput.Url === 'string' || typeof rawInput.domain === 'string')) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeToolCall(
+  id: string,
+  update: AcpRecord,
+  cwd: string,
+): { tool: ExternalRuntimeToolCall; kind: string } {
   const kind = str(update.kind).toLowerCase() || 'other';
   const title = str(update.title).trim();
+  const rawName = str(update.name).trim();
   const rawInput = asRecord(update.rawInput);
+  const locPath = extractFirstLocationPath(update.locations);
+
   if (kind === 'execute') {
-    const cmd = firstNonEmpty(
+    const rawCmd = firstNonEmpty(
       rawInput?.CommandLine,
       rawInput?.command_line,
       rawInput?.commandLine,
       rawInput?.command,
       title,
     );
-    const cwd = firstNonEmpty(
+    const { displayCommand, rawCommand } = unwrapShellCommand(rawCmd);
+    const execCwd = firstNonEmpty(
       rawInput?.Cwd,
       rawInput?.WorkingDirectory,
       rawInput?.working_dir,
       rawInput?.workingDir,
       rawInput?.cwd,
     );
-    return { kind, tool: { id, toolName: 'exec_command', args: { cmd, ...(cwd ? { cwd } : {}) } } };
+    const relCwd = execCwd ? toWorkspaceRelativePath(execCwd, cwd) : '';
+    return {
+      kind,
+      tool: {
+        id,
+        toolName: 'exec_command',
+        args: {
+          cmd: displayCommand || rawCmd,
+          ...(rawCommand ? { rawCommand } : {}),
+          ...(relCwd ? { cwd: relCwd } : {}),
+        },
+      },
+    };
   }
+
   if (kind === 'edit' || kind === 'delete' || kind === 'move') {
-    const path = firstNonEmpty(
+    const rawPath = firstNonEmpty(
       rawInput?.TargetFile,
       rawInput?.AbsolutePath,
+      rawInput?.Path,
       rawInput?.path,
       rawInput?.file_path,
       rawInput?.filePath,
+      locPath,
     );
-    return { kind, tool: { id, toolName: 'apply_patch', args: path ? { path } : {} } };
+    const relPath = rawPath ? toWorkspaceRelativePath(rawPath, cwd) : '';
+    return { kind, tool: { id, toolName: 'apply_patch', args: relPath ? { path: relPath } : {} } };
   }
-  if (kind === 'search' || kind === 'fetch') {
-    const query = firstNonEmpty(rawInput?.query, rawInput?.Query, rawInput?.url, rawInput?.Url, title);
-    return { kind, tool: { id, toolName: 'web_search', args: query ? { query } : {} } };
+
+  if (kind === 'read') {
+    const rawPath = firstNonEmpty(
+      rawInput?.AbsolutePath,
+      rawInput?.Path,
+      rawInput?.TargetFile,
+      rawInput?.path,
+      rawInput?.file_path,
+      rawInput?.filePath,
+      locPath,
+    );
+    const relPath = rawPath ? toWorkspaceRelativePath(rawPath, cwd) : '';
+    const isList = /\b(?:list|ls|dir|directory)\b/i.test(`${rawName} ${title}`);
+    return {
+      kind,
+      tool: {
+        id,
+        toolName: isList ? 'list_directory' : 'read_file',
+        args: relPath ? { path: relPath } : title ? { path: title } : {},
+      },
+    };
   }
-  const toolName = firstNonEmpty(update.name, title, 'acp_tool').slice(0, 128);
+
+  if (kind === 'fetch') {
+    const url = firstNonEmpty(rawInput?.url, rawInput?.Url, rawInput?.uri, rawInput?.href, title);
+    return { kind, tool: { id, toolName: 'web_fetch', args: url ? { url } : {} } };
+  }
+
+  if (kind === 'search') {
+    const query = firstNonEmpty(
+      rawInput?.query,
+      rawInput?.Query,
+      rawInput?.pattern,
+      rawInput?.Pattern,
+      rawInput?.name_pattern,
+      rawInput?.search_term,
+      title,
+    );
+    if (isWebSearchCall(rawName, title, rawInput)) {
+      return { kind, tool: { id, toolName: 'web_search', args: query ? { query } : {} } };
+    }
+    const rawSearchPath = firstNonEmpty(
+      rawInput?.SearchPath,
+      rawInput?.SearchDirectory,
+      rawInput?.path,
+      rawInput?.directory,
+      locPath,
+    );
+    const relSearchPath = rawSearchPath ? toWorkspaceRelativePath(rawSearchPath, cwd) : '';
+    return {
+      kind,
+      tool: {
+        id,
+        toolName: 'grep',
+        args: {
+          ...(query ? { query } : {}),
+          ...(relSearchPath ? { path: relSearchPath } : {}),
+        },
+      },
+    };
+  }
+
+  const toolName = firstNonEmpty(rawName, title, 'acp_tool').slice(0, 128);
   const args: ToolCall['arguments'] = {};
   if (rawInput) {
     for (const [key, value] of Object.entries(rawInput).slice(0, 12)) {
@@ -185,13 +307,6 @@ function normalizeToolCall(id: string, update: AcpRecord): { tool: ExternalRunti
     }
   }
   return { kind, tool: { id, toolName, args } };
-}
-
-function firstNonEmptyRaw(...values: Array<unknown>): string {
-  for (const value of values) {
-    if (typeof value === 'string' && value.length > 0) return value;
-  }
-  return '';
 }
 
 function extractRawOutputText(rawOutput: unknown): string {
@@ -211,7 +326,7 @@ function extractRawOutputText(rawOutput: unknown): string {
   );
 }
 
-function buildToolResult(tracked: TrackedTool, update: AcpRecord): ExternalRuntimeToolResult {
+function buildToolResult(tracked: TrackedTool, update: AcpRecord, cwd: string): ExternalRuntimeToolResult {
   const status = str(update.status).toLowerCase();
   const rawOutput = asRecord(update.rawOutput);
   const exitCode = typeof rawOutput?.exitCode === 'number'
@@ -225,60 +340,117 @@ function buildToolResult(tracked: TrackedTool, update: AcpRecord): ExternalRunti
   const output = contentText || rawText || tracked.output;
 
   if (tracked.tool.toolName === 'exec_command') {
-    return {
+    const durationMs = typeof rawOutput?.durationMs === 'number'
+      ? rawOutput.durationMs
+      : Math.max(0, Date.now() - tracked.startedAtMs);
+    return buildNormalizedExecCommandResult({
       id: tracked.tool.id,
       isError,
-      content: output ? [{ type: 'text', text: output.slice(0, MAX_TOOL_TEXT) }] : [],
-      details: {
-        command: str(tracked.tool.args.cmd),
-        cwd: str(tracked.tool.args.cwd),
-        exitCode,
-        truncated: output.length > MAX_TOOL_TEXT,
-      },
-    };
+      cwd,
+      command: str(tracked.tool.args.cmd),
+      rawCommand: str(tracked.tool.args.rawCommand) || undefined,
+      execCwd: str(tracked.tool.args.cwd),
+      exitCode,
+      durationMs,
+      output,
+    });
   }
   if (tracked.tool.toolName === 'apply_patch') {
     const latestChanges = extractDiffChanges(update.content, update.locations, tracked.kind);
     const changes = latestChanges.length > 0 ? latestChanges : tracked.diffChanges;
-    const diff = changes.map(change => change.diff).filter(Boolean).join('\n').slice(0, MAX_TOOL_TEXT);
-    const lines = diff ? diff.split('\n') : [];
-    return {
+    return buildNormalizedApplyPatchResult({
       id: tracked.tool.id,
       isError,
-      content: changes.length
-        ? [{ type: 'text', text: changes.map(change => change.path).join('\n') }]
-        : output ? [{ type: 'text', text: output.slice(0, MAX_TOOL_TEXT) }] : [],
-      details: {
-        changes: changes.map(({ path, kind }) => ({ path, kind })),
-        diff,
-        added: lines.filter(line => line.startsWith('+') && !line.startsWith('+++')).length,
-        removed: lines.filter(line => line.startsWith('-') && !line.startsWith('---')).length,
-      },
-    };
+      cwd,
+      rawChanges: changes,
+      fallbackOutput: output,
+    });
   }
   return {
     id: tracked.tool.id,
     isError,
-    content: output ? [{ type: 'text', text: output.slice(0, MAX_TOOL_TEXT) }] : [],
+    content: output ? [{ type: 'text', text: output.slice(0, MAX_EXTERNAL_TOOL_TEXT) }] : [],
     details: {},
   };
 }
 
-function selectAutoPermissionResponse(params: AcpRecord): AcpRecord {
-  const toolCall = asRecord(params.toolCall);
-  const toolCallId = str(toolCall?.toolCallId);
-  // Antigravity encodes native user-input questions as permission requests with `interaction_*` IDs.
-  if (toolCallId.startsWith('interaction_')) {
-    return { outcome: { outcome: 'cancelled' } };
-  }
-  const options = Array.isArray(params.options) ? params.options.map(asRecord).filter((opt): opt is AcpRecord => Boolean(opt)) : [];
-  const preferred =
-    options.find(opt => opt.kind === 'allow_always' && str(opt.optionId).trim())
-    ?? options.find(opt => opt.kind === 'allow_once' && str(opt.optionId).trim());
-  if (preferred) {
-    return { outcome: { outcome: 'selected', optionId: str(preferred.optionId) } };
+function selectAutoOption(options: ReadonlyArray<AcpRecord>, allow: boolean): AcpRecord {
+  if (allow) {
+    const preferred =
+      options.find(opt => opt.kind === 'allow_always' && str(opt.optionId).trim())
+      ?? options.find(opt => opt.kind === 'allow_once' && str(opt.optionId).trim())
+      ?? options.find(opt => str(opt.optionId).trim());
+    if (preferred) return { outcome: { outcome: 'selected', optionId: str(preferred.optionId) } };
+  } else {
+    const reject =
+      options.find(opt => opt.kind === 'reject_once' && str(opt.optionId).trim())
+      ?? options.find(opt => opt.kind === 'reject_always' && str(opt.optionId).trim());
+    if (reject) return { outcome: { outcome: 'selected', optionId: str(reject.optionId) } };
   }
   return { outcome: { outcome: 'cancelled' } };
+}
+
+async function handleAcpPermissionRequest(input: {
+  params: AcpRecord;
+  permissionMode: ExternalPermissionMode;
+  sessionPolicy: SessionInteractionPolicy;
+  requestInteraction: ExternalDriverTurnContext['requestInteraction'];
+}): Promise<AcpRecord> {
+  const { params, permissionMode, sessionPolicy, requestInteraction } = input;
+  const toolCall = asRecord(params.toolCall);
+  const toolCallId = str(toolCall?.toolCallId);
+  const kind = str(toolCall?.kind).toLowerCase();
+  const title = str(toolCall?.title).trim();
+  const options = Array.isArray(params.options)
+    ? params.options.map(asRecord).filter((opt): opt is AcpRecord => Boolean(opt))
+    : [];
+
+  // Antigravity encodes native user-input questions as permission requests with `interaction_*` IDs.
+  if (toolCallId.startsWith('interaction_')) {
+    const choices = options
+      .map((opt) => ({
+        id: str(opt.optionId).trim(),
+        label: firstNonEmpty(opt.name, opt.label, opt.optionId),
+      }))
+      .filter((choice) => choice.id && choice.label);
+    const response = await requestInteraction({
+      kind: 'question',
+      title: title || 'Question from agent',
+      question: title || 'Choose an option to continue:',
+      ...(choices.length > 0 ? { choices } : {}),
+      allowFreeText: choices.length === 0,
+    });
+    if (response.kind === 'question' && !response.cancelled) {
+      const matched = choices.find(c => c.id === response.choiceId)
+        ?? choices.find(c => c.label === response.text?.trim());
+      if (matched) return { outcome: { outcome: 'selected', optionId: matched.id } };
+    }
+    return { outcome: { outcome: 'cancelled' } };
+  }
+
+  const readOnly = sessionPolicy.mode === 'plan' || sessionPolicy.access === 'read-only';
+  const isReadTool = kind === 'read' || kind === 'search' || kind === 'fetch';
+  const isEditTool = kind === 'edit' || kind === 'delete' || kind === 'move';
+
+  if (isReadTool) return selectAutoOption(options, true);
+  if (!readOnly && permissionMode === 'full_access') return selectAutoOption(options, true);
+  if (!readOnly && permissionMode === 'auto_edit' && isEditTool) return selectAutoOption(options, true);
+
+  const rawInput = asRecord(toolCall?.rawInput);
+  const detail = firstNonEmpty(
+    rawInput?.CommandLine,
+    rawInput?.command,
+    rawInput?.TargetFile,
+    rawInput?.path,
+  );
+  const response = await requestInteraction({
+    kind: 'approval',
+    title: kind === 'execute' ? 'Approve command' : isEditTool ? 'Approve file change' : 'Approve action',
+    question: title || detail || 'Allow the agent to run this action?',
+    ...(detail && detail !== title ? { detail } : {}),
+    actionKind: kind === 'execute' ? 'command' : isEditTool ? 'file_change' : 'other',
+  });
+  return selectAutoOption(options, response.kind === 'approval' && response.decision === 'approve');
 }
 
 function extractCurrentModel(sessionResult: AcpRecord): string | undefined {
@@ -297,8 +469,109 @@ function extractCurrentModel(sessionResult: AcpRecord): string | undefined {
   return undefined;
 }
 
+const ACP_THINKING_ORDER: ReadonlyArray<ModelThinkingValue> = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+];
+
+function mapAcpEffortValueToThinking(raw: string): ModelThinkingValue | undefined {
+  const trimmed = raw.trim().toLowerCase();
+  if (!trimmed) return undefined;
+  if (trimmed === 'none' || trimmed === 'off' || trimmed === 'disabled') return 'off';
+  const normalized = normalizeThinkLevel(trimmed);
+  if (normalized && ACP_THINKING_ORDER.includes(normalized as ModelThinkingValue)) {
+    return normalized as ModelThinkingValue;
+  }
+  return undefined;
+}
+
+function collectSelectOptionValues(opt: AcpRecord): Array<{ value: string; label: string }> {
+  const out: Array<{ value: string; label: string }> = [];
+  if (!Array.isArray(opt.options)) return out;
+  for (const entry of opt.options) {
+    const rec = asRecord(entry);
+    if (!rec) continue;
+    if ('value' in rec) {
+      const val = str(rec.value).trim();
+      if (val) out.push({ value: val, label: firstNonEmpty(rec.name, rec.label, val) });
+    } else if (Array.isArray(rec.options)) {
+      for (const nested of rec.options) {
+        const nestedRec = asRecord(nested);
+        const val = str(nestedRec?.value).trim();
+        if (val) out.push({ value: val, label: firstNonEmpty(nestedRec?.name, nestedRec?.label, val) });
+      }
+    }
+  }
+  return out;
+}
+
+function findAcpThinkingConfigOption(sessionResult: AcpRecord): {
+  configId: string;
+  currentValue?: string;
+  rawValues: string[];
+  thinking: ModelThinkingCapabilities;
+} | undefined {
+  if (!Array.isArray(sessionResult.configOptions)) return undefined;
+  const candidate = sessionResult.configOptions
+    .map(asRecord)
+    .find((opt): opt is AcpRecord => {
+      if (!opt || opt.type !== 'select') return false;
+      const category = str(opt.category).toLowerCase();
+      const id = str(opt.id).toLowerCase();
+      if (category === 'thought_level' || category === 'thinking' || category === 'reasoning' || category === 'effort') {
+        return true;
+      }
+      return /^(?:thought|thinking|reasoning|effort)(?:[_-].*)?$/.test(id);
+    });
+  if (!candidate) return undefined;
+  const configId = str(candidate.id).trim();
+  if (!configId) return undefined;
+  const entries = collectSelectOptionValues(candidate);
+  const rawValues = entries.map((e) => e.value);
+  const mapped: ModelThinkingValue[] = [];
+  for (const raw of rawValues) {
+    const value = mapAcpEffortValueToThinking(raw);
+    if (value && !mapped.includes(value)) mapped.push(value);
+  }
+  if (mapped.length === 0) return undefined;
+  mapped.sort((a, b) => ACP_THINKING_ORDER.indexOf(a) - ACP_THINKING_ORDER.indexOf(b));
+  const currentValue = str(candidate.currentValue).trim() || undefined;
+  const currentMapped = currentValue ? mapAcpEffortValueToThinking(currentValue) : undefined;
+  const initialValue = (currentMapped && mapped.includes(currentMapped))
+    ? currentMapped
+    : mapped.includes('medium')
+      ? 'medium'
+      : mapped[0]!;
+  const thinking: ModelThinkingCapabilities = mapped.length === 1
+    ? { mode: mapped[0] === 'off' ? 'none' : 'fixed', options: mapped, initialValue, supportsAdaptive: false }
+    : { mode: 'levels', options: mapped, initialValue, supportsAdaptive: false };
+  return { configId, currentValue, rawValues, thinking };
+}
+
+function matchAcpThinkingRawValue(requestedLevel: string, rawValues: ReadonlyArray<string>): string | undefined {
+  const trimmed = requestedLevel.trim();
+  if (!trimmed) return undefined;
+  const exact = rawValues.find((v) => v === trimmed || v.toLowerCase() === trimmed.toLowerCase());
+  if (exact) return exact;
+  const normalizedTarget = mapAcpEffortValueToThinking(trimmed);
+  if (!normalizedTarget) return undefined;
+  const byNormalized = rawValues.find((v) => mapAcpEffortValueToThinking(v) === normalizedTarget);
+  if (byNormalized) return byNormalized;
+  if (normalizedTarget === 'max') {
+    return rawValues.find((v) => mapAcpEffortValueToThinking(v) === 'xhigh')
+      ?? rawValues.find((v) => mapAcpEffortValueToThinking(v) === 'high');
+  }
+  return undefined;
+}
+
 function extractAvailableModels(sessionResult: AcpRecord): ExternalRuntimeModelOption[] {
   const current = extractCurrentModel(sessionResult);
+  const thinkingConfig = findAcpThinkingConfigOption(sessionResult);
   const options: ExternalRuntimeModelOption[] = [];
   const seen = new Set<string>();
   const pushOption = (idRaw: unknown, labelRaw?: unknown) => {
@@ -306,13 +579,19 @@ function extractAvailableModels(sessionResult: AcpRecord): ExternalRuntimeModelO
     if (!id || seen.has(id)) return;
     seen.add(id);
     const label = str(labelRaw).trim() || id;
-    options.push({ id, label, ...(current === id ? { isDefault: true } : {}) });
+    options.push({
+      id,
+      label,
+      ...(current === id ? { isDefault: true } : {}),
+      ...(thinkingConfig ? { thinking: thinkingConfig.thinking, thinkingConfigId: thinkingConfig.configId } : {}),
+    });
   };
 
   if (Array.isArray(sessionResult.configOptions)) {
     for (const raw of sessionResult.configOptions) {
       const opt = asRecord(raw);
-      if (opt?.id !== 'model' || opt.type !== 'select' || !Array.isArray(opt.options)) continue;
+      if (!opt || opt.type !== 'select' || !Array.isArray(opt.options)) continue;
+      if (opt.id !== 'model' && str(opt.category).toLowerCase() !== 'model') continue;
       for (const entry of opt.options) {
         const rec = asRecord(entry);
         if (!rec) continue;
@@ -352,12 +631,46 @@ function isAuthRequiredRpcError(error: unknown): boolean {
   return error instanceof AcpRpcError && error.code === -32000;
 }
 
+function buildAcpPromptBlocks(input: {
+  promptText: string;
+  attachments: ExternalDriverTurnContext['attachments'];
+  supportsImageBlocks: boolean;
+}): Array<Record<string, unknown>> {
+  const fileContext = formatFileAttachmentsContext(input.attachments);
+  const fallbackImageNotes: string[] = [];
+  const imageBlocks: Array<Record<string, unknown>> = [];
+
+  for (const att of input.attachments) {
+    if (att.type !== 'image') continue;
+    if (input.supportsImageBlocks && att.base64) {
+      imageBlocks.push({
+        type: 'image',
+        data: att.base64,
+        mimeType: att.mimeType ?? 'image/png',
+      });
+    } else if (att.localPath) {
+      fallbackImageNotes.push(`- ${att.localPath}${att.name ? ` (${att.name})` : ''}`);
+    }
+  }
+
+  const imageFallbackPrefix = fallbackImageNotes.length > 0
+    ? `Attached images:\n${fallbackImageNotes.join('\n')}\n\n`
+    : '';
+  const combinedText = `${fileContext}${imageFallbackPrefix}${input.promptText}`.trim();
+  const blocks: Array<Record<string, unknown>> = [];
+  if (combinedText) blocks.push({ type: 'text', text: combinedText });
+  blocks.push(...imageBlocks);
+  if (blocks.length === 0) blocks.push({ type: 'text', text: 'Inspect the attached content.' });
+  return blocks;
+}
+
 export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentDriver {
   const capabilities: ExternalRuntimeCapabilities = {
-    supportsAttachments: false,
+    supportsAttachments: true,
     managesOwnModel: true,
     requiresWorkspace: true,
     requiresWorkspaceWrite: true,
+    steeringMode: 'interrupt_restart',
     ...config.capabilities,
   };
 
@@ -370,7 +683,19 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
     capabilities,
 
     async runTurn(context: ExternalDriverTurnContext): Promise<void> {
-      const { cwd, content, instructions, existingBinding, execution, signal, emit } = context;
+      const {
+        cwd,
+        content,
+        attachments,
+        instructions,
+        existingBinding,
+        execution,
+        permissionMode,
+        sessionPolicy,
+        signal,
+        emit,
+        requestInteraction,
+      } = context;
       const spawnConfig = config.resolveSpawn(cwd, execution);
       const tools = new Map<string, TrackedTool>();
       const finishedTools = new Set<string>();
@@ -380,7 +705,9 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
       let sessionId: string | undefined;
       let acceptingPromptUpdates = false;
       let activeMessageId: string | undefined;
+      let activeThoughtId: string | undefined;
       let messageSeq = 0;
+      let thoughtSeq = 0;
       let cancelSent = false;
       let stopTimer: NodeJS.Timeout | undefined;
       let failed = false;
@@ -390,6 +717,12 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
         if (!activeMessageId) return;
         emit({ type: 'text_done', itemId: activeMessageId });
         activeMessageId = undefined;
+      };
+
+      const flushActiveThought = () => {
+        if (!activeThoughtId) return;
+        emit({ type: 'thinking_done', itemId: activeThoughtId });
+        activeThoughtId = undefined;
       };
 
       const sendCancel = () => {
@@ -418,6 +751,7 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
         if (kind === 'agent_message_chunk') {
           const text = contentBlockText(update.content);
           if (!text) return;
+          flushActiveThought();
           const nextId = str(update.messageId) || activeMessageId || `msg-${++messageSeq}`;
           if (activeMessageId && activeMessageId !== nextId) {
             emit({ type: 'text_done', itemId: activeMessageId });
@@ -429,7 +763,25 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
 
         if (kind === 'agent_thought_chunk') {
           const text = contentBlockText(update.content);
-          if (text) emit({ type: 'thinking_delta', itemId: activeMessageId ?? 'thought', delta: text });
+          if (!text) return;
+          activeThoughtId ??= `thought-${++thoughtSeq}`;
+          emit({ type: 'thinking_delta', itemId: activeThoughtId, delta: text });
+          return;
+        }
+
+        if (kind === 'plan') {
+          const entries = Array.isArray(update.entries) ? update.entries : [];
+          const steps = entries
+            .map(asRecord)
+            .filter((entry): entry is AcpRecord => Boolean(entry))
+            .map((entry) => ({
+              step: firstNonEmpty(entry.content, entry.title, entry.step),
+              status: str(entry.status) as 'pending' | 'in_progress' | 'completed',
+            }))
+            .filter((entry) => entry.step.length > 0);
+          if (steps.length > 0) {
+            emit({ type: 'plan_updated', steps });
+          }
           return;
         }
 
@@ -457,14 +809,16 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
           }
           if (finishedTools.has(toolCallId)) return;
 
+          flushActiveThought();
           flushActiveMessage();
           let tracked = tools.get(toolCallId);
           if (!tracked) {
-            const normalized = normalizeToolCall(toolCallId, update);
+            const normalized = normalizeToolCall(toolCallId, update, cwd);
             tracked = {
               tool: normalized.tool,
               kind: normalized.kind,
               output: '',
+              startedAtMs: Date.now(),
               diffChanges: extractDiffChanges(update.content, update.locations, normalized.kind),
             };
             tools.set(toolCallId, tracked);
@@ -472,6 +826,18 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
           } else {
             const diffChanges = extractDiffChanges(update.content, update.locations, tracked.kind);
             if (diffChanges.length > 0) tracked.diffChanges = diffChanges;
+            // Enrich args when ACP sends fuller rawInput/locations on subsequent tool_call_update frames.
+            const enriched = normalizeToolCall(toolCallId, { ...update, kind: update.kind ?? tracked.kind }, cwd);
+            const hasNewArgs = Object.entries(enriched.tool.args).some(
+              ([key, val]) => val !== undefined && val !== '' && tracked!.tool.args[key] !== val,
+            );
+            if (hasNewArgs) {
+              tracked.tool = {
+                ...tracked.tool,
+                args: { ...tracked.tool.args, ...enriched.tool.args },
+              };
+              emit({ type: 'tool_update', tool: tracked.tool });
+            }
           }
 
           const nextText = extractToolTextFromContent(update.content) || extractRawOutputText(update.rawOutput);
@@ -479,7 +845,7 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
             const delta = nextText.startsWith(tracked.output)
               ? nextText.slice(tracked.output.length)
               : nextText;
-            const boundedDelta = delta.slice(0, Math.max(0, MAX_TOOL_TEXT - tracked.output.length));
+            const boundedDelta = delta.slice(0, Math.max(0, MAX_EXTERNAL_TOOL_TEXT - tracked.output.length));
             if (boundedDelta) {
               tracked.output += boundedDelta;
               if (tracked.tool.toolName === 'exec_command') {
@@ -490,7 +856,7 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
 
           const status = str(update.status).toLowerCase();
           if (status === 'completed' || status === 'failed' || status === 'cancelled') {
-            emit({ type: 'tool_end', result: buildToolResult(tracked, update) });
+            emit({ type: 'tool_end', result: buildToolResult(tracked, update, cwd) });
             finishedTools.add(toolCallId);
             tools.delete(toolCallId);
           }
@@ -511,7 +877,15 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
           },
           onRequest: (method, params) => {
             if (method === 'session/request_permission') {
-              return selectAutoPermissionResponse(params);
+              if (!acceptingPromptUpdates || !sessionId || params.sessionId !== sessionId || signal.aborted) {
+                return { outcome: { outcome: 'cancelled' } };
+              }
+              return handleAcpPermissionRequest({
+                params,
+                permissionMode,
+                sessionPolicy,
+                requestInteraction,
+              });
             }
             throw new AcpRpcError(-32601, `xopc does not implement ACP client method ${method}.`);
           },
@@ -554,7 +928,6 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
               return { id: str(resumed.sessionId) || nativeId, result: resumed };
             }
             if (agentCapabilities?.loadSession === true) {
-              // Suppress historical replay notifications while session/load runs.
               const loaded = await client!.request(
                 'session/load',
                 { sessionId: nativeId, cwd, mcpServers: [], ...metaField },
@@ -588,17 +961,41 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
 
         sessionId = opened.id;
         let resolvedModel = extractCurrentModel(opened.result);
-        const requestedModel = execution.model?.trim();
+        const requestedModel = context.modelOverride?.trim() || execution.model?.trim();
         if (requestedModel && requestedModel !== resolvedModel) {
+          const modelConfigOpt = Array.isArray(opened.result.configOptions)
+            ? opened.result.configOptions
+                .map(asRecord)
+                .find((opt) => opt?.type === 'select' && (opt.id === 'model' || str(opt.category).toLowerCase() === 'model'))
+            : undefined;
+          const modelConfigId = str(modelConfigOpt?.id).trim() || 'model';
           try {
             await client.request(
               'session/set_config_option',
-              { sessionId, configId: 'model', value: requestedModel },
+              { sessionId, configId: modelConfigId, value: requestedModel },
               signal,
             );
             resolvedModel = requestedModel;
           } catch {
             // Fall back to the agent's negotiated model if set_config_option is unsupported.
+          }
+        }
+        const requestedThinking = context.thinkingLevel?.trim();
+        if (requestedThinking) {
+          const thinkingOpt = findAcpThinkingConfigOption(opened.result);
+          if (thinkingOpt) {
+            const matchedValue = matchAcpThinkingRawValue(requestedThinking, thinkingOpt.rawValues);
+            if (matchedValue && matchedValue !== thinkingOpt.currentValue) {
+              try {
+                await client.request(
+                  'session/set_config_option',
+                  { sessionId, configId: thinkingOpt.configId, value: matchedValue },
+                  signal,
+                );
+              } catch {
+                // Ignore if the runtime rejects a thinking effort override on this model.
+              }
+            }
           }
         }
         emit({
@@ -612,15 +1009,23 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
           !existingBinding && instructions && !sessionMeta
             ? `${instructions}\n\n${content}`
             : content;
+        const promptCaps = asRecord(asRecord(initializeResult.agentCapabilities)?.promptCapabilities);
+        const supportsImageBlocks = promptCaps?.image === true;
+        const promptBlocks = buildAcpPromptBlocks({
+          promptText,
+          attachments,
+          supportsImageBlocks,
+        });
 
         acceptingPromptUpdates = true;
         const promptResult = await client.request(
           'session/prompt',
-          { sessionId, prompt: [{ type: 'text', text: promptText }] },
+          { sessionId, prompt: promptBlocks },
           promptAbort.signal,
           null,
         );
 
+        flushActiveThought();
         flushActiveMessage();
         const promptUsage = asRecord(promptResult.usage);
         if (promptUsage) {
@@ -698,7 +1103,7 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
           label: config.label,
           notFoundMessage: config.notFoundMessage,
           onNotification: () => {},
-          onRequest: (method, params) => {
+          onRequest: (method) => {
             if (method === 'session/request_permission') return { outcome: { outcome: 'cancelled' } };
             throw new AcpRpcError(-32601, `xopc does not implement ACP client method ${method}.`);
           },

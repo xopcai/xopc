@@ -2,7 +2,7 @@ import { chooseModelThinking, modelPreferenceForAgent } from '@xopcai/gateway-co
 import { useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 
-import { fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
+import { fetchAgentRuntimeModelsCached, fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import { fetchGatewayAgentEffectiveConfig } from '@/features/settings/agents-admin-api';
 import type { ExternalAgentKind } from '@/features/settings/types/agent-gateway';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -22,9 +22,27 @@ export function usePreparedSessionModel(
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const [edited, setEdited] = useState<{ preparation: ProjectSessionPreparation; selection: Selection } | null>(null);
   const { data, error } = useSWR(
-    preparation && !externalRuntime ? ['prepared-session-model', baseUrl, token, preparation.create] : null,
+    preparation ? ['prepared-session-model', baseUrl, token, preparation.create, externalRuntime ?? 'builtin'] : null,
     async () => {
       const preference = modelPreferenceForAgent(readNewSessionPreferences(), preparation!.agentId);
+      if (externalRuntime) {
+        const runtimePayload = await fetchAgentRuntimeModelsCached(preparation!.agentId);
+        const models = runtimePayload.models;
+        const preferredRef = preference?.modelRef?.trim();
+        const selected = (preferredRef ? models.find((model) => model.id === preferredRef) : undefined)
+          ?? models.find((model) => model.id === runtimePayload.defaultModel)
+          ?? models[0];
+        const modelId = selected?.id ?? runtimePayload.defaultModel ?? externalRuntime;
+        return {
+          models,
+          selection: {
+            model: modelId,
+            thinkingLevel: selected?.thinking
+              ? chooseModelThinking(selected.thinking, preference?.thinkingLevel, preference?.thinkingByModel?.[modelId])
+              : preference?.thinkingLevel ?? DEFAULT_THINKING,
+          },
+        };
+      }
       const [models, modelRef] = await Promise.all([
         fetchConfiguredModelsCached(),
         preference?.modelRef ?? fetchGatewayAgentEffectiveConfig(preparation!.agentId)
@@ -44,8 +62,8 @@ export function usePreparedSessionModel(
     },
     { revalidateOnFocus: false },
   );
-  const externalSelection: Selection | undefined = externalRuntime ? { model: externalRuntime, thinkingLevel: 'off' } : undefined;
-  const selection = externalSelection ?? (edited?.preparation === preparation ? edited?.selection : data?.selection);
+  const externalFallback: Selection | undefined = externalRuntime ? { model: externalRuntime, thinkingLevel: DEFAULT_THINKING } : undefined;
+  const selection = (edited?.preparation === preparation ? edited?.selection : data?.selection) ?? externalFallback;
   const selected = data?.models.find((model) => model.id === selection?.model);
   const ready = Boolean(externalRuntime) || Boolean(selection?.model && selected);
   const explicitlySelected = edited?.preparation === preparation;
@@ -84,10 +102,10 @@ export function usePreparedSessionModel(
     preparation: prepared,
     model: selection?.model ?? '',
     thinkingLevel: selection?.thinkingLevel ?? DEFAULT_THINKING,
-    modelSupportsThinking: Boolean(selected?.reasoning),
+    modelSupportsThinking: Boolean(selected?.reasoning || (selected?.thinking && selected.thinking.mode !== 'none')),
     ready,
     error,
-    onModelChange: (model: string) => change(model),
+    onModelChange: (model: string, level?: string) => change(model, level),
     onThinkingChange: (level: string) => change(selection?.model ?? '', level),
   };
 }

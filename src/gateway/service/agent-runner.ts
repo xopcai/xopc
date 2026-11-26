@@ -13,6 +13,12 @@ import type { ChannelManager } from '../../channels/manager.js';
 import type { SessionIndex } from '../../session/index.js';
 import { onConnectionWaitChanged } from '../../storage/sqlite/connection-wait-repository.js';
 import {
+  getActiveExternalInteractionSnapshot,
+  hasActiveExternalTurn,
+  resolveExternalInteraction,
+  steerExternalTurn,
+} from '../../agent/external/index.js';
+import {
   EphemeralClarificationWaiter,
   type ClarificationStreamEvent,
 } from '../ephemeral-clarification-waiter.js';
@@ -193,7 +199,12 @@ export class GatewayAgentRunner {
           contexts.filter((context): context is AgentSourceContext => context !== null),
         );
       },
-      steer: (conversationId, content, runId, options) => opts.getAgentService().turnDispatcher.steerWebchatSession(conversationId, content, runId, options),
+      steer: (conversationId, content, runId, options) => {
+        if (hasActiveExternalTurn(conversationId)) {
+          return steerExternalTurn(conversationId, content, runId, options);
+        }
+        return opts.getAgentService().turnDispatcher.steerWebchatSession(conversationId, content, runId, options);
+      },
       emit: (type, payload) => {
         opts.emit(type, payload);
         if (type === 'session.input-interrupt') opts.publishRealtime('sessions', type, payload);
@@ -410,7 +421,7 @@ export class GatewayAgentRunner {
   }
 
   getClarificationState(conversationId: string) {
-    return getClarificationSnapshot(conversationId);
+    return getActiveExternalInteractionSnapshot(conversationId) ?? getClarificationSnapshot(conversationId);
   }
 
   resolveClarificationResponse(input: ClarificationSubmission & {
@@ -420,6 +431,11 @@ export class GatewayAgentRunner {
     action: ClarificationResponseAction;
     responseActor?: GatewayPrincipal;
   }) {
+    const external = resolveExternalInteraction(input);
+    if (external) {
+      if (external.ok) this.opts.emit('clarification.updated', external.clarification);
+      return external;
+    }
     const wait = getClarification(input.id);
     if (wait?.deviceInteraction && wait.status === 'open' && input.action === 'answer' && input.responseActor
       && deviceExecutionPrincipalId(input.responseActor) === wait.deviceInteraction.actorPrincipalId

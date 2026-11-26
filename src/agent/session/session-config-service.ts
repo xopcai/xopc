@@ -34,6 +34,7 @@ import { createLogger } from '../../utils/logger.js';
 import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
+import { getExternalAgentDriver, getExternalConversationAgent } from '../external/index.js';
 
 const log = createLogger('SessionConfigService');
 
@@ -94,7 +95,31 @@ export class SessionConfigService {
       if (partial.configVersion !== undefined && partial.configVersion !== (existing?.updatedAt ?? 0)) {
         return { ok: false, code: 'CONFIG_CHANGED', error: 'Model configuration changed. Refresh and try again.' };
       }
-      if (partial.model === null || partial.model === '') {
+      const externalAgent = getExternalConversationAgent(conversationId);
+      if (externalAgent) {
+        if (partial.model === null || partial.model === '') {
+          if (partial.fixedModel || existing?.fixedModel) {
+            return { ok: false, code: 'INVALID_MODEL', error: 'Select a specific model' };
+          }
+          await this.opts.sessionConfigStore.update(conversationId, { modelOverride: undefined });
+        } else {
+          const driver = getExternalAgentDriver(externalAgent.execution.kind);
+          const requestedThinking = partial.thinkingLevel === undefined ? undefined : normalizeThinkLevel(partial.thinkingLevel);
+          if (partial.thinkingLevel !== undefined && !requestedThinking) {
+            return { ok: false, code: 'INVALID_THINKING', error: 'Invalid thinking level' };
+          }
+          const nextModel = partial.model?.trim()
+            || existing?.modelOverride?.trim()
+            || externalAgent.execution.model?.trim()
+            || driver.defaultModelName;
+          const nextThinking = requestedThinking ?? existing?.thinkingLevel ?? 'medium';
+          await this.opts.sessionConfigStore.update(conversationId, {
+            modelOverride: nextModel,
+            thinkingLevel: nextThinking,
+            fixedModel: true,
+          });
+        }
+      } else if (partial.model === null || partial.model === '') {
         if (partial.fixedModel || existing?.fixedModel) {
           return { ok: false, code: 'INVALID_MODEL', error: 'Select a specific model' };
         }
@@ -189,6 +214,18 @@ export class SessionConfigService {
     const existing = await this.opts.sessionConfigStore.get(conversationId);
     if (configVersion !== undefined && configVersion !== (existing?.updatedAt ?? 0)) {
       return { ok: false, code: 'CONFIG_CHANGED', error: 'Model configuration changed. Refresh and try again.' };
+    }
+    const externalAgent = getExternalConversationAgent(conversationId);
+    if (externalAgent) {
+      const driver = getExternalAgentDriver(externalAgent.execution.kind);
+      const nextModel = modelRef.trim() || externalAgent.execution.model?.trim() || driver.defaultModelName;
+      const nextThinking = normalizeThinkLevel(thinkingLevel) ?? existing?.thinkingLevel ?? 'medium';
+      await this.opts.sessionConfigStore.update(conversationId, {
+        modelOverride: nextModel,
+        fixedModel: true,
+        thinkingLevel: nextThinking,
+      });
+      return { ok: true };
     }
     const model = this.opts.modelManager.findByRef(modelRef);
     if (model) {

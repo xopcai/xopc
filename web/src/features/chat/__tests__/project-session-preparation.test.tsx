@@ -3,12 +3,14 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { fetchProject } from '@/features/projects/api';
 import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { useChatSessionInit, type ProjectSessionPreparation } from '@/features/chat/session/use-chat-session-init';
 
 vi.mock('@/features/projects/api', () => ({ fetchProject: vi.fn() }));
+vi.mock('@/features/chat/agent-selection/chat-agents-api', () => ({ fetchChatAgents: vi.fn() }));
 vi.mock('@/features/chat/session/new-chat-handoff', () => ({ openNewChatHandoff: vi.fn() }));
 
 describe('project session preparation', () => {
@@ -34,6 +36,7 @@ describe('project session preparation', () => {
     vi.clearAllMocks();
     localStorage.clear();
     vi.mocked(fetchProject).mockResolvedValue(project);
+    vi.mocked(fetchChatAgents).mockResolvedValue({ defaultId: 'main', items: [{ id: 'main' }, { id: 'codex', execution: 'codex' }] });
     vi.mocked(openNewChatHandoff).mockImplementation(async (opts) => {
       opts.onOpened('created');
       opts.navigateToSession('created', true, opts.search);
@@ -77,6 +80,11 @@ describe('project session preparation', () => {
     expect(openNewChatHandoff).toHaveBeenCalledWith(expect.objectContaining({
       initialAgentConfig: { model: 'cloud/chosen', thinkingLevel: 'high' },
     }));
+  });
+
+  it('uses the default Agent when a non-Project chat requests an external Agent', async () => {
+    await act(async () => root.render(<Harness search="?projectScope=none" requestedAgentId="codex" />));
+    expect(openNewChatHandoff).toHaveBeenCalledWith(expect.objectContaining({ agentId: 'main', projectId: null }));
   });
 
   it('does not prepare or change an existing conversation environment', async () => {

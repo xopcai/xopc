@@ -8,6 +8,7 @@ import { browserPageContextToAgentContext } from '../../../agent/source-context/
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
 import { getExternalAgent, getExternalAgentDriver, getExternalConversationAgent } from '../../../agent/external/index.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { externalAgentAccessError } from '../../security/external-agent-access.js';
 import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import { receiveSessionCommand, sessionCommandSnapshot } from '../../service/session-command-service.js';
 import { getSessionInputReceipt, isConversationDeleted, SessionCommandError, retrySessionPreparation } from '../../../storage/sqlite/session-creation-repository.js';
@@ -42,9 +43,8 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
     ? getExternalAgent(command.creation.agentId)
     : getExternalConversationAgent(id.data);
   const externalDriver = externalAgent ? getExternalAgentDriver(externalAgent.execution.kind) : undefined;
-  if (externalDriver?.capabilities.requiresWorkspaceWrite && !hasGatewayScope(principal.scopes, 'workspace.write')) {
-    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: `${externalDriver.label} requires workspace write access` } }, 403);
-  }
+  const forbidden = externalAgentAccessError(externalAgent, principal);
+  if (forbidden) return c.json({ ok: false, error: { code: 'FORBIDDEN', message: forbidden } }, 403);
   if ('input' in command) {
     if (externalDriver && !externalDriver.capabilities.supportsAttachments && (command.input.attachments?.length || command.input.contextRefs?.length
       || command.input.browserContexts?.length || command.input.appContext)) {

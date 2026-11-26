@@ -133,6 +133,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
     onChatAgentChange,
     displayAgentId,
     showChatAgentSelector,
+    selectableAgents,
     currentSessionProjectId,
   } = useChatSessionAgents({
     navigate,
@@ -230,6 +231,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
     detachForNewConversation,
     conversationId: focusedConversationId,
     sessionAgentId: displayAgentId,
+    externalAgentId: currentExternal ? displayAgentId : undefined,
     currentProjectId: currentSessionProjectId,
     hasMore,
     taskId: options?.taskId,
@@ -514,6 +516,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
       chatAgents: chatAgentsData,
       displayAgentId: projectPreparation?.agentId ?? displayAgentId,
       showChatAgentSelector,
+      selectableAgents,
       onChatAgentChange,
     },
   };

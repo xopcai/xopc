@@ -1,6 +1,14 @@
 import type { ToolCall } from '@earendil-works/pi-ai';
+import type { ModelThinkingCapabilities } from '@xopcai/gateway-contract';
 
-import type { ExternalAgentExecution, ExternalAgentKind } from '../../agent-config/schema.js';
+import type {
+  ExternalAgentExecution,
+  ExternalAgentKind,
+  ExternalPermissionMode,
+} from '../../agent-config/schema.js';
+import type { SessionInteractionPolicy } from '../session/interaction-policy-state.js';
+import type { TurnPlanStep } from '../tools/update-plan-tool.js';
+import type { UserTurnAttachment } from '../../gateway/user-turn-input.js';
 
 export type ExternalRuntimeStatus = 'ready' | 'not_installed' | 'unauthenticated' | 'warning' | 'error';
 
@@ -8,6 +16,10 @@ export type ExternalRuntimeModelOption = {
   id: string;
   label: string;
   isDefault?: boolean;
+  /** Normalized thinking/reasoning capabilities for the chat effort slider. */
+  thinking?: ModelThinkingCapabilities;
+  /** Optional protocol-native config id for thinking effort (e.g. ACP `thought_level` / `effort`). */
+  thinkingConfigId?: string;
 };
 
 export type ExternalRuntimeAccountInfo = {
@@ -60,6 +72,8 @@ export type StartExternalRuntimeAuthInput = {
   apiKey?: string;
 };
 
+export type ExternalSteeringMode = 'native' | 'interrupt_restart';
+
 export type ExternalRuntimeCapabilities = {
   /** Whether the runtime accepts file/image attachments or extra turn context refs. */
   supportsAttachments: boolean;
@@ -69,7 +83,17 @@ export type ExternalRuntimeCapabilities = {
   requiresWorkspace: boolean;
   /** Whether gateway principals must hold workspace.write scope. */
   requiresWorkspaceWrite: boolean;
+  /** How mid-turn steering is executed: native RPC (Codex turn/steer) or cancel-and-resume (ACP). */
+  steeringMode?: ExternalSteeringMode;
 };
+
+export type ExternalTurnSteerInput = {
+  content: string;
+  attachments: ExternalTurnAttachment[];
+  clientMessageId?: string;
+};
+
+export type ExternalTurnSteerHandler = (input: ExternalTurnSteerInput) => Promise<void>;
 
 export type ExternalSessionIdentity = {
   conversationId: string;
@@ -125,25 +149,74 @@ export type ExternalRuntimeEvent =
   | { type: 'text_delta'; itemId: string; delta: string }
   | { type: 'text_done'; itemId: string; text?: string }
   | { type: 'thinking_delta'; itemId: string; delta: string }
+  | { type: 'thinking_done'; itemId: string; text?: string }
   | { type: 'tool_start'; tool: ExternalRuntimeToolCall }
+  | { type: 'tool_update'; tool: ExternalRuntimeToolCall }
   | { type: 'tool_output_delta'; id: string; delta: string; stream?: 'stdout' | 'stderr' }
   | { type: 'tool_end'; result: ExternalRuntimeToolResult }
+  | { type: 'plan_updated'; explanation?: string; steps: TurnPlanStep[] }
+  | { type: 'title_updated'; title: string }
   | { type: 'usage'; usage: ExternalRuntimeUsage }
   | { type: 'turn_done'; status: 'completed' | 'interrupted' | 'failed'; errorMessage?: string };
+
+export type ExternalTurnAttachment = {
+  type: 'image' | 'file';
+  name?: string;
+  mimeType?: string;
+  localPath?: string;
+  base64?: string;
+  workspaceRelativePath?: string;
+};
+
+export type ExternalInteractionChoice = {
+  id: string;
+  label: string;
+  description?: string;
+};
+
+export type ExternalInteractionRequest =
+  | {
+      kind: 'approval';
+      title?: string;
+      question: string;
+      detail?: string;
+      actionKind?: 'command' | 'file_change' | 'other';
+    }
+  | {
+      kind: 'question';
+      title?: string;
+      question: string;
+      choices?: ExternalInteractionChoice[];
+      allowFreeText?: boolean;
+    };
+
+export type ExternalInteractionResponse =
+  | { kind: 'approval'; decision: 'approve' | 'deny' }
+  | { kind: 'question'; choiceId?: string; text?: string; cancelled?: boolean };
 
 export interface ExternalDriverTurnContext {
   conversationId: string;
   transcriptId: string;
   agentId: string;
   execution: ExternalAgentExecution;
+  permissionMode: ExternalPermissionMode;
+  sessionPolicy: SessionInteractionPolicy;
+  /** Per-session model override chosen in chat (takes precedence over execution.model). */
+  modelOverride?: string;
+  /** Per-session thinking / reasoning effort level chosen in chat. */
+  thinkingLevel?: string;
   runId: string;
   clientMessageId?: string;
   cwd: string;
   content: string;
+  attachments: ExternalTurnAttachment[];
   instructions?: string;
   existingBinding?: ExternalSessionBinding;
   signal: AbortSignal;
   emit: (event: ExternalRuntimeEvent) => void;
+  requestInteraction: (request: ExternalInteractionRequest) => Promise<ExternalInteractionResponse>;
+  /** Optional hook for drivers that support native mid-turn steering (e.g. Codex turn/steer). */
+  registerSteerHandler?: (handler: ExternalTurnSteerHandler | null) => void;
 }
 
 export interface ExternalAgentDriver {
@@ -165,7 +238,11 @@ export interface RunExternalProjectTurnInput {
   agentId: string;
   execution: ExternalAgentExecution;
   instructions?: string;
+  modelOverride?: string;
+  thinkingLevel?: string;
+  onTitleUpdated?: (title: string) => void;
   content: string;
+  attachments?: UserTurnAttachment[];
   hasAttachmentsOrContext: boolean;
   runId: string;
   clientMessageId?: string;

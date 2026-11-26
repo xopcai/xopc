@@ -213,4 +213,45 @@ describe('agents admin', () => {
     expect(convertEmbedded.ok).toBe(false);
     if (!convertEmbedded.ok) expect(convertEmbedded.status).toBe(400);
   });
+
+  it('assigns and rasterizes default Codex and Antigravity brand avatars for external agents', async () => {
+    const codexRes = await createGatewayAgent({
+      id: 'codex-brand',
+      execution: { kind: 'codex' },
+      profile: { name: 'Codex' },
+    });
+    const agyRes = await createGatewayAgent({
+      id: 'agy-brand',
+      execution: { kind: 'agy' },
+      profile: { name: 'Antigravity' },
+    });
+    expect(codexRes.ok).toBe(true);
+    expect(agyRes.ok).toBe(true);
+
+    // Also test legacy external agent stored without profile.avatar falls back automatically in list & image resolution
+    new AgentCatalogRepository().create({
+      id: 'legacy-codex',
+      execution: { kind: 'codex' },
+      profile: { name: 'Legacy Codex' },
+    }, { ready: true });
+
+    const listed = await listGatewayAgents();
+    expect(listed.agents.find((a) => a.id === 'codex-brand')?.avatar).toBe('xopc:runtime:codex');
+    expect(listed.agents.find((a) => a.id === 'agy-brand')?.avatar).toBe('xopc:runtime:agy');
+    expect(listed.agents.find((a) => a.id === 'legacy-codex')?.avatar).toBe('xopc:runtime:codex');
+
+    const codexImg = await resolveAgentAvatarImage('codex-brand');
+    const agyImg = await resolveAgentAvatarImage('agy-brand');
+    const legacyImg = await resolveAgentAvatarImage('legacy-codex');
+    expect(codexImg.ok).toBe(true);
+    expect(agyImg.ok).toBe(true);
+    expect(legacyImg.ok).toBe(true);
+    if (codexImg.ok && agyImg.ok && legacyImg.ok) {
+      expect(codexImg.data.contentType).toBe('image/png');
+      expect(codexImg.data.buffer.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+      expect(agyImg.data.buffer.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+      expect(codexImg.data.buffer.equals(agyImg.data.buffer)).toBe(false);
+      expect(codexImg.data.buffer.equals(legacyImg.data.buffer)).toBe(true);
+    }
+  });
 });

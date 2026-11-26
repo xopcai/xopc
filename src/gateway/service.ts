@@ -54,7 +54,7 @@ import { notifyUserContextChange } from '../user-context/changes.js';
 import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { listAgentEntries, resolveDefaultAgentId, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import { AgentService } from '../agent/service.js';
-import { abortAllExternalTurns } from '../agent/external/index.js';
+import { abortAllExternalTurns, cancelAllExternalRuntimeAuthFlows } from '../agent/external/index.js';
 import { getEmbeddedExecutionSession } from '../agent/embedded/execution-context.js';
 import { bootstrapApplicationStateSync } from '../bootstrap/application-state.js';
 import { ChannelManager } from '../channels/manager.js';
@@ -2187,7 +2187,7 @@ export class GatewayService {
       this.taskRunDispatchTimer = null;
     }
     await this.sessionPreparations.stop();
-    await abortAllExternalTurns();
+    await Promise.all([abortAllExternalTurns(), cancelAllExternalRuntimeAuthFlows()]);
     await stopPersonalResultPreparations();
 
     setPairingBroadcastSink(null);

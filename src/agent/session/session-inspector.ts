@@ -40,6 +40,11 @@ import { runBtwQuery } from '../service/btw-query.js';
 import { formatSessionContextReport } from '../service/session-context-report.js';
 import type { ReasoningLevel, VerboseLevel } from '../transcript/thinking-types.js';
 import { createLogger } from '../../utils/logger.js';
+import {
+  getCachedExternalDefaultModel,
+  getExternalAgentDriver,
+  getExternalConversationAgent,
+} from '../external/index.js';
 import type { SessionHydrator } from './session-hydrator.js';
 import { resolveModel } from '../../providers/index.js';
 
@@ -242,7 +247,14 @@ export class SessionInspector {
     const reasoningLevel = await resolveEffectiveReasoningLevel(this.opts.sessionConfigStore, conversationId, defReason);
     const defVerbose = 'full' as VerboseLevel;
     const verboseLevel = await resolveVerboseLevel(this.opts.sessionConfigStore, conversationId, defVerbose);
-    const model = this.opts.modelManager.getModelForSession(conversationId);
+    const externalAgent = getExternalConversationAgent(conversationId);
+    const externalDriver = externalAgent ? getExternalAgentDriver(externalAgent.execution.kind) : undefined;
+    const model = externalAgent && externalDriver
+      ? (sc?.modelOverride?.trim()
+        || externalAgent.execution.model?.trim()
+        || getCachedExternalDefaultModel(externalAgent.execution)
+        || externalDriver.defaultModelName)
+      : (sc?.modelOverride ?? this.opts.modelManager.getModelForSession(conversationId));
     const project = getProjectForSession(conversationId);
     const environment = getExecutionEnvironmentForSession(conversationId);
     const projectWorkspace = projectWorkspacePath(project);
@@ -251,9 +263,9 @@ export class SessionInspector {
     const isDefaultWorkspaceRoot = effectiveWorkspacePath === resolveDefaultAgentWorkspaceDir();
     return {
       thinkingLevel: level,
-      model: sc?.modelOverride ?? model,
+      model,
       configVersion: sc?.updatedAt ?? 0,
-      fixedModel: sc?.fixedModel === true,
+      fixedModel: externalAgent ? true : sc?.fixedModel === true,
       activityDetail: {
         default: defReason,
         override: sc?.reasoningLevel ?? null,

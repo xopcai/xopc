@@ -1,6 +1,9 @@
 export type {
   ExternalAgentDriver,
   ExternalDriverTurnContext,
+  ExternalInteractionChoice,
+  ExternalInteractionRequest,
+  ExternalInteractionResponse,
   ExternalRuntimeAccountInfo,
   ExternalRuntimeAuthFlowSnapshot,
   ExternalRuntimeAuthInputKind,
@@ -16,11 +19,38 @@ export type {
   ExternalRuntimeUsage,
   ExternalSessionBinding,
   ExternalSessionIdentity,
+  ExternalSteeringMode,
+  ExternalTurnAttachment,
   ExternalTurnEvent,
+  ExternalTurnSteerHandler,
+  ExternalTurnSteerInput,
   RunExternalProjectTurnInput,
   StartExternalRuntimeAuthInput,
 } from './types.js';
 export {
+  cancelExternalInteractionsForConversation,
+  getActiveExternalInteractionSnapshot,
+  hasExternalInteraction,
+  resolveExternalInteraction,
+  waitForExternalInteraction,
+} from './interaction.js';
+export {
+  buildNormalizedApplyPatchResult,
+  buildNormalizedExecCommandResult,
+  ExternalTurnOutcomeAggregator,
+  normalizeExternalPlanSteps,
+  summarizeFileChanges,
+  toWorkspaceRelativePath,
+  unwrapShellCommand,
+} from './presentation.js';
+export {
+  externalRuntimeDefaultAvatar,
+  parseExternalRuntimeAvatar,
+  renderExternalRuntimeAvatarSvg,
+  XOPC_RUNTIME_AVATAR_PREFIX,
+} from './avatars.js';
+export {
+  cancelAllExternalRuntimeAuthFlows,
   cancelExternalRuntimeAuthFlow,
   getExternalRuntimeAuthFlow,
   logoutExternalAgentRuntime,
@@ -28,10 +58,17 @@ export {
   startExternalRuntimeAuth,
 } from './auth-flow.js';
 export {
+  getCachedExternalDefaultModel,
+  getCachedExternalRuntimeProbe,
   getExternalAgentDriver,
+  invalidateExternalRuntimeProbeCache,
   listExternalAgentDrivers,
   probeAllExternalAgentRuntimes,
   probeExternalAgentRuntime,
+  probeExternalAgentRuntimeCached,
+  resolveExternalRuntimeModelsPayload,
+  type ExternalRuntimeCatalogModel,
+  type ExternalRuntimeModelsPayload,
 } from './registry.js';
 export {
   appendExternalTranscriptEntry,
@@ -43,4 +80,11 @@ export {
   readExternalSessionBinding,
   type ExternalStoredAgent,
 } from './session-binding.js';
-export { abortAllExternalTurns, abortExternalTurn, runExternalProjectTurn } from './turn-runner.js';
+export {
+  abortAllExternalTurns,
+  abortExternalTurn,
+  hasActiveExternalTurn,
+  runExternalProjectTurn,
+  steerExternalTurn,
+  type SteerExternalTurnOptions,
+} from './turn-runner.js';

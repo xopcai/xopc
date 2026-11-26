@@ -18,6 +18,11 @@ import {
   AGENT_PROFILE_MARKDOWN_SYSTEM_FILES,
   REQUIRED_AGENT_PROFILE_MARKDOWN_FILE_SET,
 } from '../agent/context/workspace.js';
+import {
+  externalRuntimeDefaultAvatar,
+  parseExternalRuntimeAvatar,
+  renderExternalRuntimeAvatarSvg,
+} from '../agent/external/index.js';
 import type { AgentEntry, AgentModelsOverride, EffectiveAgentConfig, SkillOverride } from '../agent-config/index.js';
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { AgentCatalogService } from '../agent-catalog/service.js';
@@ -79,12 +84,15 @@ export async function listGatewayAgents(
     const entry = listAgentEntries().find((e) => normalizeAgentId(e.id) === id);
     if (!entry) continue;
     const identity = entry.profile;
+    const resolvedAvatar =
+      identity?.avatar?.trim()
+      || (entry.execution ? externalRuntimeDefaultAvatar(entry.execution.kind) : undefined);
     agents.push({
       id,
       name: identity?.name ?? id,
       ...(identity?.description ? { description: identity.description } : {}),
       ...(identity?.language ? { language: identity.language } : {}),
-      ...(identity?.avatar ? { avatar: identity.avatar } : {}),
+      ...(resolvedAvatar ? { avatar: resolvedAvatar } : {}),
       workspace: profile.resolvedWorkspacePath,
       profileDir: resolveAgentProfileDir(id),
       revision: new AgentCatalogRepository().get(entry.id)?.revision,
@@ -153,12 +161,16 @@ export async function createGatewayAgent(
   const workspace = body.execution
     ? undefined
     : body.workspace?.trim() ? resolveUserPath(body.workspace) : undefined;
+  const profile = structuredClone(body.profile);
+  if (body.execution && !profile.avatar?.trim()) {
+    profile.avatar = externalRuntimeDefaultAvatar(body.execution.kind);
+  }
   try {
     await new AgentCatalogService().create({
       id: agentId,
       enabled: true,
       ...(workspace ? { workspace } : {}),
-      profile: structuredClone(body.profile),
+      profile,
       ...(body.specialistProfile ? { specialistProfile: body.specialistProfile } : {}),
       ...(body.execution ? { execution: body.execution } : {}),
     });
@@ -527,8 +539,23 @@ export async function resolveAgentAvatarImage(agentId: string): Promise<AgentAdm
   const missing = assertAgentExistsForAvatar(agentId);
   if (missing) return missing;
   const id = normalizeAgentId(agentId);
-  const reference = listAgentEntries().find((entry) => normalizeAgentId(entry.id) === id)?.profile?.avatar?.trim() ?? '';
+  const entry = listAgentEntries().find((item) => normalizeAgentId(item.id) === id);
+  const reference = entry?.profile?.avatar?.trim() ?? '';
   if (reference === 'xopc:custom') return readAgentAvatarFile(id);
+  const runtimeAvatarKind =
+    parseExternalRuntimeAvatar(reference)
+    ?? (!reference && entry?.execution ? entry.execution.kind : undefined);
+  if (runtimeAvatarKind) {
+    const key = `runtime:${runtimeAvatarKind}`;
+    const cached = renderedAvatarCache.get(key);
+    if (cached) return { ok: true, data: { buffer: cached, contentType: 'image/png' } };
+    const { default: sharp } = await import('sharp');
+    const svg = renderExternalRuntimeAvatarSvg(runtimeAvatarKind, 128);
+    const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
+    if (renderedAvatarCache.size >= 64) renderedAvatarCache.delete(renderedAvatarCache.keys().next().value!);
+    renderedAvatarCache.set(key, buffer);
+    return { ok: true, data: { buffer, contentType: 'image/png' } };
+  }
   if (reference.startsWith('xopc:loopi:') || /^https?:\/\//i.test(reference)) {
     return { ok: false, status: 404, error: 'Avatar is rendered by the client' };
   }

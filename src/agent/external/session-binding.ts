@@ -153,3 +153,19 @@ export function appendExternalTranscriptEntry(
     return true;
   });
 }
+
+export function updateExternalTranscriptEntry(
+  identity: ExternalSessionIdentity,
+  entryId: string,
+  row: TranscriptStoredRow,
+): boolean {
+  return runSqliteWriteTransaction(db => {
+    if (readCurrentTranscriptId(db, identity.conversationId) !== identity.transcriptId) return false;
+    const result = db.prepare(`
+      UPDATE transcript_entries
+      SET payload_json = ?
+      WHERE transcript_id = ? AND entry_id = ?
+    `).run(JSON.stringify(row), identity.transcriptId, entryId);
+    return result.changes > 0;
+  });
+}

@@ -1,6 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
 
+import { ExternalRuntimeAvatar, parseExternalRuntimeAvatar } from '@/components/brand/external-runtime-avatar';
 import { Loopi, type LoopiMood } from '@/components/brand/loopi';
+import type { ExternalAgentKind } from '@/features/settings/types/agent-gateway';
 import { cn } from '@/lib/cn';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -33,6 +35,7 @@ function fallbackAvatarDataUri(agentId: string, size = 128): string {
 type ResolvedAvatar =
   | { kind: 'sync'; src: string }
   | { kind: 'loopi'; mood: LoopiMood }
+  | { kind: 'runtime'; runtimeKind: ExternalAgentKind }
   | { kind: 'authenticated'; url: string; fallbackSrc: string }
   | { kind: 'dicebear'; styleId: DicebearStyleId; seed: string; fallbackSrc: string };
 
@@ -44,6 +47,10 @@ function resolveAvatar(
 ): ResolvedAvatar {
   const trimmed = avatar?.trim() ?? '';
   const fallbackSrc = fallbackAvatarDataUri(agentId, size);
+  const runtimeKind = parseExternalRuntimeAvatar(trimmed);
+  if (runtimeKind) {
+    return { kind: 'runtime', runtimeKind };
+  }
   if (trimmed.startsWith('xopc:loopi:')) {
     const mood = trimmed.slice('xopc:loopi:'.length);
     if (mood === 'idle' || mood === 'listen' || mood === 'curious' || mood === 'care') return { kind: 'loopi', mood };
@@ -98,7 +105,12 @@ export function AgentAvatarDisplay(props: {
     () => resolveAvatar(agentId, avatar, size, cacheRevision),
     [agentId, avatar, token, size, cacheRevision],
   );
-  const primarySrc = resolved.kind === 'sync' ? resolved.src : resolved.kind === 'loopi' ? fallbackAvatarDataUri(agentId, size) : resolved.fallbackSrc;
+  const primarySrc =
+    resolved.kind === 'sync'
+      ? resolved.src
+      : resolved.kind === 'loopi' || resolved.kind === 'runtime'
+        ? fallbackAvatarDataUri(agentId, size)
+        : resolved.fallbackSrc;
   const [src, setSrc] = useState(primarySrc);
 
   useEffect(() => {
@@ -141,6 +153,10 @@ export function AgentAvatarDisplay(props: {
       cancelled = true;
     };
   }, [resolved, size]);
+
+  if (resolved.kind === 'runtime') {
+    return <ExternalRuntimeAvatar kind={resolved.runtimeKind} size={size} className={props.className} />;
+  }
 
   if (resolved.kind === 'loopi') {
     return <span className={cn('inline-flex items-center justify-center rounded-full bg-surface-hover', props.className)} style={{ width: size, height: size }}><Loopi variant="avatar" mood={resolved.mood} className="size-full" /></span>;

@@ -298,14 +298,32 @@ export async function *runGatewayAgent(
           const driver = getExternalAgentDriver(externalAgent.execution.kind);
           throw new Error(`This ${driver.label} Agent is unavailable.`);
         }
+        let externalSessionModelOverride: string | undefined;
+        let externalSessionThinkingLevel: string | undefined = thinking;
+        if (externalAgent) {
+          agentService.enqueueProvisionalSessionTitle(conversationId, message);
+          const sessionCfg = await agentService.sessionInspector.agentConfig(conversationId).catch(() => null);
+          const driver = getExternalAgentDriver(externalAgent.execution.kind);
+          const candidateModel = sessionCfg?.model?.trim();
+          if (candidateModel && candidateModel !== driver.defaultModelName) {
+            externalSessionModelOverride = candidateModel;
+          }
+          if (!externalSessionThinkingLevel && sessionCfg?.thinkingLevel) {
+            externalSessionThinkingLevel = sessionCfg.thinkingLevel;
+          }
+        }
         const eventStream = externalAgent && webchatTranscriptId ? runExternalProjectTurn({
           conversationId,
           transcriptId: webchatTranscriptId,
           agentId: externalAgent.id,
           execution: externalAgent.execution,
           instructions: externalAgent.profile?.instructions,
+          modelOverride: externalSessionModelOverride,
+          thinkingLevel: externalSessionThinkingLevel,
+          onTitleUpdated: (title) => agentService.applyExternalSessionTitle(conversationId, title),
           content: message,
-          hasAttachmentsOrContext: Boolean(cappedAttachments?.length || runOptions?.sourceContexts?.some(context => context.kind !== 'device_context')),
+          attachments: cappedAttachments,
+          hasAttachmentsOrContext: Boolean(runOptions?.sourceContexts?.some(context => context.kind !== 'device_context')),
           runId,
           clientMessageId: runOptions?.inputIdentity?.clientMessageId,
           signal: mergedSignal,
@@ -410,7 +428,12 @@ export async function *runGatewayAgent(
         const assistantPlainText = externalAgent ? mapper.getLastAssistantText() : agentService.getLastAssistantPlainText(conversationId);
         const reviewHint = agentService.takeTaskReviewStreamHint(conversationId);
         try {
-          if (externalAgent) emit('session.transcript_updated', { key: conversationId });
+          if (externalAgent) {
+            emit('session.transcript_updated', { key: conversationId });
+            if (!mergedSignal.aborted && !streamError) {
+              agentService.enqueueAutoSessionTitleAfterTurn(conversationId);
+            }
+          }
           await agentService.outboundCoordinator.emitSessionTurnComplete({
             conversationId,
             channel: 'webchat',

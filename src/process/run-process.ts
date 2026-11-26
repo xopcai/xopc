@@ -6,17 +6,22 @@ import { ProcessExitError, type ProcessHandle, type ProcessResult, type ProcessS
 
 const DEFAULT_MAX_OUTPUT_BYTES = 1024 * 1024;
 
-export function spawnProcess(spec: ProcessSpec): ProcessHandle {
-  spec.signal?.throwIfAborted();
-  const detached = spec.detached ?? (spec.terminationPolicy === 'tree' && process.platform !== 'win32');
-  const child = spawn(spec.program, [...(spec.args ?? [])], {
+/** Raw piped stdio for framed protocols whose clients own the stream and shutdown. */
+export function spawnStdioProcess(spec: Pick<ProcessSpec, 'program' | 'args' | 'cwd' | 'env' | 'detached' | 'windowsHide' | 'shell'>) {
+  return spawn(spec.program, [...(spec.args ?? [])], {
     cwd: spec.cwd,
     env: spec.env ?? process.env,
     stdio: ['pipe', 'pipe', 'pipe'],
-    detached,
+    detached: spec.detached,
     windowsHide: spec.windowsHide ?? true,
     shell: spec.shell ?? false,
   });
+}
+
+export function spawnProcess(spec: ProcessSpec): ProcessHandle {
+  spec.signal?.throwIfAborted();
+  const detached = spec.detached ?? (spec.terminationPolicy === 'tree' && process.platform !== 'win32');
+  const child = spawnStdioProcess({ ...spec, detached });
   const stdout = createBoundedOutput(spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES);
   const stderr = createBoundedOutput(spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES);
   let timedOut = false;

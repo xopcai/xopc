@@ -7,14 +7,17 @@ import { ProjectStore } from '../../../projects/project-store.js';
 import { closeXopcDatabase, openXopcDatabase } from '../../../storage/sqlite/connection.js';
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
+import { resolveAgySpawnSpec } from '../drivers/agy/driver.js';
 import {
   getExternalAgentDriver,
   hasExternalSessionBinding,
   probeExternalAgentRuntime,
+  resolveExternalInteraction,
   runExternalProjectTurn,
+  steerExternalTurn,
 } from '../index.js';
 
-function createFakeAgyBinary(dir: string, logFile: string, mode: 'normal' | 'load_only' | 'auth_url' | 'cancel'): string {
+function createFakeAgyBinary(dir: string, logFile: string, mode: 'normal' | 'load_only' | 'auth_url' | 'cancel' | 'interactive'): string {
   const scriptPath = join(dir, 'fake-agy');
   const script = `#!${process.execPath}
 import { appendFileSync } from 'node:fs';
@@ -41,6 +44,7 @@ rl.on('line', (line) => {
         agentInfo: { name: 'antigravity', version: '1.5.8' },
         agentCapabilities: {
           loadSession: true,
+          promptCapabilities: { image: true },
           sessionCapabilities: mode === 'load_only' ? {} : { resume: {} },
           _meta: { antigravity: { systemPrompt: { append: true } } },
         },
@@ -122,13 +126,27 @@ rl.on('line', (line) => {
       });
       return;
     }
-    // 1. Thought chunk
+    // 1. Thought chunk + ACP plan update
     send({
       jsonrpc: '2.0',
       method: 'session/update',
       params: {
         sessionId: sid,
         update: { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'Checking files' } },
+      },
+    });
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: sid,
+        update: {
+          sessionUpdate: 'plan',
+          entries: [
+            { content: 'Inspect files', status: 'in_progress' },
+            { content: 'Update README', status: 'pending' },
+          ],
+        },
       },
     });
     // 2. Ignored internal update_steps tool call
@@ -140,7 +158,7 @@ rl.on('line', (line) => {
         update: { sessionUpdate: 'tool_call', toolCallId: 'steps-1', title: 'Run update_steps', status: 'in_progress' },
       },
     });
-    // 3. Permission request for shell command + interaction question
+    // 3. Permission request for shell command (+ interactive question only in interactive mode)
     send({
       jsonrpc: '2.0',
       id: 'perm-1',
@@ -154,16 +172,23 @@ rl.on('line', (line) => {
         ],
       },
     });
-    send({
-      jsonrpc: '2.0',
-      id: 'perm-question',
-      method: 'session/request_permission',
-      params: {
-        sessionId: sid,
-        toolCall: { toolCallId: 'interaction_1', title: 'Pick option' },
-        options: [{ optionId: 'opt-a', name: 'A', kind: 'allow_once' }],
-      },
-    });
+    if (mode === 'interactive') {
+      send({
+        jsonrpc: '2.0',
+        id: 'perm-question',
+        method: 'session/request_permission',
+        params: {
+          sessionId: sid,
+          toolCall: { toolCallId: 'interaction_1', title: 'Pick option' },
+          options: [
+            { optionId: 'opt-a', name: 'Option A', kind: 'allow_once' },
+            { optionId: 'opt-b', name: 'Option B', kind: 'allow_once' },
+          ],
+        },
+      });
+      activePromptId = msg.id;
+      return;
+    }
     // 4. Execute tool call + incremental output + completion
     send({
       jsonrpc: '2.0',
@@ -248,6 +273,20 @@ rl.on('line', (line) => {
     }, 25);
     return;
   }
+  if (msg.id === 'perm-question' && activePromptId !== null) {
+    const id = activePromptId;
+    activePromptId = null;
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'agy-session-1',
+        update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Picked.' } },
+      },
+    });
+    send({ jsonrpc: '2.0', id, result: { stopReason: 'end_turn' } });
+    return;
+  }
   if (msg.method === 'session/cancel' && activePromptId !== null) {
     const id = activePromptId;
     activePromptId = null;
@@ -300,6 +339,8 @@ it('registers agy driver and runs multi-turn ACP session with resume across SQLi
     'user_message',
     'message_start',
     'message_update', // thought delta
+    'tool_execution_start', // update_plan
+    'tool_execution_end', // update_plan
     'tool_execution_start', // exec_command
     'tool_execution_update',
     'tool_execution_update',
@@ -313,15 +354,19 @@ it('registers agy driver and runs multi-turn ACP session with resume across SQLi
   ]);
   expect(hasExternalSessionBinding(session.key)).toBe(true);
 
+  const outcome = firstEvents.find(event => event.type === 'turn_outcome')?.outcome as {
+    changeSet?: { files: Array<{ path: string; status?: string }>; added: number; removed: number };
+  };
+  expect(outcome?.changeSet?.files).toEqual([{ path: 'README.md', status: 'modified' }]);
+  expect(outcome?.changeSet?.added).toBe(1);
+  expect(outcome?.changeSet?.removed).toBe(1);
+
   const logged = readFileSync(rpcLog, 'utf8').trim().split('\n').map(line => JSON.parse(line));
   expect(logged.find(entry => entry.method === 'session/new')?.params?._meta).toEqual({
     antigravity: { systemPrompt: { append: 'Be concise.' } },
   });
   expect(logged.find(entry => entry.id === 'perm-1')?.result).toEqual({
     outcome: { outcome: 'selected', optionId: 'opt-once' },
-  });
-  expect(logged.find(entry => entry.id === 'perm-question')?.result).toEqual({
-    outcome: { outcome: 'cancelled' },
   });
 
   // Reopen SQLite and verify follow-up uses session/resume
@@ -333,10 +378,11 @@ it('registers agy driver and runs multi-turn ACP session with resume across SQLi
   expect(loggedAfter.some(entry => entry.method === 'session/resume' && entry.params?.sessionId === 'agy-session-1')).toBe(true);
 
   const rows = getSqliteDatabase()
-    .prepare('SELECT role FROM transcript_entries WHERE transcript_id = ? ORDER BY seq')
-    .all(session.transcriptId!);
-  // Per turn: user, toolCall(cmd), toolResult(cmd), toolCall(edit), toolResult(edit), assistant(text), turn_outcome
-  expect(rows).toHaveLength(14);
+    .prepare('SELECT payload_json FROM transcript_entries WHERE transcript_id = ? ORDER BY seq')
+    .all(session.transcriptId!) as Array<{ payload_json: string }>;
+  const payloads = rows.map(row => JSON.parse(row.payload_json));
+  expect(payloads.some(p => p.role === 'assistant' && p.content?.[0]?.type === 'thinking' && p.content[0].thinking === 'Checking files')).toBe(true);
+  expect(payloads.some(p => p.role === 'toolResult' && p.toolName === 'update_plan')).toBe(true);
 });
 
 it('falls back to session/load and ignores replayed notifications during load', async () => {
@@ -455,6 +501,15 @@ it('probes AGY readiness, discovered models, unauthenticated state, and missing 
   expect(missing.status).toBe('not_installed');
 });
 
+it('resolves a relative AGY profile against the gateway directory for authentication and execution', () => {
+  const options = { kind: 'agy', geminiDir: 'profiles/test' } as const;
+  expect(resolveAgySpawnSpec(options).args).toEqual([
+    'acp', '--gemini-dir', join(process.cwd(), 'profiles/test'), '--app-data-dir', 'antigravity-acp',
+  ]);
+  expect(resolveAgySpawnSpec({ kind: 'agy' }, { XOPC_AGY_GEMINI_DIR: 'profiles/test' }).args)
+    .toEqual(resolveAgySpawnSpec(options).args);
+});
+
 it('applies execution.model via session/set_config_option when overriding AGY default model', async () => {
   root = mkdtempSync(join(tmpdir(), 'xopc-agy-model-'));
   const rpcLog = join(root, 'rpc.jsonl');
@@ -482,4 +537,288 @@ it('applies execution.model via session/set_config_option when overriding AGY de
     && entry.params?.configId === 'model'
     && entry.params?.value === 'gemini-3-flash',
   )).toBe(true);
+});
+
+it('bridges live Antigravity interaction questions, ask-mode approvals, and image attachments', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-agy-interactive-'));
+  const rpcLog = join(root, 'rpc.jsonl');
+  const bin = createFakeAgyBinary(root, rpcLog, 'interactive');
+
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'AGY interactive', workspaceRoot: root });
+  const session = createConversation({ agentId: 'agy-coder', projectId: project.id }, root);
+
+  const clarifyKinds: string[] = [];
+  for await (const event of runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'agy-coder',
+    execution: { kind: 'agy', binaryPath: bin, permissionMode: 'ask' },
+    runId: 'interactive-run',
+    content: 'Inspect screenshot',
+    attachments: [
+      { type: 'image', name: 'ui.png', mimeType: 'image/png', data: 'data:image/png;base64,iVBORw0KGgo=' },
+    ],
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  })) {
+    if (event.type === 'clarify_request' && typeof event.requestId === 'string') {
+      clarifyKinds.push(String(event.kind));
+      if (event.kind === 'approval') {
+        resolveExternalInteraction({
+          id: event.requestId,
+          expectedVersion: 1,
+          action: 'answer',
+          decision: 'approve',
+        });
+      } else {
+        resolveExternalInteraction({
+          id: event.requestId,
+          expectedVersion: 1,
+          action: 'answer',
+          response: { choiceId: 'opt-a' },
+        });
+      }
+    }
+  }
+
+  expect(clarifyKinds).toEqual(['approval', 'input']);
+  const logged = readFileSync(rpcLog, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  expect(logged.find(entry => entry.id === 'perm-1')?.result).toEqual({
+    outcome: { outcome: 'selected', optionId: 'opt-once' },
+  });
+  expect(logged.find(entry => entry.id === 'perm-question')?.result).toEqual({
+    outcome: { outcome: 'selected', optionId: 'opt-a' },
+  });
+  const promptReq = logged.find(entry => entry.method === 'session/prompt');
+  expect(promptReq?.params?.prompt).toEqual(expect.arrayContaining([
+    expect.objectContaining({ type: 'text', text: 'Inspect screenshot' }),
+    expect.objectContaining({ type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgo=' }),
+  ]));
+});
+
+it('discovers ACP thinking configOptions on probe and applies session modelOverride and thinkingLevel', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-agy-thinking-'));
+  const rpcLog = join(root, 'rpc.jsonl');
+  const binPath = join(root, 'fake-agy-thinking.mjs');
+  writeFileSync(binPath, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+import { createInterface } from 'node:readline';
+
+const logPath = ${JSON.stringify(rpcLog)};
+const send = (obj) => process.stdout.write(JSON.stringify(obj) + '\\n');
+const rl = createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  if (!line.trim()) return;
+  const msg = JSON.parse(line);
+  appendFileSync(logPath, JSON.stringify(msg) + '\\n');
+  if (msg.method === 'initialize') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: 1, agentCapabilities: {} } });
+    return;
+  }
+  if (msg.method === 'session/new') {
+    send({
+      jsonrpc: '2.0',
+      id: msg.id,
+      result: {
+        sessionId: 'agy-think-1',
+        configOptions: [
+          {
+            id: 'model',
+            category: 'model',
+            type: 'select',
+            currentValue: 'gemini-2.5-pro',
+            options: [
+              { value: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+              { value: 'gemini-3-pro', name: 'Gemini 3 Pro' },
+            ],
+          },
+          {
+            id: 'thought_level',
+            category: 'thought_level',
+            type: 'select',
+            currentValue: 'medium',
+            options: [
+              { value: 'off', name: 'Off' },
+              { value: 'low', name: 'Low' },
+              { value: 'medium', name: 'Medium' },
+              { value: 'high', name: 'High' },
+            ],
+          },
+        ],
+      },
+    });
+    return;
+  }
+  if (msg.method === 'session/set_config_option') {
+    send({ jsonrpc: '2.0', id: msg.id, result: {} });
+    return;
+  }
+  if (msg.method === 'session/prompt') {
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'agy-think-1',
+        update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'OK' } },
+      },
+    });
+    send({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } });
+  }
+});
+`);
+  chmodSync(binPath, 0o755);
+
+  const probe = await probeExternalAgentRuntime({ kind: 'agy', binaryPath: binPath });
+  expect(probe.status).toBe('ready');
+  expect(probe.models).toEqual([
+    {
+      id: 'gemini-2.5-pro',
+      label: 'Gemini 2.5 Pro',
+      isDefault: true,
+      thinking: { mode: 'levels', options: ['off', 'low', 'medium', 'high'], initialValue: 'medium', supportsAdaptive: false },
+      thinkingConfigId: 'thought_level',
+    },
+    {
+      id: 'gemini-3-pro',
+      label: 'Gemini 3 Pro',
+      thinking: { mode: 'levels', options: ['off', 'low', 'medium', 'high'], initialValue: 'medium', supportsAdaptive: false },
+      thinkingConfigId: 'thought_level',
+    },
+  ]);
+
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'AGY Thinking', workspaceRoot: root });
+  const session = createConversation({ agentId: 'agy-coder', projectId: project.id }, root);
+
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'agy-coder',
+    execution: { kind: 'agy', binaryPath: binPath },
+    modelOverride: 'gemini-3-pro',
+    thinkingLevel: 'high',
+    runId: 'think-run',
+    content: 'Think carefully',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+
+  const logged = readFileSync(rpcLog, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  expect(logged.some(entry =>
+    entry.method === 'session/set_config_option'
+    && entry.params?.configId === 'model'
+    && entry.params?.value === 'gemini-3-pro',
+  )).toBe(true);
+  expect(logged.some(entry =>
+    entry.method === 'session/set_config_option'
+    && entry.params?.configId === 'thought_level'
+    && entry.params?.value === 'high',
+  )).toBe(true);
+});
+
+it('steers an active Antigravity/ACP turn via cancel-and-resume on the same native session', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-agy-steer-'));
+  const rpcLog = join(root, 'rpc.jsonl');
+  const binPath = join(root, 'fake-agy-steer.mjs');
+  writeFileSync(binPath, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+import { createInterface } from 'node:readline';
+
+const logPath = ${JSON.stringify(rpcLog)};
+const send = (obj) => process.stdout.write(JSON.stringify(obj) + '\\n');
+let pendingPromptId = null;
+const rl = createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  if (!line.trim()) return;
+  const msg = JSON.parse(line);
+  appendFileSync(logPath, JSON.stringify(msg) + '\\n');
+  if (msg.method === 'initialize') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: 1, agentCapabilities: { sessionCapabilities: { resume: {} } } } });
+    return;
+  }
+  if (msg.method === 'session/new') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { sessionId: 'agy-steer-session' } });
+    return;
+  }
+  if (msg.method === 'session/resume') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { sessionId: msg.params.sessionId } });
+    return;
+  }
+  if (msg.method === 'session/cancel') {
+    if (pendingPromptId !== null) {
+      const id = pendingPromptId;
+      pendingPromptId = null;
+      send({ jsonrpc: '2.0', id, result: { stopReason: 'cancelled' } });
+    }
+    return;
+  }
+  if (msg.method === 'session/prompt') {
+    const promptText = msg.params?.prompt?.[0]?.text ?? '';
+    if (promptText.includes('Task A')) {
+      pendingPromptId = msg.id;
+      send({
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          sessionId: 'agy-steer-session',
+          update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Starting A...' } },
+        },
+      });
+      return;
+    }
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'agy-steer-session',
+        update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Redirected to B.' } },
+      },
+    });
+    send({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } });
+  }
+});
+`);
+  chmodSync(binPath, 0o755);
+
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'AGY Steer', workspaceRoot: root });
+  const session = createConversation({ agentId: 'agy-coder', projectId: project.id }, root);
+
+  let handled = false;
+  let steered = false;
+  const events: Array<{ type: string; [key: string]: unknown }> = [];
+  for await (const event of runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'agy-coder',
+    execution: { kind: 'agy', binaryPath: binPath },
+    runId: 'agy-steer-run',
+    content: 'Work on Task A',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  })) {
+    events.push(event);
+    if (!steered && event.type === 'message_update') {
+      steered = true;
+      const accepted = await steerExternalTurn(session.key, 'Switch to Task B', 'agy-steer-run', {
+        clientMessageId: 'agy-steer-1',
+        onHandled: () => { handled = true; },
+      });
+      expect(accepted).toBe(true);
+    }
+  }
+
+  expect(handled).toBe(true);
+  const logged = readFileSync(rpcLog, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  expect(logged.some(entry => entry.method === 'session/cancel' && entry.params?.sessionId === 'agy-steer-session')).toBe(true);
+  expect(logged.some(entry => entry.method === 'session/resume' && entry.params?.sessionId === 'agy-steer-session')).toBe(true);
+  expect(events.some(e =>
+    e.type === 'user_message'
+    && e.content === 'Switch to Task B'
+    && (e.metadata as { steered?: boolean; clientMessageId?: string } | undefined)?.steered === true
+    && (e.metadata as { clientMessageId?: string } | undefined)?.clientMessageId === 'agy-steer-1',
+  )).toBe(true);
+  const outcome = events.find(e => e.type === 'turn_outcome')?.outcome as { status?: string } | undefined;
+  expect(outcome?.status).toBe('succeeded');
 });

@@ -9,6 +9,10 @@ import type { SessionManager } from '@/features/chat/session/session-manager';
 import { useChatSessionInit } from '@/features/chat/session/use-chat-session-init';
 import { resetNewChatHandoffInflightForTests } from '@/features/chat/session/new-chat-handoff';
 
+vi.mock('@/features/chat/agent-selection/chat-agents-api', () => ({
+  fetchChatAgents: vi.fn(async () => ({ defaultId: 'main', items: [{ id: 'main' }] })),
+}));
+
 const conversationId = 'agent:main:webchat:default:direct:chat_new';
 
 describe('useChatSessionInit', () => {

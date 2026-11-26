@@ -1,11 +1,24 @@
 import { execFile } from 'node:child_process';
-import { accessSync, constants as fsConstants, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { delimiter, isAbsolute, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import type { CodexExecution, ExternalAgentExecution } from '../../../../agent-config/schema.js';
+import type { ModelThinkingCapabilities, ModelThinkingValue } from '@xopcai/gateway-contract';
+
+import type { CodexExecution, ExternalAgentExecution, ExternalPermissionMode } from '../../../../agent-config/schema.js';
 import { resolveUserPath } from '../../../agent-scope.js';
+import type { SessionInteractionPolicy } from '../../../session/interaction-policy-state.js';
+import { normalizeThinkLevel } from '../../../transcript/thinking-types.js';
+import { formatFileAttachmentsContext } from '../../attachments.js';
+import {
+  buildNormalizedApplyPatchResult,
+  buildNormalizedExecCommandResult,
+  MAX_EXTERNAL_TOOL_TEXT,
+  summarizeFileChanges,
+  toWorkspaceRelativePath,
+  unwrapShellCommand,
+} from '../../presentation.js';
 import type {
   ExternalAgentDriver,
   ExternalDriverTurnContext,
@@ -15,47 +28,68 @@ import type {
   ExternalRuntimeToolResult,
 } from '../../types.js';
 import { CodexAppServer, deferred, record, type CodexRecord } from './app-server.js';
+import { findCodexExecutable } from './executable.js';
+
+export { findCodexExecutable };
 
 const execFileAsync = promisify(execFile);
-const fullAccess = { approvalPolicy: 'never', sandbox: 'danger-full-access' };
-const MAX_TOOL_TEXT = 32_000;
 const STOP_TIMEOUT_MS = 5_000;
-const PROBE_TIMEOUT_MS = 8_000;
+const PROBE_TIMEOUT_MS = 10_000;
+const CATALOG_REFRESH_WAIT_MS = 3_000;
+const CATALOG_REFRESH_POLL_MS = 150;
 
-function isExecutableFile(candidate: string): boolean {
-  try {
-    if (!statSync(candidate).isFile()) return false;
-    if (process.platform !== 'win32') accessSync(candidate, fsConstants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
+const CODEX_THINKING_ORDER: ReadonlyArray<ModelThinkingValue> = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
 
-export function findCodexExecutable(configuredPath?: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const raw = configuredPath?.trim() || env.XOPC_CODEX_BIN?.trim();
-  if (raw) {
-    const resolved = raw.includes('/') || raw.includes('\\') || raw.startsWith('~')
-      ? resolveUserPath(raw)
-      : raw;
-    if (isAbsolute(resolved)) return isExecutableFile(resolved) ? resolved : undefined;
-    const dirs = (env.PATH ?? '').split(delimiter).filter(Boolean);
-    for (const dir of dirs) {
-      const candidate = join(dir, resolved);
-      if (isExecutableFile(candidate)) return candidate;
-    }
-    return undefined;
-  }
-  const exts = process.platform === 'win32'
-    ? (env.PATHEXT ?? '.EXE;.CMD;.BAT').split(';').filter(Boolean)
-    : [''];
-  for (const dir of (env.PATH ?? '').split(delimiter).filter(Boolean)) {
-    for (const ext of exts) {
-      const candidate = join(dir, `codex${ext}`);
-      if (isExecutableFile(candidate)) return candidate;
-    }
+function mapCodexEffortToThinkingValue(raw: unknown): ModelThinkingValue | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim().toLowerCase();
+  if (trimmed === 'none' || trimmed === 'off') return 'off';
+  const normalized = normalizeThinkLevel(trimmed);
+  if (normalized && CODEX_THINKING_ORDER.includes(normalized as ModelThinkingValue)) {
+    return normalized as ModelThinkingValue;
   }
   return undefined;
+}
+
+function mapThinkingLevelToCodexEffort(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  const normalized = normalizeThinkLevel(raw);
+  if (!normalized || normalized === 'adaptive') return undefined;
+  if (normalized === 'off') return 'none';
+  if (normalized === 'max') return 'xhigh';
+  return normalized;
+}
+
+function parseCodexModelThinking(item: CodexRecord): ModelThinkingCapabilities | undefined {
+  const rawEfforts = Array.isArray(item.supportedReasoningEfforts) ? item.supportedReasoningEfforts : [];
+  const options: ModelThinkingValue[] = [];
+  for (const rawEntry of rawEfforts) {
+    const entry = record(rawEntry);
+    const mapped = mapCodexEffortToThinkingValue(entry?.reasoningEffort ?? rawEntry);
+    if (mapped && !options.includes(mapped)) options.push(mapped);
+  }
+  if (options.length === 0) return undefined;
+  options.sort((a, b) => CODEX_THINKING_ORDER.indexOf(a) - CODEX_THINKING_ORDER.indexOf(b));
+  const defaultVal = mapCodexEffortToThinkingValue(item.defaultReasoningEffort);
+  const initialValue = (defaultVal && options.includes(defaultVal))
+    ? defaultVal
+    : options.includes('medium')
+      ? 'medium'
+      : options[0]!;
+  if (options.length === 1) {
+    return {
+      mode: options[0] === 'off' ? 'none' : 'fixed',
+      options,
+      initialValue,
+      supportsAdaptive: false,
+    };
+  }
+  return {
+    mode: 'levels',
+    options,
+    initialValue,
+    supportsAdaptive: false,
+  };
 }
 
 function parseCodexModels(catalog: CodexRecord): ExternalRuntimeModelOption[] {
@@ -64,13 +98,71 @@ function parseCodexModels(catalog: CodexRecord): ExternalRuntimeModelOption[] {
   const seen = new Set<string>();
   for (const entry of rawModels) {
     const item = record(entry);
-    const id = text(item?.model).trim();
+    if (!item || item.hidden === true) continue;
+    const id = text(item.model).trim();
     if (!id || seen.has(id)) continue;
     seen.add(id);
-    const label = text(item?.displayName).trim() || text(item?.title).trim() || id;
-    options.push({ id, label, ...(item?.isDefault === true ? { isDefault: true } : {}) });
+    const label = text(item.displayName).trim() || text(item.title).trim() || id;
+    const thinking = parseCodexModelThinking(item);
+    options.push({
+      id,
+      label,
+      ...(item.isDefault === true ? { isDefault: true } : {}),
+      ...(thinking ? { thinking } : {}),
+    });
   }
   return options;
+}
+
+async function listAllCodexModels(
+  server: CodexAppServer,
+  signal: AbortSignal,
+): Promise<ExternalRuntimeModelOption[]> {
+  const collected: ExternalRuntimeModelOption[] = [];
+  const seen = new Set<string>();
+  let cursor: string | undefined;
+  for (let page = 0; page < 10; page += 1) {
+    const catalog = await server.request('model/list', cursor ? { cursor, limit: 100 } : { limit: 100 }, signal);
+    for (const model of parseCodexModels(catalog)) {
+      if (seen.has(model.id)) continue;
+      seen.add(model.id);
+      collected.push(model);
+    }
+    const nextCursor = text(catalog.nextCursor).trim();
+    if (!nextCursor) break;
+    cursor = nextCursor;
+  }
+  return collected;
+}
+
+async function readCodexModelsCacheFetchedAtMs(homePath?: string): Promise<number> {
+  const codexHome = homePath?.trim()
+    ? resolveUserPath(homePath.trim())
+    : process.env.CODEX_HOME?.trim()
+      ? resolveUserPath(process.env.CODEX_HOME.trim())
+      : join(homedir(), '.codex');
+  try {
+    const raw = await readFile(join(codexHome, 'models_cache.json'), 'utf8');
+    const parsed = JSON.parse(raw) as { fetched_at?: unknown };
+    if (typeof parsed.fetched_at !== 'string') return Number.NaN;
+    return Date.parse(parsed.fetched_at);
+  } catch {
+    return Number.NaN;
+  }
+}
+
+async function waitForCodexCatalogRefresh(
+  homePath: string | undefined,
+  spawnedAtMs: number,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const deadline = Date.now() + CATALOG_REFRESH_WAIT_MS;
+  while (Date.now() < deadline && !signal.aborted) {
+    const fetchedAtMs = await readCodexModelsCacheFetchedAtMs(homePath);
+    if (Number.isFinite(fetchedAtMs) && fetchedAtMs >= spawnedAtMs) return true;
+    await new Promise((resolve) => setTimeout(resolve, CATALOG_REFRESH_POLL_MS));
+  }
+  return false;
 }
 
 function codexOptionsFromExecution(execution?: ExternalAgentExecution): CodexExecution | undefined {
@@ -81,17 +173,97 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-function mapToolCall(item: CodexRecord, id: string): ExternalRuntimeToolCall | undefined {
+function resolveCodexSandboxSettings(
+  cwd: string,
+  permissionMode: ExternalPermissionMode,
+  sessionPolicy: SessionInteractionPolicy,
+): {
+  approvalPolicy: 'never' | 'on-request';
+  sandbox: 'danger-full-access' | 'workspace-write' | 'read-only';
+  sandboxPolicy: Record<string, unknown>;
+} {
+  if (sessionPolicy.mode === 'plan' || sessionPolicy.access === 'read-only') {
+    return {
+      approvalPolicy: 'on-request',
+      sandbox: 'read-only',
+      sandboxPolicy: { type: 'readOnly' },
+    };
+  }
+  const approvalPolicy = permissionMode === 'ask' || permissionMode === 'auto_edit' ? 'on-request' : 'never';
+  if (sessionPolicy.sandbox === 'unrestricted') {
+    return {
+      approvalPolicy,
+      sandbox: 'danger-full-access',
+      sandboxPolicy: { type: 'dangerFullAccess' },
+    };
+  }
+  return {
+    approvalPolicy,
+    sandbox: 'workspace-write',
+    sandboxPolicy: {
+      type: 'workspaceWrite',
+      writableRoots: [cwd],
+      networkAccess: sessionPolicy.network === true,
+      excludeTmpdirEnvVar: true,
+      excludeSlashTmp: true,
+    },
+  };
+}
+
+function extractRawFileChanges(item: CodexRecord): Array<{ path: string; kind?: string; diff?: string }> {
+  if (!Array.isArray(item.changes)) return [];
+  const out: Array<{ path: string; kind?: string; diff?: string }> = [];
+  for (const value of item.changes.slice(0, 100)) {
+    const change = record(value);
+    if (!change || typeof change.path !== 'string') continue;
+    const kindValue = typeof change.kind === 'string' ? change.kind : text(record(change.kind)?.type);
+    out.push({ path: change.path, kind: kindValue || undefined, diff: text(change.diff) });
+  }
+  return out;
+}
+
+function mapToolCall(item: CodexRecord, id: string, cwd: string): ExternalRuntimeToolCall | undefined {
   switch (item.type) {
-    case 'commandExecution':
-      return { id, toolName: 'exec_command', args: { cmd: text(item.command), cwd: text(item.cwd) } };
-    case 'fileChange':
-      return { id, toolName: 'apply_patch', args: {} };
+    case 'commandExecution': {
+      const rawCmd = text(item.command);
+      const { displayCommand, rawCommand } = unwrapShellCommand(rawCmd);
+      const relCwd = toWorkspaceRelativePath(text(item.cwd), cwd);
+      return {
+        id,
+        toolName: 'exec_command',
+        args: {
+          cmd: displayCommand || rawCmd,
+          ...(rawCommand ? { rawCommand } : {}),
+          ...(relCwd ? { cwd: relCwd } : {}),
+        },
+      };
+    }
+    case 'fileChange': {
+      const summary = summarizeFileChanges(extractRawFileChanges(item), cwd);
+      return {
+        id,
+        toolName: 'apply_patch',
+        args: summary.primaryPath ? { path: summary.primaryPath } : {},
+      };
+    }
     case 'webSearch':
       return { id, toolName: 'web_search', args: { query: text(item.query) } };
     case 'mcpToolCall':
-    case 'dynamicToolCall':
-      return { id, toolName: text(item.tool) || 'codex_tool', args: { server: text(item.server) } };
+    case 'dynamicToolCall': {
+      const serverName = text(item.server).trim();
+      const toolName = text(item.tool).trim() || 'codex_tool';
+      const args: ExternalRuntimeToolCall['args'] = {};
+      if (serverName) args.server = serverName;
+      const rawArgs = record(item.arguments);
+      if (rawArgs) {
+        for (const [key, value] of Object.entries(rawArgs).slice(0, 8)) {
+          if (typeof value === 'string') args[key] = value.slice(0, 500);
+          else if (typeof value === 'number' || typeof value === 'boolean') args[key] = value;
+          else if (value === null) args[key] = null;
+        }
+      }
+      return { id, toolName: serverName ? `${serverName}__${toolName}` : toolName, args };
+    }
     default:
       return undefined;
   }
@@ -100,53 +272,70 @@ function mapToolCall(item: CodexRecord, id: string): ExternalRuntimeToolCall | u
 function mapToolResult(
   tool: ExternalRuntimeToolCall,
   outputBuffer: string,
+  cwd: string,
+  startedAtMs: number,
   item?: CodexRecord,
 ): ExternalRuntimeToolResult {
   const isError = !item || ['failed', 'declined', 'interrupted', 'inProgress'].includes(text(item.status))
     || item.success === false || (typeof item.exitCode === 'number' && item.exitCode !== 0);
   const output = text(item?.aggregatedOutput) || outputBuffer;
   if (tool.toolName === 'exec_command') {
-    return {
+    const durationMs = typeof item?.durationMs === 'number'
+      ? item.durationMs
+      : Math.max(0, Date.now() - startedAtMs);
+    return buildNormalizedExecCommandResult({
       id: tool.id,
       isError,
-      content: output ? [{ type: 'text', text: output.slice(0, MAX_TOOL_TEXT) }] : [],
-      details: {
-        command: text(tool.args.cmd),
-        cwd: text(tool.args.cwd),
-        exitCode: item?.exitCode ?? null,
-        durationMs: item?.durationMs,
-        truncated: output.length > MAX_TOOL_TEXT,
-      },
-    };
+      cwd,
+      command: text(item?.command) || text(tool.args.cmd),
+      rawCommand: text(tool.args.rawCommand) || undefined,
+      execCwd: text(item?.cwd) || text(tool.args.cwd),
+      exitCode: typeof item?.exitCode === 'number' ? item.exitCode : null,
+      durationMs,
+      output,
+    });
   }
   if (tool.toolName === 'apply_patch') {
-    const changes = (Array.isArray(item?.changes) ? item.changes : []).slice(0, 100).flatMap((value: unknown) => {
-      const change = record(value);
-      return change && typeof change.path === 'string'
-        ? [{ path: change.path, kind: text(record(change.kind)?.type), diff: text(change.diff).slice(0, 4_000) }]
-        : [];
-    });
-    const diff = changes.map(change => change.diff).join('\n').slice(0, MAX_TOOL_TEXT);
-    const lines = diff.split('\n');
-    return {
+    return buildNormalizedApplyPatchResult({
       id: tool.id,
       isError,
-      content: changes.length ? [{ type: 'text', text: changes.map(change => change.path).join('\n') }] : [],
-      details: {
-        changes: changes.map(({ path, kind }) => ({ path, kind })),
-        diff,
-        added: lines.filter(line => line.startsWith('+') && !line.startsWith('+++')).length,
-        removed: lines.filter(line => line.startsWith('-') && !line.startsWith('---')).length,
-      },
-    };
+      cwd,
+      rawChanges: item ? extractRawFileChanges(item) : [],
+      fallbackOutput: output,
+    });
   }
   const error = text(record(item?.error)?.message);
+  const resultText = error || output || (item?.result !== undefined ? JSON.stringify(item.result).slice(0, MAX_EXTERNAL_TOOL_TEXT) : '');
   return {
     id: tool.id,
     isError,
-    content: error ? [{ type: 'text', text: error.slice(0, MAX_TOOL_TEXT) }] : [],
+    content: resultText ? [{ type: 'text', text: resultText.slice(0, MAX_EXTERNAL_TOOL_TEXT) }] : [],
     details: {},
   };
+}
+
+function buildCodexTurnInput(
+  content: string,
+  attachments: ExternalDriverTurnContext['attachments'],
+): Array<Record<string, unknown>> {
+  const fileContext = formatFileAttachmentsContext(attachments);
+  const promptText = `${fileContext}${content}`.trim();
+  const items: Array<Record<string, unknown>> = [];
+  if (promptText) {
+    items.push({ type: 'text', text: promptText, text_elements: [] });
+  }
+  for (const att of attachments) {
+    if (att.type !== 'image') continue;
+    if (att.localPath) {
+      items.push({ type: 'localImage', path: att.localPath });
+    } else if (att.base64) {
+      items.push({ type: 'image', url: `data:${att.mimeType ?? 'image/png'};base64,${att.base64}` });
+    }
+  }
+  if (items.length === 0) {
+    items.push({ type: 'text', text: 'Inspect the attached content.', text_elements: [] });
+  }
+  return items;
 }
 
 export const codexExternalDriver: ExternalAgentDriver = {
@@ -156,18 +345,35 @@ export const codexExternalDriver: ExternalAgentDriver = {
   transcriptApi: 'codex-app-server',
   defaultModelName: 'codex',
   capabilities: {
-    supportsAttachments: false,
+    supportsAttachments: true,
     managesOwnModel: true,
     requiresWorkspace: true,
     requiresWorkspaceWrite: true,
+    steeringMode: 'native',
   },
 
   async runTurn(context: ExternalDriverTurnContext): Promise<void> {
-    const { cwd, content, instructions, existingBinding, execution, runId, clientMessageId, signal, emit } = context;
+    const {
+      cwd,
+      content,
+      attachments,
+      instructions,
+      existingBinding,
+      execution,
+      permissionMode,
+      sessionPolicy,
+      runId,
+      clientMessageId,
+      signal,
+      emit,
+      requestInteraction,
+    } = context;
     const codexConfig = codexOptionsFromExecution(execution);
+    const sandboxSettings = resolveCodexSandboxSettings(cwd, permissionMode, sessionPolicy);
     const nativeThread = existingBinding?.nativeSessionId;
-    const tools = new Map<string, { tool: ExternalRuntimeToolCall; output: string }>();
+    const tools = new Map<string, { tool: ExternalRuntimeToolCall; output: string; startedAtMs: number }>();
     const finishedTools = new Set<string>();
+    const seenReasoning = new Set<string>();
     const earlyEvents: Array<{ method: string; params: CodexRecord }> = [];
 
     let server: CodexAppServer | undefined;
@@ -196,40 +402,191 @@ export const codexExternalDriver: ExternalAgentDriver = {
       interrupt();
     };
 
+    const handleServerRequest = async (method: string, params: CodexRecord): Promise<CodexRecord> => {
+      if (method === 'item/commandExecution/requestApproval') {
+        if (permissionMode === 'full_access' && sessionPolicy.mode !== 'plan' && sessionPolicy.access !== 'read-only') {
+          return { decision: 'accept' };
+        }
+        const rawCmd = text(params.command);
+        const { displayCommand } = unwrapShellCommand(rawCmd);
+        const reason = text(params.reason).trim();
+        const relCwd = toWorkspaceRelativePath(text(params.cwd), cwd);
+        const res = await requestInteraction({
+          kind: 'approval',
+          title: 'Approve command',
+          question: displayCommand || rawCmd || 'Allow Codex to execute this command?',
+          detail: [reason, relCwd ? `cwd: ${relCwd}` : ''].filter(Boolean).join('\n') || undefined,
+          actionKind: 'command',
+        });
+        return { decision: res.kind === 'approval' && res.decision === 'approve' ? 'accept' : 'decline' };
+      }
+
+      if (method === 'item/fileChange/requestApproval') {
+        if (
+          (permissionMode === 'full_access' || permissionMode === 'auto_edit')
+          && sessionPolicy.mode !== 'plan'
+          && sessionPolicy.access !== 'read-only'
+        ) {
+          return { decision: 'accept' };
+        }
+        const reason = text(params.reason).trim();
+        const res = await requestInteraction({
+          kind: 'approval',
+          title: 'Approve file changes',
+          question: reason || 'Allow Codex to apply changes to workspace files?',
+          actionKind: 'file_change',
+        });
+        return { decision: res.kind === 'approval' && res.decision === 'approve' ? 'accept' : 'decline' };
+      }
+
+      if (method === 'item/tool/requestUserInput') {
+        const questions = Array.isArray(params.questions)
+          ? params.questions.map(record).filter((q): q is CodexRecord => Boolean(q))
+          : [];
+        const answers: Record<string, { answers: string[] }> = {};
+        for (const q of questions) {
+          const qId = text(q.id).trim();
+          const prompt = text(q.question).trim();
+          if (!qId || !prompt) continue;
+          const rawOptions = Array.isArray(q.options) ? q.options.map(record).filter((o): o is CodexRecord => Boolean(o)) : [];
+          const choices = rawOptions
+            .map((opt, idx) => ({
+              id: text(opt.label).trim() || `opt-${idx + 1}`,
+              label: text(opt.label).trim(),
+              description: text(opt.description).trim() || undefined,
+            }))
+            .filter((choice) => choice.label);
+          const res = await requestInteraction({
+            kind: 'question',
+            title: text(q.header).trim() || undefined,
+            question: prompt,
+            ...(choices.length > 0 ? { choices } : {}),
+            allowFreeText: true,
+          });
+          if (res.kind === 'question' && !res.cancelled) {
+            const answerText = (res.text ?? res.choiceId ?? '').trim();
+            if (answerText) answers[qId] = { answers: [answerText] };
+          }
+        }
+        return { answers };
+      }
+
+      throw new Error(`Unsupported Codex interactive request: ${method}`);
+    };
+
     const applyNotification = (method: string, params: CodexRecord) => {
+      if (method === 'thread/name/updated') {
+        const title = text(params.threadName).trim();
+        if (title) emit({ type: 'title_updated', title });
+        return;
+      }
+
+      if (method === 'thread/tokenUsage/updated') {
+        const tokenUsage = record(params.tokenUsage);
+        const total = record(tokenUsage?.total) ?? record(tokenUsage?.last);
+        if (total) {
+          const input = typeof total.inputTokens === 'number' ? total.inputTokens : 0;
+          const output = typeof total.outputTokens === 'number' ? total.outputTokens : 0;
+          const cacheRead = typeof total.cachedInputTokens === 'number' ? total.cachedInputTokens : 0;
+          const totalTokens = typeof total.totalTokens === 'number' ? total.totalTokens : input + output;
+          emit({ type: 'usage', usage: { input, output, cacheRead, totalTokens } });
+        }
+        return;
+      }
+
       const turn = record(params.turn);
       const eventTurn = text(turn?.id) || text(params.turnId);
       if (!eventTurn || eventTurn !== turnId) return;
+
       if (method === 'turn/completed' && turn) {
         terminal.resolve(turn);
         return;
       }
+
+      if (method === 'turn/plan/updated') {
+        const rawPlan = Array.isArray(params.plan) ? params.plan : [];
+        const steps = rawPlan
+          .map(record)
+          .filter((entry): entry is CodexRecord => Boolean(entry))
+          .map((entry) => ({
+            step: text(entry.step),
+            status: text(entry.status) as 'pending' | 'in_progress' | 'completed',
+          }))
+          .filter((entry) => entry.step.trim().length > 0);
+        if (steps.length > 0) {
+          emit({
+            type: 'plan_updated',
+            explanation: text(params.explanation).trim() || undefined,
+            steps,
+          });
+        }
+        return;
+      }
+
       const item = record(params.item);
       const id = text(item?.id) || text(params.itemId);
       if (!id) return;
-      if (method === 'item/agentMessage/delta') {
+
+      if (method === 'item/reasoning/summaryTextDelta' || method === 'item/reasoning/textDelta') {
+        const delta = text(params.delta);
+        if (delta) {
+          seenReasoning.add(id);
+          emit({ type: 'thinking_delta', itemId: id, delta });
+        }
+        return;
+      }
+
+      if (method === 'item/reasoning/summaryPartAdded') {
+        if (seenReasoning.has(id)) {
+          emit({ type: 'thinking_delta', itemId: id, delta: '\n\n' });
+        }
+        return;
+      }
+
+      if (method === 'item/agentMessage/delta' || method === 'item/plan/delta') {
         const delta = text(params.delta);
         if (delta) emit({ type: 'text_delta', itemId: id, delta });
-      } else if (method === 'item/commandExecution/outputDelta') {
+        return;
+      }
+
+      if (method === 'item/commandExecution/outputDelta') {
         const tracked = tools.get(id);
         if (!tracked) return;
-        const delta = text(params.delta).slice(0, MAX_TOOL_TEXT - tracked.output.length);
+        const delta = text(params.delta).slice(0, MAX_EXTERNAL_TOOL_TEXT - tracked.output.length);
         tracked.output += delta;
         if (delta) emit({ type: 'tool_output_delta', id, delta, stream: 'stdout' });
-      } else if (item && (method === 'item/started' || method === 'item/completed')) {
-        if (item.type === 'agentMessage' && method === 'item/completed') {
+        return;
+      }
+
+      if (item && (method === 'item/started' || method === 'item/completed')) {
+        if (item.type === 'reasoning' && method === 'item/completed') {
+          const summaryParts = Array.isArray(item.summary)
+            ? item.summary.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+            : [];
+          emit({
+            type: 'thinking_done',
+            itemId: id,
+            ...(summaryParts.length > 0 ? { text: summaryParts.join('\n\n') } : {}),
+          });
+        } else if ((item.type === 'agentMessage' || item.type === 'plan') && method === 'item/completed') {
           emit({ type: 'text_done', itemId: id, text: text(item.text) });
         } else if (!finishedTools.has(id)) {
           let tracked = tools.get(id);
           if (!tracked) {
-            const tool = mapToolCall(item, id);
+            const tool = mapToolCall(item, id, cwd);
             if (!tool) return;
-            tracked = { tool, output: '' };
+            tracked = { tool, output: '', startedAtMs: Date.now() };
             tools.set(id, tracked);
             emit({ type: 'tool_start', tool });
+          } else if (method === 'item/completed' && tracked.tool.toolName === 'apply_patch' && !tracked.tool.args.path) {
+            const updated = mapToolCall(item, id, cwd);
+            if (updated?.args.path) {
+              tracked.tool = updated;
+              emit({ type: 'tool_update', tool: updated });
+            }
           }
           if (method === 'item/completed') {
-            emit({ type: 'tool_end', result: mapToolResult(tracked.tool, tracked.output, item) });
+            emit({ type: 'tool_end', result: mapToolResult(tracked.tool, tracked.output, cwd, tracked.startedAtMs, item) });
             finishedTools.add(id);
             tools.delete(id);
           }
@@ -251,18 +608,24 @@ export const codexExternalDriver: ExternalAgentDriver = {
       }, terminal.reject, {
         binaryPath: codexConfig?.binaryPath,
         homePath: codexConfig?.homePath,
+        onRequest: handleServerRequest,
       });
 
-      await server.request('initialize', { clientInfo: { name: 'xopc', title: 'xopc', version: '1' } }, signal);
+      await server.request('initialize', {
+        clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
+        capabilities: { experimentalApi: true },
+      }, signal);
       server.notify('initialized');
-      let selectedModel = codexConfig?.model?.trim();
+      let selectedModel = context.modelOverride?.trim() || codexConfig?.model?.trim();
       if (!selectedModel) {
         const catalog = await server.request('model/list', {}, signal);
         const models = Array.isArray(catalog.data) ? catalog.data.map(record) : [];
         selectedModel = text((models.find(candidate => candidate?.isDefault === true) ?? models[0])?.model);
       }
+      const requestedEffort = mapThinkingLevelToCodexEffort(context.thinkingLevel);
       const opened = await server.request(nativeThread ? 'thread/resume' : 'thread/start', {
-        ...fullAccess,
+        approvalPolicy: sandboxSettings.approvalPolicy,
+        sandbox: sandboxSettings.sandbox,
         cwd,
         ...(nativeThread ? { threadId: nativeThread } : { ephemeral: false }),
         ...(selectedModel ? { model: selectedModel } : {}),
@@ -280,17 +643,34 @@ export const codexExternalDriver: ExternalAgentDriver = {
       const started = await server.request('turn/start', {
         threadId,
         cwd,
-        approvalPolicy: 'never',
-        sandboxPolicy: { type: 'dangerFullAccess' },
+        approvalPolicy: sandboxSettings.approvalPolicy,
+        sandboxPolicy: sandboxSettings.sandboxPolicy,
+        ...(selectedModel ? { model: selectedModel } : {}),
+        ...(requestedEffort ? { effort: requestedEffort } : {}),
         clientUserMessageId: clientMessageId ?? runId,
-        input: [{ type: 'text', text: content, text_elements: [] }],
+        input: buildCodexTurnInput(content, attachments),
       }, stopping.signal);
       turnId = text(record(started.turn)?.id);
       if (!turnId) throw new Error('Codex did not return a turn ID.');
+      const activeServer = server;
+      const activeThreadId = threadId;
+      const activeTurnId = turnId;
+      context.registerSteerHandler?.(async (steer) => {
+        if (stopping.signal.aborted || signal.aborted) {
+          throw new Error('Codex turn is no longer active.');
+        }
+        await activeServer.request('turn/steer', {
+          threadId: activeThreadId,
+          expectedTurnId: activeTurnId,
+          ...(steer.clientMessageId ? { clientUserMessageId: steer.clientMessageId } : {}),
+          input: buildCodexTurnInput(steer.content, steer.attachments),
+        }, stopping.signal);
+      });
       interrupt();
       for (const event of earlyEvents.splice(0)) applyNotification(event.method, event.params);
 
       const result = await terminal.promise;
+      context.registerSteerHandler?.(null);
       if (result.status === 'interrupted') {
         emit({ type: 'turn_done', status: 'interrupted' });
       } else if (result.status === 'completed') {
@@ -307,6 +687,7 @@ export const codexExternalDriver: ExternalAgentDriver = {
       failed = true;
       throw error;
     } finally {
+      context.registerSteerHandler?.(null);
       startingTurn = false;
       signal.removeEventListener('abort', onAbort);
       clearTimeout(stopTimer);
@@ -344,13 +725,17 @@ export const codexExternalDriver: ExternalAgentDriver = {
 
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(new Error('Codex health check timed out.')), PROBE_TIMEOUT_MS);
+    const spawnedAtMs = Date.now();
     let server: CodexAppServer | undefined;
     try {
       server = new CodexAppServer(tmpdir(), () => {}, () => {}, {
         binaryPath: executablePath,
         homePath: codexConfig?.homePath,
       });
-      await server.request('initialize', { clientInfo: { name: 'xopc', title: 'xopc', version: '1' } }, abortController.signal);
+      await server.request('initialize', {
+        clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
+        capabilities: { experimentalApi: true },
+      }, abortController.signal);
       server.notify('initialized');
 
       let accountInfo: ExternalRuntimeProbeResult['account'];
@@ -384,8 +769,11 @@ export const codexExternalDriver: ExternalAgentDriver = {
         // Older Codex builds may not implement account/read; fall back to model/list.
       }
 
-      const catalog = await server.request('model/list', {}, abortController.signal);
-      const models = parseCodexModels(catalog);
+      let models = await listAllCodexModels(server, abortController.signal);
+      const refreshed = await waitForCodexCatalogRefresh(codexConfig?.homePath, spawnedAtMs, abortController.signal);
+      if (refreshed) {
+        models = await listAllCodexModels(server, abortController.signal);
+      }
       return {
         kind: 'codex',
         label: 'Codex',

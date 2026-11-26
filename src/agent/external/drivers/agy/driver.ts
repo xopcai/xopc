@@ -1,5 +1,5 @@
 import { accessSync, constants as fsConstants, statSync } from 'node:fs';
-import { delimiter, isAbsolute, join, resolve } from 'node:path';
+import { delimiter, isAbsolute, join } from 'node:path';
 
 import type { AgyExecution, ExternalAgentExecution } from '../../../../agent-config/schema.js';
 import { resolveUserPath } from '../../../agent-scope.js';
@@ -82,18 +82,13 @@ export function buildAgyEnv(baseEnv: NodeJS.ProcessEnv = process.env): NodeJS.Pr
 }
 
 export function resolveAgySpawnSpec(
-  cwd: string,
   execution?: ExternalAgentExecution,
   baseEnv: NodeJS.ProcessEnv = process.env,
 ): { command: string; args: string[]; env: NodeJS.ProcessEnv } {
   const agyConfig = agyConfigFromExecution(execution);
   const command = resolveAgyCommand(agyConfig?.binaryPath, baseEnv);
   const rawGeminiDir = agyConfig?.geminiDir?.trim() || baseEnv.XOPC_AGY_GEMINI_DIR?.trim();
-  const geminiDir = rawGeminiDir
-    ? rawGeminiDir.startsWith('~') || isAbsolute(rawGeminiDir)
-      ? resolveUserPath(rawGeminiDir)
-      : resolve(cwd, rawGeminiDir)
-    : undefined;
+  const geminiDir = rawGeminiDir ? resolveUserPath(rawGeminiDir) : undefined;
   const args = geminiDir
     ? ['acp', '--gemini-dir', geminiDir, '--app-data-dir', 'antigravity-acp']
     : ['acp'];
@@ -126,7 +121,10 @@ export const agyExternalDriver = createAcpExternalDriver({
     agyConfigFromExecution(execution)?.authMethod
     ?? (process.env.XOPC_AGY_AUTH_METHOD?.trim() || undefined),
   authenticateEagerly: true,
-  resolveSpawn: (cwd, execution) => resolveAgySpawnSpec(cwd, execution, process.env),
+  resolveSpawn: (_cwd, execution) => {
+    const spawnSpec = resolveAgySpawnSpec(execution);
+    return { ...spawnSpec, args: [...spawnSpec.args, '--sandbox'] };
+  },
   buildSessionMeta: (initializeResult, instructions) =>
     instructions && supportsAntigravitySystemPromptAppend(initializeResult)
       ? { antigravity: { systemPrompt: { append: instructions } } }

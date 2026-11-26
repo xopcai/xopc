@@ -143,8 +143,10 @@ export const ChatComposer = memo(function ChatComposer({
   showModelSelector,
   onModelChange,
   modelDisabled,
+  externalAgentId,
   onChatAgentChange,
   currentAgentId,
+  externalAgentsAvailable,
   voiceAgentName,
   voiceTaskId,
   voiceMode,
@@ -178,8 +180,9 @@ export const ChatComposer = memo(function ChatComposer({
   onAcceptWelcomeSuggestion?: (selection: WelcomeSuggestionSelection) => void;
   sessionModel: string;
   showModelSelector: boolean;
-  onModelChange: (modelId: string) => void | Promise<void>;
+  onModelChange: (modelId: string, thinkingLevel?: string) => void | Promise<void>;
   modelDisabled: boolean;
+  externalAgentId?: string;
   thinkingLevel: string;
   modelSupportsThinking: boolean;
   onThinkingChange: (level: string) => void | Promise<void>;
@@ -209,6 +212,7 @@ export const ChatComposer = memo(function ChatComposer({
   onChatAgentChange?: (agentId: string) => void;
   /** Active session agent id; the matching agent row in `/` palette gets a "current" badge. */
   currentAgentId?: string;
+  externalAgentsAvailable?: boolean;
   voiceAgentName?: string;
   voiceTaskId?: string;
   voiceMode?: 'assistant';
@@ -465,6 +469,7 @@ export const ChatComposer = memo(function ChatComposer({
     onUserTextCommitted,
     onChatAgentChange,
     currentAgentId,
+    externalAgentsAvailable,
     prepareSession: prepareContextSession,
     contextRefs,
     onAddContextRef: addContextRef,
@@ -1025,6 +1030,7 @@ export const ChatComposer = memo(function ChatComposer({
           showModelSelector={showModelSelector}
           onModelChange={onModelChange}
           modelDisabled={modelDisabled}
+          externalAgentId={externalAgentId}
         />}
       </div>
       <ReviewLauncherDialog
