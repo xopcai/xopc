@@ -10,6 +10,7 @@ struct AppRootView: View {
     @State private var appState = AppState()
     @State private var push = MobilePush.shared
     @State private var realtimeVoiceCall = RealtimeVoiceCall()
+    @State private var projectChat = ProjectChatPresentation()
     @State private var personalAgent = PersonalAgentState()
     @State private var personalReadTarget: PersonalReadTarget?
     @State private var settingsPresented = false
@@ -79,23 +80,7 @@ struct AppRootView: View {
             .mobileSheetPreset(.large)
         }
         .onChange(of: appState.gatewayConfiguration) { music.validateScope(appState.gatewayConfiguration) }
-        .overlay(alignment: .top) {
-            if realtimeVoiceCall.phase != .idle, !realtimeVoiceCall.expanded {
-                RealtimeVoiceMiniBar(call: realtimeVoiceCall)
-                    .padding(.top, 58)
-                    .zIndex(10)
-            }
-        }
-        .fullScreenCover(isPresented: Binding(
-            get: { realtimeVoiceCall.phase != .idle && realtimeVoiceCall.expanded },
-            set: {
-                if !$0 {
-                    realtimeVoiceCall.minimize()
-                }
-            }
-        )) {
-            RealtimeVoiceCallView(call: realtimeVoiceCall)
-        }
+        .modifier(VoiceCallPresentation(call: realtimeVoiceCall, active: !linkedProjectChat))
         .sheet(isPresented: $settingsPresented) {
             GatewayProfilesView(
                 profiles: appState.gatewayProfiles,
@@ -117,6 +102,9 @@ struct AppRootView: View {
         }, set: { messageLinks.destination = $0 })) { link in
             ChatMessageLinkDestination(link: link, appState: appState, router: messageLinks, defaultAgentID: defaultAgentID)
                 .mobileSheetPreset(.large)
+                .modifier(ChatSidebarPresentation(isOpen: linkedProjectChat && projectChat.sidebarOpen,
+                                                  canOpenBySwipe: false, onSetOpen: setSidebar) { sidebar })
+                .modifier(VoiceCallPresentation(call: realtimeVoiceCall, active: linkedProjectChat))
         }
         .fullScreenCover(item: Binding(get: {
             if case .route("tasks", _) = messageLinks.destination {
@@ -183,6 +171,8 @@ struct AppRootView: View {
             }
         }
         .environment(\.mobileTheme, mobileTheme)
+        .environment(projectChat)
+        .environment(realtimeVoiceCall)
         .tint(mobileTheme.action)
         .foregroundStyle(mobileTheme.foreground)
     }
@@ -207,11 +197,11 @@ struct AppRootView: View {
                 .navigationDestination(for: HomeDestination.self, destination: destination)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !appState.homePath.isEmpty || phoneVisible {
+            if !appState.homePath.isEmpty || phoneVisible, projectChat.conversationID == nil {
                 GeneratedMusicDock(playback: music)
             }
         }
-        .modifier(ChatSidebarPresentation(isOpen: sidebarOpen, canOpenBySwipe: canDragSidebar,
+        .modifier(ChatSidebarPresentation(isOpen: sidebarPresented && !linkedProjectChat, canOpenBySwipe: canDragSidebar,
                                           onSetOpen: setSidebar) { sidebar })
         .background(mobileTheme.canvas.ignoresSafeArea())
         .task(id: personalUnreadLoad) {
@@ -249,8 +239,8 @@ struct AppRootView: View {
         .task(id: SidebarLoad(configuration: appState.gatewayConfiguration, revision: recentRevision)) {
             await loadRecent(using: appState.gatewayConfiguration)
         }
-        .task(id: sidebarOpen) {
-            guard sidebarOpen else { return }
+        .task(id: sidebarPresented) {
+            guard sidebarPresented else { return }
             do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
             let recentsAreStale = recentUpdatedAt.map { Date.now.timeIntervalSince($0) > 30 } ?? true
             if !recentLoading, recentsAreStale {
@@ -444,14 +434,23 @@ struct AppRootView: View {
         let configuration = appState.gatewayConfiguration
         let currentScope = ComposerDraftStore.accountScope(configuration)
         let recents = recentScope == currentScope ? recentConversations : nil
+        let selectedID = projectChat.conversationID ?? appState.selectedConversation?.id
         return ChatSidebarView(configuration: configuration, personal: personalAgent.record(using: configuration),
-                               openingPersonal: personalAgent.isOpening, selectedID: appState.selectedConversation?.id,
+                               openingPersonal: personalAgent.isOpening, selectedID: selectedID,
                                recent: recents ?? [], recentNextOffset: recents == nil ? nil : recentNextOffset,
                                recentLoading: recentLoading || (recents == nil && !recentError), recentError: recentError,
                                attention: pendingAttention, personalUnread: personalAgent.unread(using: configuration)?.unreadCount ?? 0,
-                               isPresented: sidebarOpen, onClose: { setSidebar(false) }, onNavigate: navigate,
-                               onPersonal: { Task { await openPersonalAgent(remember: true) } },
-                               onConversation: selectConversation, onNew: startNew, onRetry: { recentRevision += 1 },
+                               isPresented: sidebarPresented, onClose: { setSidebar(false) },
+                               onNavigate: { route in leaveLinkedProject(); navigate(route) },
+                               onPersonal: { leaveLinkedProject(); Task { await openPersonalAgent(remember: true) } },
+                               onConversation: { conversation in
+                                   if projectChat.conversationID == conversation.id {
+                                       setSidebar(false)
+                                   } else {
+                                       leaveLinkedProject()
+                                       selectConversation(conversation)
+                                   }
+                               }, onNew: { leaveLinkedProject(); startNew() }, onRetry: { recentRevision += 1 },
                                onLoadMore: { Task { await loadRecent(using: configuration, more: true) } },
                                onRename: { item, name in
                                    try await changeSidebarConversation(item, name: name, using: configuration)
@@ -602,8 +601,24 @@ struct AppRootView: View {
         appState.openPersonalConversation(record, remember: remember)
     }
 
+    private var linkedProjectChat: Bool {
+        guard case .route("projects", _) = messageLinks.destination else { return false }
+        return projectChat.conversationID != nil
+    }
+
+    private var sidebarPresented: Bool {
+        sidebarOpen || projectChat.sidebarOpen
+    }
+
+    private func leaveLinkedProject() {
+        if linkedProjectChat {
+            messageLinks.destination = nil
+        }
+    }
+
     private func setSidebar(_ open: Bool) {
-        sidebarOpen = open
+        sidebarOpen = open && projectChat.conversationID == nil
+        projectChat.sidebarOpen = open && projectChat.conversationID != nil
     }
 
     private var canDragSidebar: Bool {
@@ -703,4 +718,30 @@ private struct SidebarLoad: Hashable {
 
 #Preview {
     AppRootView()
+}
+
+private struct VoiceCallPresentation: ViewModifier {
+    let call: RealtimeVoiceCall
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .top) {
+                if active, call.phase != .idle, !call.expanded {
+                    RealtimeVoiceMiniBar(call: call)
+                        .padding(.top, 58)
+                        .zIndex(10)
+                }
+            }
+            .fullScreenCover(isPresented: Binding(
+                get: { active && call.phase != .idle && call.expanded },
+                set: {
+                    if !$0, active {
+                        call.minimize()
+                    }
+                }
+            )) {
+                RealtimeVoiceCallView(call: call)
+            }
+    }
 }

@@ -16,6 +16,7 @@ struct ProjectDetailView: View {
     @State private var tasks: [TaskListItem] = []
     @State private var notes: [NoteSummary] = []
     @State private var automations: [AutomationRecord] = []
+    @State private var externalAgents: [AgentSummary] = []
     @AppStorage private var selection: ProjectSection
     @State private var isLoading = true
     @State private var loadRevision = 0
@@ -80,6 +81,15 @@ struct ProjectDetailView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("添加到项目", systemImage: "plus") {
                         Button("新建项目对话", systemImage: "bubble.left") { startProjectChat(project) }
+                        if project.workspaceRoot?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+                           !externalAgents.isEmpty
+                        {
+                            ForEach(externalAgents) { agent in
+                                Button("用 \(agent.localizedName(locale)) 对话", systemImage: "terminal") {
+                                    startProjectChat(project, agentId: agent.id)
+                                }
+                            }
+                        }
                         Button("新建项目任务", systemImage: "checklist") { creationSheet = .task }
                         Button("新建项目笔记", systemImage: "note.text") { creationSheet = .note }
                         Button("新建项目自动化", systemImage: "clock") { setupPrompt = "" }
@@ -100,9 +110,10 @@ struct ProjectDetailView: View {
         .modifier(AutomationSetupPresentation(configuration: configuration, scope: .project(projectID),
                                               prompt: $setupPrompt, onClosed: { Task { await load() } }))
         .navigationDestination(item: $projectChat) { chat in
-            ScopedAssistantChat(configuration: configuration, selection: chat,
-                                heading: chat.isDraft ? "新建项目对话" : LocalizedStringKey(chat.title),
-                                onMaterialized: { _ in removeLocalChat(chat.id) })
+            if let project {
+                ProjectAssistantChat(configuration: configuration, project: project, selection: chat,
+                                     onSaveDraft: saveLocalChat, onMaterialized: removeLocalChat)
+            }
         }
         .onChange(of: projectChat) { _, chat in
             if chat == nil {
@@ -205,7 +216,7 @@ struct ProjectDetailView: View {
                 Button("对话草稿", systemImage: "doc.text") { projectChat = draft }
                     .accessibilityIdentifier("project-draft-\(draft.id)")
                     .contextMenu {
-                        Button("删除", systemImage: "trash", role: .destructive) { removeLocalChat(draft.id) }
+                        Button("删除", systemImage: "trash", role: .destructive) { removeLocalChat(draft) }
                     }
             }
             if sessions.isEmpty, localChats.isEmpty {
@@ -306,21 +317,35 @@ struct ProjectDetailView: View {
         .mobileTextStyle(.rowTitle)
     }
 
-    private func startProjectChat(_ project: ProjectRecord) {
-        let draft = ConversationSelection.projectDraft(project: project)
+    private func startProjectChat(_ project: ProjectRecord, agentId: String? = nil) {
         do {
-            let next = [draft] + localChats
-            try ComposerDraftStore().saveProjectDrafts(next, configuration, projectID: projectID)
-            localChats = next
+            let draft = ConversationSelection.projectDraft(project: project, agentId: agentId)
+            try saveLocalChat(draft)
             projectChat = draft
         } catch { self.error = error.localizedDescription }
     }
 
-    private func removeLocalChat(_ id: String) {
-        let next = localChats.filter { $0.id != id }
-        do {
-            try ComposerDraftStore().saveProjectDrafts(next, configuration, projectID: projectID)
+    private func saveLocalChat(_ draft: ConversationSelection) throws {
+        guard let draftProjectID = draft.projectId else { return }
+        let store = ComposerDraftStore()
+        let current = draftProjectID == projectID ? localChats : try store.readProjectDrafts(configuration, projectID: draftProjectID)
+        let next = [draft] + current
+        try store.saveProjectDrafts(next, configuration, projectID: draftProjectID)
+        if draftProjectID == projectID {
             localChats = next
+        }
+    }
+
+    private func removeLocalChat(_ draft: ConversationSelection) {
+        guard let draftProjectID = draft.projectId else { return }
+        do {
+            let store = ComposerDraftStore()
+            let current = draftProjectID == projectID ? localChats : try store.readProjectDrafts(configuration, projectID: draftProjectID)
+            let next = current.filter { $0.id != draft.id }
+            try store.saveProjectDrafts(next, configuration, projectID: draftProjectID)
+            if draftProjectID == projectID {
+                localChats = next
+            }
         } catch { self.error = error.localizedDescription }
     }
 
@@ -371,6 +396,10 @@ struct ProjectDetailView: View {
                 let home = try? await client.fetchHome(locale: language)
                 return .homeSnapshot(attention: home?.needsUser, deliveries: home?.recentDeliveries)
             }
+            group.addTask {
+                let agents = (try? await client.fetchAgents().agents) ?? []
+                return .externalAgents(agents.filter(\.isExternalRuntime))
+            }
             for await result in group {
                 guard !Task.isCancelled, revision == loadRevision else {
                     group.cancelAll()
@@ -397,6 +426,8 @@ struct ProjectDetailView: View {
         case let .automations(rows): automations = rows
         case let .homeSnapshot(needsUser, rows):
             applyHomeSnapshot(needsUser, rows)
+        case let .externalAgents(agents):
+            externalAgents = agents
         case let .failed(message):
             error = error ?? message
         }
@@ -429,6 +460,7 @@ struct ProjectDetailView: View {
         case notes([NoteSummary])
         case automations([AutomationRecord])
         case homeSnapshot(attention: [HomeItem]?, deliveries: [HomeDelivery]?)
+        case externalAgents([AgentSummary])
         case failed(String)
     }
 }

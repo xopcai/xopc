@@ -142,6 +142,28 @@ describe('SessionConfigService project workspace', () => {
     expect(await service.patch(CONVERSATION_ID, { userContextMode: 'invalid' as never }))
       .toEqual({ ok: false, error: 'Invalid user context mode' });
   });
+
+  it('persists, overrides to default, and clears session serviceTier in SQLite', async () => {
+    seedConversationFixtures();
+    ensureSessionRecord(CONVERSATION_ID, process.cwd(), { agentId: "main" });
+    const sessionConfigStore = new SessionConfigStore(stateDir, process.cwd());
+    const service = new SessionConfigService({
+      sessionStore: { load: vi.fn(async () => []) } as never,
+      sessionConfigStore,
+      modelManager: {} as never,
+      agentManager: {} as never,
+      getConfig: () => minimalConfig,
+    });
+
+    expect(await service.patch(CONVERSATION_ID, { serviceTier: 'priority' })).toEqual({ ok: true });
+    expect((await sessionConfigStore.get(CONVERSATION_ID))?.serviceTierOverride).toBe('priority');
+
+    expect(await service.patch(CONVERSATION_ID, { serviceTier: 'default' })).toEqual({ ok: true });
+    expect((await sessionConfigStore.get(CONVERSATION_ID))?.serviceTierOverride).toBe('default');
+
+    expect(await service.patch(CONVERSATION_ID, { serviceTier: null })).toEqual({ ok: true });
+    expect((await sessionConfigStore.get(CONVERSATION_ID))?.serviceTierOverride).toBeUndefined();
+  });
   function modelFixture() {
     const sessionConfigStore = new SessionConfigStore(stateDir, process.cwd());
     const runtime = { getAgent: vi.fn(() => ({})), setModelForSession: vi.fn(), setThinkingLevel: vi.fn(), removeAgent: vi.fn() };

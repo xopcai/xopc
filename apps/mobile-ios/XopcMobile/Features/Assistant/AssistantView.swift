@@ -16,6 +16,7 @@ struct AssistantView<Dock: View>: View {
     let onOpenSettings: () -> Void
     let onInputFocusChanged: (Bool) -> Void
     var showsFloatingHeader = true
+    var onBack: (() -> Void)?
     var onOpenSidebar: (() -> Void)?
     var onOpenProgress: () -> Void = {}
     var onOpenPersonalOverview: (Bool) -> Void = { _ in }
@@ -60,6 +61,7 @@ struct AssistantView<Dock: View>: View {
     @State private var sharingConversation = false
     @State private var showingAgentPicker = false
     @State private var selectedPickerAgent: String?
+    @State private var selectedPickerProjectAgent: (ProjectRecord, String)?
     @State private var searchAfterOptions = false
     @State private var showingMessageSearch = false
     @State private var executionPresentation: ExecutionActivityPresentation?
@@ -311,13 +313,24 @@ struct AssistantView<Dock: View>: View {
                                       canReadAloud: realtimeVoiceCall.phase == .idle)
             }
             .sheet(isPresented: $showingAgentPicker, onDismiss: {
-                if let id = selectedPickerAgent {
+                if let (project, agentID) = selectedPickerProjectAgent {
+                    selectedPickerProjectAgent = nil
+                    requestStart(.scoped(project, nil, agentID))
+                } else if let id = selectedPickerAgent {
                     selectedPickerAgent = nil
                     requestConversation(id)
                 }
             }) {
-                AgentPicker(configuration: configuration, agents: state.agents,
-                            currentID: conversation?.agentId, personal: personalAgent, select: { selectedPickerAgent = $0 })
+                AgentPicker(
+                    configuration: configuration,
+                    agents: state.agents,
+                    currentID: conversation?.agentId,
+                    personal: personalAgent,
+                    select: { selectedPickerAgent = $0 },
+                    onSelectProjectAgent: { project, agentID in
+                        selectedPickerProjectAgent = (project, agentID)
+                    }
+                )
             }
             .onChange(of: isActionPanelExpanded, initial: true) { _, shown in onActionPanelVisibilityChanged(shown) }
     }
@@ -574,6 +587,9 @@ struct AssistantView<Dock: View>: View {
                         onConversationUpdated: onConversationUpdated,
                         onStartScopedConversation: { project, mode in
                             requestStart(.scoped(project, mode, conversation?.agentId ?? state.selectedAgentID ?? "main"))
+                        },
+                        onStartProjectAgentConversation: { project, agentID in
+                            requestStart(.scoped(project, nil, agentID))
                         },
                         isTaskConversation: !showsFloatingHeader,
                         onSearch: { searchAfterOptions = true; showingSessionActions = false },
@@ -1389,6 +1405,10 @@ struct AssistantView<Dock: View>: View {
     private var floatingHeader: some View {
         ZStack(alignment: .top) {
             HStack(spacing: 6) {
+                if let onBack {
+                    headerButton("返回", icon: Image(systemName: "chevron.backward"), action: onBack)
+                        .accessibilityIdentifier("project-chat-close")
+                }
                 if let onOpenSidebar {
                     headerButton("打开导航", icon: Image(systemName: "line.3.horizontal"), action: onOpenSidebar)
                         .accessibilityIdentifier("chat-header-sidebar")

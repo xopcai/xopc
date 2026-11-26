@@ -6,6 +6,13 @@ import { z } from 'zod';
 
 import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 import { AgentCatalogService } from '../../../agent-catalog/service.js';
+import { EXTERNAL_PERMISSION_MODES, type ExternalPermissionMode } from '../../../agent-config/schema.js';
+import {
+  getExternalAgentDriver,
+  probeExternalAgentRuntimeCached,
+  resolveExternalRuntimeModelsPayload,
+  type ExternalRuntimeProbeResult,
+} from '../../../agent/external/index.js';
 import type { SkillCatalogEntry } from '../../../agent/agent-manager.js';
 import { getMcpConnectionCheck, McpConnectionDrafts, McpDraftError } from '../../../agent/mcp/connection-drafts.js';
 import { evictAllEmbeddedSessionRunners } from '../../../agent/embedded/session-runner.js';
@@ -419,6 +426,25 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
       actions: [{ id: 'save', label: t('保存', 'Save') }] };
   }
 
+  function formatExternalRateLimitSummary(probe: ExternalRuntimeProbeResult, t: Translator): string | undefined {
+    const limits = probe.rateLimits;
+    if (!limits) return undefined;
+    const parts: string[] = [];
+    const formatRemaining = (usedPercent: number) => `${Math.max(0, 100 - usedPercent)}%`;
+    if (limits.primary) {
+      const label = limits.primary.windowDurationMins
+        ? (limits.primary.windowDurationMins >= 1440
+          ? `${Math.round(limits.primary.windowDurationMins / 1440)}d`
+          : `${Math.round(limits.primary.windowDurationMins / 60)}h`)
+        : t('5h', '5h');
+      parts.push(t(`${label} 剩余 ${formatRemaining(limits.primary.usedPercent)}`, `${label} left ${formatRemaining(limits.primary.usedPercent)}`));
+    }
+    if (limits.secondary) {
+      parts.push(t(`周额度剩余 ${formatRemaining(limits.secondary.usedPercent)}`, `Weekly left ${formatRemaining(limits.secondary.usedPercent)}`));
+    }
+    return parts.length > 0 ? parts.join(' · ') : undefined;
+  }
+
   async function agent(id: string, owner: string, t: Translator, command?: Command): Promise<Panel> {
     const repository = new AgentCatalogRepository();
     let entry = repository.get(id);
@@ -427,6 +453,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
     if (!entry || entry.deletedAt || (!own && (id === personalAgentId(owner) || /^personal-[0-9a-f]{12}$/.test(id)))) {
       throw new McpDraftError(404, 'Agent not found.');
     }
+    const isExternal = Boolean(entry.execution);
     if (command?.action === 'save') {
       if (entry.revision !== command.revision) throw new McpDraftError(409, 'This profile changed. Reopen the panel.');
       const name = z.string().trim().min(1).max(own ? 40 : 100).parse(command.values.name);
@@ -436,10 +463,144 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
         }
       } else {
         const description = z.string().trim().max(2000).parse(command.values.description ?? '');
-        await new AgentCatalogService().update(id, { profile: { ...entry.profile, name, description } }, entry.revision);
+        let nextExecution = entry.execution;
+        if (nextExecution) {
+          const requestedModel = command.values.defaultModel?.trim();
+          const model = requestedModel && requestedModel !== '__auto__' ? requestedModel : undefined;
+          const rawPerm = command.values.permissionMode?.trim();
+          const permissionMode = rawPerm && (EXTERNAL_PERMISSION_MODES as readonly string[]).includes(rawPerm)
+            ? rawPerm as ExternalPermissionMode
+            : nextExecution.permissionMode;
+          if (nextExecution.kind === 'codex') {
+            const fastTierId = command.values.fastTierId?.trim() || 'priority';
+            const serviceTier = command.values.fastMode === 'true'
+              ? fastTierId
+              : command.values.fastMode === 'false'
+                ? undefined
+                : nextExecution.serviceTier;
+            nextExecution = {
+              ...nextExecution,
+              ...(model ? { model } : { model: undefined }),
+              ...(permissionMode ? { permissionMode } : {}),
+              ...(serviceTier ? { serviceTier } : { serviceTier: undefined }),
+            };
+          } else {
+            nextExecution = {
+              ...nextExecution,
+              ...(model ? { model } : { model: undefined }),
+              ...(permissionMode ? { permissionMode } : {}),
+            };
+          }
+        }
+        await new AgentCatalogService().update(id, {
+          profile: { ...entry.profile, name, description },
+          ...(nextExecution ? { execution: nextExecution } : {}),
+        }, entry.revision);
         service.refreshAgentCatalog();
       }
       entry = repository.get(id)!;
+    }
+    if (isExternal && entry.execution) {
+      const execution = entry.execution;
+      const forceRefresh = command?.action === 'recheck';
+      const driver = getExternalAgentDriver(execution.kind);
+      const [probe, runtimeModels] = await Promise.all([
+        probeExternalAgentRuntimeCached(execution, forceRefresh),
+        resolveExternalRuntimeModelsPayload(execution, forceRefresh),
+      ]);
+      const statusText = probe.status === 'ready'
+        ? t('已就绪', 'Ready')
+        : probe.status === 'unauthenticated'
+          ? t('需要登录', 'Sign-in required')
+          : probe.status === 'not_installed'
+            ? t('宿主机未安装 CLI', 'CLI not installed on host')
+            : t('宿主机异常', 'Host error');
+      const subtitleParts: string[] = [];
+      if (probe.version) subtitleParts.push(probe.version);
+      if (probe.account?.label) subtitleParts.push(probe.account.label);
+      const quotaSummary = formatExternalRateLimitSummary(probe, t);
+      if (quotaSummary) subtitleParts.push(quotaSummary);
+      const modelOptions = [
+        { id: '__auto__', label: t('自动（运行时默认）', 'Auto (runtime default)') },
+        ...runtimeModels.models.map((item) => ({ id: item.id, label: item.name })),
+      ];
+      const currentModel = execution.model?.trim() || '__auto__';
+      if (currentModel !== '__auto__' && !modelOptions.some((opt) => opt.id === currentModel)) {
+        modelOptions.push({ id: currentModel, label: currentModel });
+      }
+      const fastTier = runtimeModels.models
+        .flatMap((item) => item.serviceTiers ?? [])
+        .find((tier) => tier.id === 'priority' || tier.id === 'fast' || tier.label.toLowerCase() === 'fast');
+      const fields: Field[] = [
+        text('name', t('名称', 'Name'), entry.profile?.name ?? id),
+        text('description', t('职责说明', 'Description'), entry.profile?.description, 'multiline'),
+        {
+          id: 'defaultModel',
+          label: t('默认模型', 'Default model'),
+          type: 'select',
+          value: currentModel,
+          options: modelOptions,
+        },
+        ...(execution.kind === 'codex'
+          ? [
+            {
+              ...toggle(
+                'fastMode',
+                t('默认开启极速模式', 'Fast mode by default'),
+                Boolean(execution.serviceTier && execution.serviceTier !== 'default'),
+              ),
+              description: t(
+                '1.5x–2x 响应速度，会消耗更多 Codex 额度；也可在单个对话的会话选项中临时开关。',
+                '1.5x–2x faster responses with increased Codex usage; can also be toggled per conversation.',
+              ),
+            },
+            ...(fastTier && fastTier.id !== 'priority'
+              ? [{
+                id: 'fastTierId',
+                label: 'Fast tier',
+                type: 'text' as const,
+                value: fastTier.id,
+                advanced: true,
+              }]
+              : []),
+          ]
+          : []),
+        {
+          id: 'permissionMode',
+          label: t('宿主机执行权限', 'Host execution permissions'),
+          type: 'select',
+          value: execution.permissionMode ?? 'full_access',
+          advanced: true,
+          options: [
+            { id: 'full_access', label: t('完全访问（默认）', 'Full access (default)') },
+            { id: 'auto_edit', label: t('自动编辑，命令前询问', 'Auto-edit, ask before commands') },
+            { id: 'ask', label: t('每次修改与命令前询问', 'Ask before edits and commands') },
+          ],
+        },
+      ];
+      const steps: string[] = probe.status === 'ready'
+        ? [t('此智能体运行在电脑宿主机上，需在绑定了本地目录的项目中发起对话。', 'Runs on your host computer and requires a project with a local workspace.')]
+        : [
+          ...(probe.message ? [probe.message] : []),
+          t('请在电脑端完成宿主机 CLI 安装或登录后，点击「重新检测宿主机」。', 'Install or sign in to the CLI on your host computer, then tap Recheck host runtime.'),
+        ];
+      return {
+        revision: entry.revision,
+        headline: `${driver.label} · ${statusText}`,
+        ...(subtitleParts.length > 0 ? { subtitle: subtitleParts.join(' · ') } : {}),
+        ...(probe.status === 'ready' && (command?.action === 'save' || command?.action === 'recheck') ? { tone: 'success' as const } : {}),
+        steps,
+        fields,
+        message: command?.action === 'save'
+          ? t('已保存', 'Saved')
+          : command?.action === 'recheck'
+            ? (probe.status === 'ready' ? t('宿主机运行正常', 'Host runtime is ready') : probe.message ?? statusText)
+            : undefined,
+        actions: [
+          { id: 'save', label: t('保存', 'Save') },
+          { id: 'recheck', label: t('重新检测宿主机', 'Recheck host runtime'), advanced: probe.status === 'ready' },
+        ],
+      };
     }
     return { revision: entry.revision, fields: [
       text('name', t('名称', 'Name'), entry.profile?.name ?? id),

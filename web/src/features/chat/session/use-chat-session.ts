@@ -101,7 +101,6 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
   const effectiveWorkspacePath = sessionSlice?.effectiveWorkspacePath ?? '';
   const workspaceSource = sessionSlice?.workspaceSource ?? 'agent_default_root';
   const userContextMode = sessionSlice?.userContextMode ?? 'enabled';
-  const interactionMode = sessionSlice?.interactionMode ?? 'default';
   const serviceTier = sessionSlice?.serviceTier ?? 'default';
 
   useEffect(() => {
@@ -218,7 +217,6 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
     onSessionModelChange,
     onSessionThinkingLevelChange,
     onSessionWorkingDirectoryChange,
-    onSessionInteractionModeChange,
     onSessionServiceTierChange,
     createNewSession,
     resetCurrentSession,
@@ -394,7 +392,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
     patchInitUi,
   });
   const preparedExternalRuntime = chatAgentsData?.items.find(agent => agent.id === projectPreparation?.agentId)?.execution;
-  const preparedModel = usePreparedSessionModel(projectPreparation, preparedExternalRuntime);
+  const preparedModel = usePreparedSessionModel(projectPreparation, preparedExternalRuntime, Boolean(chatAgentsData));
   useEffect(() => {
     if (projectPreparation && preparedModel.error) {
       useChatSessionStore.getState().setShellError(preparedModel.error instanceof Error
@@ -455,16 +453,14 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
       showSessionLoading,
       conversationPhase,
       loading: initLoading,
-      sessionModel: projectPreparation ? preparedModel.model : sessionModel,
+      sessionModel: projectPreparation ? preparedModel.model : isNewRoute ? '' : sessionModel,
       modelConfigReady: projectPreparation ? preparedModel.ready : modelConfigReady,
       modelConfigSaving,
       thinkingLevel: projectPreparation ? preparedModel.thinkingLevel : thinkingLevel,
       onSessionThinkingLevelChange: projectPreparation ? preparedModel.onThinkingChange : onSessionThinkingLevelChange,
       onSessionWorkingDirectoryChange,
-      interactionMode,
-      onSessionInteractionModeChange,
-      serviceTier,
-      onSessionServiceTierChange,
+      serviceTier: projectPreparation ? preparedModel.serviceTier : serviceTier,
+      onSessionServiceTierChange: projectPreparation ? preparedModel.onServiceTierChange : onSessionServiceTierChange,
       reasoningLevel,
       modelSupportsThinking: projectPreparation ? preparedModel.modelSupportsThinking : modelSupportsThinking,
       effectiveWorkspacePath,

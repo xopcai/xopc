@@ -22,6 +22,22 @@ describe('chat bottom region composition', () => {
     expect(options).not.toContain("onEditQueued");
   });
 
+  it('opens project conversations with the standard chat controls and returns through the project stack', () => {
+    const projectDestination = home.slice(home.indexOf("} else if (page === 'project-chat')"),
+      home.indexOf("} else if (page === 'task-conversation')"));
+    expect(projectDestination).toContain('XopcChatView({ requestedId: (param as XopcMobileRoute).itemId');
+    expect(projectDestination).toContain('onOpenSidebar: (): void => { this.openSidebar(); }');
+    expect(projectDestination).toContain('onProjectClose: (): void => { this.closeProjectChat(); }');
+    expect(projectDestination).not.toContain('embedded: true');
+    expect(projectDestination).not.toContain('XopcPageHeader');
+    const closeProject = home.slice(home.indexOf('  private closeProjectChat()'), home.indexOf('  private async openTaskChat('));
+    expect(closeProject).toContain('this.pathStack.pop();');
+    expect(closeProject).not.toContain('this.switchToChat(');
+    const navigation = chat.slice(chat.indexOf('  navigationButtons()'), chat.indexOf('  private isStandaloneDraft()'));
+    expect(navigation).toContain(".id('project-chat-close')");
+    expect(navigation).toContain(".id('chat-header-sidebar')");
+  });
+
   it('opens task conversations with the full chat header while retaining task navigation', () => {
     const taskDestination = home.slice(home.indexOf("} else if (page === 'task-conversation')"),
       home.indexOf("} else if (page === 'task-detail')"));
@@ -178,7 +194,7 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain("this.chat.connection === 'gateway_update_required' || this.chat.connection.startsWith('error:')");
     const header = chat.slice(chat.indexOf('  voiceCallButton()'), chat.indexOf('  chatWorkspace()'));
     expect(header).toContain("$r('sys.symbol.phone')");
-    const actions = header.slice(header.indexOf('  conversationActions()'), header.indexOf('  sidebarButton()'));
+    const actions = header.slice(header.indexOf('  conversationActions()'), header.indexOf('  navigationButtons()'));
     expect(actions).toMatch(/if \(!this\.personalConversation\) \{\s*Button[\s\S]+?\.id\('chat-header-actions'\)/);
     expect(header).toContain(".id('chat-header-voice-call')");
     expect(header).toContain('this.startVoiceCall()');
@@ -186,7 +202,7 @@ describe('chat bottom region composition', () => {
     expect(header).toContain('.accessibilitySelected(this.continuousReadSelected)');
     expect(actions).toContain('this.continuousReadButton()');
     const draftHeader = header.split('} else if (this.isStandaloneDraft())')[1]?.split('} else {')[0];
-    expect(draftHeader).toContain('this.sidebarButton()');
+    expect(draftHeader).toContain('this.navigationButtons()');
     expect(draftHeader).toContain('this.voiceCallButton()');
     expect(draftHeader).toContain('this.continuousReadButton()');
     expect(draftHeader).not.toContain('this.conversationActions()');

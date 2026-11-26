@@ -22,6 +22,9 @@ export async function patchChatModelConfig(
         return c.json({ ok: false, error: 'Select a specific model' }, 400);
       }
     }
+    if (body.serviceTier !== undefined && body.serviceTier !== null && typeof body.serviceTier !== 'string') {
+      return c.json({ ok: false, error: 'Invalid service tier' }, 400);
+    }
     const result = await service.sessions.patchAgentConfig(conversationId, { ...body, ...(changesModel ? { fixedModel: true } : {}) });
     if (!result.ok) return c.json({ ok: false, error: result.error, code: result.code }, result.code === 'CONFIG_CHANGED' ? 409 : 400);
     return c.json({ ok: true, payload: await service.sessions.getAgentConfig(conversationId) });

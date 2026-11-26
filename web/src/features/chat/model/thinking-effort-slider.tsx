@@ -4,7 +4,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
-export function ThinkingEffortSlider({ options, value, label, levelLabel, disabled, onCommit, modelControl, resetLabel, defaultValue }: {
+export function ThinkingEffortSlider({ options, value, label, levelLabel, disabled, onCommit, modelControl, leadingControl, resetLabel, defaultValue }: {
   options: string[];
   value: string;
   label: string;
@@ -12,6 +12,7 @@ export function ThinkingEffortSlider({ options, value, label, levelLabel, disabl
   disabled: boolean;
   onCommit: (level: string) => void | Promise<void>;
   modelControl: ReactNode;
+  leadingControl?: ReactNode;
   resetLabel: string;
   defaultValue: string;
 }) {
@@ -35,7 +36,8 @@ export function ThinkingEffortSlider({ options, value, label, levelLabel, disabl
 
   return <div className="px-1 pt-1">
     <div className="relative text-center">
-      <p className="text-base font-medium text-accent-fg" aria-hidden>{levelLabel(options[index])}</p>
+      {leadingControl && <div className="absolute -left-2 -top-2">{leadingControl}</div>}
+      <p className="px-8 text-base font-medium text-accent-fg" aria-hidden>{levelLabel(options[index])}</p>
       <button type="button" aria-label={resetLabel} title={resetLabel}
         disabled={disabled || value === defaultValue} onClick={() => void commit(options.indexOf(defaultValue))}
         className={cn('absolute -right-2 -top-2 flex size-9 items-center justify-center rounded-lg text-fg-subtle hover:bg-surface-hover hover:text-fg disabled:opacity-40', interaction.focusRingPanel)}>

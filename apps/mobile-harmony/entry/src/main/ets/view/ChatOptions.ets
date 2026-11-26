@@ -7,7 +7,8 @@ import { appSettings } from '../service/settings';
 import { userErrorMessage } from '../common/userError';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
-import { agentDisplayDescription, agentDisplayName } from '../common/agentPresentation';
+import { agentDisplayDescription, agentDisplayName, agentExternalRuntimeBadge, isExternalAgent } from '../common/agentPresentation';
+import { XopcProject } from '../model/workspace';
 
 function chatThinkingLabel(level: string): ResourceStr {
   if (level === 'off') return $r('app.string.chat_thinking_off');
@@ -45,11 +46,14 @@ export struct XopcChatOptions {
   @Event onSearch: () => void = (): void => {};
   @Event onContext: () => void = (): void => {};
   @Event onAgent: (id: string) => void = (_id: string): void => {};
+  @Event onAgentInProject: (agentId: string, projectId: string) => void = (_agentId: string, _projectId: string): void => {};
+  @Param hasProjectWorkspace: boolean = false;
   @Event onFiles: () => void = (): void => {};
   @Event onNewChat: () => void = (): void => {};
   @Event onClose: () => void = (): void => {};
   @Event onRetry: () => void = (): void => {};
   @Local query: string = '';
+  @Local pendingExternalAgent: XopcChatAgent | null = null;
 
   private thinkingSummary(): ResourceStr {
     return chatThinkingSummary(this.model);
@@ -106,8 +110,19 @@ export struct XopcChatOptions {
           revision: this.personalRecord?.agentId === agent.id ? this.personalRecord.revision ?? 0 : 0,
           fallbackLabel: this.agentText(agentDisplayName(agent)), extent: 40, activePage: false, compact: true })
         Column({ space: 3 }) {
-          Text(agentDisplayName(agent)).width('100%').fontSize(15).fontWeight(FontWeight.Medium)
-            .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Row({ space: 6 }) {
+            Text(agentDisplayName(agent)).fontSize(15).fontWeight(FontWeight.Medium)
+              .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+            if (agentExternalRuntimeBadge(agent)) {
+              Text(agentExternalRuntimeBadge(agent))
+                .fontSize(11)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(this.colors.secondary)
+                .backgroundColor(this.colors.input)
+                .borderRadius(999)
+                .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+            }
+          }.width('100%')
           if (agentDisplayDescription(agent)) {
             Text(agentDisplayDescription(agent)).width('100%').fontSize(12).fontColor(this.colors.secondary)
               .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -119,7 +134,15 @@ export struct XopcChatOptions {
       }.width('100%').padding(10)
     }.id('chat-agent-option-' + agent.id).width('100%').constraintSize({ minHeight: 60 }).padding(0)
       .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14)).backgroundColor(this.colors.chat.card)
-      .onClick((): void => { if (agent.id === this.model.agentId) this.onClose(); else this.onAgent(agent.id); })
+      .onClick((): void => {
+        if (agent.id === this.model.agentId) { this.onClose(); return; }
+        if (isExternalAgent(agent) && !this.hasProjectWorkspace) {
+          this.pendingExternalAgent = agent;
+          void this.model.loadWorkspaceProjects();
+          return;
+        }
+        this.onAgent(agent.id);
+      })
   }
 
   build() {
@@ -166,9 +189,43 @@ export struct XopcChatOptions {
             ListItem() { Text(this.thinkingSummary()).fontColor(this.colors.secondary).padding(12) }
           }
         } else if (this.mode === 'agent') {
-          ForEach(this.model.agents.filter((item: XopcChatAgent): boolean => this.matchesAgent(item)), (item: XopcChatAgent) => {
-            ListItem() { this.agentRow(item) }
-          }, (item: XopcChatAgent): string => item.id)
+          if (this.pendingExternalAgent) {
+            ListItem() {
+              Button(appSettings.effectiveLanguage().startsWith('zh') ? '← 返回智能体列表' : '← Back to agents',
+                { buttonStyle: ButtonStyleMode.TEXTUAL })
+                .onClick((): void => { this.pendingExternalAgent = null; })
+            }
+            if (this.model.projectsLoading) {
+              ListItem() { XopcListSkeleton() }
+            } else if (!this.model.workspaceProjects.length) {
+              ListItem() {
+                Text(appSettings.effectiveLanguage().startsWith('zh')
+                  ? '该外部智能体运行在电脑宿主机，请先在电脑端为至少一个项目绑定本地工作目录后再使用。'
+                  : 'This external agent runs on your host computer. Bind a local workspace folder to a project on desktop first.')
+                  .fontSize(13)
+                  .fontColor(this.colors.secondary)
+                  .padding(12)
+              }
+            } else {
+              ForEach(this.model.workspaceProjects, (project: XopcProject) => {
+                ListItem() {
+                  XopcHubRow({
+                    heading: project.name,
+                    summary: project.workspaceRoot ?? '',
+                    onOpen: (): void => {
+                      const targetAgent = this.pendingExternalAgent;
+                      this.pendingExternalAgent = null;
+                      if (targetAgent) this.onAgentInProject(targetAgent.id, project.id);
+                    },
+                  })
+                }
+              }, (project: XopcProject): string => project.id)
+            }
+          } else {
+            ForEach(this.model.agents.filter((item: XopcChatAgent): boolean => this.matchesAgent(item)), (item: XopcChatAgent) => {
+              ListItem() { this.agentRow(item) }
+            }, (item: XopcChatAgent): string => item.id)
+          }
         } else if (this.mode === 'preparation') {
           if (this.model.preparationError) {
             ListItem() {
@@ -197,6 +254,29 @@ export struct XopcChatOptions {
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_model'), summary: this.model.modelName(appSettings.effectiveLanguage()), compact: true, onOpen: (): void => { this.onMode('model'); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_thinking_effort'), summary: this.thinkingSummary(), compact: true,
             onOpen: (): void => { this.onMode('thinking'); } }) }
+          if (this.model.fastTier()) {
+            ListItem() {
+              Row({ space: 12 }) {
+                Column({ space: 2 }) {
+                  Text(appSettings.effectiveLanguage().startsWith('zh') ? '极速模式' : 'Fast mode')
+                    .fontSize(15).fontColor(this.colors.foreground)
+                  Text(this.model.fastModeSubtitle(appSettings.effectiveLanguage()))
+                    .fontSize(12).fontColor(this.colors.secondary)
+                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                Toggle({ type: ToggleType.Switch, isOn: this.model.isFastModeEnabled() })
+                  .enabled(!this.model.loading && !this.model.saving && !this.thinkingBusy)
+                  .onChange((isOn: boolean): void => {
+                    const fast = this.model.fastTier();
+                    if (!fast) return;
+                    void this.model.selectServiceTier(isOn ? fast.id : 'default');
+                  })
+              }
+              .id('chat-fast-mode-toggle')
+              .width('100%')
+              .constraintSize({ minHeight: 52 })
+              .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+            }
+          }
           ListItem() { XopcHubRow({ heading: $r('app.string.new_chat'), compact: true, symbol: $r('sys.symbol.square_and_pencil'), onOpen: (): void => { this.onNewChat(); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_session_files'), compact: true, symbol: $r('sys.symbol.folder'), onOpen: (): void => { this.onFiles(); } }) }
         }

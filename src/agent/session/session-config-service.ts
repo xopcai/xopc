@@ -192,7 +192,7 @@ export class SessionConfigService {
     }
 
     if (partial.serviceTier !== undefined) {
-      if (partial.serviceTier === null || partial.serviceTier.trim() === '' || partial.serviceTier.trim() === 'default') {
+      if (partial.serviceTier === null || partial.serviceTier.trim() === '') {
         await this.opts.sessionConfigStore.update(conversationId, { serviceTierOverride: undefined });
       } else if (typeof partial.serviceTier === 'string' && partial.serviceTier.trim().length <= 64) {
         await this.opts.sessionConfigStore.update(conversationId, { serviceTierOverride: partial.serviceTier.trim() });

@@ -2409,23 +2409,49 @@ final class MobileLayoutParityUITests: XCTestCase {
     }
 
     func testProjectChatBackPreservesTheProjectAndMainConversation() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/project-chat"
+        app.launch()
+        XCTAssertTrue(app.buttons["chat-header-personal"].waitForExistence(timeout: 8))
         tab("projects")
         let project = app.descendants(matching: .any)["project-fixture-project"].firstMatch
         XCTAssertTrue(project.waitForExistence(timeout: 5))
         project.tap()
         app.selectPageOption("project-tab-conversations", from: "project-tabs")
-        XCTAssertTrue(app.buttons["project-tabs"].exists)
+
+        let existing = app.buttons.containing(.staticText, identifier: "已有项目对话").firstMatch
+        XCTAssertTrue(existing.waitForExistence(timeout: 6))
+        existing.tap()
+        let back = app.buttons["project-chat-close"]
+        XCTAssertTrue(back.waitForExistence(timeout: 6))
+        XCTAssertTrue(app.buttons["assistant-options"].exists)
+        XCTAssertTrue(app.buttons["chat-header-voice-call"].exists)
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-close"].tap()
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        back.tap()
+        XCTAssertTrue(existing.waitForExistence(timeout: 5))
+
         let create = app.buttons["新建项目对话"]
         XCTAssertTrue(create.waitForExistence(timeout: 6))
         create.tap()
-        let chat = app.navigationBars["新建项目对话"]
-        XCTAssertTrue(chat.waitForExistence(timeout: 6))
+        XCTAssertTrue(back.waitForExistence(timeout: 6))
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].exists)
+        XCTAssertTrue(app.buttons["chat-header-voice-call"].exists)
         let draft = app.descendants(matching: .any)["assistant-chat-composer"].firstMatch
         XCTAssertTrue(draft.waitForExistence(timeout: 5))
-        chat.buttons.firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["项目详情"].waitForExistence(timeout: 6))
+        back.tap()
+        let detail = app.navigationBars["项目详情"]
+        XCTAssertTrue(detail.waitForExistence(timeout: 6))
         XCTAssertTrue(create.exists)
         XCTAssertTrue(app.buttons["对话草稿"].exists)
+        detail.buttons.firstMatch.tap()
+        XCTAssertTrue(project.waitForExistence(timeout: 6))
+        app.navigationBars["项目"].buttons.firstMatch.tap()
+        if app.buttons["chat-sidebar-close"].waitForExistence(timeout: 3) {
+            app.buttons["chat-sidebar-close"].tap()
+        }
+        XCTAssertTrue(app.buttons["chat-header-personal"].waitForExistence(timeout: 6))
     }
 
     func testAgentPickerShowsLocalizedBuiltInNames() {

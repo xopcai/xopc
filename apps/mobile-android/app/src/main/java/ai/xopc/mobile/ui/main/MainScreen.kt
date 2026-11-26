@@ -387,6 +387,7 @@ internal fun MainScreen(
   onLoadOlderHistory: () -> Unit = {},
   onSelectConversation: (String) -> Unit = {},
   onRestoreConversation: (String) -> Unit = onSelectConversation,
+  onSelectProjectConversation: (String, String) -> Unit = { id, _ -> onRestoreConversation(id) },
   onRetryConversation: (String) -> Unit = onSelectConversation,
   onRetryChatNetwork: () -> Unit = {},
   onSelectTaskChildConversation: (String, String) -> Unit = { _, _ -> },
@@ -428,8 +429,10 @@ internal fun MainScreen(
   onReloadModels: () -> Unit = {},
   onSelectModel: (String) -> Unit = {},
   onSelectThinking: (String) -> Unit = {},
+  onSelectServiceTier: (String) -> Unit = {},
   onReloadAgents: () -> Unit = {},
   onSwitchAgent: (String, Boolean) -> Unit = { _, _ -> },
+  onSwitchAgentInProject: (String, String, Boolean) -> Unit = { _, _, _ -> },
   onReloadContext: () -> Unit = {},
   onLoadContextPanel: (String, String, String) -> Unit = { _, _, _ -> },
   onSetContextDirectory: () -> Unit = {},
@@ -713,6 +716,7 @@ internal fun MainScreen(
     onLoadMoreConversations = onLoadMoreConversations, onLoadOlderHistory = onLoadOlderHistory,
     onSelectConversation = onSelectConversation,
     onRestoreConversation = onRestoreConversation,
+    onSelectProjectConversation = onSelectProjectConversation,
     onRetryConversation = onRetryConversation,
     onRetryChatNetwork = onRetryChatNetwork,
     onSelectTaskChildConversation = onSelectTaskChildConversation,
@@ -753,8 +757,9 @@ internal fun MainScreen(
     onSendMessage = onSendMessage,
     onRetryPendingInput = onRetryPendingInput, onStopRun = onStopRun,
     onReloadModels = onReloadModels, onSelectModel = onSelectModel,
-    onSelectThinking = onSelectThinking,
+    onSelectThinking = onSelectThinking, onSelectServiceTier = onSelectServiceTier,
     onReloadAgents = onReloadAgents, onSwitchAgent = onSwitchAgent,
+    onSwitchAgentInProject = onSwitchAgentInProject,
     onReloadContext = onReloadContext, onLoadContextPanel = onLoadContextPanel,
     onSetContextDirectory = onSetContextDirectory, onAddContextFile = onAddContextFile,
     onCreateContextConversation = onCreateContextConversation,
@@ -924,6 +929,7 @@ internal fun MainContent(
   onLoadOlderHistory: () -> Unit = {},
   onSelectConversation: (String) -> Unit = {},
   onRestoreConversation: (String) -> Unit = onSelectConversation,
+  onSelectProjectConversation: (String, String) -> Unit = { id, _ -> onRestoreConversation(id) },
   onRetryConversation: (String) -> Unit = onSelectConversation,
   onRetryChatNetwork: () -> Unit = {},
   onSelectTaskChildConversation: (String, String) -> Unit = { _, _ -> },
@@ -961,8 +967,10 @@ internal fun MainContent(
   onReloadModels: () -> Unit = {},
   onSelectModel: (String) -> Unit = {},
   onSelectThinking: (String) -> Unit = {},
+  onSelectServiceTier: (String) -> Unit = {},
   onReloadAgents: () -> Unit = {},
   onSwitchAgent: (String, Boolean) -> Unit = { _, _ -> },
+  onSwitchAgentInProject: (String, String, Boolean) -> Unit = { _, _, _ -> },
   onReloadContext: () -> Unit = {},
   onLoadContextPanel: (String, String, String) -> Unit = { _, _, _ -> },
   onSetContextDirectory: () -> Unit = {},
@@ -1232,29 +1240,28 @@ internal fun MainContent(
   val activeGateway by rememberUpdatedState(gatewayId)
   val activeConversation by rememberUpdatedState(conversationId)
   val activeProject by rememberUpdatedState(connection.progress.projectId)
-  var projectChatId by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
-  var projectChatTitle by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
   var projectChatReturnTab by rememberSaveable(gatewayId) { mutableStateOf(HomeTab.Projects) }
   var projectChatReturnConversation by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
-  var projectChatReturnProject by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
   var openingProjectChat by remember(gatewayId) { mutableStateOf(false) }
-  val showingProjectChat = projectChatId != null && projectChatId == conversationId &&
-    selectedTab == HomeTab.Assistant
-  val newProjectChatTitle = stringResource(R.string.assistant_action_new_chat)
-  fun openProjectChat(id: String, title: String) {
-    projectChatId = id
-    projectChatTitle = title
+  val projectChatOrigin = connection.projectChatOriginId
+  val showingProjectChat = projectChatOrigin != null && selectedTab == HomeTab.Assistant &&
+    !connection.automationConfigurationChat && !isTaskChat(connection)
+  val restoreConversationFromChild: (String) -> Unit = { id ->
+    if (projectChatOrigin != null) onSelectProjectConversation(id, projectChatOrigin)
+    else onRestoreConversation(id)
+  }
+  fun openProjectChat(id: String, projectId: String) {
     projectChatReturnTab = selectedTab
     projectChatReturnConversation = conversationId
-    projectChatReturnProject = connection.progress.projectId
-    onRestoreConversation(id)
+    onSelectProjectConversation(id, projectId)
     onSelectTab(HomeTab.Assistant)
   }
-  fun closeProjectChat() {
-    projectChatId = null
-    projectChatTitle = null
+  fun restoreMainFromProjectChat() {
     projectChatReturnConversation?.let(onRestoreConversation) ?: onOpenPersonalAgent()
-    projectChatReturnProject?.let(onOpenProgressProject)
+  }
+  fun closeProjectChat() {
+    restoreMainFromProjectChat()
+    projectChatOrigin?.let(onOpenProgressProject)
     onSelectTab(projectChatReturnTab)
   }
   val automationLocale = LocalConfiguration.current.locales[0].toLanguageTag()
@@ -1283,7 +1290,7 @@ internal fun MainContent(
     }
   }
   fun closeAutomationConfiguration() {
-    automationReturnConversation?.let(onRestoreConversation) ?: onOpenPersonalAgent()
+    automationReturnConversation?.let(restoreConversationFromChild) ?: onOpenPersonalAgent()
     when (automationReturnTab) {
       HomeTab.Progress, HomeTab.Projects -> {
         automationReturnProjectId?.let(onOpenProgressProject) ?: onLoadAutomations()
@@ -1646,12 +1653,12 @@ internal fun MainContent(
   BackHandler(enabled = selectedTab != HomeTab.Assistant && isPaired) { exitDestination() }
   BackHandler(enabled = sidebar.open) { sidebar.open = false }
   BackHandler(enabled = selectedTab == HomeTab.Assistant && isTaskChat(connection) && !imeVisible) {
-    taskNavigation.close(onRestoreConversation, onSelectTab)
+    taskNavigation.close(restoreConversationFromChild, onSelectTab)
   }
   BackHandler(enabled = selectedTab == HomeTab.Assistant && connection.automationConfigurationChat && !imeVisible) {
     closeAutomationConfiguration()
   }
-  BackHandler(enabled = showingProjectChat && !imeVisible, onBack = ::closeProjectChat)
+  BackHandler(enabled = showingProjectChat && !sidebar.open && !imeVisible, onBack = ::closeProjectChat)
   BackHandler(enabled = showOverview) { personalOverviewOpen = false }
   BackHandler(enabled = assistantActionsOpen) { assistantActionsOpen = false }
   BackHandler(enabled = selectedTab == HomeTab.Me) { leavePersonalPage() }
@@ -1660,7 +1667,7 @@ internal fun MainContent(
     sidebar = sidebar,
     layoutDirection = layoutDirection,
     sidebarGestureEnabled = !assistantActionsOpen && !messageSearchOpen && !inputVoiceHeld &&
-      !isTaskChat(connection) && !connection.automationConfigurationChat && !showingProjectChat &&
+      !isTaskChat(connection) && !connection.automationConfigurationChat &&
       !showOverview && !phonePage,
     onCloseKeyboard = closeKeyboard,
     onOpenSidebar = openSidebar,
@@ -1703,14 +1710,13 @@ internal fun MainContent(
               onDismissVoiceError = inputVoiceNotice::clear,
               onDismissError = { onDismissComposerErrors(gatewayId, conversationId) },
               onObserveSuggestion = onObserveSuggestion, onAcceptSuggestion = onAcceptSuggestion,
-              onLoadComposerPalette = onLoadComposerPalette,
-              projectChatTitle = projectChatTitle.takeIf { showingProjectChat })
+              onLoadComposerPalette = onLoadComposerPalette)
             val panelMotionAllowed = rememberMotionAllowed()
             AnimatedVisibility(visible = assistantActionsOpen,
               enter = xopcExpandPanelEnter(panelMotionAllowed, Alignment.Bottom),
               exit = xopcExpandPanelExit(panelMotionAllowed, Alignment.Bottom), label = "assistant-actions") {
               AssistantActionPanel(
-                canSwitchAgent = !showingProjectChat && !connection.automationConfigurationChat &&
+                canSwitchAgent = !connection.automationConfigurationChat &&
                   !isTaskChat(connection) && connection.personal.agent?.let {
                     it.state == "ready" && it.conversationId == conversationId
                   } != true,
@@ -1784,8 +1790,8 @@ internal fun MainContent(
           onCreateConversation, onLoadOlderHistory, onLoadReferences, onAddDraftRef,
           onNoteFileContent,
           onRetryPendingInput,
-          onReloadModels, onSelectModel, onSelectThinking,
-          onReloadAgents, onSwitchAgent,
+          onReloadModels, onSelectModel, onSelectThinking, onSelectServiceTier,
+          onReloadAgents, onSwitchAgent, onSwitchAgentInProject,
           onReloadContext,
           onLoadContextPanel, onSetContextDirectory, onAddContextFile, onCreateContextConversation,
           onRefreshClarification, onRespondToClarification, onRefreshConnectionWait, onConnectionWaitAction,
@@ -1826,8 +1832,9 @@ internal fun MainContent(
           onMessageSearchOpenChange = { messageSearchOpen = it },
           onOpenSidebar = openSidebar, onRetryHomeChat = onOpenPersonalAgent,
           onCloseAutomationConfiguration = ::closeAutomationConfiguration,
-          projectChatTitle = projectChatTitle.takeIf { showingProjectChat },
-          onCloseProjectChat = { closeKeyboard(); closeProjectChat() },
+          onCloseProjectChat = if (showingProjectChat) {
+            { closeKeyboard(); closeProjectChat() }
+          } else null,
           onOpenPersonalOverview = {
             closeKeyboard()
             overviewState.removeState("personal-overview-$gatewayId")
@@ -1846,7 +1853,7 @@ internal fun MainContent(
           onInlineMusic = { inlineMusicKey = it },
           onExpandMusic = openMusicPlayer,
           taskChrome = { search, options ->
-            TaskConversationChrome(connection, taskNavigation, onRestoreConversation, onSelectTab,
+            TaskConversationChrome(connection, taskNavigation, restoreConversationFromChild, onSelectTab,
               onOpenProgressTask, onProgressTaskCommand, onStartProgressTask, onSaveProgressTask,
               onLoadProgressProjects, search, options, taskDetailsOpen, { taskDetailsOpen = false })
           })
@@ -1896,7 +1903,7 @@ internal fun MainContent(
           onSelectConversation(id)
           onSelectTab(HomeTab.Assistant)
         }, onOpenProjectChat = { session ->
-          openProjectChat(session.id, session.title.takeUnless { session.isLocalDraft || it.isBlank() } ?: newProjectChatTitle)
+          connection.progress.projectId?.let { openProjectChat(session.id, it) }
         }, onOpenNote = { id -> openLinkedDetail(HomeTab.Notes, id) }, onCreateProjectChat = { projectId ->
           if (!openingProjectChat && !connection.creatingConversation && connection.progress.project?.id == projectId) {
             openingProjectChat = true
@@ -1907,7 +1914,7 @@ internal fun MainContent(
                 activeConversation == sourceConversation && activeProject == projectId
               try {
                 val id = onCreateProjectConversation(projectId)
-                if (sourceActive()) openProjectChat(id, newProjectChatTitle)
+                if (sourceActive()) openProjectChat(id, projectId)
               } catch (error: kotlinx.coroutines.CancellationException) {
                 throw error
               } catch (_: Exception) {
@@ -2140,6 +2147,7 @@ internal fun MainContent(
       onDelete = { onBatchConversations(it, "delete") },
       onDestination = { destination ->
         sidebar.open = false
+        if (showingProjectChat) restoreMainFromProjectChat()
         linkedDetails = emptyList()
         returnToSidebar = destination in listOf(HomeTab.Conversations, HomeTab.Progress, HomeTab.Automations)
         if (destination == HomeTab.Progress) tabStateHolder.removeState("${gatewayId}:${destination.name}")
@@ -2148,6 +2156,7 @@ internal fun MainContent(
       },
       onSearch = {
         sidebar.open = false
+        if (showingProjectChat) restoreMainFromProjectChat()
         linkedDetails = emptyList()
         returnToSidebar = true
         startConversationSearch = true
@@ -2159,11 +2168,11 @@ internal fun MainContent(
       },
       onNew = {
         sidebar.open = false
-        onCreateConversation()
+        if (showingProjectChat) onCreateAgentConversation(connection.defaultAgentId) else onCreateConversation()
       },
       onConversation = { id ->
         sidebar.open = false
-        onSelectConversation(id)
+        if (!showingProjectChat || id != conversationId) onSelectConversation(id)
       })
     },
   )
@@ -2510,8 +2519,7 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
   onVoiceCancel: () -> Unit, onVoiceRetry: () -> Unit,
   onDismissVoiceError: () -> Unit, onDismissError: () -> Unit,
   onObserveSuggestion: (String?) -> Unit, onAcceptSuggestion: (String) -> String?,
-  onLoadComposerPalette: suspend (String) -> List<ComposerPaletteItem>,
-  projectChatTitle: String? = null) {
+  onLoadComposerPalette: suspend (String) -> List<ComposerPaletteItem>) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   var composerFocused by remember { mutableStateOf(false) }
@@ -2623,7 +2631,6 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
               if (composerValue.text.isEmpty() && suggestion == null) Text(
                 when {
                   personalAgent != null -> stringResource(R.string.chat_ask_personal, personalAgent.displayName)
-                  !projectChatTitle.isNullOrBlank() -> projectChatTitle
                   else -> stringResource(R.string.assistant_input_hint)
                 },
                 style = MaterialTheme.typography.bodyLarge,
@@ -2872,8 +2879,9 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   onSessionFileContent: suspend (String) -> ByteArray,
   onRetryPendingInput: () -> Unit,
   onReloadModels: () -> Unit, onSelectModel: (String) -> Unit,
-  onSelectThinking: (String) -> Unit,
+  onSelectThinking: (String) -> Unit, onSelectServiceTier: (String) -> Unit,
   onReloadAgents: () -> Unit, onSwitchAgent: (String, Boolean) -> Unit,
+  onSwitchAgentInProject: (String, String, Boolean) -> Unit,
   onReloadContext: () -> Unit,
   onLoadContextPanel: (String, String, String) -> Unit,
   onSetContextDirectory: () -> Unit,
@@ -2908,8 +2916,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   onOpenSidebar: () -> Unit,
   onRetryHomeChat: () -> Unit,
   onCloseAutomationConfiguration: () -> Unit = {},
-  projectChatTitle: String? = null,
-  onCloseProjectChat: () -> Unit = {},
+  onCloseProjectChat: (() -> Unit)? = null,
   onOpenPersonalOverview: () -> Unit = {},
   sidebarGesture: Modifier,
   generatedMediaAccess: GeneratedMediaAccess? = null,
@@ -3221,7 +3228,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
     else -> { { connection.selectedConversationId?.let(onRetryConversation) } }
   }
   val chatTopInset = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
-  val scopedHeader = connection.automationConfigurationChat || projectChatTitle != null
+  val scopedHeader = connection.automationConfigurationChat
   val taskHeader = isTaskChat(connection)
   var headerHeightPx by remember(scopedHeader, taskHeader, isPersonalChat) { mutableIntStateOf(0) }
   val headerClearance = if (headerHeightPx > 0) with(LocalDensity.current) { headerHeightPx.toDp() }
@@ -3505,12 +3512,11 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
         .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        IconButton(onClick = if (connection.automationConfigurationChat) onCloseAutomationConfiguration else onCloseProjectChat,
-          modifier = Modifier.background(headerFill, CircleShape)
-            .testTag(if (connection.automationConfigurationChat) "automation-configuration-close" else "project-chat-close")) {
+        IconButton(onClick = onCloseAutomationConfiguration,
+          modifier = Modifier.background(headerFill, CircleShape).testTag("automation-configuration-close")) {
           Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
         }
-        Text(if (connection.automationConfigurationChat) stringResource(R.string.automation_setup_title) else projectChatTitle.orEmpty(),
+        Text(stringResource(R.string.automation_setup_title),
           modifier = Modifier.weight(1f, fill = false).background(headerFill, themedCorners(16))
             .padding(horizontal = 12.dp, vertical = 8.dp),
           style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -3524,9 +3530,15 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
         .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.fillMaxWidth().height(if (personalAgent != null) 64.dp else 48.dp)) {
-          IconButton(onClick = onOpenSidebar, modifier = Modifier.align(Alignment.TopStart)
-            .background(LocalChatColors.current.card, CircleShape).testTag("chat-header-sidebar")) {
-            Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
+          Row(Modifier.align(Alignment.TopStart), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            if (onCloseProjectChat != null) IconButton(onClick = onCloseProjectChat,
+              modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("project-chat-close")) {
+              Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+            }
+            IconButton(onClick = onOpenSidebar,
+              modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-sidebar")) {
+              Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
+            }
           }
           if (personalAgent != null) IconButton(onClick = onOpenPersonalOverview,
             modifier = Modifier.align(Alignment.TopCenter).size(62.dp).background(LocalChatColors.current.card, CircleShape).semantics {
@@ -3535,7 +3547,8 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
             PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, 62.dp,
               active = !messageSearchOpen)
           }
-          Row(Modifier.align(Alignment.TopEnd), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+          Row(Modifier.align(Alignment.TopEnd),
+            horizontalArrangement = Arrangement.spacedBy(if (onCloseProjectChat == null) 3.dp else 0.dp)) {
             LocalBrowserPreviewOpen.current?.let { openPreview ->
               IconButton(onClick = openPreview,
                 modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-browser-preview")) {
@@ -3757,9 +3770,11 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
     }
   }
 
+  var externalProjectAgentId by remember { mutableStateOf<String?>(null) }
+  var pendingExternalProject by remember { mutableStateOf<Pair<String, String>?>(null) }
   val closeOptions: () -> Unit = {
     optionsOpen = false; contextOpen = false; modelPickerOpen = false
-    thinkingPickerOpen = false; onAgentPickerOpenChange(false)
+    thinkingPickerOpen = false; externalProjectAgentId = null; onAgentPickerOpenChange(false)
     pendingModelChoice = null; pendingThinkingChoice = null
   }
   if (messageSearchOpen) ChatMessageSearch(connection.messages, connection.historyBefore != null,
@@ -3821,6 +3836,48 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
         }
       }
     } else if (agentPickerOpen) {
+      val pickingProjectAgent = externalProjectAgentId?.let { id -> connection.agents.firstOrNull { it.id == id } }
+      if (pickingProjectAgent != null) {
+        val workspaceProjects = connection.contextPanel.projects.filter { !it.workspaceRoot.isNullOrBlank() }
+        val isZh = modelLanguage == "zh"
+        ChatOptionsPanel(agentDisplayName(pickingProjectAgent), 520.dp, closeOptions) {
+          TextButton(onClick = { externalProjectAgentId = null }) {
+            Text(if (isZh) "← 返回智能体列表" else "← Back to agents")
+          }
+          if (connection.contextPanel.loading && connection.contextPanel.mode == "projects") {
+            ChatOptionsSkeleton()
+          } else if (workspaceProjects.isEmpty()) {
+            Text(
+              if (isZh) "${agentDisplayName(pickingProjectAgent)} 运行在电脑宿主机，请在电脑端为至少一个项目绑定本地目录后再使用。"
+              else "${agentDisplayName(pickingProjectAgent)} runs on your host computer. Bind a local workspace folder to a project on desktop first.",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(12.dp),
+            )
+          } else {
+            Text(
+              if (isZh) "选择要操作的代码项目" else "Select a project workspace",
+              style = MaterialTheme.typography.labelMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(horizontal = 4.dp),
+            )
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              items(workspaceProjects, key = { it.id }) { project ->
+                ContextRow(project.name, project.workspaceRoot.orEmpty(), "external-project-${project.id}",
+                  flat = true, enabled = !connection.creatingConversation) {
+                  val hasDraft = connection.draftText.isNotBlank() || connection.draftAttachments.isNotEmpty() || connection.draftRefs.isNotEmpty()
+                  if (hasDraft) {
+                    pendingExternalProject = pickingProjectAgent.id to project.id
+                  } else {
+                    closeOptions()
+                    onSwitchAgentInProject(pickingProjectAgent.id, project.id, false)
+                  }
+                }
+              }
+            }
+          }
+        }
+      } else {
       ChatOptionsPanel(stringResource(R.string.assistant_agent), 620.dp, closeOptions) {
         OutlinedTextField(agentQuery, { agentQuery = it }, modifier = Modifier.fillMaxWidth(),
           label = { Text(stringResource(R.string.assistant_agent_search)) }, singleLine = true)
@@ -3843,6 +3900,10 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
               when {
                 selectedHere -> closeOptions()
                 personal != null -> { closeOptions(); onRetryHomeChat() }
+                agent.isExternalRuntime && (connection.context?.project?.id == null || connection.context.environment == null) -> {
+                  externalProjectAgentId = agent.id
+                  onLoadContextPanel("projects", "", "")
+                }
                 connection.draftText.isNotBlank() || connection.draftAttachments.isNotEmpty() || connection.draftRefs.isNotEmpty() ->
                   pendingAgentId = agent.id
                 else -> { closeOptions(); onSwitchAgent(agent.id, false) }
@@ -3854,7 +3915,19 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
                 if (personal != null) PersonalAgentAvatar(connection.personal.agentAvatar, personal.appearance, 40.dp, false)
                 else AgentAvatar(connection.agentAvatars[agent.id], agent.avatar, agent.id, 40.dp, false, fallbackName = name)
                 Column(Modifier.weight(1f)) {
-                  Text(name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                  Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    agent.externalRuntimeBadge?.let { badge ->
+                      Surface(shape = themedCorners(999), color = MaterialTheme.colorScheme.surfaceVariant) {
+                        Text(
+                          badge,
+                          style = MaterialTheme.typography.labelSmall,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant,
+                          modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                      }
+                    }
+                  }
                   if (description.isNotBlank()) Text(description, style = MaterialTheme.typography.bodySmall, maxLines = 2,
                     overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -3863,6 +3936,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
             }
           }
         }
+      }
       }
     } else
     if (contextOpen) {
@@ -3921,6 +3995,42 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
               else -> stringResource(R.string.assistant_thinking_unsupported)
             }, "assistant-thinking", iconRes = R.drawable.action_waveform, compact = true, flat = true) {
             optionsOpen = false; thinkingPickerOpen = true
+          }
+          val fastTier = selectedModel?.fastServiceTier()
+          if (fastTier != null) {
+            val isFastEnabled = connection.serviceTier.isNotBlank() && connection.serviceTier != "default" &&
+              (connection.serviceTier == fastTier.id || selectedModel.serviceTiers.any { it.id == connection.serviceTier })
+            val isZh = modelLanguage == "zh"
+            val speedToken = Regex("""(\d+(?:\.\d+)?x)\s*speed""", RegexOption.IGNORE_CASE)
+              .find(fastTier.description)?.groupValues?.getOrNull(1) ?: "1.5x"
+            val fastSubtitle = if (isZh) "$speedToken 极速 · 消耗更多额度" else "$speedToken speed · More usage"
+            val toggleEnabled = !connection.modelsLoading && !connection.modelSaving && !connection.sending &&
+              connection.activeRunId == null && connection.pendingInput == null
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .testTag("assistant-fast-mode"),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+              Column(Modifier.weight(1f)) {
+                Text(if (isZh) "极速模式" else "Fast mode", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                  fastSubtitle,
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+              androidx.compose.material3.Switch(
+                checked = isFastEnabled,
+                enabled = toggleEnabled,
+                onCheckedChange = { checked ->
+                  onSelectServiceTier(if (checked) fastTier.id else "default")
+                },
+              )
+            }
           }
         }
         ContextRow(stringResource(R.string.assistant_action_new_chat), "", "assistant-new",
@@ -4009,6 +4119,18 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
       cancelLabel = stringResource(R.string.assistant_discard_draft_cancel),
       destructive = true,
       confirmTag = "agent-discard-confirm",
+    )
+  }
+  pendingExternalProject?.let { (agentId, projectId) ->
+    XopcConfirmDialog(
+      onDismiss = { pendingExternalProject = null },
+      onConfirm = { pendingExternalProject = null; closeOptions(); onSwitchAgentInProject(agentId, projectId, true) },
+      title = stringResource(R.string.assistant_discard_draft_title),
+      message = stringResource(R.string.assistant_discard_draft_message),
+      confirmLabel = stringResource(R.string.assistant_discard_draft_confirm),
+      cancelLabel = stringResource(R.string.assistant_discard_draft_cancel),
+      destructive = true,
+      confirmTag = "external-project-discard-confirm",
     )
   }
 }

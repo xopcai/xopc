@@ -4,19 +4,74 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { models } = vi.hoisted(() => ({ models: [
-  { id: 'xopc-cloud/auto', name: 'Standard', displayNames: { 'zh-CN': '标准', en: 'Standard' }, provider: 'xopc-cloud', reasoning: false,
-    thinking: { mode: 'none', options: ['off'], initialValue: 'off', supportsAdaptive: false } },
-  { id: 'test/one', name: 'Model One', provider: 'test', reasoning: true,
-    thinking: { mode: 'levels', options: ['low', 'high'], initialValue: 'low', supportsAdaptive: false } },
-  { id: 'other/two', name: 'Model Two', provider: 'other', reasoning: false,
-    thinking: { mode: 'none', options: ['off'], initialValue: 'off', supportsAdaptive: false } },
-  { id: 'fixed/three', name: 'Model Three', provider: 'fixed', reasoning: true,
-    thinking: { mode: 'fixed', options: ['high'], initialValue: 'high', supportsAdaptive: false } },
-  { id: 'xopc-cloud/openai/gpt-6-luna', name: 'openai/gpt-6-luna', provider: 'xopc-cloud', reasoning: true,
-    thinking: { mode: 'levels', options: ['low', 'high'], initialValue: 'low', supportsAdaptive: false } },
-] }));
-vi.mock('swr', () => ({ default: () => ({ data: models, isLoading: false, mutate: vi.fn() }) }));
+const { models, externalRuntimePayload, codexRuntimePayload } = vi.hoisted(() => ({
+  models: [
+    { id: 'xopc-cloud/auto', name: 'Standard', displayNames: { 'zh-CN': '标准', en: 'Standard' }, provider: 'xopc-cloud', reasoning: false,
+      thinking: { mode: 'none', options: ['off'], initialValue: 'off', supportsAdaptive: false } },
+    { id: 'test/one', name: 'Model One', provider: 'test', reasoning: true,
+      thinking: { mode: 'levels', options: ['low', 'high'], initialValue: 'low', supportsAdaptive: false } },
+    { id: 'other/two', name: 'Model Two', provider: 'other', reasoning: false,
+      thinking: { mode: 'none', options: ['off'], initialValue: 'off', supportsAdaptive: false } },
+    { id: 'fixed/three', name: 'Model Three', provider: 'fixed', reasoning: true,
+      thinking: { mode: 'fixed', options: ['high'], initialValue: 'high', supportsAdaptive: false } },
+    { id: 'xopc-cloud/openai/gpt-6-luna', name: 'openai/gpt-6-luna', provider: 'xopc-cloud', reasoning: true,
+      thinking: { mode: 'levels', options: ['low', 'high'], initialValue: 'low', supportsAdaptive: false } },
+  ],
+  externalRuntimePayload: {
+    runtimeKind: 'agy' as const,
+    runtimeLabel: 'Antigravity',
+    status: 'ready' as const,
+    defaultModel: 'gemini-3-pro',
+    models: [
+      {
+        id: 'gemini-3-pro',
+        name: 'Gemini 3 Pro',
+        provider: 'Antigravity',
+        reasoning: true,
+        isDefault: true,
+        thinking: { mode: 'levels' as const, options: ['low', 'medium', 'high'], initialValue: 'medium', supportsAdaptive: false },
+      },
+      {
+        id: 'claude-sonnet-4-6',
+        name: 'Claude Sonnet 4.6',
+        provider: 'Antigravity',
+        reasoning: false,
+      },
+    ],
+  },
+  codexRuntimePayload: {
+    runtimeKind: 'codex' as const,
+    runtimeLabel: 'Codex',
+    status: 'ready' as const,
+    defaultModel: 'gpt-6.1-sol',
+    models: [
+      {
+        id: 'gpt-6.1-sol',
+        name: 'GPT-6.1 Sol',
+        provider: 'Codex',
+        reasoning: true,
+        isDefault: true,
+        thinking: { mode: 'levels' as const, options: ['low', 'medium', 'high', 'xhigh'], initialValue: 'high', supportsAdaptive: false },
+        serviceTiers: [
+          { id: 'priority', label: 'Fast', description: '1.5x speed, increased usage' },
+        ],
+      },
+    ],
+  },
+}));
+vi.mock('swr', () => ({
+  default: (key: unknown) => {
+    if (key == null) return { data: undefined, isLoading: false, mutate: vi.fn() };
+    const isCodex = Array.isArray(key)
+      ? key.some((part) => typeof part === 'string' && part.includes('codex'))
+      : typeof key === 'string' && key.includes('codex');
+    if (isCodex) return { data: codexRuntimePayload, isLoading: false, mutate: vi.fn() };
+    const isExternal = Array.isArray(key)
+      ? key.some((part) => typeof part === 'string' && part.includes('agent-runtime-models'))
+      : typeof key === 'string' && key.includes('agent-runtime-models');
+    return { data: isExternal ? externalRuntimePayload : models, isLoading: false, mutate: vi.fn() };
+  },
+}));
 
 import { ComposerToolbar } from '../composer/composer-toolbar';
 import { ComposerModelConfigControl } from '../model/composer-model-config-control';
@@ -184,5 +239,77 @@ describe('composer model configuration', () => {
     expect(popover?.className).toContain('max-h-[min(21rem,calc(100dvh-3rem))]');
     expect(popover?.className).not.toContain(' h-[min(21rem,calc(100dvh-3rem))]');
     expect(popover?.querySelector('[aria-live="polite"]')).toBeNull();
+  });
+
+  it('auto-falls back to the external runtime default model instead of showing Unavailable for cross-runtime models', async () => {
+    const change = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <ComposerModelConfigControl
+            chat={messages('en').chat}
+            sessionModel="openai/gpt-6.1-sol"
+            thinkingLevel="high"
+            externalAgentId="antigravity1"
+            modelDisabled={false}
+            thinkingDisabled={false}
+            onModelChange={change}
+            onThinkingChange={vi.fn()}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(container.textContent).toContain('Gemini 3 Pro');
+    expect(container.textContent).not.toContain('Unavailable');
+    expect(container.textContent).not.toContain('gpt-6.1-sol');
+    expect(change).toHaveBeenCalledWith('gemini-3-pro', 'high');
+  });
+
+  it('toggles Codex Fast mode via the top-left lightning button and reflects active state on the trigger', async () => {
+    const onServiceTierChange = vi.fn();
+    await render({
+      externalAgentId: 'codex',
+      sessionModel: 'gpt-6.1-sol',
+      thinkingLevel: 'high',
+      serviceTier: 'default',
+      onServiceTierChange,
+    });
+
+    const fastBtn = document.querySelector<HTMLButtonElement>('button[aria-label*="Fast mode (1.5x speed, More usage)"]');
+    expect(fastBtn).toBeTruthy();
+    expect(fastBtn?.getAttribute('aria-pressed')).toBe('false');
+    expect(document.querySelector('[role="radiogroup"]')).toBeNull();
+
+    await click(fastBtn!);
+    expect(onServiceTierChange).toHaveBeenCalledWith('priority');
+
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <ComposerModelConfigControl
+            chat={messages('en').chat}
+            externalAgentId="codex"
+            sessionModel="gpt-6.1-sol"
+            thinkingLevel="high"
+            serviceTier="priority"
+            modelDisabled={false}
+            thinkingDisabled={false}
+            onModelChange={vi.fn()}
+            onThinkingChange={vi.fn()}
+            onServiceTierChange={onServiceTierChange}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    const trigger = container.querySelector('button')!;
+    expect(trigger.getAttribute('aria-label')).toContain('Fast');
+    const activeFastBtn = document.querySelector<HTMLButtonElement>('button[aria-label*="Fast mode (1.5x speed, More usage)"]');
+    expect(activeFastBtn?.getAttribute('aria-pressed')).toBe('true');
+
+    await click(activeFastBtn!);
+    expect(onServiceTierChange).toHaveBeenLastCalledWith('default');
   });
 });

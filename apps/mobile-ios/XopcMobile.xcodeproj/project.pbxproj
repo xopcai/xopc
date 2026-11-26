@@ -19,6 +19,7 @@
 		096B8983CB3A667B47361125 /* ChatImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FDDA0C2E058A5B28288921F /* ChatImageLoader.swift */; };
 		0B755942056EE4838FBFDF79 /* ClarificationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFADEE49AC582A3AA6647297 /* ClarificationCard.swift */; };
 		0D88572F7B9E140F40E89F5E /* AssistantRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB5C06720D6FAEB4E3984C7D /* AssistantRecoveryTests.swift */; };
+		0DE9AD48625D956AD247667D /* ProjectAssistantChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 984F68E72343EC735ECA3506 /* ProjectAssistantChat.swift */; };
 		0E04EDC4039351DFB9527F3F /* ConversationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8058FC1BB447A33ED9A10F4A /* ConversationsView.swift */; };
 		0FB629FDF98DF67EDEDEFF55 /* ChatScrollInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0768AAB1F9B001F2F0A781 /* ChatScrollInteraction.swift */; };
 		114E201683BA9B20DFF3FDC9 /* Math in Resources */ = {isa = PBXBuildFile; fileRef = 2E639DFE767F27B6255707D9 /* Math */; };
@@ -360,6 +361,7 @@
 		945CE29DD9EAD63F09B42935 /* GatewayProfilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayProfilesView.swift; sourceTree = "<group>"; };
 		957ACD7A723FD34666E22AA7 /* MemoryMaintenanceSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryMaintenanceSummary.swift; sourceTree = "<group>"; };
 		980992CAF7FCC3FB252A3D26 /* NoteEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteEditorView.swift; sourceTree = "<group>"; };
+		984F68E72343EC735ECA3506 /* ProjectAssistantChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectAssistantChat.swift; sourceTree = "<group>"; };
 		99900F7B67A69928E534319B /* ProductStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductStateTests.swift; sourceTree = "<group>"; };
 		9E17365AB812E05270EB75A4 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		9F5FD7365B0BBD37C7E7A261 /* TestFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestFixtures.swift; sourceTree = "<group>"; };
@@ -772,6 +774,7 @@
 				957ACD7A723FD34666E22AA7 /* MemoryMaintenanceSummary.swift */,
 				2450CD82796FD3FEBDC2B244 /* ProgressRow.swift */,
 				626D1ED3CB8A067D90888730 /* ProgressView.swift */,
+				984F68E72343EC735ECA3506 /* ProjectAssistantChat.swift */,
 				1E8108DF863EB6495DB8D4F7 /* ProjectDetailView.swift */,
 				D23702EE31DB8F887C088F2F /* ProjectManageView.swift */,
 				93BAAB9A5E492AC5DF693C5A /* ProjectTaskEditorView.swift */,
@@ -1100,6 +1103,7 @@
 				55B7DD1306B5B77297E1CE34 /* ProfileView.swift in Sources */,
 				70A51C553D3BD1A9B6328751 /* ProgressRow.swift in Sources */,
 				5D920CCBB7A84AD1D36DE686 /* ProgressView.swift in Sources */,
+				0DE9AD48625D956AD247667D /* ProjectAssistantChat.swift in Sources */,
 				89CA9F4A07F760665A7EA923 /* ProjectDetailView.swift in Sources */,
 				D1FDC69D2A43C3BD75C1FA16 /* ProjectManageView.swift in Sources */,
 				124B70EBED2EFABA81F75A48 /* ProjectTaskEditorView.swift in Sources */,

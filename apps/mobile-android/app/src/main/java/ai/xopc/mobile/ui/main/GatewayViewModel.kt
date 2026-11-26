@@ -362,6 +362,7 @@ data class ConnectionUiState(
   val attachmentError: Boolean = false,
   val referencePicker: ReferencePickerUiState = ReferencePickerUiState(),
   val chatNavigationId: String? = null,
+  val projectChatOriginId: String? = null,
   val restoringHomeChat: Boolean = false,
   val creatingConversation: Boolean = false,
   val draftModelLoading: Boolean = false,
@@ -375,6 +376,7 @@ data class ConnectionUiState(
   val models: List<ConversationModel> = emptyList(),
   val selectedModelId: String = "",
   val thinkingLevel: String = "off",
+  val serviceTier: String = "default",
   val modelConfigVersion: Long? = null,
   val modelsLoading: Boolean = false,
   val modelSaving: Boolean = false,
@@ -3261,10 +3263,14 @@ class GatewayViewModel internal constructor(application: Application, private va
 
   fun restoreConversation(id: String) = selectConversationScoped(id, null, remember = false)
 
+  fun selectProjectConversation(id: String, projectId: String) =
+    selectConversationScoped(id, null, remember = false, fallbackToPersonal = false, projectChatOriginId = projectId)
+
   fun retryConversation(id: String) = selectConversationScoped(id,
     mutableState.value.taskConversationTaskId, remember = false,
-    fallbackToPersonal = mutableState.value.taskConversationTaskId == null && !mutableState.value.automationConfigurationChat,
-    automationConfiguration = mutableState.value.automationConfigurationChat)
+    fallbackToPersonal = mutableState.value.taskConversationTaskId == null && !mutableState.value.automationConfigurationChat &&
+      mutableState.value.projectChatOriginId == null,
+    automationConfiguration = mutableState.value.automationConfigurationChat, projectChatOriginId = mutableState.value.projectChatOriginId)
 
   fun beginConversationShare(id: String) {
     val current = mutableState.value
@@ -3350,7 +3356,7 @@ class GatewayViewModel internal constructor(application: Application, private va
 
   private fun selectConversationScoped(id: String, taskId: String?, remember: Boolean = taskId == null,
     fallbackToPersonal: Boolean = taskId == null, automationConfiguration: Boolean = false,
-    initialDraft: String = "") {
+    initialDraft: String = "", projectChatOriginId: String? = null) {
     discardStream()
     if (mutableState.value.profile == null || mutableState.value.discardingDraftId == id ||
       mutableState.value.pendingDeleteId == id) return
@@ -3376,6 +3382,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     val connectionRevision = realtimeReadyRevision
     mutableState.update { it.copy(selectedConversationId = id, desktopChatTarget = null, taskConversationTaskId = taskId, restoringHomeChat = false,
       automationConfigurationChat = automationConfiguration,
+      projectChatOriginId = projectChatOriginId ?: it.projectChatOriginId.takeIf { taskId != null || automationConfiguration },
       clarification = null, clarificationBusy = false, clarificationError = null,
       taskScopeLoading = taskId == null, messages = emptyList(), draftText = "", draftRefs = emptyList(),
       draftAttachments = emptyList(), attachmentLoading = false, attachmentError = false, historyLoading = true,
@@ -3729,7 +3736,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     if (projectId == current.context?.project?.id &&
       (mode == null || mode == current.context?.environment?.kind)) return
     createConversationFor(current.selectedAgentId.ifBlank { current.defaultAgentId }, false,
-      projectId = projectId, executionMode = mode)
+      projectId = projectId, executionMode = mode, projectChatOriginId = current.projectChatOriginId)
   }
 
   fun refreshClarification() {
@@ -3880,6 +3887,7 @@ class GatewayViewModel internal constructor(application: Application, private va
         if (mutableState.value.selectedConversationId == id) mutableState.update { it.copy(
           models = selection.models, selectedModelId = selection.selectedId,
           modelConfigVersion = selection.configVersion, thinkingLevel = selection.thinkingLevel,
+          serviceTier = selection.serviceTier,
           modelsLoading = false) }
       } catch (error: CancellationException) {
         throw error
@@ -3930,11 +3938,36 @@ class GatewayViewModel internal constructor(application: Application, private va
         }
         if (mutableState.value.selectedConversationId == id) mutableState.update { it.copy(
           thinkingLevel = result.thinkingLevel, modelConfigVersion = result.configVersion,
+          serviceTier = result.serviceTier,
           modelSaving = false, modelError = false) }
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) {
         if (mutableState.value.selectedConversationId == id) mutableState.update {
           it.copy(modelSaving = false, modelError = true)
+        }
+      }
+    }
+  }
+
+  fun selectServiceTier(tier: String) {
+    val current = mutableState.value
+    val id = current.selectedConversationId ?: return
+    if (current.modelSaving || current.modelsLoading || current.sending || current.activeRunId != null ||
+      current.pendingInput != null || tier == current.serviceTier) return
+    val previous = current.serviceTier
+    mutableState.update { it.copy(serviceTier = tier, modelSaving = true, modelError = false) }
+    viewModelScope.launch {
+      try {
+        val result = runInterruptible(Dispatchers.IO) {
+          conversations.setServiceTier(id, tier)
+        }
+        if (mutableState.value.selectedConversationId == id) mutableState.update { it.copy(
+          serviceTier = result.serviceTier, modelConfigVersion = result.configVersion,
+          modelSaving = false, modelError = false) }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.selectedConversationId == id) mutableState.update {
+          it.copy(serviceTier = previous, modelSaving = false, modelError = true)
         }
       }
     }
@@ -4529,7 +4562,10 @@ class GatewayViewModel internal constructor(application: Application, private va
   }
 
   fun createConversation() {
-    createConversationFor(mutableState.value.defaultAgentId, false)
+    val current = mutableState.value
+    val projectChatOriginId = current.projectChatOriginId
+    createConversationFor(current.defaultAgentId, false,
+      projectChatOriginId = projectChatOriginId, retainCurrentProject = projectChatOriginId != null)
   }
 
   suspend fun useLibraryFile(id: String, version: ai.xopc.mobile.gateway.LibraryVersion,
@@ -4861,15 +4897,25 @@ class GatewayViewModel internal constructor(application: Application, private va
   }
 
   fun switchAgent(agentId: String, discardCurrentDraft: Boolean) {
-    if (mutableState.value.agents.none { it.id == agentId }) return
-    createConversationFor(agentId, discardCurrentDraft, projectId = mutableState.value.context?.project?.id)
+    val current = mutableState.value
+    if (current.agents.none { it.id == agentId }) return
+    createConversationFor(agentId, discardCurrentDraft, projectId = current.context?.project?.id,
+      projectChatOriginId = current.projectChatOriginId, retainCurrentProject = current.projectChatOriginId != null)
+  }
+
+  fun switchAgentInProject(agentId: String, projectId: String, discardCurrentDraft: Boolean) {
+    val current = mutableState.value
+    if (current.agents.none { it.id == agentId }) return
+    createConversationFor(agentId, discardCurrentDraft, projectId = projectId, executionMode = "local_checkout")
   }
 
   private fun createConversationFor(agentId: String, discardCurrentDraft: Boolean,
-    projectId: String? = null, executionMode: String? = null, prompt: String? = null, agentSetupLanguage: String? = null) {
-    val profile = mutableState.value.profile ?: return
-    if (mutableState.value.creatingConversation) return
-    val previousId = mutableState.value.selectedConversationId
+    projectId: String? = null, executionMode: String? = null, prompt: String? = null, agentSetupLanguage: String? = null,
+    projectChatOriginId: String? = null, retainCurrentProject: Boolean = false) {
+    val source = mutableState.value
+    val profile = source.profile ?: return
+    if (source.creatingConversation) return
+    val previousId = source.selectedConversationId
     mutableState.update { it.copy(creatingConversation = true, chatError = false) }
     viewModelScope.launch {
       try {
@@ -4877,20 +4923,30 @@ class GatewayViewModel internal constructor(application: Application, private va
         val draft = runInterruptible(Dispatchers.IO) {
           val active = session.currentProfile()
           check(active?.gatewayId == profile.gatewayId && active.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
-          val created = conversations.createDraft(agentId, projectId, executionMode, agentSetupLanguage)
+          val draftProjectId = if (retainCurrentProject && previousId != null) {
+            (source.context ?: conversations.context(previousId)).project?.id
+          } else projectId
+          val created = conversations.createDraft(agentId, draftProjectId, executionMode, agentSetupLanguage)
           if (prompt != null) conversations.saveComposerDraft(created.conversationId, prompt)
           if (discardCurrentDraft && previousId != null) conversations.saveComposerDraft(previousId, "")
           created
         }
         val active = mutableState.value.profile
         if (active?.gatewayId != profile.gatewayId || active.deviceId != profile.deviceId) return@launch
+        val current = mutableState.value
+        if (projectChatOriginId != null &&
+          (current.projectChatOriginId != projectChatOriginId || current.selectedConversationId != previousId)) {
+          mutableState.update { it.copy(creatingConversation = false) }
+          return@launch
+        }
         mutableState.update { current -> current.copy(creatingConversation = false,
-          progress = if (projectId != null && current.progress.projectId == projectId)
+          progress = if (draft.projectId != null && current.progress.projectId == draft.projectId)
             current.progress.copy(projectSessions = listOf(ProgressProjectSession(
               draft.conversationId, "", 0, isLocalDraft = true)) +
               current.progress.projectSessions.filterNot { it.id == draft.conversationId })
           else current.progress) }
-        selectConversation(draft.conversationId)
+        if (projectChatOriginId != null) selectProjectConversation(draft.conversationId, projectChatOriginId)
+        else selectConversation(draft.conversationId)
         if (prompt != null) mutableState.update { it.copy(chatNavigationId = draft.conversationId) }
         loadConversations()
       } catch (error: CancellationException) {

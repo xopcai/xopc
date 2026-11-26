@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { MoreHorizontal, Plus, Settings, SlidersHorizontal } from 'lucide-react';
+import { MoreHorizontal, Plus, Settings, SlidersHorizontal, Terminal } from 'lucide-react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
@@ -167,6 +167,20 @@ export function AgentsSettingsPanel({
     }
   }, [busy, manualDraft, mutate, navigate]);
 
+  const openQuickAddRuntime = useCallback((kind: ExternalAgentKind) => {
+    setManualError(null);
+    setManualDraft({
+      open: true,
+      name: kind === 'codex' ? 'Codex' : kind === 'claude' ? 'Claude Code' : 'Antigravity',
+      avatar: externalRuntimeDefaultAvatar(kind),
+      pendingAvatar: null,
+      instructions: '',
+      workspace: '',
+      execution: kind,
+      executionConfig: { kind },
+    });
+  }, []);
+
   const headerContribution = useMemo(() => ({
     overflow: (
       <DropdownMenu.Root>
@@ -194,6 +208,16 @@ export function AgentsSettingsPanel({
               <SlidersHorizontal className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
               {agentsMessages.manualCreateMenu}
             </DropdownMenu.Item>
+            <DropdownMenu.Item
+              className={cn('touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover', interaction.transition)}
+              onSelect={() => {
+                const preferred = externalRuntimes?.find((entry) => entry.installed)?.kind ?? 'codex';
+                openQuickAddRuntime(preferred);
+              }}
+            >
+              <Terminal className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+              {zh ? '接入外部编程运行时' : 'Connect coding runtime'}
+            </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -204,7 +228,7 @@ export function AgentsSettingsPanel({
         <span className="hidden sm:inline">{agentsMessages.listNewAgentCard}</span>
       </Button>
     ),
-  }), [agentsMessages.listNewAgentCard, agentsMessages.manualCreateMenu, messageBundle.capabilitiesHub.moreActions, messageBundle.nav.settingsAgentDefaults, navigate, startAgentCreation]);
+  }), [agentsMessages.listNewAgentCard, agentsMessages.manualCreateMenu, externalRuntimes, messageBundle.capabilitiesHub.moreActions, messageBundle.nav.settingsAgentDefaults, navigate, openQuickAddRuntime, startAgentCreation, zh]);
 
   useLayoutEffect(() => {
     onHeaderActionChange?.(headerContribution);
@@ -287,20 +311,6 @@ export function AgentsSettingsPanel({
     }
   }, [mutateExternalRuntimes]);
 
-  const openQuickAddRuntime = useCallback((kind: ExternalAgentKind) => {
-    setManualError(null);
-    setManualDraft({
-      open: true,
-      name: kind === 'codex' ? 'Codex' : kind === 'claude' ? 'Claude Code' : 'Antigravity',
-      avatar: externalRuntimeDefaultAvatar(kind),
-      pendingAvatar: null,
-      instructions: '',
-      workspace: '',
-      execution: kind,
-      executionConfig: { kind },
-    });
-  }, []);
-
   if (!token) {
     return <SettingsPageFrame className={capabilityPageWidth} padding={capabilityPagePadding}><p className="text-sm text-fg-muted">{zh ? '需要本机服务令牌。' : 'Local service token required.'}</p></SettingsPageFrame>;
   }
@@ -317,6 +327,15 @@ export function AgentsSettingsPanel({
     >
       {(error || actionError) && !selected ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{actionError ?? String(error)}</p> : null}
 
+      <AgentsListGrid
+        agents={data.agents}
+        tuiDefaultAgentId={tuiDefaultAgentId}
+        busy={busy}
+        messages={agentsMessages}
+        onOpen={openAgent}
+        onChat={startChat}
+      />
+
       <ExternalRuntimeQuickCards
         runtimes={externalRuntimes}
         loading={externalRuntimesLoading}
@@ -326,15 +345,6 @@ export function AgentsSettingsPanel({
         onRefresh={() => void refreshExternalRuntimes()}
         onAddRuntime={openQuickAddRuntime}
         onOpenAgent={openAgent}
-      />
-
-      <AgentsListGrid
-        agents={data.agents}
-        tuiDefaultAgentId={tuiDefaultAgentId}
-        busy={busy}
-        messages={agentsMessages}
-        onOpen={openAgent}
-        onChat={startChat}
       />
 
       {selected ? (

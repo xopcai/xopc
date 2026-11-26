@@ -11,18 +11,21 @@ import { DEFAULT_THINKING } from './chat-session-defaults';
 import { readNewSessionPreferences, rememberAgentModel } from './new-session-preferences';
 import type { ProjectSessionPreparation } from './use-chat-session-init';
 
-type Selection = { model: string; thinkingLevel: string };
+type Selection = { model: string; thinkingLevel: string; serviceTier?: string };
 
 /** Resolve a concrete selection before a project chat allocates its session or environment. */
 export function usePreparedSessionModel(
   preparation: ProjectSessionPreparation | null,
   externalRuntime?: ExternalAgentKind,
+  agentsReady = true,
 ) {
   const token = useGatewayStore((state) => state.conversationId);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const [edited, setEdited] = useState<{ preparation: ProjectSessionPreparation; selection: Selection } | null>(null);
   const { data, error } = useSWR(
-    preparation ? ['prepared-session-model', baseUrl, token, preparation.create, externalRuntime ?? 'builtin'] : null,
+    preparation && agentsReady
+      ? ['prepared-session-model', baseUrl, token, preparation.agentId, preparation.create, externalRuntime ?? 'builtin']
+      : null,
     async () => {
       const preference = modelPreferenceForAgent(readNewSessionPreferences(), preparation!.agentId);
       if (externalRuntime) {
@@ -63,7 +66,7 @@ export function usePreparedSessionModel(
     { revalidateOnFocus: false },
   );
   const externalFallback: Selection | undefined = externalRuntime ? { model: externalRuntime, thinkingLevel: DEFAULT_THINKING } : undefined;
-  const selection = (edited?.preparation === preparation ? edited?.selection : data?.selection) ?? externalFallback;
+  const selection: Selection | undefined = (edited?.preparation === preparation ? edited?.selection : data?.selection) ?? externalFallback;
   const selected = data?.models.find((model) => model.id === selection?.model);
   const ready = Boolean(externalRuntime) || Boolean(selection?.model && selected);
   const explicitlySelected = edited?.preparation === preparation;
@@ -78,7 +81,11 @@ export function usePreparedSessionModel(
       if (current.preparation !== preparation || !current.ready || !current.selection) {
         throw new Error('Model configuration is not ready');
       }
-      const config = current.selection;
+      const config = {
+        model: current.selection.model,
+        thinkingLevel: current.selection.thinkingLevel,
+        ...(current.selection.serviceTier ? { serviceTier: current.selection.serviceTier } : {}),
+      };
       const key = await preparation.create(mode, config, onOpened);
       if (current.explicitlySelected) {
         rememberAgentModel(preparation.agentId, { modelRef: config.model, thinkingLevel: config.thinkingLevel });
@@ -95,17 +102,42 @@ export function usePreparedSessionModel(
     const thinkingLevel = model.thinking
       ? chooseModelThinking(model.thinking, level ?? selection?.thinkingLevel, level === undefined ? remembered : undefined)
       : level ?? selection?.thinkingLevel ?? DEFAULT_THINKING;
-    setEdited({ preparation, selection: { model: modelId, thinkingLevel } });
+    const retainedTier = selection?.serviceTier
+      && (selection.serviceTier === 'default' || model.serviceTiers?.some((tier) => tier.id === selection.serviceTier))
+      ? selection.serviceTier
+      : undefined;
+    setEdited({
+      preparation,
+      selection: {
+        model: modelId,
+        thinkingLevel,
+        ...(retainedTier ? { serviceTier: retainedTier } : {}),
+      },
+    });
+  };
+
+  const changeServiceTier = async (tier: string) => {
+    if (!preparation || !selection) throw new Error('Model configuration is not ready');
+    const normalized = tier.trim();
+    setEdited({
+      preparation,
+      selection: {
+        ...selection,
+        serviceTier: normalized || 'default',
+      },
+    });
   };
 
   return {
     preparation: prepared,
     model: selection?.model ?? '',
     thinkingLevel: selection?.thinkingLevel ?? DEFAULT_THINKING,
+    serviceTier: selection?.serviceTier ?? 'default',
     modelSupportsThinking: Boolean(selected?.reasoning || (selected?.thinking && selected.thinking.mode !== 'none')),
     ready,
     error,
     onModelChange: (model: string, level?: string) => change(model, level),
     onThinkingChange: (level: string) => change(selection?.model ?? '', level),
+    onServiceTierChange: changeServiceTier,
   };
 }

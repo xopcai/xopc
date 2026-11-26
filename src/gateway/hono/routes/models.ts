@@ -5,6 +5,7 @@ import { getProviderSetupProfile } from '../../../providers/setup/profiles.js';
 import { registerProviderSetupRoutes } from './provider-setup.js';
 import { getModelThinking } from '../../../providers/model-thinking.js';
 import { resolveEffectiveAgentConfigForAgent } from '../../../config/agent-profile.js';
+import { getExternalAgent, resolveExternalRuntimeModelsPayload } from '../../../agent/external/index.js';
 import { computerModelProfile, isDedicatedComputerModel } from '../../../computer/model-policy.js';
 import type { Hono } from 'hono';
 
@@ -382,6 +383,33 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (!service.isGatewayReady()) {
       return respondStartupUnavailable(c, 'models.list');
     }
+    const agentId = c.req.query('agentId')?.trim();
+    if (agentId) {
+      const externalAgent = getExternalAgent(agentId);
+      if (externalAgent) {
+        const runtimePayload = await resolveExternalRuntimeModelsPayload(externalAgent.execution);
+        const externalModels = runtimePayload.models.map((m) => ({
+          id: m.id,
+          name: m.name,
+          provider: m.provider,
+          contextWindow: m.contextWindow ?? 128000,
+          maxTokens: 16384,
+          reasoning: m.reasoning ?? false,
+          ...(m.thinking ? { thinking: m.thinking } : {}),
+          ...(m.serviceTiers?.length ? { serviceTiers: m.serviceTiers } : {}),
+          vision: true,
+          recommended: Boolean(m.isDefault),
+          cost: { input: 0, output: 0 },
+        }));
+        return c.json({
+          ok: true,
+          payload: {
+            models: externalModels,
+            ...(runtimePayload.defaultModel ? { defaultId: runtimePayload.defaultModel } : {}),
+          },
+        });
+      }
+    }
     const pluginRegistry = getProviderRegistry();
     const models = sortModelsForPicker(await getAvailableModels()).map(m => ({
       id: `${m.provider}/${m.id}`,
@@ -420,7 +448,6 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     });
 
-    const agentId = c.req.query('agentId')?.trim();
     let defaultId: string | undefined;
     if (agentId) {
       try {

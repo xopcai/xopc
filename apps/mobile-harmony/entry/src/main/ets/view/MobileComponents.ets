@@ -227,6 +227,7 @@ export struct XopcPageSearchField {
   @Param searchId: string = '';
   @Param text: string = '';
   @Param placeholder: ResourceStr = $r('app.string.search');
+  @Param autoFocus: boolean = true;
   @Event onChange: (text: string) => void = (_text: string): void => {};
   @Event onSubmit: () => void = (): void => {};
   private focusTimer: number = -1;
@@ -235,11 +236,14 @@ export struct XopcPageSearchField {
     TextInput({ text: this.text, placeholder: this.placeholder }).id(this.searchId).width('100%').height(46)
       .backgroundColor(this.colors.input)
       .borderRadius(this.colors.corner(23)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
-      .enterKeyType(EnterKeyType.Search).defaultFocus(true)
+      .enterKeyType(EnterKeyType.Search).defaultFocus(this.autoFocus)
       .transition(xopcRevealTransition(TransitionEdge.TOP, this.layout.reduceMotion))
       .onChange(this.onChange).onSubmit(this.onSubmit)
       .onAppear((): void => {
-        this.focusTimer = setTimeout((): void => { this.getUIContext().getFocusController().requestFocus(this.searchId); }, 50);
+        if (!this.autoFocus) return;
+        this.focusTimer = setTimeout((): void => {
+          if (this.autoFocus) this.getUIContext().getFocusController().requestFocus(this.searchId);
+        }, 50);
       })
       .onDisAppear((): void => { clearTimeout(this.focusTimer); })
   }

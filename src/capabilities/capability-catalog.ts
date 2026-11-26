@@ -1,4 +1,5 @@
 import { listAgentEntries, resolveDefaultAgentId } from '../agent/agent-scope.js';
+import { getCachedExternalRuntimeProbe, getExternalAgentDriver } from '../agent/external/index.js';
 import { getMcpConnectionCheck } from '../agent/mcp/connection-drafts.js';
 import { listStoreConnectorCatalog } from '../capabilities/store-connector.js';
 import { isBundledChannelExtension } from '../channels/bundled-channel-extensions.js';
@@ -171,10 +172,26 @@ export async function listCapabilities(source: CapabilityCatalogSource, category
       const personalId = personalAgentId('local-owner');
       const items = listAgentEntries().filter(agent => agent.id !== personalId)
         .sort((first, second) => first.id.localeCompare(second.id))
-        .map((agent): MobileCapabilityRow => ({
-          id: agent.id, name: agent.profile?.name ?? agent.id, description: agent.profile?.description,
-          avatar: agent.profile?.avatar, group: agent.enabled === false ? 'disabled' : agent.id === defaultId ? 'assistant' : 'expert',
-        }));
+        .map((agent): MobileCapabilityRow => {
+          const externalDriver = agent.execution ? getExternalAgentDriver(agent.execution.kind) : undefined;
+          const cachedProbe = agent.execution ? getCachedExternalRuntimeProbe(agent.execution) : undefined;
+          const externalAttention = Boolean(agent.execution && agent.enabled !== false && cachedProbe && cachedProbe.status !== 'ready');
+          const fallbackDesc = externalDriver
+            ? (locale === 'zh-CN' ? `${externalDriver.label} 宿主机编程运行时` : `${externalDriver.label} host coding runtime`)
+            : undefined;
+          return {
+            id: agent.id,
+            name: agent.profile?.name ?? agent.id,
+            description: agent.profile?.description?.trim() || fallbackDesc,
+            avatar: agent.profile?.avatar,
+            group: agent.enabled === false
+              ? 'disabled'
+              : externalAttention
+                ? 'attention'
+                : agent.id === defaultId ? 'assistant' : 'expert',
+            ...(externalAttention && cachedProbe?.message ? { issue: cachedProbe.message } : {}),
+          };
+        });
       return { items };
     }
     case 'channels': {

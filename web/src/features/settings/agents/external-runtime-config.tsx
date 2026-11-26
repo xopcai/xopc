@@ -1,5 +1,6 @@
 import {
   Check,
+  ChevronRight,
   Copy,
   ExternalLink,
   KeyRound,
@@ -16,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { mutate as globalMutate } from 'swr';
 
 import { ExternalRuntimeAvatar } from '@/components/brand/external-runtime-avatar';
+import { externalRuntimeLabel } from '@/components/brand/external-runtime-badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -165,7 +167,7 @@ function formatResetCountdown(resetsAt: number | undefined, zh: boolean): string
   return zh ? `${days} 天后重置` : `resets in ${days}d`;
 }
 
-function ExternalRuntimeRateLimitsSummary({
+export function ExternalRuntimeRateLimitsSummary({
   rateLimits,
   zh,
 }: {
@@ -286,115 +288,171 @@ export function ExternalRuntimeQuickCards({
   onAddRuntime: (kind: ExternalAgentKind) => void;
   onOpenAgent: (agentId: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const kinds: ExternalAgentKind[] = ['codex', 'agy', 'claude'];
+  const configuredKinds = new Set<ExternalAgentKind>(
+    agents
+      .map((agent) => agent.override.execution?.kind)
+      .filter((kind): kind is ExternalAgentKind => Boolean(kind)),
+  );
+  const detectedKinds = new Set<ExternalAgentKind>(
+    (runtimes ?? [])
+      .filter((entry) => entry.installed)
+      .map((entry) => entry.kind),
+  );
+  const visibleSummaryKinds = kinds.filter(
+    (kind) => configuredKinds.has(kind) || detectedKinds.has(kind),
+  );
+
+  // Stay completely hidden for users who have neither configured an external
+  // agent nor installed any supported host CLI (access remains in the menu).
+  if (visibleSummaryKinds.length === 0) {
+    return null;
+  }
 
   return (
-    <section className="rounded-2xl border border-edge bg-surface-panel p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-fg">
-            {zh ? '外部编程运行时' : 'External coding runtimes'}
-          </h2>
-          <p className="mt-0.5 text-xs leading-5 text-fg-muted">
-            {zh
-              ? '将宿主机上的 Codex、Antigravity (AGY) 或 Claude Code 接入为项目 Agent，会话、登录与模型配置统一在 xopc 中完成。'
-              : 'Connect host-installed Codex, Antigravity (AGY), or Claude Code as Project agents with sign-in, models, and sessions managed in xopc.'}
-          </p>
+    <section
+      data-external-runtime-strip
+      className="rounded-xl border border-edge bg-surface-panel"
+    >
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((current) => !current)}
+        className="flex w-full min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-left transition-colors hover:bg-surface-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+      >
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <ChevronRight
+            className={cn('size-4 shrink-0 text-fg-muted transition-transform', expanded && 'rotate-90')}
+            aria-hidden
+          />
+          <span className="text-xs font-medium text-fg-muted">
+            {zh ? '本机编程运行时' : 'Local coding runtimes'}
+          </span>
+          <span className="flex flex-wrap items-center gap-1.5">
+            {visibleSummaryKinds.map((kind) => {
+              const probe = runtimes?.find((entry) => entry.kind === kind);
+              const count = agents.filter((agent) => agent.override.execution?.kind === kind).length;
+              return (
+                <span
+                  key={kind}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-surface-base px-2 py-0.5 text-[11px] font-medium text-fg"
+                >
+                  <ExternalRuntimeAvatar kind={kind} size={14} />
+                  <span>{externalRuntimeLabel(kind, 'short')}</span>
+                  {count > 0 ? <span className="text-fg-subtle">· {count}</span> : null}
+                  <ExternalRuntimeStatusDot status={probe?.status} />
+                </span>
+              );
+            })}
+          </span>
         </div>
-        <Button variant="ghost" className="h-8 gap-1.5 px-2.5 text-xs" disabled={refreshing || loading} onClick={onRefresh}>
-          <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} aria-hidden />
-          {zh ? '重新检测' : 'Refresh status'}
-        </Button>
-      </div>
+        <span className="shrink-0 text-xs text-fg-subtle">
+          {expanded ? (zh ? '收起' : 'Hide') : (zh ? '管理' : 'Manage')}
+        </span>
+      </button>
 
-      {loading && !runtimes ? (
-        <div className="mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Skeleton className="h-28 rounded-xl" />
-          <Skeleton className="h-28 rounded-xl" />
-          <Skeleton className="h-28 rounded-xl" />
-        </div>
-      ) : (
-        <div className="mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {kinds.map((kind) => {
-            const probe = runtimes?.find((entry) => entry.kind === kind);
-            const configured = agents.filter((agent) => agent.override.execution?.kind === kind);
-            const firstConfigured = configured[0];
-            const accountBadge = formatAccountBadge(probe);
-            const needsSignIn = probe?.status === 'unauthenticated';
-            return (
-              <div
-                key={kind}
-                className="flex flex-col justify-between gap-3 rounded-xl border border-edge bg-surface-base p-3.5"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <ExternalRuntimeAvatar kind={kind} size={22} />
-                      <h3 className="truncate text-sm font-semibold text-fg">
-                        {externalRuntimeDisplayName(kind)}
-                      </h3>
-                      {probe?.version ? (
-                        <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 font-mono text-[10px] text-fg-muted">
-                          {probe.version}
+      {expanded ? (
+        <div className="border-t border-edge-subtle px-3.5 pb-3.5 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs leading-5 text-fg-muted">
+              {zh
+                ? '将宿主机上的 Codex、Antigravity (AGY) 或 Claude Code 接入为项目智能体。'
+                : 'Connect host-installed Codex, Antigravity (AGY), or Claude Code as Project agents.'}
+            </p>
+            <Button variant="ghost" className="h-7 gap-1.5 px-2 text-xs" disabled={refreshing || loading} onClick={onRefresh}>
+              <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} aria-hidden />
+              {zh ? '重新检测' : 'Refresh status'}
+            </Button>
+          </div>
+
+          {loading && !runtimes ? (
+            <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              <Skeleton className="h-24 rounded-xl" />
+              <Skeleton className="h-24 rounded-xl" />
+              <Skeleton className="h-24 rounded-xl" />
+            </div>
+          ) : (
+            <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              {kinds.map((kind) => {
+                const probe = runtimes?.find((entry) => entry.kind === kind);
+                const configured = agents.filter((agent) => agent.override.execution?.kind === kind);
+                const firstConfigured = configured[0];
+                const accountBadge = formatAccountBadge(probe);
+                const needsSignIn = probe?.status === 'unauthenticated';
+                return (
+                  <div
+                    key={kind}
+                    className="flex flex-col justify-between gap-2.5 rounded-xl border border-edge bg-surface-base p-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <ExternalRuntimeAvatar kind={kind} size={20} />
+                          <h3 className="truncate text-sm font-semibold text-fg">
+                            {externalRuntimeDisplayName(kind)}
+                          </h3>
+                          {probe?.version ? (
+                            <span className="shrink-0 rounded-md bg-surface-hover px-1.5 py-0.5 font-mono text-[10px] text-fg-muted">
+                              {probe.version}
+                            </span>
+                          ) : null}
+                        </div>
+                        <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-fg-muted">
+                          <ExternalRuntimeStatusDot status={probe?.status} />
+                          {externalRuntimeStatusLabel(probe?.status, zh)}
                         </span>
-                      ) : null}
+                      </div>
+                      <p className="mt-1.5 truncate text-xs leading-5 text-fg-muted" title={accountBadge ?? probe?.message}>
+                        {probe?.status === 'ready'
+                          ? [
+                              accountBadge,
+                              probe.models.length > 0
+                                ? (zh ? `${probe.models.length} 个可用模型` : `${probe.models.length} models`)
+                                : null,
+                            ].filter(Boolean).join(' · ') || externalRuntimeShortDescription(kind, zh)
+                          : (probe?.message ?? externalRuntimeShortDescription(kind, zh))}
+                      </p>
                     </div>
-                    <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-fg-muted">
-                      <ExternalRuntimeStatusDot status={probe?.status} />
-                      {externalRuntimeStatusLabel(probe?.status, zh)}
-                    </span>
-                  </div>
-                  <p className="mt-1.5 truncate text-xs leading-5 text-fg-muted" title={accountBadge ?? probe?.message}>
-                    {probe?.status === 'ready'
-                      ? [
-                          accountBadge,
-                          probe.models.length > 0
-                            ? (zh ? `${probe.models.length} 个可用模型` : `${probe.models.length} models`)
-                            : null,
-                        ].filter(Boolean).join(' · ') || externalRuntimeShortDescription(kind, zh)
-                      : (probe?.message ?? externalRuntimeShortDescription(kind, zh))}
-                  </p>
-                  {probe?.status === 'ready' ? (
-                    <ExternalRuntimeRateLimitsSummary rateLimits={probe.rateLimits} zh={zh} />
-                  ) : null}
-                </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-edge-subtle pt-2.5">
-                  <span className="text-[11px] text-fg-subtle">
-                    {configured.length > 0
-                      ? (zh ? `已配置 ${configured.length} 个 Agent` : `${configured.length} configured`)
-                      : (zh ? '尚未添加 Agent' : 'Not configured yet')}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    {firstConfigured ? (
-                      <Button
-                        variant={needsSignIn ? 'primary' : 'ghost'}
-                        className="h-7 gap-1 px-2 text-xs"
-                        onClick={() => onOpenAgent(firstConfigured.id)}
-                      >
-                        {needsSignIn ? <LogIn className="size-3.5" aria-hidden /> : <Settings2 className="size-3.5" aria-hidden />}
-                        {needsSignIn ? (zh ? '去登录' : 'Sign in') : (zh ? '配置' : 'Configure')}
-                      </Button>
-                    ) : null}
-                    <Button
-                      variant={firstConfigured ? 'secondary' : 'primary'}
-                      className="h-7 gap-1 px-2.5 text-xs"
-                      onClick={() => onAddRuntime(kind)}
-                    >
-                      <Plus className="size-3.5" aria-hidden />
-                      {firstConfigured
-                        ? (zh ? '新增' : 'Add')
-                        : needsSignIn
-                          ? (zh ? `登录并接入` : `Sign in & add`)
-                          : (zh ? `接入 ${kind === 'codex' ? 'Codex' : 'AGY'}` : `Set up ${kind === 'codex' ? 'Codex' : 'AGY'}`)}
-                    </Button>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-edge-subtle pt-2">
+                      <span className="text-[11px] text-fg-subtle">
+                        {configured.length > 0
+                          ? (zh ? `已配置 ${configured.length} 个` : `${configured.length} configured`)
+                          : (zh ? '未接入' : 'Not connected')}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {firstConfigured ? (
+                          <Button
+                            variant={needsSignIn ? 'primary' : 'ghost'}
+                            className="h-7 gap-1 px-2 text-xs"
+                            onClick={() => onOpenAgent(firstConfigured.id)}
+                          >
+                            {needsSignIn ? <LogIn className="size-3.5" aria-hidden /> : <Settings2 className="size-3.5" aria-hidden />}
+                            {needsSignIn ? (zh ? '去登录' : 'Sign in') : (zh ? '配置' : 'Configure')}
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant={firstConfigured ? 'secondary' : 'primary'}
+                          className="h-7 gap-1 px-2.5 text-xs"
+                          onClick={() => onAddRuntime(kind)}
+                        >
+                          <Plus className="size-3.5" aria-hidden />
+                          {firstConfigured
+                            ? (zh ? '新增' : 'Add')
+                            : needsSignIn
+                              ? (zh ? '登录并接入' : 'Sign in & add')
+                              : (zh ? `接入 ${externalRuntimeLabel(kind, 'short')}` : `Set up ${externalRuntimeLabel(kind, 'short')}`)}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

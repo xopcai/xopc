@@ -2,9 +2,12 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import { notifyUserContextChange } from '../../user-context/changes.js';
 import type { SessionAgentConfig } from '../../session/config-types.js';
+import { DurableState } from './durable-state.js';
 import { sessionConfigRowToConfig, type SessionConfigRow } from './row-mappers.js';
 import { ensureSessionInTransaction } from './session-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
+
+const SERVICE_TIER_STATE = new DurableState<string>('session-service-tier');
 
 function readConfigRow(db: DatabaseSync, conversationId: string): SessionConfigRow | undefined {
   return db
@@ -23,7 +26,9 @@ export function getSessionConfig(conversationId: string): SessionAgentConfig | n
   if (!row) {
     return null;
   }
-  return sessionConfigRowToConfig(row);
+  const base = sessionConfigRowToConfig(row);
+  const serviceTierOverride = SERVICE_TIER_STATE.get(conversationId)?.trim();
+  return serviceTierOverride ? { ...base, serviceTierOverride } : base;
 }
 
 /** Persisted file locations must be discoverable before a session runs again. */
@@ -71,6 +76,14 @@ export function setSessionConfig(conversationId: string, config: SessionAgentCon
       next.fixedModel ? 1 : 0,
       updatedAt,
     );
+    const normalizedServiceTier = next.serviceTierOverride?.trim();
+    if (normalizedServiceTier) {
+      SERVICE_TIER_STATE.set(conversationId, normalizedServiceTier);
+      next.serviceTierOverride = normalizedServiceTier;
+    } else {
+      SERVICE_TIER_STATE.delete(conversationId);
+      delete next.serviceTierOverride;
+    }
     return next;
   });
 }
@@ -88,6 +101,7 @@ export function deleteSessionConfig(conversationId: string): void {
   notifyUserContextChange({ kind: 'session', id: conversationId });
   runSqliteWriteTransaction((db) => {
     db.prepare(`DELETE FROM session_config WHERE conversation_id = ?`).run(conversationId);
+    SERVICE_TIER_STATE.delete(conversationId);
   });
 }
 

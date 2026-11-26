@@ -184,6 +184,7 @@ export interface SessionResponse {
 export interface SessionInitialAgentConfig {
   model?: string;
   thinkingLevel?: string;
+  serviceTier?: string;
 }
 
 export interface LocalSessionOptions {

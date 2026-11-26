@@ -66,6 +66,7 @@ extension GatewayClient {
                     temporary: false,
                     model: selection.model,
                     thinkingLevel: selection.thinking,
+                    serviceTier: conversation.serviceTier,
                     agentSetupLanguage: conversation.agentSetupLanguage
                 ),
                 input: input,

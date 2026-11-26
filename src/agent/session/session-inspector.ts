@@ -42,10 +42,10 @@ import type { ReasoningLevel, VerboseLevel } from '../transcript/thinking-types.
 import { createLogger } from '../../utils/logger.js';
 import {
   compactExternalSession,
-  getCachedExternalDefaultModel,
   getExternalAgentDriver,
   getExternalConversationAgent,
   resolveExternalContextWindow,
+  resolveValidExternalSessionModel,
 } from '../external/index.js';
 import { getSessionInteractionPolicy } from './interaction-policy.js';
 import type { SessionHydrator } from './session-hydrator.js';
@@ -280,10 +280,7 @@ export class SessionInspector {
     const externalAgent = getExternalConversationAgent(conversationId);
     const externalDriver = externalAgent ? getExternalAgentDriver(externalAgent.execution.kind) : undefined;
     const model = externalAgent && externalDriver
-      ? (sc?.modelOverride?.trim()
-        || externalAgent.execution.model?.trim()
-        || getCachedExternalDefaultModel(externalAgent.execution)
-        || externalDriver.defaultModelName)
+      ? resolveValidExternalSessionModel(externalAgent.execution, sc?.modelOverride)
       : (sc?.modelOverride ?? this.opts.modelManager.getModelForSession(conversationId));
     const project = getProjectForSession(conversationId);
     const environment = getExecutionEnvironmentForSession(conversationId);

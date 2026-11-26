@@ -1957,13 +1957,22 @@ class MainScreenTest {
     composeTestRule.setContent {
       MainContent(selectedTab = selectedTab, onSelectTab = { selectedTab = it }, connection = connection,
         onOpenProgressProject = { connection = connection.copy(progress = progress.copy(projectId = it, project = project)) },
-        onRestoreConversation = { connection = connection.copy(selectedConversationId = it) },
+        onRestoreConversation = { connection = connection.copy(selectedConversationId = it, projectChatOriginId = null) },
+        onSelectProjectConversation = { id, projectId ->
+          connection = connection.copy(selectedConversationId = id, projectChatOriginId = projectId)
+        },
         onCreateProjectConversation = { createdFor = it; "new-project-chat" })
     }
     composeTestRule.onNodeWithTag("progress-project-project-1").performClick()
     composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
     composeTestRule.onNodeWithTag("progress-project-tab-sessions").performClick()
     composeTestRule.onNodeWithTag("progress-project-session-${existing.id}").performClick()
+    composeTestRule.onNodeWithTag("project-chat-close").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-header-voice-call").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-options").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar").assertIsDisplayed()
+    Espresso.pressBack()
     composeTestRule.onNodeWithTag("project-chat-close").assertIsDisplayed()
     composeTestRule.runOnIdle {
       assertEquals(existing.id, connection.selectedConversationId)
@@ -1974,6 +1983,8 @@ class MainScreenTest {
     composeTestRule.runOnIdle { assertEquals("main-chat", connection.selectedConversationId) }
     composeTestRule.onNodeWithTag("progress-project-new-chat").performClick()
     composeTestRule.onNodeWithTag("project-chat-close").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-header-sidebar").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-header-voice-call").assertIsDisplayed()
     Espresso.pressBack()
     composeTestRule.onNodeWithTag("progress-project-session-${existing.id}").assertIsDisplayed()
     composeTestRule.runOnIdle {

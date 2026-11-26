@@ -149,6 +149,8 @@ export struct XopcChatView {
   @Param activePage: boolean = true;
   @Param embedded: boolean = false;
   @Param automationSetup: boolean = false;
+  @Param projectChat: boolean = false;
+  @Event onProjectClose: () => void = (): void => {};
   @Param scopedProjectName: string = '';
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
   @Local searchOpen: boolean = false;
@@ -1915,7 +1917,7 @@ export struct XopcChatView {
           // Keep one editor node across compact/expanded states so the IME and caret survive the first keystroke.
           Stack({ alignContent: Alignment.Start }) {
             TextArea({ text: this.draftPresentation.text, placeholder: this.nextTurnPrompt ? '' : this.personalConversation
-              ? $r('app.string.chat_ask_personal', this.personalAgent?.displayName ?? '') : this.scopedProjectName ? $r('app.string.project_chat_placeholder') : $r('app.string.message_hint'),
+              ? $r('app.string.chat_ask_personal', this.personalAgent?.displayName ?? '') : $r('app.string.message_hint'),
               controller: this.editor })
               .id('chat-composer').width('100%').constraintSize({ minHeight: COMPOSER_INPUT_MIN, maxHeight: this.expandedComposer ? COMPOSER_INPUT_MAX : COMPOSER_INPUT_MIN })
               .padding({ left: 4, right: 4, top: this.expandedComposer ? 5 : 10, bottom: this.expandedComposer ? 5 : 10 }).lineHeight(20)
@@ -2238,12 +2240,21 @@ export struct XopcChatView {
   }
 
   @Builder
-  sidebarButton() {
-    Button({ type: ButtonType.Circle }) {
-      SymbolGlyph($r('sys.symbol.line_3_horizontal')).fontSize(22).fontColor([this.colors.foreground])
-    }.id('chat-header-sidebar').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
-      .accessibilityText($r('app.string.chat_open_drawer'))
-      .onClick((): void => { this.dismissComposer(); this.onOpenSidebar(); })
+  navigationButtons() {
+    Row({ space: 3 }) {
+      if (this.projectChat) {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([this.colors.foreground])
+        }.id('project-chat-close').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+          .accessibilityText($r('app.string.back'))
+          .onClick((): void => { this.dismissComposer(); this.onProjectClose(); })
+      }
+      Button({ type: ButtonType.Circle }) {
+        SymbolGlyph($r('sys.symbol.line_3_horizontal')).fontSize(22).fontColor([this.colors.foreground])
+      }.id('chat-header-sidebar').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+        .accessibilityText($r('app.string.chat_open_drawer'))
+        .onClick((): void => { this.dismissComposer(); this.onOpenSidebar(); })
+    }
   }
 
   private isStandaloneDraft(): boolean {
@@ -2261,7 +2272,7 @@ export struct XopcChatView {
       if (this.personalConversation) {
         Stack({ alignContent: Alignment.Top }) {
           Row() {
-            this.sidebarButton()
+            this.navigationButtons()
             Blank().layoutWeight(1)
             this.conversationActions()
           }.width('100%').padding({ left: 12, right: 12, top: 3 })
@@ -2284,14 +2295,14 @@ export struct XopcChatView {
           onOpenTask: (taskId: string): void => { this.dismissComposer(); this.onNavigate({ page: 'tasks', itemId: taskId }); } })
       } else if (this.isStandaloneDraft()) {
         Row({ space: 3 }) {
-          this.sidebarButton()
+          this.navigationButtons()
           Blank().layoutWeight(1)
           this.voiceCallButton()
           this.continuousReadButton()
         }.width('100%').padding({ left: 12, right: 12 })
       } else {
         Row({ space: 8 }) {
-          this.sidebarButton()
+          this.navigationButtons()
           if (this.desktopChatTarget?.deviceName) {
             if (this.desktopChatTarget?.reselectEndpointId) {
               Button(this.desktopTargetLabel()).height(44).fontSize(12).fontColor(this.colors.chat.action)
@@ -2648,6 +2659,12 @@ export struct XopcChatView {
       onContext: (): void => { this.sheetMode = 'context'; },
       onMode: (mode: string): void => { this.sheetMode = mode; }, onClose: (): void => { this.sheetOpen = false; },
       onRetry: (): void => { this.options.load(this.chat.selectedId, this.chat.agentId); },
+      hasProjectWorkspace: !!(this.context.summary?.work.project?.id && this.context.summary?.environment),
+      onAgentInProject: (agentId: string, projectId: string): void => {
+        this.saveDraft();
+        this.sheetOpen = false;
+        void this.newConversation(agentId, projectId, 'local_checkout');
+      },
       onAgent: (id: string): void => {
         this.saveDraft();
         if (id === this.personalAgent?.agentId) {
@@ -2658,7 +2675,7 @@ export struct XopcChatView {
         }
       }, onNewChat: (): void => {
         if (this.automationSetup) return;
-        if (this.embedded || this.taskId) { void this.newConversation(); return; }
+        if (this.embedded || this.taskId || this.projectChat) { void this.newConversation(); return; }
         this.sheetOpen = false;
         this.onNewOrdinaryChat();
       },

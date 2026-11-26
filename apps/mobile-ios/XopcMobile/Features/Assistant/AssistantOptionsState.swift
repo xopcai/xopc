@@ -11,6 +11,7 @@ final class AssistantOptionsState {
     private var configVersion: Int?
     var selectedModelID = ""
     var thinkingLevel = "off"
+    var serviceTier = "default"
 
     var selectedModel: ChatModel? {
         models.first { $0.id == selectedModelID }
@@ -18,6 +19,31 @@ final class AssistantOptionsState {
 
     var thinkingOptions: [String] {
         selectedModel?.thinking?.options ?? ["off"]
+    }
+
+    var fastTier: ChatModelServiceTier? {
+        selectedModel?.fastServiceTier
+    }
+
+    var isFastModeEnabled: Bool {
+        guard let fastTier else { return false }
+        let normalized = serviceTier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty, normalized != "default" else { return false }
+        return normalized == fastTier.id || selectedModel?.serviceTiers?.contains(where: { $0.id == normalized }) == true
+    }
+
+    func fastModeSubtitle(_ locale: Locale) -> String {
+        let isZh = locale.language.languageCode?.identifier == "zh"
+        let desc = fastTier?.description ?? ""
+        let speed: String
+        if let range = desc.range(of: #"\d+(?:\.\d+)?x\s*speed"#, options: [.regularExpression, .caseInsensitive]) {
+            let token = desc[range].replacingOccurrences(of: "speed", with: "", options: .caseInsensitive)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            speed = isZh ? "\(token) 极速" : "\(token) speed"
+        } else {
+            speed = isZh ? "1.5x 极速" : "1.5x speed"
+        }
+        return isZh ? "\(speed) · 消耗更多额度" : "\(speed) · More usage"
     }
 
     func load(_ conversation: ConversationSelection, using gateway: any GatewayServing) async {
@@ -31,11 +57,13 @@ final class AssistantOptionsState {
                 configVersion = nil
                 selectedModelID = conversation.model ?? catalog.defaultId ?? models.first?.id ?? ""
                 selectThinking(conversation.thinkingLevel)
+                serviceTier = conversation.serviceTier ?? "default"
             } else {
                 let configuration = try await gateway.fetchAgentConfiguration(conversationID: conversation.id)
                 configVersion = configuration.configVersion
                 selectedModelID = configuration.model ?? catalog.defaultId ?? models.first?.id ?? ""
                 selectThinking(configuration.thinkingLevel)
+                serviceTier = configuration.serviceTier ?? "default"
             }
         } catch {
             if !Task.isCancelled {
@@ -68,9 +96,44 @@ final class AssistantOptionsState {
                 configVersion = saved.configVersion
                 selectedModelID = saved.model ?? selectedModelID
                 selectThinking(saved.thinkingLevel ?? thinkingLevel)
+                serviceTier = saved.serviceTier ?? serviceTier
             }
-            return conversation.configured(model: selectedModelID, thinkingLevel: thinkingLevel)
+            return conversation.configured(model: selectedModelID, thinkingLevel: thinkingLevel, serviceTier: serviceTier)
         } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func toggleFastMode(
+        _ enabled: Bool,
+        for conversation: ConversationSelection,
+        using gateway: any GatewayServing
+    ) async -> ConversationSelection? {
+        guard !isSaving, !isLoading, let fastTier else { return nil }
+        let previous = serviceTier
+        let nextTier = enabled ? fastTier.id : "default"
+        serviceTier = nextTier
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+        do {
+            if !conversation.isDraft {
+                let saved = try await gateway.updateAgentServiceTier(
+                    conversationID: conversation.id,
+                    serviceTier: nextTier
+                )
+                configVersion = saved.configVersion ?? configVersion
+                serviceTier = saved.serviceTier ?? nextTier
+            }
+            let effectiveModel = selectedModelID.isEmpty ? (conversation.model ?? "") : selectedModelID
+            return conversation.configured(
+                model: effectiveModel.isEmpty ? (conversation.model ?? "") : effectiveModel,
+                thinkingLevel: thinkingLevel,
+                serviceTier: serviceTier
+            )
+        } catch {
+            serviceTier = previous
             errorMessage = error.localizedDescription
             return nil
         }

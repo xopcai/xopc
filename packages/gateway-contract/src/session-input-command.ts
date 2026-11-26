@@ -16,6 +16,7 @@ export const sessionCreationSchema = z.strictObject({
   agentSetupLanguage: z.enum(['zh-CN', 'en']).optional(),
   model: z.string().trim().min(1),
   thinkingLevel: z.string().min(1),
+  serviceTier: z.string().trim().min(1).max(64).optional(),
   workingDirectory: z.string().trim().min(1).optional(),
 }).refine(value => value.projectId !== null || value.execution === null, {
   message: 'An execution environment requires a project', path: ['execution'],

@@ -21,6 +21,7 @@ import { updateGatewayAgent, uploadGatewayAgentAvatar } from '@/features/setting
 import { CREATURE_PRESETS } from '@/features/settings/agents/agent-profile-markdown';
 import {
   ExternalRuntimeConfigForm,
+  ExternalRuntimeRateLimitsSummary,
   ExternalRuntimeStatusDot,
   externalRuntimeDisplayName,
   externalRuntimeShortDescription,
@@ -375,6 +376,11 @@ export function AgentEditor({
                       ? '在项目会话中自动绑定项目目录作为工作区，工具调用和上下文由外部 CLI 驱动。'
                       : 'Runs inside Project chats using the project directory as its working tree; tools and execution are driven by the external CLI.'}
                   </p>
+                  {externalProbe?.status === 'ready' && externalProbe.rateLimits ? (
+                    <div className="max-w-sm">
+                      <ExternalRuntimeRateLimitsSummary rateLimits={externalProbe.rateLimits} zh={zh} />
+                    </div>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button variant="ghost" onClick={() => switchPanel('profile')}>

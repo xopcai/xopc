@@ -35,7 +35,10 @@ import {
   ExternalTurnOutcomeAggregator,
   normalizeExternalPlanSteps,
 } from './presentation.js';
-import { getExternalAgentDriver } from './registry.js';
+import {
+  getExternalAgentDriver,
+  resolveValidExternalSessionModel,
+} from './registry.js';
 import {
   appendExternalTranscriptEntry,
   bindExternalSession,
@@ -228,7 +231,13 @@ export async function* runExternalProjectTurn(
   const finishedThoughts = new Set<string>();
   let planUpdateSeq = 0;
 
-  let model = input.modelOverride?.trim() || execution.model?.trim() || driver.defaultModelName;
+  const resolvedOverride = input.modelOverride?.trim()
+    ? resolveValidExternalSessionModel(execution, input.modelOverride)
+    : undefined;
+  const isPlaceholderName = (value: string | undefined): boolean =>
+    !value || value === execution.kind || value === driver.defaultModelName && value === 'codex' || value === 'antigravity';
+  const sanitizedModelOverride = isPlaceholderName(resolvedOverride) ? undefined : resolvedOverride;
+  let model = sanitizedModelOverride || execution.model?.trim() || driver.defaultModelName;
   let usage: ExternalRuntimeUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 };
   const assistant = (
     messageContent: AssistantMessage['content'],
@@ -692,7 +701,7 @@ export async function* runExternalProjectTurn(
             execution,
             permissionMode,
             sessionPolicy,
-            modelOverride: input.modelOverride,
+            modelOverride: sanitizedModelOverride,
             thinkingLevel: input.thinkingLevel,
             serviceTierOverride: input.serviceTierOverride,
             runId,

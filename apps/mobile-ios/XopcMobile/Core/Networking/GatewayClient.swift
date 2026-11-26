@@ -46,6 +46,19 @@ extension GatewayServing {
     func streamTaskResults(conversationID _: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
         AsyncThrowingStream { $0.finish() }
     }
+
+    func updateAgentServiceTier(conversationID: String, serviceTier: String) async throws -> SessionAgentConfiguration {
+        let current = try await fetchAgentConfiguration(conversationID: conversationID)
+        return SessionAgentConfiguration(
+            model: current.model,
+            thinkingLevel: current.thinkingLevel,
+            configVersion: current.configVersion,
+            serviceTier: serviceTier,
+            transcriptId: current.transcriptId,
+            workingDirectoryLocked: current.workingDirectoryLocked,
+            effectiveWorkspacePath: current.effectiveWorkspacePath
+        )
+    }
 }
 
 extension GatewayClient {

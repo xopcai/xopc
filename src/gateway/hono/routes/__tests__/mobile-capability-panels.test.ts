@@ -6,6 +6,8 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { initializeTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
+import { AgentCatalogRepository } from '../../../../agent-catalog/repository.js';
+import * as externalAgentRegistry from '../../../../agent/external/registry.js';
 import { ConfigSchema } from '../../../../config/schema.js';
 import { assertComposioAccessConfigured } from '../../../../connectors/composio-sessions.js';
 import { AgentPluginStore } from '../../../../extensions/agent-plugins/store.js';
@@ -59,6 +61,7 @@ function createPanelHarness(options: {
         ? { runtimeActions: { runAction: (args: { actionId: string; input?: Record<string, string>; locale?: string }) => options.runChannelAction!(channel, args) } }
         : null,
       marketplace: { reloadSkills: vi.fn(), getSkillsApi: () => ({ catalog: [] }) },
+      refreshAgentCatalog: vi.fn(),
     } as unknown as GatewayService,
     strictRateLimitMiddleware: async (_c, next) => next(),
   } as never);
@@ -336,5 +339,96 @@ describe('mobile capability panels guidance and schema-driven setup', () => {
     expect(removed.status).toBe(200);
     expect(removed.body.payload.actions).toContainEqual(expect.objectContaining({ id: 'done', dismiss: true }));
     expect(readConfig().mcp?.servers?.notes).toBeUndefined();
+  });
+
+  it('surfaces external runtime status, Codex quota, default model, fast mode, and recheck in the mobile agent panel', async () => {
+    const { getPanel, postPanel } = createPanelHarness();
+    const repo = new AgentCatalogRepository();
+    repo.create({
+      id: 'codex-mobile',
+      profile: { name: 'Codex', description: 'Host coding runtime' },
+      execution: { kind: 'codex', permissionMode: 'full_access' },
+    }, { ready: true });
+
+    const probeSpy = vi.spyOn(externalAgentRegistry, 'probeExternalAgentRuntimeCached').mockResolvedValue({
+      kind: 'codex',
+      label: 'Codex',
+      installed: true,
+      status: 'ready',
+      version: '0.114.0',
+      models: [
+        {
+          id: 'gpt-6.1-sol',
+          label: 'GPT-6.1 Sol',
+          isDefault: true,
+          thinking: { mode: 'levels', options: ['low', 'medium', 'high'], initialValue: 'high', supportsAdaptive: false },
+          serviceTiers: [{ id: 'priority', label: 'Fast', description: '1.5x speed, increased usage' }],
+        },
+      ],
+      rateLimits: {
+        primary: { usedPercent: 20, windowDurationMins: 300 },
+        secondary: { usedPercent: 10, windowDurationMins: 10080 },
+      },
+    });
+    const modelsSpy = vi.spyOn(externalAgentRegistry, 'resolveExternalRuntimeModelsPayload').mockResolvedValue({
+      runtimeKind: 'codex',
+      runtimeLabel: 'Codex',
+      status: 'ready',
+      defaultModel: 'gpt-6.1-sol',
+      models: [
+        {
+          id: 'gpt-6.1-sol',
+          name: 'GPT-6.1 Sol',
+          provider: 'Codex',
+          isDefault: true,
+          reasoning: true,
+          thinking: { mode: 'levels', options: ['low', 'medium', 'high'], initialValue: 'high', supportsAdaptive: false },
+          serviceTiers: [{ id: 'priority', label: 'Fast', description: '1.5x speed, increased usage' }],
+        },
+      ],
+    });
+
+    try {
+      const loaded = await getPanel('agents', 'codex-mobile', 'zh-CN');
+      expect(loaded.status).toBe(200);
+      expect(loaded.body.payload.headline).toBe('Codex · 已就绪');
+      expect(loaded.body.payload.subtitle).toContain('0.114.0');
+      expect(loaded.body.payload.subtitle).toContain('5h 剩余 80%');
+      expect(loaded.body.payload.subtitle).toContain('周额度剩余 90%');
+      expect(loaded.body.payload.fields).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'defaultModel', type: 'select', value: '__auto__' }),
+        expect.objectContaining({ id: 'fastMode', type: 'toggle', value: 'false' }),
+        expect.objectContaining({ id: 'permissionMode', type: 'select', advanced: true, value: 'full_access' }),
+      ]));
+
+      const saved = await postPanel('agents', 'codex-mobile', {
+        action: 'save',
+        revision: loaded.body.payload.revision,
+        values: {
+          name: 'Codex Pro',
+          description: 'Updated host runtime',
+          defaultModel: 'gpt-6.1-sol',
+          fastMode: 'true',
+          permissionMode: 'auto_edit',
+        },
+      }, 'zh-CN');
+      expect(saved.status).toBe(200);
+      expect(saved.body.payload.message).toBe('已保存');
+      const updated = repo.get('codex-mobile');
+      expect(updated?.profile?.name).toBe('Codex Pro');
+      expect(updated?.execution).toMatchObject({
+        kind: 'codex',
+        model: 'gpt-6.1-sol',
+        serviceTier: 'priority',
+        permissionMode: 'auto_edit',
+      });
+
+      const rechecked = await postPanel('agents', 'codex-mobile', { action: 'recheck', values: {} }, 'zh-CN');
+      expect(rechecked.status).toBe(200);
+      expect(probeSpy).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'codex' }), true);
+    } finally {
+      probeSpy.mockRestore();
+      modelsSpy.mockRestore();
+    }
   });
 });

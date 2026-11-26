@@ -112,7 +112,7 @@ extension GatewayClient {
         configVersion: Int?
     ) async throws -> SessionAgentConfiguration {
         let body = try encoder.encode(AgentConfigurationCommand(
-            model: model, thinkingLevel: thinkingLevel, configVersion: configVersion
+            model: model, thinkingLevel: thinkingLevel, serviceTier: nil, configVersion: configVersion
         ))
         let envelope: GatewayEnvelope<SessionAgentConfiguration> = try await request(
             path: "/api/sessions/\(conversationID)/agent-config",
@@ -121,6 +121,24 @@ extension GatewayClient {
         )
         guard envelope.isSuccessful, let saved = envelope.payload else {
             throw GatewayClientError.server(envelope.error?.message ?? "无法更新会话配置")
+        }
+        return saved
+    }
+
+    func updateAgentServiceTier(
+        conversationID: String,
+        serviceTier: String
+    ) async throws -> SessionAgentConfiguration {
+        let body = try encoder.encode(AgentConfigurationCommand(
+            model: nil, thinkingLevel: nil, serviceTier: serviceTier, configVersion: nil
+        ))
+        let envelope: GatewayEnvelope<SessionAgentConfiguration> = try await request(
+            path: "/api/sessions/\(conversationID)/agent-config",
+            method: "PATCH",
+            body: body
+        )
+        guard envelope.isSuccessful, let saved = envelope.payload else {
+            throw GatewayClientError.server(envelope.error?.message ?? "无法更新速度档位")
         }
         return saved
     }

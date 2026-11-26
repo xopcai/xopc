@@ -2,6 +2,8 @@ import { beginJourney } from '@/lib/performance/diagnostics';
 import {
   buildSessionForkAtTurnPath,
   buildSessionHistoryPath,
+  chooseModelThinking,
+  modelPreferenceForAgent,
   parseSessionForkAtTurnResponse,
   parseSessionMessagePage,
   parseSessionResetResponse,
@@ -15,7 +17,9 @@ import {
 
 import type { Message } from '@/features/chat/messages/messages.types';
 import type { SessionInfo } from '@/features/chat/chat.types';
+import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages';
+import { readNewSessionPreferences } from '@/features/chat/session/new-session-preferences';
 import { fetchSessionActiveRun } from '@/features/chat/session/resolve-resume-run-id';
 import { listSessions } from '@/features/sessions/session-api';
 import { resetChatReadAloud } from '@/features/voice/read-aloud-store';
@@ -26,7 +30,7 @@ import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { readLocalSessionDraft, saveLocalSessionDraft, draftAgentConfig, rememberSessionTranscript, readPendingSessionCommand, confirmSessionCommand, type LocalSessionDraft } from './local-session-drafts';
-import { fetchConfiguredModelsCached } from '../api/registry-api';
+import { fetchAgentRuntimeModelsCached, fetchConfiguredModelsCached } from '../api/registry-api';
 import { fetchGatewayAgentEffectiveConfig } from '@/features/settings/agents-admin-api';
 
 /** `GET /api/sessions?channel=…` filters on {@link SessionMetadata.sourceChannel}. */
@@ -219,21 +223,58 @@ export class SessionManager {
     assertScope();
     const draft = await readLocalSessionDraft(conversationId);
     if (draft) {
-      if (!draft.creation.model.trim() && !draft.submission && !draft.materialization) {
-        const [models, defaults] = await Promise.all([fetchConfiguredModelsCached(), fetchGatewayAgentEffectiveConfig(draft.creation.agentId)]);
+      if (!draft.submission && !draft.materialization) {
+        const agents = await fetchChatAgents().catch(() => undefined);
         assertScope();
-        const modelRef = defaults.config.models.chat.primary;
-        const matches = models.filter(item => item.id === modelRef || item.id.endsWith(`/${modelRef}`));
-        const model = models.find(item => item.id === modelRef) ?? (matches.length === 1 ? matches[0] : undefined);
-        const latest = await readLocalSessionDraft(conversationId);
-        assertScope();
-        if (latest && !latest.creation.model.trim() && !latest.submission && !latest.materialization && model) {
-          latest.creation.model = model.id;
-          latest.creation.thinkingLevel = model.thinking?.initialValue ?? 'off';
-          await saveLocalSessionDraft(latest);
-          return draftAgentConfig(latest);
+        const externalKind = agents?.items.find((item) => item.id === draft.creation.agentId)?.execution;
+        if (externalKind) {
+          const runtimePayload = await fetchAgentRuntimeModelsCached(draft.creation.agentId).catch(() => undefined);
+          assertScope();
+          const models = runtimePayload?.models ?? [];
+          const existingModel = draft.creation.model.trim();
+          const preference = modelPreferenceForAgent(readNewSessionPreferences(), draft.creation.agentId);
+          const preferredRef = preference?.modelRef?.trim();
+          const selected = (existingModel ? models.find((item) => item.id === existingModel) : undefined)
+            ?? (preferredRef ? models.find((item) => item.id === preferredRef) : undefined)
+            ?? (runtimePayload?.defaultModel ? models.find((item) => item.id === runtimePayload.defaultModel) : undefined)
+            ?? models[0];
+          const resolvedModel = selected?.id ?? runtimePayload?.defaultModel ?? externalKind;
+          const resolvedThinking = selected?.thinking
+            ? chooseModelThinking(
+                selected.thinking,
+                (draft.creation.thinkingLevel && draft.creation.thinkingLevel !== 'off'
+                  ? draft.creation.thinkingLevel
+                  : undefined) ?? preference?.thinkingLevel,
+                preference?.thinkingByModel?.[resolvedModel],
+              )
+            : (draft.creation.thinkingLevel || preference?.thinkingLevel || 'medium');
+          const latest = await readLocalSessionDraft(conversationId);
+          assertScope();
+          if (latest && !latest.submission && !latest.materialization) {
+            if (latest.creation.model !== resolvedModel || latest.creation.thinkingLevel !== resolvedThinking) {
+              latest.creation.model = resolvedModel;
+              latest.creation.thinkingLevel = resolvedThinking;
+              await saveLocalSessionDraft(latest);
+            }
+            return draftAgentConfig(latest);
+          }
+          if (latest) return draftAgentConfig(latest);
+        } else if (!draft.creation.model.trim()) {
+          const [models, defaults] = await Promise.all([fetchConfiguredModelsCached(), fetchGatewayAgentEffectiveConfig(draft.creation.agentId)]);
+          assertScope();
+          const modelRef = defaults.config.models.chat.primary;
+          const matches = models.filter(item => item.id === modelRef || item.id.endsWith(`/${modelRef}`));
+          const model = models.find(item => item.id === modelRef) ?? (matches.length === 1 ? matches[0] : undefined);
+          const latest = await readLocalSessionDraft(conversationId);
+          assertScope();
+          if (latest && !latest.creation.model.trim() && !latest.submission && !latest.materialization && model) {
+            latest.creation.model = model.id;
+            latest.creation.thinkingLevel = model.thinking?.initialValue ?? 'off';
+            await saveLocalSessionDraft(latest);
+            return draftAgentConfig(latest);
+          }
+          if (latest) return draftAgentConfig(latest);
         }
-        if (latest) return draftAgentConfig(latest);
       }
       return draftAgentConfig(draft);
     }
@@ -277,6 +318,11 @@ export class SessionManager {
       }
       if (patch.model !== undefined) draft.creation.model = patch.model ?? '';
       if (patch.thinkingLevel !== undefined) draft.creation.thinkingLevel = patch.thinkingLevel;
+      if (patch.serviceTier !== undefined) {
+        const nextTier = patch.serviceTier?.trim();
+        if (nextTier) draft.creation.serviceTier = nextTier;
+        else delete draft.creation.serviceTier;
+      }
       if (patch.userContextMode !== undefined) draft.creation.temporary = patch.userContextMode === 'temporary';
       await saveLocalSessionDraft(draft);
       return draftAgentConfig(draft);
@@ -448,6 +494,9 @@ export class SessionManager {
       ...(options?.agentSetup ? { agentSetup: true as const, agentSetupLanguage: options.agentSetupLanguage } : {}),
       model: options?.initialAgentConfig?.model ?? '',
       thinkingLevel: options?.initialAgentConfig?.thinkingLevel ?? 'off',
+      ...(options?.initialAgentConfig?.serviceTier?.trim()
+        ? { serviceTier: options.initialAgentConfig.serviceTier.trim() }
+        : {}),
     };
     await saveLocalSessionDraft({ conversationId, creation, createdAt });
     mark('draft_saved');

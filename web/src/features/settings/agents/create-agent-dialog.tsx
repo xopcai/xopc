@@ -193,8 +193,8 @@ export function CreateAgentDialog({
               {draft.execution === 'claude' ? (
                 <p className="text-xs leading-5 text-fg-subtle">
                   {zh
-                    ? '通过本机 Claude Code CLI 执行项目任务，支持思考级别、计划模式、工具审批与长连接会话复用。'
-                    : 'Runs Project tasks through your local Claude Code CLI with effort levels, Plan mode, approvals, and warm session reuse.'}
+                    ? '通过本机 Claude Code CLI 执行项目任务，支持思考级别、工具审批与长连接会话复用。'
+                    : 'Runs Project tasks through your local Claude Code CLI with effort levels, approvals, and warm session reuse.'}
                 </p>
               ) : null}
             </div>

@@ -161,9 +161,11 @@ class Handler(BaseHTTPRequestHandler):
   path=urlparse(self.path).path; query=parse_qs(urlparse(self.path).query)
   workspace_parity = path.startswith('/workspace-parity/')
   project_partial = path.startswith('/project-partial/')
+  project_chat_fixture = path.startswith('/project-chat/')
   settings_link = path.startswith('/settings-link/')
   if workspace_parity: path = path.removeprefix('/workspace-parity')
   if project_partial: path = path.removeprefix('/project-partial')
+  if project_chat_fixture: path = path.removeprefix('/project-chat')
   if settings_link: path = path.removeprefix('/settings-link')
   keyboard_fixture = path.startswith('/keyboard/')
   long_history_fixture = path.startswith('/long-history/')
@@ -494,7 +496,8 @@ class Handler(BaseHTTPRequestHandler):
    data=envelope({'catalog':[{'name':'meeting','description':'Meeting summary','enabled':True}]})
   elif path=='/api/projects': data={'ok':True,'items':[project],'total':1,'hasMore':False}
   elif path=='/api/projects/fixture-project': data={'ok':True,'project':project}
-  elif path=='/api/projects/fixture-project/sessions': data={'ok':True,'sessions':[]}
+  elif path=='/api/projects/fixture-project/sessions':
+   data={'ok':True,'sessions':[dict(row, name='已有项目对话')] if project_chat_fixture else []}
   elif project_partial and path=='/api/notes' and 'projectId' in query:
    status=503; data={'error':'笔记暂时不可用'}
   elif path=='/api/automations/configuration-conversations' and self.command=='POST':

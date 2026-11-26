@@ -96,12 +96,25 @@ data class PendingInput(val clientMessageId: String, val content: String, val ta
   val contextRefs: List<ConversationContextRef> = emptyList(),
   val attachments: List<ChatAttachment> = emptyList())
 data class ConversationAgent(val id: String, val name: String, val description: String, val avatar: String = "",
-  val purpose: String? = null)
+  val purpose: String? = null, val externalRuntimeKind: String? = null) {
+  val isExternalRuntime: Boolean get() = !externalRuntimeKind.isNullOrBlank()
+  val externalRuntimeBadge: String? get() = when (externalRuntimeKind?.trim()?.lowercase()) {
+    "codex" -> "Codex"
+    "claude" -> "Claude"
+    "agy" -> "AGY"
+    else -> null
+  }
+}
 data class AgentCatalog(val agents: List<ConversationAgent>, val defaultId: String)
+data class ConversationServiceTier(val id: String, val label: String, val description: String = "")
 data class ConversationModel(val id: String, val name: String, val initialThinkingLevel: String,
   val thinkingMode: String = "none", val thinkingOptions: List<String> = emptyList(),
-  val displayNames: Map<String, String> = emptyMap()) {
+  val displayNames: Map<String, String> = emptyMap(),
+  val serviceTiers: List<ConversationServiceTier> = emptyList()) {
   fun localizedName(language: String): String = displayNames[if (language == "zh") "zh-CN" else "en"] ?: name
+  fun fastServiceTier(): ConversationServiceTier? = serviceTiers.firstOrNull { tier ->
+    tier.id == "priority" || tier.id == "fast" || tier.label.equals("fast", ignoreCase = true)
+  } ?: serviceTiers.firstOrNull()
 }
 
 internal fun JSONObject.modelDisplayNames(): Map<String, String> {
@@ -111,7 +124,7 @@ internal fun JSONObject.modelDisplayNames(): Map<String, String> {
   }.toMap()
 }
 data class ModelSelection(val models: List<ConversationModel>, val selectedId: String,
-  val configVersion: Long?, val thinkingLevel: String = "off")
+  val configVersion: Long?, val thinkingLevel: String = "off", val serviceTier: String = "default")
 data class LocalConversationDraft(
   val conversationId: String,
   val agentId: String,
@@ -121,6 +134,7 @@ data class LocalConversationDraft(
   val projectId: String? = null,
   val executionMode: String? = null,
   val agentSetupLanguage: String? = null,
+  val serviceTier: String? = null,
 )
 
 private const val RECENT_CACHE_AGE = 72 * 60 * 60 * 1000L
@@ -337,7 +351,8 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       json.getString("thinkingLevel"), json.getString("createdAt"),
       if (json.isNull("projectId")) null else json.optString("projectId").takeIf(String::isNotBlank),
       if (json.isNull("executionMode")) null else json.optString("executionMode").takeIf(String::isNotBlank),
-      json.optString("agentSetupLanguage").takeIf { it in setOf("zh-CN", "en") })
+      json.optString("agentSetupLanguage").takeIf { it in setOf("zh-CN", "en") },
+      if (json.isNull("serviceTier")) null else json.optString("serviceTier").takeIf(String::isNotBlank))
   }
 
   fun projectDrafts(projectId: String): List<LocalConversationDraft> {
@@ -422,12 +437,16 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     .put("projectId", draft.projectId ?: JSONObject.NULL)
     .put("executionMode", draft.executionMode ?: JSONObject.NULL)
     .putOpt("agentSetupLanguage", draft.agentSetupLanguage)
+    .putOpt("serviceTier", draft.serviceTier)
 
   private fun creationJson(draft: LocalConversationDraft) = JSONObject()
     .put("agentId", draft.agentId).put("projectId", draft.projectId ?: JSONObject.NULL)
     .put("execution", draft.executionMode?.let { JSONObject().put("mode", it) } ?: JSONObject.NULL)
     .put("temporary", false).put("model", draft.model).put("thinkingLevel", draft.thinkingLevel)
-    .apply { draft.agentSetupLanguage?.let { put("agentSetup", true).put("agentSetupLanguage", it) } }
+    .apply {
+      draft.serviceTier?.takeIf(String::isNotBlank)?.let { put("serviceTier", it) }
+      draft.agentSetupLanguage?.let { put("agentSetup", true).put("agentSetupLanguage", it) }
+    }
 
   private fun defaultProjectExecutionMode(projectId: String): String? {
     val result = JSONObject(gateway.request("/api/projects/${encode(projectId)}"))
@@ -703,11 +722,13 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     val query = effectiveAgent?.takeIf(String::isNotBlank)?.let { "?agentId=${encode(it)}" } ?: ""
     val models = parseModels(gateway.request("/api/models$query"))
     if (local != null) return models.copy(selectedId = local.model.ifBlank { models.selectedId },
-      thinkingLevel = local.thinkingLevel)
+      thinkingLevel = local.thinkingLevel, serviceTier = local.serviceTier?.ifBlank { "default" } ?: "default")
     val raw = gateway.request("/api/sessions/$conversationId/agent-config")
     val config = parseModelConfig(raw)
+    val payload = JSONObject(raw).getJSONObject("payload")
     return models.copy(selectedId = config.first, configVersion = config.second,
-      thinkingLevel = JSONObject(raw).getJSONObject("payload").optString("thinkingLevel", "off"))
+      thinkingLevel = payload.optString("thinkingLevel", "off"),
+      serviceTier = payload.optString("serviceTier").ifBlank { "default" })
   }
 
   fun agentAvatar(agent: ConversationAgent): ByteArray? {
@@ -780,7 +801,27 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     require(response.optBoolean("ok")) { "THINKING_UPDATE_FAILED" }
     val payload = response.getJSONObject("payload")
     return ModelSelection(emptyList(), payload.getString("model"), payload.getLong("configVersion"),
-      payload.getString("thinkingLevel"))
+      payload.getString("thinkingLevel"), payload.optString("serviceTier").ifBlank { "default" })
+  }
+
+  @Synchronized
+  fun setServiceTier(conversationId: String, serviceTier: String): ModelSelection {
+    val normalized = serviceTier.trim().ifBlank { "default" }
+    require(normalized.length <= 64) { "INVALID_SERVICE_TIER" }
+    require(pendingInput(conversationId) == null) { "INPUT_PENDING" }
+    val local = draft(conversationId)
+    if (local != null) {
+      val profile = gateway.currentProfile() ?: throw IllegalStateException("NOT_PAIRED")
+      val updated = local.copy(serviceTier = normalized)
+      pendingStore?.write(draftKey(profile.gatewayId, conversationId), draftJson(updated).toString())
+      return ModelSelection(emptyList(), local.model, null, local.thinkingLevel, normalized)
+    }
+    val body = JSONObject().put("serviceTier", normalized)
+    val response = JSONObject(gateway.request("/api/sessions/$conversationId/agent-config", "PATCH", body.toString()))
+    require(response.optBoolean("ok")) { "SERVICE_TIER_UPDATE_FAILED" }
+    val payload = response.getJSONObject("payload")
+    return ModelSelection(emptyList(), payload.getString("model"), payload.getLong("configVersion"),
+      payload.optString("thinkingLevel", "off"), payload.optString("serviceTier").ifBlank { normalized })
   }
 
   fun nextTurnSuggestion(conversationId: String, locale: String): Pair<String, NextTurnSuggestion?> {
@@ -977,8 +1018,11 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         val item = items.getJSONObject(index)
         val id = item.getString("id")
         require(id.matches(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,63}"))) { "INVALID_AGENTS" }
+        val overrideObj = item.optJSONObject("override")
+        val externalKind = overrideObj?.optJSONObject("execution")?.optString("kind")?.takeIf(String::isNotBlank)
+          ?: item.optJSONObject("execution")?.optString("kind")?.takeIf(String::isNotBlank)
         ConversationAgent(id, item.optString("name").ifBlank { id }, item.optString("description"), item.optString("avatar"),
-          item.optJSONObject("override")?.optString("purpose"))
+          overrideObj?.optString("purpose"), externalKind)
       }
       val defaultId = payload.getString("defaultId")
       require(agents.any { it.id == defaultId }) { "INVALID_AGENTS" }
@@ -997,10 +1041,20 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         require(id.isNotBlank()) { "INVALID_MODELS" }
         val thinking = item.optJSONObject("thinking")
         val options = thinking?.optJSONArray("options")
+        val rawTiers = item.optJSONArray("serviceTiers")
+        val tiers = (0 until (rawTiers?.length() ?: 0)).mapNotNull { tierIdx ->
+          val tierObj = rawTiers?.optJSONObject(tierIdx) ?: return@mapNotNull null
+          val tierId = tierObj.optString("id").takeIf(String::isNotBlank) ?: return@mapNotNull null
+          ConversationServiceTier(
+            tierId,
+            tierObj.optString("label").ifBlank { tierId },
+            tierObj.optString("description"),
+          )
+        }
         ConversationModel(id, item.optString("name").ifBlank { id },
           thinking?.optString("initialValue")?.takeIf(String::isNotBlank) ?: "off",
           thinking?.optString("mode") ?: "none",
-          (0 until (options?.length() ?: 0)).map { options!!.getString(it) }, item.modelDisplayNames())
+          (0 until (options?.length() ?: 0)).map { options!!.getString(it) }, item.modelDisplayNames(), tiers)
       }
       return ModelSelection(models, payload.optString("defaultId").ifBlank { models.firstOrNull()?.id.orEmpty() }, null)
     }

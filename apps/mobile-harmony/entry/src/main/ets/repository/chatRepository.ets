@@ -418,6 +418,7 @@ export class XopcChatRepository {
   async config(id: string): Promise<XopcAgentConfig> {
     const draft = await this.draft(id);
     if (draft) return { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel,
+      serviceTier: draft.creation.serviceTier,
       workingDirectoryLocked: true, effectiveWorkspacePath: '' };
     const result = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/agent-config')) as XopcPayload<XopcAgentConfig>;
     if (!result.payload) throw new Error('INVALID_AGENT_CONFIG');
@@ -435,6 +436,25 @@ export class XopcChatRepository {
       await localSessionStore.save(draft, scope); return;
     }
     const body: XopcAgentConfig = { model, thinkingLevel, configVersion };
+    const result = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/agent-config',
+      'PATCH', JSON.stringify(body))) as XopcPayload<XopcAgentConfig>;
+    gatewaySession.assertConnection(connection);
+    if (!result.payload) throw new Error('INVALID_AGENT_CONFIG');
+    return result.payload;
+  }
+  async setServiceTier(id: string, serviceTier: string): Promise<XopcAgentConfig | undefined> {
+    const normalized = serviceTier.trim() || 'default';
+    const scope = localSessionStore.scope();
+    const connection = gatewaySession.connectionRevision();
+    const draft = await this.draft(id);
+    gatewaySession.assertConnection(connection);
+    if (draft) {
+      if (draft.command || draft.materialization) throw new Error('FIRST_INPUT_PENDING');
+      draft.creation.serviceTier = normalized;
+      await localSessionStore.save(draft, scope);
+      return { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel, serviceTier: normalized };
+    }
+    const body: XopcAgentConfig = { serviceTier: normalized };
     const result = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/agent-config',
       'PATCH', JSON.stringify(body))) as XopcPayload<XopcAgentConfig>;
     gatewaySession.assertConnection(connection);

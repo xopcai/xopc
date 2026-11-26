@@ -56,15 +56,40 @@ struct AgentCatalog: Decodable, Equatable, Sendable {
 }
 
 struct AgentSummary: Decodable, Equatable, Identifiable, Sendable {
-    struct Override: Decodable, Equatable, Sendable { let purpose: String? }
+    struct Execution: Decodable, Equatable, Sendable { let kind: String? }
+    struct Override: Decodable, Equatable, Sendable {
+        let purpose: String?
+        // swiftlint:disable:next implicit_optional_initialization
+        var execution: Execution? = nil
+    }
     // swiftlint:disable:next implicit_optional_initialization
     var override: Override? = nil
+    // swiftlint:disable:next implicit_optional_initialization
+    var execution: Execution? = nil
     let id: String
     let name: String?
     let description: String?
     let language: String?
     let avatar: String?
     let isDefault: Bool?
+
+    var externalRuntimeKind: String? {
+        let raw = (override?.execution?.kind ?? execution?.kind)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return raw?.isEmpty == false ? raw : nil
+    }
+
+    var isExternalRuntime: Bool {
+        externalRuntimeKind != nil
+    }
+
+    var externalRuntimeBadge: String? {
+        switch externalRuntimeKind {
+        case "codex": "Codex"
+        case "claude": "Claude"
+        case "agy": "AGY"
+        default: nil
+        }
+    }
 
     var displayName: String {
         let candidate = name?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -133,6 +158,7 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
     let isDraft: Bool
     let model: String?
     let thinkingLevel: String?
+    var serviceTier: String? = nil
     let projectId: String?
     let executionMode: String?
     let agentSetupLanguage: String?
@@ -146,6 +172,7 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
         isDraft: Bool,
         model: String?,
         thinkingLevel: String?,
+        serviceTier: String? = nil,
         projectId: String?,
         executionMode: String?,
         agentSetupLanguage: String? = nil,
@@ -158,6 +185,7 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
         self.isDraft = isDraft
         self.model = model
         self.thinkingLevel = thinkingLevel
+        self.serviceTier = serviceTier
         self.projectId = projectId
         self.executionMode = executionMode
         self.agentSetupLanguage = agentSetupLanguage
@@ -242,6 +270,7 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
             isDraft: false,
             model: model,
             thinkingLevel: thinkingLevel,
+            serviceTier: serviceTier,
             projectId: projectId,
             executionMode: executionMode,
             agentSetupLanguage: agentSetupLanguage,
@@ -249,7 +278,7 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
         )
     }
 
-    func configured(model: String, thinkingLevel: String) -> ConversationSelection {
+    func configured(model: String, thinkingLevel: String, serviceTier: String? = nil) -> ConversationSelection {
         ConversationSelection(
             id: id,
             title: title,
@@ -258,6 +287,7 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
             isDraft: isDraft,
             model: model,
             thinkingLevel: thinkingLevel,
+            serviceTier: serviceTier ?? self.serviceTier,
             projectId: projectId,
             executionMode: executionMode,
             agentSetupLanguage: agentSetupLanguage,
@@ -271,6 +301,13 @@ struct ChatModelCatalog: Decodable, Sendable {
     let models: [ChatModel]
 }
 
+struct ChatModelServiceTier: Decodable, Equatable, Identifiable, Sendable {
+    let id: String
+    let label: String
+    let description: String?
+    let isDefault: Bool?
+}
+
 struct ChatModel: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
@@ -279,6 +316,15 @@ struct ChatModel: Decodable, Identifiable, Sendable {
     let vision: Bool?
     let thinking: ChatModelThinking?
     var displayNames: [String: String]?
+    // swiftlint:disable:next implicit_optional_initialization
+    var serviceTiers: [ChatModelServiceTier]? = nil
+
+    var fastServiceTier: ChatModelServiceTier? {
+        guard let tiers = serviceTiers, !tiers.isEmpty else { return nil }
+        return tiers.first { tier in
+            tier.id == "priority" || tier.id == "fast" || tier.label.lowercased() == "fast"
+        } ?? tiers.first
+    }
 
     func localizedName(_ locale: Locale) -> String {
         displayNames?[locale.language.languageCode?.identifier == "zh" ? "zh-CN" : "en"] ?? name
@@ -371,6 +417,7 @@ struct HistoryPagination: Decodable, Sendable {
 struct SessionAgentConfiguration: Decodable, Sendable {
     let model: String?
     let thinkingLevel: String?
+    let serviceTier: String?
     let configVersion: Int?
     let transcriptId: String?
     let workingDirectoryLocked: Bool?
@@ -380,12 +427,14 @@ struct SessionAgentConfiguration: Decodable, Sendable {
         model: String?,
         thinkingLevel: String?,
         configVersion: Int?,
+        serviceTier: String? = nil,
         transcriptId: String? = nil,
         workingDirectoryLocked: Bool? = nil,
         effectiveWorkspacePath: String? = nil
     ) {
         self.model = model
         self.thinkingLevel = thinkingLevel
+        self.serviceTier = serviceTier
         self.configVersion = configVersion
         self.transcriptId = transcriptId
         self.workingDirectoryLocked = workingDirectoryLocked

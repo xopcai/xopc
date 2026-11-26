@@ -108,15 +108,17 @@ export interface XopcDrawerProfile { profile?: XopcProfileFields; suggestedCallN
 export interface XopcProfileFields { callName?: string; role?: string; }
 export interface XopcSessionGroup { id: string; label: string; items: XopcSessionItem[]; }
 export interface XopcModelThinking { mode: string; initialValue: string; options: string[]; }
-export interface XopcChatModel { id: string; name?: string; description?: string; displayNames?: Record<string, string>; thinking?: XopcModelThinking; }
+export interface XopcModelServiceTier { id: string; label: string; description?: string; isDefault?: boolean; }
+export interface XopcChatModel { id: string; name?: string; description?: string; displayNames?: Record<string, string>; thinking?: XopcModelThinking; serviceTiers?: XopcModelServiceTier[]; }
 export interface XopcChatModels { defaultId?: string; models?: XopcChatModel[]; items?: XopcChatModel[]; }
 export interface XopcAgentSkillConfig { mode?: string; include?: string[]; }
 export interface XopcAgentEffective { skills?: XopcAgentSkillConfig; }
-export interface XopcChatAgentOverride { purpose?: string; }
-export interface XopcChatAgent { override?: XopcChatAgentOverride; id: string; name?: string; description?: string; avatar?: string; effective?: XopcAgentEffective; }
+export interface XopcChatAgentExecution { kind?: string; }
+export interface XopcChatAgentOverride { purpose?: string; execution?: XopcChatAgentExecution; }
+export interface XopcChatAgent { override?: XopcChatAgentOverride; execution?: XopcChatAgentExecution; id: string; name?: string; description?: string; avatar?: string; effective?: XopcAgentEffective; }
 export interface XopcChatAgents { defaultId: string; agents: XopcChatAgent[]; }
 export interface XopcActivityDetail { default: string; override: string | null; effective: string; source: string; }
-export interface XopcAgentConfig { model?: string; thinkingLevel?: string; activityDetail?: XopcActivityDetail; effectiveWorkspacePath?: string; workingDirectoryLocked?: boolean; configVersion?: number; }
+export interface XopcAgentConfig { model?: string; thinkingLevel?: string; serviceTier?: string; activityDetail?: XopcActivityDetail; effectiveWorkspacePath?: string; workingDirectoryLocked?: boolean; configVersion?: number; }
 export interface XopcSessionPreparation { operationId: string; revision: number; state: string; lastError?: string; executionMode?: string; }
 export interface XopcContextRef { kind: string; sourceId: string; expectedVersion: string; title?: string; }
 export interface XopcContextWorkItem { id: string; title: string; phase?: string; }

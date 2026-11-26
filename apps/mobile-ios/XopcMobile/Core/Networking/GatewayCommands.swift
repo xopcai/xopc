@@ -7,6 +7,7 @@ struct SessionCreationCommand: Encodable {
     let temporary: Bool
     let model: String
     let thinkingLevel: String
+    var serviceTier: String?
     var agentSetupLanguage: String?
 
     func encode(to encoder: Encoder) throws {
@@ -25,6 +26,9 @@ struct SessionCreationCommand: Encodable {
         try container.encode(temporary, forKey: .temporary)
         try container.encode(model, forKey: .model)
         try container.encode(thinkingLevel, forKey: .thinkingLevel)
+        if let serviceTier, !serviceTier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            try container.encode(serviceTier, forKey: .serviceTier)
+        }
         if let agentSetupLanguage {
             try container.encode(true, forKey: .agentSetup)
             try container.encode(agentSetupLanguage, forKey: .agentSetupLanguage)
@@ -38,6 +42,7 @@ struct SessionCreationCommand: Encodable {
         case temporary
         case model
         case thinkingLevel
+        case serviceTier
         case agentSetup, agentSetupLanguage
     }
 }
@@ -109,8 +114,9 @@ struct RenameConversationCommand: Encodable {
 }
 
 struct AgentConfigurationCommand: Encodable {
-    let model: String
-    let thinkingLevel: String
+    let model: String?
+    let thinkingLevel: String?
+    let serviceTier: String?
     let configVersion: Int?
 }
 

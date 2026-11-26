@@ -76,6 +76,10 @@ export struct XopcCapabilitiesView {
     return this.tabs[Math.max(0, categories.indexOf(this.category))];
   }
 
+  @Computed get hasSearchButton(): boolean {
+    return this.category !== 'devices' && this.category !== 'skills';
+  }
+
   aboutToAppear(): void {
     this.active = true;
     this.category = appSettings.pageSelection('capabilities', categories, 'plugins');
@@ -121,7 +125,9 @@ export struct XopcCapabilitiesView {
     if (!next || next === this.category) return;
     this.getUIContext().getFocusController().clearFocus();
     this.hoveredItemId = '';
-    this.searchOpen = next !== 'devices' && (this.searchOpen || this.tabs[index].query.trim().length > 0);
+    if (next !== 'skills') {
+      this.searchOpen = next !== 'devices' && (this.searchOpen || this.tabs[index].query.trim().length > 0);
+    }
     this.category = next;
     appSettings.rememberPageSelection('capabilities', next);
     this.loadNearby(index);
@@ -326,8 +332,8 @@ export struct XopcCapabilitiesView {
       onSelectTitle: (key: string): void => { this.select(key); },
       backVisible: true,
       backId: 'capability-back',
-      onBack: (): void => { if (this.searchOpen) this.closeSearch(); else this.onExit(); },
-      searchId: this.category !== 'devices' ? 'capability-open-search' : '',
+      onBack: (): void => { if (this.hasSearchButton && this.searchOpen) this.closeSearch(); else this.onExit(); },
+      searchId: this.hasSearchButton ? 'capability-open-search' : '',
       searchOpen: this.searchOpen,
       onSearch: (): void => { this.toggleSearch(); },
       secondaryActionLabel: this.category === 'skills' ? $r('app.string.cap_native_skill') : '',
@@ -346,13 +352,14 @@ export struct XopcCapabilitiesView {
   build() {
     Column() {
       this.header()
-      if (this.category !== 'devices' && this.searchOpen) {
+      if (this.category === 'skills' || (this.hasSearchButton && this.searchOpen)) {
         Column() {
           XopcPageSearchField({
             searchId: 'capability-search',
             text: this.activeTab.query,
             placeholder: this.category === 'skills' ? $r('app.string.capability_search_installed_skills')
               : $r('app.string.capability_search', this.getLabel(this.title(this.category))),
+            autoFocus: this.hasSearchButton,
             onChange: (value: string): void => { this.updateQuery(this.activeTab, value); },
             onSubmit: (): void => { this.getUIContext().getFocusController().clearFocus(); },
           })

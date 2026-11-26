@@ -5,13 +5,16 @@ import { SWRConfig } from 'swr';
 import { modelPreferenceForAgent } from '@xopcai/gateway-contract';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchConfiguredModelsCached } from '../api/registry-api';
+import { fetchAgentRuntimeModelsCached, fetchConfiguredModelsCached } from '../api/registry-api';
 import { fetchGatewayAgentEffectiveConfig } from '@/features/settings/agents-admin-api';
 import { readNewSessionPreferences, rememberAgentModel } from '../session/new-session-preferences';
 import type { ProjectSessionPreparation } from '../session/use-chat-session-init';
 import { usePreparedSessionModel } from '../session/use-prepared-session-model';
 
-vi.mock('../api/registry-api', () => ({ fetchConfiguredModelsCached: vi.fn() }));
+vi.mock('../api/registry-api', () => ({
+  fetchConfiguredModelsCached: vi.fn(),
+  fetchAgentRuntimeModelsCached: vi.fn(),
+}));
 vi.mock('@/features/settings/agents-admin-api', () => ({ fetchGatewayAgentEffectiveConfig: vi.fn() }));
 
 describe('prepared session model', () => {
@@ -95,5 +98,81 @@ describe('prepared session model', () => {
     await render(null);
     await expect(stale.create('local_checkout')).rejects.toThrow('not ready');
     expect(preparation.create).not.toHaveBeenCalled();
+  });
+
+  it('waits until agentsReady before fetching models and resolves external runtime default instead of built-in default', async () => {
+    vi.mocked(fetchAgentRuntimeModelsCached).mockResolvedValue({
+      runtimeKind: 'agy',
+      runtimeLabel: 'Antigravity',
+      status: 'ready',
+      defaultModel: 'gemini-3-pro',
+      models: [
+        {
+          id: 'gemini-3-pro',
+          name: 'Gemini 3 Pro',
+          provider: 'Antigravity',
+          thinking: { mode: 'levels', options: ['low', 'medium', 'high'], initialValue: 'medium', supportsAdaptive: false },
+        },
+      ],
+    });
+    const extPrep: ProjectSessionPreparation = { ...preparation, agentId: 'antigravity1' };
+    function ExternalHarness({ ready, runtime }: { ready: boolean; runtime?: 'agy' }) {
+      value = usePreparedSessionModel(extPrep, runtime, ready);
+      return <span>{value.model}</span>;
+    }
+
+    await act(async () => {
+      root.render(<SWRConfig value={cache}><ExternalHarness ready={false} /></SWRConfig>);
+    });
+    expect(fetchConfiguredModelsCached).not.toHaveBeenCalled();
+    expect(fetchGatewayAgentEffectiveConfig).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.render(<SWRConfig value={cache}><ExternalHarness ready runtime="agy" /></SWRConfig>);
+    });
+    expect(fetchAgentRuntimeModelsCached).toHaveBeenCalledWith('antigravity1');
+    expect(value.model).toBe('gemini-3-pro');
+    expect(value.thinkingLevel).toBe('medium');
+    expect(value.ready).toBe(true);
+  });
+
+  it('tracks and submits serviceTier for prepared Codex sessions', async () => {
+    vi.mocked(fetchAgentRuntimeModelsCached).mockResolvedValue({
+      runtimeKind: 'codex',
+      runtimeLabel: 'Codex',
+      status: 'ready',
+      defaultModel: 'gpt-6.1-sol',
+      models: [
+        {
+          id: 'gpt-6.1-sol',
+          name: 'GPT-6.1 Sol',
+          provider: 'Codex',
+          thinking: { mode: 'levels', options: ['low', 'medium', 'high'], initialValue: 'high', supportsAdaptive: false },
+          serviceTiers: [{ id: 'priority', label: 'Fast', description: '1.5x speed, increased usage' }],
+        },
+      ],
+    });
+    const codexPrep: ProjectSessionPreparation = { ...preparation, agentId: 'codex' };
+    function CodexHarness() {
+      value = usePreparedSessionModel(codexPrep, 'codex', true);
+      return <span>{value.serviceTier}</span>;
+    }
+
+    await act(async () => {
+      root.render(<SWRConfig value={cache}><CodexHarness /></SWRConfig>);
+    });
+
+    expect(value.serviceTier).toBe('default');
+    await act(async () => value.onServiceTierChange('priority'));
+    expect(value.serviceTier).toBe('priority');
+    await act(async () => value.onThinkingChange('medium'));
+    expect(value.serviceTier).toBe('priority');
+
+    await act(async () => { await value.preparation!.create('local_checkout'); });
+    expect(preparation.create).toHaveBeenCalledWith(
+      'local_checkout',
+      { model: 'gpt-6.1-sol', thinkingLevel: 'medium', serviceTier: 'priority' },
+      undefined,
+    );
   });
 });

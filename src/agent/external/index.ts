@@ -103,6 +103,7 @@ export {
 } from './auth-flow.js';
 export {
   getCachedExternalDefaultModel,
+  resolveValidExternalSessionModel,
   getCachedExternalRuntimeProbe,
   getExternalAgentDriver,
   invalidateExternalRuntimeProbeCache,

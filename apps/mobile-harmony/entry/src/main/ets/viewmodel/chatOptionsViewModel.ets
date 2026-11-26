@@ -1,13 +1,17 @@
 import { agentDisplayName } from '../common/agentPresentation';
-import { XopcAgentConfig, XopcChatModel, XopcChatAgent, XopcSessionPreparation, XopcInputState } from '../model/chat';
+import { XopcAgentConfig, XopcChatModel, XopcChatAgent, XopcModelServiceTier, XopcSessionPreparation } from '../model/chat';
 import { XopcLocalSession } from '../model/sessionCommand';
+import { XopcProject, XopcProjectList } from '../model/workspace';
 import { XopcChatRepository } from '../repository/chatRepository';
+import { gatewaySession } from '../service/gatewaySession';
 
 @ObservedV2
 export class XopcChatOptionsViewModel {
   @Trace preparation?: XopcSessionPreparation;
   @Trace models: XopcChatModel[] = [];
   @Trace agents: XopcChatAgent[] = [];
+  @Trace workspaceProjects: XopcProject[] = [];
+  @Trace projectsLoading: boolean = false;
   @Trace modelId: string = '';
   @Trace agentId: string = '';
   @Trace loading: boolean = false;
@@ -22,6 +26,7 @@ export class XopcChatOptionsViewModel {
   private preparationRequest: number = 0;
   private timer: number = -1;
   @Trace thinkingLevel: string = 'off';
+  @Trace serviceTier: string = 'default';
 
   dispose(): void { this.generation++; this.preparationRequest++; clearInterval(this.timer); this.timer = -1; }
   pause(): void { this.preparationRequest++; clearInterval(this.timer); this.timer = -1; }
@@ -34,7 +39,7 @@ export class XopcChatOptionsViewModel {
     this.preparationRequest++; this.conversationId = id; this.agentId = agentId;
     this.preparation = undefined; this.preparationError = ''; this.preparationBusy = false;
     this.configVersion = undefined;
-    this.models = []; this.agents = []; this.modelId = ''; this.thinkingLevel = 'off'; this.error = ''; this.loading = true;
+    this.models = []; this.agents = []; this.modelId = ''; this.thinkingLevel = 'off'; this.serviceTier = 'default'; this.error = ''; this.loading = true;
     this.resume();
     try {
       // Freeze draft identity before slower catalog requests. The first input may
@@ -47,13 +52,15 @@ export class XopcChatOptionsViewModel {
       const models = await this.repository.models(this.agentId);
       if (generation !== this.generation) return;
       this.models = models.models ?? models.items ?? [];
-      const config: XopcAgentConfig = draft ? { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel }
+      const config: XopcAgentConfig = draft
+        ? { model: draft.creation.model, thinkingLevel: draft.creation.thinkingLevel, serviceTier: draft.creation.serviceTier }
         : await this.repository.config(id);
       if (generation !== this.generation) return;
       this.configVersion = config.configVersion;
       this.modelId = config.model || models.defaultId || this.models[0]?.id || '';
       const currentModel = this.models.find((item: XopcChatModel): boolean => item.id === this.modelId);
       this.thinkingLevel = this.supportedThinking(currentModel, config.thinkingLevel);
+      this.serviceTier = config.serviceTier?.trim() || 'default';
       if (!config.model && this.modelId && draft) {
         const selected = this.models.find((item: XopcChatModel): boolean => item.id === this.modelId);
         this.thinkingLevel = selected?.thinking?.initialValue ?? 'off';
@@ -67,6 +74,61 @@ export class XopcChatOptionsViewModel {
     return model?.displayNames?.[language.startsWith('zh') ? 'zh-CN' : 'en'] || model?.name || this.modelId.split('/').pop() || 'xopc';
   }
   selectedModel(): XopcChatModel | undefined { return this.models.find((item: XopcChatModel): boolean => item.id === this.modelId); }
+  fastTier(): XopcModelServiceTier | undefined {
+    const tiers = this.selectedModel()?.serviceTiers ?? [];
+    if (!tiers.length) return undefined;
+    return tiers.find((tier: XopcModelServiceTier): boolean =>
+      tier.id === 'priority' || tier.id === 'fast' || tier.label.toLowerCase() === 'fast') ?? tiers[0];
+  }
+  isFastModeEnabled(): boolean {
+    const fast = this.fastTier();
+    if (!fast) return false;
+    const normalized = this.serviceTier.trim();
+    if (!normalized || normalized === 'default') return false;
+    const tiers = this.selectedModel()?.serviceTiers ?? [];
+    return normalized === fast.id || tiers.some((tier: XopcModelServiceTier): boolean => tier.id === normalized);
+  }
+  fastModeSubtitle(language: string): string {
+    const isZh = language.startsWith('zh');
+    const desc = this.fastTier()?.description ?? '';
+    const match = desc.match(/(\d+(?:\.\d+)?x)\s*speed/i);
+    const speed = match ? match[1] : '1.5x';
+    return isZh ? speed + ' 极速 · 消耗更多额度' : speed + ' speed · More usage';
+  }
+  async selectServiceTier(tier: string): Promise<boolean> {
+    if (this.loading || this.saving || !this.conversationId) return false;
+    const normalized = tier.trim() || 'default';
+    if (normalized === this.serviceTier) return true;
+    const previous = this.serviceTier;
+    this.serviceTier = normalized;
+    this.saving = true; this.error = ''; const generation = ++this.generation;
+    try {
+      const config = await this.repository.setServiceTier(this.conversationId, normalized);
+      if (generation !== this.generation) return false;
+      if (config?.configVersion !== undefined) this.configVersion = config.configVersion;
+      this.serviceTier = config?.serviceTier?.trim() || normalized;
+      return true;
+    } catch (error) {
+      if (generation === this.generation) {
+        this.serviceTier = previous;
+        this.error = (error as Error).message;
+      }
+      return false;
+    } finally { this.saving = false; }
+  }
+  async loadWorkspaceProjects(): Promise<void> {
+    this.projectsLoading = true;
+    try {
+      const result = JSON.parse(await gatewaySession.request('/api/projects?limit=100&sortBy=updatedAt&sortOrder=desc')) as XopcProjectList;
+      const items = Array.isArray(result.items) ? result.items : [];
+      this.workspaceProjects = items.filter((item: XopcProject): boolean =>
+        item.status !== 'archived' && !!item.workspaceRoot?.trim());
+    } catch (_error) {
+      this.workspaceProjects = [];
+    } finally {
+      this.projectsLoading = false;
+    }
+  }
   private supportedThinking(model: XopcChatModel | undefined, level?: string): string {
     if (!model?.thinking) return level || 'off';
     return model.thinking.options.includes(level || '') ? level || 'off' : model.thinking.initialValue;

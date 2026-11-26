@@ -72,6 +72,38 @@ export function getCachedExternalDefaultModel(execution: ExternalAgentExecution)
   return cached.models.find((m) => m.isDefault)?.id ?? cached.models[0]?.id;
 }
 
+/**
+ * Resolve a valid model id for an external runtime session, discarding stale or
+ * cross-runtime built-in provider refs (e.g. `openai/gpt-6.1-sol` on AGY) when
+ * they do not match the runtime's discovered catalog.
+ */
+export function resolveValidExternalSessionModel(
+  execution: ExternalAgentExecution,
+  modelOverride?: string | null,
+): string {
+  const driver = getExternalAgentDriver(execution.kind);
+  const cached = getCachedExternalRuntimeProbe(execution);
+  const override = modelOverride?.trim();
+  const configured = execution.model?.trim();
+
+  if (cached && cached.models.length > 0) {
+    if (override && cached.models.some((m) => m.id === override)) {
+      return override;
+    }
+    if (configured && cached.models.some((m) => m.id === configured)) {
+      return configured;
+    }
+    return cached.models.find((m) => m.isDefault)?.id ?? cached.models[0]!.id;
+  }
+
+  // Before a runtime probe is cached, ignore built-in `provider/model` refs
+  // unless explicitly configured on the agent execution itself.
+  if (override && (!override.includes('/') || override === configured)) {
+    return override;
+  }
+  return configured || driver.defaultModelName;
+}
+
 /** Resolve nominal context window (tokens) for an external runtime model. */
 export function resolveExternalContextWindow(
   execution: ExternalAgentExecution,

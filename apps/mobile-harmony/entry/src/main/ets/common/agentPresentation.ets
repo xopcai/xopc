@@ -66,3 +66,20 @@ export function agentDisplayDescription(agent: XopcChatAgent): ResourceStr {
   }
   return copy && (!description || isDefault(description, copy.defaultDescriptions)) ? copy.description : description;
 }
+
+export function agentExternalRuntimeKind(agent: XopcChatAgent): string {
+  const raw = (agent.override?.execution?.kind ?? agent.execution?.kind ?? '').trim().toLowerCase();
+  return raw;
+}
+
+export function isExternalAgent(agent: XopcChatAgent): boolean {
+  return agentExternalRuntimeKind(agent).length > 0;
+}
+
+export function agentExternalRuntimeBadge(agent: XopcChatAgent): string {
+  const kind = agentExternalRuntimeKind(agent);
+  if (kind === 'codex') return 'Codex';
+  if (kind === 'claude') return 'Claude';
+  if (kind === 'agy') return 'AGY';
+  return '';
+}

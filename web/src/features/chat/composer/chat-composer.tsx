@@ -144,8 +144,6 @@ export const ChatComposer = memo(function ChatComposer({
   onModelChange,
   modelDisabled,
   externalAgentId,
-  interactionMode,
-  onInteractionModeChange,
   serviceTier,
   onServiceTierChange,
   onChatAgentChange,
@@ -187,8 +185,6 @@ export const ChatComposer = memo(function ChatComposer({
   onModelChange: (modelId: string, thinkingLevel?: string) => void | Promise<void>;
   modelDisabled: boolean;
   externalAgentId?: string;
-  interactionMode?: 'default' | 'plan';
-  onInteractionModeChange?: (mode: 'default' | 'plan') => void | Promise<void>;
   serviceTier?: string;
   onServiceTierChange?: (tier: string) => void | Promise<void>;
   thinkingLevel: string;
@@ -1039,8 +1035,6 @@ export const ChatComposer = memo(function ChatComposer({
           onModelChange={onModelChange}
           modelDisabled={modelDisabled}
           externalAgentId={externalAgentId}
-          interactionMode={interactionMode}
-          onInteractionModeChange={onInteractionModeChange}
           serviceTier={serviceTier}
           onServiceTierChange={onServiceTierChange}
         />}

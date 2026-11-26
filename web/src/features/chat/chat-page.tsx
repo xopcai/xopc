@@ -1566,15 +1566,9 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                 showModelSelector={!personal}
                 onModelChange={session.onSessionModelChange}
                 externalAgentId={welcomeAgent.execution ? agents.displayAgentId : undefined}
-                interactionMode={session.interactionMode}
-                onInteractionModeChange={
-                  !personal && !session.projectPreparation && session.conversationId
-                    ? session.onSessionInteractionModeChange
-                    : undefined
-                }
                 serviceTier={session.serviceTier}
                 onServiceTierChange={
-                  !personal && !session.projectPreparation && session.conversationId && welcomeAgent.execution
+                  !personal && (session.projectPreparation || session.conversationId) && welcomeAgent.execution
                     ? session.onSessionServiceTierChange
                     : undefined
                 }

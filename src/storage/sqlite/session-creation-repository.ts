@@ -98,6 +98,7 @@ export function acceptSessionCommand(input: {
         thinkingLevel: creation.thinkingLevel as SessionAgentConfig['thinkingLevel'],
         userContextMode: creation.temporary ? 'temporary' : 'enabled',
         ...(creation.workingDirectory ? { workingDirectoryOverride: creation.workingDirectory } : {}),
+        ...(creation.serviceTier ? { serviceTierOverride: creation.serviceTier } : {}),
       };
       setSessionConfig(conversationId, {
         ...config,

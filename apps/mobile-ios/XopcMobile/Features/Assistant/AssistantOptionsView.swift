@@ -12,6 +12,7 @@ struct AssistantSessionActionsView: View {
     let onAddReference: (ContextReference) -> Void
     let onConversationUpdated: (ConversationSelection) -> Void
     let onStartScopedConversation: (ProjectRecord?, String?) -> Void
+    var onStartProjectAgentConversation: ((ProjectRecord, String) -> Void)?
     var isTaskConversation = false
     var onSearch: (() -> Void)?
     var onShare: (() -> Void)?
@@ -45,18 +46,42 @@ struct AssistantSessionActionsView: View {
                 if !isTaskConversation {
                     NavigationLink {
                         List(state.agents) { agent in
-                            Button {
-                                dismiss()
-                                onStartConversation(agent.id)
-                            } label: {
-                                HStack {
-                                    ConfiguredAgentAvatar(configuration: configuration, agent: agent, size: 36, active: false)
-                                    Text(agent.localizedName(locale))
-                                    Spacer()
-                                    if agent.id == conversation?.agentId {
-                                        Image(systemName: "checkmark")
+                            if agent.isExternalRuntime, let onStartProjectAgentConversation {
+                                NavigationLink {
+                                    ExternalAgentProjectPickerView(configuration: configuration, agent: agent) { project in
+                                        dismiss()
+                                        onStartProjectAgentConversation(project, agent.id)
                                     }
-                                }.frame(minHeight: 44)
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        ConfiguredAgentAvatar(configuration: configuration, agent: agent, size: 36, active: false)
+                                        Text(agent.localizedName(locale))
+                                        if let badge = agent.externalRuntimeBadge {
+                                            AgentRuntimeBadge(label: badge)
+                                        }
+                                        Spacer()
+                                        if agent.id == conversation?.agentId {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }.frame(minHeight: 44)
+                                }
+                            } else {
+                                Button {
+                                    dismiss()
+                                    onStartConversation(agent.id)
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        ConfiguredAgentAvatar(configuration: configuration, agent: agent, size: 36, active: false)
+                                        Text(agent.localizedName(locale))
+                                        if let badge = agent.externalRuntimeBadge {
+                                            AgentRuntimeBadge(label: badge)
+                                        }
+                                        Spacer()
+                                        if agent.id == conversation?.agentId {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }.frame(minHeight: 44)
+                                }
                             }
                         }.navigationTitle("选择新对话对象")
                     } label: {
@@ -77,6 +102,26 @@ struct AssistantSessionActionsView: View {
                     } label: {
                         optionRow("思考档位", value: thinkingLabel(options.thinkingLevel), symbol: "slider.horizontal.3")
                     }.disabled(options.isLoading)
+                    if options.fastTier != nil {
+                        Toggle(isOn: Binding(
+                            get: { options.isFastModeEnabled },
+                            set: { nextValue in
+                                Task {
+                                    if let updated = await options.toggleFastMode(
+                                        nextValue,
+                                        for: conversation,
+                                        using: GatewayClient(configuration: configuration)
+                                    ) {
+                                        onConversationUpdated(updated)
+                                    }
+                                }
+                            }
+                        )) {
+                            optionRow("极速模式", value: options.fastModeSubtitle(locale), symbol: "bolt.fill")
+                        }
+                        .disabled(options.isLoading || options.isSaving)
+                        .accessibilityIdentifier("assistant-fast-mode-toggle")
+                    }
                 }
                 if !isTaskConversation {
                     Button {
