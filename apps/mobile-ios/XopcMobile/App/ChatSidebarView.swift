@@ -154,7 +154,7 @@ extension ChatSidebarView {
     private func conversationRow(_ item: ConversationSummary) -> some View {
         let selected = selection?.contains(item.id) ?? (selectedID == item.id)
         let agent = agents[item.agentId] ?? AgentSummary(id: item.agentId, name: nil, description: nil,
-                                                        language: nil, avatar: nil, isDefault: nil)
+                                                         language: nil, avatar: nil, isDefault: nil)
         return Button {
             if var selection {
                 if !selection.insert(item.id).inserted {

@@ -131,6 +131,7 @@
 		9C70CA382715DB04BD0EDA36 /* ChatAttachmentPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = C758AF7E274851B8EC276221 /* ChatAttachmentPreview.swift */; };
 		A156A04209B4F21D96CD8361 /* HoldToSpeakBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86581CF7946F4A56601345FE /* HoldToSpeakBar.swift */; };
 		A2782D63508D91F609C9853D /* GatewayPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E928EFA202655C95A0A39C2 /* GatewayPairing.swift */; };
+		A4634B3A857F8F523302E9DA /* GatewayRealtimeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCADC3BB0092C83B51AC7D8 /* GatewayRealtimeModels.swift */; };
 		A6A69590BE314D5487153752 /* ProjectTaskRoundTripUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 605A9AB9937FE45A97DB7F1B /* ProjectTaskRoundTripUITests.swift */; };
 		A6BFE24269BAEF055ED16452 /* MemoryMaintenanceSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 957ACD7A723FD34666E22AA7 /* MemoryMaintenanceSummary.swift */; };
 		A72C2C6F9AE30E9813D40BA2 /* RealtimeRunSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E5F7ECF0D5276CA41446DC4 /* RealtimeRunSocket.swift */; };
@@ -172,6 +173,7 @@
 		DD5702CC828B354471A6D4A9 /* GatewayClient+ComposerPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7636CD1ED5D767EF95BA7686 /* GatewayClient+ComposerPalette.swift */; };
 		DD6B1272BC1F7275DD29BBD9 /* ChartMarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E166E1B5840371D24051286 /* ChartMarkdownTests.swift */; };
 		DD6E1A6317903F1A6FB42767 /* ChatMessageLinkRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B1323B1C44E84AFD108F23 /* ChatMessageLinkRouter.swift */; };
+		DF0C9AD8363A65CB867D125F /* ProjectDetailSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB909EC884F58382FC451DF /* ProjectDetailSections.swift */; };
 		DF78DCC6F1D9FBC363A4E81E /* TaskEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74B5BF8D4118453BB4A02656 /* TaskEditorView.swift */; };
 		DF9F0C469B316D137D0FC6E0 /* AssistantActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18E0EF82A86C1136F64C5FB4 /* AssistantActivity.swift */; };
 		DFCD7746D70C907AE1712BE4 /* ComposerDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A164510E62DE74FB8A22F552 /* ComposerDraftStore.swift */; };
@@ -255,6 +257,7 @@
 		08B6383B58F71CBE8AC1F918 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		09373E594B14AFE76B9C5CA8 /* AutomationEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationEditorView.swift; sourceTree = "<group>"; };
 		096805868F759BC6CF8A4A07 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0AB909EC884F58382FC451DF /* ProjectDetailSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailSections.swift; sourceTree = "<group>"; };
 		0B7974FF8C079D671DEAD63C /* DeviceConnectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnectionsView.swift; sourceTree = "<group>"; };
 		0E633A6CCBDFE97CCEF69DD4 /* MobileListCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileListCache.swift; sourceTree = "<group>"; };
 		0E928EFA202655C95A0A39C2 /* GatewayPairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayPairing.swift; sourceTree = "<group>"; };
@@ -303,6 +306,7 @@
 		3B5399156DB80FDFA0CC9CDF /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
 		3CD13446795B87ABD58F6150 /* RealtimeVoiceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceModels.swift; sourceTree = "<group>"; };
 		3D00F5B1AC3954D6C80EB6A9 /* XopcMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = XopcMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3DCADC3BB0092C83B51AC7D8 /* GatewayRealtimeModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayRealtimeModels.swift; sourceTree = "<group>"; };
 		3E0EBB6C3755BDF0256201CB /* RealtimeVoiceAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceAudio.swift; sourceTree = "<group>"; };
 		3E166E1B5840371D24051286 /* ChartMarkdownTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartMarkdownTests.swift; sourceTree = "<group>"; };
 		41B4EF63C8712AA9EE957726 /* GatewayClient+Voice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+Voice.swift"; sourceTree = "<group>"; };
@@ -652,6 +656,7 @@
 				59B9D0794B0D4CE399A11BC8 /* ExecutionDetailModels.swift */,
 				B7E9A2F253F1027DFD2F82C1 /* FileTransferPolicy.swift */,
 				365D817669F3BB7FB0BBC518 /* GatewayModels.swift */,
+				3DCADC3BB0092C83B51AC7D8 /* GatewayRealtimeModels.swift */,
 				EDD10B5431CA80B4BB14615F /* MarkdownBlocks.swift */,
 				057D67784AC965DF09436DF4 /* MathMarkdownSyntax.swift */,
 				1541A14BEE8F77ADC95225E8 /* MessageLink.swift */,
@@ -775,6 +780,7 @@
 				2450CD82796FD3FEBDC2B244 /* ProgressRow.swift */,
 				626D1ED3CB8A067D90888730 /* ProgressView.swift */,
 				984F68E72343EC735ECA3506 /* ProjectAssistantChat.swift */,
+				0AB909EC884F58382FC451DF /* ProjectDetailSections.swift */,
 				1E8108DF863EB6495DB8D4F7 /* ProjectDetailView.swift */,
 				D23702EE31DB8F887C088F2F /* ProjectManageView.swift */,
 				93BAAB9A5E492AC5DF693C5A /* ProjectTaskEditorView.swift */,
@@ -1059,6 +1065,7 @@
 				699CC30DBBE7B4F2147710D9 /* GatewayModels.swift in Sources */,
 				A2782D63508D91F609C9853D /* GatewayPairing.swift in Sources */,
 				FA4EA63AEACD1C8233385ED5 /* GatewayProfilesView.swift in Sources */,
+				A4634B3A857F8F523302E9DA /* GatewayRealtimeModels.swift in Sources */,
 				C336DABCDE4659138006BFE1 /* GeneratedMediaView.swift in Sources */,
 				BCABB4A3B25CCE5A53660118 /* GeneratedMusicPlayback.swift in Sources */,
 				A156A04209B4F21D96CD8361 /* HoldToSpeakBar.swift in Sources */,
@@ -1104,6 +1111,7 @@
 				70A51C553D3BD1A9B6328751 /* ProgressRow.swift in Sources */,
 				5D920CCBB7A84AD1D36DE686 /* ProgressView.swift in Sources */,
 				0DE9AD48625D956AD247667D /* ProjectAssistantChat.swift in Sources */,
+				DF0C9AD8363A65CB867D125F /* ProjectDetailSections.swift in Sources */,
 				89CA9F4A07F760665A7EA923 /* ProjectDetailView.swift in Sources */,
 				D1FDC69D2A43C3BD75C1FA16 /* ProjectManageView.swift in Sources */,
 				124B70EBED2EFABA81F75A48 /* ProjectTaskEditorView.swift in Sources */,

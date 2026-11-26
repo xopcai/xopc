@@ -72,8 +72,7 @@ struct ConfiguredAgentAvatar: View {
         .accessibilityHidden(true)
         .task(id: ConfiguredAvatarKey(configuration: configuration, agentID: agent?.id, reference: agent?.avatar)) {
             picture = nil
-            guard let agent, !agent.id.isEmpty, agent.avatar?.hasPrefix("xopc:loopi:") != true else { return }
-            guard resolveUnconfigured || agent.avatar?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
+            guard let agent, !agent.id.isEmpty, agent.avatar?.hasPrefix("xopc:loopi:") != true, resolveUnconfigured || agent.avatar?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
             do {
                 let data: Data
                 if let reference = agent.avatar, let url = URL(string: reference), url.scheme == "https" {

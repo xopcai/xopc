@@ -368,6 +368,10 @@ struct ProjectDetailView: View {
             localChats = try ComposerDraftStore().readProjectDrafts(configuration, projectID: projectID)
         } catch { self.error = error.localizedDescription }
 
+        await loadProjectSections(revision: revision)
+    }
+
+    @MainActor private func loadProjectSections(revision: Int) async {
         let client = GatewayClient(configuration: configuration)
         let id = projectID
         let language = locale.identifier
@@ -397,7 +401,7 @@ struct ProjectDetailView: View {
                 return .homeSnapshot(attention: home?.needsUser, deliveries: home?.recentDeliveries)
             }
             group.addTask {
-                let agents = (try? await client.fetchAgents().agents) ?? []
+                let agents = await (try? client.fetchAgents().agents) ?? []
                 return .externalAgents(agents.filter(\.isExternalRuntime))
             }
             for await result in group {
@@ -462,43 +466,5 @@ struct ProjectDetailView: View {
         case homeSnapshot(attention: [HomeItem]?, deliveries: [HomeDelivery]?)
         case externalAgents([AgentSummary])
         case failed(String)
-    }
-}
-
-private enum ProjectCreationSheet: String, Identifiable {
-    case task
-    case note
-
-    var id: String {
-        rawValue
-    }
-
-    var actionTitle: LocalizedStringKey {
-        switch self {
-        case .task: "新建项目任务"
-        case .note: "新建项目笔记"
-        }
-    }
-}
-
-private enum ProjectSection: String, CaseIterable, Identifiable {
-    case overview
-    case conversations
-    case tasks
-    case notes
-    case automations
-
-    var id: String {
-        rawValue
-    }
-
-    var title: LocalizedStringResource {
-        switch self {
-        case .overview: "概览"
-        case .conversations: "对话"
-        case .tasks: "任务"
-        case .notes: "笔记"
-        case .automations: "自动化"
-        }
     }
 }
