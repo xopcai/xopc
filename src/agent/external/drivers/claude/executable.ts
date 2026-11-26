@@ -1,7 +1,8 @@
-import { accessSync, constants, existsSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 
+import { buildExternalRuntimeEnv } from '../../runtime-env.js';
 import { resolveUserPath } from '../../../agent-scope.js';
 
 function isExecutableFile(candidate: string): boolean {
@@ -58,15 +59,26 @@ export function findClaudeExecutable(override?: string): string | undefined {
   return undefined;
 }
 
+function readClaudeApiKeyHelperVariable(settingsDir: string): string | undefined {
+  try {
+    const settings = JSON.parse(readFileSync(join(settingsDir, 'settings.json'), 'utf8')) as { apiKeyHelper?: unknown } | null;
+    if (typeof settings?.apiKeyHelper !== 'string') return undefined;
+    // Only the user profile may opt in a credential. Project settings and arbitrary shell helpers cannot.
+    const key = /^(?:(?:\/usr)?\/bin\/)?printenv[ \t]+(["']?)([A-Z][A-Z0-9_]*_API_KEY)\1$/
+      .exec(settings.apiKeyHelper.trim())?.[2];
+    return key && !key.startsWith('XOPC_') ? key : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Build the process environment for spawning Claude Code CLI. */
 export function buildClaudeEnv(configDir?: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  // Prevent nested-session refusal when Gateway itself was started inside a Claude Code shell.
-  delete env.CLAUDECODE;
-  delete env.CLAUDE_CODE_ENTRYPOINT;
-  const trimmedDir = configDir?.trim();
-  if (trimmedDir) {
-    env.CLAUDE_CONFIG_DIR = resolve(resolveUserPath(trimmedDir));
-  }
+  const env = buildExternalRuntimeEnv('claude');
+  const configuredDir = configDir?.trim() || env.CLAUDE_CONFIG_DIR?.trim();
+  const settingsDir = configuredDir ? resolve(resolveUserPath(configuredDir)) : join(homedir(), '.claude');
+  if (configuredDir) env.CLAUDE_CONFIG_DIR = settingsDir;
+  const key = readClaudeApiKeyHelperVariable(settingsDir);
+  if (key && process.env[key]) env[key] = process.env[key];
   return env;
 }

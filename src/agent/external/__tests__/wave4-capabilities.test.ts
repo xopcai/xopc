@@ -1,3 +1,6 @@
+import { currentDeviceExecutionActor, recordDeviceExecutionActor } from '../../../endpoint-tools/execution-actor.js';
+import { claimNextSessionInput, insertSessionInput } from '../../../storage/sqlite/session-input-repository.js';
+import type { GatewayPrincipal } from '../../../gateway/security/gateway-principal.js';
 import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,6 +14,7 @@ import { closeXopcDatabase, openXopcDatabase } from '../../../storage/sqlite/con
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 import {
   approvalSignatureForRequest,
+  canAccessExternalInteraction,
   captureTurnCheckpoint,
   checkinPooledExternalSession,
   checkoutPooledExternalSession,
@@ -101,6 +105,13 @@ it('captures non-invasive per-turn Git checkpoints, computes accurate diffs, and
   expect(diff?.removed).toBe(1);
   expect(diff?.diff).toContain('export const value = 2;');
 
+  writeFileSync(join(repo, 'unrelated.txt'), 'Created after the turn');
+  writeFileSync(join(repo, 'app.ts'), 'Post-turn replacement\n');
+  await expect(restoreTurnCheckpoint({ cwd: repo, conversationId: 'conv-ckpt', turnId: 'turn-1' }))
+    .rejects.toThrow('conflict');
+  expect(existsSync(join(repo, 'notes.md'))).toBe(true);
+  writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\nexport const extra = true;\n');
+
   const restored = await restoreTurnCheckpoint({
     cwd: repo,
     conversationId: 'conv-ckpt',
@@ -110,6 +121,7 @@ it('captures non-invasive per-turn Git checkpoints, computes accurate diffs, and
   expect(restored).toEqual({ restored: true, filesChanged: 2, stage: 'before' });
   expect(readFileSync(join(repo, 'app.ts'), 'utf8')).toBe('export const value = 1;\n');
   expect(existsSync(join(repo, 'notes.md'))).toBe(false);
+  expect(readFileSync(join(repo, 'unrelated.txt'), 'utf8')).toBe('Created after the turn');
   expect(git(['rev-parse', 'HEAD'])).toBe(headBefore);
 });
 
@@ -179,6 +191,34 @@ it('projects enabled xopc MCP servers cleanly to Codex, ACP, and Claude Code for
     url: 'https://mcp.linear.app/sse',
     headers: { Authorization: 'Bearer token' },
   });
+});
+
+it('allows an external approval only for the live principal that submitted the run', async () => {
+  const root = makeTempDir('xopc-external-approval-');
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const conversation = createConversation({ agentId: 'main' }, root);
+  const owner: GatewayPrincipal = { kind: 'owner', principalId: 'gateway-owner', scopes: ['workspace.write'] };
+  insertSessionInput({
+    id: 'input', conversationId: conversation.key, clientMessageId: 'message', content: 'Review work',
+    requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin: { type: 'system', source: 'cli' },
+  });
+  recordDeviceExecutionActor(conversation.key, 'message', owner);
+  expect(claimNextSessionInput(conversation.key, 'approval-run')).toBeTruthy();
+
+  let requestId = '';
+  const response = waitForExternalInteraction({
+    conversationId: conversation.key, transcriptId: conversation.transcriptId!, runId: 'approval-run',
+    actor: currentDeviceExecutionActor(conversation.key, 'approval-run'),
+    request: { kind: 'approval', question: 'Run tests?', actionKind: 'command' },
+    signal: new AbortController().signal,
+    emitClarifyEvent: event => { requestId = String(event.requestId); },
+  });
+  expect(canAccessExternalInteraction(requestId, { ...owner, principalId: 'another-owner' })).toBe(false);
+  expect(canAccessExternalInteraction(requestId, { ...owner, scopes: ['sessions.write'] })).toBe(false);
+  expect(canAccessExternalInteraction(requestId, owner)).toBe(true);
+  expect(resolveExternalInteraction({ id: requestId, action: 'answer' })).toMatchObject({ ok: false, code: 'INVALID' });
+  resolveExternalInteraction({ id: requestId, action: 'answer', decision: 'deny' });
+  await expect(response).resolves.toEqual({ kind: 'approval', decision: 'deny' });
 });
 
 it('remembers session-scoped approvals while never auto-approving dangerous commands', async () => {
@@ -308,7 +348,8 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     send({ type: 'stream_event', session_id: 'direct-claude-1', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hello ' } } });
     send({ type: 'stream_event', session_id: 'direct-claude-1', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'from channel!' } } });
     send({ type: 'stream_event', session_id: 'direct-claude-1', event: { type: 'content_block_stop', index: 0 } });
-    send({ type: 'result', subtype: 'success', is_error: false, session_id: 'direct-claude-1', result: 'Hello from channel!' });
+    const failed = JSON.stringify(msg.message).includes('Fail after partial text');
+    send({ type: 'result', subtype: failed ? 'error_during_execution' : 'success', is_error: failed, session_id: 'direct-claude-1', result: failed ? 'Provider failed after partial text' : 'Hello from channel!' });
   }
 });
 `,
@@ -339,6 +380,8 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     onTextUpdate: (full) => updates.push(full),
   });
 
-  expect(res?.text).toBe('Hello from channel!');
+  expect(res).toEqual({ status: 'succeeded', text: 'Hello from channel!' });
+  const failed = await runExternalDirectTurn({ conversationId: conv.key, content: 'Fail after partial text' });
+  expect(failed).toMatchObject({ status: 'failed', text: 'Hello from channel!', error: expect.any(Error) });
   expect(updates).toEqual(['Hello ', 'Hello from channel!']);
 });

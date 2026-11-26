@@ -1,3 +1,4 @@
+import { activeExternalTurnReplacements, updateExternalTurnReplacement } from '../storage/sqlite/session-turn-replace-repository.js';
 import type { AgentService } from '../agent/service.js';
 import { abortExternalTurn } from '../agent/external/index.js';
 import { cancelPhoneAssistance } from '../phone/assistance.js';
@@ -36,6 +37,9 @@ export async function performSessionReset(
     return { ok: false, error: 'Personal AI conversation cannot be reset' };
   }
 
+  if (activeExternalTurnReplacements.has(key)) {
+    return { ok: false, error: 'Wait for the external turn rollback to finish before resetting.' };
+  }
   await Promise.all([abortEmbeddedRun(key), abortExternalTurn(key)]);
 
   try {
@@ -51,6 +55,7 @@ export async function performSessionReset(
   if (!task) {
     return { ok: false, error: 'Session not found' };
   }
+  if (task.previousTranscriptId) updateExternalTurnReplacement(task.previousTranscriptId);
 
   try {
     const agent = deps.getAgentService();

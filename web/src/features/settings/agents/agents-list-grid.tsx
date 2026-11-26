@@ -62,7 +62,13 @@ export function AgentsListGrid({
               disabled={busy}
               onClick={() => onOpen(agent.id)}
             />
-            <AgentAvatarDisplay agentId={agent.id} avatar={agent.avatar} size={40} className="pointer-events-none relative col-start-1 row-span-2 row-start-1 size-10" />
+            <AgentAvatarDisplay
+              agentId={agent.id}
+              avatar={agent.avatar}
+              runtimeBadge={agent.override.execution?.kind}
+              size={40}
+              className="pointer-events-none relative col-start-1 row-span-2 row-start-1 size-10"
+            />
             <div className="pointer-events-none relative col-span-2 col-start-2 row-start-1 flex min-w-0 items-start justify-between gap-2">
               <h3 className="truncate text-sm font-semibold text-fg" title={name}>{name}</h3>
               <div className="flex max-w-[65%] shrink-0 flex-wrap justify-end gap-1">

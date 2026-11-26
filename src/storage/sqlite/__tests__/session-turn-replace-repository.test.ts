@@ -1,3 +1,4 @@
+import { getExternalTurnReplacement, updateExternalTurnReplacement } from '../session-turn-replace-repository.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -74,6 +75,25 @@ describe('session turn replacement repository', () => {
         status: 'queued',
       }),
     ]);
+  });
+
+  it('validates before reserving an external rollback and commits only after it completes', () => {
+    appendTurn('turn-1', 'old text', 'old answer');
+    const request = { conversationId, targetTurnId: 'turn-1', clientMessageId: 'replacement', content: 'new', origin };
+    expect(replaceLatestSessionTurnAndQueueInput({ ...request, expectedTranscriptId: 'stale' }, 'reserve'))
+      .toEqual({ ok: false, code: 'TARGET_NOT_FOUND' });
+    expect(getExternalTurnReplacement(conversationId)).toBeUndefined();
+    expect(replaceLatestSessionTurnAndQueueInput(request, 'reserve')).toMatchObject({ ok: true });
+    const intent = getExternalTurnReplacement(conversationId)!;
+    expect(intent.state).toBe('reserved');
+    expect(replaceLatestSessionTurnAndQueueInput(intent.input, 'complete')).toEqual({ ok: false, code: 'SESSION_BUSY' });
+    expect(loadTranscriptRowsForSession(conversationId)).toHaveLength(2);
+    expect(getSessionInputState(conversationId).inputs).toHaveLength(0);
+    updateExternalTurnReplacement(intent.input.expectedTranscriptId!, 'rolled_back');
+    expect(replaceLatestSessionTurnAndQueueInput(intent.input, 'complete')).toMatchObject({ ok: true });
+    expect(getExternalTurnReplacement(conversationId)).toBeUndefined();
+    expect(loadTranscriptRowsForSession(conversationId)).toHaveLength(0);
+    expect(getSessionInputState(conversationId).inputs).toHaveLength(1);
   });
 
   it('is idempotent when the client retries after the transaction committed', () => {

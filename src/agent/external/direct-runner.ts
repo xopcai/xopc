@@ -9,7 +9,6 @@ import type { SessionConfigStore } from '../../session/index.js';
 import type { SessionStore } from '../../session/store.js';
 import { readCurrentTranscriptId } from '../../storage/sqlite/session-instance-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
-import { resolveExternalInteraction } from './interaction.js';
 import { getExternalAgentDriver } from './registry.js';
 import { getExternalConversationAgent } from './session-binding.js';
 import { runExternalProjectTurn } from './turn-runner.js';
@@ -29,6 +28,10 @@ export interface RunExternalDirectTurnInput {
   onTextUpdate?: (fullText: string) => void;
 }
 
+export type ExternalDirectTurnResult =
+  | { status: 'succeeded'; text: string }
+  | { status: 'failed' | 'interrupted'; text: string; error: Error };
+
 /**
  * Execute a non-webchat turn (Channels like Telegram/Weixin, Automations, CLI direct runs)
  * on an external coding runtime (`codex`, `agy`, `claude`) using the unified `runExternalProjectTurn` pipeline.
@@ -36,7 +39,7 @@ export interface RunExternalDirectTurnInput {
  */
 export async function runExternalDirectTurn(
   input: RunExternalDirectTurnInput,
-): Promise<{ text: string; error?: string } | null> {
+): Promise<ExternalDirectTurnResult | null> {
   const externalAgent = getExternalConversationAgent(input.conversationId);
   if (!externalAgent) return null;
 
@@ -73,6 +76,7 @@ export async function runExternalDirectTurn(
   let accumulatedText = '';
   let lastFinishedText = '';
   let turnError: string | undefined;
+  let interrupted = false;
 
   try {
     for await (const event of runExternalProjectTurn({
@@ -95,6 +99,7 @@ export async function runExternalDirectTurn(
       hasAttachmentsOrContext: Boolean(input.attachments?.length),
       runId,
       signal,
+      headless: true,
     })) {
       if (event.type === 'message_update') {
         const sub = event.assistantMessageEvent as { type?: string; delta?: string } | undefined;
@@ -111,24 +116,22 @@ export async function runExternalDirectTurn(
         if (text.trim()) {
           lastFinishedText = text;
         }
-      } else if (event.type === 'clarify_request' && typeof event.requestId === 'string') {
-        // Headless Channel / Automation turns cannot render a Webchat approval card:
-        // decline/cancel interactive prompts safely so the run never stalls.
-        resolveExternalInteraction({
-          id: event.requestId,
-          expectedVersion: 1,
-          action: 'cancel',
-        });
+      } else if (event.type === 'turn_outcome') {
+        const outcome = event.outcome as { status?: string; summary?: string } | undefined;
+        interrupted = outcome?.status === 'partial' && outcome.summary === 'aborted';
+        if (outcome?.status === 'failed') turnError = outcome.summary || `${driver.label} turn failed.`;
       } else if (event.type === 'error' && typeof event.content === 'string') {
         turnError = event.content;
       }
     }
 
-    const finalText = (lastFinishedText || accumulatedText).trim();
-    if (turnError && !finalText) {
-      throw new Error(turnError);
+    const text = (lastFinishedText || accumulatedText).trim();
+    if (signal.aborted || interrupted) {
+      const error = signal.reason instanceof Error ? signal.reason : new Error(`${driver.label} turn cancelled.`);
+      return { text, status: 'interrupted', error };
     }
-    return { text: finalText, ...(turnError ? { error: turnError } : {}) };
+    if (turnError) return { text, status: 'failed', error: new Error(turnError) };
+    return { text, status: 'succeeded' };
   } finally {
     if (deadlineTimer) clearTimeout(deadlineTimer);
   }

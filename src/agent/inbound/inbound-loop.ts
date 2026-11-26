@@ -318,6 +318,7 @@ export class InboundLoop {
               const extResult = await runExternalDirectTurn({
                 conversationId: sessionContext.conversationId,
                 content: inboundMsg.content,
+                attachments: inboundMsg.attachments,
                 cfg: this.cfg.getConfig(),
                 sessionStore: this.cfg.sessionStore,
                 onTextUpdate: (fullText) => {
@@ -326,6 +327,7 @@ export class InboundLoop {
               });
               if (extResult) {
                 this.cfg.sessionState.setLastAssistantText(sessionContext.conversationId, extResult.text);
+                if (extResult.status !== 'succeeded') busProcessFailed = extResult.error.message;
               }
             } else {
               await this.cfg.agentOrchestrator.process(inboundMsg, sessionContext, verifiedChannelInbound(msg));

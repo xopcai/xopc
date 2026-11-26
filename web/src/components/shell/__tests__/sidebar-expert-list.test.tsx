@@ -135,3 +135,23 @@ it('clears an expert only after all its chats stop replying and ignores setup an
   await act(async () => clearChatRunPresence('another-chat'));
   expect(replyingRow()).toBeUndefined();
 });
+
+it('exposes hover overlay buttons for new chat and agent settings on every expert', async () => {
+  await act(async () => root.render(
+    <SWRConfig value={{ provider: () => new Map(), shouldRetryOnError: false }}>
+      <MemoryRouter initialEntries={['/chat/code-chat']}>
+        <Routes>
+          <Route path="/chat/:conversationId" element={<TestSidebar />} />
+          <Route path="/capabilities/agents/:agentId" element={<div data-testid="agent-settings-page">Settings</div>} />
+        </Routes>
+      </MemoryRouter>
+    </SWRConfig>,
+  ));
+
+  const settingsButton = container.querySelector<HTMLButtonElement>('button[aria-label="设置 编程专家"]');
+  expect(settingsButton).not.toBeNull();
+  expect(container.querySelector('.sidebar-hover-row .sidebar-hover-fade')).not.toBeNull();
+
+  await act(async () => settingsButton!.click());
+  expect(container.querySelector('[data-testid="agent-settings-page"]')).not.toBeNull();
+});

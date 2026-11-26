@@ -361,6 +361,7 @@ export const claudeExternalDriver: ExternalAgentDriver = {
         binaryPath,
         configDir,
         instructions ?? '',
+        context.mcpServers ?? [],
         requestedEffort ?? '',
         sid,
       ]);

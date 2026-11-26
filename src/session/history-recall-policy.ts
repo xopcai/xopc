@@ -63,22 +63,22 @@ export function canRecallHistoryEntry(context: CaptureScopeContext, conversation
  * privacy boundaries (owner-only, non-temporary, session-only markers, and session-scoped facts).
  */
 export function canSearchConversation(config: Config | undefined, context: CaptureScopeContext, conversationId: string): boolean {
-  if (!config || !resolveUserContextSessionAccess(config, context.conversationId).crossSessionHistory) return false;
+  return Boolean(config && resolveUserContextSessionAccess(config, context.conversationId).crossSessionHistory
+    && canShareConversationHistory(config, conversationId, context.conversationId));
+}
+
+export function canShareConversationHistory(config: Config, conversationId: string, sourceConversationId?: string): boolean {
   const row = getSqliteDatabase().prepare(`SELECT s.conversation_id FROM sessions s
     JOIN transcripts t ON t.transcript_id = s.active_transcript_id
-    WHERE s.conversation_id = ? AND ${OWNER_LEARNING_SESSION_SQL}`).get(conversationId) as { conversation_id: string } | undefined;
-  if (!row) return false;
-  if (conversationId !== context.conversationId) {
-    if (!canSearchHistoryEntry(context, conversationId, null, '')) return false;
-    if (hasNarrowSessionMarker(conversationId)) return false;
-  }
-  const route = getConversationRouting(conversationId);
-  return route?.peerKind === 'direct' && isOwnerIdentity(route)
-    && resolveUserContextSessionAccess(config, conversationId).crossSessionHistory;
+    WHERE s.conversation_id = ? AND ${OWNER_LEARNING_SESSION_SQL}`).get(conversationId);
+  if (!row || !resolveUserContextSessionAccess(config, conversationId).crossSessionHistory) return false;
+  if (conversationId === sourceConversationId) return true;
+  return canSearchHistoryEntry({ conversationId: sourceConversationId }, conversationId, null, '')
+    && !hasNarrowSessionMarker(conversationId);
 }
 
 /** Explicit cross-session reads still withhold session-only markers and session-scoped facts. */
-export function canSearchHistoryEntry(context: CaptureScopeContext, conversationId: string, entryId: string | null, text: string): boolean {
+export function canSearchHistoryEntry(context: Partial<CaptureScopeContext>, conversationId: string, entryId: string | null, text: string): boolean {
   if (conversationId !== context.conversationId && NARROW_SESSION_TEXT_RE.test(text)) return false;
   const scopes = readLinkedEntryScopes(conversationId, entryId);
   return scopes.every(scope => scope.scope_type !== 'session' || scope.scope_id === context.conversationId);

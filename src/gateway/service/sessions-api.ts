@@ -1,3 +1,4 @@
+import { activeExternalTurnReplacements } from '../../storage/sqlite/session-turn-replace-repository.js';
 import { withModelConfigLock } from '../../session/model-config-lock.js';
 /**
  * GatewaySessionsApi — session CRUD, search, compaction, tag/pin/archive,
@@ -294,7 +295,7 @@ export class GatewaySessionsApi {
   // ── Lifecycle (delete / rename / tag / pin / archive) ─────────────────
 
   async delete(key: string): Promise<{ deleted: boolean }> {
-    if (isPersonalConversation(key)) return { deleted: false };
+    if (isPersonalConversation(key) || activeExternalTurnReplacements.has(key)) return { deleted: false };
     await abortExternalTurn(key);
     const transcriptRows = await this.opts.sessionIndex.getStore()
       .loadTranscriptHistoryRows(key)

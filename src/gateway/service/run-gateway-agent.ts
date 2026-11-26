@@ -1,3 +1,6 @@
+import { currentDeviceExecutionActor } from '../../endpoint-tools/execution-actor.js';
+import { hasGatewayScope } from '../security/gateway-scopes.js';
+import type { RealtimeAudience } from '../../realtime/broker.js';
 import { isPhoneAssistanceSuspended } from '../../phone/assistance.js';
 import { isBrowserAssistanceSuspended } from '../../browser/assistance.js';
 import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
@@ -74,7 +77,7 @@ export type RunGatewayAgentDeps = {
   activeExecutionBySession: Map<string, ActiveExecution>;
   sessionIndex: SessionIndex;
   emit: (type: string, payload: unknown) => void;
-  publishRealtime: (topic: string, event: string, data: unknown) => void;
+  publishRealtime: (topic: string, event: string, data: unknown, audience?: RealtimeAudience) => void;
   completeRealtimeTopic: (topic: string) => void;
   reactions?: AgentReactionService;
 };
@@ -185,6 +188,10 @@ export async function *runGatewayAgent(
     startsNewBubble: origin.type === 'system' && origin.source === 'task_update',
     ...(origin.type === 'system' && origin.source === 'task_update' && webchatConversationId
       ? { taskTrigger: listTaskUpdateTriggers(webchatConversationId).get(runId) } : {}) });
+  const externalAgent = webchatMetadata && getExternalAgent(webchatMetadata.agentId);
+  const interactionActor = externalAgent && webchatConversationId
+    ? currentDeviceExecutionActor(webchatConversationId, runId)
+    : undefined;
   let registeredActiveWebchatRun = false;
   const captureTaskEvent = (event: ChatStreamEvent): void => {
     if (event.type === 'tool_start') {
@@ -233,7 +240,10 @@ export async function *runGatewayAgent(
       }
       if (taskRun) captureTaskEvent(event);
       if (channel === 'webchat') {
-        publishRealtime(runTopic, event.type, event);
+        const audience = externalAgent && interactionActor && event.type === 'clarify_request'
+          ? { principalId: interactionActor.principalId, scope: 'workspace.write' as const }
+          : undefined;
+        publishRealtime(runTopic, event.type, event, audience);
       }
       yield event;
     }
@@ -248,7 +258,6 @@ export async function *runGatewayAgent(
         ...(webchatTranscriptId ? { transcriptId: webchatTranscriptId } : {}),
       });
 
-      const externalAgent = webchatMetadata && getExternalAgent(webchatMetadata.agentId);
       const stampedMessage = externalAgent || message.trimStart().startsWith('/')
         ? message
         : prependEnvelopeTimestamp(message, agentService.resolveUserTimezoneForSession(conversationId));
@@ -333,6 +342,8 @@ export async function *runGatewayAgent(
           runId,
           clientMessageId: runOptions?.inputIdentity?.clientMessageId,
           signal: mergedSignal,
+          interactionActor,
+          headless: !interactionActor || !hasGatewayScope(interactionActor.scopes, 'workspace.write'),
         }) : agentService.turnDispatcher.processDirectStreaming(
           stampedMessage,
           conversationId,

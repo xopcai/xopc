@@ -9,6 +9,9 @@ import {
   type ClarificationWaitSnapshot,
 } from '@xopcai/gateway-contract';
 
+import { currentDeviceExecutionActor, deviceExecutionPrincipalId } from '../../endpoint-tools/execution-actor.js';
+import type { GatewayPrincipal } from '../../gateway/security/gateway-principal.js';
+import { hasGatewayScope } from '../../gateway/security/gateway-scopes.js';
 import type { ResolveClarificationResult } from '../../storage/sqlite/clarification-wait-repository.js';
 import {
   isDangerousExternalCommand,
@@ -25,6 +28,7 @@ interface PendingExternalInteraction {
   id: string;
   conversationId: string;
   wait: ClarificationWait;
+  actor?: GatewayPrincipal;
   request: ExternalInteractionRequest;
   normalizedQuestion: ReturnType<typeof normalizeClarificationQuestion>;
   streamEvent: ExternalClarifyStreamEvent;
@@ -45,6 +49,7 @@ function buildClarificationWait(input: {
   conversationId: string;
   transcriptId: string;
   runId: string;
+  actor?: GatewayPrincipal;
   request: ExternalInteractionRequest;
 }): {
   wait: ClarificationWait;
@@ -94,7 +99,7 @@ function buildClarificationWait(input: {
 
   const wait: ClarificationWait = {
     id: input.id,
-    principalId: 'external-runtime',
+    principalId: input.actor?.principalId ?? 'external-runtime',
     conversationId: input.conversationId,
     transcriptId: input.transcriptId,
     objectiveId: input.runId,
@@ -187,6 +192,7 @@ export function waitForExternalInteraction(input: {
   conversationId: string;
   transcriptId: string;
   runId: string;
+  actor?: GatewayPrincipal;
   request: ExternalInteractionRequest;
   signal: AbortSignal;
   emitClarifyEvent: (event: ExternalClarifyStreamEvent) => void;
@@ -196,7 +202,7 @@ export function waitForExternalInteraction(input: {
   }
   if (
     input.request.kind === 'approval'
-    && isExternalApprovalRemembered(input.conversationId, input.transcriptId, input.request)
+    && isExternalApprovalRemembered(input.conversationId, input.transcriptId, input.request, input.actor?.principalId)
   ) {
     return Promise.resolve({ kind: 'approval', decision: 'approve' });
   }
@@ -207,6 +213,7 @@ export function waitForExternalInteraction(input: {
     conversationId: input.conversationId,
     transcriptId: input.transcriptId,
     runId: input.runId,
+    actor: input.actor,
     request: input.request,
   });
 
@@ -215,6 +222,7 @@ export function waitForExternalInteraction(input: {
       id,
       conversationId: input.conversationId,
       wait,
+      actor: input.actor,
       request: input.request,
       normalizedQuestion,
       streamEvent,
@@ -251,6 +259,15 @@ export function hasExternalInteraction(id: string): boolean {
   return pendingById.has(id);
 }
 
+export function canAccessExternalInteraction(id: string, actor: GatewayPrincipal | undefined): boolean {
+  const pending = pendingById.get(id);
+  if (!pending?.actor || !actor || !hasGatewayScope(actor.scopes, 'workspace.write')) return false;
+  const current = currentDeviceExecutionActor(pending.conversationId, pending.wait.originRunId);
+  return current?.principalId === pending.actor.principalId
+    && current.principalId === deviceExecutionPrincipalId(actor)
+    && hasGatewayScope(current.scopes, 'workspace.write');
+}
+
 export function resolveExternalInteraction(
   input: ClarificationSubmission & {
     id: string;
@@ -284,12 +301,13 @@ export function resolveExternalInteraction(
 
   if (pending.request.kind === 'approval') {
     const rememberForSession = input.response?.choiceId === 'approve_session';
-    const decision = input.decision ?? (input.response?.choiceId === 'deny' ? 'deny' : 'approve');
+    const choice = input.response?.choiceId;
+    const decision = input.decision ?? (choice === 'deny' ? 'deny' : choice === 'approve' || choice === 'approve_session' ? 'approve' : undefined);
     if (decision !== 'approve' && decision !== 'deny') {
       return { ok: false, code: 'INVALID', clarification: pending.wait };
     }
     if (decision === 'approve' && rememberForSession) {
-      rememberExternalSessionApproval(pending.conversationId, pending.wait.transcriptId, pending.request);
+      rememberExternalSessionApproval(pending.conversationId, pending.wait.transcriptId, pending.request, pending.actor?.principalId);
     }
     const answeredWait: ClarificationWait = {
       ...pending.wait,

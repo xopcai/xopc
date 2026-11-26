@@ -142,11 +142,14 @@ export async function forkExternalSession(input: {
 export async function rollbackExternalSession(
   conversationId: string,
   numTurns: number,
-  options?: { signal?: AbortSignal; restoreFiles?: boolean; targetTurnId?: string },
+  options?: { signal?: AbortSignal; expectedTranscriptId?: string },
 ): Promise<boolean> {
   const resolved = await resolveExternalSessionContext(conversationId);
   if (!resolved) return false;
   const { agent, driver, identity, binding } = resolved;
+  if (options?.expectedTranscriptId && identity.transcriptId !== options.expectedTranscriptId) {
+    throw new Error('Session transcript changed before rollback.');
+  }
   if (!driver.rollbackSession) {
     throw new Error(`${driver.label} sessions do not support rolling back turns.`);
   }
@@ -161,14 +164,6 @@ export async function rollbackExternalSession(
       signal: options?.signal,
     });
     clearExternalSessionLastInputEntry(identity.transcriptId);
-  }
-  if (options?.restoreFiles && options.targetTurnId) {
-    await restoreTurnCheckpoint({
-      cwd: identity.cwd,
-      conversationId,
-      turnId: options.targetTurnId,
-      stage: 'before',
-    }).catch(() => {});
   }
   return true;
 }
@@ -204,7 +199,10 @@ export async function restoreSessionTurnCheckpoint(
   conversationId: string,
   turnId: string,
   stage: 'before' | 'after' = 'before',
+  options?: { checkOnly?: boolean; optional?: boolean },
 ): Promise<{ restored: boolean; filesChanged: number; stage: 'before' | 'after' }> {
-  const cwd = await resolveSessionWorkspaceCwd(conversationId);
-  return restoreTurnCheckpoint({ cwd, conversationId, turnId, stage });
+  const external = options?.optional ? await resolveExternalSessionContext(conversationId) : undefined;
+  if (options?.optional && !external) return { restored: false, filesChanged: 0, stage };
+  const cwd = external?.identity.cwd ?? await resolveSessionWorkspaceCwd(conversationId);
+  return restoreTurnCheckpoint({ cwd, conversationId, turnId, stage }, options);
 }

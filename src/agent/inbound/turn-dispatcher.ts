@@ -33,7 +33,6 @@ import type {
 } from '../session/index.js';
 import { queueEmbeddedSteer } from '../embedded/runs.js';
 import { getExternalConversationAgent, runExternalDirectTurn } from '../external/index.js';
-import type { UserTurnAttachment } from '../../gateway/user-turn-input.js';
 import type {
   InboundAttachmentInput,
   MediaRef,
@@ -121,7 +120,7 @@ export class TurnDispatcher {
       const result = await runExternalDirectTurn({
         conversationId,
         content,
-        attachments: attachments as UserTurnAttachment[] | undefined,
+        attachments,
         thinking,
         runId: options?.runId,
         signal: options?.signal,
@@ -132,6 +131,7 @@ export class TurnDispatcher {
       });
       if (result) {
         this.cfg.onSessionTranscriptUpdated?.(conversationId);
+        if (result.status !== 'succeeded') throw result.error;
         return result.text;
       }
     }

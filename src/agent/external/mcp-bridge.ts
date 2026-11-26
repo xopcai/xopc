@@ -1,3 +1,7 @@
+import { getProjectForSession } from '../../projects/workspace.js';
+import { getSessionMetadata } from '../../storage/sqlite/session-read-repository.js';
+import { getSessionInteractionPolicy } from '../session/interaction-policy-state.js';
+import { getExternalConversationAgent } from './session-binding.js';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,6 +69,9 @@ type CachedSessionGrant = {
   connectionId: string;
   token: string;
   expiresAt: number;
+  transcriptId: string;
+  agentId: string;
+  projectId?: string;
 };
 
 const sessionGrants = new Map<string, CachedSessionGrant>();
@@ -165,6 +172,42 @@ function resolveBuiltInCapabilityIds(params: {
   return [...ids];
 }
 
+export function resolveExternalContextAccess(
+  conversationId: string,
+  configured: ExternalContextAccess | undefined,
+): ExternalContextAccess {
+  const access = configured ?? 'read_only';
+  const policy = getSessionInteractionPolicy(conversationId);
+  return access === 'read_write' && (policy.mode === 'plan' || policy.access === 'read-only') ? 'read_only' : access;
+}
+
+function grantFingerprint(
+  access: 'read_only' | 'read_write',
+  projectId: string | undefined,
+  capabilities: readonly string[],
+): string {
+  return JSON.stringify([access, projectId ?? '', [...capabilities].sort()]);
+}
+
+/** External credentials are valid only while their issuing Gateway still authorizes the active transcript. */
+export function authorizeExternalMcpConnection(connectionId: string, cfg: Config): string | undefined {
+  for (const [conversationId, grant] of sessionGrants) {
+    if (grant.connectionId !== connectionId) continue;
+    const agent = getExternalConversationAgent(conversationId);
+    const session = getSessionMetadata(conversationId);
+    const projectId = getProjectForSession(conversationId)?.id;
+    const contextAccess = resolveExternalContextAccess(conversationId, agent?.execution.contextAccess);
+    if (agent?.enabled && !agent.deletedAt && agent.id === grant.agentId
+      && session?.transcriptId === grant.transcriptId && projectId === grant.projectId
+      && (contextAccess === 'read_only' || contextAccess === 'read_write')
+      && grant.fingerprint === grantFingerprint(contextAccess, projectId, resolveBuiltInCapabilityIds({ contextAccess, conversationId, cfg }))) {
+      return conversationId;
+    }
+    revokeExternalSessionMcpGrant(conversationId);
+    return undefined;
+  }
+}
+
 function getOrCreateBuiltInXopcMcpServer(params: {
   conversationId: string;
   agentId?: string;
@@ -181,17 +224,15 @@ function getOrCreateBuiltInXopcMcpServer(params: {
     conversationId: params.conversationId,
     cfg: params.cfg,
   });
-  const fingerprint = JSON.stringify([
-    params.contextAccess,
-    params.projectId ?? '',
-    capabilityIds.slice().sort(),
-  ]);
+  const session = getSessionMetadata(params.conversationId);
+  if (!session?.transcriptId) return null;
+  const fingerprint = grantFingerprint(params.contextAccess, params.projectId, capabilityIds);
 
   const now = Date.now();
   const cached = sessionGrants.get(params.conversationId);
   let token: string;
 
-  if (cached && cached.fingerprint === fingerprint && cached.expiresAt - now > GRANT_REFRESH_MARGIN_MS) {
+  if (cached && cached.transcriptId === session.transcriptId && cached.agentId === session.agentId && cached.fingerprint === fingerprint && cached.expiresAt - now > GRANT_REFRESH_MARGIN_MS) {
     token = cached.token;
   } else {
     if (cached) revokeExternalSessionMcpGrant(params.conversationId);
@@ -207,6 +248,9 @@ function getOrCreateBuiltInXopcMcpServer(params: {
       connectionId: created.connectionId,
       token: created.token,
       expiresAt,
+      transcriptId: session.transcriptId,
+      agentId: session.agentId,
+      projectId: params.projectId,
     });
     token = created.token;
   }
@@ -310,12 +354,11 @@ export function resolveExternalTurnMcpContext(params: {
     cfg: params.cfg,
   });
 
-  const accessTier: ExternalContextAccess = params.contextAccess ?? 'read_only';
-  if (accessTier !== 'read_only' && accessTier !== 'read_write') {
+  const accessTier = resolveExternalContextAccess(params.conversationId, params.contextAccess);
+  if ((accessTier !== 'read_only' && accessTier !== 'read_write') || !params.projectId
+    || servers.some((spec) => spec.name === 'xopc')) {
+    revokeExternalSessionMcpGrant(params.conversationId);
     return { servers, builtInMounted: false };
-  }
-  if (servers.some((spec) => spec.name === 'xopc')) {
-    return { servers, builtInMounted: true };
   }
 
   const port = params.gatewayPort ?? activeExternalMcpGatewayPort;

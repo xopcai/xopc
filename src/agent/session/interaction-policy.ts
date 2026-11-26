@@ -1,4 +1,5 @@
 import { isEmbeddedRunActive } from '../embedded/runs.js';
+import { revokeExternalSessionMcpGrant } from '../external/mcp-bridge.js';
 import { hasActiveExternalTurn } from '../external/turn-runner.js';
 import { commandRegistry } from '../commands/command-registry.js';
 import { listChildRuns } from '../orchestration/child-run-monitor.js';
@@ -21,6 +22,7 @@ export function setSessionInteractionPolicy(conversationId: string, value: Sessi
     throw new Error('Stop the active run, background jobs and subagents before changing mode or permissions.');
   }
   sessionInteractionPolicies().set(conversationId, policy);
+  revokeExternalSessionMcpGrant(conversationId);
   return policy;
 }
 

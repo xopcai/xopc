@@ -376,9 +376,14 @@ export function AgentEditor({
                       : 'Runs inside Project chats using the project directory as its working tree; tools and execution are driven by the external CLI.'}
                   </p>
                 </div>
-                <Button onClick={() => switchPanel('runtime')}>
-                  {zh ? '配置运行时' : 'Configure runtime'}
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="ghost" onClick={() => switchPanel('profile')}>
+                    {zh ? '编辑资料与头像' : 'Edit profile & avatar'}
+                  </Button>
+                  <Button onClick={() => switchPanel('runtime')}>
+                    {zh ? '配置运行时' : 'Configure runtime'}
+                  </Button>
+                </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <SummaryCard
@@ -458,32 +463,29 @@ export function AgentEditor({
                     : 'Configure display identity and the working instructions injected into each external runtime session.'
                 }
               />
-              <section className="rounded-2xl border border-edge bg-surface-base p-4 sm:p-5">
-                <div className="grid items-center gap-4 sm:grid-cols-2">
-                  <div className="min-w-0">
-                    <AgentAvatarField
-                      agentId={agent.id}
-                      avatar={draft.profile?.avatar}
-                      zh={zh}
-                      disabled={saving}
-                      pending={pendingAvatar}
-                      onPendingChange={setPendingAvatar}
-                      onReadingChange={setAvatarReading}
-                      onChange={(avatar) => updateIdentity('avatar', avatar)}
-                    />
-                  </div>
-                  <label className="text-xs font-medium text-fg-muted">
+              <section className="space-y-4 rounded-2xl border border-edge bg-surface-base p-4 sm:p-5">
+                <AgentAvatarField
+                  agentId={agent.id}
+                  avatar={draft.profile?.avatar ?? agent.avatar}
+                  runtimeKind={externalExecution.kind}
+                  zh={zh}
+                  disabled={saving}
+                  pending={pendingAvatar}
+                  onPendingChange={setPendingAvatar}
+                  onReadingChange={setAvatarReading}
+                  onChange={(avatar) => updateIdentity('avatar', avatar)}
+                />
+                <div className="grid gap-4 border-t border-edge-subtle pt-4 sm:grid-cols-2">
+                  <label className="text-xs font-medium text-fg-muted sm:col-span-2">
                     {zh ? '名称' : 'Name'}
                     <input
                       className={`${inputClass} mt-1.5`}
                       value={profileName}
                       onChange={(event) => updateIdentity('name', event.target.value)}
-                      placeholder={externalExecution.kind === 'codex' ? 'Codex' : 'Antigravity'}
+                      placeholder={externalRuntimeDisplayName(externalExecution.kind)}
                     />
                   </label>
-                </div>
-                <div className="mt-4">
-                  <label className="block text-xs font-medium text-fg-muted">
+                  <label className="block text-xs font-medium text-fg-muted sm:col-span-2">
                     {zh ? '介绍' : 'Description'}
                     <textarea
                       rows={2}
@@ -500,7 +502,9 @@ export function AgentEditor({
                 <p className="mt-1 text-xs leading-5 text-fg-muted">
                   {externalExecution.kind === 'codex'
                     ? (zh ? '会在创建或恢复 Codex 会话时作为 developerInstructions 传入。' : 'Sent as developerInstructions when starting or resuming Codex sessions.')
-                    : (zh ? '会在创建 Antigravity ACP 会话时作为 systemPrompt.append 传入。' : 'Sent as systemPrompt.append when creating Antigravity ACP sessions.')}
+                    : externalExecution.kind === 'claude'
+                      ? (zh ? '会在创建或恢复 Claude Code 会话时通过 --append-system-prompt 传入。' : 'Passed via --append-system-prompt when starting or resuming Claude Code sessions.')
+                      : (zh ? '会在创建 Antigravity ACP 会话时作为 systemPrompt.append 传入。' : 'Sent as systemPrompt.append when creating Antigravity ACP sessions.')}
                 </p>
                 <textarea
                   rows={6}

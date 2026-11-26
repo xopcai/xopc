@@ -15,6 +15,8 @@ import {
   type TranscriptEntryRow,
 } from './row-mappers.js';
 import { authorizeSessionInput, readSessionInputControl } from './session-input-control-repository.js';
+import { DurableState } from './durable-state.js';
+import { readCurrentTranscriptId } from './session-instance-repository.js';
 import { getXopcDatabase } from './connection.js';
 import { runSqliteWriteTransaction } from './transaction.js';
 
@@ -31,6 +33,35 @@ export type ReplaceLatestSessionTurnInput = {
   thinking?: string;
   origin: TurnOrigin;
 };
+
+type ExternalTurnReplacement = {
+  input: ReplaceLatestSessionTurnInput & { expectedTranscriptId: string };
+  state: 'reserved' | 'rolling_back' | 'native_rolled_back' | 'rolled_back';
+};
+
+const externalReplacements = new DurableState<ExternalTurnReplacement>('external.turn-replacements');
+export const activeExternalTurnReplacements = new Set<string>();
+
+export function getExternalTurnReplacement(conversationId: string) {
+  const transcriptId = readCurrentTranscriptId(getXopcDatabase().db, conversationId);
+  return transcriptId ? externalReplacements.get(transcriptId) : undefined;
+}
+
+export function listActiveExternalTurnReplacementConversations(): string[] {
+  const db = getXopcDatabase().db;
+  return externalReplacements.entries().flatMap(([transcriptId, { input }]) =>
+    readCurrentTranscriptId(db, input.conversationId) === transcriptId ? [input.conversationId] : []);
+}
+
+export function updateExternalTurnReplacement(transcriptId: string, state?: Exclude<ExternalTurnReplacement['state'], 'reserved'>): void {
+  if (!state) {
+    externalReplacements.delete(transcriptId);
+    return;
+  }
+  const reservation = externalReplacements.get(transcriptId);
+  if (!reservation) throw new Error('External turn replacement reservation is missing');
+  externalReplacements.set(transcriptId, { ...reservation, state });
+}
 
 export type ReplaceLatestSessionTurnResult =
   | {
@@ -75,12 +106,13 @@ function validateTargetRows(
 export function validateLatestSessionTurnTarget(
   conversationId: string,
   targetTurnId: string,
+  expectedTranscriptId?: string,
 ): { ok: true } | { ok: false; code: 'TARGET_NOT_FOUND' | 'NOT_LATEST' } {
   const { db } = getXopcDatabase();
   const session = db
     .prepare(`SELECT active_transcript_id AS transcript_id FROM sessions WHERE conversation_id = ?`)
     .get(conversationId) as { transcript_id: string } | undefined;
-  if (!session) return { ok: false, code: 'TARGET_NOT_FOUND' };
+  if (!session || (expectedTranscriptId && session.transcript_id !== expectedTranscriptId)) return { ok: false, code: 'TARGET_NOT_FOUND' };
   const entries = db
     .prepare(
       `SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at
@@ -98,6 +130,7 @@ export function validateLatestSessionTurnTarget(
  */
 export function replaceLatestSessionTurnAndQueueInput(
   input: ReplaceLatestSessionTurnInput,
+  externalPhase?: 'reserve' | 'complete',
 ): ReplaceLatestSessionTurnResult {
   return runSqliteWriteTransaction((db) => {
     const existing = db
@@ -127,6 +160,12 @@ export function replaceLatestSessionTurnAndQueueInput(
       .prepare(`SELECT active_run_id FROM session_input_runtime WHERE conversation_id = ?`)
       .get(input.conversationId) as { active_run_id: string | null } | undefined;
     const control = readSessionInputControl(input.conversationId);
+    const reservation = externalReplacements.get(session.transcript_id);
+    if (externalPhase === 'complete') {
+      if (reservation?.state !== 'rolled_back' || reservation.input.clientMessageId !== input.clientMessageId
+        || reservation.input.targetTurnId !== input.targetTurnId) return { ok: false, code: 'SESSION_BUSY' };
+    } else if (reservation) return { ok: false, code: 'SESSION_BUSY' };
+    if (externalPhase !== 'complete' && input.controlVersion !== undefined && input.controlVersion !== control.version) return { ok: false, code: 'SESSION_BUSY' };
     if (input.expectedTranscriptId && session.transcript_id !== input.expectedTranscriptId) return { ok: false, code: 'TARGET_NOT_FOUND' };
     const pending = db
       .prepare(
@@ -147,6 +186,10 @@ export function replaceLatestSessionTurnAndQueueInput(
     const rows = entries.map(transcriptEntryRowToStoredRow);
     const target = validateTargetRows(rows, input.targetTurnId);
     if (target.ok === false) return target;
+    if (externalPhase === 'reserve') {
+      externalReplacements.set(session.transcript_id, { input: { ...input, expectedTranscriptId: session.transcript_id }, state: 'reserved' });
+      return { ok: true, idempotent: false, inputId: '', removedMessages: [], remainingMessages: [] };
+    }
 
     const targetSeq = entries[target.targetIndex]!.seq;
     const removedEntries = entries.filter(
@@ -190,19 +233,20 @@ export function replaceLatestSessionTurnAndQueueInput(
       .get(input.conversationId) as { value: number };
     const inputId = randomUUID();
     if (control.paused) {
-      authorizeSessionInput(input.conversationId, inputId, input.controlVersion, true);
+      authorizeSessionInput(input.conversationId, inputId, externalPhase === 'complete' ? control.version : input.controlVersion, true);
       db.prepare('UPDATE session_input_control SET review_required = 1 WHERE conversation_id = ?').run(input.conversationId);
     }
     db.prepare(
       `INSERT INTO session_inputs(id, conversation_id, client_message_id,
-       requested_delivery, effective_delivery, status, content, attachments_json,
+       expected_transcript_id, requested_delivery, effective_delivery, status, content, attachments_json,
        context_refs_json, context_snapshots_json, thinking, origin_json, position,
        target_run_id, version, created_at_ms, updated_at_ms)
-       VALUES (?, ?, ?, 'next', 'next', 'queued', ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)`,
+       VALUES (?, ?, ?, ?, 'next', 'next', 'queued', ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)`,
     ).run(
       inputId,
       input.conversationId,
       input.clientMessageId,
+      session.transcript_id,
       input.content,
       input.attachments ? JSON.stringify(input.attachments) : null,
       input.contextRefs ? JSON.stringify(input.contextRefs) : null,
@@ -218,6 +262,7 @@ export function replaceLatestSessionTurnAndQueueInput(
        WHERE conversation_id = ?`,
     ).run(now, input.conversationId);
 
+    if (externalPhase === 'complete') externalReplacements.delete(session.transcript_id);
     return {
       ok: true,
       idempotent: false,

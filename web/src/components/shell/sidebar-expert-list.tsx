@@ -1,10 +1,11 @@
 import { modelPreferenceForAgent } from '@xopcai/gateway-contract';
-import { Loader2, MessageSquarePlus } from 'lucide-react';
+import { Loader2, MessageSquarePlus, Settings } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { useShallow } from 'zustand/react/shallow';
 
+import { ExternalRuntimePill } from '@/components/brand/external-runtime-badge';
 import { SidebarCreateSectionHeader } from '@/components/shell/sidebar-create-section-header';
 import type { ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
@@ -18,6 +19,7 @@ import { SessionManager } from '@/features/chat/session/session-manager';
 import { listSessions } from '@/features/sessions/session-api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { agentListDisplayDescription, agentListDisplayName, isPersonalAgentId } from '@/features/settings/agents/agent-display-names';
+import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -196,30 +198,44 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
           const name = agentListDisplayName(agent, agentsSettings);
           const description = agentListDisplayDescription(agent, agentsSettings);
           const newLabel = sidebar.expertNewConversation.replace('{{name}}', name);
+          const settingsLabel = sidebar.expertSettings.replace('{{name}}', name);
           const active = agent.id === activeExpertId;
           const replying = replyingExperts.has(agent.id);
+          const actionsPinnedVisible = openingId === agent.id;
           return (
             <li key={agent.id}>
-              <div className={cn(
-                'group relative flex min-w-0 items-center rounded-lg transition-colors duration-200 ease-out',
-                active
-                  ? 'bg-accent-soft before:pointer-events-none before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-accent'
-                  : 'hover:bg-surface-hover',
-              )}>
+              <div
+                data-actions-visible={actionsPinnedVisible ? 'true' : undefined}
+                className={cn(
+                  'sidebar-hover-row group relative flex min-w-0 items-center rounded-lg transition-colors duration-200 ease-out',
+                  active
+                    ? 'bg-accent-soft before:pointer-events-none before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-accent'
+                    : 'hover:bg-surface-hover',
+                )}
+              >
                 <button
                   type="button"
                   className={cn(
                     'flex min-w-0 flex-1 items-center gap-2 rounded-lg py-1.5 pl-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-wait',
-                    replying ? 'pr-[4.5rem]' : 'pr-9',
+                    replying ? 'pr-10' : 'pr-2',
                   )}
                   disabled={openingId !== undefined}
                   aria-busy={openingId === agent.id}
                   aria-current={active ? 'page' : undefined}
                   onClick={() => void openExpert(agent.id)}
                 >
-                  <AgentAvatarDisplay agentId={agent.id} avatar={agent.avatar} size={24} className="size-6 shrink-0" />
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-sm text-fg">{name}</span>
+                  <AgentAvatarDisplay
+                    agentId={agent.id}
+                    avatar={agent.avatar}
+                    runtimeBadge={agent.execution}
+                    size={24}
+                    className="size-6 shrink-0"
+                  />
+                  <span className="sidebar-hover-fade flex min-w-0 flex-1 flex-col">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="min-w-0 truncate text-sm text-fg">{name}</span>
+                      {agent.execution ? <ExternalRuntimePill kind={agent.execution} variant="short" /> : null}
+                    </span>
                     {description ? <span className="truncate text-xs text-fg-muted" title={description}>{description}</span> : null}
                   </span>
                   {replying ? (
@@ -235,10 +251,10 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
                   ) : null}
                 </button>
                 <div className={cn(
-                  'absolute inset-y-0 z-10 flex items-center transition-opacity',
-                  replying ? 'right-10' : 'right-1',
-                  openingId !== agent.id &&
-                    'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
+                  'absolute inset-y-0 z-10 flex items-center gap-0.5 transition-opacity duration-150',
+                  replying ? 'right-10' : 'right-1.5',
+                  !actionsPinnedVisible &&
+                    'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
                 )}>
                   <button
                     type="button"
@@ -246,11 +262,24 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
                     disabled={openingId !== undefined}
                     aria-label={newLabel}
                     title={newLabel}
-                    className="flex h-8 w-6 shrink-0 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+                    className="flex h-7 w-6 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-active/70 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-base"
                   >
                     {openingId === agent.id
-                      ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-                      : <MessageSquarePlus className="size-4" strokeWidth={1.75} aria-hidden />}
+                      ? <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+                      : <MessageSquarePlus className="size-3.5" strokeWidth={1.75} aria-hidden />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onNavigate?.();
+                      void navigate(agentsAppDetailPath(agent.id));
+                    }}
+                    disabled={openingId !== undefined}
+                    aria-label={settingsLabel}
+                    title={settingsLabel}
+                    className="flex h-7 w-6 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-active/70 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-base"
+                  >
+                    <Settings className="size-3.5" strokeWidth={1.75} aria-hidden />
                   </button>
                 </div>
               </div>

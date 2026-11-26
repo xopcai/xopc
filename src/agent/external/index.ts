@@ -41,6 +41,7 @@ export {
 } from './approval-memory.js';
 export {
   cancelExternalInteractionsForConversation,
+  canAccessExternalInteraction,
   getActiveExternalInteractionSnapshot,
   hasExternalInteraction,
   resolveExternalInteraction,

@@ -6,6 +6,7 @@ import { createLogger } from '../../../../utils/logger.js';
 
 import { findCodexExecutable } from './executable.js';
 
+import { buildExternalRuntimeEnv } from '../../runtime-env.js';
 import { closeRuntimeProcess } from '../../runtime-process.js';
 
 const log = createLogger('CodexAppServer');
@@ -64,8 +65,8 @@ export class CodexAppServer {
     const command = findCodexExecutable(options.binaryPath);
     if (!command) throw new Error('Codex CLI was not found on the Gateway host. Install Codex and run codex login there.');
     const env: NodeJS.ProcessEnv = {
+      ...buildExternalRuntimeEnv('codex'),
       CODEX_INTERNAL_ORIGINATOR_OVERRIDE: 'xopc',
-      ...process.env,
     };
     if (options.homePath?.trim()) {
       env.CODEX_HOME = resolveUserPath(options.homePath.trim());

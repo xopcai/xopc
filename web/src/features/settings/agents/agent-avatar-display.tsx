@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 
 import { ExternalRuntimeAvatar, parseExternalRuntimeAvatar } from '@/components/brand/external-runtime-avatar';
+import { ExternalRuntimeCornerBadge } from '@/components/brand/external-runtime-badge';
 import { Loopi, type LoopiMood } from '@/components/brand/loopi';
 import type { ExternalAgentKind } from '@/features/settings/types/agent-gateway';
 import { cn } from '@/lib/cn';
@@ -83,6 +84,8 @@ export function AgentAvatarDisplay(props: {
   size?: number;
   className?: string;
   token?: string | null;
+  /** Optional external runtime badge overlaid on non-runtime (custom) avatars. */
+  runtimeBadge?: ExternalAgentKind;
 }) {
   const storeToken = useGatewayStore((s) => s.conversationId);
   const token = props.token !== undefined ? props.token : storeToken;
@@ -158,11 +161,11 @@ export function AgentAvatarDisplay(props: {
     return <ExternalRuntimeAvatar kind={resolved.runtimeKind} size={size} className={props.className} />;
   }
 
-  if (resolved.kind === 'loopi') {
-    return <span className={cn('inline-flex items-center justify-center rounded-full bg-surface-hover', props.className)} style={{ width: size, height: size }}><Loopi variant="avatar" mood={resolved.mood} className="size-full" /></span>;
-  }
-
-  return (
+  const avatarNode = resolved.kind === 'loopi' ? (
+    <span className={cn('inline-flex items-center justify-center rounded-full bg-surface-hover', props.className)} style={{ width: size, height: size }}>
+      <Loopi variant="avatar" mood={resolved.mood} className="size-full" />
+    </span>
+  ) : (
     <img
       src={src}
       alt=""
@@ -174,5 +177,17 @@ export function AgentAvatarDisplay(props: {
         setSrc(fallbackAvatarDataUri(agentId, size));
       }}
     />
+  );
+
+  if (!props.runtimeBadge) {
+    return avatarNode;
+  }
+
+  const badgeSize = Math.max(10, Math.min(16, Math.round(size * 0.42)));
+  return (
+    <span className="relative inline-flex shrink-0" style={{ width: size, height: size }}>
+      {avatarNode}
+      <ExternalRuntimeCornerBadge kind={props.runtimeBadge} size={badgeSize} />
+    </span>
   );
 }

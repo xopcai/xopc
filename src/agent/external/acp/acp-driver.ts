@@ -949,6 +949,7 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
         spawnConfig.command,
         spawnConfig.args,
         instructions?.trim() ?? '',
+        context.mcpServers ?? [],
         boundSessionId,
       ]);
 

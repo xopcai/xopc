@@ -11,6 +11,7 @@ import { getExecutionEnvironmentForSession } from '../../execution-environments/
 import type { UserTurnAttachment } from '../../gateway/user-turn-input.js';
 import { getProjectForSession } from '../../projects/workspace.js';
 import { projectWorkspacePath } from '../../session/session-workspace.js';
+import { getExternalTurnReplacement } from '../../storage/sqlite/session-turn-replace-repository.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 import { getSessionInteractionPolicy } from '../session/interaction-policy-state.js';
 import { injectSourceContextsIntoUserMessage } from '../source-context/injector.js';
@@ -21,6 +22,7 @@ import { prepareExternalAttachments } from './attachments.js';
 import { captureTurnCheckpoint, computeTurnCheckpointDiff } from './checkpoint.js';
 import { buildExternalWarmContextBrief } from './context-brief.js';
 import {
+  resolveExternalContextAccess,
   resolveExternalTurnMcpContext,
   revokeAllExternalSessionMcpGrants,
   revokeExternalSessionMcpGrant,
@@ -180,6 +182,7 @@ export async function* runExternalProjectTurn(
   const cwd = await realpath(workspace!);
   signal.throwIfAborted();
   if (activeRuns.has(conversationId)) throw new Error(`${driver.label} is already running in this session.`);
+  if (getExternalTurnReplacement(conversationId)) throw new Error('External turn replacement is pending recovery.');
 
   const sessionPolicy = getSessionInteractionPolicy(conversationId);
   const permissionMode =
@@ -495,16 +498,9 @@ export async function* runExternalProjectTurn(
   };
 
   const steeringMode = driver.capabilities.steeringMode ?? 'interrupt_restart';
-  const attachmentCleanups: Array<() => void> = [];
-  const cleanupAttachments = () => {
-    while (attachmentCleanups.length > 0) {
-      const fn = attachmentCleanups.pop();
-      try {
-        fn?.();
-      } catch {
-        // Best-effort temp cleanup.
-      }
-    }
+  const attachmentCleanups: Array<() => Promise<void>> = [];
+  const cleanupAttachments = async () => {
+    await Promise.allSettled(attachmentCleanups.map(cleanup => cleanup()));
   };
 
   type QueuedRestartSteer = {
@@ -531,6 +527,7 @@ export async function* runExternalProjectTurn(
 
   const emitAndPersistSteeredUser = (steer: {
     displayContent: string;
+    attachments?: UserTurnAttachment[];
     sourceContextsSummary?: ReturnType<typeof summarizeSourceContext>[];
     clientMessageId?: string;
     userTurnDocument?: UserTurnDocument;
@@ -539,9 +536,11 @@ export async function* runExternalProjectTurn(
     for (const id of [...messages.keys()]) finishMessage(id, undefined, 'stop', true);
     closeActiveBubble('stop');
     const seq = ++steerSeq;
+    const media = steer.attachments?.filter(attachment => attachment.uri);
     const steeredUser = {
       role: 'user' as const,
       content: steer.displayContent,
+      ...(media?.length ? { media } : {}),
       timestamp: Date.now(),
       turnId: runId,
       metadata: {
@@ -585,14 +584,16 @@ export async function* runExternalProjectTurn(
       }
       if (!nativeSteerHandler || !acceptingSteers || signal.aborted) return false;
 
-      const preparedSteerAttachments = prepareExternalAttachments({
-        attachments: mergedSteer.attachments,
-        cwd,
-        runId: `${runId}-steer-${steerSeq + 1}`,
-      });
-      attachmentCleanups.push(preparedSteerAttachments.cleanup);
-
       try {
+        const preparedSteerAttachments = await prepareExternalAttachments({
+          attachments: mergedSteer.attachments,
+          cwd,
+        });
+        if (!nativeSteerHandler || !acceptingSteers || signal.aborted) {
+          await preparedSteerAttachments.cleanup();
+          return false;
+        }
+        attachmentCleanups.push(preparedSteerAttachments.cleanup);
         await nativeSteerHandler({
           content: mergedSteer.promptText,
           attachments: preparedSteerAttachments.attachments,
@@ -604,6 +605,7 @@ export async function* runExternalProjectTurn(
 
       emitAndPersistSteeredUser({
         displayContent: steerText,
+        attachments: options?.attachments,
         sourceContextsSummary: mergedSteer.summaryMetadata,
         clientMessageId: options?.clientMessageId,
         userTurnDocument: steerDoc ?? undefined,
@@ -627,23 +629,21 @@ export async function* runExternalProjectTurn(
     return true;
   };
 
-  const preparedAttachments = prepareExternalAttachments({
-    attachments: initialContextMerged.attachments,
-    cwd,
-    runId,
-  });
-  attachmentCleanups.push(preparedAttachments.cleanup);
-
   const execute = async () => {
     try {
+      const preparedAttachments = await prepareExternalAttachments({ attachments: initialContextMerged.attachments, cwd });
+      attachmentCleanups.push(preparedAttachments.cleanup);
+      signal.throwIfAborted();
       let existingBinding = readExternalSessionBinding(identity);
       const userMetadata = {
         ...(document ? { userTurnDocument: document } : {}),
         ...(initialContextMerged.summaryMetadata?.length ? { sourceContexts: initialContextMerged.summaryMetadata } : {}),
       };
+      const media = input.attachments?.filter(attachment => attachment.uri);
       const user = {
         role: 'user' as const,
         content,
+        ...(media?.length ? { media } : {}),
         timestamp: Date.now(),
         turnId: runId,
         ...(Object.keys(userMetadata).length > 0 ? { metadata: userMetadata } : {}),
@@ -666,7 +666,7 @@ export async function* runExternalProjectTurn(
       const warmBrief = buildExternalWarmContextBrief({
         conversationId,
         projectId: project?.id,
-        contextAccess: execution.contextAccess,
+        contextAccess: resolveExternalContextAccess(conversationId, execution.contextAccess),
         builtInMcpMounted: builtInMounted,
       });
       const effectiveInstructions = [input.instructions?.trim(), warmBrief].filter(Boolean).join('\n\n') || undefined;
@@ -705,11 +705,15 @@ export async function* runExternalProjectTurn(
             existingBinding,
             signal: attemptSignal,
             emit: handleEvent,
-            requestInteraction: (request) =>
-              waitForExternalInteraction({
+            requestInteraction: (request) => input.headless
+              ? Promise.resolve(request.kind === 'approval'
+                ? { kind: 'approval', decision: 'deny' }
+                : { kind: 'question', cancelled: true })
+              : waitForExternalInteraction({
                 conversationId,
                 transcriptId,
                 runId,
+                actor: input.interactionActor,
                 request,
                 signal: attemptSignal,
                 emitClarifyEvent: (clarifyEvent) => {
@@ -753,10 +757,9 @@ export async function* runExternalProjectTurn(
           emitAndPersistSteeredUser(nextSteer);
           nextSteer.onHandled?.();
 
-          const preparedNext = prepareExternalAttachments({
+          const preparedNext = await prepareExternalAttachments({
             attachments: nextSteer.attachments,
             cwd,
-            runId: `${runId}-steer-${attemptSeq}`,
           });
           attachmentCleanups.push(preparedNext.cleanup);
           activeContent = nextSteer.promptContent;
@@ -794,7 +797,7 @@ export async function* runExternalProjectTurn(
       nativeSteerHandler = null;
       notifyNativeSteerState();
       cancelExternalInteractionsForConversation(conversationId);
-      cleanupAttachments();
+      await cleanupAttachments();
     }
 
     interrupted ||= signal.aborted;

@@ -1,3 +1,4 @@
+import { ExternalRuntimePill } from '@/components/brand/external-runtime-badge';
 import { isPersonalAgentId } from '@/features/settings/agents/agent-display-names';
 import type { ExternalAgentExecution } from '@/features/settings/types/agent-gateway';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
@@ -24,9 +25,7 @@ export function AgentStatusBadges({
   return (
     <div className={`flex flex-wrap gap-1 ${className}`}>
       {executionKind ? (
-        <span className="rounded-full border border-accent/25 bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
-          {executionKind === 'codex' ? 'Codex' : 'AGY'}
-        </span>
+        <ExternalRuntimePill kind={executionKind} variant="full" tone="accent" />
       ) : null}
       {agent.isDefault ? (
         <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">

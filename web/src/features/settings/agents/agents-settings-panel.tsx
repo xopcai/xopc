@@ -16,6 +16,9 @@ import { navigateToNewChat } from '@/features/chat/session/new-chat-navigation';
 import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
 import { usePersonalProfile } from '@/features/personal-agent/use-personal-profile';
 import { fetchProjects } from '@/features/projects/api';
+import { externalRuntimeDefaultAvatar } from '@/components/brand/external-runtime-avatar';
+import { bumpAgentAvatarCacheRevision } from '@/features/settings/agents/agent-avatar-cache';
+import { XOPC_CUSTOM_AVATAR } from '@/features/settings/agents/agent-avatar-dicebear-value';
 import { AgentEditor } from '@/features/settings/agents/agent-editor';
 import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
@@ -29,6 +32,7 @@ import {
   deleteGatewayAgent,
   fetchExternalAgentRuntimes,
   fetchGatewayAgents,
+  uploadGatewayAgentAvatar,
 } from '@/features/settings/agents-admin-api';
 import type { ExternalAgentKind, GatewayAgentRow } from '@/features/settings/types/agent-gateway';
 import { messages } from '@/i18n/messages';
@@ -104,6 +108,8 @@ export function AgentsSettingsPanel({
   const [manualDraft, setManualDraft] = useState<ManualAgentDraft>({
     open: false,
     name: '',
+    avatar: '',
+    pendingAvatar: null,
     instructions: '',
     workspace: '',
     execution: 'embedded',
@@ -126,17 +132,25 @@ export function AgentsSettingsPanel({
     setBusy(true);
     setManualError(null);
     try {
+      const avatarValue = manualDraft.pendingAvatar
+        ? XOPC_CUSTOM_AVATAR
+        : manualDraft.avatar?.trim() || undefined;
       const next = await createGatewayAgent({
         profile: {
           name: manualDraft.name.trim(),
+          ...(avatarValue ? { avatar: avatarValue } : {}),
           ...(manualDraft.instructions.trim() ? { instructions: manualDraft.instructions.trim() } : {}),
         },
         ...(manualDraft.execution !== 'embedded'
           ? { execution: manualDraft.executionConfig?.kind === manualDraft.execution ? manualDraft.executionConfig : { kind: manualDraft.execution } }
           : manualDraft.workspace.trim() ? { workspace: manualDraft.workspace.trim() } : {}),
       });
+      if (manualDraft.pendingAvatar) {
+        await uploadGatewayAgentAvatar(next.createdAgentId, manualDraft.pendingAvatar);
+        bumpAgentAvatarCacheRevision(next.createdAgentId);
+      }
       const createdExecution = manualDraft.execution;
-      setManualDraft({ open: false, name: '', instructions: '', workspace: '', execution: 'embedded', executionConfig: undefined });
+      setManualDraft({ open: false, name: '', avatar: '', pendingAvatar: null, instructions: '', workspace: '', execution: 'embedded', executionConfig: undefined });
       void mutate(next, { revalidate: false });
       if (createdExecution !== 'embedded') {
         navigate(AGENTS_APP_LIST_PATH);
@@ -278,6 +292,8 @@ export function AgentsSettingsPanel({
     setManualDraft({
       open: true,
       name: kind === 'codex' ? 'Codex' : kind === 'claude' ? 'Claude Code' : 'Antigravity',
+      avatar: externalRuntimeDefaultAvatar(kind),
+      pendingAvatar: null,
       instructions: '',
       workspace: '',
       execution: kind,

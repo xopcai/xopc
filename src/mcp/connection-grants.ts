@@ -142,6 +142,7 @@ export function listMcpConnections(): McpConnectionSummary[] {
 export function authenticateMcpConnection(token: string): {
   connectionId: string;
   capabilityIds: string[];
+  toolset?: string;
   projectIds?: string[];
   maxConcurrentRuns?: number;
   callback?: McpConnectionCallback;
@@ -159,6 +160,7 @@ export function authenticateMcpConnection(token: string): {
   return {
     connectionId,
     capabilityIds: grant.capabilityIds,
+    ...(grant.toolset?.startsWith('external-read-') ? { toolset: grant.toolset } : {}),
     ...(grant.projectIds ? { projectIds: grant.projectIds } : {}),
     ...(grant.maxConcurrentRuns !== undefined ? { maxConcurrentRuns: grant.maxConcurrentRuns } : {}),
     ...(grant.callback ? { callback: grant.callback } : {}),

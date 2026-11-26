@@ -1,3 +1,4 @@
+import { revokeExternalSessionMcpGrant } from '../external/mcp-bridge.js';
 /**
  * SessionConfigService — owns the "write side" of per-session agent settings
  * (model override, thinking level, reasoning level, working directory).
@@ -187,6 +188,7 @@ export class SessionConfigService {
         return { ok: false, error: 'Invalid user context mode' };
       }
       await this.opts.sessionConfigStore.update(conversationId, { userContextMode: partial.userContextMode });
+      revokeExternalSessionMcpGrant(conversationId);
     }
 
     if (partial.serviceTier !== undefined) {

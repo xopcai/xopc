@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import type { ModelThinkingCapabilities, ModelThinkingValue } from '@xopcai/gateway-contract';
 
+import { buildExternalRuntimeEnv } from '../../runtime-env.js';
 import type { CodexExecution, ExternalAgentExecution, ExternalPermissionMode } from '../../../../agent-config/schema.js';
 import { resolveUserPath } from '../../../agent-scope.js';
 import { PLAN_MODE_INSTRUCTIONS, type SessionInteractionPolicy } from '../../../session/interaction-policy-state.js';
@@ -49,7 +50,7 @@ const PROBE_TIMEOUT_MS = 10_000;
 const CATALOG_REFRESH_WAIT_MS = 3_000;
 const CATALOG_REFRESH_POLL_MS = 150;
 
-const CODEX_THINKING_ORDER: ReadonlyArray<ModelThinkingValue> = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+const CODEX_THINKING_ORDER: ReadonlyArray<ModelThinkingValue> = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 
 function mapCodexEffortToThinkingValue(raw: unknown): ModelThinkingValue | undefined {
   if (typeof raw !== 'string') return undefined;
@@ -62,13 +63,16 @@ function mapCodexEffortToThinkingValue(raw: unknown): ModelThinkingValue | undef
   return undefined;
 }
 
-function mapThinkingLevelToCodexEffort(raw?: string): string | undefined {
-  if (!raw) return undefined;
-  const normalized = normalizeThinkLevel(raw);
-  if (!normalized || normalized === 'adaptive') return undefined;
-  if (normalized === 'off') return 'none';
-  if (normalized === 'max') return 'xhigh';
-  return normalized;
+function resolveCodexEffort(
+  level: ModelThinkingValue | undefined,
+  model: ExternalRuntimeModelOption | undefined,
+): string | undefined {
+  if (!level) return undefined;
+  const options = model?.thinking?.options;
+  if (options?.includes(level)) return level === 'off' ? 'none' : level;
+  if (level === 'max' && options?.includes('xhigh')) return 'xhigh';
+  if (options?.length || level === 'off') return undefined;
+  return level === 'max' ? 'xhigh' : level;
 }
 
 function parseCodexModelThinking(item: CodexRecord): ModelThinkingCapabilities | undefined {
@@ -796,13 +800,14 @@ export const codexExternalDriver: ExternalAgentDriver = {
     };
 
     signal.addEventListener('abort', onAbort, { once: true });
-    type PooledCodexSession = { server: CodexAppServer; threadId: string; model?: string };
+    type PooledCodexSession = { server: CodexAppServer; threadId: string; model?: string; models?: ExternalRuntimeModelOption[] };
     const buildFingerprint = (boundThreadId: string) => JSON.stringify([
       'codex',
       cwd,
       codexConfig?.binaryPath?.trim() ?? '',
       codexConfig?.homePath?.trim() ?? '',
       instructions?.trim() ?? '',
+      context.mcpServers ?? [],
       boundThreadId,
     ]);
     const dispatchNotification = (method: string, params: CodexRecord) => {
@@ -815,7 +820,10 @@ export const codexExternalDriver: ExternalAgentDriver = {
         earlyEvents.push({ method, params });
       }
     };
+    const requestedThinking = normalizeThinkLevel(context.thinkingLevel);
+    const thinkingLevel = requestedThinking === 'adaptive' ? undefined : requestedThinking;
     let effectiveModel: string | undefined;
+    let models: ExternalRuntimeModelOption[] | undefined;
     try {
       const warm = nativeThread
         ? await checkoutPooledExternalSession<PooledCodexSession>(context.conversationId, buildFingerprint(nativeThread))
@@ -824,6 +832,7 @@ export const codexExternalDriver: ExternalAgentDriver = {
       if (warm) {
         server = warm.server;
         threadId = warm.threadId;
+        models = warm.models;
         server.setHandlers({
           onNotification: dispatchNotification,
           onFailure: terminal.reject,
@@ -846,9 +855,8 @@ export const codexExternalDriver: ExternalAgentDriver = {
         server.notify('initialized');
         let selectedModel = context.modelOverride?.trim() || codexConfig?.model?.trim();
         if (!selectedModel) {
-          const catalog = await server.request('model/list', {}, signal);
-          const models = Array.isArray(catalog.data) ? catalog.data.map(record) : [];
-          selectedModel = text((models.find(candidate => candidate?.isDefault === true) ?? models[0])?.model);
+          models = await listAllCodexModels(server, signal);
+          selectedModel = (models.find(candidate => candidate.isDefault) ?? models[0])?.id;
         }
         const codexMcpServers = context.mcpServers?.length
           ? projectMcpServersForCodex(context.mcpServers)
@@ -871,7 +879,14 @@ export const codexExternalDriver: ExternalAgentDriver = {
         signal.throwIfAborted();
       }
 
-      const requestedEffort = mapThinkingLevelToCodexEffort(context.thinkingLevel);
+      if (thinkingLevel && !models) {
+        try {
+          models = await listAllCodexModels(server, signal);
+        } catch {
+          signal.throwIfAborted();
+        }
+      }
+      const requestedEffort = resolveCodexEffort(thinkingLevel, models?.find(model => model.id === effectiveModel));
       const rawServiceTier = context.serviceTierOverride?.trim() || codexConfig?.serviceTier?.trim();
       const requestedServiceTier = rawServiceTier && rawServiceTier !== 'default' ? rawServiceTier : undefined;
       const effectivePrompt = sessionPolicy.mode === 'plan'
@@ -943,7 +958,7 @@ export const codexExternalDriver: ExternalAgentDriver = {
         checkinPooledExternalSession<PooledCodexSession>(context.conversationId, {
           fingerprint: buildFingerprint(threadId),
           executablePath: findCodexExecutable(codexConfig?.binaryPath),
-          resource: { server: pooledServer, threadId, model: effectiveModel },
+          resource: { server: pooledServer, threadId, model: effectiveModel, models },
           isAlive: () => pooledServer.isAlive(),
           dispose: (force) => pooledServer.close(force),
         });
@@ -975,7 +990,7 @@ export const codexExternalDriver: ExternalAgentDriver = {
 
     let version: string | undefined;
     try {
-      const { stdout } = await execFileAsync(executablePath, ['--version'], { timeout: 3_000 });
+      const { stdout } = await execFileAsync(executablePath, ['--version'], { timeout: 3_000, env: buildExternalRuntimeEnv('codex') });
       const parsed = stdout.trim().match(/\d+\.\d+\.\d+[\w.-]*/)?.[0] || stdout.trim().split('\n')[0]?.trim();
       if (parsed) version = parsed;
     } catch {

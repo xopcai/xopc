@@ -9,6 +9,7 @@ import type {
 import type { SessionInteractionPolicy } from '../session/interaction-policy-state.js';
 import type { AgentSourceContext } from '../source-context/types.js';
 import type { TurnPlanStep } from '../tools/update-plan-tool.js';
+import type { GatewayPrincipal } from '../../gateway/security/gateway-principal.js';
 import type { UserTurnAttachment } from '../../gateway/user-turn-input.js';
 import type { ExternalMcpServerSpec } from './mcp-bridge.js';
 
@@ -302,4 +303,6 @@ export interface RunExternalProjectTurnInput {
   runId: string;
   clientMessageId?: string;
   signal: AbortSignal;
+  headless?: boolean;
+  interactionActor?: GatewayPrincipal;
 }

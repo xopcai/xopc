@@ -30,6 +30,12 @@ import { allProjectOptions } from '@/features/sessions/session-filter-projects';
 import { sessionIdentityLabel } from '@/features/sessions/session-identity-label';
 import { SessionRenameDialog } from '@/features/sessions/session-rename-dialog';
 
+import { ExternalRuntimeAvatar, parseExternalRuntimeAvatar } from '@/components/brand/external-runtime-avatar';
+import {
+  ExternalRuntimeCornerBadge,
+  externalRuntimeLabel,
+} from '@/components/brand/external-runtime-badge';
+import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { SidebarExpertList } from '@/components/shell/sidebar-expert-list';
 import { SidebarCreateSectionHeader, sidebarSectionLabelClass } from '@/components/shell/sidebar-create-section-header';
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
@@ -38,7 +44,8 @@ import { shouldRefreshSidebarForTranscriptUpdate } from '@/components/shell/side
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SlidingSegmented } from '@/components/ui/sliding-segmented';
-import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
+import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
+import { resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
 import { navigateToNewChat } from '@/features/chat/session/new-chat-navigation';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
@@ -75,6 +82,13 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const TaskGroupsContext = createContext<Record<string, SidebarTaskGroup>>({});
+const SidebarAgentsContext = createContext<{
+  defaultAgentId: string;
+  byId: ReadonlyMap<string, ChatAgentOption>;
+}>({
+  defaultAgentId: 'main',
+  byId: new Map(),
+});
 
 const SidebarTaskChildRow = memo(function SidebarTaskChildRow({
   child,
@@ -276,7 +290,7 @@ function groupRecentSessions(sessions: SessionMetadata[]): Record<RecentPeriod, 
 
 function rowShellClass(isActive: boolean): string {
   return cn(
-    'group relative flex min-h-8 w-full min-w-0 items-center rounded-lg pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
+    'sidebar-hover-row group relative flex min-h-8 w-full min-w-0 items-center rounded-lg pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
     'pl-6',
     'focus-within:outline-none',
     isActive
@@ -352,6 +366,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   sort?: SidebarSortSpec;
 }) {
   const taskGroup = useContext(TaskGroupsContext)[session.key];
+  const sidebarAgents = useContext(SidebarAgentsContext);
   const location = useLocation();
   const language = useLocaleStore((state) => state.language);
   const setup = isAutomationConfigurationSession(session)
@@ -373,13 +388,31 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   const [tasksExpanded, setTasksExpanded] = useState(activeChild);
   useEffect(() => { if (activeChild) setTasksExpanded(true); }, [activeChild]);
   const identity = resolveSessionIdentity(session);
-  const showIdentityIcon = isAutomationConfigurationSession(session) || identity.source !== 'workbench' || identity.purpose !== 'chat';
+  const showChannelIcon = isAutomationConfigurationSession(session) || identity.source !== 'workbench' || identity.purpose !== 'chat';
+  const sessionAgentId = resolveSessionAgentId(session, sidebarAgents.defaultAgentId);
+  const sessionAgent = sidebarAgents.byId.get(sessionAgentId);
+  const externalRuntime = sessionAgent?.execution;
+  const runtimeLabel = externalRuntime ? externalRuntimeLabel(externalRuntime, 'full') : undefined;
+  const agentName = sessionAgent?.name?.trim();
+  const runtimeSummary = runtimeLabel
+    ? (agentName && agentName.toLowerCase() !== runtimeLabel.toLowerCase()
+        ? `${agentName} (${runtimeLabel})`
+        : runtimeLabel)
+    : undefined;
   const identityLabel = sessionIdentityLabel(session, sb.sessionFilters);
+  const iconTooltip = showChannelIcon && runtimeSummary
+    ? `${identityLabel} · ${runtimeSummary}`
+    : !showChannelIcon && runtimeSummary
+      ? runtimeSummary
+      : identityLabel;
   const [menuOpen, setMenuOpen] = useState(false);
   const [pinBusy, setPinBusy] = useState(false);
   const agentRunActive = useSidebarSessionAgentRun(session.key);
   const runPresence = useChatRunPresenceStore((state) => state.runs[session.key]);
   const title = sessionTitle(session, defaultUnnamedTitle);
+  const rowTooltip = [title, showChannelIcon ? identityLabel : undefined, runtimeSummary, contextLabel]
+    .filter(Boolean)
+    .join(' — ');
   const isPinned = session.status === 'pinned';
   const hasRunPresence = agentRunActive || Boolean(runPresence?.unread);
 
@@ -413,7 +446,10 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   return (
     <SidebarSortableItem spec={sort}>
     <div>
-    <div className={rowShellClass(isActive)}>
+    <div
+      data-actions-visible={menuOpen || pinBusy ? 'true' : undefined}
+      className={rowShellClass(isActive)}
+    >
       {hasExpandableContent ? (
         <button type="button" className="absolute left-0 flex size-6 items-center justify-center text-fg-subtle hover:text-fg"
           aria-label={automationId
@@ -429,10 +465,10 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         className={cn(
           'min-w-0 flex-1 self-stretch rounded-lg py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
           'flex min-w-0 items-center gap-2',
-          hasRunPresence ? 'pr-[4.75rem]' : 'pr-12',
+          hasRunPresence ? 'pr-7' : 'pr-2',
         )}
-        title={[title, identityLabel, contextLabel].filter(Boolean).join(' — ')}
-        aria-label={[title, identityLabel, contextLabel].filter(Boolean).join(' — ')}
+        title={rowTooltip}
+        aria-label={rowTooltip}
         aria-current={isActive ? 'page' : undefined}
         onClick={() => onNavigate?.()}
         onDoubleClick={(event) => {
@@ -441,10 +477,39 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           onRequestRename(session);
         }}
       >
-        {showIdentityIcon ? <span className="flex size-4 shrink-0 items-center justify-center text-fg-muted" title={identityLabel}>
-          <SessionChannelIcon sourceChannel={session.sourceChannel} session={session} className="size-3.5" />
-        </span> : null}
-        <span className="min-w-0 flex-1 truncate">{title}</span>
+        {showChannelIcon && externalRuntime ? (
+          <span
+            className="relative flex size-4 shrink-0 items-center justify-center text-fg-muted"
+            title={iconTooltip}
+            data-session-runtime={externalRuntime}
+          >
+            <SessionChannelIcon sourceChannel={session.sourceChannel} session={session} className="size-3.5" />
+            <ExternalRuntimeCornerBadge kind={externalRuntime} size={9} ringClassName="ring-surface-rail" />
+          </span>
+        ) : showChannelIcon ? (
+          <span className="flex size-4 shrink-0 items-center justify-center text-fg-muted" title={iconTooltip}>
+            <SessionChannelIcon sourceChannel={session.sourceChannel} session={session} className="size-3.5" />
+          </span>
+        ) : externalRuntime ? (
+          <span
+            className="flex size-4 shrink-0 items-center justify-center"
+            title={iconTooltip}
+            data-session-runtime={externalRuntime}
+          >
+            {sessionAgent?.avatar && !parseExternalRuntimeAvatar(sessionAgent.avatar) ? (
+              <AgentAvatarDisplay
+                agentId={sessionAgentId}
+                avatar={sessionAgent.avatar}
+                runtimeBadge={externalRuntime}
+                size={16}
+                className="size-4 shrink-0"
+              />
+            ) : (
+              <ExternalRuntimeAvatar kind={externalRuntime} size={14} />
+            )}
+          </span>
+        ) : null}
+        <span className="sidebar-hover-fade min-w-0 flex-1 truncate">{title}</span>
       </Link>
       {agentRunActive ? (
         <span
@@ -475,19 +540,19 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
       ) : null}
       <div
         className={cn(
-          'pointer-events-none absolute inset-y-0 z-10 flex items-center opacity-0 transition-opacity',
+          'pointer-events-none absolute inset-y-0 z-10 flex items-center gap-0.5 opacity-0 transition-opacity duration-150',
           'group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
           '[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
-          hasRunPresence ? 'right-7' : 'right-1',
+          hasRunPresence ? 'right-7' : 'right-1.5',
           (menuOpen || pinBusy) && 'pointer-events-auto opacity-100',
         )}
       >
         <button
           type="button"
           className={cn(
-            'flex h-8 w-6 shrink-0 items-center justify-center rounded-lg text-fg-muted',
-            'hover:bg-surface-hover hover:text-fg',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+            'flex h-7 w-6 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors',
+            'hover:bg-surface-active/70 hover:text-fg',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-base',
             'disabled:cursor-wait',
           )}
           aria-label={isPinned ? sess.unpin : sess.pin}
@@ -497,10 +562,10 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           onClick={() => void handlePinToggle()}
         >
           {pinBusy ? (
-            <Loader2 className="size-4 animate-spin" strokeWidth={1.75} aria-hidden />
+            <Loader2 className="size-3.5 animate-spin" strokeWidth={1.75} aria-hidden />
           ) : (
             <Pin
-              className="size-4 rotate-45"
+              className="size-3.5 rotate-45"
               fill={isPinned ? 'currentColor' : 'none'}
               strokeWidth={1.75}
               aria-hidden
@@ -512,15 +577,15 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
             <button
               type="button"
               className={cn(
-                'flex h-8 w-6 shrink-0 items-center justify-center rounded-lg text-fg-muted',
-                'hover:bg-surface-hover hover:text-fg',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+                'flex h-7 w-6 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors',
+                'hover:bg-surface-active/70 hover:text-fg',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-base',
               )}
               aria-label={sb.taskSessionMenuAria}
               title={sb.taskSessionMenuAria}
               aria-expanded={menuOpen}
             >
-              <MoreHorizontal className="size-4" strokeWidth={2} aria-hidden />
+              <MoreHorizontal className="size-3.5" strokeWidth={2} aria-hidden />
             </button>
           </Popover.Trigger>
           <Popover.Portal>
@@ -1104,6 +1169,10 @@ function SidebarTaskListContent({
     { revalidateOnFocus: false },
   );
   const defaultAgentId = chatAgents?.defaultId ?? 'main';
+  const sidebarAgentsCtx = useMemo(() => ({
+    defaultAgentId,
+    byId: new Map((chatAgents?.items ?? []).map((item) => [item.id.trim().toLowerCase(), item] as const)),
+  }), [chatAgents?.items, defaultAgentId]);
 
   useEffect(() => {
     const onConfigReload = () => void mutateChatAgents();
@@ -1773,6 +1842,7 @@ function SidebarTaskListContent({
 
   return (
     <TaskGroupsContext value={taskGroups}>
+    <SidebarAgentsContext value={sidebarAgentsCtx}>
     <div className="flex min-h-0 flex-1 flex-col">
       <div
         ref={scrollRegionRef}
@@ -2161,6 +2231,7 @@ function SidebarTaskListContent({
         </Dialog.Portal>
       </Dialog.Root>
     </div>
+    </SidebarAgentsContext>
     </TaskGroupsContext>
   );
 }

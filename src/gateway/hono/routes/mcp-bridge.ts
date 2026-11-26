@@ -2,6 +2,7 @@ import type { Context, Hono } from 'hono';
 import { CapabilityCallSchema } from '@xopcai/gateway-contract';
 import { z } from 'zod';
 
+import { authorizeExternalMcpConnection } from '../../../agent/external/mcp-bridge.js';
 import { capabilityHttpError } from '../../../capabilities/adapters/http.js';
 import { CapabilityError, type CapabilityContext } from '../../../capabilities/runtime/dispatcher.js';
 import { recordMcpAudit } from '../../../mcp/audit.js';
@@ -47,6 +48,8 @@ function bridgeContext(c: Context, service: GatewayService): {
   const token = getMcpBearerToken(c.req.header('Authorization'));
   const grant = authenticateMcpConnection(token);
   if (!grant) throw new CapabilityError('FORBIDDEN', 'MCP connection is absent or revoked');
+  const conversationId = grant.toolset ? authorizeExternalMcpConnection(grant.connectionId, service.getConfig()) : undefined;
+  if (grant.toolset && !conversationId) throw new CapabilityError('FORBIDDEN', 'External MCP authorization changed');
   const principalId = `mcp:${grant.connectionId}`;
   const authorize = createMcpProjectScopeAuthorizer(grant.capabilityIds, grant.projectIds, {
     getProjects: () => service.projects,
@@ -58,11 +61,14 @@ function bridgeContext(c: Context, service: GatewayService): {
     context: {
       principalId, surface: 'mcp', actor: { kind: 'integration', id: principalId },
       allowedCapabilities: grant.capabilityIds,
+      conversationId,
+      mcpProjectIds: grant.projectIds,
       scopes: mcpProductScopes(grant.capabilityIds),
       authorize,
       assertCurrent: () => {
         const current = authenticateMcpConnection(token);
-        if (!current || current.capabilityIds.join('\n') !== grant.capabilityIds.join('\n')
+        if (!current || (grant.toolset && authorizeExternalMcpConnection(grant.connectionId, service.getConfig()) !== conversationId)
+          || current.capabilityIds.join('\n') !== grant.capabilityIds.join('\n')
           || (current.projectIds ?? []).join('\n') !== (grant.projectIds ?? []).join('\n')) {
           throw new CapabilityError('FORBIDDEN', 'MCP connection authorization changed');
         }

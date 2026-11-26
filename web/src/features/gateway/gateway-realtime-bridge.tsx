@@ -6,6 +6,7 @@ import { invalidateConfiguredModelsCache } from '@/features/chat/api/registry-ap
 import { clearConnectorPaletteCache } from '@/features/search/global-command-palette/connector-palette-api';
 import { startChatRunStateBridge } from '@/features/chat/session/chat-run-state-bridge';
 import { startAgentRunStreamEventBridge } from '@/features/gateway/agent-run-stream-event-bridge';
+import { bumpAgentAvatarCacheRevision } from '@/features/settings/agents/agent-avatar-cache';
 import { isAgentCatalogCacheKey } from '@/features/gateway/agent-catalog-cache';
 import { configReloadSection } from '@/features/gateway/config-reload-event';
 import { useGatewayRealtime } from '@/features/gateway/use-gateway-realtime';
@@ -80,11 +81,18 @@ export function GatewayRealtimeBridge() {
       const topic = (event as CustomEvent<{ topic?: string }>).detail?.topic;
       if (topic === 'gateway' || topic === 'sessions') void mutate(() => true);
     };
+    const onAgentAvatarUpdated = (event: Event) => {
+      const agentId = (event as CustomEvent<{ agentId?: string }>).detail?.agentId?.trim();
+      if (agentId) bumpAgentAvatarCacheRevision(agentId);
+      void mutate(isAgentCatalogCacheKey);
+    };
     window.addEventListener('agent-catalog', onAgentCatalog);
+    window.addEventListener('agent-avatar-updated', onAgentAvatarUpdated);
     window.addEventListener('config-reload', onConfigReload);
     window.addEventListener('realtime-gap', onGap);
     return () => {
       window.removeEventListener('agent-catalog', onAgentCatalog);
+      window.removeEventListener('agent-avatar-updated', onAgentAvatarUpdated);
       window.removeEventListener('config-reload', onConfigReload);
       window.removeEventListener('realtime-gap', onGap);
     };

@@ -10,6 +10,7 @@ export interface RealtimeTicketClaim {
   clientId: string;
   clientKind: RealtimeClientKind;
   principalId: string;
+  executionPrincipalId?: string;
   deviceId?: string;
   accessSessionId?: string;
   scopes: readonly GatewayScope[];

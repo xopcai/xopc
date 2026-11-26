@@ -270,7 +270,7 @@ export function resolveMcpToolsetCapabilities(toolsetId: string, includeWrites?:
 export function registerMcpProductTools(dispatcher: CapabilityDispatcher, delegation: McpDelegationDeps): void {
   registerMcpDelegation(dispatcher, delegation);
   registerWorkspaceFiles(dispatcher, delegation.getFiles);
-  registerSessionTools(dispatcher);
+  registerSessionTools(dispatcher, delegation.getConfig);
   registerUserContextTools(dispatcher);
   registerWorkspaceSearch(dispatcher);
   for (const [id, tool] of Object.entries(productTools)) dispatcher.exposeToMcp(id, tool);

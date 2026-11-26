@@ -43,7 +43,7 @@ import { createLogger } from '../utils/logger.js';
 import { createPreauthConnectionBudget } from '../gateway/security/preauth-connection-budget.js';
 import { hasGatewayScope, type GatewayScope } from '../gateway/security/gateway-scopes.js';
 import type { BrowserPreviewRuntime } from './browser-preview.js';
-import { RealtimeBroker, type RealtimeSubscriptionHandle } from './broker.js';
+import { RealtimeBroker, type RealtimeEvent, type RealtimeSubscriptionHandle } from './broker.js';
 import { RealtimeTicketStore } from './tickets.js';
 import { RealtimeSocketWriter } from './writer.js';
 
@@ -182,6 +182,7 @@ export class RealtimeRuntime {
     let connectionId: string | undefined;
     let endpointId: string | undefined;
     let principalId: string | undefined;
+    let executionPrincipalId: string | undefined;
     let grantedScopes: readonly GatewayScope[] = [];
     let previewPeer: Parameters<BrowserPreviewRuntime['receive']>[0] | undefined;
     let unregisterPreview: (() => void) | undefined;
@@ -238,6 +239,11 @@ export class RealtimeRuntime {
       writer.enqueue(serverMessage('realtime.error', { code, message }), 'critical');
     };
 
+    const canReceive = (event: RealtimeEvent): boolean => {
+      const audience = this.broker.getAudience(event);
+      return !audience || (audience.principalId === executionPrincipalId && hasGatewayScope(grantedScopes, audience.scope));
+    };
+
     const subscribe = (requested: RealtimeSubscription[]): boolean => {
       const authorized = requested.filter((item) => {
         if (!desktopBinding && isAuthorizedTopic(item.topic, grantedScopes)) return true;
@@ -261,6 +267,7 @@ export class RealtimeRuntime {
         }
         subscriptions.get(item.topic)?.unsubscribe();
         const handle = this.broker.subscribe(item.topic, item.afterSeq, (event) => {
+          if (!canReceive(event)) return;
           const output = item.view === 'compact' ? compactRunEvent(event) : event;
           if (output) writer.enqueue(output);
         });
@@ -271,7 +278,7 @@ export class RealtimeRuntime {
         const cancelReplay = writer.enqueueReplay((function* () {
           for (const message of handle.initial) {
             // Reactions are recovered by the authenticated history snapshot without replaying their entrance.
-            if (message.kind === 'realtime.event' && message.payload.event === 'session.agent-reaction') continue;
+            if (message.kind === 'realtime.event' && (message.payload.event === 'session.agent-reaction' || !canReceive(message))) continue;
             const output = item.view === 'compact' ? compactRunEvent(message) : message;
             if (output) yield output;
           }
@@ -325,6 +332,7 @@ export class RealtimeRuntime {
         }
         authenticated = true;
         principalId = claim.principalId;
+        executionPrincipalId = claim.executionPrincipalId ?? principalId;
         grantedScopes = claim.scopes;
         const principalSockets = this.socketsByPrincipal.get(principalId) ?? new Set<WebSocket>();
         principalSockets.add(socket);

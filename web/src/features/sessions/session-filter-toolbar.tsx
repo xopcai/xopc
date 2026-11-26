@@ -4,9 +4,11 @@ import { ArrowLeft, Check, ChevronRight, MoreHorizontal, Search, Trash2, X } fro
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 
+import { externalRuntimeLabel } from '@/components/brand/external-runtime-badge';
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { SelectOptionList, type PopoverSelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { ExternalAgentKind } from '@/features/settings/types/agent-gateway';
 import type { MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
@@ -34,7 +36,7 @@ export function SessionFilterToolbar({ filters, onChange, search, onSearch, labe
   onSearch: (value: string) => void;
   labels: Labels;
   gateway: string;
-  agents: Array<{ id: string; name?: string }>;
+  agents: Array<{ id: string; name?: string; execution?: ExternalAgentKind }>;
 }) {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState<FilterPage>('home');
@@ -101,7 +103,17 @@ export function SessionFilterToolbar({ filters, onChange, search, onSearch, labe
     values = [filters.status];
     choose = ([status]) => { patch({ status: status as SessionFilters['status'] }); back(); };
   } else if (page === 'agent') {
-    options = [{ value: '', label: labels.allAgents }, ...agents.map((agent) => ({ value: agent.id, label: agent.name || agent.id }))];
+    options = [
+      { value: '', label: labels.allAgents },
+      ...agents.map((agent) => {
+        const baseLabel = agent.name || agent.id;
+        const runtime = agent.execution ? externalRuntimeLabel(agent.execution, 'short') : undefined;
+        const label = runtime && baseLabel.toLowerCase() !== runtime.toLowerCase()
+          ? `${baseLabel} (${runtime})`
+          : baseLabel;
+        return { value: agent.id, label };
+      }),
+    ];
     if (filters.agentId && !options.some((option) => option.value === filters.agentId)) options.push({ value: filters.agentId, label: filters.agentId });
     values = [filters.agentId];
     choose = ([agentId]) => { patch({ agentId }); back(); };

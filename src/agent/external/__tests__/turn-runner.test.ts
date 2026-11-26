@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { persistInboundAttachments } from '../../../channels/attachments/inbound-persist.js';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -50,7 +51,12 @@ vi.mock('../drivers/codex/app-server.js', async importOriginal => {
       async close() {}
       async request(method: string, params: CodexRecord) {
         requests(method, params);
-        if (method === 'model/list') return { data: [{ isDefault: true, model: 'test-codex-model' }] };
+        if (method === 'model/list') return { data: [
+          { isDefault: true, model: 'test-codex-model' },
+          { model: 'reasoning-required', supportedReasoningEfforts: [{ reasoningEffort: 'low' }, { reasoningEffort: 'max' }] },
+          { model: 'reasoning-optional', supportedReasoningEfforts: [{ reasoningEffort: 'none' }, { reasoningEffort: 'medium' }] },
+          { model: 'reasoning-legacy', supportedReasoningEfforts: [{ reasoningEffort: 'low' }, { reasoningEffort: 'xhigh' }] },
+        ] };
         if (method === 'thread/start' || method === 'thread/resume') return { thread: { id: 'native-thread' } };
         if (method === 'thread/fork') return { thread: { id: 'forked-thread-99' } };
         if (method === 'turn/start') {
@@ -80,6 +86,7 @@ vi.mock('../drivers/codex/app-server.js', async importOriginal => {
 
 let root: string | undefined;
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await disposeAllPooledExternalSessions(true);
   requests.mockClear();
   onTurnStartHook.fn = undefined;
@@ -265,11 +272,21 @@ it('persists resume cursor and supports controlled native session rotation', () 
 
 it('persists Codex reasoning, plans, token usage, unwrapped commands, turn changeSet/evidence, live approvals, and attachments', async () => {
   root = mkdtempSync(join(tmpdir(), 'xopc-external-rich-'));
+  vi.stubEnv('XOPC_STATE_DIR', root);
   openXopcDatabase({ path: join(root, 'xopc.db') });
   const project = new ProjectStore().create({ name: 'Codex rich', workspaceRoot: root });
   const session = createConversation({ agentId: 'codex', projectId: project.id }, root);
 
+  const bytes = 'iVBORw0KGgo=';
+  const attachments = await persistInboundAttachments([
+    { type: 'image', name: 'shot.png', mimeType: 'image/png', data: bytes },
+  ]);
+  let stagedImage: string | undefined;
+  let stagedBytes: string | undefined;
   onTurnStartHook.fn = ({ emit, onRequest, params }) => {
+    const image = (params.input as Array<{ type: string; path?: string }>).find(item => item.type === 'localImage');
+    stagedImage = image?.path;
+    if (stagedImage) stagedBytes = readFileSync(stagedImage).toString('base64');
     const scope = { threadId: 'native-thread', turnId: 'native-turn' };
     void (async () => {
       emit('item/reasoning/summaryTextDelta', { ...scope, itemId: 'reason-1', delta: 'Inspecting workspace' });
@@ -321,9 +338,7 @@ it('persists Codex reasoning, plans, token usage, unwrapped commands, turn chang
     execution: { kind: 'codex', permissionMode: 'ask' },
     runId: 'rich-run',
     content: 'Fix the bug',
-    attachments: [
-      { type: 'image', name: 'shot.png', mimeType: 'image/png', data: 'data:image/png;base64,iVBORw0KGgo=' },
-    ],
+    attachments,
     hasAttachmentsOrContext: false,
     signal: new AbortController().signal,
   })) {
@@ -338,6 +353,8 @@ it('persists Codex reasoning, plans, token usage, unwrapped commands, turn chang
     }
   }
 
+  expect(stagedBytes).toBe(bytes);
+  expect(existsSync(stagedImage!)).toBe(false);
   expect(serverReplyLog.replies).toEqual([{ decision: 'accept' }]);
   expect(requests).toHaveBeenCalledWith('turn/start', expect.objectContaining({
     approvalPolicy: 'on-request',
@@ -366,6 +383,26 @@ it('persists Codex reasoning, plans, token usage, unwrapped commands, turn chang
   expect(payloads.some((p) => p.role === 'assistant' && p.content?.[0]?.type === 'thinking' && p.content[0].thinking === 'Inspecting workspace')).toBe(true);
   expect(payloads.some((p) => p.role === 'toolResult' && p.toolName === 'update_plan')).toBe(true);
   expect(payloads.some((p) => p.role === 'assistant' && p.content?.[0]?.type === 'text' && p.usage?.input === 500)).toBe(true);
+});
+
+it.each([
+  ['reasoning-required', 'off', undefined],
+  ['reasoning-required', 'max', 'max'],
+  ['reasoning-legacy', 'max', 'xhigh'],
+  ['reasoning-optional', 'off', 'none'],
+])('uses advertised Codex reasoning levels for %s with %s', async (model, thinkingLevel, expectedEffort) => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-codex-model-effort-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'Codex model effort', workspaceRoot: root });
+  const session = createConversation({ agentId: 'codex', projectId: project.id }, root);
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key, transcriptId: session.transcriptId!, agentId: 'codex',
+    execution: { kind: 'codex', model }, thinkingLevel, runId: 'model-effort',
+    content: 'Review the model effort', hasAttachmentsOrContext: false, signal: new AbortController().signal,
+  }));
+  const turn = requests.mock.calls.find(([method]) => method === 'turn/start')?.[1];
+  expect(turn?.model).toBe(model);
+  expect(turn?.effort).toBe(expectedEffort);
 });
 
 it('forwards per-session modelOverride, thinkingLevel effort, and Codex thread/name/updated title sync', async () => {

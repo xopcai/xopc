@@ -1,7 +1,18 @@
 import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
-import { isExternalAgentKind, type ExternalAgentKind } from '@/features/settings/types/agent-gateway';
+import {
+  EXTERNAL_CONTEXT_ACCESS_MODES,
+  isExternalAgentKind,
+  type ExternalAgentKind,
+  type ExternalContextAccess,
+} from '@/features/settings/types/agent-gateway';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+
+function parseContextAccess(raw: unknown): ExternalContextAccess | undefined {
+  return typeof raw === 'string' && (EXTERNAL_CONTEXT_ACCESS_MODES as readonly string[]).includes(raw)
+    ? (raw as ExternalContextAccess)
+    : undefined;
+}
 
 export type ChatAgentOption = {
   id: string;
@@ -11,6 +22,7 @@ export type ChatAgentOption = {
   role?: string;
   purpose?: string;
   execution?: ExternalAgentKind;
+  contextAccess?: ExternalContextAccess;
   responsibilities?: string[];
   skills?: string[];
 };
@@ -42,7 +54,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
           name?: string;
           description?: string;
           avatar?: string;
-          override?: { purpose?: string; execution?: { kind?: string } };
+          override?: { purpose?: string; execution?: { kind?: string; contextAccess?: string } };
           effective?: { skills?: { mode?: string; include?: string[] } };
         }>;
       };
@@ -53,18 +65,22 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
         .filter((a): a is NonNullable<typeof a> & { id: string } =>
           Boolean(a && typeof a.id === 'string' && a.id.trim()),
         )
-        .map((a) => ({
-          id: a.id.trim().toLowerCase(),
-          ...(a.override?.purpose ? { purpose: a.override.purpose } : {}),
-          ...(isExternalAgentKind(a.override?.execution?.kind) ? { execution: a.override.execution.kind } : {}),
-          name: typeof a.name === 'string' && a.name.trim() ? a.name.trim() : undefined,
-          description:
-            typeof a.description === 'string' && a.description.trim() ? a.description.trim() : undefined,
-          ...(typeof a.avatar === 'string' && a.avatar.trim() ? { avatar: a.avatar.trim() } : {}),
-          skills: (a.effective?.skills?.mode === 'selected' ? a.effective.skills.include ?? [] : []).filter(
-            (item): item is string => typeof item === 'string' && Boolean(item.trim()),
-          ),
-        }));
+        .map((a) => {
+          const contextAccess = parseContextAccess(a.override?.execution?.contextAccess);
+          return {
+            id: a.id.trim().toLowerCase(),
+            ...(a.override?.purpose ? { purpose: a.override.purpose } : {}),
+            ...(isExternalAgentKind(a.override?.execution?.kind) ? { execution: a.override.execution.kind } : {}),
+            ...(contextAccess ? { contextAccess } : {}),
+            name: typeof a.name === 'string' && a.name.trim() ? a.name.trim() : undefined,
+            description:
+              typeof a.description === 'string' && a.description.trim() ? a.description.trim() : undefined,
+            ...(typeof a.avatar === 'string' && a.avatar.trim() ? { avatar: a.avatar.trim() } : {}),
+            skills: (a.effective?.skills?.mode === 'selected' ? a.effective.skills.include ?? [] : []).filter(
+              (item): item is string => typeof item === 'string' && Boolean(item.trim()),
+            ),
+          };
+        });
       if (items.length > 0) {
         return { defaultId, items };
       }
@@ -74,7 +90,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
   const data = (await fetchGatewayConfigSwrResponse()) as {
     payload?: {
       config?: {
-        agents?: { defaultId?: string; list?: Array<{ id?: string; purpose?: string; execution?: { kind?: string }; enabled?: boolean }> };
+        agents?: { defaultId?: string; list?: Array<{ id?: string; purpose?: string; execution?: { kind?: string; contextAccess?: string }; enabled?: boolean }> };
       };
     };
   };
@@ -85,11 +101,15 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
     .filter((e): e is typeof e & { id: string } =>
       Boolean(e && e.enabled !== false && typeof e.id === 'string' && e.id.trim()),
     )
-    .map((e) => ({
-      id: e.id.trim().toLowerCase(),
-      ...(e.purpose ? { purpose: e.purpose } : {}),
-      ...(isExternalAgentKind(e.execution?.kind) ? { execution: e.execution.kind } : {}),
-    }));
+    .map((e) => {
+      const contextAccess = parseContextAccess(e.execution?.contextAccess);
+      return {
+        id: e.id.trim().toLowerCase(),
+        ...(e.purpose ? { purpose: e.purpose } : {}),
+        ...(isExternalAgentKind(e.execution?.kind) ? { execution: e.execution.kind } : {}),
+        ...(contextAccess ? { contextAccess } : {}),
+      };
+    });
   if (items.length === 0) {
     return { defaultId, items: [{ id: defaultId }] };
   }

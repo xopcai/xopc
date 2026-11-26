@@ -13,8 +13,8 @@ const DANGEROUS_COMMAND_PATTERNS: ReadonlyArray<RegExp> = [
 
 const sessionApprovals = new Map<string, Set<string>>();
 
-function sessionKey(conversationId: string, transcriptId: string): string {
-  return `${conversationId}::${transcriptId}`;
+function sessionKey(conversationId: string, transcriptId: string, principalId = ''): string {
+  return `${conversationId}::${transcriptId}::${principalId}`;
 }
 
 /** Detect high-risk shell commands that must never be silently auto-approved by session memory. */
@@ -55,10 +55,11 @@ export function isExternalApprovalRemembered(
   conversationId: string,
   transcriptId: string,
   request: ExternalInteractionRequest,
+  principalId?: string,
 ): boolean {
   const sig = approvalSignatureForRequest(request);
   if (!sig) return false;
-  return sessionApprovals.get(sessionKey(conversationId, transcriptId))?.has(sig) ?? false;
+  return sessionApprovals.get(sessionKey(conversationId, transcriptId, principalId))?.has(sig) ?? false;
 }
 
 /** Remember a user's "Approve for session" choice for the active transcript. */
@@ -66,10 +67,11 @@ export function rememberExternalSessionApproval(
   conversationId: string,
   transcriptId: string,
   request: ExternalInteractionRequest,
+  principalId?: string,
 ): boolean {
   const sig = approvalSignatureForRequest(request);
   if (!sig) return false;
-  const key = sessionKey(conversationId, transcriptId);
+  const key = sessionKey(conversationId, transcriptId, principalId);
   let set = sessionApprovals.get(key);
   if (!set) {
     set = new Set<string>();

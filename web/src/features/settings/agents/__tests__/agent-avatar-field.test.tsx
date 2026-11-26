@@ -93,3 +93,22 @@ it('stages a local preview for saving and clears the upload when selecting a bui
   await click('自动头像');
   expect(onPendingChange).toHaveBeenLastCalledWith(null);
 });
+
+it('offers the runtime default avatar option for external agents instead of an empty fallback', async () => {
+  await act(async () => root.render(
+    <AgentAvatarField
+      agentId="claude-dev"
+      avatar="xopc:loopi:care"
+      runtimeKind="claude"
+      zh
+      pending={null}
+      onPendingChange={onPendingChange}
+      onReadingChange={onReadingChange}
+      onChange={onChange}
+    />,
+  ));
+  await click('默认头像');
+  expect(container.textContent).not.toContain('自动头像');
+  await click('Claude Code 默认');
+  expect(onChange).toHaveBeenCalledWith('xopc:runtime:claude');
+});

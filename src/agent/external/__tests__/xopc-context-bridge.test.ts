@@ -1,3 +1,5 @@
+import { authorizeExternalMcpConnection } from '../mcp-bridge.js';
+import { setSessionInteractionPolicy } from '../../session/interaction-policy.js';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -21,7 +23,6 @@ import {
   disposeAllPooledExternalSessions,
   resolveExternalTurnMcpContext,
   revokeAllExternalSessionMcpGrants,
-  revokeExternalSessionMcpGrant,
   runExternalProjectTurn,
   setActiveExternalMcpGatewayPort,
 } from '../index.js';
@@ -55,8 +56,8 @@ it('exposes xopc.sessions.{list,search,read} via MCP with FTS5 search and projec
   const projA = projects.create({ name: 'Alpha', workspaceRoot: root });
   const projB = projects.create({ name: 'Beta', workspaceRoot: root });
 
-  const convA = createConversation({ agentId: 'main', projectId: projA.id, name: 'Migration Plan' }, root);
-  const convB = createConversation({ agentId: 'main', projectId: projB.id, name: 'Other Project' }, root);
+  const convA = createConversation({ agentId: 'main', sourceChannel: 'webchat', projectId: projA.id, name: 'Migration Plan' }, root);
+  const convB = createConversation({ agentId: 'main', sourceChannel: 'webchat', projectId: projB.id, name: 'Other Project' }, root);
   const hidden = createConversation({
     agentId: 'main',
     projectId: projA.id,
@@ -86,8 +87,14 @@ it('exposes xopc.sessions.{list,search,read} via MCP with FTS5 search and projec
     timestamp: Date.now(),
   });
 
+  const temporary = createConversation({ agentId: 'main', sourceChannel: 'webchat', projectId: projA.id, name: 'Private temporary' }, root);
+  updateSessionConfig(temporary.key, { userContextMode: 'temporary' });
+  appendTranscriptEntry(temporary.key, { role: 'user', content: 'Private SQLite WAL temporary', timestamp: Date.now() });
+  const sessionOnly = createConversation({ agentId: 'main', sourceChannel: 'webchat', projectId: projA.id, name: 'Private session-only' }, root);
+  appendTranscriptEntry(sessionOnly.key, { role: 'user', content: 'Use the SQLite WAL decision only in this session.', timestamp: Date.now() });
+
   const dispatcher = new CapabilityDispatcher();
-  registerSessionTools(dispatcher);
+  registerSessionTools(dispatcher, () => ConfigSchema.parse({}));
   for (const [id, spec] of Object.entries(mcpSessionTools)) {
     dispatcher.exposeToMcp(id, spec);
   }
@@ -107,6 +114,8 @@ it('exposes xopc.sessions.{list,search,read} via MCP with FTS5 search and projec
   expect(listed.items.map((i) => i.conversationId)).toContain(convA.key);
   expect(listed.items.map((i) => i.conversationId)).toContain(convB.key);
   expect(listed.items.map((i) => i.conversationId)).not.toContain(hidden.key);
+  expect(listed.items.map((i) => i.conversationId)).not.toContain(temporary.key);
+  expect(listed.items.map((i) => i.conversationId)).not.toContain(sessionOnly.key);
 
   // Search finds via FTS5 and filters cleanly with project scope
   const searched = await dispatcher.call('xopc.sessions.search', { query: 'SQLite WAL' }, ctx) as {
@@ -115,6 +124,10 @@ it('exposes xopc.sessions.{list,search,read} via MCP with FTS5 search and projec
   };
   expect(searched.items.map((i) => i.conversationId)).toContain(convA.key);
   expect(searched.items.map((i) => i.conversationId)).not.toContain(hidden.key);
+  expect(searched.items.map((i) => i.conversationId)).not.toContain(temporary.key);
+  expect(searched.items.map((i) => i.conversationId)).not.toContain(sessionOnly.key);
+  await expect(dispatcher.call('xopc.sessions.read', { conversationId: temporary.key }, ctx)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  await expect(dispatcher.call('xopc.sessions.read', { conversationId: sessionOnly.key }, ctx)).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
   const filtered = filterMcpOutputForProjects('xopc.sessions.search', searched, [projA.id]) as typeof searched;
   expect(filtered.items.map((i) => i.conversationId)).toEqual([convA.key]);
@@ -146,6 +159,11 @@ it('auto-mounts scoped built-in xopc MCP server by contextAccess tier and revoke
   const cfg = ConfigSchema.parse({});
   const project = new ProjectStore().create({ name: 'Atlas', workspaceRoot: root });
   const conv = createConversation({ agentId: 'codex-1', projectId: project.id, sourceChannel: 'webchat' }, root);
+
+  seedTestAgentCatalog({
+    defaults: { models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} }, skills: { mode: 'all-enabled', exclude: [] }, tools: {}, runtime: {} },
+    agents: [{ id: 'codex-1', enabled: true, execution: { kind: 'codex', contextAccess: 'read_write' }, profile: { name: 'Codex' } }],
+  });
 
   // Off & brief_only do not mount built-in xopc MCP
   expect(resolveExternalTurnMcpContext({
@@ -210,10 +228,21 @@ it('auto-mounts scoped built-in xopc MCP server by contextAccess tier and revoke
   const writeAuth = authenticateMcpConnection(writeToken!);
   expect(writeAuth?.capabilityIds).toContain('xopc.notes.create');
   expect(writeAuth?.capabilityIds).toContain('xopc.tasks.create');
-
-  // Revoke cleans up the grant immediately
-  revokeExternalSessionMcpGrant(conv.key);
+  expect(authorizeExternalMcpConnection(writeAuth!.connectionId, cfg)).toBe(conv.key);
+  updateSessionConfig(conv.key, { userContextMode: 'off' });
+  expect(authorizeExternalMcpConnection(writeAuth!.connectionId, cfg)).toBeUndefined();
   expect(authenticateMcpConnection(writeToken!)).toBeNull();
+  updateSessionConfig(conv.key, { userContextMode: 'enabled' });
+
+  setSessionInteractionPolicy(conv.key, { mode: 'plan', access: 'configured' });
+  expect(authenticateMcpConnection(writeToken!)).toBeNull();
+  const scoped = { workspaceDir: root, agentId: 'codex-1', conversationId: conv.key, projectId: project.id, gatewayPort: 18790, cfg };
+  const planSpec = resolveExternalTurnMcpContext({ ...scoped, contextAccess: 'read_write' }).servers.find(server => server.name === 'xopc');
+  const planToken = planSpec?.transport === 'stdio' ? planSpec.env?.XOPC_MCP_TOKEN : undefined;
+  expect(authenticateMcpConnection(planToken!)?.capabilityIds).toContain('xopc.notes.list');
+  expect(authenticateMcpConnection(planToken!)?.capabilityIds).not.toContain('xopc.notes.create');
+  expect(resolveExternalTurnMcpContext({ ...scoped, contextAccess: 'off' }).builtInMounted).toBe(false);
+  expect(authenticateMcpConnection(planToken!)).toBeNull();
 });
 
 it('builds warm context brief respecting privacy tiers and injects both brief and built-in xopc MCP into external turns', async () => {

@@ -10,6 +10,7 @@ import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import { messagesToClientHistory, type ClientHistoryMessage } from '../../../session/client-history.js';
+import { activeExternalTurnReplacements } from '../../../storage/sqlite/session-turn-replace-repository.js';
 import { readAgentReactions } from '../../../storage/sqlite/agent-reaction-repository.js';
 import { getPersonalAgentByConversation, isPersonalConversation, resolveMessageReactionsEnabled } from '../../../personal-agent/repository.js';
 import { SessionStatus, type SessionType } from '../../../session/types.js';
@@ -953,7 +954,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (!hasGatewayScope(getGatewayPrincipal(c).scopes, 'workspace.write')) {
       return c.json({ ok: false, error: 'Restoring workspace checkpoints requires workspace write access' }, 403);
     }
-    if (hasActiveExternalTurn(key) || service.getActiveWebchatRunId(key)) {
+    if (activeExternalTurnReplacements.has(key) || hasActiveExternalTurn(key) || service.getActiveWebchatRunId(key)) {
       return c.json({ ok: false, error: 'Stop the active run before restoring workspace files' }, 409);
     }
     const body = await c.req.json().catch(() => ({})) as { stage?: unknown };

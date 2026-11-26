@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 
 import { runExec } from '../../infra/exec.js';
 import { createLogger } from '../../utils/logger.js';
@@ -199,73 +199,63 @@ export async function computeTurnCheckpointDiff(input: {
   };
 }
 
-/**
- * Restore the workspace working tree to a previously captured turn checkpoint (`before` or `after`),
- * removing files introduced after that snapshot and restoring modified/deleted files without touching `HEAD`.
- */
-export async function restoreTurnCheckpoint(input: {
+type RestoreCheckpointInput = {
   cwd: string;
   conversationId: string;
   turnId: string;
   stage?: 'before' | 'after';
-}): Promise<{ restored: boolean; filesChanged: number; stage: 'before' | 'after' }> {
+};
+
+/** Apply only the turn's change, keeping unrelated working tree and index changes. */
+export async function restoreTurnCheckpoint(
+  input: RestoreCheckpointInput,
+  options: { checkOnly?: boolean; optional?: boolean } = {},
+): Promise<{ restored: boolean; filesChanged: number; stage: 'before' | 'after' }> {
   const stage = input.stage ?? 'before';
+  const unchanged = { restored: false, filesChanged: 0, stage };
   const repoRoot = await resolveGitRoot(input.cwd);
   if (!repoRoot) {
+    if (options.optional) return unchanged;
     throw new Error('Workspace is not a Git repository; file checkpoint restore is unavailable.');
   }
 
-  const ref = checkpointRefName(input.conversationId, input.turnId, stage);
-  const targetTree = await resolveCheckpointTree(repoRoot, ref);
-  if (!targetTree) {
-    throw new Error(`No ${stage} checkpoint was found for turn "${input.turnId}".`);
-  }
-
-  const currentTree = await snapshotWorkingTreeToTreeSha(repoRoot);
-  if (currentTree === targetTree) {
-    return { restored: true, filesChanged: 0, stage };
-  }
-
-  // Find files that exist now (in currentTree) that did NOT exist in targetTree so we can remove them.
-  const addedSinceTargetRaw = await execGit(repoRoot, [
-    'diff',
-    '--name-only',
-    '--diff-filter=A',
-    '-z',
-    targetTree,
-    currentTree,
+  const from = checkpointRefName(input.conversationId, input.turnId, stage === 'before' ? 'after' : 'before');
+  const to = checkpointRefName(input.conversationId, input.turnId, stage);
+  const [fromTree, toTree] = await Promise.all([
+    resolveCheckpointTree(repoRoot, from),
+    resolveCheckpointTree(repoRoot, to),
   ]);
-  const filesToDelete = addedSinceTargetRaw.split('\0').filter(Boolean);
+  if (!fromTree || !toTree) {
+    if (options.optional && !fromTree && !toTree) return unchanged;
+    throw new Error('Both turn checkpoints are required to restore the change safely.');
+  }
+  if (fromTree === toTree) return { ...unchanged, restored: true };
 
-  // Find all differing paths for accurate return count.
-  const allChangedRaw = await execGit(repoRoot, [
-    'diff',
-    '--name-only',
-    '-z',
-    targetTree,
-    currentTree,
-  ]);
-  const filesChanged = allChangedRaw.split('\0').filter(Boolean).length;
-
-  // Check out targetTree into the working directory via an isolated temporary index.
-  const tempIndex = join(tmpdir(), `xopc-ckpt-restore-${process.pid}-${randomUUID()}`);
-  const env = { GIT_INDEX_FILE: tempIndex };
+  const dir = await mkdtemp(join(tmpdir(), 'xopc-ckpt-restore-'));
   try {
-    await execGit(repoRoot, ['read-tree', targetTree], env);
-    await execGit(repoRoot, ['checkout-index', '-a', '-f'], env);
+    const patch = join(dir, 'turn.patch');
+    const diffOptions = ['--no-renames', '--no-relative', '--no-ext-diff', '--no-textconv'];
+    const changed = await execGit(repoRoot, ['diff', ...diffOptions, '--name-only', '-z', fromTree, toTree]);
+    await execGit(repoRoot, ['-c', 'core.quotePath=true', 'diff', ...diffOptions,
+      '--binary', '--full-index', '--no-color', '--src-prefix=a/', '--dst-prefix=b/',
+      `--output=${patch}`, fromTree, toTree]);
+    const args = ['apply', '--binary', '--whitespace=nowarn', patch];
+    const check = options.checkOnly ? ['--check'] : [];
+    try {
+      await execGit(repoRoot, [...args.slice(0, 1), ...check, ...args.slice(1)]);
+    } catch (error) {
+      // Retrying a completed restore is a no-op.
+      try {
+        await execGit(repoRoot, ['apply', '--check', '--reverse', ...args.slice(1)]);
+      } catch {
+        throw new Error('Workspace files changed after this turn and conflict with the restore.', { cause: error });
+      }
+      return { ...unchanged, restored: true };
+    }
+    return { restored: !options.checkOnly, filesChanged: changed.split('\0').filter(Boolean).length, stage };
   } finally {
-    await rm(tempIndex, { force: true }).catch(() => {});
+    await rm(dir, { recursive: true, force: true });
   }
-
-  // Remove files created after targetTree (safe: only paths inside repoRoot).
-  const resolvedRoot = resolve(repoRoot);
-  for (const relPath of filesToDelete) {
-    const absPath = resolve(resolvedRoot, relPath);
-    if (!absPath.startsWith(`${resolvedRoot}/`) && !absPath.startsWith(`${resolvedRoot}\\`)) continue;
-    await rm(absPath, { force: true }).catch(() => {});
-  }
-
-  return { restored: true, filesChanged, stage };
 }
 
 /** Check whether a turn has stored `before` / `after` checkpoint refs. */

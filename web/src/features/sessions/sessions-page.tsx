@@ -21,7 +21,7 @@ import { PageTabs } from '@/components/ui/page-tabs';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { SessionCard, type SessionCardAction } from '@/features/sessions/session-card';
-import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
+import { agentOptionFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
 import { ContextCompactionConfigSection } from '@/features/settings/context-compaction-config-section';
 import { SessionConfigSection } from '@/features/settings/session-config-section';
 import { SessionDetailDrawer } from '@/features/sessions/session-detail-drawer';
@@ -733,6 +733,7 @@ export function SessionsPage() {
             >
               {sessions.map((session) => {
                 const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
+                const sessionAgent = agentOptionFromOptions(sessionAgentId, agentItems);
                 return (
                   <SessionCard
                     key={session.key}
@@ -740,7 +741,9 @@ export function SessionsPage() {
                     variant={viewMode}
                     labels={cardLabels}
                     sessionAgentId={sessionAgentId}
-                    sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
+                    sessionAgentName={sessionAgent?.name}
+                    sessionAgentAvatar={sessionAgent?.avatar}
+                    sessionAgentRuntime={sessionAgent?.execution}
                     onOpen={() => handleCardOpen(session.key)}
                     onAction={(action) => void handleCardAction(session.key, action)}
                   />
@@ -759,35 +762,34 @@ export function SessionsPage() {
         </SessionsTabPanel>
       </SettingsPageFrame>
 
-      <SessionDetailDrawer
-        open={detailOpen}
-        loading={detailLoading}
-        session={detailSession}
-        sessionAgentId={
-          detailSession ? resolveSessionAgentId(detailSession, defaultAgentId) : undefined
-        }
-        sessionAgentAvatar={
-          detailSession
-            ? agentAvatarFromOptions(
-                resolveSessionAgentId(detailSession, defaultAgentId),
-                agentItems,
-              )
-            : undefined
-        }
-        labels={detailLabels}
-        onClose={() => {
-          dispatch({ type: 'patch', patch: { detailOpen: false, detailSession: null } });
-        }}
-        onArchive={() => detailSession && void handleCardAction(detailSession.key, 'archive')}
-        onUnarchive={() => detailSession && void handleCardAction(detailSession.key, 'unarchive')}
-        onPin={() => detailSession && void handleCardAction(detailSession.key, 'pin')}
-        onUnpin={() => detailSession && void handleCardAction(detailSession.key, 'unpin')}
-        onExport={() => detailSession && void handleCardAction(detailSession.key, 'export')}
-        onDelete={() =>
-          detailSession &&
-          dispatch({ type: 'patch', patch: { confirmKey: detailSession.key, confirmOpen: true } })
-        }
-      />
+      {(() => {
+        const detailAgentId = detailSession ? resolveSessionAgentId(detailSession, defaultAgentId) : undefined;
+        const detailAgent = detailAgentId ? agentOptionFromOptions(detailAgentId, agentItems) : undefined;
+        return (
+          <SessionDetailDrawer
+            open={detailOpen}
+            loading={detailLoading}
+            session={detailSession}
+            sessionAgentId={detailAgentId}
+            sessionAgentName={detailAgent?.name}
+            sessionAgentAvatar={detailAgent?.avatar}
+            sessionAgentRuntime={detailAgent?.execution}
+            labels={detailLabels}
+            onClose={() => {
+              dispatch({ type: 'patch', patch: { detailOpen: false, detailSession: null } });
+            }}
+            onArchive={() => detailSession && void handleCardAction(detailSession.key, 'archive')}
+            onUnarchive={() => detailSession && void handleCardAction(detailSession.key, 'unarchive')}
+            onPin={() => detailSession && void handleCardAction(detailSession.key, 'pin')}
+            onUnpin={() => detailSession && void handleCardAction(detailSession.key, 'unpin')}
+            onExport={() => detailSession && void handleCardAction(detailSession.key, 'export')}
+            onDelete={() =>
+              detailSession &&
+              dispatch({ type: 'patch', patch: { confirmKey: detailSession.key, confirmOpen: true } })
+            }
+          />
+        );
+      })()}
 
       <Dialog.Root
         open={confirmOpen}

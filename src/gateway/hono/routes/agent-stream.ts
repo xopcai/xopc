@@ -127,7 +127,7 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
   authenticated.get('/api/sessions/:conversationId/clarification', (c) => {
     const conversationId = (c.req.param('conversationId') ?? '').trim();
     if (!conversationId) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing conversationId' } }, 400);
-    const snapshot = service.getClarificationState(conversationId);
+    const snapshot = service.getClarificationState(conversationId, getGatewayPrincipal(c));
     if (!snapshot) return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Session not found' } }, 404);
     const checkpoint = snapshot.clarification?.deviceInteraction;
     if (checkpoint && deviceExecutionPrincipalId(getGatewayPrincipal(c)) !== checkpoint.actorPrincipalId) {

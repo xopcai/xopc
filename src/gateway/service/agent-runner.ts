@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { ClarificationResponseAction } from '@xopcai/gateway-contract';
 
+import type { RealtimeAudience } from '../../realtime/broker.js';
 import { findSessionInputByRunId } from '../../storage/sqlite/session-input-repository.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
 import type { Config } from '../../config/schema.js';
@@ -13,7 +14,9 @@ import type { ChannelManager } from '../../channels/manager.js';
 import type { SessionIndex } from '../../session/index.js';
 import { onConnectionWaitChanged } from '../../storage/sqlite/connection-wait-repository.js';
 import {
+  canAccessExternalInteraction,
   getActiveExternalInteractionSnapshot,
+  hasExternalInteraction,
   hasActiveExternalTurn,
   resolveExternalInteraction,
   steerExternalTurn,
@@ -77,7 +80,7 @@ export interface GatewayAgentRunnerOptions {
   getConfig: () => Config;
   /** Publish low-frequency gateway state changes. */
   emit: (type: string, payload: unknown) => void;
-  publishRealtime: (topic: string, event: string, data: unknown) => void;
+  publishRealtime: (topic: string, event: string, data: unknown, audience?: RealtimeAudience) => void;
   completeRealtimeTopic: (topic: string) => void;
   resolveTurnContext: (
     ref: TurnContextRef,
@@ -353,7 +356,7 @@ export class GatewayAgentRunner {
     return this.inputs.submit(input);
   }
 
-  replaceLatestSessionTurn(input: ReplaceLatestTurnInput) {
+  replaceLatestSessionTurn(input: ReplaceLatestTurnInput, actor?: GatewayPrincipal) {
     return this.inputs.replaceLatestTurn(input, async allowAbort => {
       const activeRunId = this.activeWebchatRunBySession.get(input.conversationId)
         ?? this.inputs.snapshot(input.conversationId).activeRunId;
@@ -363,7 +366,7 @@ export class GatewayAgentRunner {
       if (!allowAbort && (this.activeWebchatRunBySession.has(input.conversationId) || this.inputs.snapshot(input.conversationId).activeRunId)) return;
       evictEmbeddedSessionRunner(input.conversationId, 'gateway_user_turn_replaced');
       this.opts.getAgentService().evictSessionAgent(input.conversationId);
-    });
+    }, actor);
   }
 
   getSessionInputState(conversationId: string) {
@@ -420,8 +423,10 @@ export class GatewayAgentRunner {
     return this.ephemeralClarifications.answer(requestId, answer);
   }
 
-  getClarificationState(conversationId: string) {
-    return getActiveExternalInteractionSnapshot(conversationId) ?? getClarificationSnapshot(conversationId);
+  getClarificationState(conversationId: string, actor?: GatewayPrincipal) {
+    const external = getActiveExternalInteractionSnapshot(conversationId);
+    if (!external?.clarification) return getClarificationSnapshot(conversationId);
+    return canAccessExternalInteraction(external.clarification.id, actor) ? external : { ...external, clarification: null };
   }
 
   resolveClarificationResponse(input: ClarificationSubmission & {
@@ -431,6 +436,9 @@ export class GatewayAgentRunner {
     action: ClarificationResponseAction;
     responseActor?: GatewayPrincipal;
   }) {
+    if (hasExternalInteraction(input.id) && !canAccessExternalInteraction(input.id, input.responseActor)) {
+      return { ok: false as const, code: 'NOT_FOUND' as const, clarification: undefined };
+    }
     const external = resolveExternalInteraction(input);
     if (external) {
       if (external.ok) this.opts.emit('clarification.updated', external.clarification);

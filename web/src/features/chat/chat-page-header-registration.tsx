@@ -168,6 +168,11 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeConversationId, handleSideChatToggle, hasMessages, terminalPlatform]);
 
+  const selectedChatAgent = useMemo(
+    () => chatAgents.find((agent) => agent.id === chatAgentId),
+    [chatAgents, chatAgentId],
+  );
+
   const header = useMemo(() => ({
       startExtra: showNewChatLink ? (
         <NewChatLink
@@ -203,6 +208,8 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             key={`context:${activeConversationId ?? context?.project?.id ?? 'new'}`}
             {...context}
             agentId={chatAgentId}
+            externalRuntime={selectedChatAgent?.execution}
+            externalContextAccess={selectedChatAgent?.contextAccess}
             executionDeviceAction={activeConversationId ? <ExecutionDevicePicker conversationId={activeConversationId} disabled={chatAgentDisabled} /> : null}
             environmentAction={canChangeWorkspace && onWorkspaceChange ? <ChatWorkspaceControl
               directoryOnly conversationId={activeConversationId} workspacePath={activeConversationId ? workspacePath : context?.project?.workspaceRoot}
@@ -236,6 +243,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   }), [
     chatHeadline,
     chatAgents,
+    selectedChatAgent,
     showChatAgentSelector,
     chatAgentId,
     onChatAgentChange,

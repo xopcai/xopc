@@ -2,6 +2,7 @@ import { REALTIME_CAPABILITIES, REALTIME_PROTOCOL_VERSION, realtimeClientKindSch
 import type { Hono } from 'hono';
 import { z } from 'zod';
 
+import { deviceExecutionPrincipalId } from '../../../endpoint-tools/execution-actor.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 
@@ -39,6 +40,7 @@ export function registerRealtimeRoutes(authenticated: Hono, deps: AuthenticatedR
         parsed.data.clientKind,
         {
           principalId: principal.principalId,
+          executionPrincipalId: deviceExecutionPrincipalId(principal),
           ...(principal.deviceId ? { deviceId: principal.deviceId } : {}),
           ...(principal.accessSessionId ? { accessSessionId: principal.accessSessionId } : {}),
           scopes: principal.scopes,

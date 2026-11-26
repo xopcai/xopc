@@ -47,7 +47,13 @@ import {
 import { deleteMediaUrisNoLongerReferenced } from '../../media/session-references.js';
 import { createLogger } from '../../utils/logger.js';
 import { fitSourceContextsToBudget } from '../../agent/source-context/budget.js';
-import { getExternalConversationAgent, rollbackExternalSession } from '../../agent/external/index.js';
+import type { GatewayPrincipal } from '../security/gateway-principal.js';
+import { isDeviceExecutionInputOwner, recordDeviceExecutionActor } from '../../endpoint-tools/execution-actor.js';
+import {
+  activeExternalTurnReplacements, getExternalTurnReplacement, listActiveExternalTurnReplacementConversations, updateExternalTurnReplacement,
+  type ReplaceLatestSessionTurnInput,
+} from '../../storage/sqlite/session-turn-replace-repository.js';
+import { getExternalConversationAgent, restoreSessionTurnCheckpoint, rollbackExternalSession } from '../../agent/external/index.js';
 import { TaskApplicationService } from '../../tasks/task-application-service.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 
@@ -126,6 +132,12 @@ export type SubmitSessionInput = {
   sourceContexts?: AgentSourceContext[];
   thinking?: string;
   origin: TurnOrigin;
+};
+
+type ReplaceTurnFailure = {
+  ok: false;
+  code: 'BAD_REQUEST' | 'TARGET_NOT_FOUND' | 'NOT_LATEST' | 'SESSION_BUSY' | 'CONTEXT_UNAVAILABLE' | 'ROLLBACK_FAILED';
+  message?: string;
 };
 
 export type ReplaceLatestTurnInput = SubmitSessionInput & {
@@ -360,14 +372,17 @@ export class SessionInputCoordinator {
   async replaceLatestTurn(
     input: ReplaceLatestTurnInput,
     beforeReplace: (allowAbort: boolean) => Promise<void>,
+    actor?: GatewayPrincipal,
   ): Promise<
     | { ok: true; effectiveDelivery: 'next'; state: SessionInputState }
-    | { ok: false; code: 'BAD_REQUEST' | 'TARGET_NOT_FOUND' | 'NOT_LATEST' | 'SESSION_BUSY' | 'CONTEXT_UNAVAILABLE' }
+    | ReplaceTurnFailure
   > {
     input = structuredClone(input);
     const conversationId = input.conversationId.trim();
-    this.deps.onInputReceived?.(conversationId);
-    return this.runSubmissionExclusive(conversationId, async () => {
+    const replaced = await this.withSubmission(conversationId, () => this.runSubmissionExclusive<
+      | { ok: true; effectiveDelivery: 'next' }
+      | ReplaceTurnFailure
+    >(conversationId, async () => {
       const clientMessageId = input.clientMessageId.trim();
       const content = input.content.trim();
       const targetTurnId = input.targetTurnId.trim();
@@ -381,10 +396,23 @@ export class SessionInputCoordinator {
       if (existing) {
         input.origin = existing.origin;
         if (!sameAppContext(input, existing)) return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
-        return { ok: true, effectiveDelivery: 'next', state: this.snapshot(conversationId) };
+        return { ok: true, effectiveDelivery: 'next' } as const;
       }
 
-      const target = validateLatestSessionTurnTarget(conversationId, targetTurnId);
+      const externalAgent = getExternalConversationAgent(conversationId);
+      if (externalAgent && targetTurnId.startsWith('steer:')) return { ok: false, code: 'BAD_REQUEST' };
+      const pending = getExternalTurnReplacement(conversationId);
+      if (pending) {
+        if (pending.input.clientMessageId !== clientMessageId || pending.input.targetTurnId !== targetTurnId
+          || (actor && !isDeviceExecutionInputOwner(conversationId, clientMessageId, actor))) {
+          return { ok: false, code: 'SESSION_BUSY', message: 'External turn replacement is pending recovery.' };
+        }
+        if (!await this.recoverExternalReplacement(conversationId, pending)) {
+          return { ok: false, code: 'ROLLBACK_FAILED', message: 'External rollback is incomplete. Resolve the workspace conflict or reset the session.' };
+        }
+        if (pending.state !== 'reserved') return { ok: true, effectiveDelivery: 'next' };
+      }
+      const target = validateLatestSessionTurnTarget(conversationId, targetTurnId, input.expectedTranscriptId);
       if (target.ok === false) return target;
 
       const original = targetTurnId.startsWith('steer:')
@@ -408,10 +436,7 @@ export class SessionInputCoordinator {
       if (input.controlVersion !== undefined && input.controlVersion !== controlState.version) throw new SessionInputControlConflict('Queue control changed');
       if ((controlState.paused || input.controlVersion !== undefined) && controlState.phase !== 'idle') return { ok: false, code: 'SESSION_BUSY' };
       await beforeReplace(input.controlVersion === undefined);
-      if (getExternalConversationAgent(conversationId)) {
-        await rollbackExternalSession(conversationId, 1, { restoreFiles: true, targetTurnId });
-      }
-      const result = replaceLatestSessionTurnAndQueueInput({
+      const replacement = {
         conversationId,
         targetTurnId,
         expectedTranscriptId: input.expectedTranscriptId,
@@ -423,26 +448,97 @@ export class SessionInputCoordinator {
         contextSnapshots: sourceContexts,
         thinking: input.thinking,
         origin: input.origin,
-      });
-      if (result.ok === false) return result;
-
-      if (!result.idempotent) {
-        cancelConnectionObjective(conversationId);
-        supersedeActiveClarification(conversationId);
-        const replacement = {
-          role: 'user',
-          content,
-          media: attachments,
-        } as unknown as AgentMessage;
-        await deleteMediaUrisNoLongerReferenced({
-          removed: result.removedMessages,
-          remaining: [...result.remainingMessages, replacement],
+      };
+      if (externalAgent) {
+        const reserved = runSqliteWriteTransaction(() => {
+          const intent = replaceLatestSessionTurnAndQueueInput(replacement, 'reserve');
+          if (intent.ok && !intent.idempotent && actor) recordDeviceExecutionActor(conversationId, clientMessageId, actor);
+          return intent;
         });
+        if (reserved.ok === false) return reserved;
+        if (reserved.idempotent) return { ok: true, effectiveDelivery: 'next' } as const;
+        const transcriptId = readCurrentTranscriptId(getSqliteDatabase(), conversationId)!;
+        replacement.expectedTranscriptId = transcriptId;
+        activeExternalTurnReplacements.add(conversationId);
+        try {
+          await restoreSessionTurnCheckpoint(conversationId, targetTurnId, 'before', { optional: true, checkOnly: true });
+          updateExternalTurnReplacement(transcriptId, 'rolling_back');
+          if (!await rollbackExternalSession(conversationId, 1, { expectedTranscriptId: transcriptId })) {
+            throw new Error('External runtime changed before rollback.');
+          }
+          updateExternalTurnReplacement(transcriptId, 'native_rolled_back');
+          await restoreSessionTurnCheckpoint(conversationId, targetTurnId, 'before', { optional: true });
+          updateExternalTurnReplacement(transcriptId, 'rolled_back');
+        } catch (err) {
+          const failure = err instanceof Error ? err.message : String(err);
+          const state = getExternalTurnReplacement(conversationId)?.state;
+          if (state === 'reserved') updateExternalTurnReplacement(transcriptId);
+          log.warn({ err, conversationId, targetTurnId, state }, 'External turn replacement rollback failed');
+          const message = state === 'native_rolled_back' || state === 'reserved'
+            ? failure : 'External rollback could not be confirmed. Reset the session before continuing.';
+          return { ok: false, code: 'ROLLBACK_FAILED', message };
+        } finally {
+          activeExternalTurnReplacements.delete(conversationId);
+        }
       }
+      const result = runSqliteWriteTransaction(() => {
+        const accepted = replaceLatestSessionTurnAndQueueInput(replacement, externalAgent ? 'complete' : undefined);
+        if (accepted.ok && !accepted.idempotent && actor && !externalAgent) recordDeviceExecutionActor(conversationId, clientMessageId, actor);
+        return accepted;
+      });
+      if (result.ok === false) return externalAgent
+        ? { ok: false, code: 'ROLLBACK_FAILED', message: 'External rollback is confirmed but the edit is still pending. Retry the same replacement.' }
+        : result;
 
-      void this.drain(conversationId);
-      return { ok: true, effectiveDelivery: 'next', state: this.publish(conversationId) };
+      await this.cleanupReplacedTurn(replacement, result);
+      return { ok: true, effectiveDelivery: 'next' } as const;
+    }));
+    if (replaced.ok === false) return replaced;
+    return { ...replaced, state: this.publish(conversationId) };
+  }
+
+  private async cleanupReplacedTurn(
+    input: ReplaceLatestSessionTurnInput,
+    result: Extract<ReturnType<typeof replaceLatestSessionTurnAndQueueInput>, { ok: true }>,
+  ): Promise<void> {
+    if (result.idempotent) return;
+    cancelConnectionObjective(input.conversationId);
+    supersedeActiveClarification(input.conversationId);
+    await deleteMediaUrisNoLongerReferenced({
+      removed: result.removedMessages,
+      remaining: [...result.remainingMessages, { role: 'user', content: input.content, media: input.attachments } as unknown as AgentMessage],
     });
+  }
+
+  /** A lost provider reply leaves rollback uncertain and requires a session reset. */
+  private async recoverExternalReplacement(
+    conversationId: string,
+    replacement: NonNullable<ReturnType<typeof getExternalTurnReplacement>>,
+  ): Promise<boolean> {
+    if (replacement.state === 'rolling_back' || activeExternalTurnReplacements.has(conversationId)) return false;
+    const { expectedTranscriptId, targetTurnId } = replacement.input;
+    if (replacement.state === 'reserved') {
+      updateExternalTurnReplacement(expectedTranscriptId);
+      return true;
+    }
+
+    activeExternalTurnReplacements.add(conversationId);
+    try {
+      if (replacement.state === 'native_rolled_back') {
+        await restoreSessionTurnCheckpoint(conversationId, targetTurnId, 'before', { optional: true });
+        updateExternalTurnReplacement(expectedTranscriptId, 'rolled_back');
+      }
+      const result = replaceLatestSessionTurnAndQueueInput(replacement.input, 'complete');
+      if (!result.ok) return false;
+      await this.cleanupReplacedTurn(replacement.input, result);
+      this.publish(conversationId);
+      return true;
+    } catch (err) {
+      log.warn({ err, conversationId, targetTurnId }, 'External turn replacement recovery failed');
+      return false;
+    } finally {
+      activeExternalTurnReplacements.delete(conversationId);
+    }
   }
 
   private async submitLocked(input: SubmitSessionInput): Promise<
@@ -450,6 +546,7 @@ export class SessionInputCoordinator {
     | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' | 'CONTEXT_UNAVAILABLE' | 'SESSION_CHANGED' }
   > {
     const conversationId = input.conversationId;
+    if (getExternalTurnReplacement(conversationId)) return { ok: false, code: 'SESSION_CHANGED' };
     const clientMessageId = input.clientMessageId.trim();
     const content = input.content.trim();
     if (!conversationId || !clientMessageId
@@ -598,6 +695,9 @@ export class SessionInputCoordinator {
     try {
       while (true) {
         // Attachment/context validation is asynchronous; do not consume a recovery ahead of it.
+        if (this.isAcceptingInput(conversationId)) return;
+        const replacement = getExternalTurnReplacement(conversationId);
+        if (replacement && !await this.recoverExternalReplacement(conversationId, replacement)) return;
         if (this.isAcceptingInput(conversationId)) return;
         const delay = (this.resumeAfter.get(conversationId) ?? 0) - Date.now();
         if (delay > 0) {
@@ -812,7 +912,7 @@ export class SessionInputCoordinator {
   recover(): void {
     const interrupted = recoverSessionInputState();
     new TaskRunRepository().reconcileCancelledRuns();
-    for (const conversationId of new Set([...interrupted, ...reconcileConnectionWaits(true), ...reconcilePhoneAssistance(), ...reconcileBrowserAssistance()])) {
+    for (const conversationId of new Set([...interrupted, ...listActiveExternalTurnReplacementConversations(), ...reconcileConnectionWaits(true), ...reconcilePhoneAssistance(), ...reconcileBrowserAssistance()])) {
       this.publish(conversationId);
       void this.drain(conversationId);
     }

@@ -1,7 +1,9 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
+import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../../gateway/chat-limits.js';
+import { readMediaReference } from '../../media/media-reference.js';
 import type { UserTurnAttachment } from '../../gateway/user-turn-input.js';
 import type { ExternalTurnAttachment } from './types.js';
 
@@ -36,80 +38,65 @@ function stripDataUrlPrefix(raw: string): { mimeType?: string; base64: string } 
  * usable by any external runtime driver (both local file paths for CLI tools
  * like Codex `localImage` and base64 payloads for ACP `image` content blocks).
  */
-export function prepareExternalAttachments(input: {
+export async function prepareExternalAttachments(input: {
   attachments?: UserTurnAttachment[];
   cwd: string;
-  runId: string;
-}): {
+}): Promise<{
   attachments: ExternalTurnAttachment[];
-  cleanup: () => void;
-} {
-  const raw = input.attachments ?? [];
-  if (raw.length === 0) {
-    return { attachments: [], cleanup: () => {} };
-  }
-
+  cleanup: () => Promise<void>;
+}> {
   let stagedDir: string | undefined;
-  const ensureStagedDir = () => {
-    if (!stagedDir) {
-      stagedDir = join(tmpdir(), `xopc-ext-att-${input.runId.replace(/[^a-zA-Z0-9_-]/g, '')}`);
-      mkdirSync(stagedDir, { recursive: true });
-    }
-    return stagedDir;
+  const cleanup = async () => {
+    if (stagedDir) await rm(stagedDir, { force: true, recursive: true });
   };
 
   const prepared: ExternalTurnAttachment[] = [];
-  raw.forEach((item, index) => {
-    const isImage = item.type === 'image' || (item.mimeType?.toLowerCase().startsWith('image/') ?? false);
-    const kind: ExternalTurnAttachment['type'] = isImage ? 'image' : 'file';
-    let mimeType = item.mimeType;
-    let base64: string | undefined;
-    let localPath: string | undefined;
-
-    if (item.workspaceRelativePath?.trim()) {
-      localPath = resolve(input.cwd, item.workspaceRelativePath.trim());
-    }
-
-    if (item.data?.trim()) {
-      const stripped = stripDataUrlPrefix(item.data.trim());
-      if (!mimeType && stripped.mimeType) mimeType = stripped.mimeType;
-      const buf = Buffer.from(stripped.base64, 'base64');
-      if (buf.byteLength <= MAX_INLINE_IMAGE_BYTES) {
-        base64 = stripped.base64;
-        if (!localPath) {
-          const safeName = item.name?.replace(/[^a-zA-Z0-9._-]/g, '_')
-            || `attachment-${index + 1}${extensionFromMimeType(mimeType)}`;
-          localPath = join(ensureStagedDir(), safeName);
-          writeFileSync(localPath, buf);
+  try {
+    for (const [index, item] of (input.attachments ?? []).entries()) {
+      const isImage = item.type === 'image' || Boolean(item.mimeType?.toLowerCase().startsWith('image/'));
+      const maxBytes = isImage ? MAX_INLINE_IMAGE_BYTES : MAX_WEBCHAT_ATTACHMENT_FILE_BYTES;
+      let mimeType = item.mimeType;
+      let localPath: string | undefined;
+      let bytes: Buffer | undefined;
+      if (item.uri) {
+        bytes = (await readMediaReference(item.uri, maxBytes)).buffer;
+      } else if (item.data?.trim()) {
+        const stripped = stripDataUrlPrefix(item.data.trim());
+        mimeType ||= stripped.mimeType;
+        bytes = Buffer.from(stripped.base64, 'base64');
+      } else if (item.workspaceRelativePath?.trim()) {
+        localPath = await realpath(resolve(input.cwd, item.workspaceRelativePath.trim()));
+        const rel = relative(input.cwd, localPath);
+        if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) {
+          throw new Error('Attachment path is outside the workspace');
         }
+        if (isImage) bytes = await readFile(localPath);
+      } else {
+        throw new Error(`Attachment "${item.name ?? index + 1}" has no readable content`);
       }
-    } else if (isImage && localPath) {
-      try {
-        const buf = readFileSync(localPath);
-        if (buf.byteLength <= MAX_INLINE_IMAGE_BYTES) {
-          base64 = buf.toString('base64');
-        }
-      } catch {
-        // Best-effort base64 load for ACP drivers.
+
+      if (bytes && bytes.byteLength > maxBytes) {
+        throw new Error(`Attachment "${item.name ?? index + 1}" exceeds the external runtime size limit`);
       }
+      if (bytes && !localPath) {
+        stagedDir ??= await mkdtemp(join(tmpdir(), 'xopc-ext-att-'));
+        const name = item.name?.replace(/[^a-zA-Z0-9._-]/g, '_') || `attachment${extensionFromMimeType(mimeType)}`;
+        localPath = join(stagedDir, `${index + 1}-${name}`);
+        await writeFile(localPath, bytes, { mode: 0o600 });
+      }
+      prepared.push({
+        type: isImage ? 'image' : 'file',
+        ...(item.name ? { name: item.name } : {}),
+        ...(mimeType ? { mimeType } : {}),
+        ...(localPath ? { localPath } : {}),
+        ...(isImage && bytes ? { base64: bytes.toString('base64') } : {}),
+      });
     }
-
-    prepared.push({
-      type: kind,
-      ...(item.name ? { name: item.name } : {}),
-      ...(mimeType ? { mimeType } : {}),
-      ...(localPath ? { localPath } : {}),
-      ...(base64 ? { base64 } : {}),
-      ...(item.workspaceRelativePath ? { workspaceRelativePath: item.workspaceRelativePath } : {}),
-    });
-  });
-
-  return {
-    attachments: prepared,
-    cleanup: () => {
-      if (stagedDir) rmSync(stagedDir, { force: true, recursive: true });
-    },
-  };
+  } catch (error) {
+    await cleanup().catch(() => {});
+    throw error;
+  }
+  return { attachments: prepared, cleanup };
 }
 
 /** Format non-image file attachments as concise context lines prepended to the prompt. */

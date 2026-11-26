@@ -18,7 +18,6 @@ import { commandRegistry } from '../../../chat-commands/registry.js';
 import { isVoiceLikeAttachment } from '../../../channels/attachments/voice-stt-webchat.js';
 import { createLogger } from '../../../utils/logger.js';
 import { getSessionInputById } from '../../../storage/sqlite/session-input-repository.js';
-import { recordDeviceExecutionActor } from '../../../endpoint-tools/execution-actor.js';
 
 const log = createLogger('Gateway:SessionCommand');
 
@@ -81,7 +80,7 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
   }
   try {
     const view = c.req.query('view') === 'compact' ? 'compact' : 'full';
-    const payload = await receiveSessionCommand(deps.service, id.data, principal.principalId, command, async () => {
+    const payload = await receiveSessionCommand(deps.service, id.data, principal, command, async () => {
       if (!('input' in command)) return [];
       const endpoint = command.origin.type === 'endpoint' ? deps.service.endpointTools.registry.get(command.origin.endpointId) : undefined;
       const contexts = endpoint ? [deviceTurnSourceContext(endpoint, command.input.endpointContext,
@@ -93,7 +92,6 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
     }, view);
     const receiveMs = performance.now() - receivedAt;
     c.header('Server-Timing', `session_input;dur=${receiveMs.toFixed(3)}`, { append: true });
-    if ('input' in command) recordDeviceExecutionActor(id.data, command.clientMessageId, principal);
     deps.service.emit('session.input-state', payload.inputState);
     if ('kind' in command && command.kind === 'start') deps.service.emit('session.updated', { key: id.data });
     if (payload.receipt.lifecycle === 'preparing') deps.service.sessionPreparations.wake(id.data);

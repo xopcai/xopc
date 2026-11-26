@@ -1,9 +1,15 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
+import { useState } from 'react';
 
-import { ExternalRuntimeAvatar } from '@/components/brand/external-runtime-avatar';
+import {
+  ExternalRuntimeAvatar,
+  externalRuntimeDefaultAvatar,
+  parseExternalRuntimeAvatar,
+} from '@/components/brand/external-runtime-avatar';
 import { Button } from '@/components/ui/button';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
+import { AgentAvatarField, type PendingAgentAvatar } from '@/features/settings/agents/agent-avatar-field';
 import {
   ExternalRuntimeConfigForm,
   ExternalRuntimeStatusDot,
@@ -25,6 +31,8 @@ const DEFAULT_RUNTIME_NAMES = new Set(['', 'Codex', 'Antigravity', 'Claude Code'
 export type ManualAgentDraft = {
   open: boolean;
   name: string;
+  avatar?: string;
+  pendingAvatar?: PendingAgentAvatar | null;
   instructions: string;
   workspace: string;
   execution: 'embedded' | ExternalAgentKind;
@@ -54,15 +62,19 @@ export function CreateAgentDialog({
   onCreate: () => void;
   onOpenChange: (open: boolean) => void;
 }) {
+  const [avatarReading, setAvatarReading] = useState(false);
+
   const selectExecution = (next: 'embedded' | ExternalAgentKind) => {
     if (next === draft.execution) return;
     const trimmedName = draft.name.trim();
     const shouldAutoName = DEFAULT_RUNTIME_NAMES.has(trimmedName);
+    const shouldAutoAvatar = !draft.pendingAvatar && (!draft.avatar?.trim() || Boolean(parseExternalRuntimeAvatar(draft.avatar)));
     if (next === 'embedded') {
       onChange({
         execution: 'embedded',
         executionConfig: undefined,
         ...(shouldAutoName ? { name: '' } : {}),
+        ...(shouldAutoAvatar ? { avatar: '' } : {}),
       });
       return;
     }
@@ -71,6 +83,7 @@ export function CreateAgentDialog({
       execution: next,
       executionConfig: { kind: next },
       ...(shouldAutoName ? { name: defaultName } : {}),
+      ...(shouldAutoAvatar ? { avatar: externalRuntimeDefaultAvatar(next) } : {}),
     });
   };
 
@@ -186,6 +199,20 @@ export function CreateAgentDialog({
               ) : null}
             </div>
 
+            <section className="rounded-xl border border-edge bg-surface-base p-3.5">
+              <AgentAvatarField
+                agentId={draft.name.trim().toLowerCase() || (draft.execution === 'embedded' ? 'new-agent' : draft.execution)}
+                avatar={draft.avatar}
+                runtimeKind={draft.execution === 'embedded' ? undefined : draft.execution}
+                zh={zh}
+                disabled={busy}
+                pending={draft.pendingAvatar ?? null}
+                onPendingChange={(pendingAvatar) => onChange({ pendingAvatar })}
+                onReadingChange={setAvatarReading}
+                onChange={(avatar) => onChange({ avatar })}
+              />
+            </section>
+
             <label htmlFor="manual-agent-name" className="block text-xs font-medium text-fg-muted">
               {messages.manualCreateName}
               <input
@@ -244,7 +271,7 @@ export function CreateAgentDialog({
 
           <footer className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
             <Dialog.Close asChild><Button disabled={busy}>{messages.manualCreateCancel}</Button></Dialog.Close>
-            <Button variant="primary" disabled={busy || !draft.name.trim()} aria-busy={busy} onClick={onCreate}>
+            <Button variant="primary" disabled={busy || avatarReading || !draft.name.trim()} aria-busy={busy} onClick={onCreate}>
               {busy ? messages.manualCreating : messages.manualCreateSubmit}
             </Button>
           </footer>

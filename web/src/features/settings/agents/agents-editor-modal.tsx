@@ -45,7 +45,13 @@ export function AgentsEditorModal({
           <SettingsShellLayerProvider layer="modal" portalContainer={portalContainer}>
             <header className="flex shrink-0 items-center justify-between gap-4 border-b border-edge px-5 py-4">
               <div className="flex min-w-0 items-center gap-3">
-                <AgentAvatarDisplay agentId={agent.id} avatar={agent.avatar} size={42} className="size-11 shrink-0" />
+                <AgentAvatarDisplay
+                  agentId={agent.id}
+                  avatar={agent.avatar}
+                  runtimeBadge={agent.override.execution?.kind}
+                  size={42}
+                  className="size-11 shrink-0"
+                />
                 <div className="min-w-0">
                   <Dialog.Title className="truncate text-base font-semibold text-fg">{agentListDisplayName(agent, messages)}</Dialog.Title>
                   <Dialog.Description className="mt-0.5 truncate font-mono text-xs text-fg-muted">{agent.id}</Dialog.Description>

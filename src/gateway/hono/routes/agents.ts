@@ -404,6 +404,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }
+    service.emit('agent.avatar.updated', { agentId: res.data.agentId });
     return c.json({ ok: true, payload: { agentId: res.data.agentId } });
   });
 
@@ -413,6 +414,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }
+    service.emit('agent.avatar.updated', { agentId: res.data.agentId });
     return c.json({ ok: true, payload: { agentId: res.data.agentId } });
   });
 

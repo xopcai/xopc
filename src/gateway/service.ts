@@ -763,8 +763,8 @@ export class GatewayService {
         return snapshot;
       },
       emit: (type, payload) => this.emit(type, payload),
-      publishRealtime: (topic, event, data) => {
-        this.realtime.broker.publish(topic, event, data);
+      publishRealtime: (topic, event, data, audience) => {
+        this.realtime.broker.publish(topic, event, data, undefined, audience);
       },
       completeRealtimeTopic: (topic) => this.realtime.completeTopic(topic),
     });
@@ -852,6 +852,7 @@ export class GatewayService {
 
   /** Refresh long-lived runtime caches after an Agent catalog mutation. */
   refreshAgentCatalog(): void {
+    revokeAllExternalSessionMcpGrants();
     this._agentService?.applyRuntimeConfiguration(this.config);
     void this.reconcileMemoryMaintenanceAutomations().catch((error) => {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1527,8 +1528,8 @@ export class GatewayService {
     return this.agentRunner.answerEphemeralClarification(requestId, answer);
   }
 
-  getClarificationState(conversationId: string) {
-    return this.agentRunner.getClarificationState(conversationId);
+  getClarificationState(conversationId: string, actor?: GatewayPrincipal) {
+    return this.agentRunner.getClarificationState(conversationId, actor);
   }
 
   resolveClarificationResponse(input: Parameters<GatewayAgentRunner['resolveClarificationResponse']>[0]) {

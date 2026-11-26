@@ -10,8 +10,10 @@ import {
   Trash2,
 } from 'lucide-react';
 
+import { ExternalRuntimePill } from '@/components/brand/external-runtime-badge';
 import type { SessionMetadata } from '@/features/sessions/session.types';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
+import type { ExternalAgentKind } from '@/features/settings/types/agent-gateway';
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { sessionIdentityLabel } from './session-identity-label';
 import { messages } from '@/i18n/messages';
@@ -56,14 +58,18 @@ export function SessionCard({
   variant,
   labels,
   sessionAgentId,
+  sessionAgentName,
   sessionAgentAvatar,
+  sessionAgentRuntime,
   onOpen,
   onAction,
 }: {
   session: SessionMetadata;
   variant: 'grid' | 'list';
   sessionAgentId: string;
+  sessionAgentName?: string;
   sessionAgentAvatar?: string;
+  sessionAgentRuntime?: ExternalAgentKind;
   labels: {
     continueChat: string;
     archive: string;
@@ -131,6 +137,9 @@ export function SessionCard({
           <span className="truncate text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
             {sourceLabel}
           </span>
+          {sessionAgentRuntime ? (
+            <ExternalRuntimePill kind={sessionAgentRuntime} variant="full" />
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted">
           {isPinned ? <Pin className="size-3.5 text-accent-fg" strokeWidth={1.75} aria-hidden /> : null}
@@ -143,6 +152,7 @@ export function SessionCard({
           <AgentAvatarDisplay
             agentId={sessionAgentId}
             avatar={sessionAgentAvatar}
+            runtimeBadge={sessionAgentRuntime}
             size={40}
             className="size-10 shrink-0 ring-1 ring-edge/60 dark:ring-edge"
           />
@@ -153,9 +163,13 @@ export function SessionCard({
             {showKeySubtitle ? (
               <div
                 className="mt-0.5 min-w-0 max-w-full truncate font-mono text-[11px] text-fg-subtle"
-                title={session.key}
+                title={sessionAgentName ? `${sessionAgentName} · ${session.key}` : session.key}
               >
-                {session.key}
+                {sessionAgentName ? `${sessionAgentName} · ${session.key}` : session.key}
+              </div>
+            ) : sessionAgentName ? (
+              <div className="mt-0.5 min-w-0 max-w-full truncate text-[11px] text-fg-subtle">
+                {sessionAgentName}
               </div>
             ) : null}
           </div>

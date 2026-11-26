@@ -1,3 +1,4 @@
+import { isAgentCatalogCacheKey } from '@/features/gateway/agent-catalog-cache';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -43,6 +44,7 @@ async function refresh(payload: GatewayAgentsPayload): Promise<void> {
   await Promise.all([
     mutate('settings-gateway-agents', payload, { revalidate: false }),
     mutate('setup-checklist-agents', payload, { revalidate: false }),
+    mutate(isAgentCatalogCacheKey),
     revalidateGatewayConfig(),
   ]);
 }

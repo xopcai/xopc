@@ -1,7 +1,10 @@
 import { Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { externalRuntimeDefaultAvatar } from '@/components/brand/external-runtime-avatar';
+import { externalRuntimeLabel } from '@/components/brand/external-runtime-badge';
 import { Button } from '@/components/ui/button';
+import type { ExternalAgentKind } from '@/features/settings/types/agent-gateway';
 import { cn } from '@/lib/cn';
 
 import { AgentAvatarDisplay } from './agent-avatar-display';
@@ -13,9 +16,21 @@ export interface PendingAgentAvatar {
   preview: string;
 }
 
-export function AgentAvatarField({ agentId, avatar, zh, disabled, pending, onPendingChange, onReadingChange, onChange }: {
+export function AgentAvatarField({
+  agentId,
+  avatar,
+  runtimeKind,
+  zh,
+  disabled,
+  pending,
+  onPendingChange,
+  onReadingChange,
+  onChange,
+}: {
   agentId: string;
   avatar?: string;
+  /** External runtime kind, when editing or creating an external agent. */
+  runtimeKind?: ExternalAgentKind;
   zh: boolean;
   disabled?: boolean;
   pending: PendingAgentAvatar | null;
@@ -32,8 +47,14 @@ export function AgentAvatarField({ agentId, avatar, zh, disabled, pending, onPen
     return () => readerRef.current?.abort();
   }, []);
 
+  const defaultValue = runtimeKind ? externalRuntimeDefaultAvatar(runtimeKind) : '';
+  const effectiveAvatar = avatar?.trim() ? avatar.trim() : defaultValue;
+  const runtimeDefaultLabel = runtimeKind
+    ? (zh ? `${externalRuntimeLabel(runtimeKind, 'full')} 默认` : `${externalRuntimeLabel(runtimeKind, 'full')} default`)
+    : (zh ? '自动头像' : 'Automatic');
+
   const options = [
-    { value: '', label: zh ? '自动头像' : 'Automatic' },
+    { value: defaultValue, label: runtimeDefaultLabel },
     { value: 'xopc:loopi:idle', label: zh ? 'Loopi · 平静' : 'Loopi · Calm' },
     { value: 'xopc:loopi:care', label: zh ? 'Loopi · 温暖' : 'Loopi · Warm' },
     { value: 'xopc:loopi:curious', label: zh ? 'Loopi · 好奇' : 'Loopi · Curious' },
@@ -41,7 +62,7 @@ export function AgentAvatarField({ agentId, avatar, zh, disabled, pending, onPen
     { value: buildXopcDicebearValue('bottts', agentId), label: zh ? '机器人' : 'Robot' },
     { value: buildXopcDicebearValue('adventurer', agentId), label: zh ? '插画人物' : 'Illustration' },
   ];
-  const currentLabel = options.find(option => option.value === (avatar ?? ''))?.label
+  const currentLabel = options.find(option => option.value === effectiveAvatar)?.label
     ?? (zh ? '自定义头像' : 'Custom avatar');
   const chooseFile = (file: File | undefined) => {
     if (!file) return;
@@ -81,7 +102,7 @@ export function AgentAvatarField({ agentId, avatar, zh, disabled, pending, onPen
           aria-label={zh ? '上传头像' : 'Upload avatar'} aria-describedby={`avatar-help-${agentId}`}
           className="group relative size-16 shrink-0 overflow-hidden rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50">
           {pending ? <img src={pending.preview} alt="" width={64} height={64} className="size-full object-cover" />
-            : <AgentAvatarDisplay agentId={agentId} avatar={avatar} size={64} />}
+            : <AgentAvatarDisplay agentId={agentId} avatar={effectiveAvatar} runtimeBadge={runtimeKind} size={64} />}
           <span className="absolute inset-x-0 bottom-0 flex h-5 items-center justify-center bg-black/55 text-white"><Upload className="size-3" aria-hidden /></span>
         </button>
         <div className="min-w-0 flex-1">
@@ -96,11 +117,11 @@ export function AgentAvatarField({ agentId, avatar, zh, disabled, pending, onPen
       {choosing ? (
         <div id={`avatar-options-${agentId}`} className="grid grid-cols-3 gap-2 sm:grid-cols-4" role="group" aria-label={zh ? '选择头像' : 'Choose avatar'}>
           {options.map(option => (
-            <button key={option.value} type="button" disabled={disabled || reading} aria-pressed={(avatar ?? '') === option.value}
+            <button key={option.value} type="button" disabled={disabled || reading} aria-pressed={effectiveAvatar === option.value}
               onClick={() => { onPendingChange(null); onChange(option.value); setError(null); }}
               className={cn('flex min-h-24 flex-col items-center gap-2 rounded-xl border p-3 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
-                (avatar ?? '') === option.value ? 'border-accent bg-accent-soft text-fg' : 'border-edge bg-surface-panel text-fg-muted hover:bg-surface-hover')}>
-              <AgentAvatarDisplay agentId={agentId} avatar={option.value} size={44} />
+                effectiveAvatar === option.value ? 'border-accent bg-accent-soft text-fg' : 'border-edge bg-surface-panel text-fg-muted hover:bg-surface-hover')}>
+              <AgentAvatarDisplay agentId={agentId} avatar={option.value} runtimeBadge={runtimeKind} size={44} />
               {option.label}
             </button>
           ))}

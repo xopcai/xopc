@@ -7,6 +7,10 @@ import {
   type ServerRealtimeMessage,
 } from '@xopcai/realtime-protocol';
 
+import type { GatewayScope } from '../gateway/security/gateway-scopes.js';
+
+export type RealtimeAudience = { principalId: string; scope: GatewayScope };
+
 export type RealtimeEvent = Extract<ServerRealtimeMessage, { kind: 'realtime.event' }>;
 export type RealtimeGap = Extract<ServerRealtimeMessage, { kind: 'realtime.gap' }>;
 export type RealtimeDelivery = RealtimeEvent | RealtimeGap;
@@ -40,6 +44,7 @@ export function defaultRealtimeTopicPolicy(topic: string): RealtimeTopicPolicy {
 }
 
 export class RealtimeBroker {
+  private readonly audiences = new WeakMap<RealtimeEvent, RealtimeAudience>();
   private readonly topics = new Map<string, TopicState>();
 
   constructor(
@@ -47,7 +52,7 @@ export class RealtimeBroker {
     private readonly onListenerError: (error: unknown, topic: string) => void = () => {},
   ) {}
 
-  publish(topic: string, event: string, data: unknown, now = Date.now()): RealtimeEvent {
+  publish(topic: string, event: string, data: unknown, now = Date.now(), audience?: RealtimeAudience): RealtimeEvent {
     realtimeTopicSchema.parse(topic);
     realtimeEventNameSchema.parse(event);
     const state = this.ensureTopic(topic);
@@ -58,6 +63,7 @@ export class RealtimeBroker {
       sentAt: now,
       payload: { topic, seq: state.nextSeq++, event, data },
     };
+    if (audience) this.audiences.set(message, audience);
     const capacity = this.resolvePolicy(topic).replayCapacity;
     if (capacity > 0) {
       state.events.push(message);
@@ -71,6 +77,10 @@ export class RealtimeBroker {
       }
     }
     return message;
+  }
+
+  getAudience(event: RealtimeEvent): RealtimeAudience | undefined {
+    return this.audiences.get(event);
   }
 
   subscribe(

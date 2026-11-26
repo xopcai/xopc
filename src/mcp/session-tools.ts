@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
-import { CapabilityError, defineReadCapability, type CapabilityDispatcher } from '../capabilities/runtime/dispatcher.js';
+import { CapabilityError, defineReadCapability, type CapabilityContext, type CapabilityDispatcher } from '../capabilities/runtime/dispatcher.js';
+import type { Config } from '../config/schema.js';
+import { canShareConversationHistory, canSearchHistoryEntry } from '../session/history-recall-policy.js';
 import { isPersonalConversation } from '../personal-agent/repository.js';
 import {
   isRuntimeOnlyTranscriptMessage,
@@ -8,7 +10,7 @@ import {
   isTranscriptCustomMessageEntry,
   type TranscriptStoredRow,
 } from '../session/session-context-for-llm.js';
-import { buildFts5SearchQuery } from '../storage/sqlite/fts.js';
+import { buildFts5SearchQuery, escapeSqlLike, sessionHanSearchTerms } from '../storage/sqlite/fts.js';
 import { getSessionMetadata } from '../storage/sqlite/session-read-repository.js';
 import { listSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { loadTranscriptRowsForSession } from '../storage/sqlite/transcript-repository.js';
@@ -61,14 +63,14 @@ export const mcpSessionTools = {
   'xopc.sessions.read': { scope: 'workspace.read' as const, output: McpSessionReadOutput },
 } as const;
 
-function isSessionSafeForExternalMcp(conversationId: string, hiddenFromSessionList?: boolean): boolean {
-  if (hiddenFromSessionList) return false;
-  try {
-    if (isPersonalConversation(conversationId)) return false;
-  } catch {
-    // If personal_agent tables are not populated in unit DBs, treat as non-personal.
-  }
-  return true;
+function isSessionSafeForExternalMcp(
+  cfg: Config,
+  session: NonNullable<ReturnType<typeof getSessionMetadata>>,
+  context: CapabilityContext,
+): boolean {
+  if (context.mcpProjectIds?.length && (!session.projectId || !context.mcpProjectIds.includes(session.projectId))) return false;
+  return !session.hiddenFromSessionList && !isPersonalConversation(session.key)
+    && canShareConversationHistory(cfg, session.key, context.conversationId);
 }
 
 function extractPlainTextFromContent(content: unknown): string {
@@ -87,23 +89,21 @@ function extractPlainTextFromContent(content: unknown): string {
   return parts.join('\n').trim();
 }
 
-function readBestFtsSnippet(conversationId: string, rawQuery: string): string | undefined {
-  try {
-    const ftsQuery = buildFts5SearchQuery(rawQuery);
-    if (!ftsQuery) return undefined;
-    const row = getSqliteDatabase()
-      .prepare(`
-        SELECT substr(content, 1, ?) AS snippet
-        FROM transcript_fts
-        WHERE conversation_id = ? AND transcript_fts MATCH ?
-        LIMIT 1
-      `)
-      .get(MAX_SNIPPET_CHARS, conversationId, ftsQuery) as { snippet?: string } | undefined;
-    const text = row?.snippet?.replace(/\s+/g, ' ').trim();
-    return text || undefined;
-  } catch {
-    return undefined;
-  }
+function readBestFtsSnippet(conversationId: string, rawQuery: string, sourceConversationId?: string): string | undefined {
+  const hanTerms = sessionHanSearchTerms(rawQuery);
+  const query = buildFts5SearchQuery(rawQuery);
+  const rows = getSqliteDatabase().prepare(`
+    SELECT f.entry_id AS entryId, f.content
+    FROM transcript_fts f JOIN transcript_entries e ON e.entry_id = f.entry_id
+    JOIN sessions s ON s.active_transcript_id = e.transcript_id AND s.conversation_id = f.conversation_id
+    WHERE f.conversation_id = ? AND e.role IN ('user','assistant')
+      AND COALESCE(json_extract(e.payload_json, '$.metadata.hiddenFromClient'), 0) = 0
+      AND (f.entry_id IN (SELECT entry_id FROM transcript_fts WHERE transcript_fts MATCH ? AND conversation_id = ?)
+        ${hanTerms.map(() => "OR f.content LIKE ? ESCAPE '\\'").join(' ')})
+    ORDER BY e.seq ASC LIMIT 50
+  `).all(conversationId, query, conversationId, ...hanTerms.map(term => `%${escapeSqlLike(term)}%`)) as Array<{ entryId: string; content: string }>;
+  const row = rows.find(item => canSearchHistoryEntry({ conversationId: sourceConversationId }, conversationId, item.entryId, item.content));
+  return row?.content.replace(/\s+/g, ' ').trim().slice(0, MAX_SNIPPET_CHARS) || undefined;
 }
 
 function toSummary(
@@ -172,7 +172,7 @@ function visibleTranscriptMessages(
   return out;
 }
 
-export function registerSessionTools(dispatcher: CapabilityDispatcher): void {
+export function registerSessionTools(dispatcher: CapabilityDispatcher, getConfig: () => Config): void {
   const policy = {
     majorVersion: 1,
     effect: 'read' as const,
@@ -194,25 +194,22 @@ export function registerSessionTools(dispatcher: CapabilityDispatcher): void {
     output: McpSessionListOutput,
     execute({ projectId, agentId, channel, limit, offset }, context) {
       context.assertCurrent?.();
-      const page = listSessionMetadata({
-        ...(projectId ? { projectId } : {}),
-        ...(agentId ? { agentId } : {}),
-        ...(channel ? { channel } : {}),
-        excludeArchived: true,
-        sortBy: 'updatedAt',
-        sortOrder: 'desc',
-        limit: limit + 10,
-        offset,
-      });
-      const safeItems = page.items
-        .filter((item) => isSessionSafeForExternalMcp(item.key, item.hiddenFromSessionList))
-        .slice(0, limit)
-        .map((item) => toSummary(item));
-      return {
-        items: safeItems,
-        total: Math.max(safeItems.length, page.total - (page.items.length - safeItems.length)),
-        hasMore: page.hasMore || page.items.length > limit,
-      };
+      const cfg = getConfig();
+      const items: ReturnType<typeof toSummary>[] = [];
+      let total = 0;
+      for (let cursor = 0; ; cursor += 100) {
+        const page = listSessionMetadata({
+          projectId, agentId, channel, excludeArchived: true, sortBy: 'updatedAt', sortOrder: 'desc',
+          limit: 100, offset: cursor,
+        });
+        for (const item of page.items) {
+          if (!isSessionSafeForExternalMcp(cfg, item, context)) continue;
+          if (total >= offset && items.length < limit) items.push(toSummary(item));
+          total++;
+        }
+        if (!page.hasMore) break;
+      }
+      return { items, total, hasMore: offset + items.length < total };
     },
   }));
 
@@ -229,20 +226,21 @@ export function registerSessionTools(dispatcher: CapabilityDispatcher): void {
     output: McpSessionSearchOutput,
     execute({ query, projectId, agentId, limit }, context) {
       context.assertCurrent?.();
-      const page = listSessionMetadata({
-        search: query,
-        ...(projectId ? { projectId } : {}),
-        ...(agentId ? { agentId } : {}),
-        excludeArchived: true,
-        sortBy: 'updatedAt',
-        sortOrder: 'desc',
-        limit: limit * 2,
-        offset: 0,
-      });
-      const items = page.items
-        .filter((item) => isSessionSafeForExternalMcp(item.key, item.hiddenFromSessionList))
-        .slice(0, limit)
-        .map((item) => toSummary(item, readBestFtsSnippet(item.key, query)));
+      const cfg = getConfig();
+      const items: ReturnType<typeof toSummary>[] = [];
+      for (let cursor = 0; items.length < limit; cursor += 100) {
+        const page = listSessionMetadata({
+          search: query, projectId, agentId, excludeArchived: true, sortBy: 'updatedAt', sortOrder: 'desc',
+          limit: 100, offset: cursor,
+        });
+        for (const item of page.items) {
+          if (!isSessionSafeForExternalMcp(cfg, item, context)) continue;
+          const snippet = readBestFtsSnippet(item.key, query, context.conversationId);
+          if (snippet || item.name?.toLowerCase().includes(query.toLowerCase())) items.push(toSummary(item, snippet));
+          if (items.length === limit) break;
+        }
+        if (!page.hasMore) break;
+      }
       return { query, items };
     },
   }));
@@ -261,11 +259,12 @@ export function registerSessionTools(dispatcher: CapabilityDispatcher): void {
     execute({ conversationId, limit, offset, includeToolCalls }, context) {
       context.assertCurrent?.();
       const meta = getSessionMetadata(conversationId);
-      if (!meta || !isSessionSafeForExternalMcp(meta.key, meta.hiddenFromSessionList)) {
+      if (!meta || !isSessionSafeForExternalMcp(getConfig(), meta, context)) {
         throw new CapabilityError('NOT_FOUND', `Session not found: ${conversationId}`);
       }
       const rows = loadTranscriptRowsForSession(conversationId);
-      const allMessages = visibleTranscriptMessages(rows, includeToolCalls);
+      const allMessages = visibleTranscriptMessages(rows, includeToolCalls)
+        .filter(item => canSearchHistoryEntry({ conversationId: context.conversationId }, conversationId, null, item.text));
       const slice = allMessages.slice(offset, offset + limit);
       return {
         conversationId: meta.key,

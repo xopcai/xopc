@@ -4,6 +4,9 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  getExternalTurnReplacement, replaceLatestSessionTurnAndQueueInput, updateExternalTurnReplacement,
+} from '../../../storage/sqlite/session-turn-replace-repository.js';
 import { SessionInputCoordinator } from '../session-input-coordinator.js';
 import { appContextToAgentContext } from '../../../agent/source-context/app-context.js';
 import {
@@ -496,6 +499,32 @@ describe('SessionInputCoordinator', () => {
 
     complete({ status: 'ok', summary: 'done' });
     await vi.waitFor(() => expect(coordinator.snapshot(conversationId).inputs).toEqual([]));
+  });
+
+  it.each(['rolling_back', 'rolled_back'] as const)('recovers external replacements in state %s', async (state) => {
+    ensureSessionRecord(conversationId, dir, { agentId: 'main' });
+    appendTranscriptEntry(conversationId, { role: 'user', content: 'Old request', turnId: 'original', timestamp: Date.now() });
+    const replacement = { conversationId, targetTurnId: 'original', clientMessageId: 'edit', content: 'New request', origin };
+    expect(replaceLatestSessionTurnAndQueueInput(replacement, 'reserve')).toMatchObject({ ok: true });
+    updateExternalTurnReplacement(getExternalTurnReplacement(conversationId)!.input.expectedTranscriptId, state);
+    const execute = vi.fn(async () => ({ status: 'ok', summary: 'done' }));
+    const coordinator = new SessionInputCoordinator({
+      sessionExists: async () => true, execute, emit: () => {},
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => [], steer: async () => false,
+    });
+
+    coordinator.recover();
+
+    if (state === 'rolling_back') {
+      expect(execute).not.toHaveBeenCalled();
+      expect(getExternalTurnReplacement(conversationId)?.state).toBe('rolling_back');
+      expect(loadTranscriptRowsForSession(conversationId)).toHaveLength(1);
+    } else {
+      await coordinator.waitForCompletion(conversationId, 'edit');
+      expect(execute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ content: 'New request' }));
+      expect(getExternalTurnReplacement(conversationId)).toBeUndefined();
+    }
   });
 
   it('freezes browser page context before a turn executes', async () => {

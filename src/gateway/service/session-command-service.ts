@@ -1,3 +1,7 @@
+import { getExternalTurnReplacement } from '../../storage/sqlite/session-turn-replace-repository.js';
+import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { recordDeviceExecutionActor } from '../../endpoint-tools/execution-actor.js';
+import type { GatewayPrincipal } from '../security/gateway-principal.js';
 import type { SessionCreation, SessionInputCommand, SessionMaterializeCommand, ModelThinkingValue } from '@xopcai/gateway-contract';
 
 import type { AgentSourceContext } from '../../agent/source-context/types.js';
@@ -45,10 +49,11 @@ function validateCreation(service: GatewayService, creation: SessionCreation): S
   return project?.workspaceRoot?.trim() ? { mode: 'local_checkout' } : null;
 }
 
-export async function receiveSessionCommand(service: GatewayService, conversationId: string, principalId: string,
+export async function receiveSessionCommand(service: GatewayService, conversationId: string, principal: GatewayPrincipal,
   command: SessionInputCommand | SessionMaterializeCommand,
   prepareSourceContexts: () => Promise<AgentSourceContext[]> = async () => [],
   view: 'full' | 'compact' = 'full') {
+  const { principalId } = principal;
   const receive = () => withModelConfigLock(conversationId, async () => {
     const personal = getPersonalAgentByConversation(conversationId);
     if (personal && 'creation' in command && command.creation.agentId !== personal.agentId) {
@@ -69,6 +74,9 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
     const clientMessageId = 'commandId' in command ? command.commandId : command.clientMessageId;
     const existing = matchSessionInputReceipt(conversationId, clientMessageId, principalId, sessionCommandHash(command));
     if (existing) return sessionCommandSnapshot(service, existing, view);
+    if (getExternalTurnReplacement(conversationId)) {
+      throw new SessionCommandError('SESSION_BUSY', 'External turn replacement is pending recovery.');
+    }
     if ('kind' in command && command.kind === 'append') {
       const session = getSessionMetadata(conversationId);
       if (!session) throw new SessionCommandError('NOT_FOUND', 'Conversation not found');
@@ -88,8 +96,12 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
       thinking: configuredThinking ?? (command.kind === 'start' ? command.creation.thinkingLevel : (await service.sessions.getAgentConfig(conversationId)).thinkingLevel),
       origin: command.origin.type === 'endpoint' ? { type: 'endpoint', endpointId: command.origin.endpointId } : command.origin,
     }) : undefined;
-    const receipt = acceptSessionCommand({ conversationId, principalId, command, preparedInput, defaultExecution,
-      attachProject: (id, projectId) => service.projects.attachSession(id, projectId) });
+    const receipt = runSqliteWriteTransaction(() => {
+      const accepted = acceptSessionCommand({ conversationId, principalId, command, preparedInput, defaultExecution,
+        attachProject: (id, projectId) => service.projects.attachSession(id, projectId) });
+      if ('input' in command) recordDeviceExecutionActor(conversationId, clientMessageId, principal);
+      return accepted;
+    });
     if ('kind' in command && command.kind === 'append' && receipt.inputId) {
       await service.dispatchAcceptedSessionInput(conversationId, receipt.inputId);
     }

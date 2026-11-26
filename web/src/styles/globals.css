@@ -108,6 +108,40 @@
   overflow: visible !important;
 }
 
+/* Codex-style sidebar hover overlay: text uses full width at rest and softly
+ * fades underneath floating right-edge action icons on hover / focus / open. */
+.sidebar-hover-row:is(:hover, :focus-within, [data-actions-visible="true"]) .sidebar-hover-fade {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - var(--sidebar-fade-start, 4.75rem)),
+    transparent calc(100% - var(--sidebar-fade-end, 3.25rem))
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - var(--sidebar-fade-start, 4.75rem)),
+    transparent calc(100% - var(--sidebar-fade-end, 3.25rem))
+  );
+}
+
+@media (hover: none) {
+  .sidebar-hover-row .sidebar-hover-fade {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      #000 0,
+      #000 calc(100% - var(--sidebar-fade-start, 4.75rem)),
+      transparent calc(100% - var(--sidebar-fade-end, 3.25rem))
+    );
+    mask-image: linear-gradient(
+      to right,
+      #000 0,
+      #000 calc(100% - var(--sidebar-fade-start, 4.75rem)),
+      transparent calc(100% - var(--sidebar-fade-end, 3.25rem))
+    );
+  }
+}
+
 /* Dark — lifted workstation gray, restrained rim light, Loop Blue signals */
 html.dark {
   color-scheme: dark;

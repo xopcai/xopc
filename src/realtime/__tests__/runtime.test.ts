@@ -51,6 +51,43 @@ describe('RealtimeRuntime', () => {
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
   });
 
+  it.each(['sender', 'other-principal', 'read-only'])('filters private approval events on replay and live delivery for %s', async variant => {
+    runtime = new RealtimeRuntime();
+    server = createServer();
+    server.on('upgrade', (request, connection, head) => { runtime!.handleUpgrade(request, connection, head); });
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing test address');
+
+    const topic = 'run:external-approval';
+    const audience = { principalId: 'sender', scope: 'workspace.write' as const };
+    const issued = runtime.tickets.issue('review-client', 'web', {
+      principalId: 'browser-session',
+      executionPrincipalId: variant === 'other-principal' ? 'other' : 'sender',
+      scopes: variant === 'read-only' ? ['agents.run'] : ['agents.run', 'workspace.write'],
+    });
+    runtime.broker.publish(topic, 'clarify_request', { phase: 'replay' }, undefined, audience);
+    runtime.broker.publish(topic, 'run.started', { phase: 'replay' });
+
+    socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`);
+    await waitForOpen(socket);
+    const messages = collectMessages(socket);
+    socket.send(JSON.stringify({
+      protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), kind: 'realtime.hello', sentAt: Date.now(),
+      payload: { ticket: issued.ticket, clientId: 'review-client', clientKind: 'web', subscriptions: [{ topic, afterSeq: 0 }] },
+    }));
+
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready' });
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.subscribed' });
+    if (variant === 'sender') await expect(messages.next()).resolves.toMatchObject({ payload: { event: 'clarify_request', data: { phase: 'replay' } } });
+    await expect(messages.next()).resolves.toMatchObject({ payload: { event: 'run.started' } });
+
+    runtime.broker.publish(topic, 'clarify_request', { phase: 'live' }, undefined, audience);
+    runtime.broker.publish(topic, 'run.completed', { phase: 'live' });
+    if (variant === 'sender') await expect(messages.next()).resolves.toMatchObject({ payload: { event: 'clarify_request', data: { phase: 'live' } } });
+    await expect(messages.next()).resolves.toMatchObject({ payload: { event: 'run.completed' } });
+  });
+
   it.each(['web', 'compatible', 'non-admin', 'old-contract', 'bad-signature', 'old-endpoint-version'])('handles desktop-compatible endpoint %s without confusing protocol and auth failures', async (variant) => {
     const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
     const kind = variant === 'web' ? 'web' : 'desktop';

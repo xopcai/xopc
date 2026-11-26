@@ -5,10 +5,20 @@ import type { SessionMetadata } from './session.types';
 export function resolveSessionAgentId(session: SessionMetadata, defaultAgentId: string): string {
   const fromRouting = session.routing?.agentId?.trim().toLowerCase();
   if (fromRouting) return fromRouting;
+  const fromSession = session.agentId?.trim().toLowerCase();
+  if (fromSession) return fromSession;
   const d = defaultAgentId.trim().toLowerCase();
   return d || 'main';
 }
 
+export function agentOptionFromOptions(
+  agentId: string,
+  items: ChatAgentOption[],
+): ChatAgentOption | undefined {
+  const normalized = agentId.trim().toLowerCase();
+  return items.find((i) => i.id === normalized);
+}
+
 export function agentAvatarFromOptions(agentId: string, items: ChatAgentOption[]): string | undefined {
-  return items.find((i) => i.id === agentId)?.avatar;
+  return agentOptionFromOptions(agentId, items)?.avatar;
 }

@@ -1,9 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
+import { ExternalRuntimePill } from '@/components/brand/external-runtime-badge';
 import { Button } from '@/components/ui/button';
 import type { SessionDetail } from '@/features/sessions/session.types';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
+import type { ExternalAgentKind } from '@/features/settings/types/agent-gateway';
 import { cn } from '@/lib/cn';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 
@@ -24,7 +26,9 @@ export function SessionDetailDrawer({
   loading,
   session,
   sessionAgentId,
+  sessionAgentName,
   sessionAgentAvatar,
+  sessionAgentRuntime,
   labels,
   onClose,
   onArchive,
@@ -38,7 +42,9 @@ export function SessionDetailDrawer({
   loading: boolean;
   session: SessionDetail | null;
   sessionAgentId?: string;
+  sessionAgentName?: string;
   sessionAgentAvatar?: string;
+  sessionAgentRuntime?: ExternalAgentKind;
   labels: {
     close: string;
     detailLoading: string;
@@ -82,6 +88,7 @@ export function SessionDetailDrawer({
                 <AgentAvatarDisplay
                   agentId={sessionAgentId}
                   avatar={sessionAgentAvatar}
+                  runtimeBadge={sessionAgentRuntime}
                   size={40}
                   className="size-10 shrink-0 ring-1 ring-edge/60 dark:ring-edge"
                 />
@@ -103,6 +110,17 @@ export function SessionDetailDrawer({
             ) : session ? (
               <>
                 <dl className="mb-4 grid gap-2 text-xs text-fg-muted">
+                  {sessionAgentId ? (
+                    <div>
+                      <dt className="text-fg-disabled">Agent</dt>
+                      <dd className="mt-0.5 flex flex-wrap items-center gap-1.5 text-fg">
+                        <span>{sessionAgentName || sessionAgentId}</span>
+                        {sessionAgentRuntime ? (
+                          <ExternalRuntimePill kind={sessionAgentRuntime} variant="full" />
+                        ) : null}
+                      </dd>
+                    </div>
+                  ) : null}
                   <div>
                     <dt className="text-fg-disabled">Key</dt>
                     <dd className="mt-0.5 break-all font-mono text-fg">{session.key}</dd>

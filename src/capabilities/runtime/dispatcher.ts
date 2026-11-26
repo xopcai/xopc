@@ -22,6 +22,7 @@ export interface CapabilityContext {
   /** Synchronous lease/grant guard immediately before domain execution or receipt replay. */
   assertCurrent?: () => void;
   actor?: ActorRef;
+  mcpProjectIds?: readonly string[];
   /** Active conversation supplied by the trusted Agent runtime. */
   conversationId?: string;
 }

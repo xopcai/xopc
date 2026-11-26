@@ -14,6 +14,10 @@ import {
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
+import {
+  ExternalRuntimePill,
+  externalRuntimeLabel,
+} from '@/components/brand/external-runtime-badge';
 import type { ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import {
@@ -27,7 +31,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 function haystack(a: ChatAgentOption, agentsMessages: AgentsSettingsMessages): string {
   const name = agentListDisplayName(a, agentsMessages);
   const desc = agentListDisplayDescription(a, agentsMessages);
-  return `${a.id} ${name} ${desc}`.toLowerCase();
+  const runtime = a.execution ? `${a.execution} ${externalRuntimeLabel(a.execution, 'full')}` : '';
+  return `${a.id} ${name} ${desc} ${runtime}`.toLowerCase();
 }
 
 function agentsMatchingQuery(
@@ -83,7 +88,11 @@ export function ChatAgentSelector({
   const selected = items.find((a) => a.id === value);
   const label = selected ? agentListDisplayName(selected, agentsMessages) : value || placeholder;
   const selectedTitle = selected
-    ? [agentListDisplayName(selected, agentsMessages), agentListDisplayDescription(selected, agentsMessages)]
+    ? [
+        agentListDisplayName(selected, agentsMessages),
+        selected.execution ? externalRuntimeLabel(selected.execution, 'full') : undefined,
+        agentListDisplayDescription(selected, agentsMessages),
+      ]
         .filter(Boolean)
         .join(' — ')
     : undefined;
@@ -112,7 +121,13 @@ export function ChatAgentSelector({
           )}
         >
           {value ? (
-            <AgentAvatarDisplay agentId={value} avatar={selected?.avatar} size={28} className="shrink-0" />
+            <AgentAvatarDisplay
+              agentId={value}
+              avatar={selected?.avatar}
+              runtimeBadge={selected?.execution}
+              size={28}
+              className="shrink-0"
+            />
           ) : null}
           <span
             className={cn(
@@ -181,10 +196,19 @@ export function ChatAgentSelector({
                         setQuery('');
                       }}
                     >
-                      <AgentAvatarDisplay agentId={a.id} avatar={a.avatar} size={32} className="shrink-0" />
+                      <AgentAvatarDisplay
+                        agentId={a.id}
+                        avatar={a.avatar}
+                        runtimeBadge={a.execution}
+                        size={32}
+                        className="shrink-0"
+                      />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium leading-tight" title={name}>
-                          {name}
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="min-w-0 truncate font-medium leading-tight" title={name}>
+                            {name}
+                          </span>
+                          {a.execution ? <ExternalRuntimePill kind={a.execution} variant="full" /> : null}
                         </span>
                         {desc ? (
                           <span

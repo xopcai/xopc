@@ -3,6 +3,7 @@ import { delimiter, isAbsolute, join } from 'node:path';
 
 import type { AgyExecution, ExternalAgentExecution } from '../../../../agent-config/schema.js';
 import { resolveUserPath } from '../../../agent-scope.js';
+import { buildExternalRuntimeEnv } from '../../runtime-env.js';
 import { createAcpExternalDriver } from '../../acp/acp-driver.js';
 import { AcpRpcError, asRecord } from '../../acp/json-rpc-client.js';
 
@@ -12,11 +13,6 @@ const SIGN_IN_REQUIRED_MESSAGE =
   'Antigravity is not signed in on the Gateway host. Run agy login (or agy acp --login) on the Gateway host and try again.';
 const NOT_FOUND_MESSAGE =
   'Antigravity CLI (agy) was not found on the Gateway host. Install agy and sign in there, or set a custom binary path.';
-
-const STRIPPED_ENV_KEYS = new Set([
-  'ELECTRON_RUN_AS_NODE',
-  'CHROME_CRASHPAD_PIPE_NAME',
-]);
 
 function isExecutableFile(candidate: string): boolean {
   try {
@@ -72,10 +68,7 @@ export function resolveAgyCommand(configuredPath?: string, env: NodeJS.ProcessEn
 }
 
 export function buildAgyEnv(baseEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {};
-  for (const [key, value] of Object.entries(baseEnv)) {
-    if (!STRIPPED_ENV_KEYS.has(key.toUpperCase())) env[key] = value;
-  }
+  const env = buildExternalRuntimeEnv('agy', baseEnv);
   env.AGY_CLI_DISABLE_AUTO_UPDATE = 'true';
   env.PYTHONUNBUFFERED = '1';
   return env;

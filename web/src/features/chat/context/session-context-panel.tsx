@@ -3,8 +3,14 @@ import { AppWindow, Check, Copy, Database, FileText, Folder, FolderKanban, GitBr
 import { useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
+import { ExternalRuntimeAvatar } from '@/components/brand/external-runtime-avatar';
+import {
+  externalContextAccessLabel,
+  externalRuntimeLabel,
+} from '@/components/brand/external-runtime-badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ComposerAttachmentSummary, ComposerContextRef } from '@/features/chat/composer/composer.types';
+import type { ExternalAgentKind, ExternalContextAccess } from '@/features/settings/types/agent-gateway';
 import { NewChatLink } from '@/features/chat/session/new-chat-navigation';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
@@ -27,6 +33,8 @@ export interface SessionContextPanelProps {
   draftPage?: ComposerAttachmentSummary | null;
   project?: { id: string; name: string; workspaceRoot?: string } | null;
   agentId?: string;
+  externalRuntime?: ExternalAgentKind;
+  externalContextAccess?: ExternalContextAccess;
   temporary?: boolean;
   onLeaveProject?: () => void;
   leaveProjectLabel?: string;
@@ -58,9 +66,13 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
   const workUnavailable = Boolean(data?.unavailableSections.includes('work'));
   const sourcesUnavailable = Boolean(data?.unavailableSections.includes('sources'));
   const environmentUnavailable = Boolean(data?.unavailableSections.includes('environment'));
-  const summary = [currentProject?.title, task?.title,
+  const summary = [
+    props.externalRuntime ? externalRuntimeLabel(props.externalRuntime, 'full') : null,
+    currentProject?.title,
+    task?.title,
     sources.length ? `${copy.sources} ${sources.length}${data?.sourcesHasMore ? '+' : ''}` : null,
-    environment?.kind === 'managed_worktree' ? 'Worktree' : null].filter(Boolean).join(' · ') || copy.title;
+    environment?.kind === 'managed_worktree' ? 'Worktree' : null,
+  ].filter(Boolean).join(' · ') || copy.title;
   const close = () => setOpen(false);
   const sourceNoteAvailable = sources.some((source) => source.kind === 'note' && !source.unavailable && source.origins.some((origin) => origin.kind === 'session'));
   const copyEnvironmentPath = () => {
@@ -94,6 +106,17 @@ export function SessionContextPanel({ conversationId, draftRefs = [], draftAttac
             {isLoading ? <div className="space-y-2 px-2" aria-busy="true">{[0, 1, 2].map((n) => <Skeleton key={n} className="h-8 w-full" />)}</div> : error ? (
               <div className="flex items-center justify-between px-2 py-2 text-sm text-fg-muted"><span>{copy.unavailable}</span>{retry()}</div>
             ) : <div className="space-y-3">
+              {props.externalRuntime ? (
+                <section className="flex min-w-0 items-center gap-2.5 rounded-lg bg-surface-inset px-2.5 py-2 text-sm text-fg" data-context-external-runtime={props.externalRuntime}>
+                  <ExternalRuntimeAvatar kind={props.externalRuntime} size={18} />
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {externalRuntimeLabel(props.externalRuntime, 'full')}
+                  </span>
+                  <span className="shrink-0 text-xs text-fg-muted">
+                    {externalContextAccessLabel(props.externalContextAccess, language === 'zh')}
+                  </span>
+                </section>
+              ) : null}
               <section aria-label={copy.work}>
                 {currentProject ? <Link className={rowClass} to={chatProductHref(returnTo, `/projects/${encodeURIComponent(currentProject.id)}`)} onClick={close}>
                   <FolderKanban className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1 truncate" title={currentProject.title}>{currentProject.title}</span>

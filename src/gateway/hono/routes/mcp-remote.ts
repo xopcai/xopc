@@ -193,7 +193,7 @@ export function registerRemoteMcpRoutes(app: Hono, service: GatewayService): voi
     });
     const context: CapabilityContext = {
       principalId, surface: 'mcp', actor: { kind: 'integration', id: principalId },
-      allowedCapabilities: capabilityIds, scopes: mcpProductScopes(capabilityIds),
+      allowedCapabilities: capabilityIds, mcpProjectIds: grant.projectIds, scopes: mcpProductScopes(capabilityIds),
       authorize, assertCurrent,
     };
     const catalog = () => {

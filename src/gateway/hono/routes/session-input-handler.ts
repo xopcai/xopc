@@ -264,10 +264,10 @@ export async function replaceLatestSessionTurn(
       contextRefs,
       thinking: selection?.thinkingLevel ?? (typeof body.thinking === 'string' ? body.thinking : undefined),
       origin: { type: 'endpoint', endpointId: origin.data.endpointId },
-    });
+    }, getGatewayPrincipal(c));
     if (result.ok === false) {
       const status = result.code === 'TARGET_NOT_FOUND' ? 404 : result.code === 'BAD_REQUEST' ? 400 : 409;
-      const message = result.code === 'NOT_LATEST'
+      const message = result.message ?? (result.code === 'NOT_LATEST'
         ? 'Only the latest user turn can be replaced'
         : result.code === 'SESSION_BUSY'
           ? 'Session has pending input'
@@ -275,7 +275,7 @@ export async function replaceLatestSessionTurn(
           ? 'User turn was not found'
           : result.code === 'CONTEXT_UNAVAILABLE'
             ? 'A referenced source changed or is no longer available. Select it again.'
-            : 'Replacement input was not accepted';
+            : 'Replacement input was not accepted');
       return c.json({ ok: false, error: { code: result.code, message } }, status);
     }
     return c.json({ ok: true, payload: { ...result, conversationId } }, 202);
