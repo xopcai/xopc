@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { CHAT_MESSAGE_TAP_SLOP_VP, CHAT_SIDEBAR_PAN_DISTANCE_VP } from '../entry/src/main/ets/common/chatSidebarGesture.ets';
 
 const content = readFileSync(new URL('../entry/src/main/ets/view/ChatMessageContent.ets', import.meta.url), 'utf8');
 const chat = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', import.meta.url), 'utf8');
@@ -18,12 +19,19 @@ describe('chat message interactions', () => {
     expect(preview).toContain('direction: GradientDirection.Bottom');
     expect(preview).toContain(".id('chat-message-preview-' + this.row.id)");
     expect(preview).toContain(".accessibilityText($r('app.string.chat_message_detail'))");
-    expect(preview).toContain('.onClick((): void => { this.onShowMore(this.row); })');
+    expect(preview).toContain('.onClick((): void => { this.onShowMore(this.row); }, CHAT_MESSAGE_TAP_SLOP_VP)');
     expect(preview).not.toContain("$r('app.string.chat_view_more')");
     for (const bubble of ['chat-user-bubble-', 'chat-assistant-card-']) {
       const card = chat.slice(chat.indexOf(`.id('${bubble}'`), chat.indexOf('.bindContextMenu', chat.indexOf(`.id('${bubble}'`)));
       expect(card).toContain('item.item.id !== this.latestMessageId && chatMessageNeedsPreview(item.item)) this.openMessageDetail(item.item);');
+      expect(card).toContain('}, CHAT_MESSAGE_TAP_SLOP_VP)');
     }
+  });
+
+  it('rejects taps on preview text and bubbles before the parallel sidebar pan starts', () => {
+    expect(CHAT_MESSAGE_TAP_SLOP_VP).toBeLessThan(CHAT_SIDEBAR_PAN_DISTANCE_VP);
+    expect(chat).toContain('direction: PanDirection.Right, distance: CHAT_SIDEBAR_PAN_DISTANCE_VP');
+    expect(markdown).toContain('.onClick((): void => { this.onPreviewTap(); }, Number.isFinite(this.lineLimit) ? CHAT_MESSAGE_TAP_SLOP_VP : -1)');
   });
 
   it('keeps the inline expand controls for long code blocks and tables', () => {

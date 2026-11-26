@@ -34,6 +34,7 @@ export struct XopcChatOptions {
   @Param model: XopcChatOptionsViewModel = new XopcChatOptionsViewModel();
   @Param personal: boolean = false;
   @Param personalRecord: XopcPersonalAgentRecord | null = null;
+  @Param conversationTitle: string = '';
   @Param mode: string = 'actions';
   @Param skillLabels: Map<string, string> = new Map<string, string>();
   @Param contextSummary: ResourceStr = '';
@@ -54,6 +55,18 @@ export struct XopcChatOptions {
   @Event onRetry: () => void = (): void => {};
   @Local query: string = '';
   @Local pendingExternalAgent: XopcChatAgent | null = null;
+
+  private displayConversationTitle(): string {
+    if (this.personal) return '';
+    const trimmed = this.conversationTitle.trim();
+    if (!trimmed || trimmed === '新对话' || trimmed === 'New chat') return '';
+    return trimmed;
+  }
+
+  private supportsThinkingOptions(): boolean {
+    const mode = this.model.selectedModel()?.thinking?.mode;
+    return (mode === 'levels' || mode === 'toggle') && (this.model.selectedModel()?.thinking?.options?.length ?? 0) > 1;
+  }
 
   private thinkingSummary(): ResourceStr {
     return chatThinkingSummary(this.model);
@@ -167,6 +180,65 @@ export struct XopcChatOptions {
       }
       List({ space: this.mode === 'actions' ? 0 : 8 }) {
         if (this.mode === 'model') {
+          if (this.supportsThinkingOptions() || this.model.fastTier()) {
+            ListItem() {
+              Column({ space: 10 }) {
+                if (this.supportsThinkingOptions()) {
+                  Column({ space: 6 }) {
+                    Text($r('app.string.chat_thinking_effort'))
+                      .fontSize(12)
+                      .fontColor(this.colors.secondary)
+                      .width('100%')
+                    Scroll() {
+                      Row({ space: 6 }) {
+                        ForEach(this.model.selectedModel()?.thinking?.options || [], (level: string) => {
+                          Button({ type: ButtonType.Capsule }) {
+                            Text(chatThinkingLabel(level))
+                              .fontSize(12)
+                              .fontWeight(FontWeight.Medium)
+                              .fontColor(level === this.model.thinkingLevel ? this.colors.onAccent : this.colors.foreground)
+                          }
+                          .height(32)
+                          .padding({ left: 12, right: 12 })
+                          .backgroundColor(level === this.model.thinkingLevel ? this.colors.accent : this.colors.input)
+                          .enabled(!this.model.loading && !this.model.saving && !this.thinkingBusy)
+                          .onClick((): void => {
+                            if (level !== this.model.thinkingLevel) {
+                              void this.model.selectThinking(level, this.rememberModel);
+                            }
+                          })
+                        }, (level: string): string => level)
+                      }
+                    }
+                    .scrollable(ScrollDirection.Horizontal)
+                    .scrollBar(BarState.Off)
+                    .width('100%')
+                  }.width('100%')
+                }
+                if (this.model.fastTier()) {
+                  Row({ space: 12 }) {
+                    Column({ space: 2 }) {
+                      Text(appSettings.effectiveLanguage().startsWith('zh') ? '极速模式' : 'Fast mode')
+                        .fontSize(14).fontColor(this.colors.foreground)
+                      Text(this.model.fastModeSubtitle(appSettings.effectiveLanguage()))
+                        .fontSize(12).fontColor(this.colors.secondary)
+                    }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                    Toggle({ type: ToggleType.Switch, isOn: this.model.isFastModeEnabled() })
+                      .enabled(!this.model.loading && !this.model.saving && !this.thinkingBusy)
+                      .onChange((isOn: boolean): void => {
+                        const fast = this.model.fastTier();
+                        if (!fast) return;
+                        void this.model.selectServiceTier(isOn ? fast.id : 'default');
+                      })
+                  }.width('100%')
+                }
+              }
+              .width('100%')
+              .padding(12)
+              .borderRadius(this.colors.corner(14))
+              .backgroundColor(this.colors.chat.card)
+            }
+          }
           if (!this.model.loading && !this.model.error && this.model.models.length && !this.matchingModels().length) {
             ListItem() { Text($r('app.string.ms_no_match')).fontColor(this.colors.secondary).padding(12) }
           }
@@ -241,6 +313,25 @@ export struct XopcChatOptions {
             }
           }
         } else {
+          if (this.displayConversationTitle()) {
+            ListItem() {
+              Column({ space: 4 }) {
+                Text(appSettings.effectiveLanguage().startsWith('zh') ? '当前对话' : 'Conversation')
+                  .fontSize(12)
+                  .fontColor(this.colors.secondary)
+                Text(this.displayConversationTitle())
+                  .fontSize(15)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(this.colors.foreground)
+                  .maxLines(3)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+              }
+              .id('chat-options-title')
+              .width('100%')
+              .alignItems(HorizontalAlign.Start)
+              .padding({ left: 12, right: 12, top: 8, bottom: 12 })
+            }
+          }
           if (this.canShare) {
             ListItem() { XopcHubRow({ heading: $r('app.string.share_session_title'), compact: true,
               symbol: $r('sys.symbol.link'), onOpen: this.onShare }) }

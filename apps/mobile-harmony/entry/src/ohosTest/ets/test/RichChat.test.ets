@@ -7,6 +7,7 @@ import { historyRows } from '../../../main/ets/common/chatProtocol';
 import { mergeAssistantRows, refreshChatRow } from '../../../main/ets/common/chatRichContent';
 import { reduceChatStream } from '../../../main/ets/common/chatStream';
 import { encodeBase64Url } from '../../../main/ets/common/protocol';
+import { CHAT_SIDEBAR_PAN_DISTANCE_VP } from '../../../main/ets/common/chatSidebarGesture';
 import { fileIo as fs } from '@kit.CoreFileKit';
 
 interface FixtureArgs { row: XopcChatRow; }
@@ -51,6 +52,27 @@ struct RichChatFixture {
 @Builder
 function fixtureBuilder(args: FixtureArgs) { RichChatFixture({ initial: args.row }) }
 
+@ComponentV2
+struct ChatPreviewSwipeFixture {
+  @Param row: XopcChatRow = { id: '', role: 'assistant', text: '' };
+  @Local sidebarOpened: boolean = false;
+  @Local detailsOpened: boolean = false;
+
+  build() {
+    Column() {
+      XopcChatMessageContent({ row: this.row, previewEligible: true,
+        onShowMore: (_row: XopcChatRow): void => { this.detailsOpened = true; } })
+      if (this.sidebarOpened) { Text('Sidebar opened').id('fixture-sidebar-open') }
+      if (this.detailsOpened) { Text('Message details opened').id('fixture-message-detail-open') }
+    }.width('95%').padding(16).backgroundColor($r('app.color.surface'))
+      .parallelGesture(PanGesture({ direction: PanDirection.Right, distance: CHAT_SIDEBAR_PAN_DISTANCE_VP })
+        .onActionEnd((): void => { this.sidebarOpened = true; }))
+  }
+}
+
+@Builder
+function previewSwipeFixtureBuilder(args: FixtureArgs) { ChatPreviewSwipeFixture({ row: args.row }) }
+
 function executionRow(): XopcChatRow {
   return mergeAssistantRows(historyRows({ session: { key: 'fixture', messages: [
     { id: 'rich', role: 'assistant', content: [{ type: 'thinking', thinking: 'Inspect references before editing.' },
@@ -74,6 +96,30 @@ function silentWav(): string {
 
 export default function richChatTest(): void {
   describe('XopcRichChat', (): void => {
+    it('opensOnlyTheSidebarOnRightSwipeAcrossACollapsedMessage', 0, async (): Promise<void> => {
+      const delegator = abilityDelegatorRegistry.getAbilityDelegator();
+      const driver = Driver.create();
+      await delegator.startAbility({ bundleName: 'ai.xopc.xopc', abilityName: 'EntryAbility' });
+      await driver.waitForComponent(ON.id('connect-title'), 10000);
+      const ui = (await window.getLastWindow((await delegator.getCurrentTopAbility()).context)).getUIContext();
+      const line = 'This long message is shown as a collapsed chat preview.';
+      const row: XopcChatRow = { id: 'sidebar-swipe', role: 'assistant', text: (line + '\n\n').repeat(14) };
+      const content = new ComponentContent(ui, wrapBuilder(previewSwipeFixtureBuilder), { row } as FixtureArgs);
+      await ui.getPromptAction().openCustomDialog(content, { autoCancel: false });
+      try {
+        const preview = await driver.waitForComponent(ON.id('chat-message-preview-sidebar-swipe'), 5000);
+        const text = await driver.waitForComponent(ON.text(line), 5000);
+        const bounds = await text.getBounds();
+        const startX = Math.round(bounds.left + (bounds.right - bounds.left) * 0.2);
+        const endX = Math.round(bounds.left + (bounds.right - bounds.left) * 0.8);
+        const y = Math.round(bounds.top + (bounds.bottom - bounds.top) * 0.25);
+        await driver.swipe(startX, y, endX, y);
+        await driver.waitForComponent(ON.id('fixture-sidebar-open'), 5000);
+        expect(await driver.findComponent(ON.id('fixture-message-detail-open'))).assertNull();
+        await preview.click();
+        await driver.waitForComponent(ON.id('fixture-message-detail-open'), 5000);
+      } finally { await ui.getPromptAction().closeCustomDialog(content); content.dispose(); }
+    }, 30000);
     it('updatesStreamingMarkdownWithAStableBlockIdentity', 0, async (): Promise<void> => {
       const delegator = abilityDelegatorRegistry.getAbilityDelegator();
       const driver = Driver.create();

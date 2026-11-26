@@ -122,7 +122,13 @@ export interface XopcAgentConfig { model?: string; thinkingLevel?: string; servi
 export interface XopcSessionPreparation { operationId: string; revision: number; state: string; lastError?: string; executionMode?: string; }
 export interface XopcContextRef { kind: string; sourceId: string; expectedVersion: string; title?: string; }
 export interface XopcContextWorkItem { id: string; title: string; phase?: string; }
-export interface XopcContextWork { project?: XopcContextWorkItem; task?: XopcContextWorkItem; }
+export interface XopcContextDelegatedTask { id: string; title: string; phase: string; runStatus?: string; }
+export interface XopcContextWork {
+  project?: XopcContextWorkItem;
+  task?: XopcContextWorkItem;
+  delegatedTasks?: XopcContextDelegatedTask[];
+  delegatedTaskCount?: number;
+}
 export interface XopcContextSource { id: string; title?: string; unavailable?: boolean; }
 export interface XopcChatEnvironment { kind: string; rootPath: string; available: boolean; branch?: string; headSha?: string; }
 export interface XopcContextSummary { conversationId: string; work: XopcContextWork; sources: XopcContextSource[]; sourcesHasMore: boolean; environment?: XopcChatEnvironment; unavailableSections: string[]; }

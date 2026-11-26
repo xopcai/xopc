@@ -11,6 +11,7 @@ import { XopcChatResultTail } from './ChatResultTail';
 import { chatAnswerText, chatAnswerStarted, chatIsAnswerBlock, artifactMedia } from '../common/chatRichContent';
 import { filePreviewKind } from '../common/filePreview';
 import { chatMessageNeedsPreview, chatMessagePreviewLines } from '../common/chatMessagePreview';
+import { CHAT_MESSAGE_TAP_SLOP_VP } from '../common/chatSidebarGesture';
 
 @ComponentV2
 export struct XopcChatMessageContent {
@@ -119,7 +120,7 @@ export struct XopcChatMessageContent {
             .hitTestBehavior(HitTestMode.None).accessibilityLevel('no')
         }.id('chat-message-preview-' + this.row.id).width('100%')
           .accessibilityText($r('app.string.chat_message_detail'))
-          .onClick((): void => { this.onShowMore(this.row); })
+          .onClick((): void => { this.onShowMore(this.row); }, CHAT_MESSAGE_TAP_SLOP_VP)
       } else {
         if (this.row.role !== 'user') {
           ForEach(this.row.refs || [], (ref: XopcContextRef) => {

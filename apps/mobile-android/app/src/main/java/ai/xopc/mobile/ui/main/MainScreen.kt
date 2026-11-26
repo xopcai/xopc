@@ -308,6 +308,17 @@ private fun projectRecommendation(info: ProjectWelcomeInfo?): WelcomeRecommendat
 @Composable
 private fun AssistantWelcome(viewportHeight: androidx.compose.ui.unit.Dp,
   recommendation: WelcomeRecommendation?, personalName: String?, standaloneDraft: Boolean,
+  showQuickSetup: Boolean = false,
+  agentAvatar: Bitmap? = null,
+  agentAvatarRef: String = "",
+  agentId: String = "main",
+  agentName: String = "",
+  modelLabel: String? = null,
+  projectTitle: String? = null,
+  isZh: Boolean = false,
+  onSelectAgent: () -> Unit = {},
+  onSelectModel: () -> Unit = {},
+  onSelectProject: () -> Unit = {},
   onChoose: (String) -> Unit) {
   Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
     .heightIn(min = viewportHeight).padding(start = 8.dp, end = 8.dp,
@@ -319,9 +330,13 @@ private fun AssistantWelcome(viewportHeight: androidx.compose.ui.unit.Dp,
       LoopiIcon(extent = if (viewportHeight < 620.dp) 88.dp else 108.dp, active = true, interactive = true,
         modifier = Modifier.testTag("assistant-welcome-loopi"))
     } else if (standaloneDraft) {
-      val mark = if (MaterialTheme.colorScheme.background.luminance() < 0.2f)
-        R.drawable.sidebar_brand_dark else R.drawable.sidebar_brand_light
-      Icon(painterResource(mark), null, Modifier.size(44.dp), tint = Color.Unspecified)
+      if (showQuickSetup && agentName.isNotBlank()) {
+        AgentAvatar(agentAvatar, agentAvatarRef, agentId, 52.dp, active = false, fallbackName = agentName)
+      } else {
+        val mark = if (MaterialTheme.colorScheme.background.luminance() < 0.2f)
+          R.drawable.sidebar_brand_dark else R.drawable.sidebar_brand_light
+        Icon(painterResource(mark), null, Modifier.size(44.dp), tint = Color.Unspecified)
+      }
     }
     Text(when {
       personalName != null -> stringResource(R.string.personal_chat_greeting, personalName)
@@ -331,6 +346,20 @@ private fun AssistantWelcome(viewportHeight: androidx.compose.ui.unit.Dp,
       fontWeight = FontWeight.Medium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     if (personalName != null) Text(stringResource(R.string.personal_chat_invitation),
       color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+    if (personalName == null && showQuickSetup) {
+      DraftQuickSetupChips(
+        agentAvatar = agentAvatar,
+        agentAvatarRef = agentAvatarRef,
+        agentId = agentId,
+        agentName = agentName.ifBlank { agentId },
+        modelLabel = modelLabel,
+        projectTitle = projectTitle,
+        isZh = isZh,
+        onSelectAgent = onSelectAgent,
+        onSelectModel = onSelectModel,
+        onSelectProject = onSelectProject,
+      )
+    }
     if (recommendation != null) {
       Card(onClick = { onChoose(recommendation.prompt) },
         modifier = Modifier.fillMaxWidth().testTag("assistant-welcome-recommendation")) {
@@ -3319,14 +3348,49 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
         BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()
           .padding(top = headerClearance, bottom = bottomChromeHeight).testTag("assistant-welcome-viewport")) {
           if (connection.automationConfigurationChat) AutomationConfigurationWelcome()
-          else AssistantWelcome(maxHeight, if (connection.contextLoading || isPersonalChat) null else
-            taskRecommendation(connection.taskWelcome) ?: projectRecommendation(connection.projectWelcome),
-            personalName = connection.personal.agent?.displayName.takeIf { isPersonalChat },
-            standaloneDraft = selected?.isLocalDraft == true && !isPersonalChat &&
-              !isTaskChat(connection) && connection.projectWelcome == null) { prompt ->
-            onActionsOpenChange(false)
-            onComposerValueChange(TextFieldValue(prompt, selection = TextRange(prompt.length)))
-            onFocusDraft()
+          else {
+            val activeAgentId = connection.selectedAgentId.ifBlank { selected?.agentId.orEmpty().ifBlank { connection.defaultAgentId } }
+            val activeAgent = connection.agents.firstOrNull { it.id == activeAgentId }
+            val activeAgentName = activeAgent?.let { agentDisplayName(it) } ?: activeAgentId.ifBlank { "Main" }
+            val activeModel = connection.models.firstOrNull { it.id == connection.selectedModelId }
+            val activeFastTier = activeModel?.fastServiceTier()
+            val activeFastEnabled = activeFastTier != null && connection.serviceTier.isNotBlank() &&
+              connection.serviceTier != "default" &&
+              (connection.serviceTier == activeFastTier.id || activeModel.serviceTiers.any { it.id == connection.serviceTier })
+            val activeModelSubtitle = chatModelSubtitle(
+              modelName = activeModel?.localizedName(modelLanguage) ?: connection.selectedModelId.substringAfterLast('/'),
+              thinkingMode = activeModel?.thinkingMode,
+              thinkingLevel = connection.thinkingLevel,
+              isFastEnabled = activeFastEnabled,
+              isZh = modelLanguage == "zh",
+            )
+            val activeProjectTitle = connection.context?.project?.title?.takeIf(String::isNotBlank)
+              ?: connection.projectWelcome?.projectName?.takeIf(String::isNotBlank)
+            val isStandaloneDraft = selected?.isLocalDraft == true && !isPersonalChat &&
+              !isTaskChat(connection) && connection.projectWelcome == null
+            AssistantWelcome(maxHeight, if (connection.contextLoading || isPersonalChat) null else
+              taskRecommendation(connection.taskWelcome) ?: projectRecommendation(connection.projectWelcome),
+              personalName = connection.personal.agent?.displayName.takeIf { isPersonalChat },
+              standaloneDraft = isStandaloneDraft,
+              showQuickSetup = !isPersonalChat && !isTaskChat(connection) && !connection.automationConfigurationChat,
+              agentAvatar = connection.agentAvatars[activeAgentId],
+              agentAvatarRef = activeAgent?.avatar.orEmpty(),
+              agentId = activeAgentId,
+              agentName = activeAgentName,
+              modelLabel = activeModelSubtitle,
+              projectTitle = activeProjectTitle,
+              isZh = modelLanguage == "zh",
+              onSelectAgent = { onAgentPickerOpenChange(true) },
+              onSelectModel = { modelQuery = ""; modelPickerOpen = true; onReloadModels() },
+              onSelectProject = {
+                contextInitialMode = "projects"
+                contextOpen = true
+                onLoadContextPanel("projects", "", "")
+              }) { prompt ->
+              onActionsOpenChange(false)
+              onComposerValueChange(TextFieldValue(prompt, selection = TextRange(prompt.length)))
+              onFocusDraft()
+            }
           }
         }
       } else LazyColumn(modifier = Modifier.weight(1f).testTag("assistant-message-list")
@@ -3524,60 +3588,141 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
     } else if (!taskHeader) {
       val personalAgent = connection.personal.agent?.takeIf { it.state == "ready" &&
         it.conversationId == connection.selectedConversationId }
+      val headerAgentId = connection.selectedAgentId.ifBlank { selected?.agentId.orEmpty().ifBlank { connection.defaultAgentId } }
+      val headerAgent = connection.agents.firstOrNull { it.id == headerAgentId }
+      val headerAgentName = headerAgent?.let { agentDisplayName(it) } ?: headerAgentId.ifBlank { "Main" }
+      val headerModel = connection.models.firstOrNull { it.id == connection.selectedModelId }
+      val headerFastTier = headerModel?.fastServiceTier()
+      val headerFastEnabled = headerFastTier != null && connection.serviceTier.isNotBlank() &&
+        connection.serviceTier != "default" &&
+        (connection.serviceTier == headerFastTier.id || headerModel.serviceTiers.any { it.id == connection.serviceTier })
+      val headerModelSubtitle = chatModelSubtitle(
+        modelName = headerModel?.localizedName(modelLanguage) ?: connection.selectedModelId.substringAfterLast('/'),
+        thinkingMode = headerModel?.thinkingMode,
+        thinkingLevel = connection.thinkingLevel,
+        isFastEnabled = headerFastEnabled,
+        isZh = modelLanguage == "zh",
+      )
+      val headerContextStrip = if (personalAgent == null) {
+        chatContextStrip(connection.context, connection.projectWelcome?.projectName, isZh = modelLanguage == "zh")
+      } else null
       Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
         .onSizeChanged { headerHeightPx = it.height }
         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
         .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.fillMaxWidth().height(if (personalAgent != null) 64.dp else 48.dp)) {
-          Row(Modifier.align(Alignment.TopStart), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            if (onCloseProjectChat != null) IconButton(onClick = onCloseProjectChat,
-              modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("project-chat-close")) {
-              Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (personalAgent != null) {
+          Box(Modifier.fillMaxWidth().height(64.dp)) {
+            Row(Modifier.align(Alignment.TopStart), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+              if (onCloseProjectChat != null) IconButton(onClick = onCloseProjectChat,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("project-chat-close")) {
+                Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+              }
+              IconButton(onClick = onOpenSidebar,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-sidebar")) {
+                Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
+              }
             }
-            IconButton(onClick = onOpenSidebar,
-              modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-sidebar")) {
-              Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
+            IconButton(onClick = onOpenPersonalOverview,
+              modifier = Modifier.align(Alignment.TopCenter).size(62.dp).background(LocalChatColors.current.card, CircleShape).semantics {
+                contentDescription = personalOverviewLabel
+              }.testTag("chat-personal-overview")) {
+              PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, 62.dp,
+                active = !messageSearchOpen)
+            }
+            Row(Modifier.align(Alignment.TopEnd),
+              horizontalArrangement = Arrangement.spacedBy(if (onCloseProjectChat == null) 3.dp else 0.dp)) {
+              LocalBrowserPreviewOpen.current?.let { openPreview ->
+                IconButton(onClick = openPreview,
+                  modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-browser-preview")) {
+                  Icon(painterResource(R.drawable.action_browser_preview), stringResource(R.string.browser_preview_open), Modifier.size(22.dp))
+                }
+              }
+              if (phoneAvailable) IconButton(onClick = onOpenPhone,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-phone")) {
+                Box {
+                  Icon(painterResource(R.drawable.action_phone), stringResource(R.string.phone_open), Modifier.size(22.dp))
+                  if (phoneNeedsUser) Box(Modifier.align(Alignment.TopEnd).size(6.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape))
+                }
+              }
+              IconButton(onClick = {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                onStartVoiceCall()
+              }, enabled = canStartVoiceCall,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-voice-call")) {
+                Icon(painterResource(R.drawable.action_call),
+                  stringResource(R.string.assistant_action_voice_natural), Modifier.size(22.dp))
+              }
             }
           }
-          if (personalAgent != null) IconButton(onClick = onOpenPersonalOverview,
-            modifier = Modifier.align(Alignment.TopCenter).size(62.dp).background(LocalChatColors.current.card, CircleShape).semantics {
-              contentDescription = personalOverviewLabel
-            }.testTag("chat-personal-overview")) {
-            PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, 62.dp,
-              active = !messageSearchOpen)
+        } else {
+          Row(Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+              if (onCloseProjectChat != null) IconButton(onClick = onCloseProjectChat,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("project-chat-close")) {
+                Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+              }
+              IconButton(onClick = onOpenSidebar,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-sidebar")) {
+                Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
+              }
+            }
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+              ChatHeaderIdentityPill(
+                agentAvatar = connection.agentAvatars[headerAgentId],
+                agentAvatarRef = headerAgent?.avatar.orEmpty(),
+                agentId = headerAgentId,
+                agentName = headerAgentName,
+                runtimeBadge = headerAgent?.externalRuntimeBadge,
+                modelSubtitle = headerModelSubtitle,
+                onClick = { optionsOpen = true },
+              )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(if (onCloseProjectChat == null) 3.dp else 0.dp),
+              verticalAlignment = Alignment.CenterVertically) {
+              LocalBrowserPreviewOpen.current?.let { openPreview ->
+                IconButton(onClick = openPreview,
+                  modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-browser-preview")) {
+                  Icon(painterResource(R.drawable.action_browser_preview), stringResource(R.string.browser_preview_open), Modifier.size(22.dp))
+                }
+              }
+              if (phoneAvailable) IconButton(onClick = onOpenPhone,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-phone")) {
+                Box {
+                  Icon(painterResource(R.drawable.action_phone), stringResource(R.string.phone_open), Modifier.size(22.dp))
+                  if (phoneNeedsUser) Box(Modifier.align(Alignment.TopEnd).size(6.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape))
+                }
+              }
+              IconButton(onClick = {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                onStartVoiceCall()
+              }, enabled = canStartVoiceCall,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-voice-call")) {
+                Icon(painterResource(R.drawable.action_call),
+                  stringResource(R.string.assistant_action_voice_natural), Modifier.size(22.dp))
+              }
+              if (selected?.isLocalDraft != true) {
+                IconButton(onClick = { optionsOpen = true },
+                  modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("assistant-options")) {
+                  Icon(painterResource(R.drawable.settings_sliders), optionsLabel, Modifier.size(22.dp))
+                }
+              }
+            }
           }
-          Row(Modifier.align(Alignment.TopEnd),
-            horizontalArrangement = Arrangement.spacedBy(if (onCloseProjectChat == null) 3.dp else 0.dp)) {
-            LocalBrowserPreviewOpen.current?.let { openPreview ->
-              IconButton(onClick = openPreview,
-                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-browser-preview")) {
-                Icon(painterResource(R.drawable.action_browser_preview), stringResource(R.string.browser_preview_open), Modifier.size(22.dp))
-              }
-            }
-            if (phoneAvailable) IconButton(onClick = onOpenPhone,
-              modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-phone")) {
-              Box {
-                Icon(painterResource(R.drawable.action_phone), stringResource(R.string.phone_open), Modifier.size(22.dp))
-                if (phoneNeedsUser) Box(Modifier.align(Alignment.TopEnd).size(6.dp)
-                  .background(MaterialTheme.colorScheme.primary, CircleShape))
-              }
-            }
-            IconButton(onClick = {
-              focusManager.clearFocus()
-              keyboardController?.hide()
-              onStartVoiceCall()
-            }, enabled = canStartVoiceCall,
-              modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-voice-call")) {
-              Icon(painterResource(R.drawable.action_call),
-                stringResource(R.string.assistant_action_voice_natural), Modifier.size(22.dp))
-            }
-            if (personalAgent == null && selected?.isLocalDraft != true) {
-              IconButton(onClick = { optionsOpen = true },
-                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("assistant-options")) {
-                Icon(painterResource(R.drawable.settings_sliders), optionsLabel, Modifier.size(22.dp))
-              }
-            }
+          if (headerContextStrip != null) {
+            ChatContextStripBar(model = headerContextStrip, onClick = {
+              contextInitialMode = "context"
+              contextInitialKind = "note"
+              contextOpen = true
+              onReloadContext()
+            })
           }
         }
         connection.desktopChatTarget?.let { target ->
@@ -3783,6 +3928,10 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   if (optionsOpen || contextOpen || modelPickerOpen || thinkingPickerOpen || agentPickerOpen)
     XopcBottomSheet(XopcSheetPreset.Large, onDismissRequest = closeOptions) {
     if (modelPickerOpen) {
+      val currentModel = connection.models.firstOrNull { it.id == connection.selectedModelId }
+      val supportsThinking = currentModel?.thinkingMode in setOf("levels", "toggle") &&
+        currentModel?.thinkingOptions.orEmpty().size > 1
+      val pickerFastTier = currentModel?.fastServiceTier()
       ChatOptionsPanel(stringResource(R.string.assistant_model), 620.dp, closeOptions) {
         OutlinedTextField(modelQuery, { modelQuery = it }, modifier = Modifier.fillMaxWidth(),
           label = { Text(stringResource(R.string.assistant_model_search)) }, singleLine = true)
@@ -3793,6 +3942,59 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
           Text(stringResource(R.string.assistant_model_retry))
         }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          if (!connection.modelsLoading && (supportsThinking || pickerFastTier != null)) {
+            item(key = "model-inline-controls") {
+              val controlsEnabled = !connection.modelSaving && !connection.sending &&
+                connection.activeRunId == null && connection.pendingInput == null
+              Surface(shape = themedCorners(14), color = LocalChatColors.current.card) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                  if (supportsThinking) {
+                    Text(stringResource(R.string.assistant_thinking), style = MaterialTheme.typography.labelMedium,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                      currentModel?.thinkingOptions.orEmpty().forEach { level ->
+                        val isChosen = level == connection.thinkingLevel
+                        Surface(
+                          onClick = { if (!isChosen) onSelectThinking(level) },
+                          enabled = controlsEnabled,
+                          shape = CircleShape,
+                          color = if (isChosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                        ) {
+                          Text(
+                            thinkingLevelLabel(level),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (isChosen) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                          )
+                        }
+                      }
+                    }
+                  }
+                  if (pickerFastTier != null) {
+                    val isFastEnabled = connection.serviceTier.isNotBlank() && connection.serviceTier != "default" &&
+                      (connection.serviceTier == pickerFastTier.id || currentModel.serviceTiers.any { it.id == connection.serviceTier })
+                    val isZh = modelLanguage == "zh"
+                    val speedToken = Regex("""(\d+(?:\.\d+)?x)\s*speed""", RegexOption.IGNORE_CASE)
+                      .find(pickerFastTier.description)?.groupValues?.getOrNull(1) ?: "1.5x"
+                    val fastSubtitle = if (isZh) "$speedToken 极速 · 消耗更多额度" else "$speedToken speed · More usage"
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                      Column(Modifier.weight(1f)) {
+                        Text(if (isZh) "极速模式" else "Fast mode", style = MaterialTheme.typography.bodyMedium)
+                        Text(fastSubtitle, style = MaterialTheme.typography.bodySmall,
+                          color = MaterialTheme.colorScheme.onSurfaceVariant)
+                      }
+                      androidx.compose.material3.Switch(
+                        checked = isFastEnabled,
+                        enabled = controlsEnabled,
+                        onCheckedChange = { checked -> onSelectServiceTier(if (checked) pickerFastTier.id else "default") },
+                      )
+                    }
+                  }
+                }
+              }
+            }
+          }
           val search = modelQuery.trim()
           val matches = connection.models.filter { model ->
             listOf(model.localizedName(modelLanguage), model.name, model.id).any { it.contains(search, ignoreCase = true) }
@@ -3952,6 +4154,17 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
     ChatOptionsPanel(stringResource(R.string.assistant_options), onClose = closeOptions) {
       Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        val fullTitle = selected?.takeIf { !it.isLocalDraft }?.title?.trim()
+          ?.takeIf { it.isNotEmpty() && it != "新对话" && it != "New chat" }
+        if (!isPersonalChat && fullTitle != null) {
+          Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).testTag("assistant-options-title"),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(if (modelLanguage == "zh") "当前对话" else "Conversation",
+              style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(fullTitle, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium,
+              maxLines = 3, overflow = TextOverflow.Ellipsis)
+          }
+        }
         if (connection.selectedConversationId != null) {
           val shareId = connection.selectedConversationId
           if (connection.messages.any { it.role == "user" || it.role == "assistant" }) {

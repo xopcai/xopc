@@ -20,6 +20,16 @@ export struct XopcChatWelcome {
   @Param personalName: string = 'Ada';
   @Param personalAgentId: string = '';
   @Param personalAppearance: string = 'loopi';
+  @Param showQuickSetup: boolean = false;
+  @Param agentId: string = '';
+  @Param agentName: ResourceStr = '';
+  @Param agentAppearance: string = 'configured';
+  @Param agentAvatar: string = '';
+  @Param modelLabel: string = '';
+  @Param projectLabel: string = '';
+  @Event onSelectAgent: () => void = (): void => {};
+  @Event onSelectModel: () => void = (): void => {};
+  @Event onSelectProject: () => void = (): void => {};
   @Event onChoose: (prompt: string) => void = (_prompt: string): void => {};
   @Event onDismissComposer: () => void = (): void => {};
   @Local model: XopcChatWelcomeViewModel = new XopcChatWelcomeViewModel();
@@ -84,7 +94,18 @@ export struct XopcChatWelcome {
           XopcPersonalAgentAvatar({ extent: this.logoSize(), activePage: this.activePage,
             agentId: this.personalAgentId, appearance: this.personalAppearance }).id('chat-welcome-personal-avatar')
         } else if (this.standaloneDraft) {
-          Image($r('app.media.brand_logo')).width(52).height(52).accessibilityLevel('no')
+          if (this.showQuickSetup && this.agentId) {
+            XopcPersonalAgentAvatar({
+              extent: 52,
+              activePage: this.activePage,
+              agentId: this.agentId,
+              appearance: this.agentAppearance,
+              avatarReference: this.agentAvatar,
+              compact: true,
+            })
+          } else {
+            Image($r('app.media.brand_logo')).width(52).height(52).accessibilityLevel('no')
+          }
         } else if (this.projectName) {
           SymbolGlyph($r('sys.symbol.folder')).fontSize(43).fontColor([this.colors.accent])
         } else if (!this.personal) {
@@ -103,6 +124,85 @@ export struct XopcChatWelcome {
         if (this.projectName) {
           Text($r('app.string.project_chat_scope', this.projectName)).fontSize(14).lineHeight(22)
             .fontColor(this.colors.secondary).width('100%').textAlign(TextAlign.Center)
+        }
+        if (!this.personal && this.showQuickSetup) {
+          Scroll() {
+            Row({ space: 8 }) {
+              Button({ type: ButtonType.Normal }) {
+                Row({ space: 6 }) {
+                  XopcPersonalAgentAvatar({
+                    extent: 18,
+                    activePage: false,
+                    agentId: this.agentId,
+                    appearance: this.agentAppearance,
+                    avatarReference: this.agentAvatar,
+                    compact: true,
+                  })
+                  Text(this.agentName || this.agentId || 'Main')
+                    .fontSize(13)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor(this.colors.foreground)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                }
+              }
+              .id('chat-welcome-agent')
+              .height(36)
+              .padding({ left: 12, right: 12 })
+              .borderRadius(this.colors.corner(16))
+              .clipShape(this.colors.cornerClip(16))
+              .backgroundColor(this.colors.chat.card)
+              .onClick((): void => { this.onSelectAgent(); })
+
+              Button({ type: ButtonType.Normal }) {
+                Row({ space: 5 }) {
+                  SymbolGlyph($r('sys.symbol.waveform'))
+                    .fontSize(13)
+                    .fontColor([this.colors.secondary])
+                    .accessibilityLevel('no')
+                  Text(this.modelLabel || (this.language.startsWith('zh') ? '默认模型' : 'Default model'))
+                    .fontSize(13)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor(this.colors.foreground)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                }
+              }
+              .id('chat-welcome-model')
+              .height(36)
+              .padding({ left: 12, right: 12 })
+              .borderRadius(this.colors.corner(16))
+              .clipShape(this.colors.cornerClip(16))
+              .backgroundColor(this.colors.chat.card)
+              .onClick((): void => { this.onSelectModel(); })
+
+              Button({ type: ButtonType.Normal }) {
+                Row({ space: 5 }) {
+                  SymbolGlyph($r('sys.symbol.folder'))
+                    .fontSize(13)
+                    .fontColor([this.projectLabel ? this.colors.accent : this.colors.secondary])
+                    .accessibilityLevel('no')
+                  Text(this.projectLabel || (this.language.startsWith('zh') ? '关联项目' : 'Project'))
+                    .fontSize(13)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor(this.colors.foreground)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                }
+              }
+              .id('chat-welcome-project')
+              .height(36)
+              .padding({ left: 12, right: 12 })
+              .borderRadius(this.colors.corner(16))
+              .clipShape(this.colors.cornerClip(16))
+              .backgroundColor(this.colors.chat.card)
+              .onClick((): void => { this.onSelectProject(); })
+            }
+          }
+          .id('chat-draft-quick-actions')
+          .scrollable(ScrollDirection.Horizontal)
+          .scrollBar(BarState.Off)
+          .constraintSize({ maxWidth: '100%' })
         }
         if (!this.personal && this.model.model?.recommendation) {
           Button({ type: ButtonType.Normal }) {

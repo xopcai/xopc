@@ -333,8 +333,15 @@ struct ChatModel: Decodable, Identifiable, Sendable {
 }
 
 struct ChatModelThinking: Decodable, Sendable {
+    let mode: String?
     let options: [String]
     let initialValue: String
+
+    init(mode: String? = nil, options: [String], initialValue: String) {
+        self.mode = mode
+        self.options = options
+        self.initialValue = initialValue
+    }
 }
 
 struct ConversationHistory: Decodable, Sendable {

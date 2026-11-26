@@ -1,5 +1,8 @@
 export const CHAT_SIDEBAR_PAN_TAG: string = 'chat-sidebar-open';
 export const CHAT_SIDEBAR_BACK_EDGE: number = 24;
+export const CHAT_SIDEBAR_PAN_DISTANCE_VP: number = 10;
+// The sidebar pan runs in parallel, so message taps must fail before it can start.
+export const CHAT_MESSAGE_TAP_SLOP_VP: number = 8;
 
 export function canStartChatSidebarPan(startX: number, width: number, offsetX: number, offsetY: number): boolean {
   return startX >= CHAT_SIDEBAR_BACK_EDGE && startX <= width - CHAT_SIDEBAR_BACK_EDGE

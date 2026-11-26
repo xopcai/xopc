@@ -17,6 +17,7 @@ import { normalizedFileMimeType } from '../common/filePreview';
 import { markdownReadingBlocks, markdownBlockGap, markdownPreviewBlocks, markdownPreviewBlockLines,
   markdownTableWidths, MARKDOWN_TABLE_CELL_INSET, MARKDOWN_HORIZONTAL_SCROLL_ID_PREFIX } from '../common/markdownLayout';
 import { markdownCodePreview } from '../common/markdownStreamParser';
+import { CHAT_MESSAGE_TAP_SLOP_VP } from '../common/chatSidebarGesture';
 
 @ComponentV2
 struct XopcMarkdownInline {
@@ -144,7 +145,8 @@ struct XopcMarkdownInline {
             }
           })
           .textAlign(this.alignment === 'right' ? TextAlign.End : this.alignment === 'center' ? TextAlign.Center : TextAlign.Start)
-          .onClick((): void => { this.onPreviewTap(); })
+          // Text's click recognizer also dispatches clicks to its child spans.
+          .onClick((): void => { this.onPreviewTap(); }, Number.isFinite(this.lineLimit) ? CHAT_MESSAGE_TAP_SLOP_VP : -1)
       }
     }.width('100%')
   }

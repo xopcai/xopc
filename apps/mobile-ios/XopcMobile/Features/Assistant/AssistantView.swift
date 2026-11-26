@@ -58,6 +58,9 @@ struct AssistantView<Dock: View>: View {
     @State private var referenceKind = ContextReferenceKind.note
     @State private var isActionPanelExpanded = false
     @State private var showingSessionActions = false
+    @State private var sessionSheetDestination: AssistantSheetDestination = .actions
+    @State private var options = AssistantOptionsState()
+    @State private var draftProjectName: String?
     @State private var sharingConversation = false
     @State private var showingAgentPicker = false
     @State private var selectedPickerAgent: String?
@@ -305,7 +308,10 @@ struct AssistantView<Dock: View>: View {
 
     private var chatLifecycle: some View {
         chatSelectionLifecycle
-            .onChange(of: sessionActionsRequest) { showingSessionActions = true }
+            .onChange(of: sessionActionsRequest) {
+                sessionSheetDestination = .actions
+                showingSessionActions = true
+            }
             .onChange(of: messageSearchRequest) { showingMessageSearch = true }
             .fullScreenCover(isPresented: $showingMessageSearch) {
                 ChatMessageSearchView(messages: state.messages, configuration: configuration,
@@ -479,6 +485,33 @@ struct AssistantView<Dock: View>: View {
                 guard !conversationSuspendedInBackground, isActive else { state.pauseConversation(); return }
                 await loadChat()
             }
+            .task(id: OptionsObservationKey(
+                configuration: configuration,
+                conversationID: conversation?.id,
+                agentID: conversation?.agentId,
+                isDraft: conversation?.isDraft,
+                model: conversation?.model,
+                thinkingLevel: conversation?.thinkingLevel,
+                serviceTier: conversation?.serviceTier,
+                isActive: isActive && !conversationSuspendedInBackground
+            )) {
+                guard isActive, !conversationSuspendedInBackground, let conversation, !isPersonalConversation else { return }
+                await options.load(conversation, using: GatewayClient(configuration: configuration))
+            }
+            .task(id: DraftProjectKey(
+                configuration: configuration,
+                projectID: conversation?.isDraft == true ? conversation?.projectId : nil,
+                isActive: isActive && !conversationSuspendedInBackground
+            )) {
+                draftProjectName = nil
+                guard isActive, !conversationSuspendedInBackground,
+                      conversation?.isDraft == true,
+                      let projectID = conversation?.projectId, !projectID.isEmpty else { return }
+                if let record = try? await GatewayClient(configuration: configuration).fetchProject(id: projectID) {
+                    guard !Task.isCancelled else { return }
+                    draftProjectName = record.name
+                }
+            }
             .task(id: TaskResultObservationKey(configuration: configuration, conversationID: conversation?.id,
                                                isActive: isActive && !conversationSuspendedInBackground))
             {
@@ -563,6 +596,7 @@ struct AssistantView<Dock: View>: View {
             ))
             .sheet(isPresented: $showingSessionActions, onDismiss: {
                 sharingConversation = false
+                sessionSheetDestination = .actions
                 if searchAfterOptions {
                     searchAfterOptions = false
                     showingMessageSearch = true
@@ -577,6 +611,8 @@ struct AssistantView<Dock: View>: View {
                         configuration: configuration,
                         conversation: conversation,
                         state: state,
+                        sharedOptions: options,
+                        initialDestination: sessionSheetDestination,
                         onStartConversation: { requestConversation($0) },
                         pendingReferences: references,
                         onAddReference: { reference in
@@ -899,14 +935,6 @@ struct AssistantView<Dock: View>: View {
         let layout = TimelineLayout(messageWidth: maximumMessageWidth, viewportHeight: viewportHeight,
                                     headerClearance: chatHeaderClearance)
         let readingScope = userScrollingMessages ? timelineReadingScope : nil
-        if showsConversationTitleInTimeline, let conversation {
-            Text(verbatim: conversation.title)
-                .mobileTextStyle(.rowTitle)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 4)
-                .accessibilityAddTraits(.isHeader)
-        }
         if let errorMessage = state.errorMessage {
             ErrorBanner(message: errorMessage)
         }
@@ -1177,11 +1205,50 @@ struct AssistantView<Dock: View>: View {
         !isPersonalConversation && (state.isRunActive || state.runProgress.terminalStatus != nil)
     }
 
+    private var currentAgent: AgentSummary? {
+        state.agents.first(where: { $0.id == conversation?.agentId }) ?? state.selectedAgent
+    }
+
     private var currentAgentName: String {
         isPersonalConversation
             ? (personalAgent?.displayName ?? "Ada")
-            : (state.agents.first(where: { $0.id == conversation?.agentId })?.localizedName(locale)
-                ?? state.selectedAgent?.localizedName(locale) ?? AppLocalization.string("未选择", locale: locale))
+            : (currentAgent?.localizedName(locale) ?? AppLocalization.string("未选择", locale: locale))
+    }
+
+    private var currentModelSubtitle: String? {
+        let modelName = options.selectedModel?.localizedName(locale)
+            ?? options.selectedModelID.split(separator: "/").last.map(String.init)
+        return ChatHeaderPresentation.modelSubtitle(
+            modelName: modelName,
+            thinkingMode: options.selectedModel?.thinking?.mode,
+            thinkingLevel: options.thinkingLevel,
+            isFastEnabled: options.isFastModeEnabled,
+            locale: locale
+        )
+    }
+
+    private var currentProjectTitle: String? {
+        let fromSummary = state.contextSummary?.work.project?.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let fromSummary, !fromSummary.isEmpty { return fromSummary }
+        let fromDraft = draftProjectName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let fromDraft, !fromDraft.isEmpty { return fromDraft }
+        return nil
+    }
+
+    private var chatContextStrip: ChatContextStripModel? {
+        guard !isPersonalConversation else { return nil }
+        let work = state.contextSummary?.work
+        let env = state.contextSummary?.environment
+        return ChatHeaderPresentation.contextStrip(.init(
+            projectTitle: currentProjectTitle,
+            taskTitle: work?.task?.title,
+            taskPhase: work?.task?.phase,
+            delegatedTaskCount: work?.delegatedTaskCount ?? 0,
+            delegatedTasks: work?.delegatedTasks,
+            environmentKind: env?.kind ?? conversation?.executionMode,
+            branch: env?.branch,
+            locale: locale
+        ))
     }
 
     private var readAloudObservation: ChatSpeechObservation? {
@@ -1260,6 +1327,15 @@ struct AssistantView<Dock: View>: View {
 
     private var welcome: some View {
         VStack(spacing: 18) {
+            if !isPersonalConversation {
+                ConfiguredAgentAvatar(
+                    configuration: configuration,
+                    agent: currentAgent,
+                    size: 52,
+                    active: isActive,
+                    resolveUnconfigured: false
+                )
+            }
             Text(verbatim: isPersonalConversation
                 ? (locale.language.languageCode?.identifier == "zh"
                     ? "你好，我是\(personalAgent?.displayName ?? "Ada")。" : "Hi, I'm \(personalAgent?.displayName ?? "Ada").")
@@ -1274,6 +1350,23 @@ struct AssistantView<Dock: View>: View {
                     .mobileTextStyle(.secondary)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+            } else if showsFloatingHeader {
+                DraftQuickSetupChips(
+                    configuration: configuration,
+                    agent: currentAgent,
+                    agentName: currentAgentName,
+                    modelLabel: currentModelSubtitle,
+                    projectTitle: currentProjectTitle,
+                    onSelectAgent: { showingAgentPicker = true },
+                    onSelectModel: {
+                        sessionSheetDestination = .model
+                        showingSessionActions = true
+                    },
+                    onSelectProject: {
+                        sessionSheetDestination = .project
+                        showingSessionActions = true
+                    }
+                )
             }
         }
         .padding(.vertical, 28)
@@ -1403,73 +1496,98 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var floatingHeader: some View {
-        ZStack(alignment: .top) {
-            HStack(spacing: 6) {
-                if let onBack {
-                    headerButton("返回", icon: Image(systemName: "chevron.backward"), action: onBack)
-                        .accessibilityIdentifier("project-chat-close")
-                }
-                if let onOpenSidebar {
-                    headerButton("打开导航", icon: Image(systemName: "line.3.horizontal"), action: onOpenSidebar)
-                        .accessibilityIdentifier("chat-header-sidebar")
-                }
-                if phone.summary?.available == true, isPersonalConversation {
-                    phoneWorkspaceButton
-                }
-                if !isPersonalConversation, let target = desktopChatTarget, let name = target.deviceName {
-                    desktopTargetBadge(target, name: name)
-                }
-                Spacer(minLength: 0)
-                if phone.summary?.available == true, !isPersonalConversation {
-                    phoneWorkspaceButton
-                }
-                headerButton("语音通话", icon: Image(systemName: "phone"), action: startRealtimeVoice)
-                    .disabled(!canStartRealtimeVoice)
-                    .accessibilityIdentifier("chat-header-voice-call")
-                if !isPersonalConversation, conversation?.isDraft != true || onOpenSidebar == nil {
-                    headerButton("会话选项", icon: Image("SettingsSliders")) {
-                        showingSessionActions = true
+        VStack(spacing: 6) {
+            ZStack(alignment: .top) {
+                HStack(spacing: 6) {
+                    if let onBack {
+                        headerButton("返回", icon: Image(systemName: "chevron.backward"), action: onBack)
+                            .accessibilityIdentifier("project-chat-close")
                     }
-                    .accessibilityIdentifier("assistant-options")
-                }
-            }
-            if isPersonalConversation {
-                VStack(spacing: 4) {
-                    Button {
-                        onOpenPersonalOverview(conversation?.isDraft == false && !state.messages.isEmpty)
-                    } label: {
-                        VStack(spacing: 4) {
-                            PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 62,
-                                                active: isActive && !showingMessageSearch,
-                                                working: state.isRunActive || state.isSending)
-                                .background(mobileTheme.card, in: Circle())
-                                .accessibilityHidden(true)
+                    if let onOpenSidebar {
+                        headerButton("打开导航", icon: Image(systemName: "line.3.horizontal"), action: onOpenSidebar)
+                            .accessibilityIdentifier("chat-header-sidebar")
+                    }
+                    if phone.summary?.available == true, isPersonalConversation {
+                        phoneWorkspaceButton
+                    }
+                    if !isPersonalConversation {
+                        ChatHeaderIdentityButton(
+                            configuration: configuration,
+                            agent: currentAgent,
+                            agentName: currentAgentName,
+                            modelSubtitle: currentModelSubtitle,
+                            isActive: isActive && !showingMessageSearch
+                        ) {
+                            sessionSheetDestination = .actions
+                            showingSessionActions = true
                         }
-                        .frame(maxWidth: 120)
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        Spacer(minLength: 0)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("助理概览")
-                    .accessibilityIdentifier("chat-header-personal")
-                    if pendingAttention > 0 {
-                        Button(action: onOpenProgress) {
-                            VStack(spacing: 2) {
-                                Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
-                                Label {
-                                    Text("有 \(pendingAttention) 项待你处理").lineLimit(1)
-                                } icon: { Circle().fill(mobileTheme.onAttention).frame(width: 6, height: 6) }
-                                    .font(.caption).foregroundStyle(mobileTheme.onAttention)
+                    if phone.summary?.available == true, !isPersonalConversation {
+                        phoneWorkspaceButton
+                    }
+                    headerButton("语音通话", icon: Image(systemName: "phone"), action: startRealtimeVoice)
+                        .disabled(!canStartRealtimeVoice)
+                        .accessibilityIdentifier("chat-header-voice-call")
+                    if !isPersonalConversation, conversation?.isDraft != true || onOpenSidebar == nil {
+                        headerButton("会话选项", icon: Image("SettingsSliders")) {
+                            sessionSheetDestination = .actions
+                            showingSessionActions = true
+                        }
+                        .accessibilityIdentifier("assistant-options")
+                    }
+                }
+                if isPersonalConversation {
+                    VStack(spacing: 4) {
+                        Button {
+                            onOpenPersonalOverview(conversation?.isDraft == false && !state.messages.isEmpty)
+                        } label: {
+                            VStack(spacing: 4) {
+                                PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 62,
+                                                    active: isActive && !showingMessageSearch,
+                                                    working: state.isRunActive || state.isSending)
+                                    .background(mobileTheme.card, in: Circle())
+                                    .accessibilityHidden(true)
                             }
-                            .padding(.horizontal, 12).frame(minHeight: 44)
-                            .background(mobileTheme.attention, in: .rect(cornerRadius: mobileTheme.corner(15)))
+                            .frame(maxWidth: 120)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityIdentifier("chat-header-attention")
-                    } else {
-                        Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
-                            .foregroundStyle(mobileTheme.foreground)
-                            .padding(.horizontal, 12).padding(.vertical, 4)
-                            .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(14)))
+                        .accessibilityLabel("助理概览")
+                        .accessibilityIdentifier("chat-header-personal")
+                        if pendingAttention > 0 {
+                            Button(action: onOpenProgress) {
+                                VStack(spacing: 2) {
+                                    Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
+                                    Label {
+                                        Text("有 \(pendingAttention) 项待你处理").lineLimit(1)
+                                    } icon: { Circle().fill(mobileTheme.onAttention).frame(width: 6, height: 6) }
+                                        .font(.caption).foregroundStyle(mobileTheme.onAttention)
+                                }
+                                .padding(.horizontal, 12).frame(minHeight: 44)
+                                .background(mobileTheme.attention, in: .rect(cornerRadius: mobileTheme.corner(15)))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("chat-header-attention")
+                        } else {
+                            Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
+                                .foregroundStyle(mobileTheme.foreground)
+                                .padding(.horizontal, 12).padding(.vertical, 4)
+                                .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(14)))
+                        }
                     }
+                }
+            }
+            if !isPersonalConversation {
+                if let contextStrip = chatContextStrip {
+                    ChatContextStripButton(model: contextStrip) {
+                        sessionSheetDestination = .context
+                        showingSessionActions = true
+                    }
+                }
+                if let target = desktopChatTarget, let name = target.deviceName {
+                    desktopTargetBadge(target, name: name)
                 }
             }
         }
@@ -2049,6 +2167,23 @@ private struct PhoneObservationKey: Equatable {
     let configuration: GatewayConfiguration
     let conversationID: String?
     let active: Bool
+}
+
+private struct OptionsObservationKey: Equatable {
+    let configuration: GatewayConfiguration
+    let conversationID: String?
+    let agentID: String?
+    let isDraft: Bool?
+    let model: String?
+    let thinkingLevel: String?
+    let serviceTier: String?
+    let isActive: Bool
+}
+
+private struct DraftProjectKey: Equatable {
+    let configuration: GatewayConfiguration
+    let projectID: String?
+    let isActive: Bool
 }
 
 private struct DesktopChatTarget: Decodable {

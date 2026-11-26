@@ -3,10 +3,20 @@ import UIKit
 
 // swiftlint:disable file_length
 
+enum AssistantSheetDestination: Hashable {
+    case actions
+    case context
+    case model
+    case project
+}
+
+// swiftlint:disable:next type_body_length
 struct AssistantSessionActionsView: View {
     let configuration: GatewayConfiguration
     let conversation: ConversationSelection?
     let state: AssistantState
+    var sharedOptions: AssistantOptionsState?
+    var initialDestination: AssistantSheetDestination = .actions
     let onStartConversation: (String) -> Void
     let pendingReferences: [ContextReference]
     let onAddReference: (ContextReference) -> Void
@@ -19,30 +29,120 @@ struct AssistantSessionActionsView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
-    @State private var options = AssistantOptionsState()
+    @Environment(\.mobileTheme) private var mobileTheme
+    @State private var fallbackOptions = AssistantOptionsState()
+
+    private var options: AssistantOptionsState {
+        sharedOptions ?? fallbackOptions
+    }
+
+    private var fullConversationTitle: String? {
+        guard !isTaskConversation, let conversation, !conversation.isDraft else { return nil }
+        let trimmed = conversation.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != "新对话", trimmed != "New chat" else { return nil }
+        return trimmed
+    }
 
     var body: some View {
         NavigationStack {
-            List {
-                if let onShare, let conversation, !conversation.isDraft, !state.messages.isEmpty {
-                    Button(action: onShare) { optionRow("分享会话", symbol: "square.and.arrow.up") }
-                        .accessibilityIdentifier("assistant-share")
+            Group {
+                switch initialDestination {
+                case .context:
+                    contextDestination
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                MobileCloseButton { dismiss() }
+                            }
+                        }
+                case .project:
+                    SessionEnvironmentSettingsView(
+                        configuration: configuration,
+                        conversation: conversation,
+                        summary: state.contextSummary,
+                        onStartScopedConversation: { project, mode in
+                            dismiss()
+                            onStartScopedConversation(project, mode)
+                        },
+                        onDirectoryChanged: reloadContext
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            MobileCloseButton { dismiss() }
+                        }
+                    }
+                case .model:
+                    if let conversation {
+                        AssistantOptionPicker(
+                            configuration: configuration,
+                            conversation: conversation,
+                            state: options,
+                            pickingModel: true,
+                            onSave: onConversationUpdated,
+                            reloadAfterError: true
+                        )
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                MobileCloseButton { dismiss() }
+                            }
+                        }
+                    } else {
+                        actionsList
+                    }
+                case .actions:
+                    actionsList
                 }
-                if !isTaskConversation, let onSearch {
-                    Button(action: onSearch) { optionRow("搜索消息", symbol: "magnifyingglass") }
-                        .accessibilityIdentifier("assistant-search")
+            }
+            .task { await loadOptions() }
+        }
+        .mobileSheetPreset(.large)
+    }
+
+    private var contextDestination: some View {
+        ConversationContextView(
+            configuration: configuration,
+            conversation: conversation,
+            summary: state.contextSummary,
+            isLoading: state.isLoadingContext,
+            errorMessage: state.contextError,
+            pendingReferences: pendingReferences,
+            onAddReference: onAddReference,
+            onStartScopedConversation: { project, mode in
+                dismiss()
+                onStartScopedConversation(project, mode)
+            },
+            onDirectoryChanged: reloadContext,
+            onRetry: reloadContext
+        )
+    }
+
+    private var actionsList: some View {
+        List {
+            if let title = fullConversationTitle {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(locale.language.languageCode?.identifier == "zh" ? "当前对话" : "Conversation")
+                        .mobileTextStyle(.caption)
+                        .foregroundStyle(mobileTheme.secondary)
+                    Text(verbatim: title)
+                        .mobileTextStyle(.rowTitle)
+                        .foregroundStyle(mobileTheme.foreground)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                NavigationLink {
-                    ConversationContextView(configuration: configuration, conversation: conversation,
-                                            summary: state.contextSummary, isLoading: state.isLoadingContext,
-                                            errorMessage: state.contextError, pendingReferences: pendingReferences,
-                                            onAddReference: onAddReference,
-                                            onStartScopedConversation: { project, mode in
-                                                dismiss(); onStartScopedConversation(project, mode)
-                                            }, onDirectoryChanged: reloadContext, onRetry: reloadContext)
-                } label: {
-                    optionRow("上下文", value: state.contextSummary?.work.project?.title ?? "Local", symbol: "folder")
-                }
+                .padding(.vertical, 6)
+                .accessibilityIdentifier("assistant-options-title")
+            }
+            if let onShare, let conversation, !conversation.isDraft, !state.messages.isEmpty {
+                Button(action: onShare) { optionRow("分享会话", symbol: "square.and.arrow.up") }
+                    .accessibilityIdentifier("assistant-share")
+            }
+            if !isTaskConversation, let onSearch {
+                Button(action: onSearch) { optionRow("搜索消息", symbol: "magnifyingglass") }
+                    .accessibilityIdentifier("assistant-search")
+            }
+            NavigationLink {
+                contextDestination
+            } label: {
+                optionRow("上下文", value: state.contextSummary?.work.project?.title ?? "Local", symbol: "folder")
+            }
                 if !isTaskConversation {
                     NavigationLink {
                         List(state.agents) { agent in
@@ -148,9 +248,6 @@ struct AssistantSessionActionsView: View {
                     MobileCloseButton { dismiss() }
                 }
             }
-            .task { await loadOptions() }
-        }
-        .mobileSheetPreset(.large)
     }
 
     private func optionRow(_ title: LocalizedStringKey, value: String? = nil, symbol: String) -> some View {
@@ -210,9 +307,71 @@ struct AssistantOptionPicker: View {
         }
     }
 
+    private var supportsThinkingSelection: Bool {
+        let mode = state.selectedModel?.thinking?.mode
+        return (mode == nil || mode == "levels" || mode == "toggle") && state.thinkingOptions.count > 1
+    }
+
     var body: some View {
         List {
             if pickingModel {
+                if supportsThinkingSelection || state.fastTier != nil {
+                    Section {
+                        if supportsThinkingSelection {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("思考档位")
+                                    .mobileTextStyle(.footnote)
+                                    .foregroundStyle(.secondary)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(state.thinkingOptions, id: \.self) { level in
+                                            let selected = state.thinkingLevel == level
+                                            Button {
+                                                guard !selected else { return }
+                                                state.thinkingLevel = level
+                                                save(dismissAfter: false)
+                                            } label: {
+                                                Text(thinkingLabel(level))
+                                                    .font(.caption.weight(.medium))
+                                                    .foregroundStyle(selected ? .white : .primary)
+                                                    .padding(.horizontal, 12)
+                                                    .frame(minHeight: 32)
+                                                    .background(selected ? Color.accentColor : Color.secondary.opacity(0.14), in: Capsule())
+                                            }
+                                            .buttonStyle(.plain)
+                                            .disabled(state.isSaving || state.isLoading)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        if state.fastTier != nil {
+                            Toggle(isOn: Binding(
+                                get: { state.isFastModeEnabled },
+                                set: { nextValue in
+                                    Task {
+                                        if let updated = await state.toggleFastMode(
+                                            nextValue,
+                                            for: conversation,
+                                            using: GatewayClient(configuration: configuration)
+                                        ) {
+                                            onSave(updated)
+                                        }
+                                    }
+                                }
+                            )) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("极速模式").mobileTextStyle(.body)
+                                    Text(state.fastModeSubtitle(locale))
+                                        .mobileTextStyle(.footnote)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .disabled(state.isLoading || state.isSaving)
+                        }
+                    }
+                }
                 ForEach(matchingModels) { model in
                     Button {
                         state.selectModel(model.id)
@@ -253,7 +412,7 @@ struct AssistantOptionPicker: View {
                         Task { await state.load(conversation, using: GatewayClient(configuration: configuration)) }
                     }.disabled(state.isLoading || state.isSaving)
                 } else {
-                    Button("重试", action: save).disabled(state.isSaving)
+                    Button("重试") { save() }.disabled(state.isSaving)
                 }
             }
         }
@@ -264,11 +423,13 @@ struct AssistantOptionPicker: View {
         .interactiveDismissDisabled(state.isSaving)
     }
 
-    private func save() {
+    private func save(dismissAfter: Bool = true) {
         Task {
             if let updated = await state.save(conversation, using: GatewayClient(configuration: configuration)) {
                 onSave(updated)
-                dismiss()
+                if dismissAfter {
+                    dismiss()
+                }
             }
         }
     }

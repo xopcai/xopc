@@ -212,7 +212,7 @@ describe('chat bottom region composition', () => {
     expect(chat).not.toContain('personalSettingsSheet');
   });
 
-  it('centers the personal avatar and leaves the ordinary conversation header blank between the controls', () => {
+  it('centers the personal avatar and shows agent identity and conditional context in ordinary chat headers without a chat title', () => {
     const header = chat.slice(chat.indexOf('  conversationHeader()'), chat.indexOf('  chatWorkspace()'));
     expect(header).toContain('if (this.personalConversation)');
     expect(header).toContain('Stack({ alignContent: Alignment.Top })');
@@ -246,7 +246,8 @@ describe('chat bottom region composition', () => {
     expect(compactAttention).toContain('.responseRegion([');
     expect(compactAttention).not.toContain('.width(44).height(44)');
     const ordinary = header.slice(header.indexOf('} else if (this.isStandaloneDraft())'));
-    expect(ordinary.match(/Blank\(\)\.layoutWeight\(1\)/g)).toHaveLength(2);
+    expect(ordinary.match(/this\.chatIdentityPill\(\)/g)).toHaveLength(2);
+    expect(ordinary).toContain('this.chatContextStripBar(');
     expect(ordinary).not.toContain('this.chat.title');
     expect(ordinary).not.toContain('this.options.agentName()');
     expect(ordinary).not.toContain('this.agentPickerButton()');

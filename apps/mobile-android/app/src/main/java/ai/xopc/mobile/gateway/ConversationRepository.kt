@@ -49,13 +49,16 @@ data class ConversationSharePreview(val conversationId: String, val transcriptId
 data class ConversationShare(val conversationId: String, val id: String, val title: String,
   val url: String, val reachability: String, val hint: String, val expiresAt: String,
   val messageCount: Int = 0, val attachmentCount: Int = 0)
-data class ContextWorkItem(val id: String, val title: String)
+data class ContextWorkItem(val id: String, val title: String, val phase: String? = null)
+data class ContextDelegatedTask(val id: String, val title: String, val phase: String, val runStatus: String? = null)
 data class ContextSource(val id: String, val title: String, val unavailable: Boolean)
 data class ContextEnvironment(val kind: String, val rootPath: String, val available: Boolean, val branch: String?)
 data class ConversationContext(val conversationId: String, val project: ContextWorkItem?, val task: ContextWorkItem?,
   val environment: ContextEnvironment?, val sources: List<ContextSource>, val sourcesHasMore: Boolean,
   val unavailableSections: List<String>, val workingDirectoryLocked: Boolean,
-  val effectiveWorkspacePath: String = "")
+  val effectiveWorkspacePath: String = "",
+  val delegatedTasks: List<ContextDelegatedTask> = emptyList(),
+  val delegatedTaskCount: Int = 0)
 data class ContextEnvironmentOptions(val localAvailable: Boolean, val worktreeUnavailableReason: String?)
 data class ContextDirectory(val name: String, val absolutePath: String, val isDirectory: Boolean)
 data class ContextDirectoryPage(val currentPath: String, val parentPath: String?, val entries: List<ContextDirectory>)
@@ -1227,8 +1230,26 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       require(summary.getString("conversationId") == conversationId) { "INVALID_CONTEXT" }
       val work = summary.getJSONObject("work")
       fun workItem(key: String): ContextWorkItem? = work.optJSONObject(key)?.let { item ->
-        ContextWorkItem(item.getString("id"), item.getString("title"))
+        ContextWorkItem(
+          item.getString("id"),
+          item.getString("title"),
+          item.optString("phase").takeIf(String::isNotBlank),
+        )
       }
+      val delegatedArray = work.optJSONArray("delegatedTasks")
+      val delegatedTasks = if (delegatedArray != null) {
+        (0 until minOf(delegatedArray.length(), 20)).mapNotNull { index ->
+          val item = delegatedArray.optJSONObject(index) ?: return@mapNotNull null
+          val id = item.optString("id").takeIf(String::isNotBlank) ?: return@mapNotNull null
+          ContextDelegatedTask(
+            id = id,
+            title = item.optString("title"),
+            phase = item.optString("phase"),
+            runStatus = item.optString("runStatus").takeIf(String::isNotBlank),
+          )
+        }
+      } else emptyList()
+      val delegatedTaskCount = maxOf(work.optInt("delegatedTaskCount", 0), delegatedTasks.size)
       val environment = summary.optJSONObject("environment")?.let {
         ContextEnvironment(it.getString("kind"), it.getString("rootPath"), it.getBoolean("available"),
           it.optString("branch").takeIf(String::isNotBlank))
@@ -1244,7 +1265,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       val config = JSONObject(configRaw).getJSONObject("payload")
       return ConversationContext(conversationId, workItem("project"), workItem("task"), environment,
         sources, summary.getBoolean("sourcesHasMore"), unavailable, config.optBoolean("workingDirectoryLocked"),
-        config.optString("effectiveWorkspacePath"))
+        config.optString("effectiveWorkspacePath"), delegatedTasks, delegatedTaskCount)
     }
 
     fun parseTaskWelcome(taskId: String, raw: String): TaskWelcomeInfo {
