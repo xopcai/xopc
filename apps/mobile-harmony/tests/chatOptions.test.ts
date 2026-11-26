@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { agents: vi.fn(), models: vi.fn(), config: vi.fn(), draft: vi.fn(), setModel: vi.fn(), inputState: vi.fn(), retryPreparation: vi.fn(), rememberModel: vi.fn() };
+  return { agents: vi.fn(), models: vi.fn(), config: vi.fn(), draft: vi.fn(), setModel: vi.fn(), inputState: vi.fn(), retryPreparation: vi.fn(), rememberModel: vi.fn(), request: vi.fn() };
 });
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {
   agents = mock.agents; models = mock.models; config = mock.config; draft = mock.draft; setModel = mock.setModel; inputState = mock.inputState;
   retryPreparation = mock.retryPreparation;
   rememberModel = mock.rememberModel;
 } }));
+vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mock.request } }));
 import { XopcChatOptionsViewModel } from '../entry/src/main/ets/viewmodel/chatOptionsViewModel.ets';
 describe('chat options and preparation', () => {
   beforeEach(() => {
