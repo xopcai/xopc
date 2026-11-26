@@ -42,7 +42,7 @@ targets:
         XOPC_APP_ENTITLEMENTS: XopcMobile/XopcMobile.entitlements
         XOPC_APNS_ENTITLEMENT: production
         XOPC_APNS_ENVIRONMENT: disabled
-        MARKETING_VERSION: 0.0.149
+        MARKETING_VERSION: 0.0.150
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: true
         INFOPLIST_FILE: XopcMobile/Resources/Info.plist
@@ -81,7 +81,7 @@ targets:
         INFOPLIST_FILE: ShareExtension/Info.plist
         APPLICATION_EXTENSION_API_ONLY: true
         SKIP_INSTALL: true
-        MARKETING_VERSION: 0.0.149
+        MARKETING_VERSION: 0.0.150
         CURRENT_PROJECT_VERSION: 1
   XopcMobileTests:
     type: bundle.unit-test
