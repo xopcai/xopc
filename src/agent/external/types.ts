@@ -10,6 +10,7 @@ import type { SessionInteractionPolicy } from '../session/interaction-policy-sta
 import type { AgentSourceContext } from '../source-context/types.js';
 import type { TurnPlanStep } from '../tools/update-plan-tool.js';
 import type { UserTurnAttachment } from '../../gateway/user-turn-input.js';
+import type { ExternalMcpServerSpec } from './mcp-bridge.js';
 
 export type ExternalRuntimeStatus = 'ready' | 'not_installed' | 'unauthenticated' | 'warning' | 'error';
 
@@ -24,6 +25,8 @@ export type ExternalRuntimeModelOption = {
   id: string;
   label: string;
   isDefault?: boolean;
+  /** Model context window size in tokens (used for context meter & compaction hints). */
+  contextWindow?: number;
   /** Normalized thinking/reasoning capabilities for the chat effort slider. */
   thinking?: ModelThinkingCapabilities;
   /** Optional protocol-native config id for thinking effort (e.g. ACP `thought_level` / `effort`). */
@@ -242,6 +245,8 @@ export interface ExternalDriverTurnContext {
   cwd: string;
   content: string;
   attachments: ExternalTurnAttachment[];
+  /** Enabled xopc MCP servers projected into the external runtime session. */
+  mcpServers?: ExternalMcpServerSpec[];
   instructions?: string;
   existingBinding?: ExternalSessionBinding;
   signal: AbortSignal;
@@ -287,6 +292,8 @@ export interface RunExternalProjectTurnInput {
   modelOverride?: string;
   thinkingLevel?: string;
   serviceTierOverride?: string;
+  /** Optional explicit workspace path for headless Automation / Channel / CLI runs. */
+  workspaceOverride?: string;
   onTitleUpdated?: (title: string) => void;
   content: string;
   attachments?: UserTurnAttachment[];

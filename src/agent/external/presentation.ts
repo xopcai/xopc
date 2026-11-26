@@ -6,6 +6,7 @@ type TurnChangeSet = NonNullable<TurnOutcome['changeSet']>;
 type TurnEvidence = TurnOutcome['evidence'][number];
 
 import type { TurnPlanStep, TurnPlanStatus } from '../tools/update-plan-tool.js';
+import type { TurnCheckpointDiff } from './checkpoint.js';
 import type { ExternalRuntimeToolResult } from './types.js';
 
 export const MAX_EXTERNAL_TOOL_TEXT = 32_000;
@@ -252,22 +253,34 @@ export class ExternalTurnOutcomeAggregator {
     }
   }
 
+  private gitCheckpointDiff?: TurnCheckpointDiff;
+
+  applyGitCheckpointDiff(checkpoint: TurnCheckpointDiff): void {
+    if (checkpoint.files.length === 0) return;
+    this.gitCheckpointDiff = checkpoint;
+  }
+
   buildOutcome(input: {
     outcomeId: string;
     runId: string;
     status: TurnOutcome['status'];
     summary?: string;
   }): TurnOutcome {
-    const files = [...this.filesByPath.entries()].map(([path, status]) => ({ path, status }));
-    const joinedDiff = this.diffs.join('\n');
-    const diffTruncated = joinedDiff.length > MAX_TURN_DIFF_CHARS;
+    const git = this.gitCheckpointDiff;
+    const files = git
+      ? git.files
+      : [...this.filesByPath.entries()].map(([path, status]) => ({ path, status }));
+    const joinedDiff = git ? git.diff : this.diffs.join('\n');
+    const diffTruncated = git ? (git.diffTruncated || joinedDiff.length > MAX_TURN_DIFF_CHARS) : joinedDiff.length > MAX_TURN_DIFF_CHARS;
+    const added = git ? git.added : this.totalAdded;
+    const removed = git ? git.removed : this.totalRemoved;
     const changeSet: TurnChangeSet | undefined = files.length > 0
       ? {
           changeSetId: `${input.outcomeId}:changes`,
           environment: 'workspace',
           files,
-          added: this.totalAdded,
-          removed: this.totalRemoved,
+          added,
+          removed,
           diff: joinedDiff.slice(0, MAX_TURN_DIFF_CHARS),
           ...(diffTruncated ? { diffTruncated: true } : {}),
         }

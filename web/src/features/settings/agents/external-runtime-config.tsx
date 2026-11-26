@@ -36,10 +36,12 @@ import {
 } from '@/features/settings/oauth-authorization-window';
 import {
   AGY_AUTH_METHODS,
+  EXTERNAL_CONTEXT_ACCESS_MODES,
   EXTERNAL_PERMISSION_MODES,
   type AgyAuthMethod,
   type ExternalAgentExecution,
   type ExternalAgentKind,
+  type ExternalContextAccess,
   type ExternalPermissionMode,
   type ExternalRuntimeAuthFlowSnapshot,
   type ExternalRuntimeAuthMode,
@@ -112,6 +114,19 @@ function permissionModeLabel(mode: ExternalPermissionMode, zh: boolean): string 
       return zh ? '自动改文件，执行命令前确认' : 'Auto-accept edits, ask before commands';
     case 'ask':
       return zh ? '逐项确认（改文件与命令均需审批）' : 'Ask before edits & commands';
+  }
+}
+
+function contextAccessLabel(mode: ExternalContextAccess, zh: boolean): string {
+  switch (mode) {
+    case 'read_only':
+      return zh ? '只读（推荐：热简报 + 读取记忆/笔记/任务/会话）' : 'Read-only (recommended: warm brief + read memory, notes, tasks & sessions)';
+    case 'brief_only':
+      return zh ? '仅热上下文简报（不挂载 xopc MCP 工具）' : 'Brief only (profile & project summary, no xopc MCP tools)';
+    case 'read_write':
+      return zh ? '读写（含创建/更新笔记与任务）' : 'Read & write (also allows creating/updating notes & tasks)';
+    case 'off':
+      return zh ? '关闭（完全隔离，不共享 xopc 上下文）' : 'Off (isolated, no xopc context or MCP access)';
   }
 }
 
@@ -1024,6 +1039,33 @@ export function ExternalRuntimeConfigForm({
           {zh
             ? '需要审批时会在对话输入框上方弹出确认卡；若会话处于「计划模式 / 只读」，会自动收紧为只读并弹窗确认。'
             : 'When approvals are required, a confirmation card appears above the chat composer. Plan/read-only sessions automatically tighten access.'}
+        </p>
+      </div>
+
+      {/* xopc Context & MCP access tier */}
+      <div className="space-y-1.5">
+        <label htmlFor={`ext-ctx-${value.kind}`} className="block text-xs font-medium text-fg-muted">
+          {zh ? 'xopc 上下文与记忆访问权限' : 'xopc context & memory access'}
+        </label>
+        <Select
+          id={`ext-ctx-${value.kind}`}
+          value={value.contextAccess ?? 'read_only'}
+          disabled={disabled}
+          onChange={(event) => {
+            const next = event.target.value as ExternalContextAccess;
+            updateFields({ contextAccess: next === 'read_only' ? undefined : next });
+          }}
+        >
+          {EXTERNAL_CONTEXT_ACCESS_MODES.map((mode) => (
+            <SelectOption key={mode} value={mode}>
+              {contextAccessLabel(mode, zh)}
+            </SelectOption>
+          ))}
+        </Select>
+        <p className="text-xs leading-5 text-fg-subtle">
+          {zh
+            ? '控制是否向外部运行时注入你的称呼/协作规则/项目简报，以及是否自动挂载受限的 xopc 内置 MCP（敏感记忆始终被自动过滤）。'
+            : 'Controls whether your profile, collaboration rules, project brief, and scoped built-in xopc MCP tools are shared with this runtime (sensitive memories are always filtered out).'}
         </p>
       </div>
 

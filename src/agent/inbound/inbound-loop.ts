@@ -42,6 +42,7 @@ import { initSessionTurn } from '../../session/init-session-turn.js';
 import { shouldSkipResetOverlapCommand } from '../../session/reset-triggers.js';
 import type { StreamHandle } from '../service.types.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
+import { getExternalConversationAgent, runExternalDirectTurn } from '../external/index.js';
 import { verifiedChannelInbound } from '../../channels/verified-inbound.js';
 import { inboundMessageLogRequestId } from '../service-inbound-utils.js';
 
@@ -313,7 +314,22 @@ export class InboundLoop {
           this.cfg.sessionState.beginInboundTurn(sessionContext.conversationId);
           inboundTurnArmed = true;
           try {
-            await this.cfg.agentOrchestrator.process(inboundMsg, sessionContext, verifiedChannelInbound(msg));
+            if (getExternalConversationAgent(sessionContext.conversationId)) {
+              const extResult = await runExternalDirectTurn({
+                conversationId: sessionContext.conversationId,
+                content: inboundMsg.content,
+                cfg: this.cfg.getConfig(),
+                sessionStore: this.cfg.sessionStore,
+                onTextUpdate: (fullText) => {
+                  this.cfg.streamManager.update(fullText);
+                },
+              });
+              if (extResult) {
+                this.cfg.sessionState.setLastAssistantText(sessionContext.conversationId, extResult.text);
+              }
+            } else {
+              await this.cfg.agentOrchestrator.process(inboundMsg, sessionContext, verifiedChannelInbound(msg));
+            }
           } catch (procErr) {
             busProcessFailed = procErr instanceof Error ? procErr.message : String(procErr);
             throw procErr;

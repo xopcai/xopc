@@ -33,12 +33,34 @@ export type {
   StartExternalRuntimeAuthInput,
 } from './types.js';
 export {
+  approvalSignatureForRequest,
+  clearExternalSessionApprovals,
+  isDangerousExternalCommand,
+  isExternalApprovalRemembered,
+  rememberExternalSessionApproval,
+} from './approval-memory.js';
+export {
   cancelExternalInteractionsForConversation,
   getActiveExternalInteractionSnapshot,
   hasExternalInteraction,
   resolveExternalInteraction,
   waitForExternalInteraction,
 } from './interaction.js';
+export {
+  buildExternalWarmContextBrief,
+} from './context-brief.js';
+export {
+  getActiveExternalMcpGatewayPort,
+  projectMcpServersForAcp,
+  projectMcpServersForClaude,
+  projectMcpServersForCodex,
+  resolveExternalMcpServers,
+  resolveExternalTurnMcpContext,
+  revokeAllExternalSessionMcpGrants,
+  revokeExternalSessionMcpGrant,
+  setActiveExternalMcpGatewayPort,
+  type ExternalMcpServerSpec,
+} from './mcp-bridge.js';
 export {
   buildNormalizedApplyPatchResult,
   buildNormalizedExecCommandResult,
@@ -55,8 +77,19 @@ export {
   XOPC_RUNTIME_AVATAR_PREFIX,
 } from './avatars.js';
 export {
+  captureTurnCheckpoint,
+  checkpointRefName,
+  computeTurnCheckpointDiff,
+  hasTurnCheckpoint,
+  restoreTurnCheckpoint,
+  type TurnCheckpointDiff,
+  type TurnCheckpointFileStatus,
+} from './checkpoint.js';
+export {
   compactExternalSession,
   forkExternalSession,
+  getSessionTurnCheckpointDiff,
+  restoreSessionTurnCheckpoint,
   rollbackExternalSession,
 } from './control.js';
 export {
@@ -76,6 +109,7 @@ export {
   probeAllExternalAgentRuntimes,
   probeExternalAgentRuntime,
   probeExternalAgentRuntimeCached,
+  resolveExternalContextWindow,
   resolveExternalRuntimeModelsPayload,
   type ExternalRuntimeCatalogModel,
   type ExternalRuntimeModelsPayload,
@@ -97,6 +131,10 @@ export {
   disposePooledExternalSession,
   getPooledExternalSessionCount,
 } from './session-pool.js';
+export {
+  runExternalDirectTurn,
+  type RunExternalDirectTurnInput,
+} from './direct-runner.js';
 export {
   abortAllExternalTurns,
   abortExternalTurn,

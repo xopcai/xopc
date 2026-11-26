@@ -16,7 +16,15 @@ import { getSessionInteractionPolicy } from '../session/interaction-policy-state
 import { injectSourceContextsIntoUserMessage } from '../source-context/injector.js';
 import { summarizeSourceContext, type AgentSourceContext } from '../source-context/types.js';
 import { AsyncQueue } from '../service/async-queue.js';
+import { clearExternalSessionApprovals } from './approval-memory.js';
 import { prepareExternalAttachments } from './attachments.js';
+import { captureTurnCheckpoint, computeTurnCheckpointDiff } from './checkpoint.js';
+import { buildExternalWarmContextBrief } from './context-brief.js';
+import {
+  resolveExternalTurnMcpContext,
+  revokeAllExternalSessionMcpGrants,
+  revokeExternalSessionMcpGrant,
+} from './mcp-bridge.js';
 import {
   cancelExternalInteractionsForConversation,
   waitForExternalInteraction,
@@ -130,11 +138,14 @@ export async function abortExternalTurn(conversationId: string): Promise<void> {
     await run.finished.catch(() => {});
   }
   await disposePooledExternalSession(conversationId, true);
+  revokeExternalSessionMcpGrant(conversationId);
+  clearExternalSessionApprovals(conversationId);
 }
 
 export async function abortAllExternalTurns(): Promise<void> {
   await Promise.all(Array.from(activeRuns.keys(), abortExternalTurn));
   await disposeAllPooledExternalSessions(true);
+  revokeAllExternalSessionMcpGrants();
 }
 
 const NATIVE_STEER_READY_TIMEOUT_MS = 5_000;
@@ -149,7 +160,10 @@ export async function* runExternalProjectTurn(
   const signal = AbortSignal.any([input.signal, stop.signal]);
 
   const project = getProjectForSession(conversationId);
-  const workspace = project && (getExecutionEnvironmentForSession(conversationId)?.rootPath ?? projectWorkspacePath(project));
+  const workspace =
+    (project && (getExecutionEnvironmentForSession(conversationId)?.rootPath ?? projectWorkspacePath(project)))
+    || input.workspaceOverride?.trim()
+    || undefined;
   if (driver.capabilities.requiresWorkspace && !workspace) {
     throw new Error(`Start a Project session with a workspace to use this ${driver.label} Agent.`);
   }
@@ -642,6 +656,27 @@ export async function* runExternalProjectTurn(
       let activeAttachments = preparedAttachments.attachments;
       let activeClientMessageId = input.clientMessageId;
 
+      const { servers: mcpServers, builtInMounted } = resolveExternalTurnMcpContext({
+        workspaceDir: cwd,
+        agentId,
+        conversationId,
+        projectId: project?.id,
+        contextAccess: execution.contextAccess,
+      });
+      const warmBrief = buildExternalWarmContextBrief({
+        conversationId,
+        projectId: project?.id,
+        contextAccess: execution.contextAccess,
+        builtInMcpMounted: builtInMounted,
+      });
+      const effectiveInstructions = [input.instructions?.trim(), warmBrief].filter(Boolean).join('\n\n') || undefined;
+      const beforeCheckpoint = await captureTurnCheckpoint({
+        cwd,
+        conversationId,
+        turnId: runId,
+        stage: 'before',
+      });
+
       while (!signal.aborted) {
         if (attemptSeq > 0) existingBinding = readExternalSessionBinding(identity);
         const attemptAbort = new AbortController();
@@ -665,7 +700,8 @@ export async function* runExternalProjectTurn(
             cwd,
             content: activeContent,
             attachments: activeAttachments,
-            instructions: input.instructions,
+            ...(mcpServers.length > 0 ? { mcpServers } : {}),
+            instructions: effectiveInstructions,
             existingBinding,
             signal: attemptSignal,
             emit: handleEvent,
@@ -731,6 +767,25 @@ export async function* runExternalProjectTurn(
 
         if (attemptFailure) failure = attemptFailure;
         break;
+      }
+
+      if (beforeCheckpoint) {
+        const afterCheckpoint = await captureTurnCheckpoint({
+          cwd,
+          conversationId,
+          turnId: runId,
+          stage: 'after',
+        });
+        if (afterCheckpoint) {
+          const checkpointDiff = await computeTurnCheckpointDiff({
+            cwd,
+            conversationId,
+            turnId: runId,
+          }).catch(() => null);
+          if (checkpointDiff && checkpointDiff.files.length > 0) {
+            outcomeAggregator.applyGitCheckpointDiff(checkpointDiff);
+          }
+        }
       }
     } catch (error) {
       if (!signal.aborted) failure = error instanceof Error ? error.message : String(error);

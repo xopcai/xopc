@@ -57,6 +57,9 @@ export type ExternalAgentKind = (typeof EXTERNAL_AGENT_KINDS)[number];
 export const EXTERNAL_PERMISSION_MODES = ['full_access', 'auto_edit', 'ask'] as const;
 export type ExternalPermissionMode = (typeof EXTERNAL_PERMISSION_MODES)[number];
 
+export const EXTERNAL_CONTEXT_ACCESS_MODES = ['off', 'brief_only', 'read_only', 'read_write'] as const;
+export type ExternalContextAccess = (typeof EXTERNAL_CONTEXT_ACCESS_MODES)[number];
+
 export const AGY_AUTH_METHODS = ['oauth-personal', 'oauth-business', 'gemini-api-key', 'agent-platform'] as const;
 export type AgyAuthMethod = (typeof AGY_AUTH_METHODS)[number];
 
@@ -67,6 +70,7 @@ export type CodexExecution = {
   model?: string;
   serviceTier?: string;
   permissionMode?: ExternalPermissionMode;
+  contextAccess?: ExternalContextAccess;
 };
 
 export type AgyExecution = {
@@ -76,6 +80,7 @@ export type AgyExecution = {
   authMethod?: AgyAuthMethod;
   model?: string;
   permissionMode?: ExternalPermissionMode;
+  contextAccess?: ExternalContextAccess;
 };
 
 export type ClaudeExecution = {
@@ -84,6 +89,7 @@ export type ClaudeExecution = {
   configDir?: string;
   model?: string;
   permissionMode?: ExternalPermissionMode;
+  contextAccess?: ExternalContextAccess;
 };
 
 export type ExternalAgentExecution = CodexExecution | AgyExecution | ClaudeExecution;

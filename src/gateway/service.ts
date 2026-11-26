@@ -54,7 +54,12 @@ import { notifyUserContextChange } from '../user-context/changes.js';
 import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { listAgentEntries, resolveDefaultAgentId, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import { AgentService } from '../agent/service.js';
-import { abortAllExternalTurns, cancelAllExternalRuntimeAuthFlows } from '../agent/external/index.js';
+import {
+  abortAllExternalTurns,
+  cancelAllExternalRuntimeAuthFlows,
+  revokeAllExternalSessionMcpGrants,
+  setActiveExternalMcpGatewayPort,
+} from '../agent/external/index.js';
 import { getEmbeddedExecutionSession } from '../agent/embedded/execution-context.js';
 import { bootstrapApplicationStateSync } from '../bootstrap/application-state.js';
 import { ChannelManager } from '../channels/manager.js';
@@ -2103,6 +2108,7 @@ export class GatewayService {
   async onHttpListening(): Promise<void> {
     await this.applyStartupReadyDelayForTesting();
     this.markGatewayReady();
+    setActiveExternalMcpGatewayPort(this.getEffectiveListenPort());
 
     await this.runExposureAutoStartIfConfigured();
 
@@ -2187,6 +2193,8 @@ export class GatewayService {
       this.taskRunDispatchTimer = null;
     }
     await this.sessionPreparations.stop();
+    setActiveExternalMcpGatewayPort(undefined);
+    revokeAllExternalSessionMcpGrants();
     await Promise.all([abortAllExternalTurns(), cancelAllExternalRuntimeAuthFlows()]);
     await stopPersonalResultPreparations();
 

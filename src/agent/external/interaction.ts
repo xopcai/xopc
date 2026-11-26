@@ -10,6 +10,11 @@ import {
 } from '@xopcai/gateway-contract';
 
 import type { ResolveClarificationResult } from '../../storage/sqlite/clarification-wait-repository.js';
+import {
+  isDangerousExternalCommand,
+  isExternalApprovalRemembered,
+  rememberExternalSessionApproval,
+} from './approval-memory.js';
 import type { ExternalInteractionRequest, ExternalInteractionResponse } from './types.js';
 
 const APPROVAL_TTL_MS = 10 * 60_000;
@@ -48,6 +53,12 @@ function buildClarificationWait(input: {
 } {
   const now = Date.now();
   const req = input.request;
+  const dangerousCommand = req.kind === 'approval' && req.actionKind === 'command' && isDangerousExternalCommand(req.question);
+  const approvalDetail = req.kind === 'approval'
+    ? [dangerousCommand ? '⚠️ High-risk command — review carefully before approving' : '', req.detail ?? '']
+        .filter(Boolean)
+        .join('\n')
+    : '';
   const rawPayload = req.kind === 'approval'
     ? {
         kind: 'approval' as const,
@@ -59,7 +70,7 @@ function buildClarificationWait(input: {
               : req.actionKind === 'file_change'
                 ? 'Modify files'
                 : 'Approve action'),
-          ...(req.detail ? { target: req.detail.slice(0, 2_000) } : {}),
+          ...(approvalDetail ? { target: approvalDetail.slice(0, 2_000) } : {}),
         },
       }
     : {
@@ -183,6 +194,12 @@ export function waitForExternalInteraction(input: {
   if (input.signal.aborted) {
     return Promise.resolve(defaultCancelledResponse(input.request));
   }
+  if (
+    input.request.kind === 'approval'
+    && isExternalApprovalRemembered(input.conversationId, input.transcriptId, input.request)
+  ) {
+    return Promise.resolve({ kind: 'approval', decision: 'approve' });
+  }
 
   const id = randomUUID();
   const { wait, normalizedQuestion, streamEvent } = buildClarificationWait({
@@ -266,9 +283,13 @@ export function resolveExternalInteraction(
   }
 
   if (pending.request.kind === 'approval') {
+    const rememberForSession = input.response?.choiceId === 'approve_session';
     const decision = input.decision ?? (input.response?.choiceId === 'deny' ? 'deny' : 'approve');
     if (decision !== 'approve' && decision !== 'deny') {
       return { ok: false, code: 'INVALID', clarification: pending.wait };
+    }
+    if (decision === 'approve' && rememberForSession) {
+      rememberExternalSessionApproval(pending.conversationId, pending.wait.transcriptId, pending.request);
     }
     const answeredWait: ClarificationWait = {
       ...pending.wait,

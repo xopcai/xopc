@@ -614,6 +614,8 @@ describe('lazy route bundles', () => {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('shares');
     }
     expect(findAuthenticatedLazyRouteBundle('/api/sessions/example/inputs')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/sessions/example/checkpoints/turn-1/diff')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/sessions/example/checkpoints/turn-1/restore')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/sessions/example/shares-extra')).toBeUndefined();
   });
 

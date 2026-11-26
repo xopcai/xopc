@@ -1,3 +1,5 @@
+import { realpathSync, statSync } from 'node:fs';
+
 import { isXopcDatabaseOpen } from '../../storage/sqlite/connection.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { createLogger } from '../../utils/logger.js';
@@ -6,9 +8,24 @@ const log = createLogger('ExternalSessionPool');
 
 const DEFAULT_IDLE_TTL_MS = 10 * 60_000;
 
+type BinaryStamp = { realPath: string; mtimeMs: number };
+
+function readBinaryStamp(executablePath?: string): BinaryStamp | undefined {
+  if (!executablePath) return undefined;
+  try {
+    const realPath = realpathSync(executablePath);
+    const stat = statSync(realPath);
+    return { realPath, mtimeMs: stat.mtimeMs };
+  } catch {
+    return undefined;
+  }
+}
+
 export type PooledExternalSessionEntry<T> = {
   fingerprint: string;
   resource: T;
+  /** Optional host CLI binary path; if replaced/upgraded on disk, the pooled process is evicted. */
+  executablePath?: string;
   isAlive: () => boolean;
   dispose: (force?: boolean) => Promise<void>;
 };
@@ -16,6 +33,7 @@ export type PooledExternalSessionEntry<T> = {
 type StoredPoolEntry = PooledExternalSessionEntry<unknown> & {
   busy: boolean;
   dbRef: unknown;
+  binaryStamp?: BinaryStamp;
   idleTimer?: NodeJS.Timeout;
 };
 
@@ -45,7 +63,15 @@ export async function checkoutPooledExternalSession<T>(
   if (existing.busy) return undefined;
 
   const dbRef = currentDbIdentity();
-  if (existing.fingerprint === fingerprint && existing.dbRef === dbRef && existing.isAlive()) {
+  const binaryUnchanged = !existing.binaryStamp || (() => {
+    const latest = readBinaryStamp(existing.executablePath);
+    return Boolean(
+      latest
+      && latest.realPath === existing.binaryStamp.realPath
+      && latest.mtimeMs === existing.binaryStamp.mtimeMs,
+    );
+  })();
+  if (existing.fingerprint === fingerprint && existing.dbRef === dbRef && binaryUnchanged && existing.isAlive()) {
     clearIdleTimer(existing);
     existing.busy = true;
     return existing.resource as T;
@@ -80,6 +106,7 @@ export function checkinPooledExternalSession<T>(
     ...(entry as PooledExternalSessionEntry<unknown>),
     busy: false,
     dbRef: currentDbIdentity(),
+    binaryStamp: readBinaryStamp(entry.executablePath),
   };
   stored.idleTimer = setTimeout(() => {
     const latest = pool.get(conversationId);

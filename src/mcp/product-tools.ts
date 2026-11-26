@@ -17,6 +17,7 @@ import {
 } from '../local-apps/capabilities/projections.js';
 
 import { mcpDelegationTools, registerMcpDelegation, type McpDelegationDeps } from './delegation.js';
+import { mcpSessionTools, registerSessionTools } from './session-tools.js';
 import { mcpUserContextTools, registerUserContextTools } from './user-context-tools.js';
 import { mcpFileTools, registerWorkspaceFiles } from './workspace-files.js';
 import { registerWorkspaceSearch, WorkspaceSearchOutput } from './workspace-search.js';
@@ -81,6 +82,7 @@ const taskRunReceipt = TaskRunReceiptSchema.pick({
 const productTools = {
   ...mcpDelegationTools,
   ...mcpFileTools,
+  ...mcpSessionTools,
   ...mcpUserContextTools,
   'xopc.projects.list': { scope: 'workspace.read', input: ProjectListInputSchema.extend({ limit: listLimit }), output: LocalAppProjectListSchema },
   'xopc.projects.get': { scope: 'workspace.read', output: projectDetail, description: 'Read project planning details and its version by ID.' },
@@ -195,16 +197,19 @@ export const MCP_TOOLSETS: readonly McpToolsetDefinition[] = [
       'xopc.projects.list', 'xopc.projects.get', 'xopc.projects.list_milestones', 'xopc.projects.list_updates',
       'xopc.notes.list', 'xopc.notes.get', 'xopc.notes.history', 'xopc.notes.snapshot', 'xopc.notes.project_summaries',
       'xopc.tasks.list', 'xopc.tasks.get', 'xopc.task_runs.list', 'xopc.task_runs.get',
+      'xopc.sessions.list', 'xopc.sessions.search', 'xopc.sessions.read',
       'xopc.files.spaces', 'xopc.files.list', 'xopc.files.search', 'xopc.files.get',
     ],
   },
   {
     id: 'memory-read',
     label: 'User Context & Knowledge Memory',
-    description: 'Read user profile, active goals, collaboration rules, and non-sensitive knowledge memory.',
+    description: 'Read user profile, active goals, collaboration rules, past sessions, and non-sensitive knowledge memory.',
     includesWrite: false,
     capabilityIds: [
-      'xopc.user_context.profile', 'xopc.knowledge.list', 'xopc.knowledge.search', 'xopc.workspace.search',
+      'xopc.user_context.profile', 'xopc.knowledge.list', 'xopc.knowledge.search',
+      'xopc.sessions.list', 'xopc.sessions.search', 'xopc.sessions.read',
+      'xopc.workspace.search',
     ],
   },
   {
@@ -222,6 +227,7 @@ export const MCP_TOOLSETS: readonly McpToolsetDefinition[] = [
       'xopc.tasks.list', 'xopc.tasks.get', 'xopc.tasks.create', 'xopc.tasks.update', 'xopc.tasks.reorder',
       'xopc.tasks.update_dependencies', 'xopc.tasks.add_context', 'xopc.tasks.remove_context',
       'xopc.task_runs.list', 'xopc.task_runs.get', 'xopc.task_runs.feedback',
+      'xopc.sessions.list', 'xopc.sessions.search', 'xopc.sessions.read',
       'xopc.files.spaces', 'xopc.files.list', 'xopc.files.search', 'xopc.files.get',
     ],
   },
@@ -264,6 +270,7 @@ export function resolveMcpToolsetCapabilities(toolsetId: string, includeWrites?:
 export function registerMcpProductTools(dispatcher: CapabilityDispatcher, delegation: McpDelegationDeps): void {
   registerMcpDelegation(dispatcher, delegation);
   registerWorkspaceFiles(dispatcher, delegation.getFiles);
+  registerSessionTools(dispatcher);
   registerUserContextTools(dispatcher);
   registerWorkspaceSearch(dispatcher);
   for (const [id, tool] of Object.entries(productTools)) dispatcher.exposeToMcp(id, tool);

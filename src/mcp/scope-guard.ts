@@ -2,6 +2,7 @@ import { ObjectLinkService } from '../activity/service.js';
 import type { FileSpaceService } from '../files/file-service.js';
 import { NotesStore } from '../notes/store.js';
 import type { ProjectService } from '../projects/project-service.js';
+import { getSessionMetadata } from '../storage/sqlite/session-read-repository.js';
 import { TaskRepository } from '../tasks/task-repository.js';
 import { TaskRunRepository } from '../tasks/task-run-repository.js';
 
@@ -176,11 +177,17 @@ export function createMcpProjectScopeAuthorizer(
       return true;
     }
 
-    // Workspace search & user context
+    // Workspace search, user context & sessions
     if (capabilityId === 'xopc.workspace.search' || capabilityId === 'xopc.user_context.profile'
-      || capabilityId === 'xopc.knowledge.list' || capabilityId === 'xopc.knowledge.search') {
+      || capabilityId === 'xopc.knowledge.list' || capabilityId === 'xopc.knowledge.search'
+      || capabilityId === 'xopc.sessions.list' || capabilityId === 'xopc.sessions.search') {
       const targetProjectId = stringField(input, 'projectId');
       return !targetProjectId || allowedProjects.has(targetProjectId);
+    }
+    if (capabilityId === 'xopc.sessions.read') {
+      const conversationId = stringField(input, 'conversationId');
+      const sessionMeta = conversationId ? getSessionMetadata(conversationId) : null;
+      return Boolean(sessionMeta?.projectId && allowedProjects.has(sessionMeta.projectId));
     }
 
     // Automations
@@ -242,6 +249,13 @@ export function filterMcpOutputForProjects(
         return bindings.some(binding => binding.kind === 'project' && allowed.has(binding.id));
       }),
     };
+  }
+  if ((capabilityId === 'xopc.sessions.list' || capabilityId === 'xopc.sessions.search') && Array.isArray(record.items)) {
+    const items = record.items.filter(item => {
+      const pid = (item as { projectId?: unknown })?.projectId;
+      return typeof pid === 'string' && allowed.has(pid);
+    });
+    return { ...record, items, ...(typeof record.total === 'number' ? { total: items.length } : {}) };
   }
   if ((capabilityId === 'xopc.knowledge.list' || capabilityId === 'xopc.knowledge.search') && Array.isArray(record.items)) {
     return {

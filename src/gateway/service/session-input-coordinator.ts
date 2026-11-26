@@ -409,7 +409,7 @@ export class SessionInputCoordinator {
       if ((controlState.paused || input.controlVersion !== undefined) && controlState.phase !== 'idle') return { ok: false, code: 'SESSION_BUSY' };
       await beforeReplace(input.controlVersion === undefined);
       if (getExternalConversationAgent(conversationId)) {
-        await rollbackExternalSession(conversationId, 1);
+        await rollbackExternalSession(conversationId, 1, { restoreFiles: true, targetTurnId });
       }
       const result = replaceLatestSessionTurnAndQueueInput({
         conversationId,

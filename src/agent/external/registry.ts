@@ -72,6 +72,22 @@ export function getCachedExternalDefaultModel(execution: ExternalAgentExecution)
   return cached.models.find((m) => m.isDefault)?.id ?? cached.models[0]?.id;
 }
 
+/** Resolve nominal context window (tokens) for an external runtime model. */
+export function resolveExternalContextWindow(
+  execution: ExternalAgentExecution,
+  modelId?: string,
+): number {
+  const cached = getCachedExternalRuntimeProbe(execution);
+  const target = modelId?.trim() || execution.model?.trim();
+  const matched = cached?.models.find((m) => (target ? m.id === target : m.isDefault)) ?? cached?.models[0];
+  if (matched?.contextWindow && matched.contextWindow > 0) {
+    return matched.contextWindow;
+  }
+  if (execution.kind === 'agy') return 1_000_000;
+  if (execution.kind === 'claude') return 200_000;
+  return 272_000;
+}
+
 export function getExternalAgentDriver(kind: ExternalAgentKind): ExternalAgentDriver {
   const driver = registry.get(kind);
   if (!driver) throw new Error(`Unsupported external agent runtime: ${kind}`);
@@ -118,6 +134,7 @@ export type ExternalRuntimeCatalogModel = {
   id: string;
   name: string;
   provider: string;
+  contextWindow?: number;
   reasoning?: boolean;
   thinking?: ModelThinkingCapabilities;
   serviceTiers?: ExternalRuntimeServiceTier[];
@@ -150,6 +167,7 @@ export async function resolveExternalRuntimeModelsPayload(
     id: opt.id,
     name: opt.label,
     provider: driver.label,
+    ...(opt.contextWindow ? { contextWindow: opt.contextWindow } : {}),
     reasoning: Boolean(opt.thinking && opt.thinking.mode !== 'none'),
     ...(opt.thinking ? { thinking: opt.thinking } : {}),
     ...(opt.serviceTiers?.length ? { serviceTiers: opt.serviceTiers } : {}),

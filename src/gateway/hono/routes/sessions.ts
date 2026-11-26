@@ -21,9 +21,13 @@ import {
   compactExternalSession,
   getExternalAgentDriver,
   getExternalConversationAgent,
+  getSessionTurnCheckpointDiff,
+  hasActiveExternalTurn,
   hasExternalSessionBinding,
+  restoreSessionTurnCheckpoint,
   rollbackExternalSession,
 } from '../../../agent/external/index.js';
+import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import { computeTranscriptUserRoundDeleteRange } from '../../../session/user-round-delete.js';
 import {
   isRuntimeOnlyTranscriptMessage,
@@ -926,6 +930,41 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const question = typeof body.question === 'string' ? body.question : '';
     const result = await service.sessions.btwQuery(key, question);
     return c.json(result);
+  });
+
+  authenticated.get('/api/sessions/:key/checkpoints/:turnId/diff', async (c) => {
+    const key = c.req.param('key');
+    const turnId = c.req.param('turnId');
+    if (!hasGatewayScope(getGatewayPrincipal(c).scopes, 'workspace.read')) {
+      return c.json({ ok: false, error: 'Reading workspace checkpoints requires workspace access' }, 403);
+    }
+    try {
+      const payload = await getSessionTurnCheckpointDiff(key, turnId);
+      return c.json({ ok: true, payload });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: msg }, 400);
+    }
+  });
+
+  authenticated.post('/api/sessions/:key/checkpoints/:turnId/restore', async (c) => {
+    const key = c.req.param('key');
+    const turnId = c.req.param('turnId');
+    if (!hasGatewayScope(getGatewayPrincipal(c).scopes, 'workspace.write')) {
+      return c.json({ ok: false, error: 'Restoring workspace checkpoints requires workspace write access' }, 403);
+    }
+    if (hasActiveExternalTurn(key) || service.getActiveWebchatRunId(key)) {
+      return c.json({ ok: false, error: 'Stop the active run before restoring workspace files' }, 409);
+    }
+    const body = await c.req.json().catch(() => ({})) as { stage?: unknown };
+    const stage = body.stage === 'after' ? 'after' : 'before';
+    try {
+      const result = await restoreSessionTurnCheckpoint(key, turnId, stage);
+      return c.json({ ok: true, payload: result });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: msg }, 400);
+    }
   });
 
   authenticated.post('/api/sessions/:key/fork', async (c) => {

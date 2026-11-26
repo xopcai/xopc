@@ -32,6 +32,8 @@ import type {
   SessionStateBag,
 } from '../session/index.js';
 import { queueEmbeddedSteer } from '../embedded/runs.js';
+import { getExternalConversationAgent, runExternalDirectTurn } from '../external/index.js';
+import type { UserTurnAttachment } from '../../gateway/user-turn-input.js';
 import type {
   InboundAttachmentInput,
   MediaRef,
@@ -106,8 +108,8 @@ export class TurnDispatcher {
     this.log = cfg.log;
   }
 
-  /** One-shot direct turn (CLI / embedded TUI). */
-  processDirect(
+  /** One-shot direct turn (CLI / embedded TUI / Automations). */
+  async processDirect(
     content: string,
     conversationId: string,
     origin: TurnOrigin,
@@ -115,6 +117,24 @@ export class TurnDispatcher {
     thinking?: string,
     options?: ProcessDirectOptions,
   ): Promise<string> {
+    if (getExternalConversationAgent(conversationId)) {
+      const result = await runExternalDirectTurn({
+        conversationId,
+        content,
+        attachments: attachments as UserTurnAttachment[] | undefined,
+        thinking,
+        runId: options?.runId,
+        signal: options?.signal,
+        deadlineAtMs: options?.deadlineAtMs,
+        cfg: this.cfg.getConfig(),
+        sessionStore: this.cfg.sessionStore,
+        sessionConfigStore: this.cfg.sessionConfigStore,
+      });
+      if (result) {
+        this.cfg.onSessionTranscriptUpdated?.(conversationId);
+        return result.text;
+      }
+    }
     return runProcessDirect(this.buildOneShotDeps(), {
       content,
       conversationId,

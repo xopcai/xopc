@@ -11,6 +11,7 @@ import { resolveUserPath } from '../../../agent-scope.js';
 import { PLAN_MODE_INSTRUCTIONS, type SessionInteractionPolicy } from '../../../session/interaction-policy-state.js';
 import { normalizeThinkLevel } from '../../../transcript/thinking-types.js';
 import { formatFileAttachmentsContext } from '../../attachments.js';
+import { projectMcpServersForCodex } from '../../mcp-bridge.js';
 import {
   buildNormalizedApplyPatchResult,
   buildNormalizedExecCommandResult,
@@ -191,9 +192,18 @@ function parseCodexModels(catalog: CodexRecord): ExternalRuntimeModelOption[] {
     const label = text(item.displayName).trim() || text(item.title).trim() || id;
     const thinking = parseCodexModelThinking(item);
     const serviceTiers = parseCodexServiceTiers(item);
+    const rawCtx = typeof item.contextWindow === 'number'
+      ? item.contextWindow
+      : typeof item.maxContextTokens === 'number'
+        ? item.maxContextTokens
+        : typeof item.inputTokenLimit === 'number'
+          ? item.inputTokenLimit
+          : undefined;
+    const contextWindow = rawCtx && Number.isFinite(rawCtx) && rawCtx > 0 ? Math.trunc(rawCtx) : 272_000;
     options.push({
       id,
       label,
+      contextWindow,
       ...(item.isDefault === true ? { isDefault: true } : {}),
       ...(thinking ? { thinking } : {}),
       ...(serviceTiers ? { serviceTiers } : {}),
@@ -840,6 +850,9 @@ export const codexExternalDriver: ExternalAgentDriver = {
           const models = Array.isArray(catalog.data) ? catalog.data.map(record) : [];
           selectedModel = text((models.find(candidate => candidate?.isDefault === true) ?? models[0])?.model);
         }
+        const codexMcpServers = context.mcpServers?.length
+          ? projectMcpServersForCodex(context.mcpServers)
+          : undefined;
         const opened = await server.request(nativeThread ? 'thread/resume' : 'thread/start', {
           approvalPolicy: sandboxSettings.approvalPolicy,
           sandbox: sandboxSettings.sandbox,
@@ -847,6 +860,7 @@ export const codexExternalDriver: ExternalAgentDriver = {
           ...(nativeThread ? { threadId: nativeThread } : { ephemeral: false }),
           ...(selectedModel ? { model: selectedModel } : {}),
           ...(instructions ? { developerInstructions: instructions } : {}),
+          ...(codexMcpServers ? { config: { mcp_servers: codexMcpServers } } : {}),
         }, signal);
         threadId = text(record(opened.thread)?.id);
         if (!threadId || (nativeThread && nativeThread !== threadId)) {
@@ -928,6 +942,7 @@ export const codexExternalDriver: ExternalAgentDriver = {
         pooledServer.setHandlers({});
         checkinPooledExternalSession<PooledCodexSession>(context.conversationId, {
           fingerprint: buildFingerprint(threadId),
+          executablePath: findCodexExecutable(codexConfig?.binaryPath),
           resource: { server: pooledServer, threadId, model: effectiveModel },
           isAlive: () => pooledServer.isAlive(),
           dispose: (force) => pooledServer.close(force),

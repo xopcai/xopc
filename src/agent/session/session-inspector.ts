@@ -45,6 +45,7 @@ import {
   getCachedExternalDefaultModel,
   getExternalAgentDriver,
   getExternalConversationAgent,
+  resolveExternalContextWindow,
 } from '../external/index.js';
 import { getSessionInteractionPolicy } from './interaction-policy.js';
 import type { SessionHydrator } from './session-hydrator.js';
@@ -113,6 +114,11 @@ export class SessionInspector {
   }
 
   private async contextWindowForSession(conversationId: string): Promise<number> {
+    const externalAgent = getExternalConversationAgent(conversationId);
+    if (externalAgent) {
+      const sc = await this.opts.sessionConfigStore.get(conversationId);
+      return resolveExternalContextWindow(externalAgent.execution, sc.modelOverride ?? externalAgent.execution.model);
+    }
     await this.ensureEffectiveSessionModel(conversationId);
     return this.opts.getContextWindow(conversationId);
   }
@@ -194,11 +200,26 @@ export class SessionInspector {
     };
   }
 
-  /** Rough context usage for TUI footer (estimated tokens vs nominal budget). */
+  /** Rough context usage for TUI/Web footer (prefers provider-reported input tokens when available). */
   async contextUsage(conversationId: string): Promise<SessionContextUsage> {
     const messages = await this.opts.sessionStore.load(conversationId);
     const contextWindow = await this.contextWindowForSession(conversationId);
-    const estimatedTokens = await this.opts.sessionStore.estimateTokenUsage(conversationId, messages);
+    let reportedTokens = 0;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i] as { role?: string; usage?: { input?: number; cacheRead?: number; totalTokens?: number } } | undefined;
+      if (msg?.role === 'assistant' && msg.usage) {
+        const input = typeof msg.usage.input === 'number' && Number.isFinite(msg.usage.input) ? msg.usage.input : 0;
+        const cacheRead = typeof msg.usage.cacheRead === 'number' && Number.isFinite(msg.usage.cacheRead) ? msg.usage.cacheRead : 0;
+        const combined = input + cacheRead;
+        if (combined > 0) {
+          reportedTokens = combined;
+          break;
+        }
+      }
+    }
+    const estimatedTokens = reportedTokens > 0
+      ? reportedTokens
+      : await this.opts.sessionStore.estimateTokenUsage(conversationId, messages);
     const usagePercent =
       contextWindow > 0 ? Math.min(100, Math.round((estimatedTokens / contextWindow) * 100)) : null;
     return { estimatedTokens, contextWindow, usagePercent };

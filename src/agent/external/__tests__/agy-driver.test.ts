@@ -367,9 +367,12 @@ it('registers agy driver and runs multi-turn ACP session with resume across SQLi
   expect(outcome?.changeSet?.removed).toBe(1);
 
   const logged = readFileSync(rpcLog, 'utf8').trim().split('\n').map(line => JSON.parse(line));
-  expect(logged.find(entry => entry.method === 'session/new')?.params?._meta).toEqual({
-    antigravity: { systemPrompt: { append: 'Be concise.' } },
-  });
+  const sessionNewMeta = logged.find(entry => entry.method === 'session/new')?.params?._meta as {
+    antigravity?: { systemPrompt?: { append?: string } };
+  } | undefined;
+  expect(sessionNewMeta?.antigravity?.systemPrompt?.append).toContain('Be concise.');
+  expect(sessionNewMeta?.antigravity?.systemPrompt?.append).toContain('<xopc_context>');
+  expect(sessionNewMeta?.antigravity?.systemPrompt?.append).toContain('AGY project');
   expect(logged.find(entry => entry.id === 'perm-1')?.result).toEqual({
     outcome: { outcome: 'selected', optionId: 'opt-once' },
   });

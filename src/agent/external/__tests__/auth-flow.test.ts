@@ -250,7 +250,9 @@ it('completes Codex ChatGPT OAuth flow with callback forwarding, probes account 
   expect(done.phase).toBe('succeeded');
   expect(done.probe?.status).toBe('ready');
   expect(done.probe?.account).toEqual({ label: 'dev@example.com', authMode: 'pro' });
-  expect(done.probe?.models).toEqual([{ id: 'gpt-5.3-codex', label: 'GPT-5.3 Codex', isDefault: true }]);
+  expect(done.probe?.models).toEqual([
+    { id: 'gpt-5.3-codex', label: 'GPT-5.3 Codex', isDefault: true, contextWindow: 272_000 },
+  ]);
 
   const afterLogout = await logoutExternalAgentRuntime({ kind: 'codex', binaryPath: bin });
   expect(afterLogout.status).toBe('unauthenticated');

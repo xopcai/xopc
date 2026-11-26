@@ -6,6 +6,12 @@ import { projectWorkspacePath } from '../../session/session-workspace.js';
 import { readCurrentTranscriptId } from '../../storage/sqlite/session-instance-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import type { CompactionResult } from '../memory/compaction.js';
+import {
+  computeTurnCheckpointDiff,
+  hasTurnCheckpoint,
+  restoreTurnCheckpoint,
+  type TurnCheckpointDiff,
+} from './checkpoint.js';
 import { getExternalAgentDriver } from './registry.js';
 import {
   bindExternalSession,
@@ -136,7 +142,7 @@ export async function forkExternalSession(input: {
 export async function rollbackExternalSession(
   conversationId: string,
   numTurns: number,
-  signal?: AbortSignal,
+  options?: { signal?: AbortSignal; restoreFiles?: boolean; targetTurnId?: string },
 ): Promise<boolean> {
   const resolved = await resolveExternalSessionContext(conversationId);
   if (!resolved) return false;
@@ -144,16 +150,61 @@ export async function rollbackExternalSession(
   if (!driver.rollbackSession) {
     throw new Error(`${driver.label} sessions do not support rolling back turns.`);
   }
-  if (!binding) return true;
-  await driver.rollbackSession({
-    conversationId,
-    execution: agent.execution,
-    cwd: identity.cwd,
-    nativeSessionId: binding.nativeSessionId,
-    instructions: agent.profile?.instructions,
-    numTurns: Math.max(1, Math.trunc(numTurns)),
-    signal,
-  });
-  clearExternalSessionLastInputEntry(identity.transcriptId);
+  if (binding) {
+    await driver.rollbackSession({
+      conversationId,
+      execution: agent.execution,
+      cwd: identity.cwd,
+      nativeSessionId: binding.nativeSessionId,
+      instructions: agent.profile?.instructions,
+      numTurns: Math.max(1, Math.trunc(numTurns)),
+      signal: options?.signal,
+    });
+    clearExternalSessionLastInputEntry(identity.transcriptId);
+  }
+  if (options?.restoreFiles && options.targetTurnId) {
+    await restoreTurnCheckpoint({
+      cwd: identity.cwd,
+      conversationId,
+      turnId: options.targetTurnId,
+      stage: 'before',
+    }).catch(() => {});
+  }
   return true;
+}
+
+async function resolveSessionWorkspaceCwd(conversationId: string): Promise<string> {
+  const project = getProjectForSession(conversationId);
+  const workspace = project && (getExecutionEnvironmentForSession(conversationId)?.rootPath ?? projectWorkspacePath(project));
+  if (!workspace) {
+    throw new Error('Session has no project workspace.');
+  }
+  return realpath(workspace);
+}
+
+/** Read the Git checkpoint diff and availability for a turn in a Project session. */
+export async function getSessionTurnCheckpointDiff(
+  conversationId: string,
+  turnId: string,
+): Promise<{
+  hasBefore: boolean;
+  hasAfter: boolean;
+  diff: TurnCheckpointDiff | null;
+}> {
+  const cwd = await resolveSessionWorkspaceCwd(conversationId);
+  const [{ hasBefore, hasAfter }, diff] = await Promise.all([
+    hasTurnCheckpoint({ cwd, conversationId, turnId }),
+    computeTurnCheckpointDiff({ cwd, conversationId, turnId }),
+  ]);
+  return { hasBefore, hasAfter, diff };
+}
+
+/** Restore the workspace working tree to a turn's `before` or `after` Git checkpoint. */
+export async function restoreSessionTurnCheckpoint(
+  conversationId: string,
+  turnId: string,
+  stage: 'before' | 'after' = 'before',
+): Promise<{ restored: boolean; filesChanged: number; stage: 'before' | 'after' }> {
+  const cwd = await resolveSessionWorkspaceCwd(conversationId);
+  return restoreTurnCheckpoint({ cwd, conversationId, turnId, stage });
 }

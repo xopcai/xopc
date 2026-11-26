@@ -150,7 +150,13 @@ export const MessageList = memo(function MessageList({
     && Boolean(userMessageTurnTarget(list[lastUserIndex]) || (list[lastUserIndex].deliveryStatus === 'failed' && list[lastUserIndex].clientSubmissionId))
     && !currentRound.some(message => message.content.some(part => part.type === 'tool_use'))
     ? () => onRetryUserMessageRound(lastUserIndex) : undefined;
-  const feedback = { turnId: currentOutcome?.turnId, running, error: runError, onRetry: retry };
+  const feedback = {
+    conversationId: conversationId ?? undefined,
+    turnId: currentOutcome?.turnId,
+    running,
+    error: runError,
+    onRetry: retry,
+  };
   const recovering = running && (progress?.stage === 'model_retry' || progress?.stage === 'model_fallback');
 
   const isStreamingRow = (msg: Message, index: number) => Boolean(

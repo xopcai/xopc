@@ -18,6 +18,7 @@ import {
   buildNormalizedExecCommandResult,
   toWorkspaceRelativePath,
 } from '../../presentation.js';
+import { projectMcpServersForClaude } from '../../mcp-bridge.js';
 import {
   checkinPooledExternalSession,
   checkoutPooledExternalSession,
@@ -50,9 +51,9 @@ const DEFAULT_CLAUDE_THINKING: ModelThinkingCapabilities = {
 };
 
 const FALLBACK_CLAUDE_MODELS: ReadonlyArray<ExternalRuntimeModelOption> = [
-  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', isDefault: true, thinking: DEFAULT_CLAUDE_THINKING },
-  { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', thinking: DEFAULT_CLAUDE_THINKING },
-  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', thinking: { mode: 'levels', options: ['low', 'medium', 'high'], initialValue: 'low', supportsAdaptive: false } },
+  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', isDefault: true, contextWindow: 200_000, thinking: DEFAULT_CLAUDE_THINKING },
+  { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', contextWindow: 200_000, thinking: DEFAULT_CLAUDE_THINKING },
+  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', contextWindow: 200_000, thinking: { mode: 'levels', options: ['low', 'medium', 'high'], initialValue: 'low', supportsAdaptive: false } },
 ];
 
 type PooledClaudeSession = {
@@ -114,9 +115,15 @@ function parseClaudeModels(initResponse: ClaudeRecord): ExternalRuntimeModelOpti
           supportsAdaptive: false,
         }
       : DEFAULT_CLAUDE_THINKING;
+    const rawCtx = typeof item.contextWindow === 'number'
+      ? item.contextWindow
+      : typeof item.context_window === 'number'
+        ? item.context_window
+        : undefined;
     options.push({
       id,
       label,
+      contextWindow: rawCtx && Number.isFinite(rawCtx) && rawCtx > 0 ? Math.trunc(rawCtx) : 200_000,
       ...(item.isDefault === true ? { isDefault: true } : {}),
       thinking,
     });
@@ -741,6 +748,12 @@ export const claudeExternalDriver: ExternalAgentDriver = {
         });
 
         await client.requestControl('initialize', {}, signal);
+        const claudeMcpServers = context.mcpServers?.length
+          ? projectMcpServersForClaude(context.mcpServers)
+          : undefined;
+        if (claudeMcpServers) {
+          await client.requestControl('mcp_set_servers', { servers: claudeMcpServers }, signal).catch(() => {});
+        }
         if (signal.aborted) {
           emit({ type: 'turn_done', status: 'interrupted' });
           return;
@@ -789,6 +802,7 @@ export const claudeExternalDriver: ExternalAgentDriver = {
         pooledClient.setHandlers({});
         checkinPooledExternalSession<PooledClaudeSession>(context.conversationId, {
           fingerprint: buildFingerprint(boundId),
+          executablePath: findClaudeExecutable(claudeConfig?.binaryPath),
           resource: {
             client: pooledClient,
             sessionId: boundId,

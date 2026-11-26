@@ -18,6 +18,7 @@ import {
   toWorkspaceRelativePath,
   unwrapShellCommand,
 } from '../presentation.js';
+import { projectMcpServersForAcp } from '../mcp-bridge.js';
 import {
   checkinPooledExternalSession,
   checkoutPooledExternalSession,
@@ -1033,12 +1034,16 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
             const sessionCapabilities = asRecord(agentCapabilities?.sessionCapabilities);
             const metaField = sessionMeta ? { _meta: sessionMeta } : {};
 
+            const acpMcpServers = context.mcpServers?.length
+              ? projectMcpServersForAcp(context.mcpServers)
+              : [];
+
             if (existingBinding?.nativeSessionId) {
               const nativeId = existingBinding.nativeSessionId;
               if (sessionCapabilities?.resume != null) {
                 const resumed = await client!.request(
                   'session/resume',
-                  { sessionId: nativeId, cwd, mcpServers: [], ...metaField },
+                  { sessionId: nativeId, cwd, mcpServers: acpMcpServers, ...metaField },
                   signal,
                 );
                 return { id: str(resumed.sessionId) || nativeId, result: resumed };
@@ -1046,7 +1051,7 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
               if (agentCapabilities?.loadSession === true) {
                 const loaded = await client!.request(
                   'session/load',
-                  { sessionId: nativeId, cwd, mcpServers: [], ...metaField },
+                  { sessionId: nativeId, cwd, mcpServers: acpMcpServers, ...metaField },
                   signal,
                 );
                 return { id: str(loaded.sessionId) || nativeId, result: loaded };
@@ -1056,7 +1061,7 @@ export function createAcpExternalDriver(config: AcpDriverConfig): ExternalAgentD
 
             const created = await client!.request(
               'session/new',
-              { cwd, mcpServers: [], ...metaField },
+              { cwd, mcpServers: acpMcpServers, ...metaField },
               signal,
             );
             const createdId = str(created.sessionId).trim();

@@ -171,6 +171,9 @@ export type ExternalAgentKind = (typeof EXTERNAL_AGENT_KINDS)[number];
 export const EXTERNAL_PERMISSION_MODES = ['full_access', 'auto_edit', 'ask'] as const;
 export type ExternalPermissionMode = (typeof EXTERNAL_PERMISSION_MODES)[number];
 
+export const EXTERNAL_CONTEXT_ACCESS_MODES = ['off', 'brief_only', 'read_only', 'read_write'] as const;
+export type ExternalContextAccess = (typeof EXTERNAL_CONTEXT_ACCESS_MODES)[number];
+
 export const AGY_AUTH_METHODS = ['oauth-personal', 'oauth-business', 'gemini-api-key', 'agent-platform'] as const;
 export type AgyAuthMethod = (typeof AGY_AUTH_METHODS)[number];
 
@@ -181,6 +184,7 @@ export const CodexExecutionSchema = z.object({
   model: z.string().trim().min(1).max(200).optional(),
   serviceTier: z.string().trim().min(1).max(64).optional(),
   permissionMode: z.enum(EXTERNAL_PERMISSION_MODES).optional(),
+  contextAccess: z.enum(EXTERNAL_CONTEXT_ACCESS_MODES).optional(),
 }).strict();
 export type CodexExecution = z.infer<typeof CodexExecutionSchema>;
 
@@ -191,6 +195,7 @@ export const AgyExecutionSchema = z.object({
   authMethod: z.enum(AGY_AUTH_METHODS).optional(),
   model: z.string().trim().min(1).max(200).optional(),
   permissionMode: z.enum(EXTERNAL_PERMISSION_MODES).optional(),
+  contextAccess: z.enum(EXTERNAL_CONTEXT_ACCESS_MODES).optional(),
 }).strict();
 export type AgyExecution = z.infer<typeof AgyExecutionSchema>;
 
@@ -200,6 +205,7 @@ export const ClaudeExecutionSchema = z.object({
   configDir: z.string().trim().min(1).max(500).optional(),
   model: z.string().trim().min(1).max(200).optional(),
   permissionMode: z.enum(EXTERNAL_PERMISSION_MODES).optional(),
+  contextAccess: z.enum(EXTERNAL_CONTEXT_ACCESS_MODES).optional(),
 }).strict();
 export type ClaudeExecution = z.infer<typeof ClaudeExecutionSchema>;
 
