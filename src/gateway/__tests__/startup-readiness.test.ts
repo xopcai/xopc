@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { getActiveExternalMcpGatewayPort, setActiveExternalMcpGatewayPort } from '../../agent/external/mcp-bridge.js';
 import {
   buildStartupUnavailablePayload,
   GatewayReadiness,
@@ -51,6 +52,7 @@ describe('GatewayService startup readiness', () => {
     service.startOutboundProcessor = vi.fn(async () => {});
     service.emit = vi.fn();
     service.getChannelsStatus = vi.fn(() => ({}));
+    service.getEffectiveListenPort = vi.fn(() => 3210);
     service.runExposureAutoStartIfConfigured = vi.fn(async () => {});
     service.applyStartupReadyDelayForTesting = vi.fn(async () => {});
     service.schedulePostReadySidecars = vi.fn();
@@ -58,13 +60,17 @@ describe('GatewayService startup readiness', () => {
     service.lastChannelConnectDeferSource = 'meta';
     service.lastDeferredChannelConnectIds = ['telegram'];
 
+    const previousPort = getActiveExternalMcpGatewayPort();
     const pending = service.onHttpListening();
-    await vi.waitFor(() => expect(service.channelManager.startDeferredConnects).toHaveBeenCalled());
-
-    expect(service.isGatewayReady()).toBe(true);
-
-    finishDeferred();
-    await pending;
+    try {
+      await vi.waitFor(() => expect(service.channelManager.startDeferredConnects).toHaveBeenCalled());
+      expect(service.isGatewayReady()).toBe(true);
+      expect(getActiveExternalMcpGatewayPort()).toBe(3210);
+    } finally {
+      finishDeferred();
+      await pending;
+      setActiveExternalMcpGatewayPort(previousPort);
+    }
   });
 });
 

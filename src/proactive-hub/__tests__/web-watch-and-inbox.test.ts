@@ -66,6 +66,7 @@ describe('Unified FollowUpMatter Loop, Web Sensor Engine, and personal_inbox Too
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(dir, { recursive: true, force: true });
@@ -282,6 +283,7 @@ describe('Unified FollowUpMatter Loop, Web Sensor Engine, and personal_inbox Too
   });
 
   it('enables conversational list, disambiguation, explicit approval guardrails, edit_and_approve execution, and mute via personal_inbox', async () => {
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
     const executeApprovedAction = vi.fn().mockResolvedValue({
       kind: 'approve_draft',
       taskId: 'task-chat-approved-1',

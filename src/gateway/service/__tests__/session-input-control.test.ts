@@ -257,7 +257,7 @@ describe('durable session input control', () => {
     expect(claimNextSessionInput(id, 'duplicate')).toBeUndefined();
   });
 
-  it('rejects an edit prepared before another device resumes, without cancelling the new run', async () => {
+  it('rejects a stale edit after another device resumes and preserves the queued input', async () => {
     appendTranscriptEntry(id, { role: 'user', content: 'old', turnId: 'old' } as never);
     enqueue('next'); acceptSessionInputControl(id, command('pause'));
     const version = readSessionInputControl(id).version;
@@ -270,9 +270,11 @@ describe('durable session input control', () => {
     const replacing = service.replaceLatestTurn({ conversationId: id, targetTurnId: 'old', expectedTranscriptId: transcriptId,
       controlVersion: version, clientMessageId: 'edit', content: 'edited', delivery: 'next', origin }, cleanup);
     await service.control(id, command('resume'));
-    await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    expect(execute).not.toHaveBeenCalled();
+    expect(getSessionInputState(id).inputs).toMatchObject([{ id: 'next', status: 'queued' }]);
     const rejection = expect(replacing).rejects.toThrow('Queue control changed');
     release(); await rejection;
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
     expect(cleanup).not.toHaveBeenCalled();
     expect(getSessionInputState(id).activeRunId).toBeDefined();
     expect(loadTranscriptRowsForSession(id)).toMatchObject([{ content: 'old' }]);
