@@ -1,15 +1,20 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { CheckCircle2, ChevronRight, Clock3, Download, ExternalLink, Laptop, PanelRight, Smartphone, X, type LucideIcon } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock3, Download, ExternalLink, FolderOpen, Laptop, Loader2, PanelRight, RefreshCw, Smartphone, X, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { CopyTextRow } from '@/components/ui/copy-text-row';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TailscaleServeSection } from '@/features/remote-access/tailscale-serve-section';
 import { ReverseProxySection } from '@/features/remote-access/reverse-proxy-section';
+import {
+  fetchBrowserExtensionStatus,
+  installBrowserExtension,
+  openBrowserExtension,
+} from '@/features/settings/browser/browser-control-api';
 import { encodeMobilePairQr } from '@/features/tunnel/mobile-pair-qr';
 import { messages } from '@/i18n/messages';
 import { openExternalHttpLink } from '@/lib/app-link';
@@ -19,10 +24,15 @@ import type { DevicePairingTargetKind } from '@xopcai/gateway-contract';
 import { cn } from '@/lib/cn';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_MODAL_POPOVER_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import {
-  cancelDevicePairingSetup, createDevicePairingSetup, decideDevicePairing, downloadBrowserExtensionArchive,
-  fetchDevicePairingReadiness, fetchDevicePairingSetup, type DevicePairingSetup,
+  cancelDevicePairingSetup, createDevicePairingSetup, decideDevicePairing, DEVICE_PAIRING_READINESS_KEY,
+  downloadBrowserExtensionArchive, fetchDevicePairingReadiness, fetchDevicePairingSetup, type DevicePairingSetup,
 } from './device-access-api';
 import { DevicePairingRouteSetup } from './device-pairing-route-setup';
+
+const WIZARD_DIALOG_CLASS = 'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(600px,calc(100dvh-48px))] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay';
+const LOCAL_BROWSER_SETTINGS_PATH = '/settings/agent-browser?driver=extension&browser-status=1';
+
+type WizardStep = DevicePairingTargetKind | 'local-browser';
 
 export function DevicePairingWizard({ open, onOpenChange, onPaired, targetKind }: {
   open: boolean;
@@ -31,30 +41,47 @@ export function DevicePairingWizard({ open, onOpenChange, onPaired, targetKind }
   targetKind?: DevicePairingTargetKind;
 }) {
   const navigate = useNavigate();
-  const [selectedTarget, setSelectedTarget] = useState<DevicePairingTargetKind | undefined>(targetKind);
-  useEffect(() => { setSelectedTarget(targetKind); }, [targetKind]);
+  const [selectedStep, setSelectedStep] = useState<WizardStep | undefined>(targetKind);
+  useEffect(() => { setSelectedStep(targetKind); }, [targetKind]);
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) setSelectedTarget(targetKind);
+    if (!nextOpen) setSelectedStep(targetKind);
     onOpenChange(nextOpen);
   };
+  const openLocalBrowserSettings = () => {
+    handleOpenChange(false);
+    navigate(LOCAL_BROWSER_SETTINGS_PATH);
+  };
   return <Dialog.Root open={open} onOpenChange={handleOpenChange}>
-    {open ? selectedTarget
-      ? <DevicePairingWizardContent targetKind={selectedTarget} onClose={() => handleOpenChange(false)} onPaired={onPaired} />
-      : <DeviceKindChooser
-          onChoose={setSelectedTarget}
-          onChooseLocalBrowser={() => {
-            handleOpenChange(false);
-            navigate('/settings/agent-browser?driver=extension');
-          }}
+    {open ? selectedStep === 'local-browser'
+      ? <LocalBrowserPairingContent
+          onBack={() => setSelectedStep(undefined)}
+          onSwitchToRemoteBrowser={() => setSelectedStep('browser')}
+          onManageSettings={openLocalBrowserSettings}
           onClose={() => handleOpenChange(false)}
-        /> : null}
+          onPaired={onPaired}
+        />
+      : selectedStep
+        ? <DevicePairingWizardContent
+            targetKind={selectedStep}
+            onBack={targetKind ? undefined : () => setSelectedStep(undefined)}
+            onClose={() => handleOpenChange(false)}
+            onPaired={onPaired}
+          />
+        : <DeviceKindChooser
+            onChoose={setSelectedStep}
+            onChooseLocalBrowser={() => setSelectedStep('local-browser')}
+            onManageLocalBrowser={openLocalBrowserSettings}
+            onClose={() => handleOpenChange(false)}
+          /> : null}
   </Dialog.Root>;
 }
 
-function DeviceChoice({ icon: Icon, title, hint, onClick }: {
+function DeviceChoice({ icon: Icon, title, hint, badge, badgeTone = 'neutral', onClick }: {
   icon: LucideIcon;
   title: string;
   hint: string;
+  badge?: string;
+  badgeTone?: 'accent' | 'success' | 'neutral';
   onClick: () => void;
 }) {
   return <button
@@ -66,7 +93,15 @@ function DeviceChoice({ icon: Icon, title, hint, onClick }: {
       <Icon className="size-5" aria-hidden="true" />
     </span>
     <span className="min-w-0 flex-1">
-      <span className="block text-sm font-semibold text-fg">{title}</span>
+      <span className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold text-fg">{title}</span>
+        {badge ? <span className={cn(
+          'rounded-full px-2 py-0.5 text-[11px] font-medium leading-4',
+          badgeTone === 'accent' && 'bg-accent-soft text-accent-fg',
+          badgeTone === 'success' && 'bg-success-soft text-success',
+          badgeTone === 'neutral' && 'bg-surface-hover text-fg-muted',
+        )}>{badge}</span> : null}
+      </span>
       <span className="mt-0.5 block text-xs leading-5 text-fg-muted">{hint}</span>
     </span>
     <ChevronRight
@@ -76,60 +111,360 @@ function DeviceChoice({ icon: Icon, title, hint, onClick }: {
   </button>;
 }
 
-function DeviceKindChooser({ onChoose, onChooseLocalBrowser, onClose }: {
+function DeviceKindChooser({ onChoose, onChooseLocalBrowser, onManageLocalBrowser, onClose }: {
   onChoose: (target: DevicePairingTargetKind) => void;
   onChooseLocalBrowser: () => void;
+  onManageLocalBrowser: () => void;
   onClose: () => void;
 }) {
   const language = useLocaleStore(s => s.language);
   const copy = messages(language).endpointToolsSettings.deviceAccess;
+  const readiness = useSWR(DEVICE_PAIRING_READINESS_KEY, fetchDevicePairingReadiness, {
+    revalidateOnFocus: true,
+    shouldRetryOnError: false,
+  });
+  const devices = readiness.data?.devices;
+  const localBrowserConnected = devices?.localBrowserConnected === true;
+  const mobileCount = devices?.mobileCount ?? 0;
+  const remoteBrowserCount = devices?.remoteBrowserConnectedCount ?? 0;
+  const loadingInitial = readiness.isLoading && !readiness.data;
+
   return <Dialog.Portal>
     <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)} />
-    <Dialog.Content className={cn('xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(28rem,calc(100dvh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay', SETTINGS_SHELL_CONTENT_Z)}>
+    <Dialog.Content className={cn(WIZARD_DIALOG_CLASS, SETTINGS_SHELL_CONTENT_Z)}>
       <header className="flex shrink-0 items-center justify-between border-b border-edge-subtle px-6 py-3">
         <span className="text-lg font-semibold tracking-tight text-fg">xopc</span>
-        <button type="button" className="flex size-10 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover" aria-label={copy.cancel} onClick={onClose}><X className="size-4" /></button>
+        <button type="button" className="flex size-10 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={copy.cancel} onClick={onClose}><X className="size-4" /></button>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8">
-        <Dialog.Title className="text-lg font-semibold tracking-tight text-fg sm:text-xl">{copy.chooseTitle}</Dialog.Title>
-        <Dialog.Description className="mt-1.5 text-sm leading-6 text-fg-muted">{copy.chooseHint}</Dialog.Description>
-        <div className="mt-5 flex flex-col gap-2.5">
-          <DeviceChoice
-            icon={Laptop}
-            title={copy.localBrowserTitle}
-            hint={copy.localBrowserHint}
-            onClick={onChooseLocalBrowser}
-          />
-          <DeviceChoice
-            icon={Smartphone}
-            title={copy.mobileTitle}
-            hint={copy.mobileHint}
-            onClick={() => onChoose('mobile')}
-          />
-          <DeviceChoice
-            icon={PanelRight}
-            title={copy.remoteBrowserTitle}
-            hint={copy.remoteBrowserHint}
-            onClick={() => onChoose('browser')}
-          />
-        </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7 sm:px-8">
+        <Dialog.Title className="text-xl font-semibold tracking-tight text-fg">{copy.chooseTitle}</Dialog.Title>
+        <Dialog.Description className="mt-2 text-sm leading-6 text-fg-muted">
+          {localBrowserConnected ? copy.chooseHintConnected : copy.chooseHint}
+        </Dialog.Description>
+        {loadingInitial ? (
+          <div className="mt-6 space-y-3" aria-busy="true">
+            <Skeleton className="h-[4.75rem] w-full rounded-xl" />
+            <Skeleton className="h-[4.75rem] w-full rounded-xl" />
+            <Skeleton className="mt-5 h-5 w-2/3 rounded-md" />
+          </div>
+        ) : (
+          <>
+            <div className="mt-6 flex flex-col gap-3">
+              <DeviceChoice
+                icon={Smartphone}
+                title={copy.mobileTitle}
+                hint={mobileCount > 0 ? copy.mobileHintAddAnother : copy.mobileHint}
+                badge={mobileCount > 0
+                  ? copy.connectedCountBadge.replace('{{count}}', String(mobileCount))
+                  : copy.recommendedBadge}
+                badgeTone={mobileCount > 0 ? 'success' : 'accent'}
+                onClick={() => onChoose('mobile')}
+              />
+              {localBrowserConnected ? (
+                <DeviceChoice
+                  icon={PanelRight}
+                  title={copy.remoteBrowserTitle}
+                  hint={copy.remoteBrowserHint}
+                  badge={remoteBrowserCount > 0
+                    ? copy.connectedCountBadge.replace('{{count}}', String(remoteBrowserCount))
+                    : undefined}
+                  badgeTone="neutral"
+                  onClick={() => onChoose('browser')}
+                />
+              ) : (
+                <DeviceChoice
+                  icon={Laptop}
+                  title={copy.localBrowserTitle}
+                  hint={copy.localBrowserHint}
+                  onClick={onChooseLocalBrowser}
+                />
+              )}
+            </div>
+            {!localBrowserConnected ? (
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-edge-subtle pt-4 text-xs text-fg-muted">
+                <span>{copy.remoteBrowserFooterPrompt}</span>
+                <button
+                  type="button"
+                  className="inline-flex cursor-pointer items-center gap-0.5 rounded-md px-1.5 py-1 font-medium text-accent-fg transition-colors hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  onClick={() => onChoose('browser')}
+                >
+                  {copy.remoteBrowserFooterAction}
+                  <ChevronRight className="size-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
+      {localBrowserConnected ? (
+        <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-edge-subtle bg-surface-panel/70 px-6 py-3.5 sm:px-8">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-xs font-medium text-fg">
+              <span className="size-2 shrink-0 rounded-full bg-success" aria-hidden="true" />
+              <span>{copy.localBrowserConnected}</span>
+            </p>
+            <p className="mt-0.5 text-[11px] leading-4 text-fg-subtle">{copy.localBrowserConnectedHint}</p>
+          </div>
+          <Button variant="ghost" className="h-8 shrink-0 gap-1 px-2.5 text-xs text-fg-muted hover:text-fg" onClick={onManageLocalBrowser}>
+            {copy.manageBrowser}
+            <ChevronRight className="size-3.5" aria-hidden="true" />
+          </Button>
+        </footer>
+      ) : null}
     </Dialog.Content>
   </Dialog.Portal>;
 }
 
-function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
-  targetKind: DevicePairingTargetKind;
+function LocalBrowserPairingContent({
+  onBack,
+  onSwitchToRemoteBrowser,
+  onManageSettings,
+  onClose,
+  onPaired,
+}: {
+  onBack: () => void;
+  onSwitchToRemoteBrowser: () => void;
+  onManageSettings: () => void;
   onClose: () => void;
   onPaired?: () => void;
 }) {
+  const { mutate } = useSWRConfig();
+  const language = useLocaleStore(s => s.language);
+  const copy = messages(language).endpointToolsSettings.deviceAccess;
+  const f = copy.flow;
+  const status = useSWR('browser-extension-status', fetchBrowserExtensionStatus, {
+    refreshInterval: 2_000,
+    revalidateOnFocus: true,
+    shouldRetryOnError: false,
+  });
+  const [busyAction, setBusyAction] = useState<'install' | 'chrome' | 'folder' | null>(null);
+  const [actionError, setActionError] = useState<'install' | 'open' | null>(null);
+  const [openedNotice, setOpenedNotice] = useState(false);
+  const delivered = useRef(false);
+
+  const localConnected = status.data?.localConnected === true;
+  const localManagementAvailable = status.data?.localManagementAvailable !== false;
+  const artifacts = status.data?.artifacts;
+  const extensionFilesReady = artifacts?.installed === true && artifacts?.needsRefresh !== true;
+  const nativeHostReady = artifacts?.nativeHost?.installed === true;
+  const needsPrepare = !extensionFilesReady || !nativeHostReady;
+  const needsReload = artifacts?.needsChromeReload === true
+    || (status.data?.socketConnected === true && !status.data?.connected);
+  const loadingInitial = status.isLoading && !status.data;
+
+  useEffect(() => {
+    if (localConnected && !delivered.current) {
+      delivered.current = true;
+      void mutate(DEVICE_PAIRING_READINESS_KEY);
+      onPaired?.();
+    }
+  }, [localConnected, mutate, onPaired]);
+
+  const prepareExtension = async (force = false) => {
+    setBusyAction('install');
+    setActionError(null);
+    setOpenedNotice(false);
+    try {
+      await installBrowserExtension(force);
+      await status.mutate();
+    } catch {
+      setActionError('install');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const openInstallUi = async (action: 'chrome' | 'folder') => {
+    setBusyAction(action);
+    setActionError(null);
+    try {
+      await openBrowserExtension(action);
+      setOpenedNotice(true);
+    } catch {
+      setActionError('open');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const title = localConnected ? copy.localBrowserSuccess : copy.localBrowserFlowTitle;
+  const description = localConnected
+    ? copy.localBrowserSuccessHint
+    : !localManagementAvailable
+      ? copy.localBrowserRemoteOnlyHint
+      : needsReload
+        ? copy.localBrowserReloadHint
+        : !needsPrepare
+          ? copy.localBrowserReadyHint
+          : copy.localBrowserFlowHint;
+
+  return <Dialog.Portal>
+    <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)} />
+    <Dialog.Content className={cn(WIZARD_DIALOG_CLASS, SETTINGS_SHELL_CONTENT_Z)}>
+      <header className="flex shrink-0 items-center justify-between border-b border-edge-subtle px-6 py-3">
+        {!localConnected ? (
+          <button
+            type="button"
+            className="-ml-2 inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-lg px-2 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            onClick={onBack}
+          >
+            <ChevronLeft className="size-4" aria-hidden="true" />
+            <span>{f.back}</span>
+          </button>
+        ) : (
+          <span className="text-lg font-semibold tracking-tight text-fg">xopc</span>
+        )}
+        <button
+          type="button"
+          className="flex size-10 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          aria-label={f.cancel}
+          onClick={onClose}
+        >
+          <X className="size-4" aria-hidden="true" />
+        </button>
+      </header>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-8 py-7">
+        {localConnected ? <CheckCircle2 className="mb-5 size-7 text-success" aria-hidden="true" /> : null}
+        <Dialog.Title className="text-xl font-semibold tracking-tight text-fg">{title}</Dialog.Title>
+        <Dialog.Description className="mt-2 text-sm leading-relaxed text-fg-muted">{description}</Dialog.Description>
+        {actionError === 'install' ? <p role="alert" className="mt-4 text-sm text-danger">{copy.localBrowserInstallFailed}</p> : null}
+        {actionError === 'open' ? <p role="alert" className="mt-4 text-sm text-danger">{copy.localBrowserOpenFailed}</p> : null}
+        {openedNotice && !localConnected ? <p role="status" className="mt-4 rounded-lg bg-surface-inset px-3 py-2 text-xs text-fg-muted">{copy.localBrowserOpenedNotice}</p> : null}
+        {loadingInitial ? (
+          <div className="mt-6 space-y-4" aria-busy="true">
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <Skeleton className="h-14 rounded-xl" />
+              <Skeleton className="h-14 rounded-xl" />
+            </div>
+            <Skeleton className="h-24 w-full rounded-xl" />
+          </div>
+        ) : localConnected ? (
+          <p className="mt-6 text-xs leading-5 text-fg-muted">{copy.localBrowserConnectedHint}</p>
+        ) : !localManagementAvailable ? null : (
+          <>
+            <div className="mt-6 grid gap-2.5 sm:grid-cols-2">
+              <div className="rounded-xl bg-surface-inset px-3.5 py-2.5">
+                <p className="text-xs text-fg-subtle">{copy.localBrowserStatusFiles}</p>
+                <p className={cn('mt-1 flex items-center gap-1.5 text-sm font-medium', !needsPrepare ? 'text-success' : 'text-fg')}>
+                  <span className={cn('size-1.5 rounded-full', !needsPrepare ? 'bg-success' : 'bg-warning')} aria-hidden="true" />
+                  {!needsPrepare ? copy.localBrowserStatusReady : copy.localBrowserStatusPending}
+                </p>
+              </div>
+              <div className="rounded-xl bg-surface-inset px-3.5 py-2.5">
+                <p className="text-xs text-fg-subtle">{copy.localBrowserStatusConnection}</p>
+                <p className={cn('mt-1 flex items-center gap-1.5 text-sm font-medium', needsReload ? 'text-warning' : 'text-fg-muted')}>
+                  <span className={cn('size-1.5 rounded-full', needsReload ? 'bg-warning' : 'bg-fg-subtle')} aria-hidden="true" />
+                  {needsReload ? copy.localBrowserStatusReload : copy.localBrowserStatusWaiting}
+                </p>
+              </div>
+            </div>
+            {needsPrepare ? (
+              <ol className="mt-6 space-y-3 text-sm leading-6 text-fg-muted">
+                <li><span className="mr-2 text-fg-subtle">1.</span>{copy.localBrowserPrepareStep1}</li>
+                <li><span className="mr-2 text-fg-subtle">2.</span>{copy.localBrowserPrepareStep2}</li>
+              </ol>
+            ) : (
+              <>
+                <ol className="mt-6 space-y-2.5 text-sm leading-6 text-fg-muted">
+                  <li><span className="mr-2 text-fg-subtle">1.</span>{copy.localBrowserLoadStep1}</li>
+                  <li><span className="mr-2 text-fg-subtle">2.</span>{copy.localBrowserLoadStep2}</li>
+                  <li><span className="mr-2 text-fg-subtle">3.</span>{copy.localBrowserLoadStep3}</li>
+                </ol>
+                {artifacts?.extensionDir ? (
+                  <p className="mt-4 break-all rounded-lg bg-surface-inset px-3 py-2 font-mono text-[11px] text-fg-subtle">
+                    {artifacts.extensionDir}
+                  </p>
+                ) : null}
+              </>
+            )}
+          </>
+        )}
+      </div>
+      <footer className="shrink-0 space-y-2 border-t border-edge-subtle px-8 py-5">
+        {localConnected ? (
+          <div className="flex flex-col gap-2">
+            <Button className="w-full" variant="primary" onClick={onClose}>{f.done}</Button>
+            <Button className="w-full" variant="ghost" onClick={onManageSettings}>
+              {copy.manageBrowser}
+              <ChevronRight className="size-3.5" aria-hidden="true" />
+            </Button>
+          </div>
+        ) : !localManagementAvailable ? (
+          <Button className="w-full" variant="primary" onClick={onSwitchToRemoteBrowser}>
+            {copy.localBrowserSwitchRemote}
+          </Button>
+        ) : needsPrepare ? (
+          <Button
+            className="w-full"
+            variant="primary"
+            disabled={busyAction !== null || loadingInitial}
+            onClick={() => void prepareExtension(Boolean(artifacts?.installed))}
+          >
+            {busyAction === 'install' ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
+            {busyAction === 'install' ? copy.localBrowserPreparing : copy.localBrowserPrepareAction}
+          </Button>
+        ) : (
+          <>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                className="w-full"
+                variant="primary"
+                disabled={busyAction !== null}
+                onClick={() => void openInstallUi('chrome')}
+              >
+                {busyAction === 'chrome' ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <ExternalLink className="size-4" aria-hidden="true" />}
+                {copy.localBrowserOpenChrome}
+              </Button>
+              <Button
+                className="w-full"
+                variant="secondary"
+                disabled={busyAction !== null}
+                onClick={() => void openInstallUi('folder')}
+              >
+                {busyAction === 'folder' ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FolderOpen className="size-4" aria-hidden="true" />}
+                {copy.localBrowserOpenFolder}
+              </Button>
+            </div>
+            <div className="flex items-center justify-between pt-1 text-xs">
+              <button
+                type="button"
+                className="inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
+                disabled={busyAction !== null}
+                onClick={() => void prepareExtension(true)}
+              >
+                <RefreshCw className={cn('size-3', busyAction === 'install' && 'animate-spin')} aria-hidden="true" />
+                {copy.localBrowserRefreshFiles}
+              </button>
+              <button
+                type="button"
+                className="inline-flex cursor-pointer items-center gap-0.5 rounded-md px-1.5 py-1 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+                onClick={onManageSettings}
+              >
+                {copy.manageBrowser}
+                <ChevronRight className="size-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          </>
+        )}
+      </footer>
+    </Dialog.Content>
+  </Dialog.Portal>;
+}
+
+function DevicePairingWizardContent({ targetKind, onBack, onClose, onPaired }: {
+  targetKind: DevicePairingTargetKind;
+  onBack?: () => void;
+  onClose: () => void;
+  onPaired?: () => void;
+}) {
+  const { mutate } = useSWRConfig();
   const language = useLocaleStore(s => s.language);
   const m = messages(language);
   const copy = m.endpointToolsSettings.deviceAccess;
   const f = copy.flow;
   const [started, setStarted] = useState(targetKind === 'mobile');
   const [downloadOpen, setDownloadOpen] = useState(false);
-  const readiness = useSWR(started ? 'device-pairing-readiness' : null, fetchDevicePairingReadiness, { refreshInterval: 1500 });
+  const readiness = useSWR(started ? DEVICE_PAIRING_READINESS_KEY : null, fetchDevicePairingReadiness, { refreshInterval: 1500 });
   const [setup, setSetup] = useState<DevicePairingSetup>();
   const [error, setError] = useState<'create' | 'decision' | 'background' | 'download' | null>(null);
   const [busy, setBusy] = useState(false);
@@ -177,7 +512,13 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
   useEffect(() => {
     if (readiness.data?.ready && !setup && error !== 'create' && !creating.current) void create();
   }, [readiness.data, setup, error, create]);
-  useEffect(() => { if (connected && !delivered.current) { delivered.current = true; onPaired?.(); } }, [connected, onPaired]);
+  useEffect(() => {
+    if (connected && !delivered.current) {
+      delivered.current = true;
+      void mutate(DEVICE_PAIRING_READINESS_KEY);
+      onPaired?.();
+    }
+  }, [connected, mutate, onPaired]);
   const decide = async (decision: 'approve' | 'reject') => {
     if (!request) return;
     setBusy(true); setError(null);
@@ -205,7 +546,20 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
   };
   const preparationTitle = copy.browserPrepareTitle;
   const preparationHint = copy.browserPrepareHint;
-  const title = !started ? preparationTitle : connected ? targetCopy.success : request?.status === 'pending' ? targetCopy.allowTitle : credentialsCommitted || request?.status === 'approved' ? f.waiting : setup ? targetCopy.connect : f.title;
+  const needsRouteSetup = Boolean(started && readiness.data && !readiness.data.ready && !setup && !connected && !request && !ended && !expired);
+  const title = !started
+    ? preparationTitle
+    : connected
+      ? targetCopy.success
+      : request?.status === 'pending'
+        ? targetCopy.allowTitle
+        : credentialsCommitted || request?.status === 'approved'
+          ? f.waiting
+          : setup
+            ? targetCopy.connect
+            : needsRouteSetup
+              ? copy.routeSetupTitle
+              : f.title;
   const errorMessage = error === 'create' ? f.createFailed
     : error === 'decision' ? f.decisionFailed
       : error === 'background' ? f.backgroundFailed
@@ -219,9 +573,20 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
   };
   return <Dialog.Portal>
     <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)} />
-    <Dialog.Content className={cn('xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(600px,calc(100dvh-48px))] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay', SETTINGS_SHELL_CONTENT_Z)}>
+    <Dialog.Content className={cn(WIZARD_DIALOG_CLASS, SETTINGS_SHELL_CONTENT_Z)}>
       <header className="flex shrink-0 items-center justify-between border-b border-edge-subtle px-6 py-3">
-        <span className="text-lg font-semibold tracking-tight text-fg">xopc</span>
+        {onBack && !connected ? (
+          <button
+            type="button"
+            className="-ml-2 inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-lg px-2 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            onClick={onBack}
+          >
+            <ChevronLeft className="size-4" aria-hidden="true" />
+            <span>{f.back}</span>
+          </button>
+        ) : (
+          <span className="text-lg font-semibold tracking-tight text-fg">xopc</span>
+        )}
         <div className="flex items-center gap-2">
           {targetKind === 'mobile' ? <Popover.Root open={downloadOpen} onOpenChange={setDownloadOpen}>
             <Popover.Trigger asChild>
@@ -247,9 +612,30 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
       </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-8 py-7">
         {connected ? <CheckCircle2 className="mb-5 size-7 text-success" /> : null}
+        {needsRouteSetup ? (
+          <div className="mb-4 flex flex-wrap items-center gap-1.5 text-xs font-medium" aria-label={copy.stepOne}>
+            <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-accent-fg">{copy.stepSetupRoute}</span>
+            <ChevronRight className="size-3.5 text-fg-subtle" aria-hidden="true" />
+            <span className="rounded-full bg-surface-hover px-2.5 py-0.5 text-fg-muted">
+              {targetKind === 'mobile' ? copy.stepMobileScan : copy.stepBrowserInvite}
+            </span>
+          </div>
+        ) : null}
         <Dialog.Title className="text-xl font-semibold tracking-tight text-fg">{title}</Dialog.Title>
         <Dialog.Description className="mt-2 text-sm leading-relaxed text-fg-muted">
-          {!started ? preparationHint : connected ? targetCopy.successHint : credentialsCommitted ? f.waitingForDevice : request ? request.displayName : setup ? targetCopy.connectHint : f.intro}
+          {!started
+            ? preparationHint
+            : connected
+              ? targetCopy.successHint
+              : credentialsCommitted
+                ? f.waitingForDevice
+                : request
+                  ? request.displayName
+                  : setup
+                    ? targetCopy.connectHint
+                    : needsRouteSetup
+                      ? copy.routeSetupReturnHint
+                      : f.intro}
         </Dialog.Description>
         {errorMessage ? <p role="alert" className="mt-4 text-sm text-danger">{errorMessage}</p> : null}
         {started && readiness.error ? <p role="alert" className="mt-4 text-sm text-danger">{f.readinessFailed}</p> : null}

@@ -21,17 +21,33 @@ export type DevicePairingCreation =
   | { kind: 'ready'; setup: DevicePairingSetup }
   | { kind: 'needs-secure-route' };
 
+export type DevicePairingDevicesSummary = {
+  mobileCount: number;
+  mobileOnlineCount: number;
+  localBrowserConnected: boolean;
+  browserConnectedCount: number;
+  remoteBrowserConnectedCount: number;
+};
+
 export type DevicePairingReadiness = {
   protocolVersion: 3;
   ready: boolean;
   routes: DevicePairingSetup['routes'];
+  devices?: DevicePairingDevicesSummary;
 };
+
+export const DEVICE_PAIRING_READINESS_KEY = 'device-pairing-readiness';
 
 export async function fetchDevicePairingReadiness(): Promise<DevicePairingReadiness> {
   const response = await fetchJson<{ ok: true } & DevicePairingReadiness>(
     apiUrl('/api/device-pairing/readiness'),
   );
-  return { ready: response.ready, routes: response.routes, protocolVersion: response.protocolVersion };
+  return {
+    ready: response.ready,
+    routes: response.routes,
+    protocolVersion: response.protocolVersion,
+    ...(response.devices ? { devices: response.devices } : {}),
+  };
 }
 
 export async function createDevicePairingSetup(targetKind: DevicePairingTargetKind): Promise<DevicePairingCreation> {

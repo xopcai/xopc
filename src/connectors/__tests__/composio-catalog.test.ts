@@ -110,7 +110,7 @@ describe('Composio agent-ready catalog', () => {
 
     expect(definition('gmail').understanding).toEqual({
       mode: 'activity',
-      bootstrapWindowDays: 30,
+      bootstrapWindowDays: 180,
       readOnly: true,
     });
     expect(definition('github').understanding?.mode).toBe('activity');

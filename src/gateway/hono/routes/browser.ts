@@ -24,6 +24,8 @@ interface ExtensionStatusPayload {
   running: boolean;
   socketConnected: boolean;
   connected: boolean;
+  localConnected: boolean;
+  localManagementAvailable: boolean;
   driverKind: 'extension';
   protocolVersion: number | null;
   expectedProtocolVersion: number | null;
@@ -53,6 +55,7 @@ async function extensionStatus(
     .sort((left, right) => right.lastHeartbeatAt - left.lastHeartbeatAt);
   const endpoint = endpoints[0];
   const connected = endpoints.length > 0;
+  const localConnected = endpoints.some((item) => item.localTransport === true);
   const extensionVersion = endpoint?.appVersion ?? null;
 
   const doctor = includeLocalArtifacts
@@ -68,6 +71,8 @@ async function extensionStatus(
     running: true,
     socketConnected: connected,
     connected,
+    localConnected,
+    localManagementAvailable: includeLocalArtifacts,
     driverKind: 'extension',
     protocolVersion: connected ? BROWSER_EXTENSION_PROTOCOL_VERSION : null,
     expectedProtocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,

@@ -1,4 +1,4 @@
-import { Monitor } from 'lucide-react';
+import { Monitor, Plus } from 'lucide-react';
 import { useState } from 'react';
 import useSWR from 'swr';
 
@@ -9,6 +9,7 @@ import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 import { ArtifactTransfer } from './artifact-transfer';
+import { DevicePairingWizard } from './device-pairing-wizard';
 
 type Target = { endpointId: string; principalId: string; connectionId: string; expiresAt: number };
 
@@ -24,8 +25,11 @@ export function ExecutionDevicePicker({ conversationId, disabled }: { conversati
   const devices = useSWR(path ? managedDevicesKey() : null, fetchManagedDevices, { refreshInterval: 30_000, shouldRetryOnError: false });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
+  const [pairingOpen, setPairingOpen] = useState(false);
   if (!path) return null;
-  const options: import('@/components/ui/popover-select').PopoverSelectOption[] = (devices.data ?? []).filter(device => !device.principal?.revokedAt && !device.access?.revokedAt).flatMap(device =>
+  const activeDevices = (devices.data ?? []).filter(device => !device.principal?.revokedAt && !device.access?.revokedAt);
+  const hasMobile = activeDevices.some(device => device.kind === 'mobile');
+  const options: import('@/components/ui/popover-select').PopoverSelectOption[] = activeDevices.flatMap(device =>
     device.endpoints.map(endpoint => ({ value: endpoint.endpointId, label: `${device.displayName} · ${device.platform}` })));
   const selected = target.data;
   const device = (devices.data ?? []).find(device => device.id === selected?.principalId);
@@ -50,6 +54,21 @@ export function ExecutionDevicePicker({ conversationId, disabled }: { conversati
         } catch { setError(true); await target.mutate(); }
         finally { setSaving(false); }
       }} />}
+    {!devices.isLoading && !devices.error && !hasMobile && !disabled ? (
+      <button
+        type="button"
+        className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        onClick={() => setPairingOpen(true)}
+      >
+        <Plus className="size-3.5 shrink-0" aria-hidden />
+        <span>{zh ? '连接手机或 Chrome' : 'Connect phone or Chrome'}</span>
+      </button>
+    ) : null}
+    <DevicePairingWizard
+      open={pairingOpen}
+      onOpenChange={setPairingOpen}
+      onPaired={() => void devices.mutate()}
+    />
     {conversationId && selected && !unavailable && !disabled ? <ArtifactTransfer key={selected.connectionId}
       conversationId={conversationId} deviceName={device?.displayName ?? selected.endpointId} zh={zh} /> : null}
     {error ? <span role="alert" className="text-xs text-danger">{zh ? '无法更改设备，请先结束正在进行的操作并重试。' : 'Unable to change device. Finish active operations and retry.'}</span> : null}

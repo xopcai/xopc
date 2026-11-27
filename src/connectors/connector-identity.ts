@@ -70,7 +70,7 @@ export function connectorIdentityKey(
     const enterpriseId = text(identity, ['enterpriseId', 'enterprise_id']) ?? '-';
     return `slack:${enterpriseId}:${workspaceId}:${subjectId}`;
   }
-  if (normalizedToolkit === 'gmail' || normalizedToolkit === 'googledrive') {
+  if (normalizedToolkit === 'gmail' || normalizedToolkit === 'googledrive' || normalizedToolkit === 'googlecalendar') {
     const email = text(identity, ['email']);
     return email ? `${normalizedToolkit}:${email.toLowerCase()}` : undefined;
   }

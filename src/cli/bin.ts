@@ -42,6 +42,8 @@ if (foregroundGateway && existsSync(new URL('chunks.json', bundles))) {
   }
 }
 if (foregroundGateway) enableCompileCache();
+const { registerPiOAuthPageHook } = await import('../auth/oauth/pi-oauth-page-hook.js');
+registerPiOAuthPageHook();
 await import('../infra/http-proxy-env.js');
 if (foregroundGateway) {
   const { tryRunGatewayRunFastPath } = await import('./gateway-run-fast-path.js');

@@ -9,9 +9,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase,
+  createDevice,
   getDevice,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
+  revokeDevice,
 } from '../../../../storage/sqlite/index.js';
 import { registerDeviceAuthPublicRoutes, registerDeviceRoutes } from '../devices.js';
 import type { AuthenticatedRouteDeps } from '../deps.js';
@@ -141,6 +143,74 @@ describe('device pairing routes', () => {
     expect(result.request.status).toBe('completed');
     expect(getDevice(result.request.deviceId)?.scopes).not.toContain('gateway.admin');
     expect(result.tokens).toBeUndefined();
+  });
+
+  it('reports local vs remote Chrome and active mobile counts in pairing readiness', async () => {
+    const mobileKeys = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const mobileActive = createDevice({
+      displayName: 'Pixel',
+      platform: 'android',
+      publicKeyJwk: mobileKeys.publicKey.export({ format: 'jwk' }),
+      scopes: ['sessions.read'],
+    });
+    const mobileRevoked = createDevice({
+      displayName: 'Old Phone',
+      platform: 'ios',
+      publicKeyJwk: mobileKeys.publicKey.export({ format: 'jwk' }),
+      scopes: ['sessions.read'],
+    });
+    revokeDevice(mobileRevoked.id);
+
+    let endpoints: Array<{ kind: string; principalId: string; localTransport?: true }> = [
+      { kind: 'browser', principalId: 'remote-chrome-1' },
+      { kind: 'mobile', principalId: mobileActive.id },
+    ];
+    const readinessApp = new Hono();
+    registerDeviceRoutes(readinessApp, {
+      service: {
+        currentConfig: { gateway: { publicUrl: 'https://gateway.example.com' } },
+        realtime: { disconnectPrincipal() {} },
+        endpointTools: { registry: { list: () => endpoints } },
+      },
+    } as unknown as AuthenticatedRouteDeps);
+
+    const remoteOnly = await (await readinessApp.request('/api/device-pairing/readiness')).json() as {
+      devices: {
+        mobileCount: number;
+        mobileOnlineCount: number;
+        localBrowserConnected: boolean;
+        browserConnectedCount: number;
+        remoteBrowserConnectedCount: number;
+      };
+    };
+    expect(remoteOnly.devices).toEqual({
+      mobileCount: 1,
+      mobileOnlineCount: 1,
+      localBrowserConnected: false,
+      browserConnectedCount: 1,
+      remoteBrowserConnectedCount: 1,
+    });
+
+    endpoints = [
+      { kind: 'browser', principalId: 'remote-chrome-1' },
+      { kind: 'browser', principalId: 'local-chrome-1', localTransport: true },
+    ];
+    const withLocal = await (await readinessApp.request('/api/device-pairing/readiness')).json() as {
+      devices: {
+        mobileCount: number;
+        mobileOnlineCount: number;
+        localBrowserConnected: boolean;
+        browserConnectedCount: number;
+        remoteBrowserConnectedCount: number;
+      };
+    };
+    expect(withLocal.devices).toEqual({
+      mobileCount: 1,
+      mobileOnlineCount: 0,
+      localBrowserConnected: true,
+      browserConnectedCount: 2,
+      remoteBrowserConnectedCount: 1,
+    });
   });
 
 });

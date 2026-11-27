@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
+import type { DevicePairingDevicesSummary } from '@/features/endpoint-tools/device-access-api';
 import type { StoredLanguage } from '@/lib/storage';
 import { cn } from '@/lib/cn';
 import { helpDocsHomeUrl } from '@/navigation';
@@ -74,12 +75,14 @@ export function SidebarAppMenu({
   onAboutClick,
   onSupportClick,
   onDeviceConnectClick,
+  deviceSummary,
 }: {
   onNavigate?: () => void;
   /** Open About dialog; parent should close the app menu popover when handling this. */
   onAboutClick?: () => void;
   onSupportClick?: () => void;
   onDeviceConnectClick?: () => void;
+  deviceSummary?: DevicePairingDevicesSummary;
 }) {
   const [openFlyout, setOpenFlyout] = useState<FlyoutId | null>(null);
   const [petState, setPetState] = useState<DesktopPetState | null>(null);
@@ -277,6 +280,14 @@ export function SidebarAppMenu({
       >
         <MonitorSmartphone className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
         <span className="min-w-0 flex-1 text-left">{m.endpointToolsSettings.deviceAccess.flow.title}</span>
+        <span className="max-w-24 shrink-0 truncate text-xs font-medium text-fg-subtle">
+          {deviceSummary && (deviceSummary.mobileCount + deviceSummary.browserConnectedCount) > 0
+            ? m.endpointToolsSettings.deviceAccess.menuDeviceHintCount.replace(
+              '{{count}}',
+              String(deviceSummary.mobileCount + deviceSummary.browserConnectedCount),
+            )
+            : m.endpointToolsSettings.deviceAccess.menuDeviceHintUnpaired}
+        </span>
       </button>
 
       <div className="my-2 h-px bg-edge-subtle" role="separator" />

@@ -930,8 +930,9 @@ export function UserModelPage() {
         </div>
       ),
     });
-    return clearPageHeader;
-  }, [clearPageHeader, refreshBusy, refreshFeedback, refreshLabel, refreshUserModel, setPageHeader, setView, t, view]);
+  }, [refreshBusy, refreshFeedback, refreshLabel, refreshUserModel, setPageHeader, setView, t, view]);
+
+  useEffect(() => clearPageHeader, [clearPageHeader]);
 
   const act = async (id: string, operation: () => Promise<unknown>) => {
     setBusy(id);

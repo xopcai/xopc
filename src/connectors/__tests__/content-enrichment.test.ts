@@ -112,4 +112,46 @@ describe('connected content enrichment', () => {
       agentId: 'main',
     })).rejects.toThrow('Select between 1 and 5 source items.');
   });
+
+  it('ranks owned recent high-signal documents ahead of older unowned files and supports Slides/Sheets', () => {
+    const oldMisc = upsertKnowledgeSourceItems([{
+      sourceInstanceId: 'composio:composio-googledrive:drive-work',
+      collectionScope: 'files',
+      externalId: 'doc-old',
+      itemType: 'cloud_document',
+      occurredAt: '2025-01-01T00:00:00.000Z',
+      sourceUpdatedAt: '2025-01-01T00:00:00.000Z',
+      contentHash: 'h-old',
+      normalizedText: JSON.stringify({ title: 'Random export.csv', mimeType: 'text/csv' }),
+      metadata: {
+        connectorId: 'composio-googledrive', connectionId: 'drive-work', toolkit: 'googledrive',
+        agentId: 'main', workspaceId: 'workspace-main', mimeType: 'text/csv', actorAttributed: false,
+      },
+      sensitivity: 'personal',
+      retentionClass: 'bounded',
+      synthesisPipeline: 'connected_knowledge',
+      synthesisStatus: 'ignored',
+    }]).items[0]!;
+    const okrDoc = upsertKnowledgeSourceItems([{
+      sourceInstanceId: 'composio:composio-googledrive:drive-work',
+      collectionScope: 'files',
+      externalId: 'doc-okr',
+      itemType: 'cloud_document',
+      occurredAt: new Date().toISOString(),
+      sourceUpdatedAt: new Date().toISOString(),
+      contentHash: 'h-okr',
+      normalizedText: JSON.stringify({ title: 'Q4 Roadmap & OKR Planning', mimeType: 'application/vnd.google-apps.presentation' }),
+      metadata: {
+        connectorId: 'composio-googledrive', connectionId: 'drive-work', toolkit: 'googledrive',
+        agentId: 'main', workspaceId: 'workspace-main', mimeType: 'application/vnd.google-apps.presentation', actorAttributed: true,
+      },
+      sensitivity: 'personal',
+      retentionClass: 'bounded',
+      synthesisPipeline: 'connected_knowledge',
+      synthesisStatus: 'ignored',
+    }]).items[0]!;
+
+    const ranked = listConnectedContentCandidates({ agentId: 'main', limit: 10 });
+    expect(ranked.map((item) => item.sourceItemId)).toEqual([okrDoc.id, oldMisc.id]);
+  });
 });

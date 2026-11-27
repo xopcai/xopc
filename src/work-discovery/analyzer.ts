@@ -34,10 +34,15 @@ const LIGHTWEIGHT_SIGNAL_SOURCES = new Set([
 const WRITING_SOURCE_WEIGHT: Record<string, number> = {
   'local-ai-instructions': 4.0,
   'local-obsidian': 3.2,
+  'connector:gmail': 3.2,
   'local-markdown-notes': 3.0,
   'apple-notes': 3.0,
+  'connector:googledrive': 2.8,
   'local-recent-files': 2.2,
   'apple-mail': 2.0,
+  'connector:github': 2.0,
+  'connector:linear': 1.8,
+  'connector:googlecalendar': 1.0,
 };
 
 function extractText(content: unknown): string {
@@ -148,12 +153,19 @@ function parsePersonalDomain(value: unknown): PersonalDomain | undefined {
     : undefined;
 }
 
-function sourceIdsFromRefs(refs: readonly string[] | undefined): string[] {
+function sourceIdsFromRefs(
+  refs: readonly string[] | undefined,
+  refToSourceId?: ReadonlyMap<string, string>,
+): string[] {
   if (!refs?.length) return [];
-  return [...new Set(refs.map((ref) => ref.split('://', 1)[0]).filter((id): id is string => Boolean(id)))];
+  return [...new Set(refs.map((ref) => refToSourceId?.get(ref) ?? ref.split('://', 1)[0]).filter((id): id is string => Boolean(id)))];
 }
 
-function validateProfileCandidate(value: unknown, allowedRefs?: Set<string>): WorkDiscoveryProfileCandidate | null {
+function validateProfileCandidate(
+  value: unknown,
+  allowedRefs?: Set<string>,
+  refToSourceId?: ReadonlyMap<string, string>,
+): WorkDiscoveryProfileCandidate | null {
   if (!value || typeof value !== 'object') return null;
   const item = value as Record<string, unknown>;
   const category = item.category === 'role'
@@ -176,7 +188,7 @@ function validateProfileCandidate(value: unknown, allowedRefs?: Set<string>): Wo
     ? strings(item.evidenceRefs, 16).filter((ref) => allowedRefs.has(ref))
     : undefined;
   if (allowedRefs && !evidenceRefs?.length) return null;
-  const sourceIds = sourceIdsFromRefs(evidenceRefs);
+  const sourceIds = sourceIdsFromRefs(evidenceRefs, refToSourceId);
   const domain = parsePersonalDomain(item.domain);
   return {
     id: randomUUID(),
@@ -192,7 +204,11 @@ function validateProfileCandidate(value: unknown, allowedRefs?: Set<string>): Wo
   };
 }
 
-function validateWritingStyleCandidate(value: unknown, allowedRefs: Set<string>): WritingStyleCandidate | null {
+function validateWritingStyleCandidate(
+  value: unknown,
+  allowedRefs: Set<string>,
+  refToSourceId?: ReadonlyMap<string, string>,
+): WritingStyleCandidate | null {
   if (!value || typeof value !== 'object') return null;
   const item = value as Record<string, unknown>;
   const rawDim = typeof item.dimension === 'string' ? item.dimension.trim().toLocaleLowerCase() : '';
@@ -202,7 +218,7 @@ function validateWritingStyleCandidate(value: unknown, allowedRefs: Set<string>)
   if (statement.length < 6) return null;
   const evidenceRefs = strings(item.evidenceRefs, 12).filter((ref) => allowedRefs.has(ref));
   if (!evidenceRefs.length) return null;
-  const sourceIds = sourceIdsFromRefs(evidenceRefs);
+  const sourceIds = sourceIdsFromRefs(evidenceRefs, refToSourceId);
   const rawKey = typeof item.factKey === 'string' && item.factKey.trim()
     ? item.factKey.trim().toLocaleLowerCase()
     : `writing:${dimension}`;
@@ -221,7 +237,11 @@ function validateWritingStyleCandidate(value: unknown, allowedRefs: Set<string>)
   };
 }
 
-function validateWorkThreadCandidate(value: unknown, allowedRefs: Set<string>): WorkUnderstandingThreadCandidate | null {
+function validateWorkThreadCandidate(
+  value: unknown,
+  allowedRefs: Set<string>,
+  refToSourceId?: ReadonlyMap<string, string>,
+): WorkUnderstandingThreadCandidate | null {
   if (!value || typeof value !== 'object') return null;
   const item = value as Record<string, unknown>;
   if (typeof item.title !== 'string' || typeof item.summary !== 'string') return null;
@@ -241,7 +261,7 @@ function validateWorkThreadCandidate(value: unknown, allowedRefs: Set<string>): 
     || `thread-${randomUUID().slice(0, 8)}`;
   const evidenceRefs = strings(item.evidenceRefs, 16).filter((ref) => allowedRefs.has(ref));
   if (!evidenceRefs.length) return null;
-  const sourceIds = sourceIdsFromRefs(evidenceRefs);
+  const sourceIds = sourceIdsFromRefs(evidenceRefs, refToSourceId);
   const recommendedFirstStep = typeof item.recommendedFirstStep === 'string' && item.recommendedFirstStep.trim()
     ? item.recommendedFirstStep.trim().slice(0, 300)
     : undefined;
@@ -542,6 +562,8 @@ export interface UnderstandingBudgetProfile {
   maxPerSourceChars: number;
   maxBatchChars: number;
   maxBatchItems: number;
+  maxItems: number;
+  maxPerItemChars: number;
   maxWritingSamples: number;
   maxWritingSampleChars: number;
 }
@@ -550,31 +572,49 @@ export function resolveUnderstandingBudgets(contextWindow?: number): Understandi
   const window = typeof contextWindow === 'number' && Number.isFinite(contextWindow) ? contextWindow : 128_000;
   if (window <= 32_768) {
     return {
-      maxTotalChars: 36_000,
-      maxPerSourceChars: 14_000,
-      maxBatchChars: 14_000,
-      maxBatchItems: 18,
-      maxWritingSamples: 6,
-      maxWritingSampleChars: 2_000,
+      maxTotalChars: 48_000,
+      maxPerSourceChars: 20_000,
+      maxBatchChars: 16_000,
+      maxBatchItems: 20,
+      maxItems: 180,
+      maxPerItemChars: 2_000,
+      maxWritingSamples: 8,
+      maxWritingSampleChars: 2_200,
     };
   }
   if (window <= 65_536) {
     return {
-      maxTotalChars: 72_000,
-      maxPerSourceChars: 28_000,
-      maxBatchChars: 24_000,
-      maxBatchItems: 22,
-      maxWritingSamples: 10,
+      maxTotalChars: 100_000,
+      maxPerSourceChars: 45_000,
+      maxBatchChars: 28_000,
+      maxBatchItems: 26,
+      maxItems: 260,
+      maxPerItemChars: 2_800,
+      maxWritingSamples: 12,
       maxWritingSampleChars: 2_800,
     };
   }
+  if (window <= 131_072) {
+    return {
+      maxTotalChars: 180_000,
+      maxPerSourceChars: 75_000,
+      maxBatchChars: 38_000,
+      maxBatchItems: 34,
+      maxItems: 360,
+      maxPerItemChars: 3_500,
+      maxWritingSamples: 18,
+      maxWritingSampleChars: 3_400,
+    };
+  }
   return {
-    maxTotalChars: 110_000,
-    maxPerSourceChars: 40_000,
-    maxBatchChars: 32_000,
-    maxBatchItems: 28,
-    maxWritingSamples: 14,
-    maxWritingSampleChars: 3_200,
+    maxTotalChars: 280_000,
+    maxPerSourceChars: 110_000,
+    maxBatchChars: 48_000,
+    maxBatchItems: 40,
+    maxItems: 500,
+    maxPerItemChars: 4_000,
+    maxWritingSamples: 24,
+    maxWritingSampleChars: 4_000,
   };
 }
 
@@ -620,7 +660,9 @@ function selectWritingSamples(
   items: BoundedUnderstandingSourceItem[],
   budget: Pick<UnderstandingBudgetProfile, 'maxWritingSamples' | 'maxWritingSampleChars'>,
 ): BoundedUnderstandingSourceItem[] {
-  const eligible = items.filter((item) => item.ownerAttribution === 'user' && item.text.trim().length >= 60);
+  const eligible = items.filter((item) => item.ownerAttribution === 'user'
+    && !item.group?.endsWith(':signal-summary')
+    && item.text.trim().length >= 60);
   if (!eligible.length) return [];
 
   const scored = eligible.map((item) => {
@@ -778,15 +820,16 @@ async function analyzeUnderstandingBatch(input: {
   const parsed = parseJson(raw);
   if (!parsed) throw invalidJsonError('Understanding source analysis', response, raw);
   const allowedRefs = new Set(input.items.map((item) => item.ref));
+  const refToSourceId = new Map(input.items.map((item) => [item.ref, item.source]));
   return {
     profileCandidates: Array.isArray(parsed.profileCandidates)
       ? parsed.profileCandidates
-        .map((value) => validateProfileCandidate(value, allowedRefs))
+        .map((value) => validateProfileCandidate(value, allowedRefs, refToSourceId))
         .filter((value): value is WorkDiscoveryProfileCandidate => Boolean(value))
       : [],
     workThreadCandidates: Array.isArray(parsed.workThreads)
       ? parsed.workThreads
-        .map((value) => validateWorkThreadCandidate(value, allowedRefs))
+        .map((value) => validateWorkThreadCandidate(value, allowedRefs, refToSourceId))
         .filter((value): value is WorkUnderstandingThreadCandidate => Boolean(value))
       : [],
   };
@@ -821,6 +864,8 @@ export async function synthesizeCrossSourceUnderstanding(input: {
   stageAWriting: WritingStyleCandidate[];
   stageAThreads: WorkUnderstandingThreadCandidate[];
   allowedRefs: Set<string>;
+  refToSourceId?: ReadonlyMap<string, string>;
+  existingProfileStatements?: string[];
   workContext?: Pick<WorkDiscoveryResult, 'projectSummary' | 'currentState' | 'uncertainties' | 'workThreads'>;
   locale?: string;
   signal?: AbortSignal;
@@ -841,18 +886,21 @@ export async function synthesizeCrossSourceUnderstanding(input: {
 
   const prompt = [
     'You are the Cross-Source Deep User Understanding Synthesizer (Stage B Reduce).',
-    'You receive structured intermediate extractions from multiple independent local sources (AI instructions, Obsidian/Markdown notes, recent documents, browser bookmarks, Apple Notes/Mail/Calendar/Reminders).',
+    'You receive structured intermediate extractions from multiple independent local and connected sources (AI instructions, Obsidian/Markdown notes, recent documents, browser bookmarks, Apple Notes/Mail/Calendar/Reminders, Gmail, Google Calendar, Google Drive, GitHub, Linear).',
     'Your job is to CORROBORATE, DEDUPLICATE, RESOLVE CONFLICTS, and SYNTHESIZE a sharp, coherent understanding of this user.',
     'Return ONLY one JSON object with: { "profileCandidates": [...], "writingPreferences": [...], "workThreads": [...], "calibrationQuestions": [...] }.',
     'SYNTHESIS RULES:',
     '1. Cross-Source Corroboration: Merge equivalent insights and work threads appearing across multiple sources into ONE richer entry carrying ALL supporting evidenceRefs from every corroborating source. Boost confidence to "high" when >= 2 independent sources agree.',
-    '2. About You (profileCandidates, max 8): Cover distinct PersonalDomains (identity, capabilities, cognition, behavior, values, preferences, relationships). Keep every statement concise, concrete, and non-redundant. Put writing/style rules in writingPreferences, NOT in profileCandidates.',
-    '3. Writing & Communication Preferences (writingPreferences, max 6, at most one per dimension: language|structure|tone|density|scenarios|vocabulary): Combine writing-style analysis with general communication rules from AI instructions into clear, directly actionable collaboration rules.',
-    '4. Work Threads (workThreads, max 5): Merge fragmented clues across notes + documents + calendar + mail + bookmarks into 2-5 crisp, distinct work threads ordered by recency/importance (horizon: current|ongoing|long_term). Include a concrete recommendedFirstStep for each.',
+    '2. About You (profileCandidates, max 10): Cover distinct PersonalDomains (identity, capabilities, cognition, behavior, values, preferences, relationships). Keep every statement concise, concrete, and non-redundant. Put writing/style rules in writingPreferences, NOT in profileCandidates. For relationships, emit ONLY work collaborators grounded in repeated owner-involved evidence.',
+    '3. Writing & Communication Preferences (writingPreferences, max 6, at most one per dimension: language|structure|tone|density|scenarios|vocabulary): Combine writing-style analysis with general communication rules from AI instructions and sent correspondence into clear, directly actionable collaboration rules.',
+    '4. Work Threads (workThreads, max 6): Merge fragmented clues across notes + documents + calendar + mail + code/issues + bookmarks into crisp, distinct work threads ordered by recency/importance (horizon: current|ongoing|long_term). Include a concrete recommendedFirstStep for each.',
     '5. Calibration Questions (calibrationQuestions, 0-2): Only include 1-2 short clarifying questions if there is genuine cross-source ambiguity (e.g. two competing priorities or unclear role focus). Omit if evidence is already clear.',
     '6. Anti-Barnum & Privacy: Reject generic personality filler. Never include PII, secrets, or verbatim private quotes. Every evidenceRefs entry MUST come strictly from the supplied input refs.',
     USER_FACING_UNDERSTANDING_WRITING_GUIDANCE,
     outputLanguageInstruction(input.locale, 'items'),
+    input.existingProfileStatements?.length
+      ? `Existing active profile statements (avoid near-duplicates; refine or supersede only when new evidence adds material clarity):\n${JSON.stringify(input.existingProfileStatements.slice(0, 30))}`
+      : '',
     input.workContext ? `Work-directory context:\n${JSON.stringify(input.workContext)}` : '',
     JSON.stringify({
       stageAProfiles: input.stageAProfiles.map((p) => ({
@@ -883,17 +931,17 @@ export async function synthesizeCrossSourceUnderstanding(input: {
     if (parsed) {
       const profileCandidates = Array.isArray(parsed.profileCandidates)
         ? parsed.profileCandidates
-          .map((value) => validateProfileCandidate(value, input.allowedRefs))
+          .map((value) => validateProfileCandidate(value, input.allowedRefs, input.refToSourceId))
           .filter((value): value is WorkDiscoveryProfileCandidate => Boolean(value))
         : [];
       const writingPreferences = Array.isArray(parsed.writingPreferences)
         ? parsed.writingPreferences
-          .map((value) => validateWritingStyleCandidate(value, input.allowedRefs))
+          .map((value) => validateWritingStyleCandidate(value, input.allowedRefs, input.refToSourceId))
           .filter((value): value is WritingStyleCandidate => Boolean(value))
         : [];
       const workThreadCandidates = Array.isArray(parsed.workThreads)
         ? parsed.workThreads
-          .map((value) => validateWorkThreadCandidate(value, input.allowedRefs))
+          .map((value) => validateWorkThreadCandidate(value, input.allowedRefs, input.refToSourceId))
           .filter((value): value is WorkUnderstandingThreadCandidate => Boolean(value))
         : [];
       const calibrationQuestions = Array.isArray(parsed.calibrationQuestions)
@@ -930,9 +978,9 @@ export async function synthesizeCrossSourceUnderstanding(input: {
     if (!threadByKey.has(item.topicKey)) threadByKey.set(item.topicKey, item);
   }
   return {
-    profileCandidates: [...profileByKey.values()].slice(0, 8),
+    profileCandidates: [...profileByKey.values()].slice(0, 10),
     writingPreferences: [...writingByDim.values()].slice(0, 6),
-    workThreadCandidates: [...threadByKey.values()].slice(0, 5),
+    workThreadCandidates: [...threadByKey.values()].slice(0, 6),
     calibrationQuestions: [],
   };
 }
@@ -941,6 +989,7 @@ export async function analyzeUnderstandingSources(input: {
   config: Config;
   items: UnderstandingSourceItem[];
   workContext?: Pick<WorkDiscoveryResult, 'projectSummary' | 'currentState' | 'uncertainties' | 'workThreads'>;
+  existingProfileStatements?: string[];
   locale?: string;
   signal?: AbortSignal;
   onPhase?: (phase: 'analyzing_writing' | 'synthesizing') => void;
@@ -957,16 +1006,25 @@ export async function analyzeUnderstandingSources(input: {
   const model = resolveModel(modelRef);
   const budget = resolveUnderstandingBudgets(model.contextWindow);
 
+  const eligible = input.items.filter((item) => item.sensitivity !== 'secret' && item.sensitivity !== 'regulated');
+  const summaryEntries = eligible.filter((item) => item.group?.endsWith(':signal-summary'));
+  const regularEntries = eligible.filter((item) => !item.group?.endsWith(':signal-summary'));
+  const selected = [
+    ...regularEntries.slice(0, Math.max(0, budget.maxItems - summaryEntries.length)),
+    ...summaryEntries,
+  ];
   const remainingBySource = new Map<string, number>();
   let totalRemaining = budget.maxTotalChars;
-  const items: BoundedUnderstandingSourceItem[] = input.items
-    .filter((item) => item.sensitivity !== 'secret' && item.sensitivity !== 'regulated')
-    .slice(0, 180)
+  const items: BoundedUnderstandingSourceItem[] = selected
     .map((item) => {
+      const isSummary = Boolean(item.group?.endsWith(':signal-summary'));
       const sourceRemaining = remainingBySource.get(item.sourceId) ?? budget.maxPerSourceChars;
-      const allowance = Math.min(sourceRemaining, totalRemaining);
+      const itemCap = isSummary ? 12_000 : budget.maxPerItemChars;
+      const allowance = Math.min(itemCap, sourceRemaining, totalRemaining);
       const text = (item.text ?? '').slice(0, Math.max(0, allowance));
-      remainingBySource.set(item.sourceId, Math.max(0, sourceRemaining - text.length));
+      if (!isSummary) {
+        remainingBySource.set(item.sourceId, Math.max(0, sourceRemaining - text.length));
+      }
       totalRemaining = Math.max(0, totalRemaining - text.length);
       return {
         ref: item.evidenceRef,
@@ -1094,12 +1152,15 @@ export async function analyzeUnderstandingSources(input: {
   // Stage B: Cross-Source Synthesis (Reduce)
   input.onPhase?.('synthesizing');
   const allowedRefs = new Set(items.map((item) => item.ref));
+  const refToSourceId = new Map(items.map((item) => [item.ref, item.source]));
   const synthesized = await synthesizeCrossSourceUnderstanding({
     modelRef,
     stageAProfiles,
     stageAWriting,
     stageAThreads,
     allowedRefs,
+    refToSourceId,
+    ...(input.existingProfileStatements?.length ? { existingProfileStatements: input.existingProfileStatements } : {}),
     ...(input.workContext ? { workContext: input.workContext } : {}),
     locale: input.locale,
     signal: input.signal,

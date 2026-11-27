@@ -40,6 +40,7 @@ export interface EndpointConnectionSnapshot {
   terminalVersion?: 1;
   mobileMcpSetupCard?: true;
   backgroundToolsSupported?: true;
+  localTransport?: true;
 }
 
 type EndpointConnection = EndpointConnectionSnapshot & {
@@ -73,6 +74,7 @@ function snapshot(connection: EndpointConnection): EndpointConnectionSnapshot {
     ...(connection.terminalVersion ? { terminalVersion: connection.terminalVersion } : {}),
     ...(connection.mobileMcpSetupCard ? { mobileMcpSetupCard: true as const } : {}),
     ...(connection.backgroundToolsSupported ? { backgroundToolsSupported: true as const } : {}),
+    ...(connection.localTransport ? { localTransport: true as const } : {}),
   };
 }
 
@@ -111,6 +113,7 @@ export class EndpointRegistry {
     executionAuthority?: EndpointDesktopExecutionAuthority,
     mobileMcpSetupCard = false,
     backgroundToolsSupported = false,
+    localTransport = false,
   ): EndpointRegistration {
     const authority = executionAuthority ? endpointDesktopExecutionAuthoritySchema.parse(executionAuthority) : undefined;
     if (authority && (hello.kind !== 'desktop' || hello.principalId !== authority.deviceId
@@ -153,6 +156,7 @@ export class EndpointRegistry {
       ...(hello.terminal && authority ? { terminalVersion: 1 as const } : {}),
       ...(hello.kind === 'mobile' && mobileMcpSetupCard ? { mobileMcpSetupCard: true as const } : {}),
       ...(hello.kind === 'mobile' && backgroundToolsSupported ? { backgroundToolsSupported: true as const } : {}),
+      ...(localTransport ? { localTransport: true as const } : {}),
     };
     this.connectionByEndpointId.set(connection.endpointId, connection);
     for (const listener of this.changeListeners) listener(connection.endpointId);

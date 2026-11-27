@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Battery, Bell, CalendarDays, Camera, CheckCircle2, ChevronRight, Clipboard, Clock3, Contact, FileText, Folder, Image, Laptop, Link2, Loader2, MapPin, Monitor, MousePointer2, Plus, ShieldCheck, Smartphone, WifiOff, type LucideIcon } from 'lucide-react';
+import { Battery, Bell, CalendarDays, Camera, CheckCircle2, ChevronRight, Clipboard, Clock3, Contact, FileText, Folder, Image, Laptop, Link2, Loader2, MapPin, MessageSquare, Monitor, MousePointer2, Plus, ShieldCheck, Smartphone, WifiOff, type LucideIcon } from 'lucide-react';
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
@@ -15,6 +15,7 @@ import { interaction } from '@/lib/interaction';
 import { useSectionNavigation } from '@/lib/use-section-navigation';
 import { apiUrl } from '@/lib/url';
 import { DevicePairingAction } from './device-pairing-action';
+import { DevicePairingWizard } from './device-pairing-wizard';
 
 type LocalizedText = readonly [zh: string, en: string];
 const DEVICE_CONNECTIONS_PATH = '/api/endpoint-tools/device-connections';
@@ -164,6 +165,66 @@ function DeviceSections({ devices, localId, zh, renderCapabilities }: {
   </div>;
 }
 
+const mobilePreviewCapabilities: ReadonlyArray<readonly [LucideIcon, LocalizedText, LocalizedText]> = [
+  [MessageSquare, ['随时继续对话', 'Continue chats anywhere'], ['离开电脑也能查看任务进度，在手机上无缝续聊。', 'Check task progress and keep conversations going away from your desk.']],
+  [Image, ['解读相册照片', 'Analyze photos'], ['从手机相册选取照片或现场拍照，直接带到对话中分析。', 'Pick a photo from your phone library or capture one right into chat.']],
+  [Folder, ['读取手机文件', 'Read phone files'], ['选择手机里的文档与资料，请智能体快速阅读与总结。', 'Select files on your phone for your agent to read and summarize.']],
+  [CalendarDays, ['查看与管理日程', 'Check & manage calendar'], ['查看今天的行程安排，或把对话里的计划直接加入手机日历。', 'Check today’s schedule or save plans from chat straight to your calendar.']],
+];
+
+function MobileDiscoverySection({
+  zh,
+  standalone,
+  onConnectPhone,
+}: {
+  zh: boolean;
+  standalone: boolean;
+  onConnectPhone: () => void;
+}) {
+  const locale = zh ? 0 : 1;
+  return (
+    <section
+      aria-label={zh ? '连接手机' : 'Connect your phone'}
+      className={cn(
+        'space-y-4',
+        standalone ? 'mt-4 lg:mt-6' : 'mt-8 border-t border-edge-subtle pt-6',
+      )}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-edge bg-surface-panel p-4 sm:p-5">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-fg">
+            <Smartphone className="size-5" strokeWidth={1.75} aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-fg">
+              {zh ? '连接手机，解锁移动端能力' : 'Connect your phone to unlock mobile capabilities'}
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-fg-muted">
+              {zh
+                ? '使用 xopc 移动应用扫码连接，随时继续对话，并在对话中安全调用手机上的照片、文件与日程。'
+                : 'Scan a QR code with the xopc mobile app to continue chats anywhere and use your phone’s photos, files, and calendar.'}
+            </p>
+          </div>
+        </div>
+        <Button variant="primary" className="shrink-0" onClick={onConnectPhone}>
+          <Smartphone className="size-4" aria-hidden />
+          {zh ? '扫码连接手机' : 'Connect phone'}
+        </Button>
+      </div>
+      <div className={CONNECTION_CARD_GRID_CLASS}>
+        {mobilePreviewCapabilities.map(([Icon, title, description]) => (
+          <DeviceCapabilityCard
+            key={title[1]}
+            icon={Icon}
+            name={title[locale]}
+            description={description[locale]}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function ConnectDeviceButton({ zh }: { zh: boolean }) {
   const { mutate } = useSWRConfig();
   return <DevicePairingAction label={zh ? '连接设备' : 'Connect a device'} onPaired={() => void mutate(apiUrl(DEVICE_CONNECTIONS_PATH))} />;
@@ -185,9 +246,11 @@ export function DeviceConnectionsPanel({ zh }: { zh: boolean }) {
   const [capabilityError, setCapabilityError] = useState(false);
   const [startingTool, setStartingTool] = useState<{ deviceId: string; key: string }>();
   const [chatError, setChatError] = useState<{ deviceId: string; message: string }>();
+  const [mobilePairingOpen, setMobilePairingOpen] = useState(false);
   const folderTrigger = useRef<HTMLButtonElement>(null);
   const folderFallback = useRef<HTMLButtonElement>(null);
   const devices = catalog.data?.devices ?? [];
+  const hasMobileDevice = devices.some(device => device.kind === 'mobile');
   const localEndpoint = localCapabilities.data?.endpointId ?? local.data?.endpointId;
   const localDevice = devices.find(device => device.endpointId && device.endpointId === localEndpoint);
   const locale = zh ? 0 : 1;
@@ -417,13 +480,26 @@ export function DeviceConnectionsPanel({ zh }: { zh: boolean }) {
     </div> : catalog.error ? <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-edge bg-surface-panel p-4 text-sm text-fg-muted lg:mt-4">
       <p>{zh ? '暂时无法加载设备，请检查连接后重试。' : 'Unable to load devices. Check your connection and try again.'}</p>
       <Button variant="secondary" onClick={() => void catalog.mutate()}>{zh ? '重试' : 'Retry'}</Button>
-    </div> : !devices.length ? <p className="mt-3 py-14 text-center text-sm text-fg-muted lg:mt-4">
-      {zh ? '在电脑上打开 xopc，或点击「连接设备」添加手机。' : 'Open xopc on your computer, or select Connect a device to add your phone.'}
-    </p> : <DeviceSections devices={orderedDevices} localId={localDevice?.id} zh={zh} renderCapabilities={device => (
-      device.availability === 'offline' ? <p className="flex items-center gap-3 rounded-xl bg-surface-panel p-4 text-sm text-fg-muted">
-        <WifiOff className="size-4 shrink-0" aria-hidden />{offlineHint}
-      </p> : device.kind === 'desktop' ? renderComputerCapabilities(device) : renderPhoneCapabilities(device)
-    )} />}
+    </div> : !devices.length ? (
+      <MobileDiscoverySection zh={zh} standalone onConnectPhone={() => setMobilePairingOpen(true)} />
+    ) : (
+      <>
+        <DeviceSections devices={orderedDevices} localId={localDevice?.id} zh={zh} renderCapabilities={device => (
+          device.availability === 'offline' ? <p className="flex items-center gap-3 rounded-xl bg-surface-panel p-4 text-sm text-fg-muted">
+            <WifiOff className="size-4 shrink-0" aria-hidden />{offlineHint}
+          </p> : device.kind === 'desktop' ? renderComputerCapabilities(device) : renderPhoneCapabilities(device)
+        )} />
+        {!hasMobileDevice ? (
+          <MobileDiscoverySection zh={zh} standalone={false} onConnectPhone={() => setMobilePairingOpen(true)} />
+        ) : null}
+      </>
+    )}
+    <DevicePairingWizard
+      open={mobilePairingOpen}
+      targetKind="mobile"
+      onOpenChange={setMobilePairingOpen}
+      onPaired={() => void catalog.mutate()}
+    />
     <Dialog.Root open={Boolean(revoking)} onOpenChange={open => {
       if (!open && !busy) { setFailed(false); setRevoking(undefined); }
     }}>

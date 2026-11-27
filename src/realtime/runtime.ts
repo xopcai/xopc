@@ -41,6 +41,8 @@ import { getEndpointPrincipal } from '../storage/sqlite/endpoint-principal-repos
 import { getOrCreateGatewayIdentity, signGatewayPayload } from '../storage/sqlite/gateway-identity-repository.js';
 import { createLogger } from '../utils/logger.js';
 import { createPreauthConnectionBudget } from '../gateway/security/preauth-connection-budget.js';
+import { isLoopbackHost } from '../gateway/host.js';
+import { isLoopbackClientIp } from '../gateway/security/loopback.js';
 import { hasGatewayScope, type GatewayScope } from '../gateway/security/gateway-scopes.js';
 import type { BrowserPreviewRuntime } from './browser-preview.js';
 import { RealtimeBroker, type RealtimeEvent, type RealtimeSubscriptionHandle } from './broker.js';
@@ -53,6 +55,25 @@ const REALTIME_WS_PATH = '/api/realtime/v1/ws';
 const MAX_MESSAGE_CLOCK_SKEW_MS = 60_000;
 const MAX_SUBSCRIPTIONS = 100;
 const MAX_CONNECTIONS = 100;
+
+function isDirectLoopbackUpgradeRequest(request: IncomingMessage): boolean {
+  if (!isLoopbackClientIp(request.socket.remoteAddress)) return false;
+  if (
+    request.headers['x-forwarded-for']
+    || request.headers['x-real-ip']
+    || request.headers['forwarded']
+    || request.headers['cf-connecting-ip']
+  ) {
+    return false;
+  }
+  const host = typeof request.headers.host === 'string' ? request.headers.host.trim() : '';
+  if (!host) return true;
+  try {
+    return isLoopbackHost(new URL(`http://${host}`).hostname);
+  } catch {
+    return false;
+  }
+}
 
 function serverMessage<T extends ServerRealtimeMessage['kind']>(
   kind: T,
@@ -402,6 +423,7 @@ export class RealtimeRuntime {
                 && message.payload.capabilities.includes(MOBILE_MCP_SETUP_CARD_CAPABILITY),
               claim.clientKind === 'mobile'
                 && message.payload.capabilities.includes(BACKGROUND_TOOLS_CAPABILITY),
+              isDirectLoopbackUpgradeRequest(request),
             );
             endpointId = message.payload.endpoint.endpointId;
             this.setupAuthorities.delete(endpointId);

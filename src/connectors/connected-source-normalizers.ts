@@ -120,12 +120,36 @@ function gmailContent(message: JsonRecord): string | undefined {
   return content ? content.slice(0, MAX_EMAIL_CONTENT_CHARS) : undefined;
 }
 
+const AUTOMATED_SENDER_RE = /(?:^|[<.\s_-])(no-?reply|donotreply|do-not-reply|mailer-daemon|notifications?|newsletter|updates?|digest|alerts?|bounces?|automated)@/i;
+
+function stringNames(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const names = value.flatMap((entry) => {
+    if (typeof entry === 'string' && entry.trim()) return [entry.trim()];
+    const row = record(entry);
+    const label = text(row, 'name', 'title', 'label');
+    return label ? [label] : [];
+  });
+  return names.length ? [...new Set(names)].slice(0, 20) : undefined;
+}
+
 function normalizeGmail(result: unknown): ConnectedSourceEntity[] {
   return rows(payload(result), 'messages').flatMap((message) => {
     const externalId = text(message, 'id', 'messageId', 'message_id');
     if (!externalId) return [];
     const occurredAt = time(message.internalDate ?? message.internal_date ?? message.date ?? message.timestamp);
     const headers = gmailHeaders(message);
+    const sender = message.sender ?? message.from ?? headers.get('from');
+    const senderText = typeof sender === 'string' ? sender : text(record(sender), 'email', 'name') ?? '';
+    const rawLabels = message.labelIds ?? message.label_ids ?? message.labels;
+    const labels = Array.isArray(rawLabels) ? rawLabels.filter((entry): entry is string => typeof entry === 'string') : [];
+    const isSent = labels.some((label) => label.toUpperCase() === 'SENT');
+    const autoSubmitted = headers.get('auto-submitted')?.toLowerCase();
+    const automated = !isSent && (
+      Boolean(headers.get('list-unsubscribe'))
+      || Boolean(autoSubmitted && autoSubmitted !== 'no')
+      || AUTOMATED_SENDER_RE.test(senderText)
+    );
     return [{
       externalId,
       itemType: 'email',
@@ -135,16 +159,18 @@ function normalizeGmail(result: unknown): ConnectedSourceEntity[] {
         id: externalId,
         threadId: text(message, 'threadId', 'thread_id'),
         subject: text(message, 'subject') ?? headers.get('subject'),
-        sender: message.sender ?? message.from ?? headers.get('from'),
+        sender,
         recipients: message.recipients ?? message.to ?? headers.get('to'),
         date: occurredAt,
-        labels: message.labelIds ?? message.label_ids ?? message.labels,
+        labels: rawLabels,
         snippet: text(message, 'snippet', 'preview'),
         content: gmailContent(message),
       }),
       metadata: {
         observationKind: 'message',
         logicalEventKey: `gmail:message:${externalId}`,
+        ...(isSent ? { isSent: true } : {}),
+        ...(automated ? { automated: true } : {}),
       },
       synthesisStatus: 'pending' as const,
     }];
@@ -157,6 +183,25 @@ function normalizeCalendar(result: unknown): ConnectedSourceEntity[] {
     if (!externalId) return [];
     const occurredAt = time(event.start ?? event.startTime ?? event.start_time);
     const sourceUpdatedAt = time(event.updated ?? event.updatedAt ?? event.updated_at);
+    const organizer = record(event.organizer);
+    const creator = record(event.creator);
+    const attendees = Array.isArray(event.attendees)
+      ? event.attendees.map(record).filter((entry): entry is JsonRecord => Boolean(entry))
+      : [];
+    const selfAttendee = attendees.find((attendee) => attendee.self === true);
+    const selfResponseStatus = text(selfAttendee, 'responseStatus', 'response_status');
+    const declined = selfResponseStatus === 'declined';
+    const organizerSelf = organizer?.self === true;
+    const creatorSelf = creator?.self === true;
+    const selfEmail = (organizerSelf ? text(organizer, 'email') : undefined)
+      ?? (creatorSelf ? text(creator, 'email') : undefined)
+      ?? (selfAttendee ? text(selfAttendee, 'email') : undefined);
+    const eventType = text(event, 'eventType', 'event_type');
+    const organizerEmail = text(organizer, 'email')?.toLowerCase() ?? '';
+    const automated = eventType === 'birthday'
+      || organizerEmail.endsWith('@holiday.calendar.google.com')
+      || organizerEmail.endsWith('@group.v.calendar.google.com');
+    const actorAttributed = !declined && !automated && (organizerSelf || creatorSelf || Boolean(selfAttendee));
     return [{
       externalId,
       itemType: 'calendar_event',
@@ -172,13 +217,22 @@ function normalizeCalendar(result: unknown): ConnectedSourceEntity[] {
         start: occurredAt,
         end: time(event.end ?? event.endTime ?? event.end_time),
         organizer: event.organizer,
+        creator: event.creator,
         attendees: event.attendees,
         status: event.status,
+        eventType,
         recurrence: event.recurrence,
+        recurringEventId: text(event, 'recurringEventId', 'recurring_event_id'),
+        selfResponseStatus,
       }),
       metadata: {
         observationKind: 'calendar_event',
         logicalEventKey: `googlecalendar:event:${externalId}`,
+        ...(actorAttributed ? { actorAttributed: true } : {}),
+        ...(declined ? { declined: true } : {}),
+        ...(automated ? { automated: true } : {}),
+        ...(selfEmail ? { selfEmail } : {}),
+        ...(selfResponseStatus ? { selfResponseStatus } : {}),
       },
       synthesisStatus: 'pending' as const,
     }];
@@ -199,6 +253,7 @@ function normalizeGoogleDrive(result: unknown): ConnectedSourceEntity[] {
       value: compact({
         id: externalId,
         title: name,
+        description: text(file, 'description')?.slice(0, 600),
         mimeType: text(file, 'mimeType', 'mime_type'),
         modifiedAt,
         owners: file.owners,
@@ -230,18 +285,23 @@ function normalizeGitHub(result: unknown, actionId: string): ConnectedSourceEnti
       const externalId = text(repository, 'id', 'node_id', 'full_name');
       const fullName = text(repository, 'full_name');
       if (!externalId || !fullName) return [];
+      const ownerLogin = text(record(repository.owner), 'login') ?? fullName.split('/', 1)[0];
       return [{
         externalId,
         itemType: 'repository',
-        occurredAt: time(repository.created_at),
+        occurredAt: time(repository.pushed_at ?? repository.updated_at ?? repository.created_at),
         sourceUpdatedAt: time(repository.updated_at),
         value: compact({
           id: externalId,
           fullName,
+          owner: ownerLogin,
           description: text(repository, 'description'),
           visibility: repository.visibility,
           language: repository.language,
+          topics: stringNames(repository.topics),
+          fork: Boolean(repository.fork),
           archived: repository.archived,
+          pushedAt: time(repository.pushed_at),
         }),
         metadata: {
           observationKind: 'inventory',
@@ -269,6 +329,9 @@ function normalizeGitHub(result: unknown, actionId: string): ConnectedSourceEnti
         id: externalId,
         repository: subjectKey,
         title: text(activity, 'title', 'message', 'name'),
+        body: text(activity, 'body')?.slice(0, 1_500),
+        labels: stringNames(activity.labels),
+        isPullRequest: Boolean(activity.pull_request),
         author: activity.author ?? activity.user ?? activity.actor,
         state: activity.state,
         occurredAt,
@@ -288,6 +351,8 @@ function normalizeExternalTasks(result: unknown, toolkit: string): ConnectedSour
     const externalId = text(item, 'id', 'identifier', 'key');
     if (!externalId) return [];
     const occurredAt = time(item.createdAt ?? item.created_at);
+    const cycle = text(record(item.cycle), 'name') ?? text(item, 'cycle');
+    const labels = stringNames(record(item.labels)?.nodes ?? item.labels);
     return [{
       externalId,
       itemType: 'external_task',
@@ -296,10 +361,15 @@ function normalizeExternalTasks(result: unknown, toolkit: string): ConnectedSour
       value: compact({
         id: externalId,
         title: text(item, 'title', 'summary', 'name'),
+        description: text(item, 'description')?.slice(0, 1_500),
         project: item.project ?? item.team,
         assignee: item.assignee,
         creator: item.creator ?? item.reporter,
         state: item.state ?? item.status,
+        priority: item.priorityLabel ?? item.priority,
+        labels,
+        cycle,
+        dueDate: time(item.dueDate ?? item.due_date),
       }),
       metadata: {
         observationKind: 'external_task',

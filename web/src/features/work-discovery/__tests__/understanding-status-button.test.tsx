@@ -3,6 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, useLocation } from 'react-router-dom';
+import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useLocaleStore } from '@/stores/locale-store';
@@ -36,7 +37,7 @@ const completedRun: WorkDiscoveryRun = {
 
 function LocationProbe() {
   const location = useLocation();
-  return <output data-testid="location">{location.pathname}</output>;
+  return <output data-testid="location">{`${location.pathname}${location.search}`}</output>;
 }
 
 describe('UnderstandingStatusButton', () => {
@@ -182,9 +183,11 @@ describe('UnderstandingStatusButton', () => {
   });
   it('offers edit and deletion without a confirmation queue', async () => {
     await act(async () => root.render(
-      <MemoryRouter initialEntries={['/user-model?workDiscovery=review']}>
-        <UnderstandingStatusButton />
-      </MemoryRouter>,
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <MemoryRouter initialEntries={['/user-model?workDiscovery=review']}>
+          <UnderstandingStatusButton />
+        </MemoryRouter>
+      </SWRConfig>,
     ));
     expect(document.body.textContent).toContain('Recent updates');
     expect(document.body.textContent).not.toContain('Needs your confirmation');
@@ -201,6 +204,79 @@ describe('UnderstandingStatusButton', () => {
     const confirm = Array.from(dialog?.querySelectorAll('button') ?? []).find((button) => button.textContent === 'Delete');
     await act(async () => confirm?.click());
     expect(deleteAssertion).toHaveBeenCalledWith('assertion-1');
+  });
+
+  it('opens the local sources discovery overlay from the modal footer', async () => {
+    await act(async () => root.render(
+      <MemoryRouter initialEntries={['/user-model?workDiscovery=review']}>
+        <UnderstandingStatusButton />
+        <LocationProbe />
+      </MemoryRouter>,
+    ));
+
+    const scanButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Scan local sources'));
+    expect(scanButton).toBeDefined();
+    await act(async () => scanButton?.click());
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe('/user-model?workDiscovery=new');
+  });
+
+  it('filters recent updates when a source card is selected and explains empty connector channels', async () => {
+    fetchUserModel.mockResolvedValueOnce({
+      profile: {},
+      assertions: [{
+        id: 'assertion-1',
+        predicate: 'identity.work_discovery.role:builder',
+        statement: 'Builds developer tools.',
+        kind: 'identity',
+        status: 'active',
+        authority: 'system_inferred',
+        usable: true,
+        confidence: 0.9,
+        inferredImportance: 0.6,
+        consequence: 'low',
+        actionability: 0.5,
+        volatility: 'stable',
+        sensitivity: 'normal',
+        observedAt: 1,
+        recordedAt: 1,
+        createdAt: 1,
+        createdBy: 'runtime',
+        scope: { type: 'global' },
+        sources: [{ id: 'work-folder:project-1', kind: 'work_folder', label: 'xopc', category: 'files', observedAt: 1 }],
+      }],
+      goals: [], priorities: [], rules: [], knowledge: [],
+      sources: [
+        { id: 'source-1', kind: 'work_folder', adapterId: 'local-work-folders', category: 'files', displayName: 'xopc', lastCollectedAt: 1 },
+        { id: 'source-2', kind: 'connector', adapterId: 'connector:composio-googlecalendar', category: 'calendar', displayName: 'Google Calendar', lastCollectedAt: 2 },
+      ],
+      maintenance: { lastRun: null },
+      counts: { activeAssertions: 1, reviewAssertions: 0, activeGoals: 0, activePriorities: 0, activeKnowledge: 0 },
+    });
+
+    await act(async () => root.render(
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <MemoryRouter initialEntries={['/user-model?workDiscovery=review']}>
+          <UnderstandingStatusButton />
+        </MemoryRouter>
+      </SWRConfig>,
+    ));
+
+    expect(document.body.textContent).toContain('Google Calendar');
+    expect(document.body.textContent).toContain('Builds developer tools.');
+
+    const calendarCard = Array.from(document.body.querySelectorAll<HTMLElement>('article[role="button"]'))
+      .find((card) => card.textContent?.includes('Google Calendar'));
+    expect(calendarCard).toBeDefined();
+    await act(async () => calendarCard?.click());
+
+    expect(document.body.textContent).toContain('Filtered: Google Calendar');
+    expect(document.body.textContent).not.toContain('Builds developer tools.');
+
+    const clearButton = Array.from(document.body.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Show all'));
+    await act(async () => clearButton?.click());
+    expect(document.body.textContent).toContain('Builds developer tools.');
   });
 
 });

@@ -167,10 +167,10 @@ describe('connector learning coordinator', () => {
       { cursor: encodeConnectedSourceCursor({ checkpoint: '2026-08-01T00:00:00.000Z', pageToken: 'gmail-page-2' }) },
       { email: 'owner@example.com' },
     )).toMatchObject({
-      max_results: 30,
+      max_results: 50,
       include_payload: true,
       verbose: false,
-      query: `in:sent newer_than:30d after:${Math.floor(Date.parse('2026-08-01T00:00:00.000Z') / 1_000)} -in:spam -in:trash`,
+      query: `in:sent newer_than:180d after:${Math.floor(Date.parse('2026-08-01T00:00:00.000Z') / 1_000)} -in:spam -in:trash`,
       page_token: 'gmail-page-2',
     });
   });

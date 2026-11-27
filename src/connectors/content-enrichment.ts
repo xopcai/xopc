@@ -19,6 +19,14 @@ const MAX_SELECTION = 5;
 const MAX_CONTENT_BYTES = 1_000_000;
 const MAX_CONTENT_CHARS = 24_000;
 const GOOGLE_DOCUMENT_MIME = 'application/vnd.google-apps.document';
+const GOOGLE_SLIDES_MIME = 'application/vnd.google-apps.presentation';
+const GOOGLE_SHEETS_MIME = 'application/vnd.google-apps.spreadsheet';
+const EXPORTABLE_GOOGLE_MIMES = new Map<string, string>([
+  [GOOGLE_DOCUMENT_MIME, 'text/plain'],
+  [GOOGLE_SLIDES_MIME, 'text/plain'],
+  [GOOGLE_SHEETS_MIME, 'text/csv'],
+]);
+const HIGH_SIGNAL_TITLE_RE = /\b(okr|kpi|prd|rfc|roadmap|plan|planning|design|spec|architecture|review|retro|retrospective|weekly|monthly|quarterly|strategy|notes|brief|proposal|summary|goals?)\b|周报|月报|季报|复盘|计划|规划|方案|设计|需求|目标|总结|纪要|评审|路线图/i;
 const DOWNLOADABLE_TEXT_MIMES = new Set([
   'application/json',
   'application/xml',
@@ -78,7 +86,7 @@ function candidateFor(item: KnowledgeSourceItem): ConnectedContentCandidate | un
   }
   const mimeType = text(item.metadata.mimeType) ?? text(value.mimeType);
   if (toolkit === 'googledrive' && item.itemType === 'cloud_document'
-    && mimeType && (mimeType === GOOGLE_DOCUMENT_MIME || DOWNLOADABLE_TEXT_MIMES.has(mimeType))) {
+    && mimeType && (EXPORTABLE_GOOGLE_MIMES.has(mimeType) || DOWNLOADABLE_TEXT_MIMES.has(mimeType))) {
     return {
       sourceItemId: item.id,
       sourceInstanceId: item.sourceInstanceId,
@@ -91,12 +99,33 @@ function candidateFor(item: KnowledgeSourceItem): ConnectedContentCandidate | un
   return undefined;
 }
 
+function candidateScore(item: KnowledgeSourceItem, candidate: ConnectedContentCandidate, nowMs: number): number {
+  let score = 0;
+  if (item.metadata.actorAttributed === true) score += 3;
+  const ts = Date.parse(item.sourceUpdatedAt ?? item.occurredAt ?? '');
+  if (Number.isFinite(ts)) {
+    const ageDays = Math.max(0, (nowMs - ts) / 86_400_000);
+    if (ageDays <= 14) score += 3;
+    else if (ageDays <= 45) score += 2;
+    else if (ageDays <= 90) score += 1;
+  }
+  if (HIGH_SIGNAL_TITLE_RE.test(candidate.title)) score += 2.5;
+  if (candidate.mimeType === GOOGLE_DOCUMENT_MIME
+    || candidate.mimeType === 'text/markdown'
+    || candidate.mimeType === 'text/plain') {
+    score += 1;
+  } else if (candidate.mimeType === GOOGLE_SLIDES_MIME) {
+    score += 0.6;
+  }
+  return score;
+}
+
 export function listConnectedContentCandidates(options: {
   agentId: string;
   sourceInstanceId?: string;
   limit?: number;
 }): ConnectedContentCandidate[] {
-  const limit = Math.max(1, Math.min(20, options.limit ?? 10));
+  const limit = Math.max(1, Math.min(50, options.limit ?? 10));
   const items = listKnowledgeSourceItems({
     agentId: options.agentId,
     ...(options.sourceInstanceId ? { sourceInstanceId: options.sourceInstanceId } : {}),
@@ -106,10 +135,15 @@ export function listConnectedContentCandidates(options: {
   const completedReads = new Set(items
     .map((item) => text(item.metadata.sourceMetadataItemId))
     .filter((id): id is string => Boolean(id)));
+  const nowMs = Date.now();
   return items
     .filter((item) => !completedReads.has(item.id))
-    .map(candidateFor)
-    .filter((candidate): candidate is ConnectedContentCandidate => Boolean(candidate))
+    .flatMap((item) => {
+      const candidate = candidateFor(item);
+      return candidate ? [{ candidate, score: candidateScore(item, candidate, nowMs) }] : [];
+    })
+    .sort((left, right) => right.score - left.score)
+    .map((entry) => entry.candidate)
     .slice(0, limit);
 }
 
@@ -120,10 +154,11 @@ function contentRecipe(item: KnowledgeSourceItem): { actionId: string; args: Rec
   }
   const value = normalizedRecord(item);
   const mimeType = text(item.metadata.mimeType) ?? text(value.mimeType);
-  if (toolkit === 'googledrive' && item.itemType === 'cloud_document' && mimeType === GOOGLE_DOCUMENT_MIME) {
+  const exportMime = mimeType ? EXPORTABLE_GOOGLE_MIMES.get(mimeType) : undefined;
+  if (toolkit === 'googledrive' && item.itemType === 'cloud_document' && exportMime) {
     return {
       actionId: 'GOOGLEDRIVE_EXPORT_GOOGLE_WORKSPACE_FILE',
-      args: { fileId: item.externalId, mimeType: 'text/plain' },
+      args: { fileId: item.externalId, mimeType: exportMime },
       mode: 'file',
     };
   }

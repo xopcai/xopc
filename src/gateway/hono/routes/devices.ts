@@ -9,6 +9,7 @@ import {
   browserPairingInvitationPayloadSchema,
   formatBrowserPairingInvitation,
   formatMobilePairingInvitation,
+  isMobileDevicePlatform,
   MOBILE_PAIRING_INVITATION_VERSION,
 } from '@xopcai/gateway-contract';
 
@@ -127,10 +128,34 @@ export function registerDeviceAuthPublicRoutes(app: Hono, options?: PairingPubli
 export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   registerPairingApprovalAdminRoutes(authenticated);
   authenticated.get('/api/device-pairing/readiness', (c) => {
+    c.header('Cache-Control', 'no-store');
     const routes = resolveSecureDeviceRoutes(deps.service.currentConfig);
-    return c.json({ ok: true, ready: routes.length > 0, routes, protocolVersion: 3,
+    const activeEndpoints = deps.service.endpointTools?.registry.list() ?? [];
+    const browserEndpoints = activeEndpoints.filter((item) => item.kind === 'browser');
+    const localBrowserConnected = browserEndpoints.some((item) => item.localTransport === true);
+    const remoteBrowserConnectedCount = browserEndpoints.filter((item) => !item.localTransport).length;
+    const onlineMobilePrincipals = new Set(
+      activeEndpoints.filter((item) => item.kind === 'mobile').map((item) => item.principalId),
+    );
+    const pairedMobileCount = listDevices().filter(
+      (device) => device.revokedAt === undefined && isMobileDevicePlatform(device.platform),
+    ).length;
+    return c.json({
+      ok: true,
+      ready: routes.length > 0,
+      routes,
+      protocolVersion: 3,
       routeState: routes.length > 0 ? 'configured' : 'missing',
-      nextAction: routes.length > 0 ? 'scan' : 'configure-route', serverTime: Date.now() });
+      nextAction: routes.length > 0 ? 'scan' : 'configure-route',
+      serverTime: Date.now(),
+      devices: {
+        mobileCount: Math.max(pairedMobileCount, onlineMobilePrincipals.size),
+        mobileOnlineCount: onlineMobilePrincipals.size,
+        localBrowserConnected,
+        browserConnectedCount: browserEndpoints.length,
+        remoteBrowserConnectedCount,
+      },
+    });
   });
 
   authenticated.post('/api/device-pairing/setups', async (c) => {

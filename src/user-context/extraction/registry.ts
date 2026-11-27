@@ -11,7 +11,8 @@ export type ExtractorId =
   | 'turn-semantics'
   | 'transcript-synthesis'
   | 'source-work-synthesis'
-  | 'connector-semantic';
+  | 'connector-semantic'
+  | 'connector-cross-source';
 
 export type ExtractorDefinition = {
   id: ExtractorId;
@@ -47,6 +48,11 @@ const DEFINITIONS: Record<ExtractorId, ExtractorDefinition> = {
     id: 'connector-semantic', version: '1', inputKinds: ['connector', 'file'], requiredProcessingPolicy: 'remote_allowed',
     authorityCeiling: 'external_untrusted', candidateKinds: ['preference', 'routine'],
     maxAutomaticStatus: 'candidate', timeoutMs: 30_000,
+  },
+  'connector-cross-source': {
+    id: 'connector-cross-source', version: '1', inputKinds: ['connector', 'file'], requiredProcessingPolicy: 'remote_allowed',
+    authorityCeiling: 'user_observed', candidateKinds: UNDERSTANDING_KINDS,
+    maxAutomaticStatus: 'candidate', timeoutMs: 60_000,
   },
 };
 

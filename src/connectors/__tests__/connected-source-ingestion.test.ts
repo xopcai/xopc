@@ -194,10 +194,10 @@ describe('connected source ingestion', () => {
 
     expect(result.itemsSeen).toBe(2);
     expect(executeWithPolicy).toHaveBeenCalledTimes(3);
-    expect(executeWithPolicy.mock.calls[0]?.[0]).toMatchObject({ args: { max_results: 30 } });
-    expect(executeWithPolicy.mock.calls[1]?.[0]).toMatchObject({ args: { max_results: 15 } });
+    expect(executeWithPolicy.mock.calls[0]?.[0]).toMatchObject({ args: { max_results: 50 } });
+    expect(executeWithPolicy.mock.calls[1]?.[0]).toMatchObject({ args: { max_results: 25 } });
     expect(executeWithPolicy.mock.calls[2]?.[0]).toMatchObject({
-      args: { max_results: 15, page_token: 'page-2' },
+      args: { max_results: 25, page_token: 'page-2' },
     });
     expect(listKnowledgeSyncRuns()[0]).toMatchObject({ status: 'succeeded', itemsSeen: 2 });
   });
@@ -389,6 +389,69 @@ describe('connected source ingestion', () => {
     }));
     expect(decodeConnectedSourceCursor(getKnowledgeSourceCursor(result.sourceInstanceId, 'events')))
       .toMatchObject({ syncToken: 'calendar-sync-2' });
+  });
+
+  it('attributes Google Calendar events via self markers, filters declined events, backfills identity, and keeps 250+ events per page', async () => {
+    upsertConnectorInstallation({
+      id: 'composio-googlecalendar-local-owner',
+      connectorId: 'composio-googlecalendar',
+      principalId: 'local-owner',
+      enabled: true,
+      allowedAgentIds: ['main'],
+      maxScope: 'read',
+      confirmationPolicy: 'writes',
+      selectedAccountIds: null,
+    });
+    upsertConnectorConnection({
+      id: 'calendar-self',
+      installationId: 'composio-googlecalendar-local-owner',
+      connectorId: 'composio-googlecalendar',
+      provider: 'composio',
+      principalId: 'local-owner',
+      providerConnectionId: 'ca_calendar_self',
+      identity: {},
+      status: 'active',
+      isDefault: true,
+      metadata: { toolkit: 'googlecalendar' },
+    });
+    const bulkEvents = Array.from({ length: 250 }, (_, idx) => ({
+      id: `evt-${idx + 1}`,
+      summary: `Recurring sync ${idx + 1}`,
+      start: { dateTime: '2026-08-05T09:00:00+08:00' },
+      organizer: idx === 0
+        ? { email: 'self@example.com', self: true }
+        : { email: 'self@example.com' },
+    }));
+    bulkEvents.push({
+      id: 'evt-declined',
+      summary: 'Declined invite',
+      start: { dateTime: '2026-08-06T09:00:00+08:00' },
+      organizer: { email: 'other@example.com' },
+      attendees: [{ email: 'self@example.com', self: true, responseStatus: 'declined' }],
+    } as unknown as (typeof bulkEvents)[number]);
+    const executeWithPolicy = vi.fn(async () => ({
+      decision: 'allowed' as const,
+      result: { data: { items: bulkEvents, nextSyncToken: 'cal-sync-bulk' } },
+    }));
+
+    const result = await ingestComposioConnectedSource({
+      config: {} as Config,
+      connectorId: 'composio-googlecalendar',
+      collectionScope: 'events',
+      streamKind: 'activity',
+      actionId: 'GOOGLECALENDAR_SYNC_EVENTS',
+      agentId: 'main',
+      adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,
+    });
+
+    expect(result.itemsSeen).toBe(251);
+    const items = listKnowledgeSourceItems({ sourceInstanceId: result.sourceInstanceId, limit: 300 });
+    expect(items).toHaveLength(251);
+    const owned = items.find((item) => item.externalId === 'evt-2');
+    const declined = items.find((item) => item.externalId === 'evt-declined');
+    expect(owned?.metadata.actorAttributed).toBe(true);
+    expect(declined?.metadata.actorAttributed).toBe(false);
+    expect(declined?.metadata.declined).toBe(true);
   });
 
   it('normalizes Linear issues as work context', async () => {

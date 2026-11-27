@@ -10,6 +10,7 @@ import { createLogger } from '../utils/logger.js';
 import {
   getConnectorInstallation,
   listConnectorConnections,
+  upsertConnectorConnection,
 } from '../storage/sqlite/index.js';
 import {
   ConnectedKnowledgePipeline,
@@ -74,7 +75,7 @@ function personEntities(record: Record<string, unknown> | null): PersonEntitySig
       ? [{ role, name: name || undefined, email: email || undefined, username: username || undefined }]
       : [];
   };
-  const entities = ['email', 'from', 'sender', 'author', 'user', 'username', 'owner', 'owners', 'organizer', 'assignee', 'attendees', 'participants']
+  const entities = ['email', 'from', 'sender', 'author', 'user', 'username', 'owner', 'owners', 'organizer', 'creator', 'assignee', 'attendees', 'participants']
     .flatMap((key) => {
       const value = record[key];
       return Array.isArray(value)
@@ -113,9 +114,9 @@ function hasOwnerAttribution(
   const attributableRoles = toolkit === 'gmail'
     ? new Set(['sender', 'from'])
     : toolkit === 'googlecalendar'
-      ? new Set(['organizer', 'attendees'])
+      ? new Set(['organizer', 'creator', 'attendees'])
       : toolkit === 'linear'
-        ? new Set(['author', 'user', 'assignee'])
+        ? new Set(['author', 'user', 'assignee', 'creator'])
         : new Set(['author', 'user', 'username', 'owner', 'owners']);
   return people
     .filter((person) => attributableRoles.has(person.role))
@@ -167,12 +168,18 @@ function resultToSourceItems(input: {
   workspaceId: string;
   connectionIdentity: Record<string, unknown>;
 }): KnowledgeSourceItemInput[] {
-  return normalizeConnectedSourceResult(input).slice(0, 200).map((entity) => {
+  return normalizeConnectedSourceResult(input).slice(0, 500).map((entity) => {
     const record = entity.value;
     const people = personEntities(record);
     const ownerIdentities = connectionIdentities(input.connectionIdentity);
-    const actorAttributed = entity.metadata.actorAttributed === true
-      || hasOwnerAttribution(input.toolkit, people, ownerIdentities);
+    const excluded = entity.metadata.declined === true || entity.metadata.automated === true;
+    const streamImpliesOwner = (input.toolkit === 'gmail' && (input.collectionScope === 'sent-messages' || entity.metadata.isSent === true))
+      || (input.toolkit === 'github' && (input.collectionScope === 'authored-work' || input.collectionScope === 'reviewed-work'));
+    const actorAttributed = !excluded && (
+      entity.metadata.actorAttributed === true
+      || streamImpliesOwner
+      || hasOwnerAttribution(input.toolkit, people, ownerIdentities)
+    );
     const serialized = JSON.stringify(sanitizeConnectedSourceValue(entity.value), null, 2);
     const normalizedText = serialized;
     const contentHash = createHash('sha256').update(`connected-source-v2:${serialized}`).digest('hex');
@@ -211,6 +218,7 @@ function resultToSourceItems(input: {
 class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
   readonly kind = 'composio';
   private adaptiveMaxResults: number | undefined;
+  private fetchedItems = 0;
 
   constructor(private readonly input: {
     connectorId: string;
@@ -219,6 +227,7 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
     actionId: string;
     arguments: Record<string, unknown>;
     buildArguments?: (pull: KnowledgePullInput) => Record<string, unknown>;
+    maxItems?: number;
     agentId: string;
     connection: ReturnType<typeof listConnectorConnections>[number];
     toolkit: string;
@@ -284,7 +293,7 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
       execution = await execute(undefined);
     }
     if (execution.decision !== 'allowed') throw new Error(execution.reason);
-    const items = resultToSourceItems({
+    let items = resultToSourceItems({
       result: execution.result,
       sourceInstanceId: pull.instanceId,
       collectionScope: pull.collectionScope,
@@ -297,9 +306,40 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
       workspaceId: this.input.workspaceId,
       connectionIdentity: this.input.connection.identity,
     });
-    const nextPageToken = paginationValue(execution.result, 'nextPageToken', 'next_page_token');
+    if (this.input.toolkit === 'googlecalendar' && connectionIdentities(this.input.connection.identity).length === 0) {
+      const discoveredEmail = items
+        .map((item) => item.metadata?.selfEmail)
+        .find((value): value is string => typeof value === 'string' && value.trim().length > 0);
+      if (discoveredEmail) {
+        this.input.connection = upsertConnectorConnection({
+          ...this.input.connection,
+          identity: { ...this.input.connection.identity, email: discoveredEmail.trim() },
+        });
+        items = resultToSourceItems({
+          result: execution.result,
+          sourceInstanceId: pull.instanceId,
+          collectionScope: pull.collectionScope,
+          streamKind: this.input.streamKind,
+          connectorId: this.input.connectorId,
+          connectionId: this.input.connection.id,
+          actionId: this.input.actionId,
+          toolkit: this.input.toolkit,
+          agentId: this.input.agentId,
+          workspaceId: this.input.workspaceId,
+          connectionIdentity: this.input.connection.identity,
+        });
+      }
+    }
+    if (this.input.maxItems && this.input.maxItems > 0) {
+      const remaining = Math.max(0, this.input.maxItems - this.fetchedItems);
+      if (items.length > remaining) items = items.slice(0, remaining);
+    }
+    this.fetchedItems += items.length;
+    const reachedCap = Boolean(this.input.maxItems && this.fetchedItems >= this.input.maxItems);
+    const nextPageToken = reachedCap ? undefined : paginationValue(execution.result, 'nextPageToken', 'next_page_token');
     const nextSyncToken = paginationValue(execution.result, 'nextSyncToken', 'next_sync_token');
     const completeSnapshot = this.input.streamKind === 'inventory'
+      && !reachedCap
       && (this.input.toolkit === 'github' || !cursor?.checkpoint);
     return {
       items,
@@ -326,6 +366,7 @@ export async function ingestComposioConnectedSource(input: {
   actionId: string;
   arguments?: Record<string, unknown>;
   buildArguments?: (pull: KnowledgePullInput) => Record<string, unknown>;
+  maxItems?: number;
   agentId: string;
   connectionId?: string;
   adapter?: ComposioSessionsAdapter;
@@ -374,6 +415,7 @@ export async function ingestComposioConnectedSource(input: {
     actionId: input.actionId,
     arguments: input.arguments ?? {},
     buildArguments: input.buildArguments,
+    maxItems: input.maxItems,
     agentId: input.agentId,
     toolkit,
     workspaceId,

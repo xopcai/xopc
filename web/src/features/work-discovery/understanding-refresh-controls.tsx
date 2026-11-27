@@ -14,7 +14,10 @@ export function UnderstandingRefreshButton({ sourceId, disabled = false }: { sou
     : failed ? (zh ? '重试' : 'Retry')
       : sourceId ? (zh ? '更新理解' : 'Update understanding') : (zh ? '更新全部' : 'Update all');
   return <Button variant="ghost" className="h-8 shrink-0 gap-1.5 px-2 text-xs" disabled={disabled || starting || running}
-    onClick={() => void start(sourceId)}>
+    onClick={(event) => {
+      event.stopPropagation();
+      void start(sourceId);
+    }}>
     {running ? <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" /> : <RefreshCw className="size-3.5" />}
     {label}
   </Button>;

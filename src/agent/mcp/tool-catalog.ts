@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { InMemoryCredentialStore, InMemoryModelsStore } from '@earendil-works/pi-ai';
 
+import { registerPiOAuthPageHook } from '../../auth/oauth/pi-oauth-page-hook.js';
 import type { Config } from '../../config/schema.js';
 import { createEmbeddedModelRuntime } from '../embedded/model-runtime.js';
 import type { NativeMcpCredentials } from './credential-store.js';
@@ -53,6 +54,7 @@ async function runNativeMcpSession(config: Config, workspaceDir: string, serverI
     if (relay.username || relay.password || relay.search || relay.hash) throw new Error('Invalid callback relay.');
     entry.config = { ...entry.config, oauth: { ...entry.config.oauth, callbackRelayUrl: relay.href } };
   }
+  registerPiOAuthPageHook();
   const [{ createAgentSession, createMcpExtension, createToolSearchExtension, DefaultResourceLoader,
     ModelRuntime, SessionManager, SettingsManager }, { createXopcMcpTransport }] = await Promise.all([
     import('@earendil-works/pi-coding-agent'), import('./transport.js'),

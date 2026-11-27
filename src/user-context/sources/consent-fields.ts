@@ -1,10 +1,10 @@
 const FIELD_KEYS: Record<string, string[]> = {
-  title: ['title', 'subject', 'name', 'fullName', 'repository'],
-  content: ['content', 'body', 'text', 'snippet', 'description', 'summary'],
-  participants: ['from', 'to', 'cc', 'bcc', 'sender', 'author', 'organizer', 'attendees', 'participants', 'assignee', 'owners'],
-  status: ['status', 'state', 'labels'],
-  timestamps: ['createdAt', 'updatedAt', 'modifiedAt', 'start', 'end', 'created_at', 'updated_at', 'modified_at'],
-  owner_activity: ['user', 'username', 'owner'],
+  title: ['title', 'subject', 'name', 'fullName', 'repository', 'project', 'signalSummary'],
+  content: ['content', 'body', 'text', 'snippet', 'description', 'summary', 'language', 'topics', 'highlights', 'patterns'],
+  participants: ['from', 'to', 'cc', 'bcc', 'sender', 'author', 'organizer', 'creator', 'attendees', 'participants', 'assignee', 'owners', 'owner', 'collaborators'],
+  status: ['status', 'state', 'labels', 'priority', 'cycle', 'eventType', 'recurrence', 'recurringEventId', 'isPullRequest', 'fork'],
+  timestamps: ['createdAt', 'updatedAt', 'modifiedAt', 'start', 'end', 'dueDate', 'pushedAt', 'created_at', 'updated_at', 'modified_at'],
+  owner_activity: ['user', 'username', 'owner', 'selfResponseStatus', 'roleBreakdown'],
 };
 
 /** Restrict source fields before either model processing or searchable chunk persistence. */

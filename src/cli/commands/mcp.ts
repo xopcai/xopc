@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
-import { main as piMain } from '@earendil-works/pi-coding-agent';
 import { resolveMcpSetupConfig } from '../../agent/mcp/effective-server.js';
 import { getNativePiAgentDir, prepareNativeMcpConfig } from '../../agent/mcp/native-mcp.js';
+import { registerPiOAuthPageHook } from '../../auth/oauth/pi-oauth-page-hook.js';
 import { Command } from 'commander';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
@@ -60,6 +60,8 @@ function createMcpCommand(ctx: CLIContext, getCtx = () => ctx): Command {
         xopcGenerated: true,
         mcpServers: Object.fromEntries(mcp.servers.filter(entry => !server || entry.name === server).map(entry => [mcp.credentialAliases?.[entry.name] ?? entry.name, entry.config])),
       }), { mode: 0o600 });
+      registerPiOAuthPageHook();
+      const { main: piMain } = await import('@earendil-works/pi-coding-agent');
       await piMain(['mcp', action, ...(server ? [mcp.credentialAliases?.[server] ?? server] : []),
         ...(action === 'list' && (options as { json?: boolean })?.json ? ['--json'] : []),
         ...(action === 'login' && loginOptions?.timeout ? ['--timeout', loginOptions.timeout] : []),

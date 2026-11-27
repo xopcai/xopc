@@ -278,6 +278,58 @@ describe('connected source understanding', () => {
       content: 'Renamed launch review: Review in progress.',
     })]);
   });
+
+  it('persists writingPreferences, passes locale, and expands signal-summary evidence refs', async () => {
+    const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('gmail');
+    const sourceItemIds = upsertKnowledgeSourceItems(
+      [1, 2].map((index) => {
+        const row = sourceRow(sourceInstanceId, index, true);
+        return { ...row, metadata: { ...row.metadata, toolkit: 'gmail' } };
+      }),
+    ).changedItemIds;
+
+    const analyze = vi.fn(async ({ items, locale }) => {
+      expect(locale).toBe('zh-CN');
+      expect(items.some((item) => item.evidenceRef === 'signal-summary://gmail')).toBe(true);
+      return {
+        modelRef: 'test/model',
+        profileCandidates: [{
+          id: 'role-summary',
+          category: 'role' as const,
+          factKey: 'project-owner',
+          statement: '负责 Atlas 项目跨团队协调。',
+          confidence: 'high' as const,
+          evidence: ['Backed by signal summary'],
+          evidenceRefs: ['signal-summary://gmail'],
+          status: 'pending' as const,
+        }],
+        writingPreferences: [{
+          id: 'writing-tone',
+          dimension: 'tone' as const,
+          factKey: 'writing:tone',
+          statement: '工作邮件偏好直接给结论并附行动项。',
+          confidence: 'high' as const,
+          evidence: ['Consistent sent email structure'],
+          evidenceRefs: [items[0]!.evidenceRef],
+          sourceIds: ['connector:gmail'],
+          status: 'pending' as const,
+        }],
+        workThreadCandidates: [],
+        calibrationQuestions: [],
+        sourceStatuses: [{ sourceId: 'connector:gmail', status: 'completed' as const }],
+      };
+    });
+
+    const config = ConfigSchema.parse({ userContext: { preferences: { responseLanguage: 'zh-CN' } } });
+    const result = await deriveConnectedSourceUnderstanding({
+      config, agentId: 'main', sourceInstanceId, sourceItemIds, sourceRunId, processingPolicy, analyze,
+    });
+
+    expect(result).toEqual({ created: 2, knowledgeCount: 0, status: 'completed' });
+    const statements = listUserAssertions().map((assertion) => assertion.statement);
+    expect(statements).toContain('负责 Atlas 项目跨团队协调。');
+    expect(statements).toContain('工作邮件偏好直接给结论并附行动项。');
+  });
 });
 
 function sourceContext(kind: string, allowedFields = ['title', 'content', 'timestamps', 'owner_activity', 'status']) {

@@ -39,6 +39,7 @@ export default defineConfig({
     alias: {
       '@xopcai/xopc': path.resolve(__dirname, 'src'),
       '@': path.resolve(__dirname, 'web/src'),
+      '@earendil-works/pi-ai/utils/oauth-page': path.resolve(__dirname, 'src/auth/oauth/oauth-page.ts'),
     },
   },
   test: {

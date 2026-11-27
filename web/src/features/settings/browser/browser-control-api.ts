@@ -18,6 +18,8 @@ export type BrowserExtensionStatus = {
   running: boolean;
   socketConnected: boolean;
   connected: boolean;
+  localConnected?: boolean;
+  localManagementAvailable?: boolean;
   driverKind: 'extension';
   protocolVersion: number | null;
   expectedProtocolVersion: number | null;
@@ -58,6 +60,10 @@ type ApiResult<T> = { ok: true; payload: T };
 
 export function fetchBrowserStatus(): Promise<ApiResult<BrowserStatus>> {
   return fetchJson(apiUrl('/api/browser/status'));
+}
+
+export function fetchBrowserExtensionStatus(): Promise<BrowserExtensionStatus> {
+  return fetchJson(apiUrl('/api/browser/extension-status'));
 }
 
 export function testBrowserConnection(): Promise<ApiResult<{ driverKind: BrowserDriverKind; durationMs: number }>> {

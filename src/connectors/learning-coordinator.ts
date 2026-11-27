@@ -36,6 +36,7 @@ import { getConnectorDefinition } from './catalog.js';
 import { ComposioSessionsAdapter } from './composio-sessions.js';
 import { connectorIdentityKey, normalizeConnectorIdentity } from './connector-identity.js';
 import { deriveConnectedSourceUnderstanding } from './connected-source-understanding.js';
+import { synthesizeConnectedSources } from './cross-source-synthesis.js';
 import { ingestComposioConnectedSource } from './connected-source-ingestion.js';
 import { listConnectedContentCandidates, readConnectedContent } from './content-enrichment.js';
 import { buildConnectorLearningArguments, getConnectorLearningPlan } from './learning-recipes.js';
@@ -126,6 +127,7 @@ export type ConnectorLearningCoordinator = {
   enqueueToolkit(toolkit: string): ConnectorLearningJob[];
   setPaused(connectionId: string, paused: boolean): number;
   runNow(): Promise<void>;
+  scheduleCrossSourceSynthesis(trigger?: 'bootstrap' | 'refresh' | 'manual'): void;
   stop(): void;
 };
 
@@ -140,15 +142,44 @@ export function startConnectorLearningCoordinator(options: {
   emit?: (type: string, payload: unknown) => void;
   intervalMs?: number;
   initialDelayMs?: number;
+  crossSourceDebounceMs?: number;
   composioAdapter?: ComposioSessionsAdapter;
 }): ConnectorLearningCoordinator {
   const intervalMs = Math.max(2_000, Math.min(options.intervalMs ?? 10_000, 60_000));
+  const crossSourceDebounceMs = Math.max(0, options.crossSourceDebounceMs ?? 45_000);
   let timer: NodeJS.Timeout | null = null;
+  let crossSourceTimer: NodeJS.Timeout | null = null;
+  let crossSourceRunning = false;
   let running = false;
   let stopped = false;
   const composioAdapter = options.composioAdapter ?? new ComposioSessionsAdapter();
 
   const publish = (job: ConnectorLearningJob) => options.emit?.('connector.learning.updated', job);
+
+  function scheduleCrossSourceSynthesis(trigger: 'bootstrap' | 'refresh' | 'manual' = 'bootstrap'): void {
+    if (stopped || !learningEnabled(options.getConfig())) return;
+    if (crossSourceTimer) clearTimeout(crossSourceTimer);
+    crossSourceTimer = setTimeout(() => {
+      crossSourceTimer = null;
+      if (stopped || crossSourceRunning) return;
+      crossSourceRunning = true;
+      void synthesizeConnectedSources({
+        config: options.getConfig(),
+        agentId: options.resolveAgentId(),
+        trigger,
+      }).then((result) => {
+        if (!result.skipped) {
+          options.emit?.('understanding.cross_source.completed', result);
+        }
+      }).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn({ err, trigger }, `Cross-source synthesis failed: ${message}`);
+      }).finally(() => {
+        crossSourceRunning = false;
+      });
+    }, crossSourceDebounceMs);
+    crossSourceTimer.unref?.();
+  }
 
   const activeAccountConnections = () => listConnectorConnections()
     .filter((connection) => connection.status === 'active' && connection.accountId)
@@ -282,6 +313,7 @@ export function startConnectorLearningCoordinator(options: {
         actionId: stream.actionId,
         arguments: stream.arguments,
         buildArguments: (pull) => buildConnectorLearningArguments(plan, stream, pull, connection.identity),
+        ...(stream.maxItems ? { maxItems: stream.maxItems } : {}),
         agentId: job.agentId,
       });
       itemsSeen += synced.itemsSeen;
@@ -290,15 +322,17 @@ export function startConnectorLearningCoordinator(options: {
     }
     const enrichmentErrors: string[] = [];
     if (plan.toolkit === 'googledrive') {
+      const targetDocs = job.mode === 'bootstrap' ? 20 : 10;
       const candidates = listConnectedContentCandidates({
         agentId: job.agentId,
         sourceInstanceId: job.sourceInstanceId,
-        limit: 5,
+        limit: targetDocs,
       });
-      if (candidates.length) {
+      for (let offset = 0; offset < candidates.length; offset += 5) {
+        const batch = candidates.slice(offset, offset + 5);
         const enriched = await readConnectedContent({
           agentId: job.agentId,
-          sourceItemIds: candidates.map((candidate) => candidate.sourceItemId),
+          sourceItemIds: batch.map((candidate) => candidate.sourceItemId),
         });
         enrichmentErrors.push(...enriched.failed.map((failure) => failure.error));
         itemsIndexed += enriched.completed;
@@ -369,6 +403,9 @@ export function startConnectorLearningCoordinator(options: {
       lastCollectedAt: Date.now(),
     });
     publish(completed);
+    if (job.mode === 'bootstrap' || job.idempotencyKey.startsWith('understanding-refresh:')) {
+      scheduleCrossSourceSynthesis(job.mode === 'bootstrap' ? 'bootstrap' : 'refresh');
+    }
     const sourceGrant = getUnderstandingSourceGrant(sourceRun.grantId);
     const activeConsent = getActiveUnderstandingConsent(sourceRun.grantId);
     const rawRetentionDays = sourceGrant?.retentionPolicy === 'bounded_raw'
@@ -470,12 +507,17 @@ export function startConnectorLearningCoordinator(options: {
       return changed;
     },
     runNow,
+    scheduleCrossSourceSynthesis,
     stop() {
       stopped = true;
       if (timer) {
         clearTimeout(timer);
         clearInterval(timer);
         timer = null;
+      }
+      if (crossSourceTimer) {
+        clearTimeout(crossSourceTimer);
+        crossSourceTimer = null;
       }
     },
   };

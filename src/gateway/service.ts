@@ -189,6 +189,7 @@ import {
   startConnectorLearningCoordinator,
   type ConnectorLearningCoordinator,
 } from '../connectors/learning-coordinator.js';
+import { synthesizeConnectedSources } from '../connectors/cross-source-synthesis.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { TaskCollaborationDelivery } from '../tasks/task-collaboration-delivery.js';
 import { TaskMainUpdateDelivery } from '../tasks/task-main-update-delivery.js';
@@ -2688,6 +2689,20 @@ export class GatewayService {
       staleRetentionDays: maintenance.staleRetentionDays,
       evidenceThreshold: maintenance.evidenceThreshold,
     });
+    if ((jobType === 'daily_reconciliation' || jobType === 'weekly_knowledge') && !result.skipped) {
+      void synthesizeConnectedSources({
+        config: this.config,
+        agentId: resolveDefaultAgentId(),
+        trigger: 'maintenance',
+      }).then((synthesis) => {
+        if (!synthesis.skipped) {
+          this.emit('understanding.cross_source.completed', synthesis);
+        }
+      }).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn({ err, jobType }, `Scheduled cross-source synthesis failed: ${message}`);
+      });
+    }
     return { summary: `Memory maintenance completed: ${JSON.stringify(result.metrics)}` };
   }
 

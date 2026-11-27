@@ -1,6 +1,9 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { registerPiOAuthPageHook } from '../src/auth/oauth/pi-oauth-page-hook.js';
+
+registerPiOAuthPageHook();
 
 const stateDirKey = 'XOPC_VITEST_STATE_DIR';
 
