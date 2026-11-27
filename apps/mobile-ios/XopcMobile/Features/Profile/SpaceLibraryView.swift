@@ -123,22 +123,7 @@ struct SpaceLibraryView: View {
     }
 
     var body: some View {
-        TabView(selection: $scope) {
-            ForEach(LibraryScope.allCases, id: \.self) { pageScope in
-                Group {
-                    if pageScope == scope {
-                        libraryList
-                    } else {
-                        ScrollView {
-                            MobileListSkeleton(rows: 5)
-                                .padding(.horizontal, MobileDesignTokens.pagePaddingX)
-                        }
-                    }
-                }
-                .tag(pageScope)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .never))
+        libraryList
         .sensoryFeedback(.selection, trigger: scope)
         .sheet(item: $selectedItem) { item in
             SpaceLibraryDetail(configuration: configuration, item: item, searchHit: item.hit, onOpenSource: onOpenSource,

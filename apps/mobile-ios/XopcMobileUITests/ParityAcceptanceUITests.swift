@@ -2025,16 +2025,17 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(title.waitForNonExistence(timeout: 5))
     }
 
-    func testCapabilityNavigationChoiceRestoresAfterAppRelaunch() {
-        tab("capabilities")
+    func testCapabilityNavigationOpensSpecificCategoryDirectly() {
         app.selectCapability("capability-category-skills")
         XCTAssertTrue(app.buttons["capability-row-meeting-skill"].waitForExistence(timeout: 6))
+        XCTAssertFalse(app.buttons["capability-page-menu"].exists)
 
         app.terminate()
         app.launchEnvironment.removeValue(forKey: "XOPC_UI_TEST_RESET_NAVIGATION")
         app.launch()
-        tab("capabilities")
+        app.selectCapability("capability-category-skills")
         XCTAssertTrue(app.buttons["capability-row-meeting-skill"].waitForExistence(timeout: 6))
+        XCTAssertFalse(app.buttons["capability-page-menu"].exists)
     }
 
     func testGatewayManagementDismissesToSettings() {
@@ -2860,32 +2861,21 @@ final class MobileLayoutParityUITests: XCTestCase {
 
     func testSidebarAndCapabilitySwipesDoNotOpenRows() {
         XCTAssertTrue(app.openHomeSidebar())
-        let progress = app.buttons["chat-sidebar-workbench"]
-        XCTAssertTrue(progress.waitForExistence(timeout: 5))
-        progress.swipeLeft()
-        XCTAssertTrue(progress.waitForNonExistence(timeout: 5))
+        let pluginsEntry = app.buttons["chat-sidebar-capability-plugins"]
+        XCTAssertTrue(pluginsEntry.waitForExistence(timeout: 5))
+        pluginsEntry.swipeLeft()
+        XCTAssertTrue(pluginsEntry.waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.buttons["chat-header-sidebar"].isHittable)
 
         tab("capabilities")
-        let menu = app.buttons["capability-page-menu"]
-        XCTAssertTrue(menu.label.contains("插件"))
+        XCTAssertFalse(app.buttons["capability-page-menu"].exists)
+        XCTAssertTrue(app.navigationBars["插件"].waitForExistence(timeout: 5))
         let plugin = app.buttons["capability-row-meeting-plugin"]
         XCTAssertTrue(plugin.waitForExistence(timeout: 5))
         plugin.swipeLeft()
-        let skill = app.buttons["capability-row-meeting-skill"]
-        XCTAssertTrue(skill.waitForExistence(timeout: 5))
-        XCTAssertTrue(menu.label.contains("技能"))
+        XCTAssertTrue(plugin.exists)
+        XCTAssertFalse(app.buttons["capability-row-meeting-skill"].exists)
         XCTAssertFalse(app.buttons["capability-panel-close"].exists)
-        skill.swipeRight()
-        XCTAssertTrue(plugin.waitForExistence(timeout: 5))
-        app.selectCapability("capability-category-skills")
-        XCTAssertTrue(skill.waitForExistence(timeout: 5))
-        XCTAssertTrue(menu.label.contains("技能"))
-        menu.tap()
-        XCTAssertTrue(app.buttons["capability-category-devices"].waitForExistence(timeout: 5))
-        capture("capability-header-menu")
-        app.buttons["capability-category-plugins"].tap()
-        XCTAssertTrue(plugin.waitForExistence(timeout: 5))
         plugin.tap()
         XCTAssertTrue(app.buttons["capability-panel-close"].waitForExistence(timeout: 5))
     }
@@ -2900,19 +2890,10 @@ final class MobileLayoutParityUITests: XCTestCase {
         let search = app.textFields["capability-search"]
         search.tap()
         search.typeText("Meeting")
-        let shortStart = plugin.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
-        shortStart.press(forDuration: 0.25, thenDragTo: shortStart.withOffset(CGVector(dx: -25, dy: 0)),
-                         withVelocity: .slow, thenHoldForDuration: 0.2)
-        XCTAssertTrue(plugin.isHittable, "A short drag should return to the plugin category")
         app.scrollViews["capability-catalog-plugins"].swipeUp()
         XCTAssertFalse(plugin.isHittable, "The long filtered list should scroll past its first row")
         app.selectCapability("capability-category-channels")
         XCTAssertTrue(app.descendants(matching: .any)["capability-loading"].firstMatch.waitForExistence(timeout: 3))
-        app.selectCapability("capability-category-plugins")
-        XCTAssertEqual(search.value as? String, "Meeting")
-        XCTAssertFalse(plugin.isHittable, "Returning to plugins should restore its scroll position")
-        XCTAssertFalse(app.buttons["capability-row-document-plugin"].exists)
-        app.selectCapability("capability-category-skills")
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.45)).withOffset(CGVector(dx: 2, dy: 0))
         let finish = app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.45))
         start.press(forDuration: 0.04, thenDragTo: finish)
@@ -3816,7 +3797,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(active.label.contains(target))
     }
 
-    func testHistoryLibraryAndProjectTitlesFollowHorizontalSwipes() {
+    func testHistoryLibraryUseHeaderMenuAndProjectTitlesFollowHorizontalSwipes() {
         func assertTitle(_ id: String, contains title: String) {
             let menu = app.buttons.matching(identifier: id)
                 .matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
@@ -3830,13 +3811,12 @@ final class MobileLayoutParityUITests: XCTestCase {
         let conversation = app.staticTexts["移动端布局检查"].firstMatch
         XCTAssertTrue(conversation.waitForExistence(timeout: 6))
         conversation.swipeLeft()
+        assertTitle("sessions-mode-menu", contains: "最近")
+        app.selectPageOption("sessions-mode-projects", from: "sessions-mode-menu")
         assertTitle("sessions-mode-menu", contains: "项目")
         let group = app.staticTexts["未分配"].firstMatch
         XCTAssertTrue(group.waitForExistence(timeout: 6))
-        let rowY = (group.frame.midY - history.frame.minY) / history.frame.height
-        let start = history.coordinate(withNormalizedOffset: CGVector(dx: 0.22, dy: rowY))
-        let end = history.coordinate(withNormalizedOffset: CGVector(dx: 0.88, dy: rowY))
-        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .fast, thenHoldForDuration: 0)
+        app.selectPageOption("sessions-mode-recent", from: "sessions-mode-menu")
         assertTitle("sessions-mode-menu", contains: "最近")
 
         tab("library")
@@ -3844,8 +3824,12 @@ final class MobileLayoutParityUITests: XCTestCase {
         let item = app.buttons["space-item-55555555-5555-4555-8555-555555555555"]
         XCTAssertTrue(item.waitForExistence(timeout: 6))
         item.swipeLeft()
-        assertTitle("space-scope-menu", contains: "收藏")
+        assertTitle("space-scope-menu", contains: "全部资料")
         XCTAssertFalse(app.buttons["preview-actions"].exists)
+        app.selectPageOption("library-scope-favorites", from: "space-scope-menu")
+        assertTitle("space-scope-menu", contains: "收藏")
+        app.selectPageOption("library-scope-all", from: "space-scope-menu")
+        assertTitle("space-scope-menu", contains: "全部资料")
 
         tab("progress")
         app.selectPageOption("work-page-projects", from: "work-page-menu")
@@ -4078,7 +4062,11 @@ private extension MobileLayoutParityUITests {
 @MainActor
 extension XCUIApplication {
     func selectCapability(_ identifier: String) {
-        selectPageOption(identifier, from: "capability-page-menu")
+        let category = identifier.replacingOccurrences(of: "capability-category-", with: "")
+        XCTAssertTrue(openHomeSidebar(), "Could not open navigation")
+        let button = buttons["chat-sidebar-capability-\(category)"]
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
+        button.tap()
     }
 
     func selectPageOption(_ identifier: String, from menu: String) {

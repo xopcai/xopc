@@ -199,7 +199,7 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
       state = scopePager,
       modifier = Modifier.weight(1f).fillMaxWidth(),
       key = { scopes[it].value },
-      userScrollEnabled = activeID == null,
+      userScrollEnabled = false,
       flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(scopePager, snapPositionalThreshold = 0.33f),
     ) { pageIndex ->
       val pageScope = scopes[pageIndex].value

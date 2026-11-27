@@ -47,43 +47,31 @@ function screen(name: string): void {
   command('shell', 'snapshot_display', '-f', remote);
   command('file', 'recv', remote, join(output, name + '.jpeg'));
 }
-async function openCapabilities(): Promise<Attr[]> {
+async function openCapability(category: string): Promise<Attr[]> {
   let nodes = await until('main-chat', 'chat-header-sidebar');
   click(node(nodes, 'chat-header-sidebar'));
-  nodes = await until('sidebar', 'chat-sidebar-capabilities');
-  click(node(nodes, 'chat-sidebar-capabilities'));
-  return until('capabilities', 'capability-pager');
-}
-
-async function selectCategory(nodes: Attr[], key: string): Promise<Attr[]> {
-  click(node(nodes, 'capability-page-menu'));
-  nodes = await until(key + '-menu', 'capability-category-' + key);
-  click(node(nodes, 'capability-category-' + key));
-  return until(key + '-selected', 'capability-pager');
+  const entryId = 'chat-sidebar-capabilities-' + category;
+  nodes = await until('sidebar', entryId);
+  click(node(nodes, entryId));
+  return until(category, 'capability-catalog-' + category);
 }
 
 try {
   let nodes = await tree('initial');
-  if (!nodes.some(item => item.id === 'capability-pager')) nodes = await openCapabilities();
+  if (!nodes.some(item => item.id === 'capability-catalog-agents')) nodes = await openCapability('agents');
   assert(!nodes.some(item => item.id === 'capability-panel-close'), 'Close any existing capability panel first.');
-  for (const origin of ['connections', 'plugins', 'channels']) {
-    nodes = await selectCategory(nodes, origin);
-    // Re-enter to make the origin the initial Swiper index, then change category before opening a sheet.
-    click(node(nodes, 'capability-back'));
-    nodes = await openCapabilities();
-    nodes = await selectCategory(nodes, 'agents');
-    nodes = await until(origin + '-agents', 'capability-settings-coder');
-    click(node(nodes, 'capability-settings-coder'));
-    nodes = await until(origin + '-settings', 'capability-field-name');
-    node(nodes, 'capability-field-description');
-    node(nodes, 'capability-chat-setup-agents');
-    assert(!nodes.some(item => item.id === 'capability-panel-inspect'), 'Expert settings became connection settings.');
-    screen(origin + '-settings');
-    click(node(nodes, 'capability-panel-close'));
-    nodes = await until(origin + '-closed', 'capability-settings-coder');
-    node(nodes, 'capability-chat-setup-agents');
-    passed.push(origin + ' → agents → expert settings → close preserves the selected category');
-  }
+  assert(!nodes.some(item => item.id === 'capability-page-menu'), 'Capabilities header must not render category menu.');
+  nodes = await until('agents-list', 'capability-settings-coder');
+  click(node(nodes, 'capability-settings-coder'));
+  nodes = await until('agents-settings', 'capability-field-name');
+  node(nodes, 'capability-field-description');
+  node(nodes, 'capability-chat-setup-agents');
+  assert(!nodes.some(item => item.id === 'capability-panel-inspect'), 'Expert settings became connection settings.');
+  screen('agents-settings');
+  click(node(nodes, 'capability-panel-close'));
+  nodes = await until('agents-closed', 'capability-settings-coder');
+  node(nodes, 'capability-chat-setup-agents');
+  passed.push('sidebar → agents → expert settings → close opens the direct category page without header/swipe switcher');
   writeFileSync(join(output, 'result.json'), JSON.stringify({ status: 'passed', at: new Date().toISOString(), target, passed, gatewayMutations: false }, null, 2));
   console.log(JSON.stringify({ passed, output }));
 } catch (error) {

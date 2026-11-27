@@ -50,6 +50,15 @@ export function selectSkillsVisibleInPrompt(
   return list;
 }
 
+const PLUGIN_PROMPT_RETENTION_PRIORITY = 400;
+
+function promptRetentionPriority(skill: Skill): number {
+  if (skill.origin?.id?.startsWith('plugin:')) {
+    return PLUGIN_PROMPT_RETENTION_PRIORITY;
+  }
+  return skill.origin?.priority ?? 0;
+}
+
 export function compareSkillsForPrompt(
   left: Skill,
   right: Skill,
@@ -61,8 +70,8 @@ export function compareSkillsForPrompt(
     return rightPinned - leftPinned;
   }
 
-  const leftPriority = left.origin?.priority ?? 0;
-  const rightPriority = right.origin?.priority ?? 0;
+  const leftPriority = promptRetentionPriority(left);
+  const rightPriority = promptRetentionPriority(right);
   if (leftPriority !== rightPriority) {
     return rightPriority - leftPriority;
   }

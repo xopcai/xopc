@@ -40,9 +40,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerDefaults
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -66,9 +63,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -153,39 +148,24 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
   deviceScope: String? = null,
   initialCategoryKey: String? = null,
 ) {
-  val navigation = rememberNavigationPreferences()
-  val categories = CapabilityCategory.entries
-  val initialCategory = remember(navigation, initialCategoryKey) {
-    val requested = initialCategoryKey?.let { key -> categories.firstOrNull { it.key == key } }
-    requested ?: run {
-      val key = navigation.selection("capabilities", categories.map { it.key }, CapabilityCategory.Plugins.key)
-      categories.first { it.key == key }
-    }
+  val category = remember(initialCategoryKey) {
+    initialCategoryKey?.let { key -> CapabilityCategory.entries.firstOrNull { it.key == key } }
+      ?: CapabilityCategory.Plugins
   }
-  val pager = rememberPagerState(initialPage = initialCategory.ordinal) { categories.size }
-  LaunchedEffect(initialCategoryKey) {
-    val targetIndex = initialCategoryKey?.let { key -> categories.indexOfFirst { it.key == key } } ?: -1
-    if (targetIndex >= 0 && pager.currentPage != targetIndex) {
-      pager.scrollToPage(targetIndex)
-    }
-  }
-  val category = categories[pager.settledPage]
   val scope = rememberCoroutineScope()
   val currentLoad by rememberUpdatedState(onLoad)
-  val pages = remember(deviceScope) { mutableStateMapOf<CapabilityCategory, CapabilityPage>() }
-  val loading = remember(deviceScope) { mutableStateMapOf<CapabilityCategory, Boolean>() }
-  val failures = remember(deviceScope) { mutableStateMapOf<CapabilityCategory, Boolean>() }
-  val queries = remember(deviceScope) { mutableStateMapOf<CapabilityCategory, String>() }
-  val loadJobs = remember(deviceScope) { mutableMapOf<CapabilityCategory, kotlinx.coroutines.Job>() }
-  val lists = remember(deviceScope) { categories.associateWith { LazyListState() } }
-  var detail by remember(deviceScope) { mutableStateOf<CapabilityItem?>(null) }
+  var catalog by remember(deviceScope, category) { mutableStateOf<CapabilityPage?>(null) }
+  var loading by remember(deviceScope, category) { mutableStateOf(false) }
+  var failed by remember(deviceScope, category) { mutableStateOf(false) }
+  var query by remember(deviceScope, category) { mutableStateOf("") }
+  var loadJob by remember(deviceScope, category) { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+  val listState = remember(deviceScope, category) { LazyListState() }
+  var detail by remember(deviceScope, category) { mutableStateOf<CapabilityItem?>(null) }
   val keyboard = LocalSoftwareKeyboardController.current
   val focus = LocalFocusManager.current
   val searchFocus = remember { FocusRequester() }
   val colors = MaterialTheme.colorScheme
-  val page = pages[category]
-  val origin = page?.origin
-  val query = queries[category].orEmpty()
+  val origin = catalog?.origin
   val skills = category == CapabilityCategory.Skills
   val agents = category == CapabilityCategory.Agents
   val connections = category == CapabilityCategory.Connections
@@ -195,67 +175,44 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
   val calendarToolPrompt = stringResource(R.string.device_tool_calendar_prompt)
   val locationToolPrompt = stringResource(R.string.device_tool_location_prompt)
 
-  fun load(requested: CapabilityCategory, refresh: Boolean = false) {
-    if (requested == CapabilityCategory.Devices) return
-    if (!refresh && (loading[requested] == true || pages.containsKey(requested) || failures[requested] == true)) return
-    loadJobs.remove(requested)?.cancel()
-    loading[requested] = true
-    failures.remove(requested)
+  fun load(refresh: Boolean = false) {
+    if (category == CapabilityCategory.Devices) return
+    if (!refresh && (loading || catalog != null || failed)) return
+    loadJob?.cancel()
+    loading = true
+    failed = false
     val job = scope.launch {
       try {
-        pages[requested] = currentLoad(requested.key)
+        catalog = currentLoad(category.key)
       } catch (error: CancellationException) {
         throw error
       } catch (_: Exception) {
-        failures[requested] = true
+        failed = true
       } finally {
-        if (loadJobs[requested] === coroutineContext[kotlinx.coroutines.Job]) {
-          loadJobs.remove(requested)
-          loading.remove(requested)
+        if (loadJob === coroutineContext[kotlinx.coroutines.Job]) {
+          loadJob = null
+          loading = false
         }
       }
     }
-    loadJobs[requested] = job
+    loadJob = job
   }
 
   fun updateQuery(value: String) {
-    if (queries[category].orEmpty() == value) return
-    queries[category] = value
-    lists.getValue(category).requestScrollToItem(0)
+    if (query == value) return
+    query = value
+    listState.requestScrollToItem(0)
   }
 
-  LaunchedEffect(pager, deviceScope) {
-    var previous = pager.settledPage
-    snapshotFlow { pager.settledPage }.collect { index ->
-      if (index != previous) {
-        focus.clearFocus()
-        keyboard?.hide()
-        navigation.rememberSelection("capabilities", categories[index].key)
-        previous = index
-      }
-      load(categories[index])
-      categories.getOrNull(index - 1)?.let { load(it) }
-      categories.getOrNull(index + 1)?.let { load(it) }
-    }
+  LaunchedEffect(deviceScope, category) {
+    load()
   }
 
-  val motionAllowed = rememberMotionAllowed()
   Column(Modifier.fillMaxSize().background(colors.background).padding(insets).imePadding()) {
     XopcPageHeader(
       backTag = "capability-back",
       onBack = onExit,
-      titleContent = {
-        PageTitleMenu(
-          categories.map { SegmentOption(it, stringResource(it.title), "capability-category-${it.key}") },
-          category, "capability-page-menu",
-        ) { target ->
-          scope.launch {
-            val distance = target.ordinal - pager.currentPage
-            if (xopcPagerAnimated(motionAllowed, distance)) pager.animateScrollToPage(target.ordinal)
-            else pager.scrollToPage(target.ordinal)
-          }
-        }
-      },
+      title = stringResource(category.title),
     ) {
       if (skills) {
         IconButton(onClick = {
@@ -293,25 +250,20 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
       }
     }
     Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.PagePaddingX)) {
-    if (category != CapabilityCategory.Devices) {
-      XopcPageSearchField(
-        query = query,
-        onQueryChange = { updateQuery(it) },
-        placeholder = if (skills) stringResource(R.string.capability_search_installed_skills)
-          else stringResource(R.string.capability_search, stringResource(category.title)),
-        tag = "capability-search",
-        autoFocus = false,
-        focusRequester = searchFocus,
-        modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
-      )
-    }
-    HorizontalPager(pager, modifier = Modifier.weight(1f).fillMaxWidth().testTag("capability-pager"),
-      key = { categories[it].key }, userScrollEnabled = detail == null,
-      flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.33f),
-    ) { index ->
-      val kind = categories[index]
-      Column(Modifier.fillMaxSize()) {
-        if (kind == CapabilityCategory.Devices) {
+      if (category != CapabilityCategory.Devices) {
+        XopcPageSearchField(
+          query = query,
+          onQueryChange = { updateQuery(it) },
+          placeholder = if (skills) stringResource(R.string.capability_search_installed_skills)
+            else stringResource(R.string.capability_search, stringResource(category.title)),
+          tag = "capability-search",
+          autoFocus = false,
+          focusRequester = searchFocus,
+          modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+        )
+      }
+      if (category == CapabilityCategory.Devices) {
+        Box(Modifier.weight(1f).fillMaxWidth().testTag("capability-catalog-${category.key}")) {
           androidx.compose.runtime.key(deviceScope) {
             DeviceConnectionsScreen(onLoadDevices, onUseComputer, onShareDeviceFile, { tool ->
               val prompt = when (tool) {
@@ -320,21 +272,20 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
                 else -> locationToolPrompt
               }
               onSetupChat(prompt, false)
-            }, onPairDevice, setCapability = onSetDeviceCapability, active = category == CapabilityCategory.Devices)
+            }, onPairDevice, setCapability = onSetDeviceCapability, active = true)
           }
-        } else {
-          val catalog = pages[kind]
-          val failed = failures[kind] == true
-          val pending = loading[kind] == true || (catalog == null && !failed)
-          val groups = capabilityRows(kind, catalog, personal, queries[kind].orEmpty())
-          val search = queries[kind].orEmpty().trim()
-          val list = lists.getValue(kind)
-          XopcPullToRefreshBox(
-            isRefreshing = loading[kind] == true && catalog != null,
-            onRefresh = { load(kind, refresh = true) },
-            modifier = Modifier.fillMaxSize(),
-          ) {
-          LazyColumn(state = list, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
+        }
+      } else {
+        val pending = loading || (catalog == null && !failed)
+        val groups = capabilityRows(category, catalog, personal, query)
+        val search = query.trim()
+        XopcPullToRefreshBox(
+          isRefreshing = loading && catalog != null,
+          onRefresh = { load(refresh = true) },
+          modifier = Modifier.weight(1f).fillMaxWidth(),
+        ) {
+          LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("capability-catalog-${category.key}"),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (pending && catalog == null) item { CapabilityListSkeleton() }
             if (failed || catalog?.incomplete == true) item {
@@ -342,7 +293,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
                 message = stringResource(if (failed) R.string.capability_load_failed else R.string.capability_partial),
                 tone = if (failed) XopcBannerTone.Danger else XopcBannerTone.Warning,
                 actionLabel = stringResource(R.string.capability_retry),
-                onAction = { load(kind, refresh = true) },
+                onAction = { load(refresh = true) },
               )
             }
             if (!pending && !failed && groups.isEmpty()) item {
@@ -350,7 +301,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
                 message = stringResource(if (search.isEmpty()) R.string.capability_empty else R.string.capability_no_matches),
                 icon = R.drawable.action_search,
                 actionLabel = if (search.isNotEmpty()) stringResource(R.string.capability_clear) else null,
-                onAction = if (search.isNotEmpty()) ({ if (pager.settledPage == index) updateQuery("") }) else null,
+                onAction = if (search.isNotEmpty()) ({ updateQuery("") }) else null,
                 modifier = Modifier.padding(top = 24.dp).testTag("capability-empty"),
               )
             }
@@ -361,26 +312,22 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
                   color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp, bottom = 2.dp, start = 4.dp))
               }
               items(rows, key = { it.id }) { row ->
-                val isAgent = kind == CapabilityCategory.Agents
+                val isAgent = category == CapabilityCategory.Agents
                 val canOpenRow = !isAgent || row.group != "disabled"
                 CapabilityCard(row.name, row.description, modifier = Modifier.testTag("capability-row-${row.id}"),
                   onClick = if (canOpenRow) ({
-                    if (pager.settledPage == index && !pager.isScrollInProgress) {
-                      focus.clearFocus(); keyboard?.hide()
-                      if (isAgent) onOpenAgent(row) else detail = row
-                    }
-                  }) else null, leading = { CapabilityItemIcon(row, kind, catalog?.origin, personal, agentAvatars) }) {
+                    focus.clearFocus(); keyboard?.hide()
+                    if (isAgent) onOpenAgent(row) else detail = row
+                  }) else null, leading = { CapabilityItemIcon(row, category, catalog?.origin, personal, agentAvatars) }) {
                   if (isAgent) {
                     val settingsLabel = "${stringResource(R.string.settings_title)} · ${row.name}"
                     IconButton(onClick = {
-                      if (pager.settledPage == index && !pager.isScrollInProgress) {
-                        focus.clearFocus(); keyboard?.hide(); detail = row
-                      }
+                      focus.clearFocus(); keyboard?.hide(); detail = row
                     }, modifier = Modifier.size(44.dp).testTag("capability-settings-${row.id}")) {
                       ActionIcon(R.drawable.action_more_horizontal, color = colors.onSurfaceVariant,
                         contentDescription = settingsLabel, size = 18.dp)
                     }
-                  } else if (kind == CapabilityCategory.Connections && (row.group == "available" || row.group == "attention")) {
+                  } else if (category == CapabilityCategory.Connections && (row.group == "available" || row.group == "attention")) {
                     Text(stringResource(R.string.capability_connect), style = MaterialTheme.typography.labelLarge, color = colors.primary)
                   } else {
                     ActionIcon(R.drawable.action_chevron_right, color = colors.onSurfaceVariant, size = 14.dp)
@@ -389,10 +336,8 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
               }
             }
           }
-          }
         }
       }
-    }
     }
   }
   detail?.let { row ->
@@ -404,7 +349,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
         CapabilityItemIcon(row, category, origin, personal, agentAvatars, 44.dp)
       }, request = { body ->
         onPanel(category.key, if (category == CapabilityCategory.Connections) row.id else row.targetId ?: row.id, body)
-      }, onChanged = { load(category, refresh = true) }, onChat = chat, onClose = { detail = null },
+      }, onChanged = { load(refresh = true) }, onChat = chat, onClose = { detail = null },
         onUseInChat = { prompt -> detail = null; onSetupChat(prompt, false) },
         isMcpSetup = row.id == "mcp:setup")
     }

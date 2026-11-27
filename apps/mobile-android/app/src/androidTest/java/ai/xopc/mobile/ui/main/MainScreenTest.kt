@@ -2326,12 +2326,18 @@ class MainScreenTest {
   }
 
   private fun selectCapability(category: String) {
-    composeTestRule.onNodeWithTag("capability-page-menu").performClick()
-    composeTestRule.onNodeWithTag("capability-category-$category").performClick()
+    if (composeTestRule.onAllNodesWithTag("capability-back").fetchSemanticsNodes().isNotEmpty()) {
+      composeTestRule.onNodeWithTag("capability-back").performClick()
+    }
+    if (composeTestRule.onAllNodesWithTag("chat-sidebar").fetchSemanticsNodes().isEmpty()) {
+      composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    }
+    composeTestRule.onNodeWithTag("chat-sidebar-capability-$category").performClick()
   }
 
   private fun assertCapabilityTitle(title: Int) {
-    composeTestRule.onNodeWithTag("capability-page-menu").assertTextContains(composeTestRule.activity.getString(title))
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(title)).assertIsDisplayed()
+    composeTestRule.onNodeWithTag("capability-page-menu").assertDoesNotExist()
   }
 
   @Test fun capabilityCatalogActionsAndSearchStayInTheirCategory() {
@@ -2431,23 +2437,17 @@ class MainScreenTest {
       }
     }
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
-    composeTestRule.onNodeWithTag("chat-sidebar-workbench").performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithTag("chat-sidebar-capability-plugins").performTouchInput { swipeLeft() }
     composeTestRule.waitUntil(5000) {
       composeTestRule.onAllNodesWithTag("chat-sidebar").fetchSemanticsNodes().isEmpty()
     }
-    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
-    composeTestRule.onNodeWithTag("chat-sidebar-capabilities").performClick()
     selectCapability("plugins")
+    assertCapabilityTitle(R.string.capability_plugins)
     composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
     composeTestRule.onNodeWithTag("capability-row-meeting-plugin").performTouchInput { swipeLeft() }
-    composeTestRule.onNodeWithTag("capability-row-skills").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("capability-row-skills").assertDoesNotExist()
     composeTestRule.onNodeWithTag("capability-panel-close").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("capability-row-skills").performTouchInput { swipeRight() }
-    composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
-    selectCapability("skills")
-    composeTestRule.onNodeWithTag("capability-row-skills").assertIsDisplayed()
-    selectCapability("plugins")
-    composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
     composeTestRule.onNodeWithTag("capability-refresh").assertDoesNotExist()
     composeTestRule.waitUntil(5000) {
       composeTestRule.onAllNodesWithTag("capability-brand-loaded", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
@@ -2460,6 +2460,8 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("capability-search").performTextInput("Meeting")
     composeTestRule.onNodeWithTag("capability-row-document-plugin").assertDoesNotExist()
     composeTestRule.onNodeWithTag("capability-discover").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("capability-search-clear").performClick()
+    composeTestRule.onNodeWithTag("capability-row-document-plugin").assertIsDisplayed()
     for (kind in listOf("skills", "connections", "agents", "channels")) {
       selectCapability(kind)
       composeTestRule.onNodeWithTag("capability-row-$kind").assertIsDisplayed()
@@ -2467,7 +2469,8 @@ class MainScreenTest {
       if (kind == "skills") {
         val setup = composeTestRule.onNodeWithTag("capability-add-$kind").assertIsDisplayed()
         assertTrue(setup.fetchSemanticsNode().boundsInRoot.right >=
-          composeTestRule.onNodeWithTag("capability-page-menu").fetchSemanticsNode().boundsInRoot.right)
+          composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.capability_skills))
+            .fetchSemanticsNode().boundsInRoot.right)
         setup.performClick()
         composeTestRule.onNodeWithTag("capability-field-query").assertIsDisplayed()
         composeTestRule.onNodeWithTag("capability-panel-close").performClick()
@@ -2536,10 +2539,6 @@ class MainScreenTest {
       if (kind == "channels") composeTestRule.onNodeWithTag("capability-panel-pair").assertIsDisplayed()
       composeTestRule.onNodeWithTag("capability-panel-close").performClick()
     }
-    selectCapability("plugins")
-    composeTestRule.onNodeWithTag("capability-search").assertTextContains("Meeting")
-    composeTestRule.onNodeWithTag("capability-search-clear").performClick()
-    composeTestRule.onNodeWithTag("capability-row-document-plugin").assertIsDisplayed()
     composeTestRule.runOnIdle {
       assertTrue(chatSetups.map { it.second } == listOf(false, true))
     }
@@ -2582,12 +2581,10 @@ class MainScreenTest {
         CapabilitiesScreen(androidx.compose.foundation.layout.PaddingValues(), PersonalUiState(), emptyMap(),
           onLoad = { ai.xopc.mobile.gateway.CapabilityPage(emptyList()) }, onOpenAgent = {}, onExit = {},
           onSetupChat = { _, _ -> }, onPanel = { _, _, _ -> JSONObject() },
-          onLoadDevices = { DeviceConnections(own.id, listOf(own, online, offline)) }, onUseComputer = { target.set(it) })
+          onLoadDevices = { DeviceConnections(own.id, listOf(own, online, offline)) }, onUseComputer = { target.set(it) },
+          initialCategoryKey = "devices")
       }
     }
-    selectCapability("connections")
-    assertCapabilityTitle(R.string.capability_connections)
-    composeTestRule.onNodeWithTag("capability-pager").performTouchInput { swipeLeft() }
     assertCapabilityTitle(R.string.capability_devices)
     composeTestRule.waitUntil(5_000) { composeTestRule.onAllNodesWithText("Offline PC").fetchSemanticsNodes().isNotEmpty() }
     composeTestRule.onNodeWithTag("capability-search").assertDoesNotExist()
@@ -2623,10 +2620,10 @@ class MainScreenTest {
               })).put("actions", JSONArray().put(JSONObject().put("id", "save").put("label", "Save")))
               else -> JSONObject().put("qrUrl", qrPayload)
             }
-          })
+          },
+          initialCategoryKey = "channels")
       }
     }
-    selectCapability("channels")
     composeTestRule.onNodeWithTag("capability-row-direct").performClick()
     composeTestRule.onNodeWithTag("capability-panel-qr").assertDoesNotExist()
     val close = composeTestRule.onNodeWithTag("capability-panel-close")
@@ -2698,23 +2695,16 @@ class MainScreenTest {
         })
       }
     }
-    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
-    composeTestRule.onNodeWithTag("chat-sidebar-capabilities").performClick()
-    val pager = composeTestRule.onNodeWithTag("capability-pager")
     selectCapability("plugins")
-    pager.performTouchInput {
-      swipe(center, center.copy(x = center.x - width * 0.12f), durationMillis = 480)
-    }
     assertCapabilityTitle(R.string.capability_plugins)
-    pager.performTouchInput { swipeUp() }
-    composeTestRule.onNodeWithTag("capability-row-plugins-0").assertIsNotDisplayed()
-    pager.performTouchInput { swipeLeft() }
-    assertCapabilityTitle(R.string.capability_skills)
-    composeTestRule.onNodeWithTag("capability-loading").assertIsDisplayed()
-    pager.performTouchInput { swipeRight() }
+    val catalog = composeTestRule.onNodeWithTag("capability-catalog-plugins")
+    catalog.performTouchInput { swipeLeft() }
     assertCapabilityTitle(R.string.capability_plugins)
+    catalog.performTouchInput { swipeUp() }
     composeTestRule.onNodeWithTag("capability-row-plugins-0").assertIsNotDisplayed()
     selectCapability("skills")
+    assertCapabilityTitle(R.string.capability_skills)
+    composeTestRule.onNodeWithTag("capability-loading").assertIsDisplayed()
     slow.complete(Unit)
     composeTestRule.waitUntil(5000) {
       composeTestRule.onAllNodesWithTag("capability-row-skills-0").fetchSemanticsNodes().isNotEmpty()
@@ -2726,7 +2716,7 @@ class MainScreenTest {
       device.executeShellCommand("input swipe 1 $y ${display.widthPixels * 3 / 4} $y 350"),
     ).use { it.readBytes() }
     composeTestRule.waitUntil(5000) {
-      composeTestRule.onAllNodesWithTag("capability-pager").fetchSemanticsNodes().isEmpty()
+      composeTestRule.onAllNodesWithTag("capability-catalog-skills").fetchSemanticsNodes().isEmpty()
     }
   }
 

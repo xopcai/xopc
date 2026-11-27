@@ -352,10 +352,12 @@ function loadSkillFromFile(
       };
     }
 
-    // Derive category from directory path: .xopc/skills/creative/theme-factory → 'creative'
-    // Only assign a category when the skill is nested at least two levels below rootDir.
+    // Derive category from plugin id (for plugin sources) or directory path:
+    // .xopc/skills/creative/theme-factory → 'creative' (only when nested >= 2 levels below rootDir).
     let category: string | undefined;
-    if (rootDir && source.id !== 'rsi-project') {
+    if (source.id.startsWith('plugin:')) {
+      category = source.id.slice('plugin:'.length) || undefined;
+    } else if (rootDir && source.id !== 'rsi-project') {
       const relDir = toPosixPath(relative(rootDir, skillDir));
       const segments = relDir.split('/');
       if (segments.length > 1) {

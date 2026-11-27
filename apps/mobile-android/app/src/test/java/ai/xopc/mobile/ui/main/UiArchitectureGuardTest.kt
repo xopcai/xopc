@@ -148,12 +148,20 @@ class UiArchitectureGuardTest {
     }
     for (file in listOf("MainScreen.kt", "SpaceLibraryScreen.kt")) {
       val text = File(uiMainDir(), file).readText()
-      assertTrue("$file must use HorizontalPager instead of swipePageSelection", !text.contains("swipePageSelection("))
+      assertTrue("$file must not use swipePageSelection", !text.contains("swipePageSelection("))
+      assertTrue("$file must disable horizontal swipe switching on its bottom-tab pager", text.contains("userScrollEnabled = false"))
     }
+    val progress = File(uiMainDir(), "ProgressScreen.kt").readText()
+    assertTrue("ProgressScreen workbench pager must disable horizontal swipe switching", progress.contains("userScrollEnabled = false"))
+    val notes = File(uiMainDir(), "NotesScreen.kt").readText()
+    assertTrue("NotesScreen must switch filters via PageTitleMenu without HorizontalPager",
+      notes.contains("PageTitleMenu(") && !notes.contains("HorizontalPager("))
     val capabilities = File(uiMainDir(), "CapabilitiesScreen.kt").readText()
     val searchIdx = capabilities.indexOf("XopcPageSearchField(")
-    val pagerIdx = capabilities.indexOf("HorizontalPager(")
-    assertTrue("CapabilitiesScreen must place search above HorizontalPager", searchIdx in 0 until pagerIdx)
+    val listIdx = capabilities.indexOf("XopcPullToRefreshBox(")
+    assertTrue("CapabilitiesScreen must place search above list content", searchIdx in 0 until listIdx)
+    assertTrue("CapabilitiesScreen must not show PageTitleMenu switcher", !capabilities.contains("PageTitleMenu("))
+    assertTrue("CapabilitiesScreen must not use HorizontalPager", !capabilities.contains("HorizontalPager("))
     assertTrue("CapabilitiesScreen skill market button must use action_capabilities icon",
       capabilities.contains("R.drawable.action_capabilities"))
   }

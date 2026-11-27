@@ -153,6 +153,8 @@ struct UIArchitectureGuardTests {
         let bottomSearchPattern = try Regex(#"\.safeAreaInset\(edge:\s*\.bottom,\s*spacing:\s*0\)\s*\{[\s\S]{0,120}searchField"#)
         #expect(source.contains(topSearchPattern), "CapabilitiesView search must be anchored at top")
         #expect(!source.contains(bottomSearchPattern), "CapabilitiesView must not pin search at bottom")
+        #expect(!source.contains("MobilePageTitleMenu("), "CapabilitiesView must use a static header title without category menu switching")
+        #expect(!source.contains(".tabViewStyle(.page"), "CapabilitiesView must not use horizontal swipe paging across categories")
         #expect(source.contains("systemImage: \"square.grid.2x2\""), "CapabilitiesView skill market must use grid icon")
     }
 
@@ -210,8 +212,19 @@ struct UIArchitectureGuardTests {
             contentsOf: Self.iosSourceRoot.appendingPathComponent("Features/Profile/SpaceLibraryView.swift"),
             encoding: .utf8
         )
-        #expect(spaceLibrary.contains("TabView(selection:"), "SpaceLibraryView must use interactive TabView(.page)")
+        #expect(spaceLibrary.contains("MobilePageTitleMenu("), "SpaceLibraryView must switch scopes via top header menu")
+        #expect(!spaceLibrary.contains(".tabViewStyle(.page"), "SpaceLibraryView must not allow horizontal swipe switching")
         #expect(!spaceLibrary.contains(".pageSelectionSwipe("), "SpaceLibraryView must not fall back to discrete pageSelectionSwipe")
+        for rel in [
+            "Features/Conversations/ConversationsView.swift",
+            "Features/Progress/ProgressView.swift",
+            "Features/Notes/NotesView.swift",
+            "Features/Profile/SpaceLibraryView.swift"
+        ] {
+            let text = try String(contentsOf: Self.iosSourceRoot.appendingPathComponent(rel), encoding: .utf8)
+            #expect(text.contains("MobilePageTitleMenu("), "\(rel) must use MobilePageTitleMenu for manual header switching")
+            #expect(!text.contains(".tabViewStyle(.page"), "\(rel) must disable horizontal swipe switching")
+        }
         #expect(spaceLibrary.contains("MobileUndoBar("), "SpaceLibraryView must use MobileUndoBar")
         #expect(spaceLibrary.contains("MobileErrorView("), "SpaceLibraryView must use MobileErrorView")
         #expect(spaceLibrary.contains("MobileEmptyState("), "SpaceLibraryView must use MobileEmptyState")

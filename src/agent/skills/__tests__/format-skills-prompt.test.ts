@@ -126,6 +126,45 @@ describe('formatSkillsForPrompt', () => {
     expect(xml).toContain('<more_skills omitted="2"');
   });
 
+  it('retains active plugin skills ahead of bundled and agents-global skills despite lower collision priority', () => {
+    const bundledSkill: Skill = {
+      ...baseSkill,
+      name: 'aaa-bundled',
+      source: 'builtin',
+      origin: makeOrigin('bundled', 200, 'builtin'),
+    };
+    const agentsGlobalSkill: Skill = {
+      ...baseSkill,
+      name: 'bbb-agents-global',
+      source: 'global',
+      origin: makeOrigin('agents-global', 300, 'global'),
+    };
+    const pluginSkill: Skill = {
+      ...baseSkill,
+      name: 'jira.triage',
+      category: 'jira',
+      source: 'global',
+      origin: makeOrigin('plugin:jira', 150, 'global'),
+    };
+    const workspaceSkill: Skill = {
+      ...baseSkill,
+      name: 'zzz-workspace',
+      source: 'workspace',
+      origin: makeOrigin('xopc-workspace', 500, 'workspace'),
+    };
+
+    const xml = formatSkillsForPrompt(
+      [bundledSkill, agentsGlobalSkill, pluginSkill, workspaceSkill],
+      { limits: { maxSkillsInPrompt: 2 } },
+    );
+
+    expect(xml).toContain('<name>zzz-workspace</name>');
+    expect(xml).toContain('<name>jira.triage</name>');
+    expect(xml).not.toContain('<name>aaa-bundled</name>');
+    expect(xml).not.toContain('<name>bbb-agents-global</name>');
+    expect(xml.indexOf('zzz-workspace')).toBeLessThan(xml.indexOf('jira.triage'));
+  });
+
   it('degrades to compact entries when character budget is tight before omitting', () => {
     const skills: Skill[] = Array.from({ length: 12 }, (_, idx) => ({
       ...baseSkill,

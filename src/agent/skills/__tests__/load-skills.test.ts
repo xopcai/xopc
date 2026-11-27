@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { AgentPluginStore } from '../../../extensions/agent-plugins/store.js';
 import { loadSkills } from '../index.js';
 import { resolveAgentsSkillsDir, resolveSkillSources } from '../skill-sources.js';
 
@@ -527,5 +528,38 @@ metadata:
       headings: ['Release Guard', 'Canary Verification', 'Rollback Triggers'],
     });
     rmSync(root, { recursive: true, force: true });
+  });
+
+  it('defaults plugin skill category to plugin id while honoring explicit frontmatter category', () => {
+    const source = mkdtempSync(join(tmpdir(), 'xopc-plugin-skill-cat-'));
+    mkdirSync(join(source, '.claude-plugin'), { recursive: true });
+    mkdirSync(join(source, 'skills', 'triage'), { recursive: true });
+    mkdirSync(join(source, 'skills', 'deploy'), { recursive: true });
+    writeFileSync(
+      join(source, '.claude-plugin', 'plugin.json'),
+      JSON.stringify({ name: 'jira-ops', version: '1.0.0' }),
+    );
+    writeFileSync(
+      join(source, 'skills', 'triage', 'SKILL.md'),
+      '---\nname: triage\ndescription: Triage issues\n---\nTriage steps.\n',
+    );
+    writeFileSync(
+      join(source, 'skills', 'deploy', 'SKILL.md'),
+      '---\nname: deploy\ndescription: Deploy services\ncategory: devops\n---\nDeploy steps.\n',
+    );
+
+    const store = new AgentPluginStore(stateDir);
+    const plan = store.inspect(source);
+    store.install(source, { reviewHash: plan.reviewHash });
+    const plugin = store.list()[0]!;
+    store.setEnabled(plugin.id, true);
+
+    const result = loadTestSkills({});
+    const triage = result.skills.find((skill) => skill.name === `${plugin.id}.triage`);
+    const deploy = result.skills.find((skill) => skill.name === `${plugin.id}.deploy`);
+
+    expect(triage?.category).toBe(plugin.id);
+    expect(deploy?.category).toBe('devops');
+    rmSync(source, { recursive: true, force: true });
   });
 });

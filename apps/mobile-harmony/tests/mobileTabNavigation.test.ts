@@ -305,6 +305,8 @@ describe('HarmonyOS multi-stack mobile tab navigation', () => {
     const sidebar = readFileSync(new URL('../entry/src/main/ets/view/ChatSidebar.ets', import.meta.url), 'utf8');
     const tabBar = readFileSync(new URL('../entry/src/main/ets/view/FloatingTabBar.ets', import.meta.url), 'utf8');
     const sessions = readFileSync(new URL('../entry/src/main/ets/view/SessionsView.ets', import.meta.url), 'utf8');
+    const notes = readFileSync(new URL('../entry/src/main/ets/view/NotesTabView.ets', import.meta.url), 'utf8');
+    const library = readFileSync(new URL('../entry/src/main/ets/view/SpaceLibraryView.ets', import.meta.url), 'utf8');
     const capabilities = readFileSync(new URL('../entry/src/main/ets/view/CapabilitiesView.ets', import.meta.url), 'utf8');
 
     expect(home).not.toContain('returnToSidebar');
@@ -325,8 +327,18 @@ describe('HarmonyOS multi-stack mobile tab navigation', () => {
     expect(sessions).toContain('@Param scrollTopRevision: number = 0;');
     expect(sessions).toContain("drawerId: 'sessions-header-sidebar'");
 
-    // CapabilitiesView accepts initialCategory from flattened sidebar routes
+    // Bottom tabs (Conversations, Workbench, Notes, Library) switch via top header menu only (no horizontal swipe)
+    expect(sessions).toContain('.disableSwipe(true)');
+    expect(home).toContain('.disableSwipe(true)');
+    expect(notes).toContain('.disableSwipe(true)');
+    expect(library).toContain('.disableSwipe(true)');
+    expect(library).toContain("titleMenuId: 'space-scope-menu'");
+
+    // CapabilitiesView opens a single category directly with static title and no pager/header switching
     expect(capabilities).toContain("@Param initialCategory: string = '';");
+    expect(capabilities).toContain('showStaticTitle: true');
+    expect(capabilities).not.toContain('titleOptions:');
+    expect(capabilities).not.toContain('Swiper(');
 
     // Flattened sidebar has zero duplication with bottom tabs and no recent conversations list
     expect(sidebar).not.toContain('XopcSessionsViewModel');

@@ -617,7 +617,7 @@ export struct XopcSpaceLibraryView {
           }.width('100%').height('100%').accessibilityLevel(page.scope === this.scope ? 'auto' : 'no-hide-descendants')
         }, (page: XopcLibraryScopeState): string => page.scope)
       }.id('space-library-pager').index(this.scopeIndex).loop(false).indicator(false).cachedCount(2)
-        .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(this.detailOpen || this.busy)
+        .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(true)
         .onChange((index: number): void => { this.commitScope(index); })
         .width('100%').layoutWeight(1).clip(true)
       if (this.undo) {

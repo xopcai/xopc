@@ -78,10 +78,6 @@ enum CapabilityCategory: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-private final class CapabilityScrollPositions {
-    var rows: [CapabilityCategory: String] = [:]
-}
-
 private struct CapabilityCatalogPage: Decodable {
     let items: [CapabilityCatalogItem]
     let incomplete: Bool?
@@ -116,14 +112,12 @@ struct CapabilitiesView: View {
     let onShareDeviceFile: (MessageAttachment) async throws -> Void
     let onPairDevice: () -> Void
     @Environment(\.locale) private var locale
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("navigation.capabilities") private var rememberedCategory = CapabilityCategory.plugins
-    @State private var category: CapabilityCategory
-    @State private var queries: [CapabilityCategory: String] = [:]
-    @State private var positions = CapabilityScrollPositions()
-    @State private var pages: [CapabilityCategory: CapabilityCatalogPage] = [:]
-    @State private var failures: Set<CapabilityCategory> = []
-    @State private var requests: [CapabilityCategory: Task<Void, Never>] = [:]
+    private let category: CapabilityCategory
+    @State private var query = ""
+    @State private var scrollPosition: String?
+    @State private var page: CapabilityCatalogPage?
+    @State private var failed = false
+    @State private var request: Task<Void, Never>?
     @State private var detail: CapabilityCatalogItem?
     @State private var pendingChatPrompt: String?
     @FocusState private var searchFocused: Bool
@@ -148,41 +142,29 @@ struct CapabilitiesView: View {
         self.onOpenDeviceChat = onOpenDeviceChat
         self.onShareDeviceFile = onShareDeviceFile
         self.onPairDevice = onPairDevice
-        let resolved = initialCategory.flatMap(CapabilityCategory.init(rawValue:))
-            ?? UserDefaults.standard.string(forKey: "navigation.capabilities").flatMap(CapabilityCategory.init(rawValue:))
-            ?? .plugins
-        _category = State(initialValue: resolved)
+        category = initialCategory.flatMap(CapabilityCategory.init(rawValue:)) ?? .plugins
     }
 
     var body: some View {
-        TabView(selection: $category) {
-            ForEach(CapabilityCategory.allCases) { kind in
-                Group {
-                    if kind == .devices {
-                        DeviceConnectionsView(configuration: configuration, active: category == .devices,
-                                              onOpenChat: onOpenDeviceChat, onShareFile: onShareDeviceFile,
-                                              onLocalTool: openDeviceTool, onPair: onPairDevice)
-                            .id(ComposerDraftStore.accountScope(configuration))
-                    } else {
-                        catalogPage(kind)
-                    }
-                }.tag(kind)
+        Group {
+            if category == .devices {
+                DeviceConnectionsView(configuration: configuration, active: true,
+                                      onOpenChat: onOpenDeviceChat, onShareFile: onShareDeviceFile,
+                                      onLocalTool: openDeviceTool, onPair: onPairDevice)
+                    .id(ComposerDraftStore.accountScope(configuration))
+            } else {
+                catalogPage
             }
         }
-        .tabViewStyle(.page(indexDisplayMode: .never))
-        .accessibilityIdentifier("capability-pager")
-        .sensoryFeedback(.selection, trigger: category)
         .background(mobileTheme.canvas)
         .safeAreaInset(edge: .top, spacing: 0) {
             if category != .devices {
                 searchField
             }
         }
-        .mobilePageTitle(Text(category.title)) {
-            MobilePageTitleMenu(options: CapabilityCategory.allCases.map {
-                SegmentOption(id: $0, title: $0.title, accessibilityID: "capability-category-\($0.id)")
-            }, selected: category, identifier: "capability-page-menu", onSelect: selectCategory)
-        }
+        .navigationTitle(Text(category.title))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if category == .skills {
@@ -200,14 +182,10 @@ struct CapabilitiesView: View {
                 }
             }
         }
-        .onChange(of: category, initial: true) {
-            rememberedCategory = category
-            searchFocused = false
-            loadNearby()
-        }
+        .onAppear { load() }
         .onChange(of: locale.identifier) { reloadCatalog() }
         .onChange(of: configuration) { reloadCatalog() }
-        .onDisappear { cancelRequests() }
+        .onDisappear { cancelRequest() }
         .sheet(item: $detail, onDismiss: {
             guard let prompt = pendingChatPrompt else { return }
             pendingChatPrompt = nil
@@ -253,47 +231,33 @@ struct CapabilitiesView: View {
                     category == .agents ? (locale.identifier.hasPrefix("zh") ? "zh-CN" : "en") : nil)
     }
 
-    private var query: Binding<String> {
-        Binding(get: { queries[category, default: ""] },
-                set: { queries[category] = String($0.prefix(160)) })
+    private var queryBinding: Binding<String> {
+        Binding(get: { query }, set: { query = String($0.prefix(160)) })
     }
 
-    private func selectCategory(_ option: CapabilityCategory) {
-        let cases = CapabilityCategory.allCases
-        guard option != category, let from = cases.firstIndex(of: category),
-              let targetIndex = cases.firstIndex(of: option) else { return }
-        withAnimation(MobileMotion.pagerAnimation(reduceMotion: reduceMotion, distance: targetIndex - from)) {
-            category = option
-        }
-    }
-
-    private func catalogPage(_ kind: CapabilityCategory) -> some View {
-        let query = queries[kind, default: ""]
-        return ScrollViewReader { scroll in
+    private var catalogPage: some View {
+        ScrollViewReader { scroll in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     Color.clear.frame(height: 0).id("capability-top").accessibilityHidden(true)
-                    catalogContent(kind, query: query)
+                    catalogContent
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, 18)
             }
-            .accessibilityIdentifier("capability-catalog-\(kind.id)")
-            .scrollPosition(id: Binding(get: { positions.rows[kind] }, set: { positions.rows[kind] = $0 }))
+            .accessibilityIdentifier("capability-catalog-\(category.id)")
+            .scrollPosition(id: $scrollPosition)
             .onChange(of: query) { _, _ in
-                positions.rows[kind] = "capability-top"
+                scrollPosition = "capability-top"
                 scroll.scrollTo("capability-top", anchor: .top)
             }
             .scrollDismissesKeyboard(.interactively)
         }
-        .accessibilityHidden(kind != category)
     }
 
-    @ViewBuilder private func catalogContent(_ kind: CapabilityCategory, query: String) -> some View {
-        let page = pages[kind]
-        let failed = failures.contains(kind)
-        let loading = requests[kind] != nil || (page == nil && !failed)
-        let groups = Dictionary(grouping: matches(kind, query: query), by: \.group)
+    @ViewBuilder private var catalogContent: some View {
+        let loading = request != nil || (page == nil && !failed)
+        let groups = Dictionary(grouping: matches, by: \.group)
         if loading, page == nil {
             VStack(alignment: .leading, spacing: 10) {
                 ProgressListSkeleton()
@@ -307,7 +271,7 @@ struct CapabilitiesView: View {
                 message: AppLocalization.string(failed ? "capability_load_failed" : "capability_partial", locale: locale),
                 tone: failed ? .danger : .warning,
                 actionLabel: AppLocalization.string("capability_retry", locale: locale),
-                onAction: { load(kind, refresh: true) }
+                onAction: { load(refresh: true) }
             )
         }
         if groups.isEmpty, !loading, !failed {
@@ -315,7 +279,7 @@ struct CapabilitiesView: View {
                 Label(query.isEmpty ? "capability_empty" : "capability_no_matches", systemImage: "magnifyingglass")
             } actions: {
                 if !query.isEmpty {
-                    Button("capability_clear") { queries[kind] = "" }
+                    Button("capability_clear") { query = "" }
                 }
             }
             .accessibilityIdentifier("capability-empty")
@@ -331,21 +295,21 @@ struct CapabilitiesView: View {
                     .padding(.leading, 4)
                     .id("capability-group-\(group)")
                 ForEach(rows) { item in
-                    catalogRow(item, kind: kind).id("capability-item-\(item.id)")
+                    catalogRow(item).id("capability-item-\(item.id)")
                 }
             }
         }
     }
 
-    private func matches(_ kind: CapabilityCategory, query: String) -> [CapabilityCatalogItem] {
-        guard var rows = pages[kind]?.items else { return [] }
-        if kind == .agents {
+    private var matches: [CapabilityCatalogItem] {
+        guard var rows = page?.items else { return [] }
+        if category == .agents {
             rows = rows.map { item in
                 CapabilityCatalogItem(id: item.id, name: item.agent.localizedName(locale),
                                       description: item.agent.localizedDescription(locale), group: item.group, avatar: item.avatar)
             }
         }
-        if kind == .agents, let personal, personal.state == "ready" {
+        if category == .agents, let personal, personal.state == "ready" {
             rows.removeAll { $0.id == personal.agentId }
             rows.insert(CapabilityCatalogItem(id: personal.agentId, name: personal.displayName,
                                               description: AppLocalization.string("capability_personal_description", locale: locale),
@@ -364,13 +328,13 @@ struct CapabilitiesView: View {
             : String(format: AppLocalization.string("capability_search", locale: locale), localizedCategory)
         return HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
-            TextField(placeholder, text: query)
+            TextField(placeholder, text: queryBinding)
                 .focused($searchFocused)
                 .submitLabel(.search)
                 .onSubmit { searchFocused = false }
                 .accessibilityIdentifier("capability-search")
-            if !query.wrappedValue.isEmpty {
-                Button { query.wrappedValue = "" } label: {
+            if !query.isEmpty {
+                Button { query = "" } label: {
                     Label("capability_clear", systemImage: "xmark.circle.fill")
                         .labelStyle(.iconOnly)
                         .frame(width: 44, height: 44)
@@ -395,26 +359,26 @@ struct CapabilitiesView: View {
         detail = item
     }
 
-    private func catalogRow(_ item: CapabilityCatalogItem, kind: CapabilityCategory) -> some View {
+    private func catalogRow(_ item: CapabilityCatalogItem) -> some View {
         HStack(spacing: 0) {
             Button {
                 searchFocused = false
-                if kind == .agents {
+                if category == .agents {
                     onOpenAgent(item.id, personal?.agentId == item.id)
                 } else {
                     openDetails(item)
                 }
             } label: {
                 CapabilityCardLabel(title: item.name, description: item.description,
-                                    hoverEnabled: kind != .agents || item.group != "disabled")
+                                    hoverEnabled: category != .agents || item.group != "disabled")
                 {
-                    icon(item, kind: kind)
+                    icon(item)
                 } trailing: {
-                    if kind == .connections, item.group == "available" || item.group == "attention" {
+                    if category == .connections, item.group == "available" || item.group == "attention" {
                         Text("capability_connect").font(.subheadline.weight(.medium))
                             .foregroundStyle(mobileTheme.action).padding(.trailing, 8)
                     }
-                    if kind != .agents {
+                    if category != .agents {
                         Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                             .foregroundStyle(mobileTheme.secondary).accessibilityHidden(true)
                     }
@@ -422,9 +386,9 @@ struct CapabilitiesView: View {
             }
             .buttonStyle(MobilePressStyle(radius: mobileTheme.corner(18)))
             .accessibilityIdentifier("capability-row-\(item.id)")
-            .disabled(kind == .agents && item.group == "disabled")
+            .disabled(category == .agents && item.group == "disabled")
 
-            if kind == .agents {
+            if category == .agents {
                 Button {
                     openDetails(item)
                 } label: {
@@ -443,15 +407,15 @@ struct CapabilitiesView: View {
         .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(18)))
     }
 
-    @ViewBuilder private func icon(_ item: CapabilityCatalogItem, kind: CapabilityCategory, extent: CGFloat = 48) -> some View {
-        if kind == .agents, personal?.agentId == item.id {
+    @ViewBuilder private func icon(_ item: CapabilityCatalogItem, extent: CGFloat = 48) -> some View {
+        if category == .agents, personal?.agentId == item.id {
             PersonalAgentAvatar(configuration: configuration, agent: personal, size: extent, active: false)
-        } else if kind == .agents {
+        } else if category == .agents {
             ConfiguredAgentAvatar(configuration: configuration, agent: item.agent, size: extent, active: false)
         } else {
             CapabilityLogo(reference: item.iconUrl, origin: configuration.baseURL,
                            label: ["marketplace:search", "mcp:setup"].contains(item.id) ? "" : item.name,
-                           symbol: kind.symbol, extent: extent)
+                           symbol: category.symbol, extent: extent)
         }
     }
 
@@ -459,7 +423,7 @@ struct CapabilitiesView: View {
         CapabilitySettingsPanel(configuration: configuration, category: category.id,
                                 itemID: category == .connections ? item.id : item.targetId ?? item.id, name: item.name,
                                 summary: item.description ?? "", onChanged: {
-                                    load(category, refresh: true)
+                                    load(refresh: true)
                                     if item.id == personal?.agentId {
                                         onPersonalChanged()
                                     }
@@ -468,7 +432,7 @@ struct CapabilitiesView: View {
                                 onUseInChat: { prompt in
                                     pendingChatPrompt = prompt
                                     detail = nil
-                                }) { icon(item, kind: category, extent: 44) }
+                                }) { icon(item, extent: 44) }
     }
 
     // swiftlint:disable:next identifier_name
@@ -489,49 +453,37 @@ struct CapabilitiesView: View {
         }
     }
 
-    private func loadNearby() {
-        let cases = CapabilityCategory.allCases
-        guard let index = cases.firstIndex(of: category) else { return }
-        load(category)
-        if index > 0 {
-            load(cases[index - 1])
-        }
-        if index + 1 < cases.count {
-            load(cases[index + 1])
-        }
-    }
-
-    private func cancelRequests() {
-        requests.values.forEach { $0.cancel() }
-        requests.removeAll()
+    private func cancelRequest() {
+        request?.cancel()
+        request = nil
     }
 
     private func reloadCatalog() {
-        cancelRequests()
-        pages.removeAll()
-        failures.removeAll()
-        loadNearby()
+        cancelRequest()
+        page = nil
+        failed = false
+        load()
     }
 
-    private func load(_ kind: CapabilityCategory, refresh: Bool = false) {
-        guard kind != .devices, requests[kind] == nil, refresh || (pages[kind] == nil && !failures.contains(kind)) else { return }
-        failures.remove(kind)
-        requests[kind] = Task { @MainActor in
+    private func load(refresh: Bool = false) {
+        guard category != .devices, request == nil, refresh || (page == nil && !failed) else { return }
+        failed = false
+        request = Task { @MainActor in
             do {
                 let response: GatewayEnvelope<CapabilityCatalogPage> = try await GatewayClient(configuration: configuration).request(
                     path: "/api/capabilities/mobile-catalog",
-                    queryItems: [URLQueryItem(name: "category", value: kind.id), URLQueryItem(name: "locale", value: locale.identifier)]
+                    queryItems: [URLQueryItem(name: "category", value: category.id), URLQueryItem(name: "locale", value: locale.identifier)]
                 )
-                guard response.isSuccessful, let page = response.payload else { throw GatewayClientError.invalidResponse }
+                guard response.isSuccessful, let loaded = response.payload else { throw GatewayClientError.invalidResponse }
                 try Task.checkCancellation()
-                pages[kind] = page
+                page = loaded
             } catch {
                 if !Task.isCancelled {
-                    failures.insert(kind)
+                    failed = true
                 }
             }
             if !Task.isCancelled {
-                requests[kind] = nil
+                request = nil
             }
         }
     }
