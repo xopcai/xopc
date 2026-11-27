@@ -91,10 +91,20 @@ jobs:
           # Match the simulator runtime installed on the macos-26 image.
           DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
         run: |
+          # Wait for CoreSimulator to register devices before asking Xcode to run tests.
+          devices="$(xcrun simctl list devices available --json)"
+          simulator_id="$(jq -r '[.devices["com.apple.CoreSimulator.SimRuntime.iOS-26-5"][]? | select(.name == "iPhone 17 Pro")][0].udid // empty' <<< "$devices")"
+          if [[ -z "$simulator_id" ]]; then
+            xcrun simctl list runtimes
+            xcrun simctl list devices available
+            echo "::error::No available iPhone 17 Pro simulator for iOS 26.5."
+            exit 1
+          fi
+          xcrun simctl bootstatus "$simulator_id" -b
           xcodebuild \
             -project XopcMobile.xcodeproj \
             -scheme XopcMobile \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+            -destination "platform=iOS Simulator,id=$simulator_id" \
             -only-testing:XopcMobileTests \
             CODE_SIGNING_ALLOWED=NO \
             test
