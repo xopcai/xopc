@@ -42,8 +42,10 @@ struct NotesView: View {
             }
             ScrollViewReader { scroller in
                 List {
-                    statusPicker
+                    Color.clear
+                        .frame(height: 0)
                         .id("notes-list-top")
+                        .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                     if pendingVoiceNote != nil || pendingVoiceNoteLoadFailed {
@@ -104,7 +106,13 @@ struct NotesView: View {
                 presentedSheet = .create
             })
         }
-        .mobilePageTitle(Text("笔记")) { Text("笔记").font(.headline) }
+        .mobilePageTitle(Text(selectedStatusTitle)) {
+            MobilePageTitleMenu(
+                options: statusOptions,
+                selected: status,
+                identifier: "notes-page-menu"
+            ) { status = $0 }
+        }
         .toolbar {
             if let onOpenSidebar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -161,14 +169,17 @@ struct NotesView: View {
 }
 
 private extension NotesView {
-    var statusPicker: some View {
-        SegmentedTabs(options: [
-            SegmentOption(id: "", title: "全部", accessibilityID: "library-status-all"),
-            SegmentOption(id: "inbox", title: "收件箱", accessibilityID: "library-status-inbox"),
-            SegmentOption(id: "processed", title: "已处理", accessibilityID: "library-status-processed"),
-            SegmentOption(id: "archived", title: "已归档", accessibilityID: "library-status-archived")
-        ], selected: status, label: "状态") { status = $0 }
-            .accessibilityIdentifier("library-status-tabs")
+    var statusOptions: [SegmentOption<String>] {
+        [
+            SegmentOption(id: "", title: "全部", accessibilityID: "notes-status-all"),
+            SegmentOption(id: "inbox", title: "收件箱", accessibilityID: "notes-status-inbox"),
+            SegmentOption(id: "processed", title: "已处理", accessibilityID: "notes-status-processed"),
+            SegmentOption(id: "archived", title: "已归档", accessibilityID: "notes-status-archived")
+        ]
+    }
+
+    var selectedStatusTitle: LocalizedStringResource {
+        statusOptions.first(where: { $0.id == status })?.title ?? "全部"
     }
 
     var emptyTitle: LocalizedStringResource {

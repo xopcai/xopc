@@ -1602,13 +1602,6 @@ struct AssistantView<Dock: View>: View {
                     headerButton("语音通话", icon: Image(systemName: "phone"), action: startRealtimeVoice)
                         .disabled(!canStartRealtimeVoice)
                         .accessibilityIdentifier("chat-header-voice-call")
-                    if !isPersonalConversation, conversation?.isDraft != true || onOpenSidebar == nil {
-                        headerButton("会话选项", icon: Image("SettingsSliders")) {
-                            sessionSheetDestination = .actions
-                            showingSessionActions = true
-                        }
-                        .accessibilityIdentifier("assistant-options")
-                    }
                 }
                 if isPersonalConversation {
                     personalFloatingCenterHeader

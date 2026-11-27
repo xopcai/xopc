@@ -591,7 +591,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       }
       "overview", "tasks", "projects" -> workPageStates.SaveableStateProvider("workbench") {
         HorizontalPager(workPager, modifier = Modifier.fillMaxSize().testTag("work-page-pager"),
-          beyondViewportPageCount = 1, flingBehavior = PagerDefaults.flingBehavior(workPager, snapPositionalThreshold = 0.33f),
+          beyondViewportPageCount = 1, userScrollEnabled = false,
+          flingBehavior = PagerDefaults.flingBehavior(workPager, snapPositionalThreshold = 0.33f),
           key = { workPages[it].value }) { index ->
           val accessibility = if (index == workPager.settledPage) Modifier
             else Modifier.clearAndSetSemantics { hideFromAccessibility() }

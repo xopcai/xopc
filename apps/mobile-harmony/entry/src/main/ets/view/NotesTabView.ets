@@ -1,7 +1,7 @@
 import { XOPC_PAGE_PADDING_X, xopcMoreIcon } from '../common/designTokens';
 import { xopcConfirmDialog } from '../common/dialogActions';
 import { xopcClickEffect, xopcPagerAnimated, xopcPagerDuration, xopcRevealTransition } from '../common/motionTokens';
-import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcPagerProgress, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
 import { generatedMusicPlayback, XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
 import { XopcMusicMiniPlayer } from './MusicPlaybackView';
 import { XopcLocalRecording } from '../service/discussionRecordingStore';
@@ -18,6 +18,7 @@ import {
   XopcListSkeleton,
   XopcPageHeader,
   XopcPageSearchField,
+  XopcPageTitleOption,
   XopcPaginationFooter,
 } from './MobileComponents';
 import { XopcNotesView } from './NotesView';
@@ -53,20 +54,23 @@ export struct XopcNotesTabView {
   private initialized: boolean = false;
   private listScroller: Scroller = new Scroller();
   private pager: SwiperController = new SwiperController();
-  private pagerProgress: XopcPagerProgress = new XopcPagerProgress();
-  private readonly statusOptions: XopcSegmentOption[] = [
-    { key: '', label: $r('app.string.note_all') },
-    { key: 'inbox', label: $r('app.string.inbox') },
-    { key: 'processed', label: $r('app.string.note_processed') },
-    { key: 'archived', label: $r('app.string.archive') },
+  private readonly statusOptions: XopcPageTitleOption[] = [
+    { key: '', label: $r('app.string.note_all'), id: 'notes-status-all' },
+    { key: 'inbox', label: $r('app.string.inbox'), id: 'notes-status-inbox' },
+    { key: 'processed', label: $r('app.string.note_processed'), id: 'notes-status-processed' },
+    { key: 'archived', label: $r('app.string.archive'), id: 'notes-status-archived' },
   ];
 
   private statusIndex(): number {
-    return Math.max(0, this.statusOptions.findIndex((option: XopcSegmentOption): boolean => option.key === this.model.status));
+    return Math.max(0, this.statusOptions.findIndex((option: XopcPageTitleOption): boolean => option.key === this.model.status));
+  }
+
+  private currentStatusLabel(): ResourceStr {
+    return this.statusOptions[this.statusIndex()]?.label ?? $r('app.string.note_all');
   }
 
   private selectStatus(key: string): void {
-    const target = this.statusOptions.findIndex((option: XopcSegmentOption): boolean => option.key === key);
+    const target = this.statusOptions.findIndex((option: XopcPageTitleOption): boolean => option.key === key);
     if (target < 0 || key === this.model.status) return;
     this.pager.changeIndex(target, xopcPagerAnimated(this.layout.reduceMotion, target - this.statusIndex()));
   }
@@ -362,7 +366,9 @@ export struct XopcNotesTabView {
   @Builder
   listPane() {
     Column() {
-      XopcPageHeader({ heading: $r('app.string.notes'), showStaticTitle: true,
+      XopcPageHeader({ heading: this.currentStatusLabel(), titleOptions: this.statusOptions,
+        selectedTitle: this.model.status, titleMenuId: 'notes-page-menu',
+        onSelectTitle: (key: string): void => { this.selectStatus(key); },
         backVisible: !this.rootTab, onBack: this.onExit,
         drawerVisible: this.rootTab, drawerId: 'notes-header-sidebar', onOpenDrawer: this.onOpenSidebar,
         searchId: 'notes-open-search', searchOpen: this.searchOpen, searchLabel: $r('app.string.search_notes'),
@@ -373,11 +379,6 @@ export struct XopcNotesTabView {
             onChange: (value: string): void => { this.searchText = value; }, onSubmit: (): void => { this.searchAll(); } })
         }.padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 12 })
       }
-      Row() {
-        XopcSegmentedTabs({ options: this.statusOptions, selectedKey: this.model.status,
-          pagerProgress: this.pagerProgress, swipeToSelect: !this.model.selecting,
-          onSelect: (key: string): void => { this.selectStatus(key); } }).layoutWeight(1)
-      }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
       if (this.model.error && this.model.items.length > 0) {
         Column() {
           XopcInlineBanner({
@@ -390,7 +391,7 @@ export struct XopcNotesTabView {
       }
       Stack({ alignContent: Alignment.Bottom }) {
         Swiper(this.pager) {
-          ForEach(this.statusOptions, (option: XopcSegmentOption) => {
+          ForEach(this.statusOptions, (option: XopcPageTitleOption) => {
             Column() {
               if (option.key === this.model.status) {
                 this.notesListBody()
@@ -399,13 +400,9 @@ export struct XopcNotesTabView {
               }
             }.width('100%').height('100%')
               .accessibilityLevel(option.key === this.model.status ? 'auto' : 'no-hide-descendants')
-          }, (option: XopcSegmentOption): string => option.key || 'all')
+          }, (option: XopcPageTitleOption): string => option.key || 'all')
         }.id('notes-tab-pager').index(this.statusIndex()).loop(false).indicator(false).cachedCount(1)
-          .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(this.model.selecting)
-          .onContentDidScroll((_selected: number, index: number, position: number, length: number): void => {
-            this.pagerProgress.update(index, position, length);
-          })
-          .onAnimationEnd((): void => { this.pagerProgress.reset(); })
+          .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(true)
           .onChange((index: number): void => { this.commitStatus(index); })
           .width('100%').height('100%')
         if (!this.model.selecting || this.recordingAvailable) this.captureActions()

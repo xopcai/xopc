@@ -64,7 +64,7 @@ export struct XopcFloatingTabBar {
           this.tabBadge(this.personalUnread, false)
         }.width(28).height(24).alignContent(Alignment.Center)
         Text(this.adaLabel())
-          .fontSize(11)
+          .fontSize(10.5)
           .fontWeight(this.selectedTab === 'ada' ? FontWeight.Medium : FontWeight.Normal)
           .fontColor(this.selectedTab === 'ada' ? this.colors.accent : this.colors.secondary)
           .maxLines(1)
@@ -75,7 +75,7 @@ export struct XopcFloatingTabBar {
     .layoutWeight(1)
     .constraintSize({ minWidth: 44, minHeight: 48 })
     .height(50)
-    .padding({ left: 6, right: 6 })
+    .padding({ left: 2, right: 2 })
     .borderRadius(25)
     .backgroundColor(this.selectedTab === 'ada' ? this.colors.accentSoft : Color.Transparent)
     .clickEffect(xopcClickEffect())
@@ -111,7 +111,7 @@ export struct XopcFloatingTabBar {
           }
         }.width(28).height(24).alignContent(Alignment.Center)
         Text(label)
-          .fontSize(11)
+          .fontSize(10.5)
           .fontWeight(this.selectedTab === tab ? FontWeight.Medium : FontWeight.Normal)
           .fontColor(this.selectedTab === tab ? this.colors.accent : this.colors.secondary)
           .maxLines(1)
@@ -122,7 +122,7 @@ export struct XopcFloatingTabBar {
     .layoutWeight(1)
     .constraintSize({ minWidth: 44, minHeight: 48 })
     .height(50)
-    .padding({ left: 6, right: 6 })
+    .padding({ left: 2, right: 2 })
     .borderRadius(25)
     .backgroundColor(this.selectedTab === tab ? this.colors.accentSoft : Color.Transparent)
     .clickEffect(xopcClickEffect())
@@ -133,17 +133,18 @@ export struct XopcFloatingTabBar {
 
   build() {
     Row() {
-      Row({ space: 4 }) {
+      Row({ space: 2 }) {
         this.adaTab()
+        this.iconTab('conversations', $r('app.string.sessions'), $r('sys.symbol.ellipsis_bubble'), 0, false)
         this.iconTab('workbench', $r('app.string.workbench'), $r('sys.symbol.square_grid_2x2'), this.pendingAttention, false)
         this.iconTab('notes', $r('app.string.notes'), $r('sys.symbol.doc_text'), 0, this.recordingAvailable)
         this.iconTab('library', $r('app.string.library_title'), $r('sys.symbol.doc'), 0, false)
       }
       .id('floating-tab-bar')
       .width('100%')
-      .constraintSize({ maxWidth: 420 })
+      .constraintSize({ maxWidth: 460 })
       .height(FLOATING_TAB_BAR_HEIGHT_VP)
-      .padding({ left: 6, right: 6 })
+      .padding({ left: 4, right: 4 })
       .borderRadius(FLOATING_TAB_BAR_HEIGHT_VP / 2)
       .backgroundColor(this.colors.panel)
       .backgroundBlurStyle(
@@ -159,7 +160,7 @@ export struct XopcFloatingTabBar {
     }
     .id('floating-tab-bar-host')
     .width('100%')
-    .padding({ left: 16, right: 16, bottom: FLOATING_TAB_BAR_MARGIN_BOTTOM_VP })
+    .padding({ left: 12, right: 12, bottom: FLOATING_TAB_BAR_MARGIN_BOTTOM_VP })
     .justifyContent(FlexAlign.Center)
     .hitTestBehavior(HitTestMode.Transparent)
   }

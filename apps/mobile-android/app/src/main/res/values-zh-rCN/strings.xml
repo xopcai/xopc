@@ -1215,6 +1215,8 @@
     <string name="voice_note_empty_transcript">暂无逐字稿。</string>
     <string name="tab_ada_fallback">Ada</string>
     <string name="sidebar_about_you">关于我与目标</string>
+    <string name="sidebar_section_work_tools">工作与工具</string>
+    <string name="sidebar_share_center">分享中心</string>
     <string name="chat_switch_conversation">切换对话</string>
     <string name="tab_bar_description">主导航栏</string>
     <string name="notes_pending_recording_indicator">有待恢复录音</string>

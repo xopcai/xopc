@@ -1,10 +1,10 @@
 import { XopcMobileRoute } from '../model/home';
 import { XopcNotificationRoute } from './notificationRoute';
 
-export type XopcCoreMobileTab = 'ada' | 'workbench' | 'notes' | 'library';
+export type XopcCoreMobileTab = 'ada' | 'conversations' | 'workbench' | 'notes' | 'library';
 export type XopcMobileTab = XopcCoreMobileTab | string;
 
-export const CORE_MOBILE_TABS: XopcCoreMobileTab[] = ['ada', 'workbench', 'notes', 'library'];
+export const CORE_MOBILE_TABS: XopcCoreMobileTab[] = ['ada', 'conversations', 'workbench', 'notes', 'library'];
 export const PINNED_SPACE_TAB_PREFIX: string = 'pinnedSpace:';
 
 export const FLOATING_TAB_BAR_HEIGHT_VP: number = 62;
@@ -117,7 +117,7 @@ export function synthesizeNotificationPlan(
       return { tab: 'ada', routes: [] };
     }
     return {
-      tab: 'ada',
+      tab: 'conversations',
       routes: [{ page: 'session-chat', itemId: target.conversationId }],
     };
   }
@@ -126,7 +126,7 @@ export function synthesizeNotificationPlan(
 
 /**
  * Pure multi-stack navigation state machine shared by HomeView and host unit tests.
- * Keeps 4 core tab stacks (plus extensible pinnedSpace:<id> tabs) strictly isolated.
+ * Keeps 5 core tab stacks (plus extensible pinnedSpace:<id> tabs) strictly isolated.
  */
 export class XopcMobileTabNavState {
   selectedTab: XopcMobileTab = 'ada';
@@ -227,10 +227,10 @@ export class XopcMobileTabNavState {
     return this.pushOnActiveTab(route);
   }
 
-  openSessionChatFromSidebar(route: XopcMobileRoute): XopcStackTransition {
+  openSessionChat(route: XopcMobileRoute): XopcStackTransition {
     this.sidebarOpen = false;
-    this.selectedTab = 'ada';
-    const stack = this.ensureStack('ada');
+    this.selectedTab = 'conversations';
+    const stack = this.ensureStack('conversations');
     const normalized: XopcMobileRoute = {
       page: 'session-chat',
       itemId: route.itemId,
@@ -243,10 +243,14 @@ export class XopcMobileTabNavState {
     const top = stack.length > 0 ? stack[stack.length - 1] : undefined;
     if (top && top.page === 'session-chat') {
       stack[stack.length - 1] = normalized;
-      return { tab: 'ada', operation: 'replace', route: normalized };
+      return { tab: 'conversations', operation: 'replace', route: normalized };
     }
     stack.push(normalized);
-    return { tab: 'ada', operation: 'push', route: normalized };
+    return { tab: 'conversations', operation: 'push', route: normalized };
+  }
+
+  openSessionChatFromSidebar(route: XopcMobileRoute): XopcStackTransition {
+    return this.openSessionChat(route);
   }
 
   switchSessionChatInPlace(route: XopcMobileRoute): XopcStackTransition {
@@ -265,7 +269,7 @@ export class XopcMobileTabNavState {
       stack[stack.length - 1] = normalized;
       return { tab: this.selectedTab, operation: 'replace', route: normalized };
     }
-    return this.openSessionChatFromSidebar(normalized);
+    return this.openSessionChat(normalized);
   }
 
   openConversationFromSearch(conversationId: string, personalConversationId: string): XopcSearchOpenResult {
@@ -280,9 +284,16 @@ export class XopcMobileTabNavState {
     return { tab: this.selectedTab, operation: 'push', route };
   }
 
+  private sessionCandidateTabs(): XopcMobileTab[] {
+    const candidates: XopcMobileTab[] = [this.selectedTab];
+    if (!candidates.includes('conversations')) candidates.push('conversations');
+    if (!candidates.includes('ada')) candidates.push('ada');
+    return candidates;
+  }
+
   promoteSessionChatDraft(draftId: string, conversationId: string): boolean {
     if (!conversationId) return false;
-    const candidates: XopcMobileTab[] = this.selectedTab === 'ada' ? ['ada'] : [this.selectedTab, 'ada'];
+    const candidates = this.sessionCandidateTabs();
     for (const tab of candidates) {
       const stack = this.ensureStack(tab);
       if (stack.length === 0) continue;
@@ -299,7 +310,7 @@ export class XopcMobileTabNavState {
 
   handleSessionUnavailable(conversationId: string): XopcSessionUnavailableResult {
     if (!conversationId) return { popped: false };
-    const candidates: XopcMobileTab[] = this.selectedTab === 'ada' ? ['ada'] : [this.selectedTab, 'ada'];
+    const candidates = this.sessionCandidateTabs();
     for (const tab of candidates) {
       const stack = this.ensureStack(tab);
       if (stack.length === 0) continue;

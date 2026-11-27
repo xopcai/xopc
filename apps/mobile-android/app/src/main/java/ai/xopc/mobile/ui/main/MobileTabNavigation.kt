@@ -8,13 +8,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 
 /**
- * Top-level mobile tabs (4 core fixed slots + 1 reserved dynamic pinned-space slot).
+ * Top-level mobile tabs (5 core fixed slots + reserved dynamic pinned-space slot).
  */
 internal sealed interface MobileTab {
   val key: String
 
   data object Ada : MobileTab {
     override val key: String = "ada"
+  }
+
+  data object Conversations : MobileTab {
+    override val key: String = "conversations"
   }
 
   data object Workbench : MobileTab {
@@ -34,7 +38,7 @@ internal sealed interface MobileTab {
   }
 
   companion object {
-    val coreTabs: List<MobileTab> = listOf(Ada, Workbench, Notes, Library)
+    val coreTabs: List<MobileTab> = listOf(Ada, Conversations, Workbench, Notes, Library)
   }
 }
 
@@ -281,7 +285,7 @@ internal data class MobileNavSnapshot(
   }
 
   /**
-   * Opens an ordinary conversation (or new draft) on the Ada host stack.
+   * Opens an ordinary conversation (or new draft) on the Conversations host stack.
    * Replaces the top SessionChat if one is already on top, never stacking ordinary chats indefinitely.
    */
   fun openOrdinaryChat(
@@ -296,17 +300,42 @@ internal data class MobileNavSnapshot(
       agentId = agentId,
       title = title,
     )
-    val adaStack = stackFor(MobileTab.Ada)
-    val nextAdaStack = if (adaStack.lastOrNull() is MobileRoute.SessionChat) {
-      adaStack.dropLast(1) + route
+    val conversationsStack = stackFor(MobileTab.Conversations)
+    val nextConversationsStack = if (conversationsStack.lastOrNull() is MobileRoute.SessionChat) {
+      conversationsStack.dropLast(1) + route
     } else {
-      adaStack + route
+      conversationsStack + route
     }
     return copy(
-      selectedTab = MobileTab.Ada,
-      stacks = stacks + (MobileTab.Ada to nextAdaStack),
+      selectedTab = MobileTab.Conversations,
+      stacks = stacks + (MobileTab.Conversations to nextConversationsStack),
       sidebarOpen = false,
     )
+  }
+
+  /**
+   * Switches ordinary chat from inside an open SessionChat, replacing the top SessionChat on the
+   * active stack (preserving e.g. ConversationSearch predecessor when opened from search) or
+   * routing to the Conversations host stack otherwise.
+   */
+  fun switchOrdinaryChat(
+    conversationId: String,
+    agentId: String = "main",
+    title: String? = null,
+  ): MobileNavSnapshot {
+    val current = stackFor(selectedTab)
+    if (current.lastOrNull() is MobileRoute.SessionChat) {
+      val route = MobileRoute.SessionChat(
+        conversationId = conversationId,
+        agentId = agentId,
+        title = title,
+      )
+      return copy(
+        stacks = stacks + (selectedTab to (current.dropLast(1) + route)),
+        sidebarOpen = false,
+      )
+    }
+    return openOrdinaryChat(conversationId = conversationId, agentId = agentId, title = title)
   }
 
   /**
@@ -486,8 +515,8 @@ internal data class MobileNavSnapshot(
       sidebarOpen = false,
     )
     is PushNavTarget.OrdinaryChat -> copy(
-      selectedTab = MobileTab.Ada,
-      stacks = stacks + (MobileTab.Ada to listOf(
+      selectedTab = MobileTab.Conversations,
+      stacks = stacks + (MobileTab.Conversations to listOf(
         MobileRoute.SessionChat(conversationId = target.conversationId, agentId = target.agentId, title = target.title),
       )),
       sidebarOpen = false,
@@ -582,6 +611,7 @@ internal data class MobileNavSnapshot(
   companion object {
     fun defaultStacks(): Map<MobileTab, List<MobileRoute>> = mapOf(
       MobileTab.Ada to emptyList(),
+      MobileTab.Conversations to emptyList(),
       MobileTab.Workbench to emptyList(),
       MobileTab.Notes to emptyList(),
       MobileTab.Library to emptyList(),
@@ -646,6 +676,14 @@ internal class MobileTabNavState(initial: MobileNavSnapshot = MobileNavSnapshot(
     title: String? = null,
   ) {
     snapshot = snapshot.openOrdinaryChat(conversationId, draftId, agentId, title)
+  }
+
+  fun switchOrdinaryChat(
+    conversationId: String,
+    agentId: String = "main",
+    title: String? = null,
+  ) {
+    snapshot = snapshot.switchOrdinaryChat(conversationId, agentId, title)
   }
 
   fun promoteSessionDraftInPlace(draftId: String, realConversationId: String, title: String? = null) {

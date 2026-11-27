@@ -157,10 +157,16 @@ export struct XopcSessionsView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Local layout: XopcLayoutState = layoutState;
   private pager: SwiperController = new SwiperController();
+  @Param rootTab: boolean = false;
+  @Param activePage: boolean = true;
+  @Param bottomChromeInset: number = 0;
+  @Param scrollTopRevision: number = 0;
   @Param startSearching: boolean = false;
   @Param currentId: string = '';
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
   @Event onExit: () => void = (): void => {};
+  @Event onOpenSidebar: () => void = (): void => {};
+  @Event onBackHandler: (handler?: () => boolean) => void = (_handler?: () => boolean): void => {};
   @Event onOpen: (id: string) => void = (_id: string): void => {};
   @Event onTask: (id: string) => void = (_id: string): void => {};
   @Event onNew: (id: string) => void = (_id: string): void => {};
@@ -197,8 +203,28 @@ export struct XopcSessionsView {
     this.historyMode = this.startSearching ? 'recent'
       : appSettings.pageSelection('conversation-history', ['recent', 'projects', 'experts'], 'recent');
     this.searchOpen = this.startSearching;
+    if (this.rootTab) {
+      this.onBackHandler((): boolean => this.back());
+      if (this.activePage) this.activate();
+    }
   }
-  aboutToDisappear(): void { this.catalogRevision++; this.sessions.dispose(); }
+  aboutToDisappear(): void {
+    if (this.rootTab) this.onBackHandler();
+    this.catalogRevision++;
+    this.sessions.dispose();
+  }
+  @Monitor('activePage')
+  onActivePageChange(): void {
+    if (this.rootTab && this.activePage) this.activate();
+  }
+  @Monitor('scrollTopRevision')
+  onScrollTopRequest(): void {
+    if (this.scrollTopRevision <= 0) return;
+    if (this.searchOpen) this.closeSearch();
+    if (this.groupId) this.clearGroup();
+    if (this.historyMode !== 'recent') this.selectMode('recent');
+    this.scroller.scrollEdge(Edge.Top);
+  }
   private activate(): void {
     this.opening = false;
     if (this.browsingGroups()) void this.loadGroups(); else void this.sessions.load();
@@ -297,6 +323,7 @@ export struct XopcSessionsView {
         }
       }
     }.width('100%').layoutWeight(1).padding({ left: 20, right: 20 })
+      .contentEndOffset(this.bottomChromeInset > 0 ? this.bottomChromeInset + 12 : 0)
   }
 
   @Computed
@@ -505,16 +532,19 @@ export struct XopcSessionsView {
           selectedTitle: this.historyMode,
           titleMenuId: 'sessions-mode-menu',
           onSelectTitle: (mode: string): void => { this.selectMode(mode); },
-          backVisible: true,
+          backVisible: !this.rootTab || this.sessions.selecting || !!this.groupId,
           backId: 'sessions-back',
           onBack: (): void => { if (!this.back()) this.onExit(); },
+          drawerVisible: this.rootTab && !this.sessions.selecting && !this.groupId,
+          drawerId: 'sessions-header-sidebar',
+          onOpenDrawer: (): void => { this.onOpenSidebar(); },
           searchId: 'sessions-open-search',
           searchOpen: this.searchOpen,
           searchLabel: this.searchLabel(),
           onSearch: (): void => {
             if (this.searchOpen) this.closeSearch(); else this.searchOpen = true;
           },
-          actionLabel: this.historyMode === 'recent' ? $r('app.string.new_chat') : '',
+          actionLabel: $r('app.string.new_chat'),
           actionIcon: $r('sys.symbol.plus'),
           actionId: 'sessions-new',
           actionTone: 'accent',
@@ -587,6 +617,7 @@ export struct XopcSessionsView {
                       }
                     }
                   }.id('sessions-list').width('100%').height('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).cachedCount(5)
+                    .contentEndOffset(this.bottomChromeInset > 0 ? this.bottomChromeInset + 12 : 0)
                 }.layoutWeight(1).pullToRefresh(!this.sessions.busy).onRefreshing((): void => { this.sessions.load(false, true); })
               }
             }.width('100%').height('100%')
@@ -594,7 +625,7 @@ export struct XopcSessionsView {
           }, (option: XopcPageTitleOption): string => option.key)
         }.id('sessions-pager').index(this.modeIndex()).loop(false).indicator(false).cachedCount(1)
           .duration(xopcPagerDuration(this.layout.reduceMotion))
-          .disableSwipe(this.sessions.selecting || this.sessions.busy || this.opening || this.menuOpen || this.renameOpen)
+          .disableSwipe(true)
           .onChange((index: number): void => { this.commitMode(index); })
           .layoutWeight(1).width('100%')
         if (this.sessions.undoId) {
@@ -605,9 +636,11 @@ export struct XopcSessionsView {
               actionId: 'sessions-undo',
               onUndo: (): void => { this.sessions.undoDelete(); },
             })
-          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
+          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 + (this.sessions.selecting ? 0 : this.bottomChromeInset) })
         }
-        if (this.sessions.selecting) { this.batchBar() }
+        if (this.sessions.selecting) {
+          Column() { this.batchBar() }.width('100%').padding({ bottom: this.bottomChromeInset })
+        }
         Column().id('session-menu-sheet-host').width('100%').height(0)
           .bindSheet($$this.menuOpen, this.sessionMenuSheet, xopcSheetOptions('medium', {
             height: '65%',
@@ -619,9 +652,15 @@ export struct XopcSessionsView {
       .bindSheet($$this.shareOpen, this.shareSheet, xopcSheetOptions('immersive', { backgroundColor: this.colors.panel }))
   }
   build() {
-    NavDestination() { this.content() }
-      .hideTitleBar(true).backgroundColor(this.colors.surface)
-      .onShown((): void => { this.activate(); })
-      .onBackPressed((): boolean => { if (!this.back()) this.onExit(); return true; })
+    if (this.rootTab) {
+      Column() { this.content() }
+        .id('conversations-tab-root')
+        .width('100%').height('100%').backgroundColor(this.colors.surface)
+    } else {
+      NavDestination() { this.content() }
+        .hideTitleBar(true).backgroundColor(this.colors.surface)
+        .onShown((): void => { this.activate(); })
+        .onBackPressed((): boolean => { if (!this.back()) this.onExit(); return true; })
+    }
   }
 }

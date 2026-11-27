@@ -206,7 +206,6 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   val uriHandler = LocalUriHandler.current
   var query by rememberSaveable(state.gatewayId) { mutableStateOf(state.search) }
   val notesListState = rememberLazyListState()
-  val filtersOpen = rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var searchOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   fun toggleSearch() {
     searchOpen = !searchOpen
@@ -488,12 +487,26 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       selectedId != null -> closeNote
       else -> onExit ?: {}
     }
+    val showingNotesList = !fileBrowserOpen && !editorOpen && selectedId == null
+    val noteStatusOptions = listOf(
+      "" to R.string.notes_all,
+      "inbox" to R.string.notes_inbox,
+      "processed" to R.string.notes_processed,
+      "archived" to R.string.notes_archived,
+    ).map { (statusValue, labelRes) ->
+      SegmentOption(statusValue, stringResource(labelRes), "notes-filter-${statusValue.ifEmpty { "all" }}")
+    }
     XopcPageHeader(
       backTag = "notes-back",
       onBack = back,
       showBack = !isNotesRoot && (onExit != null || fileBrowserOpen || editorOpen || selectedId != null),
       leadingContent = if (isNotesRoot) ({ PageSidebarButton("notes-sidebar", onOpenSidebar!!) }) else null,
       title = if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
+      titleContent = if (showingNotesList) ({
+        PageTitleMenu(noteStatusOptions, state.status, "notes-page-menu") { next ->
+          onSearch(query.trim(), next)
+        }
+      }) else null,
     ) {
       if (fileBrowserOpen || editorOpen || selectedId != null) {
         if (fileBrowserOpen && selectedFile == null && onUploadSpaceFile != null &&
@@ -570,7 +583,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
               editorOpen = true; onOpenDraft(id)
             }
           }, searchOpen = searchOpen,
-          listState = notesListState, filtersOpen = filtersOpen, bottomContentPadding = 76.dp + effectiveBottomInset,
+          listState = notesListState, bottomContentPadding = 76.dp + effectiveBottomInset,
           pendingVoiceCount = pendingVoiceCount, onRecoverVoice = {
             focusManager.clearFocus(force = true)
             if (onNavigateRoute != null && isNotesRoot) {
@@ -1300,26 +1313,6 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
             Icon(painterResource(R.drawable.action_search), stringResource(R.string.notes_search))
           }
         },
-      )
-    }
-    IconButton(onClick = { filtersOpen.value = !filtersOpen.value },
-      modifier = Modifier.align(Alignment.End).size(48.dp)
-        .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14))
-        .testTag("notes-filter-menu")) {
-      Icon(painterResource(R.drawable.action_filter), stringResource(R.string.notes_filter),
-        tint = if (filtersOpen.value || state.status.isNotEmpty()) MaterialTheme.colorScheme.primary
-          else MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    androidx.compose.animation.AnimatedVisibility(
-      visible = filtersOpen.value,
-      enter = xopcExpandPanelEnter(motionAllowed, Alignment.Top),
-      exit = xopcExpandPanelExit(motionAllowed, Alignment.Top),
-    ) {
-      SegmentedTabs(
-        listOf("" to R.string.notes_all, "inbox" to R.string.notes_inbox,
-          "processed" to R.string.notes_processed, "archived" to R.string.notes_archived).map { (status, label) ->
-          SegmentOption(status, stringResource(label), "notes-filter-${status.ifEmpty { "all" }}")
-        }, state.status, onStatus,
       )
     }
     XopcPullToRefreshBox(

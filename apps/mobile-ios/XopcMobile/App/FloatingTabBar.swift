@@ -40,12 +40,12 @@ struct FloatingTabBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 2) {
             ForEach(MobileTab.coreTabs, id: \.self) { tab in
                 tabButton(for: tab)
             }
         }
-        .padding(5)
+        .padding(4)
         .background { pillBackground }
         .overlay {
             Capsule()
@@ -57,8 +57,8 @@ struct FloatingTabBar: View {
             radius: reduceTransparency ? 4 : 14,
             y: reduceTransparency ? 2 : 6
         )
-        .frame(maxWidth: 420)
-        .padding(.horizontal, MobileDesignTokens.pagePaddingX)
+        .frame(maxWidth: 440)
+        .padding(.horizontal, 12)
         .padding(.top, 4)
         .padding(.bottom, 6)
         .frame(maxWidth: .infinity)
@@ -103,10 +103,10 @@ struct FloatingTabBar: View {
                 Text(verbatim: title)
                     .font(.caption2.weight(isSelected ? .semibold : .medium))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .minimumScaleFactor(0.8)
             }
             .foregroundStyle(foreground)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 3)
             .padding(.vertical, 6)
             .frame(maxWidth: .infinity, minHeight: 48)
             .background {
@@ -141,6 +141,10 @@ struct FloatingTabBar: View {
                 working: personalWorking
             )
             .accessibilityHidden(true)
+        case .conversations:
+            Image(systemName: selected ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right")
+                .font(.callout.weight(selected ? .semibold : .medium))
+                .accessibilityHidden(true)
         case .workbench:
             Image(systemName: selected ? "square.grid.2x2.fill" : "square.grid.2x2")
                 .font(.callout.weight(selected ? .semibold : .medium))
@@ -177,7 +181,7 @@ struct FloatingTabBar: View {
             if hasPendingRecording {
                 dotBadge(color: mobileTheme.onAttention)
             }
-        case .library, .pinnedSpace:
+        case .conversations, .library, .pinnedSpace:
             EmptyView()
         }
     }
@@ -204,6 +208,8 @@ struct FloatingTabBar: View {
         switch tab {
         case .ada:
             adaLabel
+        case .conversations:
+            isZh ? "对话" : "Chats"
         case .workbench:
             isZh ? "工作台" : "Work"
         case .notes:
@@ -235,7 +241,7 @@ struct FloatingTabBar: View {
                 return Text("待恢复录音")
             }
             return Text("")
-        case .library, .pinnedSpace:
+        case .conversations, .library, .pinnedSpace:
             return Text("")
         }
     }

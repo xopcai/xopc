@@ -23,6 +23,13 @@ function setup() {
     pop: vi.fn(),
     size: vi.fn(() => 0),
   };
+  const conversationsStack = {
+    pushPath: vi.fn(),
+    replacePath: vi.fn(),
+    clear: vi.fn(),
+    pop: vi.fn(),
+    size: vi.fn(() => 0),
+  };
   const notesStack = {
     pushPath: vi.fn(),
     replacePath: vi.fn(),
@@ -63,8 +70,9 @@ function setup() {
       adaStack.clear();
     }),
     adaStack,
+    conversationsStack,
     notesStack,
-    stackFor: (tab: string) => (tab === 'notes' ? notesStack : adaStack),
+    stackFor: (tab: string) => (tab === 'conversations' ? conversationsStack : tab === 'notes' ? notesStack : adaStack),
   });
   return home;
 }
@@ -79,44 +87,47 @@ describe('HarmonyOS home chat selection & state isolation', () => {
     expect(home.selectedTab).toBe('ada');
   });
 
-  it('opens ordinary conversations in session-chat without mutating AdaRoot state', async () => {
+  it('opens ordinary conversations on conversationsStack without mutating AdaRoot state', async () => {
     const home = setup();
     await home.restoreInitialChat();
 
-    home.openSessionChatFromSidebar('ordinary-a');
+    home.openSessionChat('ordinary-a');
+    expect(home.selectedTab).toBe('conversations');
     expect(home.adaConversationId).toBe('personal');
     expect(home.sessionChatId).toBe('ordinary-a');
-    expect(home.adaStack.pushPath).toHaveBeenCalledOnce();
+    expect(home.conversationsStack.pushPath).toHaveBeenCalledOnce();
+    expect(home.adaStack.pushPath).not.toHaveBeenCalled();
 
-    home.openSessionChatFromSidebar('ordinary-b');
+    home.openSessionChat('ordinary-b');
+    expect(home.selectedTab).toBe('conversations');
     expect(home.adaConversationId).toBe('personal');
     expect(home.sessionChatId).toBe('ordinary-b');
-    expect(home.adaStack.replacePath).toHaveBeenCalledOnce();
+    expect(home.conversationsStack.replacePath).toHaveBeenCalledOnce();
   });
 
   it('switches to AdaRoot instead of pushing session-chat when opening personal conversation', async () => {
     const home = setup();
     await home.restoreInitialChat();
-    home.openSessionChatFromSidebar('ordinary-a');
-    home.openSessionChatFromSidebar('personal');
+    home.openSessionChat('ordinary-a');
+    home.openSessionChat('personal');
     expect(home.switchToAdaRoot).toHaveBeenCalledOnce();
     expect(home.selectedTab).toBe('ada');
   });
 
-  it('promotes a new draft in-place and pops back to AdaRoot when unavailable', async () => {
+  it('promotes a new draft in-place and pops back to conversations root when unavailable', async () => {
     const home = setup();
     await home.restoreInitialChat();
-    home.openSessionChatFromSidebar('draft-1');
-    const route = home.tabNav.topRoute('ada');
+    home.openSessionChat('draft-1');
+    const route = home.tabNav.topRoute('conversations');
 
     home.promoteSessionChatDraft('draft-1', 'persisted-1', route);
     expect(route.itemId).toBe('persisted-1');
     expect(home.sessionChatId).toBe('persisted-1');
-    expect(home.adaStack.pop).not.toHaveBeenCalled();
+    expect(home.conversationsStack.pop).not.toHaveBeenCalled();
 
-    home.adaStack.size.mockReturnValue(1);
+    home.conversationsStack.size.mockReturnValue(1);
     home.onSessionChatUnavailable('persisted-1');
-    expect(home.adaStack.pop).toHaveBeenCalledOnce();
+    expect(home.conversationsStack.pop).toHaveBeenCalledOnce();
     expect(home.sessionChatId).toBe('');
     expect(home.adaConversationId).toBe('personal');
   });

@@ -13,6 +13,25 @@ import org.junit.Test
 class MobileTabNavigationTest {
 
   @Test
+  fun coreTabsContainFiveFixedSlotsInCanonicalOrder() {
+    assertEquals(
+      listOf(
+        MobileTab.Ada,
+        MobileTab.Conversations,
+        MobileTab.Workbench,
+        MobileTab.Notes,
+        MobileTab.Library,
+      ),
+      MobileTab.coreTabs,
+    )
+    val defaults = MobileNavSnapshot.defaultStacks()
+    assertEquals(5, defaults.size)
+    for (tab in MobileTab.coreTabs) {
+      assertTrue("Default stack for ${tab.key} must exist and start empty", defaults[tab]?.isEmpty() == true)
+    }
+  }
+
+  @Test
   fun coldStartDefaultsToAdaRootWithVisibleTabBarAndSwipe() {
     val nav = MobileNavSnapshot()
     assertEquals(MobileTab.Ada, nav.selectedTab)
@@ -32,16 +51,26 @@ class MobileTabNavigationTest {
     assertFalse(root.showBottomTabBar(imeVisible = false, fullScreenOverlayActive = true))
     assertFalse(root.allowSidebarEdgeSwipe(fullScreenOverlayActive = true))
 
+    // Conversations root shows bottom tab bar and allows left-edge sidebar swipe
+    val conversationsRoot = root.selectTab(MobileTab.Conversations)
+    assertTrue(conversationsRoot.isAtRoot)
+    assertTrue(conversationsRoot.showBottomTabBar(imeVisible = false, fullScreenOverlayActive = false))
+    assertTrue(conversationsRoot.allowSidebarEdgeSwipe(fullScreenOverlayActive = false))
+
     // Entering any L1 screen forces bottom tab bar hidden and disables sidebar edge swipe
-    val pushed = root.openOrdinaryChat(conversationId = "chat-1")
+    val pushed = conversationsRoot.openOrdinaryChat(conversationId = "chat-1")
+    assertEquals(MobileTab.Conversations, pushed.selectedTab)
     assertFalse(pushed.isAtRoot)
     assertFalse(pushed.showBottomTabBar(imeVisible = false, fullScreenOverlayActive = false))
     assertFalse(pushed.allowSidebarEdgeSwipe(fullScreenOverlayActive = false))
   }
 
   @Test
-  fun tabSwitchingPreservesIndependentStacksAcrossAllCoreTabs() {
+  fun tabSwitchingPreservesIndependentStacksAcrossAllFiveCoreTabs() {
     var nav = MobileNavSnapshot()
+    nav = nav.selectTab(MobileTab.Conversations)
+      .openOrdinaryChat(conversationId = "conv-1", title = "Chat 1")
+
     nav = nav.selectTab(MobileTab.Workbench)
       .push(MobileRoute.ProjectDetail("proj-1"))
       .push(MobileRoute.ProjectChat("proj-1", "conv-p1"))
@@ -49,9 +78,18 @@ class MobileTabNavigationTest {
     nav = nav.selectTab(MobileTab.Notes)
       .push(MobileRoute.NoteDetail("note-1"))
 
+    nav = nav.selectTab(MobileTab.Library)
+      .push(MobileRoute.SpaceDetail("space-1"))
+
     nav = nav.selectTab(MobileTab.Ada)
     assertTrue(nav.activeStack.isEmpty())
     assertTrue(nav.showBottomTabBar(imeVisible = false, fullScreenOverlayActive = false))
+
+    // Returning to Conversations restores its open SessionChat intact
+    nav = nav.selectTab(MobileTab.Conversations)
+    assertEquals(1, nav.activeStack.size)
+    assertEquals("conv-1", (nav.topRoute as MobileRoute.SessionChat).conversationId)
+    assertFalse(nav.showBottomTabBar(imeVisible = false, fullScreenOverlayActive = false))
 
     // Returning to Workbench restores its deep stack intact
     nav = nav.selectTab(MobileTab.Workbench)
@@ -61,70 +99,74 @@ class MobileTabNavigationTest {
     )
     assertFalse(nav.showBottomTabBar(imeVisible = false, fullScreenOverlayActive = false))
 
-    // Notes stack also remains intact
+    // Notes & Library stacks also remain intact
     assertEquals(listOf(MobileRoute.NoteDetail("note-1")), nav.stackFor(MobileTab.Notes))
+    assertEquals(listOf(MobileRoute.SpaceDetail("space-1")), nav.stackFor(MobileTab.Library))
   }
 
   @Test
   fun activeRetapPopsToRootOrTriggersScrollToTopAtRoot() {
     var nav = MobileNavSnapshot()
-      .selectTab(MobileTab.Workbench)
-      .push(MobileRoute.TaskDetail("task-1"))
-      .push(MobileRoute.TaskChat("task-1"))
-    assertEquals(2, nav.activeStack.size)
-    assertEquals(0, nav.scrollToTopRevision(MobileTab.Workbench))
+      .selectTab(MobileTab.Conversations)
+      .openOrdinaryChat(conversationId = "chat-1")
+    assertEquals(1, nav.activeStack.size)
+    assertEquals(0, nav.scrollToTopRevision(MobileTab.Conversations))
 
-    // Active re-tap with non-empty stack pops to root
-    nav = nav.selectTab(MobileTab.Workbench)
+    // Active re-tap with non-empty stack pops to Conversations root
+    nav = nav.selectTab(MobileTab.Conversations)
     assertTrue(nav.activeStack.isEmpty())
-    assertEquals(0, nav.scrollToTopRevision(MobileTab.Workbench))
+    assertEquals(0, nav.scrollToTopRevision(MobileTab.Conversations))
 
     // Active re-tap already at root increments scroll-to-top signal
-    nav = nav.selectTab(MobileTab.Workbench)
+    nav = nav.selectTab(MobileTab.Conversations)
     assertTrue(nav.activeStack.isEmpty())
-    assertEquals(1, nav.scrollToTopRevision(MobileTab.Workbench))
+    assertEquals(1, nav.scrollToTopRevision(MobileTab.Conversations))
     assertEquals(0, nav.scrollToTopRevision(MobileTab.Ada))
   }
 
   @Test
-  fun ordinaryChatSwitchesToAdaAndReplacesTopSessionChatWithoutStacking() {
+  fun ordinaryChatSwitchesToConversationsAndReplacesTopSessionChatWithoutStacking() {
     var nav = MobileNavSnapshot()
       .selectTab(MobileTab.Workbench)
       .push(MobileRoute.ProjectDetail("proj-1"))
       .setSidebarOpen(true)
 
-    // Opening ordinary chat A from Workbench switches to Ada and protects Workbench stack
+    // Opening ordinary chat A from Workbench switches to Conversations and protects Workbench & Ada stacks
     nav = nav.openOrdinaryChat(conversationId = "chat-a", title = "Chat A")
-    assertEquals(MobileTab.Ada, nav.selectedTab)
+    assertEquals(MobileTab.Conversations, nav.selectedTab)
     assertFalse(nav.sidebarOpen)
     assertEquals(1, nav.activeStack.size)
     assertEquals("chat-a", (nav.topRoute as MobileRoute.SessionChat).conversationId)
+    assertTrue(nav.stackFor(MobileTab.Ada).isEmpty())
     assertEquals(listOf(MobileRoute.ProjectDetail("proj-1")), nav.stackFor(MobileTab.Workbench))
 
-    // Continuous switch A -> B -> C replaces top SessionChat (stack depth stays 1)
-    nav = nav.openOrdinaryChat(conversationId = "chat-b", title = "Chat B")
+    // Continuous switch A -> B -> C replaces top SessionChat on Conversations stack (depth stays 1)
+    nav = nav.switchOrdinaryChat(conversationId = "chat-b", title = "Chat B")
     nav = nav.openOrdinaryChat(conversationId = "chat-c", title = "Chat C")
+    assertEquals(MobileTab.Conversations, nav.selectedTab)
     assertEquals(1, nav.activeStack.size)
     assertEquals("chat-c", (nav.topRoute as MobileRoute.SessionChat).conversationId)
 
-    // Single back returns directly to AdaRoot
+    // Single back returns directly to Conversations root (bottom bar reappears)
     val back = nav.handleBack(hasTransientUi = false)
     assertTrue(back.action is BackAction.PoppedRoute)
-    assertEquals(MobileTab.Ada, back.state.selectedTab)
+    assertEquals(MobileTab.Conversations, back.state.selectedTab)
     assertTrue(back.state.activeStack.isEmpty())
     assertTrue(back.state.showBottomTabBar(imeVisible = false, fullScreenOverlayActive = false))
   }
 
   @Test
-  fun draftPromotionUpdatesTopSessionChatInPlacePreservingInstanceKey() {
+  fun draftPromotionUpdatesTopSessionChatOnConversationsStackInPlace() {
     var nav = MobileNavSnapshot()
       .openOrdinaryChat(conversationId = null, draftId = "draft-123", agentId = "coder")
+    assertEquals(MobileTab.Conversations, nav.selectedTab)
     val before = nav.topRoute as MobileRoute.SessionChat
     assertEquals("draft-123", before.effectiveConversationId)
     val originalKey = before.routeKey
 
     nav = nav.promoteSessionDraftInPlace("draft-123", "server-uuid-999", title = "Hello")
     val after = nav.topRoute as MobileRoute.SessionChat
+    assertEquals(MobileTab.Conversations, nav.selectedTab)
     assertEquals(1, nav.activeStack.size)
     assertEquals("server-uuid-999", after.conversationId)
     assertNull(after.draftId)
@@ -133,7 +175,7 @@ class MobileTabNavigationTest {
   }
 
   @Test
-  fun openFromSearchPreservesSearchPredecessorAndJumpsToAdaForPersonal() {
+  fun openFromSearchPreservesSearchPredecessorSupportsInPlaceSwitchAndJumpsToAdaForPersonal() {
     var nav = MobileNavSnapshot()
       .selectTab(MobileTab.Notes)
       .setSidebarOpen(true)
@@ -149,6 +191,13 @@ class MobileTabNavigationTest {
     assertTrue(nav.activeStack[0] is MobileRoute.ConversationSearch)
     assertEquals("chat-hit", (nav.activeStack[1] as MobileRoute.SessionChat).conversationId)
 
+    // Switching ordinary chat inside SessionChat opened from search replaces top in-place on Notes stack
+    nav = nav.switchOrdinaryChat(conversationId = "chat-alt", title = "Alt")
+    assertEquals(MobileTab.Notes, nav.selectedTab)
+    assertEquals(2, nav.activeStack.size)
+    assertTrue(nav.activeStack[0] is MobileRoute.ConversationSearch)
+    assertEquals("chat-alt", (nav.activeStack[1] as MobileRoute.SessionChat).conversationId)
+
     // Back returns to ConversationSearch first
     val backToSearch = nav.handleBack(hasTransientUi = false).state
     assertEquals(listOf(MobileRoute.ConversationSearch()), backToSearch.activeStack)
@@ -160,24 +209,55 @@ class MobileTabNavigationTest {
   }
 
   @Test
-  fun sidebarLowFrequencyToolsPushInPlaceOnActiveTabWithoutReturnToSidebar() {
-    val nav = MobileNavSnapshot()
-      .selectTab(MobileTab.Library)
-      .setSidebarOpen(true)
-      .openSidebarTool(MobileRoute.Capabilities())
+  fun flattenedSidebarDestinationsPushInPlaceOnActiveTabWithoutReturnToSidebar() {
+    val routes = listOf(
+      MobileRoute.Capabilities(section = "plugins"),
+      MobileRoute.Capabilities(section = "skills"),
+      MobileRoute.Capabilities(section = "connections"),
+      MobileRoute.Capabilities(section = "devices"),
+      MobileRoute.Capabilities(section = "agents"),
+      MobileRoute.Capabilities(section = "channels"),
+      MobileRoute.Automations,
+      MobileRoute.ShareCenter,
+      MobileRoute.AboutYou(),
+      MobileRoute.PersonalGoals,
+      MobileRoute.Settings(),
+    )
 
-    assertEquals(MobileTab.Library, nav.selectedTab)
-    assertFalse(nav.sidebarOpen)
-    assertEquals(listOf(MobileRoute.Capabilities()), nav.activeStack)
+    for (route in routes) {
+      val nav = MobileNavSnapshot()
+        .selectTab(MobileTab.Library)
+        .setSidebarOpen(true)
+        .openSidebarTool(route)
 
-    val popped = nav.handleBack(hasTransientUi = false).state
-    assertEquals(MobileTab.Library, popped.selectedTab)
-    assertTrue(popped.activeStack.isEmpty())
-    assertFalse(popped.sidebarOpen)
+      assertEquals(MobileTab.Library, nav.selectedTab)
+      assertFalse(nav.sidebarOpen)
+      assertEquals(listOf(route), nav.activeStack)
+      assertFalse(nav.showBottomTabBar(imeVisible = false, fullScreenOverlayActive = false))
+
+      val popped = nav.handleBack(hasTransientUi = false).state
+      assertEquals(MobileTab.Library, popped.selectedTab)
+      assertTrue(popped.activeStack.isEmpty())
+      assertFalse(popped.sidebarOpen)
+    }
+
+    // Distinct capability sections carry distinct routeKeys so SaveableStateProvider stays isolated
+    assertEquals("capabilities:devices", MobileRoute.Capabilities(section = "devices").routeKey)
+    assertEquals("capabilities:channels", MobileRoute.Capabilities(section = "channels").routeKey)
   }
 
   @Test
-  fun taskChatPushesInPlaceAcrossTabsAndPreventsTaskDetailLoop() {
+  fun taskChatPushesInPlaceAcrossTabsIncludingConversationsAndPreventsTaskDetailLoop() {
+    // From Conversations tab root (expanding parent conversation -> clicking child task row)
+    val fromConversations = MobileNavSnapshot()
+      .selectTab(MobileTab.Conversations)
+      .openTaskChat("t-conv", conversationId = "cid-tconv")
+    assertEquals(MobileTab.Conversations, fromConversations.selectedTab)
+    assertEquals(listOf(MobileRoute.TaskChat("t-conv", conversationId = "cid-tconv")), fromConversations.activeStack)
+    val backToConversations = fromConversations.handleBack(false).state
+    assertEquals(MobileTab.Conversations, backToConversations.selectedTab)
+    assertTrue(backToConversations.activeStack.isEmpty())
+
     // From Ada root
     val fromAda = MobileNavSnapshot().openTaskChat("t-1")
     assertEquals(MobileTab.Ada, fromAda.selectedTab)
@@ -234,8 +314,11 @@ class MobileTabNavigationTest {
     assertEquals(listOf(MobileRoute.NoteDetail("note-5")), note.activeStack)
 
     val chat = MobileNavSnapshot().openPushTarget(PushNavTarget.OrdinaryChat("cid-5"))
-    assertEquals(MobileTab.Ada, chat.selectedTab)
+    assertEquals(MobileTab.Conversations, chat.selectedTab)
     assertEquals("cid-5", (chat.topRoute as MobileRoute.SessionChat).conversationId)
+    val chatBack = chat.handleBack(false).state
+    assertEquals(MobileTab.Conversations, chatBack.selectedTab)
+    assertTrue(chatBack.activeStack.isEmpty())
   }
 
   @Test
@@ -274,12 +357,14 @@ class MobileTabNavigationTest {
   }
 
   @Test
-  fun deletingOrMissingOrdinaryChatPopsBackToAdaRoot() {
+  fun deletingOrMissingOrdinaryChatPopsBackToConversationsRoot() {
     val nav = MobileNavSnapshot()
       .openOrdinaryChat(conversationId = "gone-chat")
+    assertEquals(MobileTab.Conversations, nav.selectedTab)
     val cleaned = nav.onConversationDeletedOrMissing("gone-chat")
-    assertEquals(MobileTab.Ada, cleaned.selectedTab)
+    assertEquals(MobileTab.Conversations, cleaned.selectedTab)
     assertTrue(cleaned.activeStack.isEmpty())
+    assertTrue(cleaned.showBottomTabBar(imeVisible = false, fullScreenOverlayActive = false))
   }
 
   @Test
@@ -290,11 +375,12 @@ class MobileTabNavigationTest {
     assertFalse(adaRoot.shouldMarkPersonalRead(appInForeground = true, fullScreenOverlayActive = true))
     assertFalse(adaRoot.setSidebarOpen(true).shouldMarkPersonalRead(appInForeground = true, fullScreenOverlayActive = false))
     assertFalse(adaRoot.openOrdinaryChat("other-chat").shouldMarkPersonalRead(appInForeground = true, fullScreenOverlayActive = false))
+    assertFalse(adaRoot.selectTab(MobileTab.Conversations).shouldMarkPersonalRead(appInForeground = true, fullScreenOverlayActive = false))
     assertFalse(adaRoot.selectTab(MobileTab.Workbench).shouldMarkPersonalRead(appInForeground = true, fullScreenOverlayActive = false))
   }
 
   @Test
-  fun gatewaySwitchAtomicallyClearsAllStacksAndResetsToAdaRoot() {
+  fun gatewaySwitchAtomicallyClearsAllFiveStacksAndResetsToAdaRoot() {
     val dirty = MobileNavSnapshot()
       .selectTab(MobileTab.Workbench)
       .push(MobileRoute.ProjectDetail("p1"))
@@ -357,7 +443,7 @@ class MobileTabNavigationTest {
   }
 
   @Test
-  fun legacyRoutingPatchesAndDuplicateSidebarShortcutsAreRemoved() {
+  fun flattenedSidebarHasZeroTabDuplicationAndExposesDirectGroupedDestinations() {
     val uiMainDir = listOf(
       File("src/main/java/ai/xopc/mobile/ui/main"),
       File("app/src/main/java/ai/xopc/mobile/ui/main"),
@@ -367,12 +453,43 @@ class MobileTabNavigationTest {
     assertFalse("returnToSidebar must be removed from MainScreen.kt", mainScreen.contains("returnToSidebar"))
     assertFalse("linkedDetails must be removed from MainScreen.kt", mainScreen.contains("linkedDetails"))
 
-    val sidebar = File(uiMainDir, "ChatSidebar.kt").readText()
-    for (removedTag in listOf("chat-sidebar-personal", "chat-sidebar-workbench", "chat-sidebar-notes", "chat-sidebar-library")) {
-      assertFalse("Duplicate sidebar shortcut $removedTag must be removed", sidebar.contains(removedTag))
+    val tabBar = File(uiMainDir, "FloatingTabBar.kt").readText()
+    for (tabTag in listOf(
+      "floating-tab-ada",
+      "floating-tab-conversations",
+      "floating-tab-workbench",
+      "floating-tab-notes",
+      "floating-tab-library",
+    )) {
+      assertTrue("FloatingTabBar must render $tabTag", tabBar.contains(tabTag))
     }
-    for (keptTag in listOf("chat-sidebar-search", "chat-sidebar-automations", "chat-sidebar-capabilities", "chat-sidebar-about", "chat-sidebar-new", "chat-sidebar-profile")) {
-      assertTrue("Slimmed sidebar must contain $keptTag", sidebar.contains(keptTag))
+
+    val sidebar = File(uiMainDir, "ChatSidebar.kt").readText()
+    for (removedTag in listOf(
+      "chat-sidebar-personal",
+      "chat-sidebar-workbench",
+      "chat-sidebar-notes",
+      "chat-sidebar-library",
+      "chat-sidebar-session-",
+    )) {
+      assertFalse("Duplicate/removed sidebar entry $removedTag must not exist", sidebar.contains(removedTag))
+    }
+    for (keptTag in listOf(
+      "chat-sidebar-search",
+      "chat-sidebar-capability-plugins",
+      "chat-sidebar-capability-skills",
+      "chat-sidebar-capability-connections",
+      "chat-sidebar-capability-devices",
+      "chat-sidebar-capability-agents",
+      "chat-sidebar-capability-channels",
+      "chat-sidebar-automations",
+      "chat-sidebar-share-center",
+      "chat-sidebar-about",
+      "chat-sidebar-goals",
+      "chat-sidebar-new",
+      "chat-sidebar-profile",
+    )) {
+      assertTrue("Flattened sidebar must contain $keptTag", sidebar.contains(keptTag))
     }
   }
 }

@@ -1781,6 +1781,11 @@
     {"name": "task_stop_run", "value": "Stop active run"},
     {"name": "task_stop_run_help", "value": "Request cancellation of the active run without closing the task."},
     {"name": "chat_copy_formula", "value": "Copy LaTeX"},
-    {"name": "chat_switch_conversation", "value": "Switch conversation"}
+    {"name": "chat_switch_conversation", "value": "Switch conversation"},
+    {"name": "sessions", "value": "Chats"},
+    {"name": "sidebar_section_work_tools", "value": "Work & Tools"},
+    {"name": "sidebar_section_mine", "value": "Me"},
+    {"name": "sidebar_share_center", "value": "Share center"},
+    {"name": "sidebar_goals", "value": "Goals"}
   ]
 }

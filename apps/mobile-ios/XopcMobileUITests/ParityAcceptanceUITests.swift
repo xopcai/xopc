@@ -2424,7 +2424,8 @@ final class MobileLayoutParityUITests: XCTestCase {
         existing.tap()
         let back = app.buttons["project-chat-close"]
         XCTAssertTrue(back.waitForExistence(timeout: 6))
-        XCTAssertTrue(app.buttons["assistant-options"].exists)
+        XCTAssertTrue(app.buttons["chat-header-identity"].exists)
+        XCTAssertFalse(app.buttons["assistant-options"].exists)
         XCTAssertTrue(app.buttons["chat-header-voice-call"].exists)
         XCTAssertTrue(app.openHomeSidebar())
         app.buttons["chat-sidebar-close"].tap()
@@ -3515,7 +3516,7 @@ final class MobileLayoutParityUITests: XCTestCase {
     }
 
     private func openChatMessageSearch() {
-        app.buttons["assistant-options"].tap()
+        app.buttons["chat-header-identity"].tap()
         let search = app.buttons["assistant-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
@@ -3737,7 +3738,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         let handle = app.coordinate(withNormalizedOffset: .zero)
             .withOffset(CGVector(dx: app.frame.midX, dy: detail.frame.minY + 8))
         handle.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)))
-        let options = app.buttons["assistant-options"]
+        let options = app.buttons["chat-header-identity"]
         let visible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: options)
         XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 5), .completed)
         options.tap()
@@ -3755,7 +3756,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         capture("message-jump-centered")
         jump.tap()
         XCTAssertFalse(jump.exists)
-        app.buttons["assistant-options"].tap()
+        app.buttons["chat-header-identity"].tap()
         app.staticTexts["新建会话"].tap()
         dismissNewConversationConfirmation()
         XCTAssertEqual(app.textFields["assistant-chat-composer"].value as? String, "请整理移动端布局")
@@ -4120,7 +4121,13 @@ extension XCUIApplication {
             buttons["chat-sidebar-close"].tap()
             return
         }
-        let tabMap = ["progress": "bottom-tab-workbench", "projects": "bottom-tab-workbench", "notes": "bottom-tab-notes", "library": "bottom-tab-library"]
+        let tabMap = [
+            "conversations": "bottom-tab-conversations",
+            "progress": "bottom-tab-workbench",
+            "projects": "bottom-tab-workbench",
+            "notes": "bottom-tab-notes",
+            "library": "bottom-tab-library"
+        ]
         if let tabID = tabMap[destination] {
             let tab = buttons[tabID]
             if tab.waitForExistence(timeout: 5), tab.isHittable {
@@ -4132,7 +4139,13 @@ extension XCUIApplication {
             }
         }
         XCTAssertTrue(openHomeSidebar(), "Could not open navigation")
-        let identifier = ["conversations": "search"][destination] ?? destination
+        let identifier = [
+            "conversations": "search",
+            "capabilities": "capability-plugins",
+            "shareCenter": "share-center",
+            "aboutYou": "about-you",
+            "personalGoals": "personal-goals"
+        ][destination] ?? destination
         let button = buttons["chat-sidebar-\(identifier)"]
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         button.tap()

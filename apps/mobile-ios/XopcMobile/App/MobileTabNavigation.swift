@@ -3,16 +3,18 @@ import SwiftUI
 
 enum MobileTab: Hashable, Sendable {
     case ada
+    case conversations
     case workbench
     case notes
     case library
     case pinnedSpace(String)
 
-    static let coreTabs: [MobileTab] = [.ada, .workbench, .notes, .library]
+    static let coreTabs: [MobileTab] = [.ada, .conversations, .workbench, .notes, .library]
 
     var accessibilityID: String {
         switch self {
         case .ada: "bottom-tab-ada"
+        case .conversations: "bottom-tab-conversations"
         case .workbench: "bottom-tab-workbench"
         case .notes: "bottom-tab-notes"
         case .library: "bottom-tab-library"
@@ -32,7 +34,8 @@ struct SessionChatRoute: Hashable, Sendable {
 enum HomeDestination: Hashable, Sendable {
     case sessionChat(SessionChatRoute)
     case conversations, conversationSearch
-    case progress, projects, automations, notes, library, capabilities, settings, files
+    case progress, projects, automations, notes, library, shareCenter, settings, files
+    case capabilities(initialCategory: String? = nil)
     case aboutYou, personalGoals
     case settingsSection(MobileSettingsSection)
     case personalOverview(allowsConversationSharing: Bool)
@@ -148,8 +151,15 @@ extension AppState {
             openPersonalAgent()
             return
         }
-        selectedTab = .ada
-        replaceTopSessionChat(conversation, in: .ada)
+        selectedTab = .conversations
+        let stack = path(for: .conversations)
+        if stack.count == 1, let existingRoute = stack.first?.sessionChatRoute {
+            sessionConversations[existingRoute.slotID] = conversation
+        } else {
+            let route = SessionChatRoute()
+            sessionConversations[route.slotID] = conversation
+            setPath([.sessionChat(route)], for: .conversations)
+        }
     }
 
     func replaceTopSessionChat(_ conversation: ConversationSelection, in tab: MobileTab? = nil) {
@@ -217,6 +227,9 @@ extension AppState {
 
     func openSidebarDestination(_ destination: HomeDestination) {
         switch destination {
+        case .conversations:
+            selectedTab = .conversations
+            popToRoot(in: .conversations)
         case .progress:
             selectedTab = .workbench
             popToRoot(in: .workbench)
@@ -276,10 +289,10 @@ extension AppState {
                     selectedTab = .ada
                     setPath([], for: .ada)
                 } else {
-                    selectedTab = .ada
+                    selectedTab = .conversations
                     let route = SessionChatRoute()
                     sessionConversations[route.slotID] = .existing(id: id, title: "", agentId: defaultAgentID)
-                    setPath([.sessionChat(route)], for: .ada)
+                    setPath([.sessionChat(route)], for: .conversations)
                 }
             }
         default:

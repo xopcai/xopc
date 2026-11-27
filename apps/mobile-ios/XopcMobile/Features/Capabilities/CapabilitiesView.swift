@@ -37,11 +37,22 @@ struct CapabilityCardLabel<Leading: View, Trailing: View>: View {
     }
 }
 
-private enum CapabilityCategory: String, CaseIterable, Identifiable {
+enum CapabilityCategory: String, CaseIterable, Identifiable, Sendable {
     case plugins, skills, connections, devices, agents, channels
 
     var id: String {
         rawValue
+    }
+
+    var titleKey: String {
+        switch self {
+        case .plugins: "capability_plugins"
+        case .skills: "capability_skills"
+        case .connections: "capability_connections"
+        case .devices: "device_connection_devices"
+        case .agents: "capability_agents"
+        case .channels: "capability_channels"
+        }
     }
 
     var title: LocalizedStringResource {
@@ -97,15 +108,17 @@ struct CapabilitiesView: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let personal: PersonalAgentRecord?
+    let initialCategory: String?
     let onOpenAgent: (String, Bool) -> Void
     let onSetupChat: (String, String?) -> Void
-    var onPersonalChanged: () -> Void = {}
-    var onOpenDeviceChat: (String, String) -> Void = { _, _ in }
-    var onShareDeviceFile: (MessageAttachment) async throws -> Void = { _ in }
-    var onPairDevice: () -> Void = {}
+    let onPersonalChanged: () -> Void
+    let onOpenDeviceChat: (String, String) -> Void
+    let onShareDeviceFile: (MessageAttachment) async throws -> Void
+    let onPairDevice: () -> Void
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("navigation.capabilities") private var category = CapabilityCategory.plugins
+    @AppStorage("navigation.capabilities") private var rememberedCategory = CapabilityCategory.plugins
+    @State private var category: CapabilityCategory
     @State private var queries: [CapabilityCategory: String] = [:]
     @State private var positions = CapabilityScrollPositions()
     @State private var pages: [CapabilityCategory: CapabilityCatalogPage] = [:]
@@ -114,6 +127,32 @@ struct CapabilitiesView: View {
     @State private var detail: CapabilityCatalogItem?
     @State private var pendingChatPrompt: String?
     @FocusState private var searchFocused: Bool
+
+    init(
+        configuration: GatewayConfiguration,
+        personal: PersonalAgentRecord?,
+        initialCategory: String? = nil,
+        onOpenAgent: @escaping (String, Bool) -> Void,
+        onSetupChat: @escaping (String, String?) -> Void,
+        onPersonalChanged: @escaping () -> Void = {},
+        onOpenDeviceChat: @escaping (String, String) -> Void = { _, _ in },
+        onShareDeviceFile: @escaping (MessageAttachment) async throws -> Void = { _ in },
+        onPairDevice: @escaping () -> Void = {}
+    ) {
+        self.configuration = configuration
+        self.personal = personal
+        self.initialCategory = initialCategory
+        self.onOpenAgent = onOpenAgent
+        self.onSetupChat = onSetupChat
+        self.onPersonalChanged = onPersonalChanged
+        self.onOpenDeviceChat = onOpenDeviceChat
+        self.onShareDeviceFile = onShareDeviceFile
+        self.onPairDevice = onPairDevice
+        let resolved = initialCategory.flatMap(CapabilityCategory.init(rawValue:))
+            ?? UserDefaults.standard.string(forKey: "navigation.capabilities").flatMap(CapabilityCategory.init(rawValue:))
+            ?? .plugins
+        _category = State(initialValue: resolved)
+    }
 
     var body: some View {
         TabView(selection: $category) {
@@ -162,6 +201,7 @@ struct CapabilitiesView: View {
             }
         }
         .onChange(of: category, initial: true) {
+            rememberedCategory = category
             searchFocused = false
             loadNearby()
         }

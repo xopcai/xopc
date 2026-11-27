@@ -2274,13 +2274,6 @@ export struct XopcChatView {
           .accessibilityText($r('app.string.chat_switch_conversation'))
           .onClick((): void => { this.dismissComposer(); this.onOpenSessionSwitcher(); })
       }
-      if (!this.personalConversation) {
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.slider_horizontal_2')).fontSize(21).fontColor([this.colors.foreground])
-        }.width(44).height(44).padding(0).backgroundColor(this.colors.chat.card).id('chat-header-actions')
-          .accessibilityText($r('app.string.chat_actions'))
-          .onClick((): void => { this.dismissComposer(); this.openSheet('actions'); })
-      }
     }
   }
 
@@ -2485,12 +2478,19 @@ export struct XopcChatView {
   sessionChatTitlePill() {
     Button({ type: ButtonType.Normal }) {
       Column({ space: 1 }) {
-        Text(this.chat.title || $r('app.string.new_chat'))
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.colors.foreground)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Row({ space: 4 }) {
+          Text(this.chat.title || $r('app.string.new_chat'))
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.colors.foreground)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .constraintSize({ maxWidth: 160 })
+          SymbolGlyph($r('sys.symbol.chevron_down'))
+            .fontSize(11)
+            .fontColor([this.colors.secondary])
+            .accessibilityLevel('no')
+        }.justifyContent(FlexAlign.Center).alignItems(VerticalAlign.Center)
         Row({ space: 4 }) {
           Text(this.currentChatAgentName())
             .fontSize(11)

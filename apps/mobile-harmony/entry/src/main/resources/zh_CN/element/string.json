@@ -1781,6 +1781,11 @@
     {"name": "task_stop_run", "value": "停止当前执行"},
     {"name": "task_stop_run_help", "value": "将请求中止当前运行，不会关闭任务。"},
     {"name": "chat_copy_formula", "value": "复制公式源码"},
-    {"name": "chat_switch_conversation", "value": "切换对话"}
+    {"name": "chat_switch_conversation", "value": "切换对话"},
+    {"name": "sessions", "value": "对话"},
+    {"name": "sidebar_section_work_tools", "value": "工作与工具"},
+    {"name": "sidebar_section_mine", "value": "我的"},
+    {"name": "sidebar_share_center", "value": "分享中心"},
+    {"name": "sidebar_goals", "value": "目标"}
   ]
 }

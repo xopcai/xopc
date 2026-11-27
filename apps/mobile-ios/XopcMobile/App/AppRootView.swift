@@ -23,17 +23,13 @@ struct AppRootView: View {
     @State private var phoneVisible = false
     @State private var actionPanelVisible = false
     @State private var recentConversations: [ConversationSummary]?
-    @State private var recentNextOffset: Int?
     @State private var recentScope: String?
-    @State private var recentError = false
     @State private var recentLoading = false
     @State private var recentRevision = 0
     @State private var recentUpdatedAt: Date?
-    @State private var recentDeleteFailures: Set<String> = []
     @State private var homeRetry = 0
     @State private var pendingAttention = 0
     @State private var defaultAgentID = "main"
-    @State private var sidebarAgents: [String: AgentSummary] = [:]
     @State private var messageLinks = ChatMessageLinkRouter()
     @State private var music = GeneratedMusicPlayback.shared
     @State private var musicSourceToOpen: GeneratedMusicTrack?
@@ -224,6 +220,7 @@ struct AppRootView: View {
     private var homeShell: some View {
         ZStack {
             tabStack(for: .ada) { adaRootContainer }
+            tabStack(for: .conversations) { conversationsRoot }
             tabStack(for: .workbench) { workbenchRoot }
             tabStack(for: .notes) { notesRoot }
             tabStack(for: .library) { libraryRoot }
@@ -275,7 +272,7 @@ struct AppRootView: View {
             hasPendingRecording = pending != nil
         }
         .task(id: appState.gatewayConfiguration) {
-            await loadSidebarAgents(using: appState.gatewayConfiguration)
+            await loadDefaultAgent(using: appState.gatewayConfiguration)
         }
         .task(id: HomeChatLoad(configuration: appState.gatewayConfiguration,
                                needsSelection: appState.personalConversation == nil, retry: homeRetry))
@@ -293,15 +290,18 @@ struct AppRootView: View {
         .task(id: SidebarLoad(configuration: appState.gatewayConfiguration, revision: recentRevision)) {
             await loadRecent(using: appState.gatewayConfiguration)
         }
-        .task(id: sidebarPresented) {
-            guard sidebarPresented else { return }
-            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+        .task(id: appState.activeSessionRoute) {
+            guard appState.activeSessionRoute != nil else { return }
             let recentsAreStale = recentUpdatedAt.map { Date.now.timeIntervalSince($0) > 30 } ?? true
             if !recentLoading, recentsAreStale {
                 recentRevision += 1
             }
+        }
+        .task(id: sidebarPresented) {
+            guard sidebarPresented else { return }
+            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
             let configuration = appState.gatewayConfiguration
-            async let agents: Void = loadSidebarAgents(using: configuration)
+            async let agents: Void = loadDefaultAgent(using: configuration)
             await loadAttention(using: configuration)
             await agents
         }
@@ -309,16 +309,12 @@ struct AppRootView: View {
             setSidebar(false)
             recentUpdatedAt = nil
             recentConversations = nil
-            recentDeleteFailures = []
-            recentNextOffset = nil
             recentScope = nil
-            recentError = false
             pendingAttention = 0
             personalWorking = false
             hasPendingRecording = false
             personalReadTarget = nil
             defaultAgentID = "main"
-            sidebarAgents = [:]
         }
         .onChange(of: appState.sessionPromotionRevision) {
             recentUpdatedAt = nil
@@ -327,9 +323,7 @@ struct AppRootView: View {
         .onChange(of: appState.listCacheRevision) {
             recentUpdatedAt = nil
             recentConversations = nil
-            recentNextOffset = nil
             recentScope = nil
-            recentError = false
             recentRevision += 1
         }
     }
@@ -400,6 +394,26 @@ struct AppRootView: View {
             externalIntake: appState.externalIntake,
             onExternalIntakeFinished: appState.externalIntakeFinished
         ) { composer in composer }
+    }
+
+    private var conversationsRoot: some View {
+        let configuration = appState.gatewayConfiguration
+        return ConversationsView(
+            configuration: configuration,
+            onSelect: { conversation in
+                appState.openOrdinaryConversation(ConversationSelection(summary: conversation))
+            },
+            onStartNew: startNew,
+            personalConversationID: personalAgent.record(using: configuration)?.conversationId,
+            onOpenSettings: { settingsPresented = true },
+            onOpenSidebar: { setSidebar(true) },
+            onOpenTaskChat: { taskID in
+                appState.openTaskChat(taskID: taskID, in: .conversations)
+            },
+            retapToken: appState.retapRevision(for: .conversations),
+            refreshToken: appState.sessionPromotionRevision + appState.listCacheRevision,
+            onDelete: handleConversationDeleted
+        )
     }
 
     private var workbenchRoot: some View {
@@ -488,7 +502,11 @@ struct AppRootView: View {
                 personalConversationID: personalAgent.record(using: configuration)?.conversationId,
                 onOpenSettings: { settingsPresented = true },
                 startSearching: route == .conversationSearch,
-                onDelete: appState.conversationUnavailable
+                onOpenTaskChat: { taskID in
+                    appState.openTaskChat(taskID: taskID, in: tab)
+                },
+                refreshToken: appState.sessionPromotionRevision + appState.listCacheRevision,
+                onDelete: handleConversationDeleted
             )
         case .progress:
             WorkPagesView(
@@ -550,8 +568,11 @@ struct AppRootView: View {
             UserUnderstandingView(configuration: configuration)
         case .personalGoals:
             PersonalGoalsView(configuration: configuration)
-        case .capabilities:
+        case .shareCenter:
+            ShareCenterView(configuration: configuration)
+        case let .capabilities(initialCategory):
             CapabilitiesView(configuration: configuration, personal: personalAgent.record(using: configuration),
+                             initialCategory: initialCategory,
                              onOpenAgent: { id, personal in
                                  if personal {
                                      Task { await openPersonalAgent(navigateToAda: true) }
@@ -640,7 +661,10 @@ struct AppRootView: View {
             onCreateNewConversation: {
                 appState.replaceTopSessionChat(.draft(agentId: defaultAgentID), in: tab)
             },
-            onOpenConversationList: { setSidebar(true) },
+            onOpenConversationList: {
+                appState.switchTab(.conversations)
+                appState.popToRoot(in: .conversations)
+            },
             onBack: { appState.pop(in: tab) },
             onConversationUnavailable: { id in
                 guard configuration == appState.gatewayConfiguration else { return }
@@ -655,95 +679,23 @@ struct AppRootView: View {
     }
 
     private var sidebar: some View {
-        let configuration = appState.gatewayConfiguration
-        let currentScope = ComposerDraftStore.accountScope(configuration)
-        let recents = recentScope == currentScope ? recentConversations : nil
-        let selectedID = projectChat.conversationID ?? appState.activeSessionConversation?.id
-        return ChatSidebarView(configuration: configuration,
-                               personalConversationID: personalAgent.record(using: configuration)?.conversationId,
-                               selectedID: selectedID,
-                               recent: recents ?? [], agents: sidebarAgents, recentNextOffset: recents == nil ? nil : recentNextOffset,
-                               recentLoading: recentLoading || (recents == nil && !recentError), recentError: recentError,
-                               isPresented: sidebarPresented, onClose: { setSidebar(false) },
-                               onNavigate: { route in leaveLinkedProject(); navigateFromSidebar(route) },
-                               onConversation: { conversation in
-                                   if projectChat.conversationID == conversation.id {
-                                       setSidebar(false)
-                                   } else {
-                                       leaveLinkedProject()
-                                       selectConversation(conversation)
-                                   }
-                               }, onNew: { leaveLinkedProject(); startNew() }, onRetry: { recentRevision += 1 },
-                               onLoadMore: { Task { await loadRecent(using: configuration, more: true) } },
-                               onRename: { item, name in
-                                   try await changeSidebarConversation(item, name: name, using: configuration)
-                               }, onPin: { item in
-                                   try await changeSidebarConversation(item, using: configuration)
-                               }, onDelete: { ids in
-                                   await deleteSidebarConversations(ids, using: configuration)
-                               })
-                               .id(currentScope)
-    }
-
-    private func changeSidebarConversation(_ item: ConversationSummary, name: String? = nil,
-                                           using configuration: GatewayConfiguration) async throws
-    {
-        let scope = ComposerDraftStore.accountScope(configuration)
-        guard scope == ComposerDraftStore.accountScope(appState.gatewayConfiguration) else { throw CancellationError() }
-        let gateway = GatewayClient(configuration: configuration)
-        if let name {
-            try await gateway.renameConversation(id: item.id, name: name)
-        } else {
-            try await gateway.mutateConversation(id: item.id, action: item.status == "pinned" ? .unpin : .pin)
-        }
-        guard scope == ComposerDraftStore.accountScope(appState.gatewayConfiguration) else { return }
-        recentConversations = recentConversations?.map { row in
-            guard row.id == item.id else { return row }
-            var updated = row
-            if let name {
-                updated.name = name
-            } else {
-                updated.status = item.status == "pinned" ? "active" : "pinned"
+        ChatSidebarView(
+            onClose: { setSidebar(false) },
+            onNavigate: { route in
+                leaveLinkedProject()
+                navigateFromSidebar(route)
+            },
+            onNew: {
+                leaveLinkedProject()
+                startNew()
             }
-            return updated
-        }
-        if let name {
-            appState.updateSessionConversationTitle(id: item.id, title: name)
-        }
-        await persistSidebarMutation(scope: scope)
+        )
     }
 
-    private func deleteSidebarConversations(_ ids: [String], using configuration: GatewayConfiguration) async -> Set<String> {
-        let scope = ComposerDraftStore.accountScope(configuration)
-        let gateway = GatewayClient(configuration: configuration)
-        var failed = Set(ids)
-        for id in ids {
-            guard scope == ComposerDraftStore.accountScope(appState.gatewayConfiguration) else { return failed }
-            do {
-                try await gateway.deleteConversation(id: id)
-                failed.remove(id)
-            } catch {
-                continue
-            }
-        }
-        guard scope == ComposerDraftStore.accountScope(appState.gatewayConfiguration) else { return failed }
-        recentDeleteFailures = failed
-        let deleted = Set(ids).subtracting(failed)
-        guard !deleted.isEmpty else { return failed }
-        recentConversations?.removeAll { deleted.contains($0.id) }
-        for id in deleted {
-            appState.conversationUnavailable(id)
-        }
-        await persistSidebarMutation(scope: scope)
-        return failed
-    }
-
-    private func persistSidebarMutation(scope: String) async {
-        MobileListCache.shared.remove(.conversations, scope: scope)
+    private func handleConversationDeleted(_ id: String) {
+        appState.conversationUnavailable(id)
+        recentConversations?.removeAll { $0.id == id }
         recentRevision += 1
-        if let recentConversations {
-            await RecentConversationsStore.shared.write(recentConversations, scope: scope, requestedAt: .now)
-        }
     }
 
     private func openMobilePush(_ route: String) async {
@@ -798,11 +750,6 @@ struct AppRootView: View {
         appState.openSidebarDestination(route)
     }
 
-    private func selectConversation(_ conversation: ConversationSummary) {
-        setSidebar(false)
-        appState.open(conversation)
-    }
-
     private func startNew() {
         setSidebar(false)
         appState.startConversation(agentId: defaultAgentID)
@@ -850,11 +797,10 @@ struct AppRootView: View {
             && !fullScreenOverlayActive
     }
 
-    private func loadSidebarAgents(using configuration: GatewayConfiguration) async {
+    private func loadDefaultAgent(using configuration: GatewayConfiguration) async {
         guard let catalog = try? await GatewayClient(configuration: configuration).fetchAgents(),
               !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
         defaultAgentID = catalog.defaultId
-        sidebarAgents = Dictionary(catalog.agents.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     private func restoreRecents(using configuration: GatewayConfiguration) async {
@@ -866,52 +812,34 @@ struct AppRootView: View {
         recentConversations = cached
     }
 
-    private func loadRecent(using configuration: GatewayConfiguration, more: Bool = false) async {
+    private func loadRecent(using configuration: GatewayConfiguration) async {
         let scope = ComposerDraftStore.accountScope(configuration)
         let revision = recentRevision
         guard configuration == appState.gatewayConfiguration else { return }
-        let offset: Int
-        if more {
-            guard sidebarOpen, !recentLoading, recentScope == scope, let recentNextOffset else { return }
-            offset = recentNextOffset
-        } else {
-            offset = 0
-            recentNextOffset = nil
-        }
         let isCurrentRequest = {
             !Task.isCancelled && revision == recentRevision && configuration == appState.gatewayConfiguration
         }
         let requestedAt = Date.now
-        recentError = false
         recentLoading = true
         defer {
             if isCurrentRequest() {
                 recentLoading = false
             }
         }
-        if !more, recentScope != scope || recentConversations == nil {
+        if recentScope != scope || recentConversations == nil {
             await restoreRecents(using: configuration)
         }
         guard !Task.isCancelled else { return }
         do {
-            let page = try await GatewayClient(configuration: configuration).fetchSidebarConversations(startOffset: offset)
+            let page = try await GatewayClient(configuration: configuration).fetchSidebarConversations(startOffset: 0)
             guard isCurrentRequest() else { return }
-            let retained = more ? recentConversations ?? [] : []
-            var seen = Set(retained.map(\.id))
+            var seen = Set<String>()
             recentScope = scope
-            let fresh = page.items.filter { seen.insert($0.id).inserted }
-            let failedRows = more ? [] : (recentConversations ?? []).filter {
-                recentDeleteFailures.contains($0.id) && seen.insert($0.id).inserted
-            }
-            recentConversations = retained + fresh + failedRows
-            recentNextOffset = page.nextOffset
+            recentConversations = page.items.filter { seen.insert($0.id).inserted }
             recentUpdatedAt = .now
-            if !more {
-                await RecentConversationsStore.shared.write(page.items, scope: scope, requestedAt: requestedAt)
-            }
+            await RecentConversationsStore.shared.write(page.items, scope: scope, requestedAt: requestedAt)
         } catch {
-            guard !(error is CancellationError), isCurrentRequest() else { return }
-            recentError = true
+            return
         }
     }
 

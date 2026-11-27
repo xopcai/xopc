@@ -52,6 +52,7 @@ class XopcCapabilityTabState {
 @ComponentV2
 export struct XopcCapabilitiesView {
   @Param personal: XopcPersonalAgentRecord | null = null;
+  @Param initialCategory: string = '';
   @Event onExit: () => void = (): void => {};
   @Event onOpenAgent: (id: string, personal: boolean) => void = (_id: string, _personal: boolean): void => {};
   @Event onPersonalChanged: () => void = (): void => {};
@@ -82,7 +83,9 @@ export struct XopcCapabilitiesView {
 
   aboutToAppear(): void {
     this.active = true;
-    this.category = appSettings.pageSelection('capabilities', categories, 'plugins');
+    const requested = this.initialCategory && categories.includes(this.initialCategory) ? this.initialCategory : '';
+    this.category = requested || appSettings.pageSelection('capabilities', categories, 'plugins');
+    if (requested) appSettings.rememberPageSelection('capabilities', requested);
     this.loadNearby(Math.max(0, categories.indexOf(this.category)));
   }
 

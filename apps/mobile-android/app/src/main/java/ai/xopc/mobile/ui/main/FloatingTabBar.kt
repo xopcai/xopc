@@ -54,7 +54,7 @@ internal val FLOATING_TAB_BAR_BOTTOM_MARGIN: Dp = 8.dp
 internal val FLOATING_TAB_BAR_TOTAL_INSET: Dp = FLOATING_TAB_BAR_HEIGHT + FLOATING_TAB_BAR_BOTTOM_MARGIN + FLOATING_TAB_BAR_COMPOSER_GAP
 
 /**
- * Floating pill bottom navigation bar with 4 core slots (Ada, Workbench, Notes, Library).
+ * Floating pill bottom navigation bar with 5 core slots (Ada, Conversations, Workbench, Notes, Library).
  * Designed with >=48dp touch targets, translucent/elevated pill surface, and active capsule highlight.
  */
 @Composable
@@ -77,6 +77,7 @@ internal fun FloatingTabBar(
   val isDark = scheme.background.luminance() < 0.2f
   val barLabel = stringResource(R.string.tab_bar_description)
   val adaLabel = personalName?.trim()?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.tab_ada_fallback)
+  val conversationsLabel = stringResource(R.string.tab_conversations)
   val workbenchLabel = stringResource(R.string.tab_workbench)
   val notesLabel = stringResource(R.string.tab_notes)
   val libraryLabel = stringResource(R.string.library_title)
@@ -94,7 +95,7 @@ internal fun FloatingTabBar(
     modifier = modifier
       .fillMaxWidth()
       .navigationBarsPadding()
-      .padding(horizontal = 16.dp)
+      .padding(horizontal = 12.dp)
       .padding(bottom = FLOATING_TAB_BAR_BOTTOM_MARGIN),
     contentAlignment = Alignment.Center,
   ) {
@@ -106,7 +107,7 @@ internal fun FloatingTabBar(
       tonalElevation = if (isDark) 2.dp else 0.dp,
       modifier = Modifier
         .fillMaxWidth()
-        .widthIn(max = 420.dp)
+        .widthIn(max = 440.dp)
         .height(FLOATING_TAB_BAR_HEIGHT)
         .semantics { contentDescription = barLabel }
         .testTag("floating-tab-bar"),
@@ -114,8 +115,8 @@ internal fun FloatingTabBar(
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 6.dp, vertical = 5.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+          .padding(horizontal = 4.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
         val adaUnreadDesc = if (personalUnread > 0) {
@@ -143,8 +144,35 @@ internal fun FloatingTabBar(
           PersonalAgentAvatar(
             avatar = personalAvatar,
             appearance = personalAppearance,
-            extent = 22.dp,
+            extent = 21.dp,
             active = selected || personalActive,
+          )
+        }
+
+        FloatingTabSlot(
+          label = conversationsLabel,
+          isSelected = selectedTab == MobileTab.Conversations,
+          tag = "floating-tab-conversations",
+          badgeCount = 0,
+          badgeFill = scheme.primary,
+          badgeTextColor = scheme.onPrimary,
+          badgeTag = null,
+          badgeContentDescription = null,
+          showDot = false,
+          dotColor = scheme.primary,
+          dotTag = null,
+          dotDescription = null,
+          onClick = {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onSelectTab(MobileTab.Conversations)
+          },
+          modifier = Modifier.weight(1f),
+        ) { selected ->
+          Icon(
+            painter = painterResource(R.drawable.tab_conversations),
+            contentDescription = null,
+            tint = if (selected) scheme.primary else scheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
           )
         }
 
@@ -171,7 +199,7 @@ internal fun FloatingTabBar(
             painter = painterResource(R.drawable.tab_progress),
             contentDescription = null,
             tint = if (selected) scheme.primary else scheme.onSurfaceVariant,
-            modifier = Modifier.size(21.dp),
+            modifier = Modifier.size(20.dp),
           )
         }
 
@@ -198,7 +226,7 @@ internal fun FloatingTabBar(
             painter = painterResource(R.drawable.tab_notes),
             contentDescription = null,
             tint = if (selected) scheme.primary else scheme.onSurfaceVariant,
-            modifier = Modifier.size(21.dp),
+            modifier = Modifier.size(20.dp),
           )
         }
 
@@ -225,7 +253,7 @@ internal fun FloatingTabBar(
             painter = painterResource(R.drawable.action_folder),
             contentDescription = null,
             tint = if (selected) scheme.primary else scheme.onSurfaceVariant,
-            modifier = Modifier.size(21.dp),
+            modifier = Modifier.size(20.dp),
           )
         }
       }
@@ -279,10 +307,10 @@ private fun FloatingTabSlot(
     Column(
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.spacedBy(2.dp),
-      modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+      modifier = Modifier.padding(horizontal = 2.dp, vertical = 4.dp),
     ) {
       Box(contentAlignment = Alignment.TopEnd) {
-        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
           icon(isSelected)
         }
         if (badgeCount > 0) {
@@ -316,10 +344,11 @@ private fun FloatingTabSlot(
       Text(
         text = label,
         color = textColor,
-        fontSize = 11.sp,
-        lineHeight = 13.sp,
+        fontSize = 10.sp,
+        lineHeight = 12.sp,
         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
         maxLines = 1,
+        softWrap = false,
         overflow = TextOverflow.Ellipsis,
       )
     }

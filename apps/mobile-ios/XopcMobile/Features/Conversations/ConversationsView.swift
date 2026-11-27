@@ -17,12 +17,17 @@ private enum ConversationHistoryMode: String, CaseIterable {
 // swiftlint:disable:next type_body_length
 struct ConversationsView: View {
     @Environment(\.mobileTheme) private var mobileTheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let configuration: GatewayConfiguration
     let onSelect: (ConversationSummary) -> Void
     let onStartNew: () -> Void
     let personalConversationID: String?
     let onOpenSettings: () -> Void
     var startSearching = false
+    var onOpenSidebar: (() -> Void)?
+    var onOpenTaskChat: ((String) -> Void)?
+    var retapToken = 0
+    var refreshToken = 0
     var onDelete: (String) -> Void = { _ in }
 
     private var visibleConversations: [ConversationSummary] {
@@ -68,8 +73,9 @@ struct ConversationsView: View {
                     .padding(.bottom, 8)
             }
 
-            TabView(selection: Binding(get: { mode }, set: { selectMode($0) })) {
+            ZStack {
                 ForEach(ConversationHistoryMode.allCases, id: \.self) { page in
+                    let active = page == mode
                     Group {
                         if page != .recent, page != mode || groupName == nil {
                             groupList(page)
@@ -78,10 +84,12 @@ struct ConversationsView: View {
                         } else {
                             ConversationLoadingSkeleton().frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
-                    }.tag(page)
+                    }
+                    .opacity(active ? 1 : 0)
+                    .allowsHitTesting(active)
+                    .accessibilityHidden(!active)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
             .accessibilityIdentifier("sessions-mode-pager")
         }
         .background(mobileTheme.canvas)
@@ -91,12 +99,27 @@ struct ConversationsView: View {
             }, selected: mode, identifier: "sessions-mode-menu", onSelect: selectMode)
         }
         .toolbar {
+            if let onOpenSidebar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
+                        .accessibilityIdentifier("chat-header-sidebar")
+                }
+            }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 PageSearchButton(searchLabel, isOpen: $searchOpen, query: $state.searchText,
                                  accessibilityID: "conversations-open-search")
                 if mode == .recent {
                     Button("新建对话", systemImage: "plus", action: onStartNew)
+                        .accessibilityIdentifier("conversations-new")
                 }
+            }
+        }
+        .onChange(of: retapToken) {
+            guard retapToken > 0 else { return }
+            if mode != .recent || groupName != nil || searchOpen {
+                clearGroup()
+                mode = .recent
+                rememberedMode = .recent
             }
         }
         .task {
@@ -108,7 +131,8 @@ struct ConversationsView: View {
         }
         .task(id: ConversationSearchKey(configuration: configuration, query: state.searchText,
                                         personalConversationID: personalConversationID,
-                                        scope: state.scope, loadSessions: !browsingGroups))
+                                        scope: state.scope, loadSessions: !browsingGroups,
+                                        refreshToken: refreshToken))
         {
             guard !browsingGroups else { return }
             state.personalConversationID = personalConversationID
@@ -158,7 +182,19 @@ struct ConversationsView: View {
                 ContentUnavailableView.search(text: state.searchText)
             }
         } else {
+            conversationListScrollView(page)
+        }
+    }
+
+    private func conversationListScrollView(_ page: ConversationHistoryMode) -> some View {
+        ScrollViewReader { scroller in
             List {
+                Color.clear
+                    .frame(height: 0)
+                    .id("conversations-list-top")
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 if state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     ForEach(ConversationDateSection.group(visibleConversations, locale: locale)) { section in
                         Section {
@@ -182,6 +218,12 @@ struct ConversationsView: View {
             .refreshable {
                 guard page == mode else { return }
                 await state.load(using: GatewayClient(configuration: configuration))
+            }
+            .onChange(of: retapToken) {
+                guard retapToken > 0, page == mode else { return }
+                MobileMotion.perform(MobileMotion.standardDuration, reduceMotion: reduceMotion) {
+                    scroller.scrollTo("conversations-list-top", anchor: .top)
+                }
             }
         }
     }
@@ -367,23 +409,23 @@ struct ConversationsView: View {
             .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
             if expandedConversations.contains(conversation.id), let group = state.childrenByConversationID[conversation.id] {
                 ForEach(group.items) { child in
-                    NavigationLink {
-                        TaskConversationView(configuration: configuration, taskID: child.taskId)
-                    } label: {
-                        HStack(spacing: 10) {
-                            Circle().stroke(.secondary, lineWidth: 1.2).frame(width: 10, height: 10)
-                            Text(child.title).mobileTextStyle(.secondary).lineLimit(2)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Text(AppLocalization.string(child.phase == "closed" ? "已完成" : child.runStatus == "running" ? "进行中" : "待处理", locale: locale))
-                                .mobileTextStyle(.caption).foregroundStyle(.secondary)
+                    if let onOpenTaskChat {
+                        Button {
+                            onOpenTaskChat(child.taskId)
+                        } label: {
+                            childTaskRowLabel(child)
                         }
-                        .padding(.horizontal, 24).frame(minHeight: 52)
-                        .background(mobileTheme.grouped, in: .rect(cornerRadius: mobileTheme.corner(16)))
-                        .contentShape(.hoverEffect, .rect(cornerRadius: mobileTheme.corner(16)))
-                        .hoverEffect(.highlight)
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("conversation-child-\(child.id)")
+                    } else {
+                        NavigationLink {
+                            TaskConversationView(configuration: configuration, taskID: child.taskId)
+                        } label: {
+                            childTaskRowLabel(child)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("conversation-child-\(child.id)")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("conversation-child-\(child.id)")
                 }
             }
         }
@@ -393,6 +435,20 @@ struct ConversationsView: View {
             guard page == mode, conversation.id == visibleConversations.last?.id else { return }
             Task { await state.loadMore(using: GatewayClient(configuration: configuration)) }
         }
+    }
+
+    private func childTaskRowLabel(_ child: SidebarTask) -> some View {
+        HStack(spacing: 10) {
+            Circle().stroke(.secondary, lineWidth: 1.2).frame(width: 10, height: 10)
+            Text(child.title).mobileTextStyle(.secondary).lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(AppLocalization.string(child.phase == "closed" ? "已完成" : child.runStatus == "running" ? "进行中" : "待处理", locale: locale))
+                .mobileTextStyle(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 24).frame(minHeight: 52)
+        .background(mobileTheme.grouped, in: .rect(cornerRadius: mobileTheme.corner(16)))
+        .contentShape(.hoverEffect, .rect(cornerRadius: mobileTheme.corner(16)))
+        .hoverEffect(.highlight)
     }
 }
 
@@ -462,6 +518,7 @@ private struct ConversationSearchKey: Hashable {
     let personalConversationID: String?
     let scope: ConversationHistoryScope
     let loadSessions: Bool
+    let refreshToken: Int
 }
 
 struct ConversationDateSection: Identifiable {

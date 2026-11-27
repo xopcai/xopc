@@ -41,18 +41,23 @@ struct WorkPagesView: View {
     }
 
     var body: some View {
-        TabView(selection: $page) {
+        ZStack {
             ProgressHubView(configuration: configuration, onOpenConversation: onOpenConversation, onSelectPage: selectPage,
                             onOpenLibrary: onOpenLibrary, onNavigate: onNavigate,
                             isActive: isTabActive && page == .progress, scrollToTopToken: retapToken)
-                .tag(WorkPage.progress)
+                .opacity(page == .progress ? 1 : 0)
+                .allowsHitTesting(page == .progress)
+                .accessibilityHidden(page != .progress)
             TasksView(configuration: configuration, isActive: isTabActive && page == .tasks, onNavigate: onNavigate)
-                .tag(WorkPage.tasks)
+                .opacity(page == .tasks ? 1 : 0)
+                .allowsHitTesting(page == .tasks)
+                .accessibilityHidden(page != .tasks)
             ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation,
                          isActive: isTabActive && page == .projects, onNavigate: onNavigate)
-                .tag(WorkPage.projects)
+                .opacity(page == .projects ? 1 : 0)
+                .allowsHitTesting(page == .projects)
+                .accessibilityHidden(page != .projects)
         }
-        .tabViewStyle(.page(indexDisplayMode: .never))
         .accessibilityIdentifier("work-page-pager")
         .onChange(of: retapToken) {
             guard retapToken > 0 else { return }

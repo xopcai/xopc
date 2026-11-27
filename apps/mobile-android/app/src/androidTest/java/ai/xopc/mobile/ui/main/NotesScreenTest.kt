@@ -98,13 +98,15 @@ class NotesScreenTest {
     var opened = ""
     var more = 0
     composeTestRule.setContent {
-      NotesListContent(NotesUiState(items = listOf(note), hasMore = true), query,
-        { query = it }, { submitted = query }, { status = it }, { opened = it }, { more++ }, searchOpen = true)
+      NotesScreen(NotesUiState(gatewayId = "test", items = listOf(note), hasMore = true),
+        androidx.compose.foundation.layout.PaddingValues(),
+        { q, s -> submitted = q; status = s }, { more++ }, { opened = it })
     }
+    composeTestRule.onNodeWithTag("notes-open-search").performClick()
     composeTestRule.onNodeWithTag("notes-search").performTextInput("idea")
     composeTestRule.onNodeWithTag("notes-refresh").performClick()
     assertEquals("idea", submitted)
-    composeTestRule.onNodeWithTag("notes-filter-menu").performClick()
+    composeTestRule.onNodeWithTag("notes-page-menu").performClick()
     composeTestRule.onNodeWithTag("notes-filter-inbox").performClick()
     assertEquals("inbox", status)
     composeTestRule.onNodeWithTag("note-note-1").performClick()

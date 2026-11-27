@@ -23,7 +23,7 @@ describe('chat entry handoff', () => {
     });
     Object.assign(view, {
       ordinaryOpening: false, navigationRevision: 1, disposed: false,
-      chatRepository: { create: vi.fn(async () => 'conversation') }, openSessionChatFromSidebar: vi.fn(),
+      chatRepository: { create: vi.fn(async () => 'conversation') }, openSessionChat: vi.fn(),
       getUIContext: () => ({ getPromptAction: () => ({ showToast: vi.fn() }) }),
     });
     return view;
@@ -33,7 +33,7 @@ describe('chat entry handoff', () => {
     const view = home();
     await Promise.all([view.openOrdinaryChat(), view.openOrdinaryChat()]);
     expect(view.chatRepository.create).toHaveBeenCalledOnce();
-    expect(view.openSessionChatFromSidebar).toHaveBeenCalledExactlyOnceWith('conversation', '', true);
+    expect(view.openSessionChat).toHaveBeenCalledExactlyOnceWith('conversation', '', true);
   });
 
   it('ignores an outgoing draft request after the user changes destination', async () => {
@@ -41,7 +41,7 @@ describe('chat entry handoff', () => {
     const pending = view.openOrdinaryChat();
     view.navigationRevision++;
     await pending;
-    expect(view.openSessionChatFromSidebar).not.toHaveBeenCalled();
+    expect(view.openSessionChat).not.toHaveBeenCalled();
     expect(view.ordinaryOpening).toBe(false);
   });
 

@@ -26,7 +26,7 @@ import { XopcSessionsView } from './SessionsView';
 import { XopcChatSidebar } from './ChatSidebar';
 import { XopcFloatingTabBar } from './FloatingTabBar';
 import {
-  CHAT_SIDEBAR_BACK_EDGE,
+  canStartChatSidebarPan,
   CHAT_SIDEBAR_PAN_DISTANCE_VP,
   chatSidebarDragProgress,
   shouldOpenChatSidebar,
@@ -80,8 +80,6 @@ import { generatedMusicPlayback, XopcGeneratedMusicPlayback } from '../service/g
 import { XopcMusicMiniPlayer } from './MusicPlaybackView';
 import { voiceCall, XopcVoiceCall } from '../service/voiceCall';
 
-const ROOT_EDGE_SWIPE_BAND_VP: number = 72;
-
 @ComponentV2
 export struct XopcHomeView {
   @Param gatewayId: string = '';
@@ -102,19 +100,23 @@ export struct XopcHomeView {
   // Multi-stack tab navigation state
   private tabNav: XopcMobileTabNavState = new XopcMobileTabNavState();
   private adaStack: NavPathStack = new NavPathStack();
+  private conversationsStack: NavPathStack = new NavPathStack();
   private workbenchStack: NavPathStack = new NavPathStack();
   private notesStack: NavPathStack = new NavPathStack();
   private libraryStack: NavPathStack = new NavPathStack();
   @Local selectedTab: XopcMobileTab = 'ada';
   @Local adaDepth: number = 0;
+  @Local conversationsDepth: number = 0;
   @Local workbenchDepth: number = 0;
   @Local notesDepth: number = 0;
   @Local libraryDepth: number = 0;
   @Local adaTopRoute: string = '';
+  @Local conversationsTopRoute: string = '';
   @Local workbenchTopRoute: string = '';
   @Local notesTopRoute: string = '';
   @Local libraryTopRoute: string = '';
   @Local adaScrollRevision: number = 0;
+  @Local conversationsScrollRevision: number = 0;
   @Local workbenchResetRevision: number = 0;
   @Local notesScrollRevision: number = 0;
   @Local libraryScrollRevision: number = 0;
@@ -139,6 +141,7 @@ export struct XopcHomeView {
   // Overlay & back handlers
   @Local chatOverlayActive: boolean = false;
   @Local libraryDetailOpen: boolean = false;
+  private conversationsBackHandler?: () => boolean;
   private libraryBackHandler?: () => boolean;
   private workbenchBackHandler?: () => boolean;
   @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
@@ -161,6 +164,7 @@ export struct XopcHomeView {
   private attentionTimer: number = -1;
 
   @Computed get activeStackDepth(): number {
+    if (this.selectedTab === 'conversations') return this.conversationsDepth;
     if (this.selectedTab === 'workbench') return this.workbenchDepth;
     if (this.selectedTab === 'notes') return this.notesDepth;
     if (this.selectedTab === 'library') return this.libraryDepth;
@@ -168,6 +172,7 @@ export struct XopcHomeView {
   }
 
   @Computed get detailRoute(): string {
+    if (this.selectedTab === 'conversations') return this.conversationsTopRoute;
     if (this.selectedTab === 'workbench') return this.workbenchTopRoute;
     if (this.selectedTab === 'notes') return this.notesTopRoute;
     if (this.selectedTab === 'library') return this.libraryTopRoute;
@@ -218,7 +223,7 @@ export struct XopcHomeView {
   @Computed get showGlobalMusicMiniPlayer(): boolean {
     if (!this.music.track) return false;
     if (this.activeStackDepth === 0) {
-      return this.selectedTab === 'workbench' || this.selectedTab === 'library';
+      return this.selectedTab === 'conversations' || this.selectedTab === 'workbench' || this.selectedTab === 'library';
     }
     return this.detailRoute !== 'library' && this.detailRoute !== 'notes-list'
       && this.detailRoute !== 'session-chat' && this.detailRoute !== 'project-chat'
@@ -234,6 +239,7 @@ export struct XopcHomeView {
   }
 
   private stackFor(tab: XopcMobileTab): NavPathStack {
+    if (tab === 'conversations') return this.conversationsStack;
     if (tab === 'workbench') return this.workbenchStack;
     if (tab === 'notes') return this.notesStack;
     if (tab === 'library') return this.libraryStack;
@@ -255,7 +261,9 @@ export struct XopcHomeView {
     if (tab === 'ada') {
       this.adaDepth = depth;
       this.adaTopRoute = depth > 0 ? topName : '';
-      if (this.adaTopRoute !== 'session-chat') this.sessionChatId = '';
+    } else if (tab === 'conversations') {
+      this.conversationsDepth = depth;
+      this.conversationsTopRoute = depth > 0 ? topName : '';
     } else if (tab === 'workbench') {
       this.workbenchDepth = depth;
       this.workbenchTopRoute = depth > 0 ? topName : '';
@@ -265,6 +273,11 @@ export struct XopcHomeView {
     } else {
       this.libraryDepth = depth;
       this.libraryTopRoute = depth > 0 ? topName : '';
+    }
+    if (this.adaTopRoute !== 'session-chat' && this.conversationsTopRoute !== 'session-chat'
+      && this.workbenchTopRoute !== 'session-chat' && this.notesTopRoute !== 'session-chat'
+      && this.libraryTopRoute !== 'session-chat') {
+      this.sessionChatId = '';
     }
   }
 
@@ -285,6 +298,7 @@ export struct XopcHomeView {
     layoutState.dismissSidebar = (): boolean => this.closeSidebar();
     layoutState.handleBackPress = (): boolean => this.handleBackPress();
     this.attachStackInterception('ada', this.adaStack);
+    this.attachStackInterception('conversations', this.conversationsStack);
     this.attachStackInterception('workbench', this.workbenchStack);
     this.attachStackInterception('notes', this.notesStack);
     this.attachStackInterception('library', this.libraryStack);
@@ -345,6 +359,7 @@ export struct XopcHomeView {
     this.navigationRevision++;
     this.tabNav.resetForGatewaySwitch();
     this.adaStack.clear(false);
+    this.conversationsStack.clear(false);
     this.workbenchStack.clear(false);
     this.notesStack.clear(false);
     this.libraryStack.clear(false);
@@ -354,10 +369,12 @@ export struct XopcHomeView {
     this.sidebarDragging = false;
     this.selectedTab = 'ada';
     this.adaDepth = 0;
+    this.conversationsDepth = 0;
     this.workbenchDepth = 0;
     this.notesDepth = 0;
     this.libraryDepth = 0;
     this.adaTopRoute = '';
+    this.conversationsTopRoute = '';
     this.workbenchTopRoute = '';
     this.notesTopRoute = '';
     this.libraryTopRoute = '';
@@ -395,6 +412,7 @@ export struct XopcHomeView {
       || this.sessionSwitcherOpen
       || (layoutState.dismissChatOverlay?.() ?? false)
       || this.collapseNotesRecording()
+      || (this.selectedTab === 'conversations' && this.conversationsDepth === 0 && (this.conversationsBackHandler?.() ?? false))
       || (this.selectedTab === 'library' && this.libraryDepth === 0 && (this.libraryBackHandler?.() ?? false))
       || (this.selectedTab === 'workbench' && this.workbenchDepth === 0 && (this.workbenchBackHandler?.() ?? false));
     if (hasOverlay) {
@@ -430,6 +448,7 @@ export struct XopcHomeView {
     }
     if (result === 'scroll-to-top') {
       if (tab === 'ada') this.adaScrollRevision++;
+      else if (tab === 'conversations') this.conversationsScrollRevision++;
       else if (tab === 'workbench') this.workbenchResetRevision++;
       else if (tab === 'notes') this.notesScrollRevision++;
       else if (tab === 'library') this.libraryScrollRevision++;
@@ -465,6 +484,10 @@ export struct XopcHomeView {
     if (route.page === 'automation-setup' && this.automationOpening) return;
     this.navigationRevision++;
     this.closeSidebar();
+    if (route.page === 'sessions' && !route.itemId) {
+      this.selectTab('conversations');
+      return;
+    }
     if (route.page === 'workbench' || route.page === 'progress') {
       this.selectTab('workbench');
       return;
@@ -587,7 +610,7 @@ export struct XopcHomeView {
         expectedVersion: route.version ?? '', title: route.title ?? ''
       }] : [];
       chatDraftIntake.stage(id, route.prompt ?? '', refs);
-      this.openSessionChatFromSidebar(id, '', true);
+      this.openSessionChat(id, '', true);
     } catch (error) {
       xopcToast(this.getUIContext(), userErrorMessage((error as Error).message, 'save'));
     }
@@ -735,7 +758,7 @@ export struct XopcHomeView {
     }
   }
 
-  private openSessionChatFromSidebar(id: string, prompt: string = '', focusComposer: boolean = false): void {
+  private openSessionChat(id: string, prompt: string = '', focusComposer: boolean = false): void {
     if (!id) return;
     if (id === (this.personalAgent.record?.conversationId || this.adaConversationId)) {
       this.switchToAdaRoot();
@@ -743,15 +766,15 @@ export struct XopcHomeView {
     }
     this.navigationRevision++;
     this.closeSidebar();
-    const transition = this.tabNav.openSessionChatFromSidebar({ page: 'session-chat', itemId: id, prompt });
-    this.selectedTab = 'ada';
+    const transition = this.tabNav.openSessionChat({ page: 'session-chat', itemId: id, prompt });
+    this.selectedTab = 'conversations';
     this.sessionChatId = id;
     this.sessionChatRequestRevision++;
     if (focusComposer) this.sessionChatFocusRevision++;
     if (transition.operation === 'replace' && transition.route) {
-      this.adaStack.replacePath({ name: 'session-chat', param: transition.route }, !this.layout.reduceMotion);
+      this.conversationsStack.replacePath({ name: 'session-chat', param: transition.route }, !this.layout.reduceMotion);
     } else if (transition.route) {
-      this.adaStack.pushPath({ name: 'session-chat', param: transition.route }, !this.layout.reduceMotion);
+      this.conversationsStack.pushPath({ name: 'session-chat', param: transition.route }, !this.layout.reduceMotion);
     }
   }
 
@@ -782,7 +805,7 @@ export struct XopcHomeView {
       this.switchToAdaRoot();
       return;
     }
-    this.openSessionChatFromSidebar(id);
+    this.openSessionChat(id);
   }
 
   private openConversationFromSearch(id: string): void {
@@ -833,7 +856,7 @@ export struct XopcHomeView {
       const id = await this.chatRepository.create(undefined, resolved || undefined, undefined, agentSetup ? language : undefined);
       if (!this.disposed && revision === this.navigationRevision) {
         if (prompt) chatDraftIntake.stage(id, prompt, []);
-        this.openSessionChatFromSidebar(id, '', true);
+        this.openSessionChat(id, '', true);
       }
     } catch (error) {
       if (!this.disposed && revision === this.navigationRevision) {
@@ -852,7 +875,7 @@ export struct XopcHomeView {
     if (this.disposed || navigation !== this.navigationRevision) return;
     await new XopcChatDrafts().save(JSON.stringify([profile.gatewayId, profile.deviceId, id]), { text: '', refs: [], files: [file] });
     gatewaySession.assertConnection(revision);
-    if (!this.disposed && navigation === this.navigationRevision) this.openSessionChatFromSidebar(id);
+    if (!this.disposed && navigation === this.navigationRevision) this.openSessionChat(id);
   }
 
   private openSessionSwitcher(): void {
@@ -960,7 +983,7 @@ export struct XopcHomeView {
         onExit: (): void => { this.popActiveStack(); },
         onOpen: (id: string): void => { this.openConversationFromSearch(id); },
         onTask: (id: string): void => { this.navigate({ page: 'task-chat', itemId: id }); },
-        onNew: (id: string): void => { this.openSessionChatFromSidebar(id, '', true); },
+        onNew: (id: string): void => { this.openSessionChat(id, '', true); },
         onDelete: (id: string): void => { this.onSessionChatUnavailable(id); } })
     } else if (page === 'capability-mcp-setup') {
       NavDestination() {
@@ -979,7 +1002,9 @@ export struct XopcHomeView {
       }.hideTitleBar(true).backgroundColor(this.colors.surface)
     } else if (page === 'capabilities') {
       NavDestination() {
-        XopcCapabilitiesView({ personal: this.personalAgent.record, onExit: (): void => { this.popActiveStack(); },
+        XopcCapabilitiesView({ personal: this.personalAgent.record,
+          initialCategory: (param as XopcMobileRoute).itemId,
+          onExit: (): void => { this.popActiveStack(); },
           onPersonalChanged: (): void => { void this.personalAgent.refresh(); },
           onSetupChat: (prompt: string, agentSetup: boolean): void => { void this.openOrdinaryChat('', prompt, agentSetup); },
           onDeviceChat: (id: string): void => { this.openConversationTarget(id); },
@@ -1138,7 +1163,7 @@ export struct XopcHomeView {
       return GestureJudgeResult.REJECT;
     }
     const startX = finger.globalX - event.offsetX;
-    if (startX < CHAT_SIDEBAR_BACK_EDGE || startX > ROOT_EDGE_SWIPE_BAND_VP || event.offsetX <= Math.abs(event.offsetY) * 1.25) {
+    if (!canStartChatSidebarPan(startX, this.recordingViewportWidth, event.offsetX, event.offsetY)) {
       return GestureJudgeResult.REJECT;
     }
     return GestureJudgeResult.CONTINUE;
@@ -1207,6 +1232,31 @@ export struct XopcHomeView {
       .zIndex(this.selectedTab === 'ada' ? 2 : 0)
       .hitTestBehavior(this.selectedTab === 'ada' ? HitTestMode.Default : HitTestMode.None)
       .accessibilityLevel(this.selectedTab === 'ada' && !this.sidebarOpen ? 'auto' : 'no-hide-descendants')
+  }
+
+  @Builder
+  conversationsTabStack() {
+    Navigation(this.conversationsStack) {
+      XopcSessionsView({
+        rootTab: true,
+        activePage: this.selectedTab === 'conversations' && this.conversationsDepth === 0 && this.layout.foreground,
+        currentId: this.visibleConversationId,
+        personalAgent: this.personalAgent.record,
+        bottomChromeInset: this.bottomChromeInset,
+        scrollTopRevision: this.conversationsScrollRevision,
+        onOpenSidebar: (): void => { this.openSidebar(); },
+        onBackHandler: (handler?: () => boolean): void => { this.conversationsBackHandler = handler; },
+        onOpen: (id: string): void => { this.openSessionChat(id); },
+        onTask: (id: string): void => { this.navigate({ page: 'task-chat', itemId: id }); },
+        onNew: (id: string): void => { this.openSessionChat(id, '', true); },
+        onDelete: (id: string): void => { this.onSessionChatUnavailable(id); },
+      })
+    }.hideTitleBar(true).mode(NavigationMode.Stack).navDestination(this.destination)
+      .width('100%').height('100%').backgroundColor(this.colors.surface)
+      .visibility(this.selectedTab === 'conversations' ? Visibility.Visible : Visibility.Hidden)
+      .zIndex(this.selectedTab === 'conversations' ? 2 : 0)
+      .hitTestBehavior(this.selectedTab === 'conversations' ? HitTestMode.Default : HitTestMode.None)
+      .accessibilityLevel(this.selectedTab === 'conversations' && !this.sidebarOpen ? 'auto' : 'no-hide-descendants')
   }
 
   @Builder
@@ -1281,6 +1331,7 @@ export struct XopcHomeView {
       Stack({ alignContent: Alignment.Bottom }) {
         Stack({ alignContent: Alignment.TopStart }) {
           this.adaTabStack()
+          this.conversationsTabStack()
           this.workbenchTabStack()
           this.notesTabStack()
           this.libraryTabStack()
@@ -1320,11 +1371,9 @@ export struct XopcHomeView {
       if (this.sidebarMounted) {
         Stack() {
           XopcChatSidebar({
-            personalAgent: this.personalAgent.record,
             reveal: this.sidebarProgress,
             drawerWidth: this.sidebarWidth,
             interactive: this.sidebarOpen,
-            currentId: this.visibleConversationId,
             onClose: (): void => { this.closeSidebar(); },
             onDismissDrag: (offset: number): void => {
               if (this.sidebarOpen) this.sidebarProgress = 1 - chatSidebarDragProgress(-offset, this.sidebarWidth);
@@ -1335,11 +1384,6 @@ export struct XopcHomeView {
               else this.settleSidebar(1);
             },
             onNew: (): void => { void this.openOrdinaryChat(); },
-            onConversation: (id: string): void => {
-              if (this.detailRoute === 'project-chat' && id === this.projectConversationId) this.closeSidebar();
-              else this.openSessionChatFromSidebar(id);
-            },
-            onDelete: (id: string): void => { this.onSessionChatUnavailable(id); },
             onNavigate: (route: XopcMobileRoute): void => { this.openSidebarRoute(route); },
           })
         }.width('100%').height('100%').zIndex(45)
@@ -1511,7 +1555,7 @@ struct XopcWorkbenchView {
           onNavigate: this.onNavigate,
         })
       }.id('work-page-pager').index(this.selectedIndex).loop(false).indicator(false).cachedCount(2)
-        .duration(xopcPagerDuration(this.layout.reduceMotion))
+        .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(true)
         .width('100%').layoutWeight(1).clip(true)
         .onChange((index: number): void => {
           this.selectedIndex = index;

@@ -17,7 +17,7 @@ import {
 
 describe('HarmonyOS multi-stack mobile tab navigation', () => {
   it('enforces the global visibility, edge-swipe, bottom-inset and Ada unread formulas', () => {
-    expect(CORE_MOBILE_TABS).toEqual(['ada', 'workbench', 'notes', 'library']);
+    expect(CORE_MOBILE_TABS).toEqual(['ada', 'conversations', 'workbench', 'notes', 'library']);
 
     // showBottomTabBar = activeStackDepth === 0 && !keyboardVisible && !fullScreenOverlayActive
     expect(shouldShowBottomTabBar(0, false, false)).toBe(true);
@@ -38,6 +38,7 @@ describe('HarmonyOS multi-stack mobile tab navigation', () => {
     // viewedPersonal only when on Ada root, foreground, no sidebar, no overlay
     expect(shouldMarkPersonalViewed('ada', 0, false, true, false)).toBe(true);
     expect(shouldMarkPersonalViewed('ada', 1, false, true, false)).toBe(false);
+    expect(shouldMarkPersonalViewed('conversations', 0, false, true, false)).toBe(false);
     expect(shouldMarkPersonalViewed('workbench', 0, false, true, false)).toBe(false);
     expect(shouldMarkPersonalViewed('ada', 0, true, true, false)).toBe(false);
     expect(shouldMarkPersonalViewed('ada', 0, false, false, false)).toBe(false);
@@ -49,6 +50,11 @@ describe('HarmonyOS multi-stack mobile tab navigation', () => {
     expect(nav.selectedTab).toBe('ada');
     expect(nav.activeStackDepth()).toBe(0);
 
+    // Switch to conversations and push session-chat
+    expect(nav.selectTab('conversations')).toBe('switched');
+    nav.pushOnActiveTab({ page: 'session-chat', itemId: 'conv-1' });
+    expect(nav.stackDepth('conversations')).toBe(1);
+
     // Switch to workbench and push project-detail
     expect(nav.selectTab('workbench')).toBe('switched');
     nav.pushOnActiveTab({ page: 'project-detail', itemId: 'proj-1' });
@@ -59,9 +65,10 @@ describe('HarmonyOS multi-stack mobile tab navigation', () => {
     nav.pushOnActiveTab({ page: 'notes', itemId: 'note-1' });
     expect(nav.stackDepth('notes')).toBe(1);
 
-    // Switch back to workbench -> project-detail is preserved
+    // Switch back to workbench -> project-detail is preserved, conversations & notes untouched
     expect(nav.selectTab('workbench')).toBe('switched');
     expect(nav.topRoute('workbench')).toEqual({ page: 'project-detail', itemId: 'proj-1' });
+    expect(nav.stackDepth('conversations')).toBe(1);
     expect(nav.stackDepth('notes')).toBe(1);
 
     // Active re-tap when depth > 0 pops to root
@@ -70,55 +77,83 @@ describe('HarmonyOS multi-stack mobile tab navigation', () => {
 
     // Active re-tap when already at root triggers scroll-to-top / reset
     expect(nav.selectTab('workbench')).toBe('scroll-to-top');
+
+    // Switch back to conversations -> active re-tap pops session-chat, then scrolls to top
+    expect(nav.selectTab('conversations')).toBe('switched');
+    expect(nav.selectTab('conversations')).toBe('popped-to-root');
+    expect(nav.stackDepth('conversations')).toBe(0);
+    expect(nav.selectTab('conversations')).toBe('scroll-to-top');
   });
 
-  it('hosts ordinary session-chat on ada stack, replaces top on consecutive switches, and isolates AdaRoot', () => {
+  it('hosts ordinary session-chat on conversations stack, replaces top on consecutive switches, and isolates AdaRoot', () => {
     const nav = new XopcMobileTabNavState();
     nav.selectTab('workbench');
     nav.pushOnActiveTab({ page: 'task-detail', itemId: 'task-1' });
     nav.sidebarOpen = true;
 
-    // Opening ordinary chat A from sidebar while on workbench -> switches to ada & pushes session-chat(A)
-    const first = nav.openSessionChatFromSidebar({ page: 'session-chat', itemId: 'chat-a' });
-    expect(first.tab).toBe('ada');
+    // Opening ordinary chat A (or + New Chat from sidebar) while on workbench -> switches to conversations & pushes session-chat(A)
+    const first = nav.openSessionChat({ page: 'session-chat', itemId: 'chat-a' });
+    expect(first.tab).toBe('conversations');
     expect(first.operation).toBe('push');
     expect(nav.sidebarOpen).toBe(false);
-    expect(nav.selectedTab).toBe('ada');
-    expect(nav.stackFor('ada')).toEqual([{ page: 'session-chat', itemId: 'chat-a' }]);
-    // Workbench stack is untouched
+    expect(nav.selectedTab).toBe('conversations');
+    expect(nav.stackFor('conversations')).toEqual([{ page: 'session-chat', itemId: 'chat-a' }]);
+    // Workbench and Ada stacks are untouched
     expect(nav.stackFor('workbench')).toEqual([{ page: 'task-detail', itemId: 'task-1' }]);
+    expect(nav.stackDepth('ada')).toBe(0);
 
     // Switching straight to ordinary chat B replaces top (no infinite stacking!)
     const second = nav.switchSessionChatInPlace({ page: 'session-chat', itemId: 'chat-b' });
+    expect(second.tab).toBe('conversations');
     expect(second.operation).toBe('replace');
-    expect(nav.stackFor('ada')).toEqual([{ page: 'session-chat', itemId: 'chat-b' }]);
+    expect(nav.stackFor('conversations')).toEqual([{ page: 'session-chat', itemId: 'chat-b' }]);
 
-    // Opening ordinary chat C from sidebar while on session-chat(B) also replaces top
-    const third = nav.openSessionChatFromSidebar({ page: 'session-chat', itemId: 'chat-c' });
+    // Opening ordinary chat C while on session-chat(B) also replaces top
+    const third = nav.openSessionChat({ page: 'session-chat', itemId: 'chat-c' });
+    expect(third.tab).toBe('conversations');
     expect(third.operation).toBe('replace');
-    expect(nav.stackFor('ada')).toEqual([{ page: 'session-chat', itemId: 'chat-c' }]);
+    expect(nav.stackFor('conversations')).toEqual([{ page: 'session-chat', itemId: 'chat-c' }]);
 
-    // Single back press returns directly to AdaRoot
+    // Single back press returns directly to Conversations root
     expect(nav.resolveBackPress(false)).toBe('pop');
-    expect(nav.stackDepth('ada')).toBe(0);
-    expect(nav.selectedTab).toBe('ada');
+    expect(nav.stackDepth('conversations')).toBe(0);
+    expect(nav.selectedTab).toBe('conversations');
   });
 
-  it('promotes new chat draft in-place without pop+push and pops on delete/404', () => {
+  it('promotes new chat draft in-place without pop+push and pops back to conversations root on delete/404', () => {
     const nav = new XopcMobileTabNavState();
-    nav.openSessionChatFromSidebar({ page: 'session-chat', itemId: 'draft-1', draftId: 'draft-1' });
-    const before = nav.topRoute('ada');
+    nav.openSessionChat({ page: 'session-chat', itemId: 'draft-1', draftId: 'draft-1' });
+    const before = nav.topRoute('conversations');
 
     expect(nav.promoteSessionChatDraft('draft-1', 'server-conv-42')).toBe(true);
-    expect(nav.stackDepth('ada')).toBe(1);
-    expect(nav.topRoute('ada')).toBe(before);
-    expect(nav.topRoute('ada')?.itemId).toBe('server-conv-42');
-    expect(nav.topRoute('ada')?.draftId).toBeUndefined();
+    expect(nav.stackDepth('conversations')).toBe(1);
+    expect(nav.topRoute('conversations')).toBe(before);
+    expect(nav.topRoute('conversations')?.itemId).toBe('server-conv-42');
+    expect(nav.topRoute('conversations')?.draftId).toBeUndefined();
 
-    // Deleting or getting 404 on open ordinary chat pops back to AdaRoot
+    // Deleting or getting 404 on open ordinary chat pops back to conversations root
     const unavailable = nav.handleSessionUnavailable('server-conv-42');
-    expect(unavailable).toEqual({ popped: true, tab: 'ada' });
-    expect(nav.stackDepth('ada')).toBe(0);
+    expect(unavailable).toEqual({ popped: true, tab: 'conversations' });
+    expect(nav.stackDepth('conversations')).toBe(0);
+  });
+
+  it('pushes flattened sidebar direct entries onto whichever tab opened the drawer', () => {
+    const nav = new XopcMobileTabNavState();
+    nav.selectTab('conversations');
+    nav.sidebarOpen = true;
+
+    const cap = nav.openSidebarLowFrequencyRoute({ page: 'capabilities', itemId: 'channels' });
+    expect(cap).toEqual({
+      tab: 'conversations',
+      operation: 'push',
+      route: { page: 'capabilities', itemId: 'channels' },
+    });
+    expect(nav.sidebarOpen).toBe(false);
+    expect(nav.topRoute('conversations')).toEqual({ page: 'capabilities', itemId: 'channels' });
+
+    expect(nav.resolveBackPress(false)).toBe('pop');
+    expect(nav.stackDepth('conversations')).toBe(0);
+    expect(nav.selectedTab).toBe('conversations');
   });
 
   it('preserves search predecessor when opening ordinary chat from sessions-search and switches to AdaRoot for Ada', () => {
@@ -181,7 +216,7 @@ describe('HarmonyOS multi-stack mobile tab navigation', () => {
       .toEqual({ tab: 'ada', routes: [] });
 
     expect(synthesizeNotificationPlan({ gatewayId: 'g', eventId: 'e3', target: { kind: 'chat', conversationId: 'chat-7' } }, 'ada-1'))
-      .toEqual({ tab: 'ada', routes: [{ page: 'session-chat', itemId: 'chat-7' }] });
+      .toEqual({ tab: 'conversations', routes: [{ page: 'session-chat', itemId: 'chat-7' }] });
 
     expect(synthesizeNotificationPlan({ gatewayId: 'g', eventId: 'e4', target: { kind: 'task', taskId: 't-1' } }, 'ada-1'))
       .toEqual({ tab: 'workbench', routes: [{ page: 'task-detail', itemId: 't-1' }] });
@@ -264,32 +299,53 @@ describe('HarmonyOS multi-stack mobile tab navigation', () => {
     expect(nav.selectedTab).toBe('pinnedSpace:space-alpha');
   });
 
-  it('removes returnToSidebar completely and mounts the 4 preserved stacks and FloatingTabBar in HomeView', () => {
+  it('mounts the 5 preserved stacks, FloatingTabBar, L0 SessionsView, initialCategory CapabilitiesView, and flattened ChatSidebar', () => {
     const home = readFileSync(new URL('../entry/src/main/ets/view/HomeView.ets', import.meta.url), 'utf8');
     const homeModel = readFileSync(new URL('../entry/src/main/ets/model/home.ets', import.meta.url), 'utf8');
     const sidebar = readFileSync(new URL('../entry/src/main/ets/view/ChatSidebar.ets', import.meta.url), 'utf8');
     const tabBar = readFileSync(new URL('../entry/src/main/ets/view/FloatingTabBar.ets', import.meta.url), 'utf8');
+    const sessions = readFileSync(new URL('../entry/src/main/ets/view/SessionsView.ets', import.meta.url), 'utf8');
+    const capabilities = readFileSync(new URL('../entry/src/main/ets/view/CapabilitiesView.ets', import.meta.url), 'utf8');
 
     expect(home).not.toContain('returnToSidebar');
     expect(homeModel).not.toContain('returnToSidebar');
     expect(home).toContain('private adaStack: NavPathStack = new NavPathStack();');
+    expect(home).toContain('private conversationsStack: NavPathStack = new NavPathStack();');
     expect(home).toContain('private workbenchStack: NavPathStack = new NavPathStack();');
     expect(home).toContain('private notesStack: NavPathStack = new NavPathStack();');
     expect(home).toContain('private libraryStack: NavPathStack = new NavPathStack();');
     expect(home).toContain("if (page === 'session-chat')");
+    expect(home).toContain('this.conversationsTabStack()');
+    expect(home).toContain('initialCategory: (param as XopcMobileRoute).itemId');
     expect(home).toContain('XopcFloatingTabBar({');
 
-    // Slimmed-down sidebar has no duplicate Personal/Workbench/Notes/Library shortcuts
+    // SessionsView supports L0 root tab mode with drawer button, bottom chrome inset, and scroll-to-top
+    expect(sessions).toContain('@Param rootTab: boolean = false;');
+    expect(sessions).toContain('@Param bottomChromeInset: number = 0;');
+    expect(sessions).toContain('@Param scrollTopRevision: number = 0;');
+    expect(sessions).toContain("drawerId: 'sessions-header-sidebar'");
+
+    // CapabilitiesView accepts initialCategory from flattened sidebar routes
+    expect(capabilities).toContain("@Param initialCategory: string = '';");
+
+    // Flattened sidebar has zero duplication with bottom tabs and no recent conversations list
+    expect(sidebar).not.toContain('XopcSessionsViewModel');
+    expect(sidebar).not.toContain('recentConversations');
     expect(sidebar).not.toContain("'personal'");
     expect(sidebar).not.toContain("'workbench'");
     expect(sidebar).not.toContain("'notes-list'");
     expect(sidebar).not.toContain("'library'");
+    for (const category of ['plugins', 'skills', 'connections', 'devices', 'agents', 'channels']) {
+      expect(sidebar).toContain(`'capabilities', '${category}'`);
+    }
     expect(sidebar).toContain("this.shortcut($r('app.string.automations'), $r('sys.symbol.clock'), 'automations')");
-    expect(sidebar).toContain("this.shortcut($r('app.string.capability_title'), $r('sys.symbol.square_grid_2x2'), 'capabilities')");
+    expect(sidebar).toContain("this.shortcut($r('app.string.sidebar_share_center'), $r('sys.symbol.share'), 'sharing')");
     expect(sidebar).toContain("this.shortcut($r('app.string.about_you'), $r('sys.symbol.person'), 'about-you')");
+    expect(sidebar).toContain("this.shortcut($r('app.string.sidebar_goals'), $r('sys.symbol.flag'), 'personal-goals')");
 
-    // FloatingTabBar defines the 4 exact core slots
+    // FloatingTabBar defines the 5 exact core slots
     expect(tabBar).toContain(".id('floating-tab-ada')");
+    expect(tabBar).toContain("this.iconTab('conversations'");
     expect(tabBar).toContain("this.iconTab('workbench'");
     expect(tabBar).toContain("this.iconTab('notes'");
     expect(tabBar).toContain("this.iconTab('library'");

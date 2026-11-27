@@ -240,10 +240,7 @@ private data class MainRenderTarget(
 
 private fun HomeTab.toNavSnapshot(): MobileNavSnapshot = when (this) {
   HomeTab.Assistant -> MobileNavSnapshot(selectedTab = MobileTab.Ada)
-  HomeTab.Conversations -> MobileNavSnapshot(
-    selectedTab = MobileTab.Ada,
-    stacks = MobileNavSnapshot.defaultStacks() + (MobileTab.Ada to listOf(MobileRoute.ConversationSearch(autoFocusSearch = false))),
-  )
+  HomeTab.Conversations -> MobileNavSnapshot(selectedTab = MobileTab.Conversations)
   HomeTab.Progress -> MobileNavSnapshot(selectedTab = MobileTab.Workbench)
   HomeTab.Projects -> MobileNavSnapshot(selectedTab = MobileTab.Workbench)
   HomeTab.Automations -> MobileNavSnapshot(
@@ -1203,7 +1200,7 @@ internal fun MainContent(
       lastExternalTab = selectedTab
       when (selectedTab) {
         HomeTab.Assistant -> navState.openPushTarget(PushNavTarget.AdaHome)
-        HomeTab.Conversations -> navState.openSidebarTool(MobileRoute.ConversationSearch(autoFocusSearch = false))
+        HomeTab.Conversations -> navState.selectTab(MobileTab.Conversations)
         HomeTab.Progress, HomeTab.Projects -> navState.selectTab(MobileTab.Workbench)
         HomeTab.Automations -> {
           navState.selectTab(MobileTab.Workbench)
@@ -1396,7 +1393,7 @@ internal fun MainContent(
     }
   }
 
-  // Automatically pop deleted / 404 ordinary conversation back to AdaRoot.
+  // Automatically pop deleted / 404 ordinary conversation back to Conversations root.
   var handledUnavailableRevision by remember(gatewayId) { mutableIntStateOf(connection.unavailableConversationRevision) }
   LaunchedEffect(connection.unavailableConversationRevision) {
     if (connection.unavailableConversationRevision > handledUnavailableRevision) {
@@ -1413,6 +1410,20 @@ internal fun MainContent(
       onOpenPersonalAgent()
     } else {
       navState.openOrdinaryChat(
+        conversationId = id,
+        agentId = connection.conversationSummary(id)?.agentId ?: connection.defaultAgentId,
+        title = connection.conversationSummary(id)?.title,
+      )
+      onSelectConversation(id)
+    }
+  }
+
+  fun switchConversationRoute(id: String) {
+    if (id == personalConversationId) {
+      navState.openPushTarget(PushNavTarget.AdaHome)
+      onOpenPersonalAgent()
+    } else {
+      navState.switchOrdinaryChat(
         conversationId = id,
         agentId = connection.conversationSummary(id)?.agentId ?: connection.defaultAgentId,
         title = connection.conversationSummary(id)?.title,
@@ -1817,9 +1828,7 @@ internal fun MainContent(
       }
     }
   }
-  val conversationsSearch by rememberUpdatedState(connection.conversationSearch)
-  val clearConversationSearch by rememberUpdatedState(onConversationSearchChange)
-  val refreshSidebarConversations by rememberUpdatedState(onRefreshRecentConversations)
+  var sessionSwitcherOpen by remember(gatewayId) { mutableStateOf(false) }
   val closeKeyboard: () -> Unit = {
     focusManager.clearFocus(force = true)
     keyboardController?.hide()
@@ -1827,8 +1836,6 @@ internal fun MainContent(
   val openSidebar: () -> Unit = {
     assistantActionsOpen = false
     closeKeyboard()
-    if (conversationsSearch.isNotEmpty()) clearConversationSearch("")
-    refreshSidebarConversations()
     setSidebarOpen(true)
   }
   val workbenchAttention = connection.progress.needsUser.size.takeIf {
@@ -1839,13 +1846,13 @@ internal fun MainContent(
     (connection.personalChatSnapshot?.activeRunId != null)
 
   // Single unified BackHandler following strict 5-level priority:
-  // 1. IME (handled by Android) / composer action panel / L2 overlays / multi-select
+  // 1. IME (handled by Android) / composer action panel / L2 overlays
   // 2. Sidebar drawer
   // 3. Active tab stack non-empty -> pop()
   // 4. Non-Ada root -> switch to Ada
   // 5. Ada root -> disabled (system backgrounds app)
   val hasTransientUi = assistantActionsOpen || messageSearchOpen || musicPlayerOpen ||
-    linkedMcp != null || phonePage || (sidebar.open && sidebar.selecting)
+    linkedMcp != null || phonePage || sessionSwitcherOpen
   val canHandleBack = (isPaired && (
     hasTransientUi ||
     sidebar.open ||
@@ -1855,7 +1862,7 @@ internal fun MainContent(
   BackHandler(enabled = canHandleBack) {
     if (hasTransientUi) {
       when {
-        sidebar.open && sidebar.selecting -> sidebar.onCancelSelection?.invoke()
+        sessionSwitcherOpen -> sessionSwitcherOpen = false
         linkedMcp != null -> linkedMcp = null
         musicPlayerOpen -> musicPlayerOpen = false
         messageSearchOpen -> messageSearchOpen = false
@@ -2121,7 +2128,11 @@ internal fun MainContent(
                 onBackFromChat = if (sessionChatRoute != null) {
                   { closeKeyboard(); popCurrentRoute() }
                 } else null,
-                onSwitchConversation = if (sessionChatRoute != null) openSidebar else null,
+                onSwitchConversation = if (sessionChatRoute != null) ({
+                  closeKeyboard()
+                  onRefreshRecentConversations()
+                  sessionSwitcherOpen = true
+                }) else null,
                 sessionTitleOverride = sessionChatRoute?.title,
                 isTaskChatRoute = taskChatRoute != null,
                 isAutomationSetupRoute = automationSetupRoute != null,
@@ -2131,6 +2142,7 @@ internal fun MainContent(
                     val title = chatConn.context?.task?.title ?: chatConn.taskWelcome?.taskTitle ?: taskChatRoute?.title.orEmpty()
                     val returnTabHint = when (target.tab) {
                       MobileTab.Ada -> HomeTab.Assistant
+                      MobileTab.Conversations -> HomeTab.Conversations
                       MobileTab.Workbench -> HomeTab.Progress
                       MobileTab.Notes -> HomeTab.Notes
                       MobileTab.Library, is MobileTab.PinnedSpace -> HomeTab.Library
@@ -2158,11 +2170,40 @@ internal fun MainContent(
           }
 
           if (route == null) {
-            // L0 Tab Roots (4 preserved tabs + future PinnedSpace)
+            // L0 Tab Roots (5 preserved tabs + future PinnedSpace)
             when (target.tab) {
               MobileTab.Ada -> renderChatSurface(
                 chatConn = connection.forAdaRoot(),
                 isAdaRootSurface = true,
+              )
+              MobileTab.Conversations -> ConversationsScreen(
+                connection = connection,
+                insets = rootInsets,
+                onSearchChange = onConversationSearchChange,
+                onRefresh = onRefreshConversations,
+                onLoadMore = onLoadMoreConversations,
+                onCreateConversation = ::openNewOrdinaryDraft,
+                onSelectConversation = ::openConversationRoute,
+                onSelectTaskChild = { taskId, cid ->
+                  navState.openTaskChat(taskId = taskId, conversationId = cid)
+                  onSelectTaskChildConversation(taskId, cid)
+                },
+                onBeginRename = onBeginRename,
+                onTogglePin = onTogglePin,
+                onToggleArchive = onToggleArchive,
+                onBatchConversations = onBatchConversations,
+                onBeginShare = onBeginConversationShare,
+                onScheduleDelete = onScheduleDelete,
+                onUndoDelete = onUndoDelete,
+                onExit = null,
+                startSearching = false,
+                onScope = onConversationScope,
+                onLoadProjects = onLoadProgressProjects,
+                onFetchExperts = onFetchConversationExperts,
+                onOpenSidebar = openSidebar,
+                bottomChromeInset = bottomTabBarInset + if (showMusicMini) 68.dp else 0.dp,
+                scrollToTopRevision = navState.scrollToTopRevision(MobileTab.Conversations),
+                sidebarGesture = sidebarGesture,
               )
               MobileTab.Workbench -> ProgressScreen(
                 state = connection.progress.takeIf { it.gatewayId == gatewayId }
@@ -2605,6 +2646,7 @@ internal fun MainContent(
                 onShareDeviceFile = onShareDeviceConnectionFile,
                 onPairDevice = onScanPairing,
                 deviceScope = connection.profile?.let { it.gatewayId + ':' + it.deviceId },
+                initialCategoryKey = route.section,
               )
               is MobileRoute.AboutYou -> {
                 val profile = connection.profile
@@ -2726,7 +2768,7 @@ internal fun MainContent(
     }
     },
     overlays = { sidebarWidth ->
-      // Floating bottom pill for non-chat tab roots (Workbench / Notes / Library).
+      // Floating bottom pill for non-chat tab roots (Conversations / Workbench / Notes / Library).
       // On AdaRoot, the pill sits inside bottomBar directly beneath the composer (10dp gap).
       if (showBottomTabBar && !showBottomChrome) {
         Column(
@@ -2756,47 +2798,62 @@ internal fun MainContent(
             })
         }
       }
-      val activeSessionId = (topRoute as? MobileRoute.SessionChat)?.effectiveConversationId
       ChatSidebar(
         state = sidebar,
         width = sidebarWidth,
-        connection = connection,
-        activeSessionId = activeSessionId,
+        creatingConversation = connection.creatingConversation,
         onClose = { setSidebarOpen(false) },
-        onRetry = onRefreshRecentConversations,
-        onLoadMore = onLoadMoreRecentConversations,
+        onSearch = {
+          setSidebarOpen(false)
+          navState.openSidebarTool(MobileRoute.ConversationSearch(autoFocusSearch = true))
+        },
+        onCapability = { section ->
+          setSidebarOpen(false)
+          navState.openSidebarTool(MobileRoute.Capabilities(section = section))
+        },
         onAutomations = {
           setSidebarOpen(false)
           navState.openSidebarTool(MobileRoute.Automations)
         },
-        onCapabilities = {
+        onShareCenter = {
           setSidebarOpen(false)
-          navState.openSidebarTool(MobileRoute.Capabilities())
+          navState.openSidebarTool(MobileRoute.ShareCenter)
         },
         onAboutYou = {
           setSidebarOpen(false)
           navState.openSidebarTool(MobileRoute.AboutYou())
         },
-        onSettings = {
+        onGoals = {
           setSidebarOpen(false)
-          navState.openSidebarTool(MobileRoute.Settings())
-        },
-        onSearch = {
-          setSidebarOpen(false)
-          navState.openSidebarTool(MobileRoute.ConversationSearch(autoFocusSearch = true))
+          navState.openSidebarTool(MobileRoute.PersonalGoals)
         },
         onNew = {
           setSidebarOpen(false)
           openNewOrdinaryDraft()
         },
-        onConversation = { id ->
+        onSettings = {
           setSidebarOpen(false)
-          openConversationRoute(id)
+          navState.openSidebarTool(MobileRoute.Settings())
         },
-        onRename = onBeginRename,
-        onTogglePin = onTogglePin,
-        onDelete = { onBatchConversations(it, "delete") },
       )
+      if (sessionSwitcherOpen) {
+        val activeSessionId = (topRoute as? MobileRoute.SessionChat)?.effectiveConversationId
+        SessionQuickSwitcherSheet(
+          connection = connection,
+          activeSessionId = activeSessionId,
+          onDismiss = { sessionSwitcherOpen = false },
+          onRetry = onRefreshRecentConversations,
+          onLoadMore = onLoadMoreRecentConversations,
+          onNewChat = {
+            sessionSwitcherOpen = false
+            openNewOrdinaryDraft()
+          },
+          onSelectConversation = { id ->
+            sessionSwitcherOpen = false
+            if (id != activeSessionId) switchConversationRoute(id)
+          },
+        )
+      }
     },
   )
   if (connection.renameDraftId != null) AlertDialog(
@@ -3613,7 +3670,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   var contextInitialKind by remember(connection.selectedConversationId) { mutableStateOf("note") }
   var optionsOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
 
-  val optionsLabel = stringResource(R.string.assistant_options)
   val optimisticUser = connection.chatSendMessageId?.takeIf { id ->
     connection.optimisticText.isNotBlank() && connection.messages.none { it.renderId == id }
   }?.let { ConversationMessage(it, "user", connection.optimisticText) }
@@ -4394,12 +4450,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
                 Icon(painterResource(R.drawable.action_call),
                   stringResource(R.string.assistant_action_voice_natural), Modifier.size(22.dp))
               }
-              if (selected?.isLocalDraft != true) {
-                IconButton(onClick = { optionsOpen = true },
-                  modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("assistant-options")) {
-                  Icon(painterResource(R.drawable.settings_sliders), optionsLabel, Modifier.size(22.dp))
-                }
-              }
             }
           }
           if (headerContextStrip != null) {
@@ -5145,12 +5195,17 @@ private fun ConversationsScreen(
   onBeginShare: (String) -> Unit,
   onScheduleDelete: (String) -> Unit,
   onUndoDelete: () -> Unit,
-  onExit: () -> Unit,
-  startSearching: Boolean,
+  onExit: (() -> Unit)? = null,
+  startSearching: Boolean = false,
   onScope: (ConversationHistoryScope?) -> Unit,
   onLoadProjects: () -> Unit,
   onFetchExperts: suspend () -> List<ConversationAgent>,
+  onOpenSidebar: (() -> Unit)? = null,
+  bottomChromeInset: Dp = 0.dp,
+  scrollToTopRevision: Int = 0,
+  sidebarGesture: Modifier = Modifier,
 ) {
+  val isConversationsRoot = onOpenSidebar != null && onExit == null
   val navigation = rememberNavigationPreferences()
   var mode by rememberSaveable(connection.profile?.gatewayId, startSearching) {
     mutableStateOf(if (startSearching) "recent"
@@ -5207,10 +5262,15 @@ private fun ConversationsScreen(
   }
   val listState = rememberLazyListState()
   val currentLoadMore by rememberUpdatedState(onLoadMore)
-  LaunchedEffect(connection.profile?.gatewayId, scope, connection.conversationSearch) {
-    listState.scrollToItem(0)
-    expandedTaskParents = emptyList()
-    collapsedTaskParents = emptyList()
+  var lastAppliedScopeKey by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
+  val currentScopeKey = "${connection.profile?.gatewayId}:$scope:${connection.conversationSearch}"
+  LaunchedEffect(currentScopeKey) {
+    if (lastAppliedScopeKey.isNotEmpty() && lastAppliedScopeKey != currentScopeKey) {
+      listState.scrollToItem(0)
+      expandedTaskParents = emptyList()
+      collapsedTaskParents = emptyList()
+    }
+    lastAppliedScopeKey = currentScopeKey
   }
   LaunchedEffect(connection.profile?.gatewayId, connection.conversationSearch,
     connection.conversationsHasMore, connection.conversationsLoading,
@@ -5306,6 +5366,10 @@ private fun ConversationsScreen(
     groupId = ""
     groupName = ""
   }
+  BackHandler(enabled = selecting) {
+    selecting = false
+    selectedIds = emptyList()
+  }
   BackHandler(enabled = !selecting && (searchOpen || groupId.isNotEmpty())) {
     if (searchOpen) closeSearch() else clearGroup()
   }
@@ -5326,6 +5390,18 @@ private fun ConversationsScreen(
     searchOpen = keepSearching
     mode = value
     navigation.rememberSelection("conversation-history", value)
+  }
+  LaunchedEffect(scrollToTopRevision) {
+    if (scrollToTopRevision > 0) {
+      if (selecting) {
+        selecting = false
+        selectedIds = emptyList()
+      }
+      if (groupId.isNotEmpty()) clearGroup()
+      if (searchOpen) closeSearch()
+      if (mode != "recent") selectMode("recent")
+      listState.animateScrollToItem(0)
+    }
   }
   LaunchedEffect(modePager) {
     snapshotFlow { modePager.settledPage }.collect { index ->
@@ -5348,12 +5424,19 @@ private fun ConversationsScreen(
     browsingGroups -> R.string.conversations_search_experts
     else -> R.string.conversations_search
   })
-  Column(modifier = Modifier.fillMaxSize().padding(insets),
-    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+  Column(
+    modifier = Modifier
+      .fillMaxSize()
+      .then(if (isConversationsRoot && groupId.isEmpty() && !selecting) sidebarGesture else Modifier)
+      .padding(insets),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
+    val sidebarAction = onOpenSidebar.takeIf { isConversationsRoot && groupId.isEmpty() && !selecting }
     XopcPageHeader(
       backTag = "conversations-back",
-      onBack = { if (groupId.isNotEmpty()) clearGroup() else onExit() },
-      showBack = !selecting,
+      onBack = { if (groupId.isNotEmpty()) clearGroup() else onExit?.invoke() },
+      showBack = !selecting && sidebarAction == null && (groupId.isNotEmpty() || onExit != null),
+      leadingContent = sidebarAction?.let { action -> ({ PageSidebarButton("conversations-sidebar", action) }) },
       title = if (selecting) stringResource(R.string.conversations_selected, selectedIds.size) else null,
       titleContent = if (!selecting) ({ PageTitleMenu(historyModes, mode, "sessions-mode-menu", Modifier.fillMaxWidth(), ::selectMode) }) else null,
     ) {
@@ -5371,7 +5454,7 @@ private fun ConversationsScreen(
           tint = MaterialTheme.colorScheme.onSurface,
           modifier = Modifier.size(24.dp).testTag("conversations-search-icon"))
       }
-      if (!selecting && mode == "recent") IconButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
+      if (!selecting && (mode == "recent" || isConversationsRoot)) IconButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
         modifier = Modifier.size(48.dp).semantics {
           contentDescription = newConversationLabel
         }.testTag("chats-new")) {
@@ -5412,7 +5495,7 @@ private fun ConversationsScreen(
       state = modePager,
       modifier = Modifier.fillMaxWidth().weight(1f).testTag("sessions-mode-pager"),
       key = { historyModes[it].value },
-      userScrollEnabled = !selecting && !connection.batchConversationBusy,
+      userScrollEnabled = false,
       flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(modePager, snapPositionalThreshold = 0.33f),
     ) { pageIndex ->
       val pageMode = historyModes[pageIndex].value
@@ -5436,7 +5519,10 @@ private fun ConversationsScreen(
             onRetry = { if (projects) onLoadProjects() else expertReload++ },
           )
           matches.isEmpty() -> XopcEmptyState(message = stringResource(R.string.progress_no_matches))
-          else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          else -> LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = bottomChromeInset + 20.dp),
+          ) {
             items(matches, key = { it.first }) { (id, name) ->
               Card(onClick = { closeSearch(); groupId = id; groupName = name },
                 modifier = Modifier.fillMaxWidth().testTag("sessions-group-$id"), shape = themedCorners(16)) {
@@ -5511,7 +5597,7 @@ private fun ConversationsScreen(
         modifier = Modifier.fillMaxSize().testTag("conversations-refresh-gesture"),
       ) {
       LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("conversations-list"),
-        contentPadding = PaddingValues(bottom = 20.dp),
+        contentPadding = PaddingValues(bottom = bottomChromeInset + 20.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ConversationGroups.group(ConversationGroups.visibleHistory(connection.conversations)
           .filterNot { it.id == connection.pendingDeleteId || it.id == connection.personal.agent?.conversationId }).forEach { group ->
@@ -5573,6 +5659,122 @@ private fun ConversationsScreen(
       }
       }
     }
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SessionQuickSwitcherSheet(
+  connection: ConnectionUiState,
+  activeSessionId: String?,
+  onDismiss: () -> Unit,
+  onRetry: () -> Unit,
+  onLoadMore: () -> Unit,
+  onNewChat: () -> Unit,
+  onSelectConversation: (String) -> Unit,
+) {
+  val scheme = MaterialTheme.colorScheme
+  val personalId = connection.personal.agent?.conversationId
+  val agents = remember(connection.agents) { connection.agents.associateBy { it.id } }
+  val recent = remember(connection.recentConversations, personalId, connection.pendingDeleteId) {
+    connection.recentConversations.orEmpty().filter {
+      it.id != personalId && it.id != connection.pendingDeleteId && it.isRecentSidebarCandidate
+    }.sortedWith(compareByDescending<ConversationSummary> { it.status == "pinned" }.thenByDescending { it.updatedAt })
+  }
+  val nextOffset = connection.recentConversationsNextOffset
+  val requestMore by rememberUpdatedState(onLoadMore)
+  XopcBottomSheet(XopcSheetPreset.Medium, onDismissRequest = onDismiss) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp).testTag("session-switcher-sheet")) {
+      XopcSheetHeader(
+        title = stringResource(R.string.chat_switch_conversation),
+        onClose = onDismiss,
+        closeTag = "session-switcher-close",
+        trailing = {
+          TextButton(
+            onClick = onNewChat,
+            enabled = !connection.creatingConversation,
+            modifier = Modifier.testTag("session-switcher-new"),
+          ) {
+            Text(stringResource(R.string.assistant_action_new_chat))
+          }
+        },
+      )
+      LazyColumn(
+        modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        contentPadding = PaddingValues(bottom = 8.dp),
+      ) {
+        if (connection.recentConversationsLoading && recent.isEmpty()) {
+          item("loading") { XopcListSkeleton(rows = 4) }
+        } else if (connection.recentConversationsError && recent.isEmpty()) {
+          item("error") {
+            XopcErrorState(
+              message = stringResource(R.string.chat_load_error),
+              retryLabel = stringResource(R.string.progress_refresh),
+              onRetry = onRetry,
+              retryTag = "session-switcher-retry",
+            )
+          }
+        } else if (recent.isEmpty()) {
+          item("empty") {
+            XopcEmptyState(message = stringResource(R.string.assistant_choose_conversation))
+          }
+        } else {
+          items(recent, key = { "switcher-${it.id}" }) { item ->
+            val agentId = item.agentId.orEmpty()
+            val agent = agents[agentId]
+            val agentName = agent?.let { agentDisplayName(it) } ?: agentId
+            val avatarRef = agent?.avatar.orEmpty()
+            val selected = item.id == activeSessionId
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .clip(themedCorners(XopcDesignTokens.RadiusSm))
+                .background(if (selected) scheme.primaryContainer else Color.Transparent)
+                .clickable(role = Role.Button) { onSelectConversation(item.id) }
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .testTag("session-switcher-item-${item.id}"),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+              AgentAvatar(
+                connection.agentAvatars[agentId].takeIf { avatarRef.isNotBlank() },
+                avatarRef,
+                agentId,
+                24.dp,
+                active = false,
+                fallbackName = agentName,
+              )
+              Text(
+                text = item.title,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (selected) scheme.onPrimaryContainer else scheme.onSurface,
+              )
+              if (item.status == "pinned") {
+                Icon(
+                  painterResource(R.drawable.action_pin),
+                  stringResource(R.string.conversations_pinned),
+                  Modifier.size(16.dp),
+                  tint = scheme.onSurfaceVariant,
+                )
+              }
+            }
+          }
+          if (connection.recentConversationsLoading) {
+            item("loading-more") { BrandLoadingIndicator(Modifier.padding(10.dp), extent = 24.dp) }
+          } else if (nextOffset != null) {
+            item("load-more") {
+              Spacer(Modifier.height(16.dp))
+              LaunchedEffect(nextOffset) { requestMore() }
+            }
+          }
+        }
+      }
     }
   }
 }

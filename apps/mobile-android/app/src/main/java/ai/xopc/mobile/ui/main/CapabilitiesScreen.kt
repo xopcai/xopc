@@ -152,14 +152,24 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
   onShareDeviceFile: suspend (android.net.Uri) -> Unit = {},
   onPairDevice: () -> Unit = {},
   deviceScope: String? = null,
+  initialCategoryKey: String? = null,
 ) {
   val navigation = rememberNavigationPreferences()
-  val initialCategory = remember(navigation) {
-    val key = navigation.selection("capabilities", CapabilityCategory.entries.map { it.key }, CapabilityCategory.Plugins.key)
-    CapabilityCategory.entries.first { it.key == key }
-  }
   val categories = CapabilityCategory.entries
+  val initialCategory = remember(navigation, initialCategoryKey) {
+    val requested = initialCategoryKey?.let { key -> categories.firstOrNull { it.key == key } }
+    requested ?: run {
+      val key = navigation.selection("capabilities", categories.map { it.key }, CapabilityCategory.Plugins.key)
+      categories.first { it.key == key }
+    }
+  }
   val pager = rememberPagerState(initialPage = initialCategory.ordinal) { categories.size }
+  LaunchedEffect(initialCategoryKey) {
+    val targetIndex = initialCategoryKey?.let { key -> categories.indexOfFirst { it.key == key } } ?: -1
+    if (targetIndex >= 0 && pager.currentPage != targetIndex) {
+      pager.scrollToPage(targetIndex)
+    }
+  }
   val category = categories[pager.settledPage]
   val scope = rememberCoroutineScope()
   val currentLoad by rememberUpdatedState(onLoad)

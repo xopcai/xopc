@@ -117,13 +117,14 @@ describe('chat bottom region composition', () => {
     expect(chat).not.toContain(".id('chat-composer-voice-call')");
   });
 
-  it('keeps slimmed sidebar shortcuts and opens ordinary drafts on session-chat', () => {
+  it('keeps flattened sidebar direct-access sections and opens ordinary drafts on session-chat', () => {
     expect(sidebar).not.toContain("this.shortcut($r('app.string.chat_personal_agent')");
-    expect(sidebar).toContain(".id('chat-sidebar-' + page)");
+    expect(sidebar).toContain(".id(itemId ? 'chat-sidebar-' + page + '-' + itemId : 'chat-sidebar-' + page)");
     expect(sidebar).toContain("id('chat-sidebar-new')");
-    expect(sidebar).toContain("item.key !== this.personalAgent?.conversationId");
+    expect(sidebar).not.toContain('recentConversations');
+    expect(sessions).toContain("item.key !== this.personalAgent?.conversationId");
     expect(home).toContain('this.personalAgent.openOrCreate()');
-    expect(home).toContain('this.openSessionChatFromSidebar(id');
+    expect(home).toContain('this.openSessionChat(id');
     expect(home).toContain('this.chatRepository.create()');
     expect(chat).toContain('this.chat.localDraft && !this.chat.rows.length');
     const profile = sidebar.slice(sidebar.indexOf("id('chat-sidebar-new')"));
@@ -152,25 +153,34 @@ describe('chat bottom region composition', () => {
   it('does not stack page-level bottom padding on top of the reserved composer inset', () => {
     expect(notesTab).toContain(".padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).scrollBar(BarState.Off)");
     expect(notesTab).not.toContain("padding({ left: 20, right: 20, bottom: 24 })");
+    expect(notesTab).toContain("titleMenuId: 'notes-page-menu'");
+    expect(notesTab).toContain('titleOptions: this.statusOptions');
+    expect(notesTab).not.toContain('XopcSegmentedTabs(');
     expect(sessions).not.toContain("padding({ left: 20, right: 20, bottom: 20 }).cachedCount(5)");
     expect(homeHubs).not.toContain("padding({ left: 20, right: 20, bottom: 28 })");
     expect(personal).not.toContain("padding({ left: 20, right: 20, bottom: 28 })");
   });
 
-  it('scrolls search and low-frequency shortcuts with the paginated sidebar list and reserves the system back edge', () => {
+  it('scrolls search and flattened direct-access shortcuts in the sidebar and reserves the system back edge', () => {
     const list = sidebar.slice(sidebar.indexOf('List({ space: 2 })'), sidebar.indexOf(".id('chat-sidebar-list')"));
     expect(list).toMatch(/List\(\{ space: 2 \}\) \{\s*ListItem\(\) \{\s*Column\(\{ space: 6 \}\)/);
     expect(list).toContain(".id('chat-sidebar-search')");
     expect(list).toContain("this.go('sessions-search')");
+    expect(list).toContain("this.shortcut($r('app.string.capability_plugins'), $r('sys.symbol.square_grid_2x2'), 'capabilities', 'plugins')");
+    expect(list).toContain("this.shortcut($r('app.string.capability_skills'), $r('sys.symbol.lightbulb'), 'capabilities', 'skills')");
+    expect(list).toContain("this.shortcut($r('app.string.capability_connections'), $r('sys.symbol.link'), 'capabilities', 'connections')");
+    expect(list).toContain("this.shortcut($r('app.string.device_connection_devices'), $r('sys.symbol.phone_1'), 'capabilities', 'devices')");
+    expect(list).toContain("this.shortcut($r('app.string.capability_agents'), $r('sys.symbol.person'), 'capabilities', 'agents')");
+    expect(list).toContain("this.shortcut($r('app.string.capability_channels'), $r('sys.symbol.ellipsis_bubble'), 'capabilities', 'channels')");
     expect(list).toContain("this.shortcut($r('app.string.automations'), $r('sys.symbol.clock'), 'automations')");
-    expect(list).toContain("this.shortcut($r('app.string.capability_title'), $r('sys.symbol.square_grid_2x2'), 'capabilities')");
+    expect(list).toContain("this.shortcut($r('app.string.sidebar_share_center'), $r('sys.symbol.share'), 'sharing')");
     expect(list).toContain("this.shortcut($r('app.string.about_you'), $r('sys.symbol.person'), 'about-you')");
+    expect(list).toContain("this.shortcut($r('app.string.sidebar_goals'), $r('sys.symbol.flag'), 'personal-goals')");
     expect(list).not.toContain('.sticky(');
     expect(sidebar).not.toContain("$r('app.string.chat_recent_conversations')");
     expect(sidebar).not.toContain(".id('chat-sidebar-sessions')");
     expect(sidebar).not.toContain("$r('app.string.chat_view_more')");
-    expect(sidebar).toContain('.virtualScroll({ totalCount: this.recentConversations.length })');
-    expect(sidebar).toContain('void this.sessions.load(this.sessions.hasMore)');
+    expect(sidebar).not.toContain('XopcSessionsViewModel');
     expect(home).toContain("startSearching: page === 'sessions-search'");
     expect(sessions).toContain('this.searchOpen = this.startSearching');
     expect(sessions).toContain("searchId: 'sessions-open-search'");
@@ -195,7 +205,10 @@ describe('chat bottom region composition', () => {
     const header = chat.slice(chat.indexOf('  voiceCallButton()'), chat.indexOf('  chatWorkspace()'));
     expect(header).toContain("$r('sys.symbol.phone')");
     const actions = header.slice(header.indexOf('  conversationActions()'), header.indexOf('  navigationButtons()'));
-    expect(actions).toMatch(/if \(!this\.personalConversation\) \{\s*Button[\s\S]+?\.id\('chat-header-actions'\)/);
+    expect(actions).not.toContain(".id('chat-header-actions')");
+    expect(header).toContain(".id('chat-header-identity')");
+    expect(header).toContain(".id('session-chat-header-title')");
+    expect(header).toContain("this.openSheet('actions')");
     expect(header).toContain(".id('chat-header-voice-call')");
     expect(header).toContain('this.startVoiceCall()');
     expect(header).toContain(".id('chat-header-continuous-read')");

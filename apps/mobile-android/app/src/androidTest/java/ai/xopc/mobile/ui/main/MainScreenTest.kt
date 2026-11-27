@@ -1969,7 +1969,8 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-project-session-${existing.id}").performClick()
     composeTestRule.onNodeWithTag("project-chat-close").assertIsDisplayed()
     composeTestRule.onNodeWithTag("chat-header-voice-call").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("assistant-options").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-header-identity").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-options").assertDoesNotExist()
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
     composeTestRule.onNodeWithTag("chat-sidebar").assertIsDisplayed()
     Espresso.pressBack()
@@ -3328,7 +3329,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-agent").assertDoesNotExist()
     composeTestRule.onNodeWithTag("assistant-model").assertDoesNotExist()
     composeTestRule.onNodeWithTag("assistant-context").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-new").assertExists()
     composeTestRule.onNodeWithTag("assistant-agent").assertExists()
     composeTestRule.onNodeWithTag("assistant-model").assertExists()
@@ -3349,7 +3350,7 @@ class MainScreenTest {
                 ConversationMedia("png", "diagram.png", "image", "image/png", 10, "image"))))))
       }
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-search").performClick()
     val input = composeTestRule.onNodeWithTag("chat-message-search-input")
     input.assertIsFocused()
@@ -3390,7 +3391,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-detail-panel").assertExists()
     Espresso.closeSoftKeyboard()
     Espresso.pressBack()
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-search").performClick()
     composeTestRule.onNodeWithTag("chat-search-close").performClick()
     composeTestRule.onNodeWithTag("chat-message-search-screen").assertDoesNotExist()
@@ -4022,7 +4023,7 @@ class MainScreenTest {
         connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
           selectedConversationId = id, context = context), onReloadContext = { refreshes++ })
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-context").performClick()
     assert(refreshes == 1)
     composeTestRule.onNodeWithText("/work/alpha", substring = true).assertExists()
@@ -4045,7 +4046,7 @@ class MainScreenTest {
         connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
           selectedConversationId = id, context = context))
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     val tags = listOf("assistant-context", "assistant-agent", "assistant-model", "assistant-thinking", "assistant-new",
       "assistant-session-files")
     val tops = tags.map { composeTestRule.onNodeWithTag(it).fetchSemanticsNode().boundsInRoot.top }
@@ -4065,7 +4066,7 @@ class MainScreenTest {
           contextPanel = ContextPanelUiState(mode = "environment", environment =
             ai.xopc.mobile.gateway.ContextEnvironmentOptions(true, "Worktree unavailable"))))
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-context").performClick()
     composeTestRule.onNodeWithTag("context-environment").performClick()
     composeTestRule.onNodeWithTag("context-local").assertIsEnabled()
@@ -4088,7 +4089,7 @@ class MainScreenTest {
         onNoteFileContent = { "Hello".toByteArray() },
         onAddContextFile = { attached = true })
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-session-files").performClick()
     composeTestRule.runOnIdle { assertEquals("files", loadedMode) }
     composeTestRule.onNodeWithTag("session-file-file-1").performClick()
@@ -4113,7 +4114,7 @@ class MainScreenTest {
         onLoadContextPanel = { mode, _, _ -> requestedMode = mode },
         onCreateContextConversation = { project, _ -> selectedProject = project })
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-context").performClick()
     composeTestRule.onNodeWithTag("context-project").performClick()
     assert(requestedMode == "project")
@@ -4135,7 +4136,7 @@ class MainScreenTest {
         onLoadContextPanel = { _, path, _ -> browsedPath = path },
         onSetContextDirectory = { saved++ })
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-context").performClick()
     composeTestRule.onNodeWithTag("context-directory").performClick()
     composeTestRule.onNodeWithTag("context-directory-project").performClick()
@@ -4156,7 +4157,7 @@ class MainScreenTest {
             ReferencePickerItem("note", "note-1", "Meeting notes", "Recent decisions", "42")))),
         onAddDraftRef = { added = it.id; true })
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-context").performClick()
     composeTestRule.onNodeWithTag("context-add-reference").performClick()
     composeTestRule.onNodeWithTag("context-reference-note-note-1").performClick()
@@ -4214,7 +4215,7 @@ class MainScreenTest {
           models = listOf(ConversationModel("test/one", "One", "off"), ConversationModel("test/two", "Two", "low"))),
         onSelectModel = { selected = it })
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-model").performClick()
     composeTestRule.onNodeWithTag("model-test/two").performClick()
     assert(selected == "test/two")
@@ -4229,7 +4230,7 @@ class MainScreenTest {
           selectedConversationId = id, selectedModelId = "test/one", activeRunId = "run-1",
           models = listOf(ConversationModel("test/two", "Two", "low"))))
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-model").performClick()
     composeTestRule.onNodeWithTag("model-test/two").assertIsNotEnabled()
   }
@@ -4246,7 +4247,7 @@ class MainScreenTest {
           agents = listOf(ConversationAgent("main", "Main", ""), ConversationAgent("research", "Research", ""))),
         onSwitchAgent = { agent, discard -> chosen = agent; discarded = discard })
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-agent").performClick()
     composeTestRule.onNodeWithTag("agent-research").performClick()
     assert(chosen.isEmpty())
@@ -4264,7 +4265,7 @@ class MainScreenTest {
       MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value,
         onSelectModel = { state.value = state.value.copy(modelSaving = true, modelError = false) })
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-model").performClick()
     composeTestRule.onNodeWithTag("model-test/two").performClick()
     composeTestRule.onNodeWithTag("model-test/two").assertIsNotEnabled()
@@ -4288,14 +4289,14 @@ class MainScreenTest {
       MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value,
         onSelectThinking = { chosen = it; state.value = state.value.copy(modelSaving = true) })
     }
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("assistant-thinking").performClick()
     composeTestRule.onNodeWithTag("thinking-high").performClick()
     composeTestRule.runOnIdle { assertEquals("high", chosen) }
     composeTestRule.onNodeWithTag("chat-options-panel").assertIsDisplayed()
     composeTestRule.runOnIdle { state.value = state.value.copy(modelSaving = false, thinkingLevel = "high") }
     composeTestRule.onNodeWithTag("chat-options-panel").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("chat-header-identity").performClick()
     composeTestRule.onNodeWithTag("chat-options-close").performClick()
     composeTestRule.onNodeWithTag("chat-options-panel").assertDoesNotExist()
   }

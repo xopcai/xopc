@@ -106,7 +106,7 @@ struct SettingsSectionView: View {
     }
 }
 
-private struct ShareCenterView: View {
+struct ShareCenterView: View {
     let configuration: GatewayConfiguration
     @State private var shares: [MobileShare] = []
     @State private var activeOnly = false
