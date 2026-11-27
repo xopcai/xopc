@@ -207,7 +207,7 @@ struct UIArchitectureGuardTests {
         }
     }
 
-    @Test func spaceLibrarySkeletonsSheetHeadersDynamicTypeAndHapticsAdopted() throws {
+    @Test func spaceLibraryAdoptsSharedNavigationAndStates() throws {
         let spaceLibrary = try String(
             contentsOf: Self.iosSourceRoot.appendingPathComponent("Features/Profile/SpaceLibraryView.swift"),
             encoding: .utf8
@@ -230,7 +230,9 @@ struct UIArchitectureGuardTests {
         #expect(spaceLibrary.contains("MobileEmptyState("), "SpaceLibraryView must use MobileEmptyState")
         #expect(spaceLibrary.contains("MobileListSkeleton("), "SpaceLibraryView must use MobileListSkeleton")
         #expect(spaceLibrary.contains(".sensoryFeedback("), "SpaceLibraryView must trigger haptic feedback on scope change")
+    }
 
+    @Test func auxiliaryViewsAdoptSkeletonsSheetHeadersDynamicTypeAndHaptics() throws {
         for rel in [
             "Features/Profile/ProfileView.swift",
             "Features/Conversations/ConversationsView.swift",

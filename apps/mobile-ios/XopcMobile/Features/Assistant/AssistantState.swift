@@ -481,7 +481,7 @@ final class AssistantState {
             streamGap = false
             messages = streamBuffer.finish(messages)
             self.runID = nil
-            self.isStopping = false
+            isStopping = false
         }
         if event.name == "error" {
             errorMessage = event.errorMessage ?? AppLocalization.resolve("助手执行失败")
@@ -543,7 +543,7 @@ final class AssistantState {
             runProgress.status = "cancelled"
             if result.idle || runObservation == nil {
                 cancelRunObservation()
-                self.runID = nil
+                runID = nil
                 activityLabel = nil
                 isSending = false
                 isStopping = false

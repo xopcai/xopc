@@ -124,77 +124,77 @@ struct SpaceLibraryView: View {
 
     var body: some View {
         libraryList
-        .sensoryFeedback(.selection, trigger: scope)
-        .sheet(item: $selectedItem) { item in
-            SpaceLibraryDetail(configuration: configuration, item: item, searchHit: item.hit, onOpenSource: onOpenSource,
-                               onUseInChat: onUseInChat, onChange: { refresh += 1 }, onTrash: {
-                                   undo = (item.id, $0)
-                                   undoFailed = false
-                               })
-                               .mobileSheetPreset(.large)
-        }
-        .background(theme.canvas)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let undo {
-                MobileUndoBar(
-                    message: undoFailed ? label("操作未完成，请重试", "Could not complete the action. Try again.")
-                        : label("已移到回收站", "Moved to Trash"),
-                    undoLabel: label("撤销", "Undo")
-                ) {
-                    self.undo = nil
-                    Task {
-                        do {
-                            let _: LibraryMutationResult = try await client.request(
-                                path: "/api/spaces/items/\(undo.id)/restore", method: "POST",
-                                body: client.encoder.encode(LibraryMutation(revision: undo.revision))
-                            )
-                            refresh += 1
-                        } catch {
-                            self.undo = undo
-                            undoFailed = true
+            .sensoryFeedback(.selection, trigger: scope)
+            .sheet(item: $selectedItem) { item in
+                SpaceLibraryDetail(configuration: configuration, item: item, searchHit: item.hit, onOpenSource: onOpenSource,
+                                   onUseInChat: onUseInChat, onChange: { refresh += 1 }, onTrash: {
+                                       undo = (item.id, $0)
+                                       undoFailed = false
+                                   })
+                                   .mobileSheetPreset(.large)
+            }
+            .background(theme.canvas)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if let undo {
+                    MobileUndoBar(
+                        message: undoFailed ? label("操作未完成，请重试", "Could not complete the action. Try again.")
+                            : label("已移到回收站", "Moved to Trash"),
+                        undoLabel: label("撤销", "Undo")
+                    ) {
+                        self.undo = nil
+                        Task {
+                            do {
+                                let _: LibraryMutationResult = try await client.request(
+                                    path: "/api/spaces/items/\(undo.id)/restore", method: "POST",
+                                    body: client.encoder.encode(LibraryMutation(revision: undo.revision))
+                                )
+                                refresh += 1
+                            } catch {
+                                self.undo = undo
+                                undoFailed = true
+                            }
                         }
                     }
-                }
-                .padding(.horizontal, MobileDesignTokens.pagePaddingX)
-                .padding(.vertical, 8)
-            }
-        }
-        .mobilePageTitle(Text(verbatim: label("资料库", "Library"))) {
-            MobilePageTitleMenu(options: LibraryScope.allCases.map {
-                SegmentOption(id: $0, title: $0.title, accessibilityID: "library-scope-\($0.rawValue)")
-            }, selected: scope, identifier: "space-scope-menu") { scope = $0 }
-        }
-        .searchable(text: $query, prompt: Text(verbatim: label("搜索资料", "Search files")))
-        .toolbar {
-            if let onOpenSidebar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
-                        .accessibilityIdentifier("chat-header-sidebar")
+                    .padding(.horizontal, MobileDesignTokens.pagePaddingX)
+                    .padding(.vertical, 8)
                 }
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Picker(label("资料类型", "File type"), selection: $kind) {
-                        Text(label("全部类型", "All types")).tag("")
-                        ForEach(kinds, id: \.self) { type in Text(typeName(type)).tag(type) }
+            .mobilePageTitle(Text(verbatim: label("资料库", "Library"))) {
+                MobilePageTitleMenu(options: LibraryScope.allCases.map {
+                    SegmentOption(id: $0, title: $0.title, accessibilityID: "library-scope-\($0.rawValue)")
+                }, selected: scope, identifier: "space-scope-menu") { scope = $0 }
+            }
+            .searchable(text: $query, prompt: Text(verbatim: label("搜索资料", "Search files")))
+            .toolbar {
+                if let onOpenSidebar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
+                            .accessibilityIdentifier("chat-header-sidebar")
                     }
-                } label: { Label(label("资料类型", "File type"), systemImage: "line.3.horizontal.decrease.circle") }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Picker(label("资料类型", "File type"), selection: $kind) {
+                            Text(label("全部类型", "All types")).tag("")
+                            ForEach(kinds, id: \.self) { type in Text(typeName(type)).tag(type) }
+                        }
+                    } label: { Label(label("资料类型", "File type"), systemImage: "line.3.horizontal.decrease.circle") }
+                }
             }
-        }
-        .onChange(of: scope) { query = ""; undo = nil }
-        .task(id: filters + [String(refresh), ComposerDraftStore.accountScope(configuration)]) {
-            let request = filters
-            let cache = ComposerDraftStore.accountScope(configuration) + ":space:" + request.joined(separator: "\u{1F}")
-            let snapshot: LibraryPage? = MobileListCache.shared.read(.spaceLibrary, scope: cache)
-            items = snapshot?.items ?? []
-            cursor = snapshot?.nextCursor
-            failed = false
-            loading = true
-            if !request[1].isEmpty {
-                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            .onChange(of: scope) { query = ""; undo = nil }
+            .task(id: filters + [String(refresh), ComposerDraftStore.accountScope(configuration)]) {
+                let request = filters
+                let cache = ComposerDraftStore.accountScope(configuration) + ":space:" + request.joined(separator: "\u{1F}")
+                let snapshot: LibraryPage? = MobileListCache.shared.read(.spaceLibrary, scope: cache)
+                items = snapshot?.items ?? []
+                cursor = snapshot?.nextCursor
+                failed = false
+                loading = true
+                if !request[1].isEmpty {
+                    do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+                }
+                await load(request, cache: cache)
             }
-            await load(request, cache: cache)
-        }
     }
 
     private var libraryList: some View {
