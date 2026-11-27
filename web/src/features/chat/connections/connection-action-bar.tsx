@@ -27,7 +27,7 @@ const copy = {
     scope: '确认后继续', scopeHint: '这个目标已等待了一段时间。请确认仍要按下方原始要求继续；如需修改时间范围，请先在聊天中说明。未读等条件将以实际执行时为准。',
     account: '选择账号', all: '查看全部连接', close: '关闭', intro: '完成连接后，将自动恢复当前目标。你也可以继续发送消息。',
     callbackHint: '远程 Gateway 无法接收本地回调时，粘贴浏览器地址栏中的完整回调 URL。', callbackPlaceholder: '完整回调 URL', callbackSubmit: '完成连接',
-    replace: '更换应用', confirmReplace: '确认改用', apps: '个应用需要连接', preserved: '目标已保留', retry: '重试检查', toolsUnavailable: '应用工具暂不可用', toolsHint: '账号已连接，当前无法使用任务所需工具。可以重试检查，无需重新授权。' },
+    replace: '更换应用', switchInline: '或改用：', confirmReplace: '确认改用', apps: '个应用需要连接', preserved: '目标已保留', retry: '重试检查', toolsUnavailable: '应用工具暂不可用', toolsHint: '账号已连接，当前无法使用任务所需工具。可以重试检查，无需重新授权。' },
   en: { waiting: 'Waiting for connection', reconnectRequired: 'Reauthorization required', install: 'Install', installing: 'Preparing installation', connect: 'Connect', reconnect: 'Reconnect', details: 'Details', skip: 'Skip connection', cancel: 'Cancel this objective',
     ready: 'Connected', check: 'Check authorization', authorizing: 'Waiting for authorization', queued: 'Connected, waiting to continue', queuedSkipped: 'Waiting to continue with available information',
     checkingConnection: 'Checking connection', checkingTools: 'Connected, checking tools', queueHint: 'Your objective is saved. Waiting for the current execution to finish.',
@@ -36,7 +36,7 @@ const copy = {
     scope: 'Confirm and continue', scopeHint: 'This objective has been waiting for a while. Confirm the original request below, or send a message to change the time range first. Conditions such as unread status are evaluated at execution time.',
     account: 'Choose an account', all: 'View all connections', close: 'Close', intro: 'The current objective resumes automatically after connecting. You can keep sending messages.',
     callbackHint: 'If a remote Gateway cannot receive the local callback, paste the complete callback URL from the browser address bar.', callbackPlaceholder: 'Complete callback URL', callbackSubmit: 'Complete connection',
-    replace: 'Change app', confirmReplace: 'Confirm switch to', apps: 'apps need connecting', preserved: 'Objective preserved', retry: 'Retry check', toolsUnavailable: 'App tools unavailable', toolsHint: 'The account is connected, but the tools needed for this task are unavailable. Retry the check without reconnecting.' },
+    replace: 'Change app', switchInline: 'Or switch to:', confirmReplace: 'Confirm switch to', apps: 'apps need connecting', preserved: 'Objective preserved', retry: 'Retry check', toolsUnavailable: 'App tools unavailable', toolsHint: 'The account is connected, but the tools needed for this task are unavailable. Retry the check without reconnecting.' },
 };
 const secondary = 'rounded-lg border border-edge px-3 py-1.5 text-sm text-fg hover:bg-surface-hover disabled:opacity-50';
 const primary = 'rounded-lg bg-accent px-3 py-1.5 text-sm text-on-accent disabled:opacity-50';
@@ -141,6 +141,22 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
       <button type="button" className="min-h-11 px-2 text-xs text-fg-muted hover:text-fg" onClick={() => void act('cancel')}>{t.cancel}</button>
     </div>
     {reconnecting && !checking && !queued ? <p className="mt-1 text-xs text-fg-muted">{t.intro}</p> : null}
+    {single && !queued && !checking && ['connect', 'reconnect'].includes(first.phase) && first.alternatives?.length ? (
+      <div className="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label={t.replace}>
+        <span className="text-xs text-fg-muted">{t.switchInline}</span>
+        {first.alternatives.map(alt => (
+          <button
+            key={alt.candidateRef}
+            type="button"
+            disabled={busy}
+            className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-xs text-fg hover:bg-surface-hover disabled:opacity-50"
+            onClick={() => void act('replace_source', first.key, undefined, alt.candidateRef)}
+          >
+            {alt.label}
+          </button>
+        ))}
+      </div>
+    ) : null}
     {wait.queueBlocked && <p className="mt-2 text-xs text-fg-muted">{wait.blockedInputId ? t.interruptedInputHint : t.queueHint}</p>}
     {wait.lastCheckedAt && <p className="mt-2 text-xs text-fg-muted">{t.lastChecked}: {new Date(wait.lastCheckedAt).toLocaleTimeString(language === 'zh' ? 'zh-CN' : 'en-US')}</p>}
     {accountNeed && !queued && <p className="mt-2 line-clamp-2 break-words text-sm text-fg-muted">{wait.summary}</p>}

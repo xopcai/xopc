@@ -257,4 +257,27 @@ describe('single connection action area', () => {
     await click('Finish installation');
     expect(mocked.state.act).toHaveBeenCalledWith('install_complete', 'store-demo', undefined, undefined, 'demo-instance');
   });
+
+  it('shows inline multi-source switch buttons for same-domain alternatives and switches in one click', async () => {
+    mocked.state.wait!.needs = [{
+      key: 'composio-googlecalendar:default',
+      target: { type: 'connector', connectorId: 'composio-googlecalendar' },
+      label: 'Google Calendar',
+      capabilities: ['calendar.read'],
+      phase: 'connect',
+      authorizationMode: 'browser',
+      accounts: [],
+      alternatives: [{ candidateRef: 'composio-outlook', label: 'Outlook' }],
+    }];
+
+    await render();
+    expect(container.textContent).toContain('Or switch to:');
+    await click('Outlook');
+    expect(mocked.state.act).toHaveBeenCalledExactlyOnceWith(
+      'replace_source',
+      'composio-googlecalendar:default',
+      undefined,
+      'composio-outlook',
+    );
+  });
 });

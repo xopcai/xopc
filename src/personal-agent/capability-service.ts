@@ -1,7 +1,7 @@
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import { assessSpecialist, type SpecialistAssessment } from '../agent-matching/service.js';
 import { canAccessConnectorAccount, currentAccountConnections } from '../connectors/account-access.js';
-import { connectionCandidates, resolveConnectionCandidate } from '../connectors/connection-candidates.js';
+import { connectionCandidates, rankConnectionCandidatesByEcosystem, resolveConnectionCandidate } from '../connectors/connection-candidates.js';
 import { connectorPrincipalForSession } from '../connectors/principal.js';
 import { getConnectorInstallation, listConnectorConnections } from '../storage/sqlite/connector-repository.js';
 import { isPersonalConversation } from './repository.js';
@@ -22,7 +22,13 @@ export function personalCapabilities(conversationId: string, query: string, acco
   if (!principal.isLocalOwner) throw new Error('Owner access is required');
   const repository = new AgentCatalogRepository();
   const catalog = repository.snapshot();
-  return connectionCandidates(query).map(candidate => {
+  const activeConnectorIds = new Set(
+    listConnectorConnections({ principalId: principal.principalId })
+      .filter(connection => connection.status === 'active'
+        && (!connection.expiresAt || Date.parse(connection.expiresAt) > Date.now()))
+      .map(connection => connection.connectorId),
+  );
+  return rankConnectionCandidatesByEcosystem(connectionCandidates(query), activeConnectorIds).map(candidate => {
     resolveConnectionCandidate(candidate.candidateRef);
     const installation = getConnectorInstallation(`${candidate.candidateRef}-${principal.principalId}`);
     const executorProfiles: NonNullable<PersonalCapability['executorProfiles']> = [];

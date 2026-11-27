@@ -1,10 +1,28 @@
 import type { Config } from '../../config/schema.js';
 import { searchStoreConnectorInstallCandidates } from '../../capabilities/store-connector.js';
 import { connectionCandidates } from '../../connectors/connection-candidates.js';
+import { rankConnectionCandidatesByEcosystem } from '../../connectors/connection-ecosystem.js';
+import { connectorPrincipalForSession } from '../../connectors/principal.js';
+import { isXopcDatabaseOpen } from '../../storage/sqlite/connection.js';
+import { listConnectorConnections } from '../../storage/sqlite/connector-repository.js';
 import { connectionBindings, getActiveConnectionWait } from '../../storage/sqlite/connection-wait-repository.js';
 import type { ExternalToolService } from './service.js';
 import { EXTERNAL_TOOL_SOURCES, type ExternalToolSource, type ExternalToolTurnContext } from './types.js';
 import type { PersonalRequest } from '../../personal-agent/request-repository.js';
+
+function activeConnectorIdsForConversation(conversationId?: string): ReadonlySet<string> {
+  if (!conversationId || !isXopcDatabaseOpen()) return new Set();
+  try {
+    const principal = connectorPrincipalForSession(conversationId);
+    const active = listConnectorConnections({ principalId: principal.principalId })
+      .filter(connection => connection.status === 'active'
+        && (!connection.expiresAt || Date.parse(connection.expiresAt) > Date.now()))
+      .map(connection => connection.connectorId);
+    return new Set(active);
+  } catch {
+    return new Set();
+  }
+}
 
 export type ExternalDiscoveryParams = { query: string; limit?: number; sources?: ExternalToolSource[]; signal?: AbortSignal; timeoutMs?: number };
 
@@ -29,9 +47,13 @@ export async function discoverExternalTools(deps: {
   const currentRequest = deps.getRequest();
   if (request && (currentRequest?.requestId !== request.requestId || currentRequest.accountId !== request.accountId
     || currentRequest.connectorId !== request.connectorId)) throw new Error('Personal request execution identity changed');
-  const candidates = [...(request ? [] : result.connectionCandidates), ...(request ? [] : connectionCandidates(params.query))]
-    .filter((candidate, index, all) => all.findIndex(item => item.candidateRef === candidate.candidateRef) === index)
-    .slice(0, params.limit ?? 8);
+  const rawCandidates = [...(request ? [] : result.connectionCandidates), ...(request ? [] : connectionCandidates(params.query))]
+    .filter((candidate, index, all) => all.findIndex(item => item.candidateRef === candidate.candidateRef) === index);
+  const activeConnectors = !request ? activeConnectorIdsForConversation(getContext?.()?.conversationId) : new Set<string>();
+  const rankedCandidates = typeof rankConnectionCandidatesByEcosystem === 'function'
+    ? rankConnectionCandidatesByEcosystem(rawCandidates, activeConnectors)
+    : rawCandidates;
+  const candidates = rankedCandidates.slice(0, params.limit ?? 8);
   let installCandidates: Awaited<ReturnType<typeof searchStoreConnectorInstallCandidates>> = [];
   let installCatalogError: string | undefined;
   const config = getConfig?.();

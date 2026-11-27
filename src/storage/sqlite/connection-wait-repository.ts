@@ -133,7 +133,7 @@ export function queueConnectionResolution(wait: ConnectionWait, resolution: 'con
       clientMessageId: `connection:${wait.id}:${wait.objectiveRevision}:${resolution}`,
       requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued',
       content: resolution === 'skipped'
-        ? `The user skipped the requested connection. Continue this objective using only available information: ${wait.summary}. Do not request these connections again or claim to have read their data.`
+        ? `The user skipped the requested connection. Continue this objective using available tools (including browser_use for authorized web reading when applicable) or available context: ${wait.summary}. Do not request these connections again or claim to have read their data without actually reading it.`
         : `Recovery checkpoint: ${JSON.stringify(wait.checkpoint)}. The user chose to continue the request originally made at ${new Date(wait.objectiveUpdatedAt).toISOString()}: ${wait.summary}. Interpret relative dates against that original request time, unless the user explicitly changed them. The connection requirement has been checked. Search and describe tools again before using them. Use the explicitly selected account. Do not repeat already completed actions.`,
       origin: { type: 'system', source: 'internal' }, thinking: origin.thinking,
       contextRefs: origin.contextRefs, contextSnapshots: origin.contextSnapshots,

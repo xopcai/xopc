@@ -25,8 +25,10 @@ import { resolveResponseLanguageForSession } from './response-language.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { buildTtsSystemPromptHint } from '../../voice/tts/directives.js';
 import { createLogger } from '../../utils/logger.js';
+import { resolveDefaultAgentId } from '../agent-scope.js';
 import { appendStablePromptSection } from './cache-boundary.js';
 import { getConversationalConfigurationGuide } from './conversational-configuration-guide.js';
+import { buildProactiveDataAccessGuide } from './proactive-data-access.js';
 
 const log = createLogger('SystemPromptBuilder');
 
@@ -156,9 +158,31 @@ export class SystemPromptBuilder {
         ? appendStablePromptSection(basePrompt, configGuide.trim())
         : basePrompt;
 
-    const fullPrompt = skillPrompt
-      ? appendStablePromptSection(withConfigGuide, skillPrompt)
+    let defaultAgentId = 'main';
+    if (isXopcDatabaseOpen()) {
+      try {
+        defaultAgentId = resolveDefaultAgentId();
+      } catch {
+        defaultAgentId = 'main';
+      }
+    }
+
+    const proactiveGuide = resolved.promptMode === 'full'
+      ? buildProactiveDataAccessGuide({
+          agentId: options.agentId,
+          defaultAgentId,
+          promptRole: resolved.promptRole,
+          toolNames: reg,
+        })
+      : '';
+
+    const withProactiveGuide = proactiveGuide.trim()
+      ? appendStablePromptSection(withConfigGuide, proactiveGuide.trim())
       : withConfigGuide;
+
+    const fullPrompt = skillPrompt
+      ? appendStablePromptSection(withProactiveGuide, skillPrompt)
+      : withProactiveGuide;
 
     log.debug(
       {

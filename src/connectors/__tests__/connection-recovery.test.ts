@@ -1106,6 +1106,17 @@ describe('durable connection recovery', () => {
     expect(drain).not.toHaveBeenCalled();
   });
 
+  it('exposes same-domain alternatives for calendar waits and preserves generic tool capability on switch', async () => {
+    const calendarNeed = resolveConnectionCandidate('composio-googlecalendar');
+    requireSessionConnection({ conversationId, principalId: 'local-owner', agentId: 'main', summary: 'Check today schedule', needs: [calendarNeed] });
+    const snapshot = recovery.snapshot(conversationId);
+    expect(snapshot.wait?.needs[0].alternatives).toEqual([{ candidateRef: 'composio-outlook', label: 'Outlook' }]);
+    await recovery.act(conversationId, action('replace_source', { needKey: calendarNeed.key, candidateRef: 'composio-outlook' }));
+    const switched = getActiveConnectionWait(conversationId)?.needs[0];
+    expect(switched?.target).toEqual({ type: 'connector', connectorId: 'composio-outlook' });
+    expect(switched?.capabilities).toEqual(['tools']);
+  });
+
   it('installs a missing Gmail connector on the first explicit connect action', async () => {
     vi.stubEnv('XOPC_STATE_DIR', dir);
     vi.stubEnv('COMPOSIO_API_KEY', 'test-only-key');

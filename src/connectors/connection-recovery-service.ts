@@ -11,7 +11,7 @@ import { cancelConnectionObjective, getActiveConnectionWait, getConnectionWait, 
 import { getConnectorConnection, getConnectorInstallation, listConnectorConnections, upsertConnectorInstallation } from '../storage/sqlite/connector-repository.js';
 import { capabilityActions, isToolInputSchema, missingConnectionCapabilities } from './connection-capabilities.js';
 import { readPluginConnection } from './plugin-connection.js';
-import { resolveConnectionCandidate } from './connection-candidates.js';
+import { connectionCandidateAlternatives, resolveConnectionCandidate } from './connection-candidates.js';
 import { getConnectorDefinition } from './catalog.js';
 import { installConnector } from './install.js';
 import { getInstalledConnectorDefinition, listConnectorInstances } from './instances.js';
@@ -224,8 +224,7 @@ export class ConnectionRecoveryService {
         : active.length > 1 || (need.accountSelector && active.length > 0 && !need.connectionId) ? 'choose_account'
           : need.attempt && need.attempt.expiresAt > Date.now() ? 'authorizing'
             : need.unavailable || all.some(connection => ['expired', 'revoked', 'failed'].includes(connection.status)) ? 'reconnect' : 'connect';
-      const alternatives = ['composio-gmail', 'composio-outlook'].includes(id)
-        ? ['composio-gmail', 'composio-outlook'].filter(candidate => candidate !== id).map(candidate => ({ candidateRef: candidate, label: getConnectorDefinition(candidate)?.displayName ?? candidate })) : [];
+      const alternatives = connectionCandidateAlternatives(id, need.capabilities);
       return { ...need, authorizationMode, alternatives, accountId: selected?.accountId ?? need.accountId, connectionId: selected?.id ?? need.connectionId, phase,
         accounts: active.map(connection => ({ id: connection.accountId!,
           label: [...new Set([getConnectorAccount(connection.accountId!)?.label, connection.identity.workspace,
@@ -403,7 +402,11 @@ export class ConnectionRecoveryService {
       } else if (action.action === 'replace_source') {
         const need = wait.needs.find(need => need.key === action.needKey);
         if (!need || !this.view(wait).needs.find(item => item.key === need.key)?.alternatives?.some(item => item.candidateRef === action.candidateRef)) throw new Error('Unsupported replacement.');
-        const replacement = resolveConnectionCandidate(action.candidateRef!);
+        const baseReplacement = resolveConnectionCandidate(action.candidateRef!);
+        const hasDomainOverlap = need.capabilities.some(cap => baseReplacement.capabilities.includes(cap));
+        const replacement = hasDomainOverlap || need.capabilities.length === 0
+          ? baseReplacement
+          : { ...baseReplacement, capabilities: ['tools'] };
         updateConnectionWait({ ...wait, summary: `${wait.summary}\nUse ${replacement.label} instead of ${need.label}, as confirmed by the user.`,
           needs: wait.needs.map(item => item.key === need.key ? replacement : item),
           objectiveRevision: wait.objectiveRevision + 1, intent: undefined,

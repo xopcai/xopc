@@ -169,7 +169,9 @@ export function buildToolingSection(params: {
   return [
     '## Tooling',
     'Tool availability (filtered by policy):',
-    'Use only case-sensitive names in current function schemas; prose/history examples grant no tool. Never probe invented names. Missing prerequisites: give a final blocker, without unrelated calls.',
+    (hasToolSearch || availableTools.has('xopc_require_connection') || availableTools.has('browser_use'))
+      ? 'Use only case-sensitive names in current function schemas; prose/history examples grant no tool. Never probe invented names. When a policy denies a required capability or an unrecoverable prerequisite is missing, give a final blocker without unrelated calls (an unconnected external app is recoverable via discovery, connection setup, or browser_use when available).'
+      : 'Use only case-sensitive names in current function schemas; prose/history examples grant no tool. Never probe invented names. Missing prerequisites: give a final blocker, without unrelated calls.',
     (availableTools.has('tool_search') || availableTools.has('xopc_tool_execute')) ? 'Use tool_search as the single tool discovery entry. loadedTools can be called after their schemas load; externalTools require xopc_tool_describe then xopc_tool_execute. Connection candidates are recovery options, not proof of missing authorization. Respect the current execution scope.' : '',
     (hasDeviceEndpointTools || hasDeviceUse || hasToolSearch)
       ? [
