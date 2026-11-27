@@ -290,59 +290,62 @@ struct ChatHeaderIdentityButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 5) {
-                    if identity.showsAvatarInPrimary {
-                        ConfiguredAgentAvatar(
-                            configuration: configuration, agent: agent, size: 18,
-                            active: isActive, resolveUnconfigured: false
-                        )
-                    }
-                    Text(verbatim: identity.primaryText)
-                        .font(.system(size: 16, weight: .semibold)).foregroundStyle(mobileTheme.foreground)
-                        .lineLimit(1).truncationMode(.tail)
-                    if let badge = identity.primaryRuntimeBadge {
-                        AgentRuntimeBadge(label: badge).fixedSize()
-                    }
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .semibold)).foregroundStyle(mobileTheme.secondary)
-                        .fixedSize().accessibilityHidden(true)
+            HStack(spacing: 8) {
+                if identity.showsAvatarInPrimary {
+                    ConfiguredAgentAvatar(
+                        configuration: configuration, agent: agent, size: 24,
+                        active: isActive, resolveUnconfigured: false
+                    )
                 }
-                if identity.hasSecondaryRow {
-                    HStack(spacing: 4) {
-                        if let secondaryAgent = identity.secondaryAgentName {
-                            ConfiguredAgentAvatar(
-                                configuration: configuration, agent: agent, size: 14,
-                                active: isActive, resolveUnconfigured: false
-                            )
-                            Text(verbatim: secondaryAgent)
-                                .font(.caption).foregroundStyle(mobileTheme.secondary).lineLimit(1).layoutPriority(0.8)
-                            if let badge = identity.secondaryRuntimeBadge {
-                                AgentRuntimeBadge(label: badge).fixedSize().layoutPriority(0.9)
-                            }
-                            if identity.modelName != nil {
-                                Text(verbatim: "·")
-                                    .font(.caption).foregroundStyle(mobileTheme.secondary.opacity(0.65))
-                                    .fixedSize().layoutPriority(1).accessibilityHidden(true)
-                            }
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 5) {
+                        Text(verbatim: identity.primaryText)
+                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(mobileTheme.foreground)
+                            .lineLimit(1).truncationMode(.tail)
+                        if let badge = identity.primaryRuntimeBadge {
+                            AgentRuntimeBadge(label: badge).fixedSize()
                         }
-                        if let modelName = identity.modelName {
-                            Text(verbatim: modelName)
-                                .font(.caption).foregroundStyle(mobileTheme.secondary)
-                                .lineLimit(1).truncationMode(.tail).layoutPriority(0.2)
-                        }
-                        if let suffix = identity.modelSuffix {
-                            Text(verbatim: suffix)
-                                .font(.caption).foregroundStyle(mobileTheme.secondary)
-                                .lineLimit(1).fixedSize().layoutPriority(1)
+                    }
+                    if identity.hasSecondaryRow {
+                        HStack(spacing: 4) {
+                            if let secondaryAgent = identity.secondaryAgentName {
+                                ConfiguredAgentAvatar(
+                                    configuration: configuration, agent: agent, size: 14,
+                                    active: isActive, resolveUnconfigured: false
+                                )
+                                Text(verbatim: secondaryAgent)
+                                    .font(.caption).foregroundStyle(mobileTheme.secondary).lineLimit(1).layoutPriority(0.8)
+                                if let badge = identity.secondaryRuntimeBadge {
+                                    AgentRuntimeBadge(label: badge).fixedSize().layoutPriority(0.9)
+                                }
+                                if identity.modelName != nil {
+                                    Text(verbatim: "·")
+                                        .font(.caption).foregroundStyle(mobileTheme.secondary.opacity(0.65))
+                                        .fixedSize().layoutPriority(1).accessibilityHidden(true)
+                                }
+                            }
+                            if let modelName = identity.modelName {
+                                Text(verbatim: modelName)
+                                    .font(.caption).foregroundStyle(mobileTheme.secondary)
+                                    .lineLimit(1).truncationMode(.tail).layoutPriority(0.2)
+                            }
+                            if let suffix = identity.modelSuffix {
+                                Text(verbatim: suffix)
+                                    .font(.caption).foregroundStyle(mobileTheme.secondary)
+                                    .lineLimit(1).fixedSize().layoutPriority(1)
+                            }
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(mobileTheme.secondary.opacity(0.75))
+                    .fixedSize().accessibilityHidden(true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 6).padding(.vertical, 4).frame(minHeight: 44).contentShape(.rect)
+            .padding(.horizontal, 12).padding(.vertical, 6).frame(minHeight: 44).contentShape(.rect)
         }
-        .buttonStyle(MobilePressStyle(radius: mobileTheme.corner(14)))
+        .buttonStyle(MobilePressStyle(radius: mobileTheme.corner(18), restingBackground: mobileTheme.card))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(verbatim: identity.accessibilitySummary))
         .accessibilityIdentifier("chat-header-identity")
@@ -402,13 +405,10 @@ struct ChatContextStripButton: View {
                     .foregroundStyle(mobileTheme.secondary.opacity(0.65))
                     .accessibilityHidden(true)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .frame(minHeight: 34)
-            .contentShape(.rect)
+            .padding(.horizontal, 10).padding(.vertical, 5).frame(minHeight: 32).contentShape(.rect)
         }
         .buttonStyle(MobilePressStyle(
-            radius: mobileTheme.corner(14),
+            radius: mobileTheme.corner(12),
             restingBackground: model.needsAttention ? mobileTheme.attention : mobileTheme.card
         ))
         .accessibilityElement(children: .combine)

@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 
-export const sidebarSectionLabelClass = 'text-xs font-normal leading-5 text-fg-subtle';
+export const sidebarSectionLabelClass = 'text-[0.8125rem] font-medium leading-5 text-fg-muted';
 
 export function SidebarCreateSectionHeader({ label, createLabel, onCreate, disabled, current, className }: {
   label: string;

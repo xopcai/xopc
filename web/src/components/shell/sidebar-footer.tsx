@@ -107,8 +107,8 @@ export function SidebarFooter({
               <Smartphone className="size-3.5" strokeWidth={1.75} aria-hidden />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-medium leading-4 text-fg">{deviceCopy.sidebarMobilePromoTitle}</span>
-              <span className="block truncate text-[11px] leading-4 text-fg-muted">{deviceCopy.sidebarMobilePromoHint}</span>
+              <span className="block truncate text-[0.8125rem] font-medium leading-4 text-fg">{deviceCopy.sidebarMobilePromoTitle}</span>
+              <span className="block truncate text-xs leading-4 text-fg-muted">{deviceCopy.sidebarMobilePromoHint}</span>
             </span>
           </button>
           <button
@@ -182,8 +182,8 @@ export function SidebarFooter({
                 aria-label={m.sidebar.appMenuAria}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold leading-tight text-fg">{m.appBrand}</div>
-                  <div className="truncate text-xs text-fg-muted">{m.appearanceSettings.quickMenuHint}</div>
+                  <div className="truncate text-[0.9375rem] font-semibold leading-tight text-fg">{m.appBrand}</div>
+                  <div className="truncate text-[0.8125rem] text-fg-muted">{m.appearanceSettings.quickMenuHint}</div>
                 </div>
                 <Settings className="size-[18px] shrink-0" strokeWidth={1.5} />
               </button>

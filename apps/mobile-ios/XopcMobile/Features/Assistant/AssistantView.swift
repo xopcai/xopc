@@ -203,17 +203,27 @@ struct AssistantView<Dock: View>: View {
         Group {
             if let endpointID = target.reselectEndpointId {
                 Button { Task { await reselectDesktopTarget(endpointID) } } label: {
-                    Label(title, systemImage: "laptopcomputer").lineLimit(2)
-                }.buttonStyle(.plain).disabled(reselectingDesktop || state.isRunActive || state.isSending)
-                    .accessibilityLabel(Text(verbatim: title)).accessibilityIdentifier("chat-execution-device")
+                    Label(title, systemImage: "laptopcomputer")
+                        .lineLimit(1)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(mobileTheme.action)
+                        .padding(.horizontal, 10).padding(.vertical, 5).frame(minHeight: 32)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(MobilePressStyle(radius: mobileTheme.corner(12), restingBackground: mobileTheme.card))
+                .disabled(reselectingDesktop || state.isRunActive || state.isSending)
+                .accessibilityLabel(Text(verbatim: title)).accessibilityIdentifier("chat-execution-device")
             } else {
-                Label(title, systemImage: "laptopcomputer").lineLimit(2)
+                Label(title, systemImage: "laptopcomputer")
+                    .lineLimit(1)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(mobileTheme.secondary)
+                    .padding(.horizontal, 10).padding(.vertical, 5).frame(minHeight: 32)
+                    .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(12)))
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(Text(verbatim: title)).accessibilityIdentifier("chat-execution-device")
             }
         }
-        .font(.caption.weight(.medium)).foregroundStyle(mobileTheme.secondary)
-        .padding(.horizontal, 8).frame(minHeight: 44)
     }
 
     private var chatLayout: some View {
@@ -270,7 +280,7 @@ struct AssistantView<Dock: View>: View {
         }
         .overlay(alignment: .top) {
             if showsFloatingHeader {
-                VStack(spacing: 4) {
+                VStack(spacing: 6) {
                     floatingHeader.padding(.horizontal, 12)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                             if isPersonalConversation {
@@ -285,16 +295,9 @@ struct AssistantView<Dock: View>: View {
                     }
                 }
                 .padding(.top, 8)
-                .padding(.bottom, 6)
-                .background {
-                    LinearGradient(stops: [
-                        .init(color: mobileTheme.canvas, location: 0),
-                        .init(color: mobileTheme.canvas, location: 0.84),
-                        .init(color: mobileTheme.canvas.opacity(0), location: 1)
-                    ], startPoint: .top, endPoint: .bottom)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
+                .padding(.bottom, 8)
+                .frame(maxWidth: .infinity)
+                .background(mobileTheme.canvas.ignoresSafeArea(edges: .top))
             }
         }
     }
@@ -302,8 +305,8 @@ struct AssistantView<Dock: View>: View {
     private var chatHeaderClearance: CGFloat {
         let measuredHeight = isPersonalConversation ? personalHeaderHeight : ordinaryHeaderHeight
         let headerHeight = showsFloatingHeader && measuredHeight > 0
-            ? measuredHeight + 14 : (isPersonalConversation ? 114 : 64)
-        return chatTopInset + headerHeight + (pinsPlayingMusic ? stickyMusicHeight + 4 : 0)
+            ? measuredHeight + 16 : (isPersonalConversation ? 116 : 66)
+        return chatTopInset + headerHeight + (pinsPlayingMusic ? stickyMusicHeight + 6 : 0)
     }
 
     private var pinsPlayingMusic: Bool {
@@ -1554,9 +1557,9 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var floatingHeader: some View {
-        VStack(alignment: isPersonalConversation ? .center : .leading, spacing: 6) {
+        VStack(alignment: isPersonalConversation ? .center : .leading, spacing: 8) {
             ZStack(alignment: .top) {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     if let onBack {
                         headerButton("返回", icon: Image(systemName: "chevron.backward"), action: onBack)
                             .accessibilityIdentifier(backAccessibilityID)
@@ -1579,6 +1582,10 @@ struct AssistantView<Dock: View>: View {
                             showingSessionActions = true
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    } else if compactPersonalHeader {
+                        Spacer(minLength: 0)
+                        personalFloatingCenterHeader
+                        Spacer(minLength: 0)
                     } else {
                         Spacer(minLength: 0)
                     }
@@ -1591,19 +1598,29 @@ struct AssistantView<Dock: View>: View {
                             .accessibilityIdentifier("chat-header-voice-call")
                     }
                 }
-                if isPersonalConversation {
+                if isPersonalConversation, !compactPersonalHeader {
                     personalFloatingCenterHeader
                 }
             }
             if !isPersonalConversation {
-                if let contextStrip = chatContextStrip {
-                    ChatContextStripButton(model: contextStrip) {
-                        sessionSheetDestination = .context
-                        showingSessionActions = true
-                    }
+                let contextStrip = chatContextStrip
+                let targetWithName: (DesktopChatTarget, String)? = desktopChatTarget.flatMap { target in
+                    target.deviceName.map { (target, $0) }
                 }
-                if let target = desktopChatTarget, let name = target.deviceName {
-                    desktopTargetBadge(target, name: name)
+                if contextStrip != nil || targetWithName != nil {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            if let contextStrip {
+                                ChatContextStripButton(model: contextStrip) {
+                                    sessionSheetDestination = .context
+                                    showingSessionActions = true
+                                }
+                            }
+                            if let (target, name) = targetWithName {
+                                desktopTargetBadge(target, name: name)
+                            }
+                        }
+                    }
                 }
             }
         }

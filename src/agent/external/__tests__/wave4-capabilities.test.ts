@@ -21,6 +21,8 @@ import {
   clearExternalSessionApprovals,
   computeTurnCheckpointDiff,
   disposeAllPooledExternalSessions,
+  disposePooledExternalSession,
+  disposePooledExternalSessionsByNativeId,
   hasTurnCheckpoint,
   isDangerousExternalCommand,
   projectMcpServersForAcp,
@@ -321,6 +323,85 @@ it('evicts pooled external runtime processes when the host CLI binary is upgrade
   const afterUpgrade = await checkoutPooledExternalSession<{ tag: string }>('conv-bin', 'fp-1');
   expect(afterUpgrade).toBeUndefined();
   expect(dispose).toHaveBeenCalledWith(true);
+});
+
+it('awaits in-flight idle and explicit disposals before returning from checkout or dispose', async () => {
+  let releaseDispose!: () => void;
+  let disposeFinished = false;
+  const dispose = vi.fn(async () => {
+    await new Promise<void>((resolve) => {
+      releaseDispose = resolve;
+    });
+    disposeFinished = true;
+  });
+
+  // 1. Idle eviction race: checkout must wait for the in-flight idle dispose to finish.
+  checkinPooledExternalSession('conv-idle-race', {
+    fingerprint: 'fp-idle',
+    nativeSessionId: 'thread-race-1',
+    resource: { tag: 'old' },
+    isAlive: () => true,
+    dispose,
+  }, 10);
+
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  expect(dispose).toHaveBeenCalledTimes(1);
+  expect(disposeFinished).toBe(false);
+
+  let checkoutDone = false;
+  const checkoutPromise = checkoutPooledExternalSession('conv-idle-race', 'fp-idle', {
+    nativeSessionId: 'thread-race-1',
+  }).then((res) => {
+    checkoutDone = true;
+    return res;
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(checkoutDone).toBe(false);
+
+  releaseDispose();
+  expect(await checkoutPromise).toBeUndefined();
+  expect(disposeFinished).toBe(true);
+
+  // 2. Cross-conversation nativeSessionId eviction: checking out with same nativeSessionId disposes idle holder.
+  const disposeOther = vi.fn(async () => {});
+  checkinPooledExternalSession('conv-other', {
+    fingerprint: 'fp-other',
+    nativeSessionId: 'thread-shared-9',
+    resource: { tag: 'other' },
+    isAlive: () => true,
+    dispose: disposeOther,
+  });
+  expect(await checkoutPooledExternalSession('conv-new', 'fp-new', {
+    nativeSessionId: 'thread-shared-9',
+  })).toBeUndefined();
+  expect(disposeOther).toHaveBeenCalledTimes(1);
+
+  // 3. Concurrent disposePooledExternalSession awaits the first caller's disposal.
+  let releaseSecond!: () => void;
+  let secondFinished = false;
+  checkinPooledExternalSession('conv-concurrent', {
+    fingerprint: 'fp-c',
+    nativeSessionId: 'thread-c',
+    resource: { tag: 'c' },
+    isAlive: () => true,
+    dispose: async () => {
+      await new Promise<void>((resolve) => {
+        releaseSecond = resolve;
+      });
+      secondFinished = true;
+    },
+  });
+  const firstDispose = disposePooledExternalSession('conv-concurrent', true);
+  let secondAwaited = false;
+  const secondDispose = disposePooledExternalSessionsByNativeId('thread-c', true).then(() => {
+    secondAwaited = true;
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(secondAwaited).toBe(false);
+  releaseSecond();
+  await Promise.all([firstDispose, secondDispose]);
+  expect(secondFinished).toBe(true);
 });
 
 it('resolves nominal context windows and runs headless external turns via runExternalDirectTurn', async () => {

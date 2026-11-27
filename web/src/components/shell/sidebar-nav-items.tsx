@@ -51,10 +51,10 @@ type MenuItem = {
 
 function rowClass(collapsed: boolean, active: boolean, popover = false): string {
   return cn(
-    'flex w-full items-center text-sm font-medium transition-colors duration-200 ease-out',
+    'flex w-full items-center text-[0.9375rem] font-medium transition-colors duration-200 ease-out',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
     popover
-      ? 'gap-2 rounded-md px-2 py-1.5 text-left leading-5'
+      ? 'gap-2 rounded-md px-2 py-1.5 text-left leading-6'
       : collapsed
         ? 'justify-center rounded-xl p-2.5 leading-6'
         : 'gap-2 rounded-lg px-3 py-2.5 text-left leading-6 md:py-1.5',
@@ -232,7 +232,7 @@ export function SidebarNavItems({
             aria-label={m.sidebar.moreAppsAria}
             title={m.sidebar.moreApps}
             className={cn(
-              'flex w-full items-center text-sm font-medium leading-6 transition-colors duration-200 ease-out',
+              'flex w-full items-center text-[0.9375rem] font-medium leading-6 transition-colors duration-200 ease-out',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
               collapsed ? 'justify-center rounded-xl p-2.5' : 'gap-2 rounded-lg px-3 py-2.5 text-left md:py-1.5',
               dropHint?.id === 'more' && 'ring-2 ring-accent',
@@ -258,7 +258,7 @@ export function SidebarNavItems({
               {overflowItems.map((item) => renderLink(item, true))}
               {overflowExtensions.length > 0 ? (
                 <section aria-labelledby="sidebar-more-extension-apps">
-                  <div id="sidebar-more-extension-apps" className="px-2 pb-1 pt-1.5 text-[11px] font-semibold tracking-wide text-fg-subtle">
+                  <div id="sidebar-more-extension-apps" className="px-2 pb-1 pt-1.5 text-xs font-medium tracking-wide text-fg-subtle">
                     {m.sidebar.extensionAppsHeading}
                   </div>
                   <div className="flex flex-col gap-0.5">{overflowExtensions.map((item) => renderLink(item, true))}</div>

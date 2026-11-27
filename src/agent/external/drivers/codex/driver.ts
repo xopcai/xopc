@@ -7,6 +7,7 @@ import type { ModelThinkingCapabilities, ModelThinkingValue } from '@xopcai/gate
 import { buildExternalRuntimeEnv } from '../../runtime-env.js';
 import type { CodexExecution, ExternalAgentExecution, ExternalPermissionMode } from '../../../../agent-config/schema.js';
 import { runProcessChecked } from '../../../../process/run-process.js';
+import { createLogger } from '../../../../utils/logger.js';
 import { resolveUserPath } from '../../../agent-scope.js';
 import { PLAN_MODE_INSTRUCTIONS, type SessionInteractionPolicy } from '../../../session/interaction-policy-state.js';
 import { normalizeThinkLevel } from '../../../transcript/thinking-types.js';
@@ -24,6 +25,7 @@ import {
   checkinPooledExternalSession,
   checkoutPooledExternalSession,
   disposePooledExternalSession,
+  disposePooledExternalSessionsByNativeId,
 } from '../../session-pool.js';
 import type {
   ExternalAgentDriver,
@@ -38,15 +40,79 @@ import type {
   ExternalRuntimeToolResult,
   ExternalSessionControlContext,
 } from '../../types.js';
-import { CodexAppServer, deferred, record, type CodexRecord } from './app-server.js';
+import { ExternalRollbackNotAppliedError } from '../../control.js';
+import { CodexAppServer, CodexRpcError, deferred, record, type CodexRecord } from './app-server.js';
 import { findCodexExecutable } from './executable.js';
 
 export { findCodexExecutable };
+
+const log = createLogger('CodexDriver');
 
 const STOP_TIMEOUT_MS = 5_000;
 const PROBE_TIMEOUT_MS = 10_000;
 const CATALOG_REFRESH_WAIT_MS = 3_000;
 const CATALOG_REFRESH_POLL_MS = 150;
+const ACTIVE_WRITER_ERROR_RE = /already has an active writer/i;
+const THREAD_RESUME_RETRY_DELAYS_MS = [200, 400, 800] as const;
+
+export function isCodexActiveWriterError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return ACTIVE_WRITER_ERROR_RE.test(message);
+}
+
+function buildActiveWriterErrorMessage(threadId: string): string {
+  return `Codex thread ${threadId} already has an active writer in another process (such as Codex Desktop, an IDE extension, or another Codex CLI session). Close the other Codex session or retry in a moment.`;
+}
+
+async function waitWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  if (ms <= 0) return;
+  signal?.throwIfAborted();
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new Error('Aborted'));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    timer.unref?.();
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function resumeCodexThreadWithRetry(params: {
+  server: CodexAppServer;
+  conversationId: string;
+  threadId: string;
+  requestParams: CodexRecord;
+  signal?: AbortSignal;
+}): Promise<CodexRecord> {
+  const { server, conversationId, threadId, requestParams, signal } = params;
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= THREAD_RESUME_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      return await server.request('thread/resume', requestParams, signal);
+    } catch (error) {
+      if (!isCodexActiveWriterError(error) || signal?.aborted) {
+        throw error;
+      }
+      lastError = error;
+      await Promise.all([
+        disposePooledExternalSession(conversationId, true),
+        disposePooledExternalSessionsByNativeId(threadId, true),
+      ]);
+      const delayMs = THREAD_RESUME_RETRY_DELAYS_MS[attempt];
+      if (delayMs === undefined) break;
+      log.warn(
+        { conversationId, threadId, attempt: attempt + 1, retryDelayMs: delayMs },
+        `Codex thread ${threadId} has an active writer; retrying thread/resume in ${delayMs}ms`,
+      );
+      await waitWithAbort(delayMs, signal);
+    }
+  }
+  throw lastError;
+}
 
 const CODEX_THINKING_ORDER: ReadonlyArray<ModelThinkingValue> = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -824,8 +890,12 @@ export const codexExternalDriver: ExternalAgentDriver = {
     let models: ExternalRuntimeModelOption[] | undefined;
     try {
       const warm = nativeThread
-        ? await checkoutPooledExternalSession<PooledCodexSession>(context.conversationId, buildFingerprint(nativeThread))
-        : undefined;
+        ? await checkoutPooledExternalSession<PooledCodexSession>(
+            context.conversationId,
+            buildFingerprint(nativeThread),
+            { nativeSessionId: nativeThread },
+          )
+        : (await disposePooledExternalSession(context.conversationId, true), undefined);
 
       if (warm) {
         server = warm.server;
@@ -837,7 +907,12 @@ export const codexExternalDriver: ExternalAgentDriver = {
           onRequest: handleServerRequest,
         });
         effectiveModel = context.modelOverride?.trim() || codexConfig?.model?.trim() || warm.model;
-        emit({ type: 'session_bound', nativeSessionId: threadId, ...(effectiveModel ? { model: effectiveModel } : {}) });
+        emit({
+          type: 'session_bound',
+          nativeSessionId: threadId,
+          metadata: { lastAttemptRunId: runId },
+          ...(effectiveModel ? { model: effectiveModel } : {}),
+        });
         signal.throwIfAborted();
       } else {
         server = new CodexAppServer(cwd, dispatchNotification, terminal.reject, {
@@ -859,21 +934,76 @@ export const codexExternalDriver: ExternalAgentDriver = {
         const codexMcpServers = context.mcpServers?.length
           ? projectMcpServersForCodex(context.mcpServers)
           : undefined;
-        const opened = await server.request(nativeThread ? 'thread/resume' : 'thread/start', {
+        const threadParams: CodexRecord = {
           approvalPolicy: sandboxSettings.approvalPolicy,
           sandbox: sandboxSettings.sandbox,
           cwd,
-          ...(nativeThread ? { threadId: nativeThread } : { ephemeral: false }),
           ...(selectedModel ? { model: selectedModel } : {}),
           ...(instructions ? { developerInstructions: instructions } : {}),
           ...(codexMcpServers ? { config: { mcp_servers: codexMcpServers } } : {}),
-        }, signal);
+        };
+        let opened: CodexRecord;
+        let rotatedThread = false;
+        if (nativeThread) {
+          try {
+            opened = await resumeCodexThreadWithRetry({
+              server,
+              conversationId: context.conversationId,
+              threadId: nativeThread,
+              requestParams: { ...threadParams, threadId: nativeThread },
+              signal,
+            });
+          } catch (resumeError) {
+            if (!isCodexActiveWriterError(resumeError) || signal.aborted) {
+              throw resumeError;
+            }
+            log.warn(
+              { conversationId: context.conversationId, threadId: nativeThread, phase: 'thread_resume_active_writer_fallback' },
+              `Codex thread ${nativeThread} still has an active writer after retries; falling back to thread/fork`,
+            );
+            try {
+              opened = await server.request('thread/fork', {
+                ...threadParams,
+                threadId: nativeThread,
+                ephemeral: false,
+              }, signal);
+              rotatedThread = true;
+            } catch (forkError) {
+              if (signal.aborted) throw forkError;
+              const forkMsg = forkError instanceof Error ? forkError.message : String(forkError);
+              log.warn(
+                { err: forkError, conversationId: context.conversationId, threadId: nativeThread },
+                `Codex thread/fork fallback failed after active writer conflict: ${forkMsg}`,
+              );
+              throw new Error(buildActiveWriterErrorMessage(nativeThread), { cause: resumeError });
+            }
+          }
+        } else {
+          opened = await server.request('thread/start', {
+            ...threadParams,
+            ephemeral: false,
+          }, signal);
+        }
         threadId = text(record(opened.thread)?.id);
-        if (!threadId || (nativeThread && nativeThread !== threadId)) {
-          throw new Error('Codex did not return the requested thread.');
+        if (!threadId || (!rotatedThread && nativeThread && nativeThread !== threadId)) {
+          throw new Error(rotatedThread
+            ? buildActiveWriterErrorMessage(nativeThread!)
+            : 'Codex did not return the requested thread.');
+        }
+        if (rotatedThread) {
+          log.info(
+            { conversationId: context.conversationId, previousThreadId: nativeThread, threadId },
+            `Forked locked Codex thread ${nativeThread} to ${threadId}`,
+          );
         }
         effectiveModel = text(opened.model) || selectedModel || undefined;
-        emit({ type: 'session_bound', nativeSessionId: threadId, ...(effectiveModel ? { model: effectiveModel } : {}) });
+        emit({
+          type: 'session_bound',
+          nativeSessionId: threadId,
+          metadata: { lastAttemptRunId: runId },
+          ...(rotatedThread ? { rotated: true } : {}),
+          ...(effectiveModel ? { model: effectiveModel } : {}),
+        });
         signal.throwIfAborted();
       }
 
@@ -904,6 +1034,12 @@ export const codexExternalDriver: ExternalAgentDriver = {
       }, stopping.signal);
       turnId = text(record(started.turn)?.id);
       if (!turnId) throw new Error('Codex did not return a turn ID.');
+      emit({
+        type: 'session_bound',
+        nativeSessionId: threadId,
+        metadata: { lastAttemptRunId: runId, lastStartedRunId: runId },
+        ...(effectiveModel ? { model: effectiveModel } : {}),
+      });
       const activeServer = server;
       const activeThreadId = threadId;
       const activeTurnId = turnId;
@@ -955,6 +1091,7 @@ export const codexExternalDriver: ExternalAgentDriver = {
         pooledServer.setHandlers({});
         checkinPooledExternalSession<PooledCodexSession>(context.conversationId, {
           fingerprint: buildFingerprint(threadId),
+          nativeSessionId: threadId,
           executablePath: findCodexExecutable(codexConfig?.binaryPath),
           resource: { server: pooledServer, threadId, model: effectiveModel, models },
           isAlive: () => pooledServer.isAlive(),
@@ -1118,7 +1255,10 @@ export const codexExternalDriver: ExternalAgentDriver = {
     const abortController = new AbortController();
     const signal = context.signal ? AbortSignal.any([context.signal, abortController.signal]) : abortController.signal;
     const timer = setTimeout(() => abortController.abort(new Error('Codex compaction timed out.')), 45_000);
-    await disposePooledExternalSession(context.conversationId, false);
+    await Promise.all([
+      disposePooledExternalSession(context.conversationId, false),
+      disposePooledExternalSessionsByNativeId(context.nativeSessionId, false),
+    ]);
     const server = new CodexAppServer(context.cwd, () => {}, () => {}, {
       binaryPath: codexConfig?.binaryPath,
       homePath: codexConfig?.homePath,
@@ -1129,10 +1269,23 @@ export const codexExternalDriver: ExternalAgentDriver = {
         capabilities: { experimentalApi: true },
       }, signal);
       server.notify('initialized');
-      await server.request('thread/resume', {
-        threadId: context.nativeSessionId,
-        cwd: context.cwd,
-      }, signal);
+      try {
+        await resumeCodexThreadWithRetry({
+          server,
+          conversationId: context.conversationId,
+          threadId: context.nativeSessionId,
+          requestParams: {
+            threadId: context.nativeSessionId,
+            cwd: context.cwd,
+          },
+          signal,
+        });
+      } catch (error) {
+        if (isCodexActiveWriterError(error)) {
+          throw new Error(buildActiveWriterErrorMessage(context.nativeSessionId), { cause: error });
+        }
+        throw error;
+      }
       await server.request('thread/compact/start', { threadId: context.nativeSessionId }, signal);
       return { compacted: true, summary: 'Codex thread context compacted.' };
     } finally {
@@ -1179,25 +1332,56 @@ export const codexExternalDriver: ExternalAgentDriver = {
     const abortController = new AbortController();
     const signal = context.signal ? AbortSignal.any([context.signal, abortController.signal]) : abortController.signal;
     const timer = setTimeout(() => abortController.abort(new Error('Codex rollback timed out.')), 20_000);
-    await disposePooledExternalSession(context.conversationId, false);
-    const server = new CodexAppServer(context.cwd, () => {}, () => {}, {
-      binaryPath: codexConfig?.binaryPath,
-      homePath: codexConfig?.homePath,
-    });
+    await Promise.all([
+      disposePooledExternalSession(context.conversationId, false),
+      disposePooledExternalSessionsByNativeId(context.nativeSessionId, false),
+    ]);
+    let server: CodexAppServer;
     try {
-      await server.request('initialize', {
-        clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
-        capabilities: { experimentalApi: true },
-      }, signal);
-      server.notify('initialized');
-      await server.request('thread/resume', {
-        threadId: context.nativeSessionId,
-        cwd: context.cwd,
-      }, signal);
-      await server.request('thread/rollback', {
-        threadId: context.nativeSessionId,
-        numTurns: Math.max(1, Math.trunc(context.numTurns)),
-      }, signal);
+      server = new CodexAppServer(context.cwd, () => {}, () => {}, {
+        binaryPath: codexConfig?.binaryPath,
+        homePath: codexConfig?.homePath,
+      });
+    } catch (error) {
+      clearTimeout(timer);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ExternalRollbackNotAppliedError(message, { cause: error });
+    }
+    try {
+      try {
+        await server.request('initialize', {
+          clientInfo: { name: 'xopc', title: 'xopc', version: '1' },
+          capabilities: { experimentalApi: true },
+        }, signal);
+        server.notify('initialized');
+        await resumeCodexThreadWithRetry({
+          server,
+          conversationId: context.conversationId,
+          threadId: context.nativeSessionId,
+          requestParams: {
+            threadId: context.nativeSessionId,
+            cwd: context.cwd,
+          },
+          signal,
+        });
+      } catch (error) {
+        if (isCodexActiveWriterError(error)) {
+          throw new ExternalRollbackNotAppliedError(buildActiveWriterErrorMessage(context.nativeSessionId), { cause: error });
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        throw new ExternalRollbackNotAppliedError(message, { cause: error });
+      }
+      try {
+        await server.request('thread/rollback', {
+          threadId: context.nativeSessionId,
+          numTurns: Math.max(1, Math.trunc(context.numTurns)),
+        }, signal);
+      } catch (error) {
+        if (error instanceof CodexRpcError) {
+          throw new ExternalRollbackNotAppliedError(error.message, { cause: error });
+        }
+        throw error;
+      }
       return { rolledBack: true };
     } finally {
       clearTimeout(timer);

@@ -51,7 +51,7 @@ export function ProductSectionHeader({ fallback }: { fallback: ReactNode }) {
           ariaLabel={copy.sectionsAria}
           tabIdPrefix={`${domainId}-section-tab`}
           className="overflow-y-hidden pb-0"
-          buttonClassName="h-9 py-1.5"
+          buttonClassName="h-9 py-1.5 text-[0.9375rem]"
         />
       </div>
       <PopoverSelect
@@ -60,7 +60,7 @@ export function ProductSectionHeader({ fallback }: { fallback: ReactNode }) {
         placeholder={copy.domains[domainId]}
         allowEmpty={false}
         ariaLabel={copy.sectionsAria}
-        triggerClassName="h-9 w-auto min-w-[7.5rem] bg-surface-panel xl:hidden"
+        triggerClassName="h-9 w-auto min-w-[7.5rem] bg-surface-panel text-[0.9375rem] xl:hidden"
         contentClassName="min-w-[12rem]"
         onChange={(next) => changeSection(next as ProductSectionId)}
       />

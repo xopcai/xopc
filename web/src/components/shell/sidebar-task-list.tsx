@@ -290,7 +290,7 @@ function groupRecentSessions(sessions: SessionMetadata[]): Record<RecentPeriod, 
 
 function rowShellClass(isActive: boolean): string {
   return cn(
-    'sidebar-hover-row group relative flex min-h-8 w-full min-w-0 items-center rounded-lg pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
+    'sidebar-hover-row group relative flex min-h-[2.125rem] w-full min-w-0 items-center rounded-lg pr-1 text-left text-[0.9375rem] leading-[1.375rem] transition-colors duration-200 ease-out',
     'pl-6',
     'focus-within:outline-none',
     isActive
@@ -599,7 +599,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
             >
               <button
                 type="button"
-                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
+                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
                 onClick={() => {
                   setMenuOpen(false);
                   onRequestRename(session);
@@ -610,7 +610,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
               </button>
               <button
                 type="button"
-                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
+                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
                 onClick={() => void copyChatId()}
               >
                 <ClipboardCopy className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
@@ -618,7 +618,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
               </button>
               <button
                 type="button"
-                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-red-600 transition-colors hover:bg-surface-hover dark:text-red-400"
+                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm font-medium leading-snug text-red-600 transition-colors hover:bg-surface-hover dark:text-red-400"
                 onClick={() => {
                   setMenuOpen(false);
                   onRequestDelete(session.key);
@@ -721,7 +721,7 @@ function SidebarProjectMenu({
         >
           <Link
             to={`/projects/${encodeURIComponent(project.id)}`}
-            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
             onClick={() => {
               setMenuOpen(false);
               onNavigate?.();
@@ -731,10 +731,10 @@ function SidebarProjectMenu({
             {sb.projectOpen}
           </Link>
           <ProjectUnderstandingAction hasProjectFolder={Boolean(project.workspaceRoot?.trim())} projectId={project.id} onStarted={() => setMenuOpen(false)}
-            className="flex w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50" />
+            className="flex w-full rounded-md px-2 py-1.5 text-left text-sm font-medium text-fg hover:bg-surface-hover disabled:opacity-50" />
           <button
             type="button"
-            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
             onClick={() => {
               setMenuOpen(false);
               onPinToggle(project);
@@ -749,7 +749,7 @@ function SidebarProjectMenu({
           </button>
           <button
             type="button"
-            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:text-fg-subtle disabled:hover:bg-transparent"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm font-medium leading-snug text-fg transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:text-fg-subtle disabled:hover:bg-transparent"
             onClick={() => void openWorkspace()}
             disabled={!canOpenWorkspace}
             title={!canOpenWorkspace ? sb.projectOpenInExplorerUnavailable : undefined}
@@ -759,7 +759,7 @@ function SidebarProjectMenu({
           </button>
           <button
             type="button"
-            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
             onClick={() => {
               setMenuOpen(false);
               onRequestRename(project);
@@ -770,7 +770,7 @@ function SidebarProjectMenu({
           </button>
           <button
             type="button"
-            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
             onClick={() => {
               setMenuOpen(false);
               onArchive(project);
@@ -781,7 +781,7 @@ function SidebarProjectMenu({
           </button>
           <button
             type="button"
-            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-red-600 transition-colors hover:bg-surface-hover dark:text-red-400"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm font-medium leading-snug text-red-600 transition-colors hover:bg-surface-hover dark:text-red-400"
             onClick={() => {
               setMenuOpen(false);
               onRequestRemove(project);
@@ -856,13 +856,13 @@ function SidebarProjectSection({
     <section className="flex flex-col gap-0.5" aria-label={group.project.name}>
       <div
         className={cn(
-          'group flex h-7 min-w-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium leading-5',
+          'group flex h-8 min-w-0 items-center gap-1.5 rounded-lg px-2 text-[0.9375rem] font-medium leading-[1.375rem]',
           hasActiveSession ? 'text-fg' : 'text-fg-muted',
         )}
       >
         <button
           type="button"
-          className="flex h-7 min-w-0 flex-1 items-center gap-1 text-left hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+          className="flex h-8 min-w-0 flex-1 items-center gap-1 text-left hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
           onClick={() => onToggleCollapsed(group.project.id)}
           title={group.project.name}
           aria-expanded={!isCollapsed}
@@ -923,7 +923,7 @@ function SidebarProjectSection({
           {canToggleSessionLimit ? (
             <button
               type="button"
-              className="ml-4 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+              className="ml-4 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-[0.8125rem] font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
               onClick={() => onToggleExpanded(group.project.id)}
               data-sidebar-load-more={group.sessionHasMore ? '' : undefined}
               disabled={group.sessionLoading}
@@ -1056,7 +1056,7 @@ function SidebarInboxSection({
         {hasMore ? (
           <button
             type="button"
-            className="ml-4 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+            className="ml-4 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-[0.8125rem] font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
             onClick={onLoadMore}
             data-sidebar-load-more=""
             disabled={loadingMore}
@@ -1857,7 +1857,7 @@ function SidebarTaskListContent({
             onChange={changeView}
             onReorder={reorderViews}
             flush
-            buttonClassName="h-8 min-w-0 px-1"
+            buttonClassName="h-8 min-w-0 px-1 text-[0.8125rem]"
             options={viewOrder.map(value => ({ value, ...viewOptions[value] }))}
           />
         </div>
@@ -1886,7 +1886,7 @@ function SidebarTaskListContent({
             {!recentPages && !recentError ? <SidebarTaskListSkeleton /> : null}
             {!pendingRecentPage ? recentLoadError : null}
             {recentPages && !recentError && !recentItems.length && !pinnedSessions.length && !recentHasMore
-              ? <p className="px-2 py-3 text-xs text-fg-muted">{sb.taskListEmpty}</p>
+              ? <p className="px-2 py-3 text-[0.8125rem] text-fg-muted">{sb.taskListEmpty}</p>
               : null}
             {renderRecentPeriod(sb.timelineToday, recentGroups.today)}
             {renderRecentPeriod(sb.timelineYesterday, recentGroups.yesterday)}
@@ -1896,7 +1896,7 @@ function SidebarTaskListContent({
                 {hasMoreOlder ? (
                   <button
                     type="button"
-                    className="min-h-8 w-full rounded-lg px-2 text-left text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                    className="min-h-8 w-full rounded-lg px-2 text-left text-[0.8125rem] text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
                     data-sidebar-load-more=""
                     disabled={!hasHiddenOlder && !canLoadRecentPage}
                     onClick={() => {
@@ -1979,7 +1979,7 @@ function SidebarTaskListContent({
                 onReorder={reorderSidebar}
               />
               {inboxItems.some((session) => resolveSessionIdentity(session).source === 'system') ? <details className="mt-3" open={inboxItems.some((session) => session.key === activeConversationId && resolveSessionIdentity(session).source === 'system')}>
-                <summary className="cursor-pointer px-2 py-2 text-xs text-fg-muted">{language === 'zh' ? '系统活动' : 'System activity'}</summary>
+                <summary className="cursor-pointer px-2 py-2 text-[0.8125rem] font-medium text-fg-muted">{language === 'zh' ? '系统活动' : 'System activity'}</summary>
               <SidebarInboxSection
                 sessions={inboxItems.filter((session) => resolveSessionIdentity(session).source === 'system')}
                 hasMore={false}
@@ -2006,7 +2006,7 @@ function SidebarTaskListContent({
             </div>
           ) : (
             <div className="px-4 pb-2">
-              <p className="rounded-xl bg-surface-panel p-3 text-xs leading-relaxed text-fg-muted">
+              <p className="rounded-xl bg-surface-panel p-3 text-[0.8125rem] leading-relaxed text-fg-muted">
                 {sb.taskListEmpty}
               </p>
             </div>
@@ -2015,7 +2015,7 @@ function SidebarTaskListContent({
           {loadingMore ? <SidebarSessionSkeletonRow /> : hasMorePages ? (
             <button
               type="button"
-              className="mx-4 rounded-lg px-2 py-1.5 text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="mx-4 rounded-lg px-2 py-1.5 text-[0.8125rem] text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               data-sidebar-load-more=""
               onClick={() => setViewPageCount('projects', (data?.length ?? 0) + 1)}
             >

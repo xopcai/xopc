@@ -110,7 +110,7 @@ export function SidebarNav({
                   to="/chat/new"
                   state={{ forceNewChat: true }}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium leading-6 transition-colors duration-200 ease-out md:py-1.5',
+                    'flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[0.9375rem] font-medium leading-6 transition-colors duration-200 ease-out md:py-1.5',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
                     'text-fg-muted hover:bg-surface-hover hover:text-fg',
                   )}

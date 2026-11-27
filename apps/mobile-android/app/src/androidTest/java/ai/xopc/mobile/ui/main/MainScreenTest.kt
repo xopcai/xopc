@@ -3242,7 +3242,7 @@ class MainScreenTest {
       val header = composeTestRule.onNodeWithTag("chat-floating-header").fetchSemanticsNode().boundsInRoot
       val mask = composeTestRule.onNodeWithTag("chat-status-bar-background").fetchSemanticsNode().boundsInRoot
       val retry = composeTestRule.onNodeWithTag("assistant-status-retry").fetchSemanticsNode().boundsInRoot
-      assertTrue("Only the status bar has a full-width background", mask.bottom <= header.top)
+      assertTrue("The status bar sits above the header controls", mask.bottom <= header.top)
       assertTrue("The connection banner starts below the title controls", retry.top >= header.bottom)
     }
     checkHeader()

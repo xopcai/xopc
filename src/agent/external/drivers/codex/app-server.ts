@@ -13,6 +13,16 @@ const log = createLogger('CodexAppServer');
 
 export type CodexRecord = Record<string, unknown>;
 
+/** Explicit JSON-RPC error returned by Codex App Server (request was rejected, not lost in transit). */
+export class CodexRpcError extends Error {
+  readonly code?: number;
+  constructor(message: string, code?: number) {
+    super(message);
+    this.name = 'CodexRpcError';
+    this.code = code;
+  }
+}
+
 export type CodexAppServerOptions = {
   binaryPath?: string;
   homePath?: string;
@@ -209,7 +219,8 @@ export class CodexAppServer {
       if (!request) return;
       const error = record(frame.error);
       if (error) {
-        request.reject(new Error(String(error.message ?? 'Codex request failed.').slice(0, 1_000)));
+        const code = typeof error.code === 'number' ? error.code : undefined;
+        request.reject(new CodexRpcError(String(error.message ?? 'Codex request failed.').slice(0, 1_000), code));
       } else {
         request.resolve(frame.result);
       }

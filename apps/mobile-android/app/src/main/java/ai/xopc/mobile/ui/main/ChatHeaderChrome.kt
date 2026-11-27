@@ -28,7 +28,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -257,129 +256,135 @@ internal fun ChatHeaderIdentityPill(
 ) {
   Surface(
     onClick = onClick,
-    shape = themedCorners(14),
-    color = Color.Transparent,
+    shape = themedCorners(18),
+    color = LocalChatColors.current.card,
     modifier = modifier
       .fillMaxWidth()
       .defaultMinSize(minHeight = 44.dp)
       .semantics { contentDescription = identity.accessibilitySummary }
       .testTag("chat-header-identity"),
   ) {
-    Column(
+    Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 6.dp, vertical = 4.dp),
-      horizontalAlignment = Alignment.Start,
-      verticalArrangement = Arrangement.Center,
+        .padding(horizontal = 12.dp, vertical = 6.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-      ) {
-        if (identity.showsAvatarInPrimary) {
-          AgentAvatar(
-            avatar = agentAvatar,
-            reference = agentAvatarRef,
-            agentId = agentId,
-            extent = 18.dp,
-            active = false,
-            fallbackName = identity.primaryText,
-          )
-        }
-        Text(
-          text = identity.primaryText,
-          style = MaterialTheme.typography.titleMedium,
-          fontWeight = FontWeight.SemiBold,
-          color = MaterialTheme.colorScheme.onSurface,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-          modifier = Modifier.weight(1f, fill = false),
-        )
-        if (identity.primaryRuntimeBadge != null) {
-          Surface(shape = themedCorners(999), color = MaterialTheme.colorScheme.surfaceVariant) {
-            Text(
-              text = identity.primaryRuntimeBadge,
-              fontSize = 10.sp,
-              fontWeight = FontWeight.Medium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              maxLines = 1,
-              modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-            )
-          }
-        }
-        Icon(
-          painter = painterResource(R.drawable.action_chevron_down),
-          contentDescription = null,
-          tint = MaterialTheme.colorScheme.onSurfaceVariant,
-          modifier = Modifier.size(12.dp),
+      if (identity.showsAvatarInPrimary) {
+        AgentAvatar(
+          avatar = agentAvatar,
+          reference = agentAvatarRef,
+          agentId = agentId,
+          extent = 24.dp,
+          active = false,
+          fallbackName = identity.primaryText,
         )
       }
-      if (identity.hasSecondaryRow) {
+      Column(
+        modifier = Modifier.weight(1f),
+        horizontalAlignment = Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+      ) {
         Row(
           modifier = Modifier.fillMaxWidth(),
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(4.dp),
+          horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-          if (identity.secondaryAgentName != null) {
-            AgentAvatar(
-              avatar = agentAvatar,
-              reference = agentAvatarRef,
-              agentId = agentId,
-              extent = 14.dp,
-              active = false,
-              fallbackName = identity.secondaryAgentName,
-            )
-            Text(
-              text = identity.secondaryAgentName,
-              style = MaterialTheme.typography.labelSmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-              modifier = Modifier.widthIn(max = 120.dp),
-            )
-            if (identity.secondaryRuntimeBadge != null) {
-              Surface(shape = themedCorners(999), color = MaterialTheme.colorScheme.surfaceVariant) {
+          Text(
+            text = identity.primaryText,
+            style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+          )
+          if (identity.primaryRuntimeBadge != null) {
+            Surface(shape = themedCorners(999), color = MaterialTheme.colorScheme.surfaceVariant) {
+              Text(
+                text = identity.primaryRuntimeBadge,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+              )
+            }
+          }
+        }
+        if (identity.hasSecondaryRow) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+          ) {
+            if (identity.secondaryAgentName != null) {
+              AgentAvatar(
+                avatar = agentAvatar,
+                reference = agentAvatarRef,
+                agentId = agentId,
+                extent = 14.dp,
+                active = false,
+                fallbackName = identity.secondaryAgentName,
+              )
+              Text(
+                text = identity.secondaryAgentName,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 120.dp),
+              )
+              if (identity.secondaryRuntimeBadge != null) {
+                Surface(shape = themedCorners(999), color = MaterialTheme.colorScheme.surfaceVariant) {
+                  Text(
+                    text = identity.secondaryRuntimeBadge,
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                  )
+                }
+              }
+              if (!identity.modelName.isNullOrBlank()) {
                 Text(
-                  text = identity.secondaryRuntimeBadge,
-                  fontSize = 9.5.sp,
-                  fontWeight = FontWeight.Medium,
+                  text = "·",
+                  style = MaterialTheme.typography.labelSmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                   maxLines = 1,
-                  modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
                 )
               }
             }
             if (!identity.modelName.isNullOrBlank()) {
               Text(
-                text = "·",
+                text = identity.modelName,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+              )
+            }
+            if (!identity.modelSuffix.isNullOrBlank()) {
+              Text(
+                text = identity.modelSuffix,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false,
               )
             }
           }
-          if (!identity.modelName.isNullOrBlank()) {
-            Text(
-              text = identity.modelName,
-              style = MaterialTheme.typography.labelSmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-              modifier = Modifier.weight(1f, fill = false),
-            )
-          }
-          if (!identity.modelSuffix.isNullOrBlank()) {
-            Text(
-              text = identity.modelSuffix,
-              style = MaterialTheme.typography.labelSmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              maxLines = 1,
-              softWrap = false,
-            )
-          }
         }
       }
+      Icon(
+        painter = painterResource(R.drawable.action_chevron_down),
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+        modifier = Modifier.size(12.dp),
+      )
     }
   }
 }
@@ -393,15 +398,15 @@ internal fun ChatContextStripBar(
   val attentionColors = LocalAttentionColors.current
   Surface(
     onClick = onClick,
-    shape = themedCorners(14),
+    shape = themedCorners(12),
     color = if (model.needsAttention) attentionColors.fill else LocalChatColors.current.card,
     modifier = modifier
-      .heightIn(min = 34.dp)
+      .heightIn(min = 32.dp)
       .semantics { contentDescription = model.summaryText }
       .testTag("chat-context-bar"),
   ) {
     Row(
-      modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+      modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {

@@ -29,7 +29,7 @@ export function ExtensionSettingsNav({ navLinkClassName, showAdvanced = true }: 
 
   return (
     <div>
-      <p className="px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
+      <p className="px-4 pb-1 pt-2 text-[0.8125rem] font-medium text-fg-muted">
         {m.settingsNavGroups.extensions}
       </p>
       <div className="flex flex-col gap-0.5">

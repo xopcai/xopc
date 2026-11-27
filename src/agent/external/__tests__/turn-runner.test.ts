@@ -27,6 +27,7 @@ import {
 import type { CodexAppServerOptions, CodexRecord } from '../drivers/codex/app-server.js';
 
 const requests = vi.hoisted(() => vi.fn());
+const onRequestOverride = vi.hoisted(() => ({ fn: undefined as ((method: string, params: CodexRecord) => Promise<CodexRecord | undefined> | CodexRecord | undefined) | undefined }));
 const onTurnStartHook = vi.hoisted(() => ({ fn: undefined as ((ctx: {
   emit: (method: string, params: CodexRecord) => void;
   onRequest?: CodexAppServerOptions['onRequest'];
@@ -52,6 +53,10 @@ vi.mock('../drivers/codex/app-server.js', async importOriginal => {
       async close() {}
       async request(method: string, params: CodexRecord) {
         requests(method, params);
+        if (onRequestOverride.fn) {
+          const overridden = await onRequestOverride.fn(method, params);
+          if (overridden !== undefined) return overridden;
+        }
         if (method === 'model/list') return { data: [
           { isDefault: true, model: 'test-codex-model' },
           { model: 'reasoning-required', supportedReasoningEfforts: [{ reasoningEffort: 'low' }, { reasoningEffort: 'max' }] },
@@ -65,7 +70,7 @@ vi.mock('../drivers/codex/app-server.js', async importOriginal => {
             onTurnStartHook.fn({ emit: this.emit, onRequest: this.onRequest, params });
             return { turn: { id: 'native-turn' } };
           }
-          const scope = { threadId: 'native-thread', turnId: 'native-turn' };
+          const scope = { threadId: String(params.threadId || 'native-thread'), turnId: 'native-turn' };
           this.emit('item/agentMessage/delta', { ...scope, turnId: 'previous-turn', itemId: 'previous-reply', delta: 'Old text.' });
           const command = { type: 'commandExecution', id: 'command-1', command: 'pwd', cwd: params.cwd };
           this.emit('item/started', { ...scope, item: command });
@@ -90,6 +95,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   await disposeAllPooledExternalSessions(true);
   requests.mockClear();
+  onRequestOverride.fn = undefined;
   onTurnStartHook.fn = undefined;
   serverReplyLog.replies = [];
   closeXopcDatabase();
@@ -794,4 +800,293 @@ it('uses the agent default workspace (and respects agent/session overrides) for 
   expect(requests).toHaveBeenCalledWith('thread/start', expect.objectContaining({
     cwd: realpathSync(sessionFolder),
   }));
+});
+
+it('retries Codex thread/resume on transient active-writer conflict without forking', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-codex-writer-retry-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'Codex Retry', workspaceRoot: root });
+  const session = createConversation({ agentId: 'codex', projectId: project.id }, root);
+
+  const run = (runId: string) => Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'codex',
+    execution: { kind: 'codex' },
+    runId,
+    content: 'Continue task',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+
+  await run('initial-run');
+  await disposeAllPooledExternalSessions(true);
+  requests.mockClear();
+
+  let resumeAttempts = 0;
+  onRequestOverride.fn = (method) => {
+    if (method === 'thread/resume') {
+      resumeAttempts += 1;
+      if (resumeAttempts === 1) {
+        throw new Error('thread native-thread already has an active writer');
+      }
+    }
+    return undefined;
+  };
+
+  const events = await run('retry-run');
+  expect(resumeAttempts).toBe(2);
+  expect(events.some((e) => e.type === 'error')).toBe(false);
+  expect(requests).not.toHaveBeenCalledWith('thread/fork', expect.anything());
+  expect(readExternalSessionBinding({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    runtimeKind: 'codex',
+    agentId: 'codex',
+    cwd: realpathSync(root),
+  })?.nativeSessionId).toBe('native-thread');
+});
+
+it('falls back to thread/fork and rotates the binding when a Codex thread remains locked by another writer', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-codex-writer-fork-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const project = new ProjectStore().create({ name: 'Codex Fork Fallback', workspaceRoot: root });
+  const session = createConversation({ agentId: 'codex', projectId: project.id }, root);
+
+  const run = (runId: string) => Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'codex',
+    execution: { kind: 'codex' },
+    runId,
+    content: 'Keep working',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+
+  await run('initial-run');
+  await disposeAllPooledExternalSessions(true);
+  requests.mockClear();
+
+  let resumeAttempts = 0;
+  onRequestOverride.fn = (method) => {
+    if (method === 'thread/resume') {
+      resumeAttempts += 1;
+      throw new Error('thread native-thread already has an active writer');
+    }
+    return undefined;
+  };
+
+  const events = await run('fork-fallback-run');
+  expect(resumeAttempts).toBe(4);
+  expect(events.some((e) => e.type === 'error')).toBe(false);
+  expect(requests).toHaveBeenCalledWith('thread/fork', expect.objectContaining({
+    threadId: 'native-thread',
+    ephemeral: false,
+  }));
+  expect(requests).toHaveBeenCalledWith('turn/start', expect.objectContaining({
+    threadId: 'forked-thread-99',
+  }));
+  expect(readExternalSessionBinding({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    runtimeKind: 'codex',
+    agentId: 'codex',
+    cwd: realpathSync(root),
+  })?.nativeSessionId).toBe('forked-thread-99');
+});
+
+it('rejects compact and rollback while a Codex turn is actively running', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-codex-active-ctl-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  initializeTestAgentCatalog({
+    defaults: {
+      models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
+      skills: { mode: 'all-enabled', exclude: [] },
+      tools: {},
+      runtime: {},
+    },
+    agents: [
+      { id: 'main', enabled: true, profile: { name: 'Main' } },
+      { id: 'codex-busy', enabled: true, execution: { kind: 'codex' }, profile: { name: 'Codex Busy' } },
+    ],
+  });
+  const project = new ProjectStore().create({ name: 'Codex Busy', workspaceRoot: root });
+  const session = createConversation({ agentId: 'codex-busy', projectId: project.id }, root);
+
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'codex-busy',
+    execution: { kind: 'codex' },
+    runId: 'seed-run',
+    content: 'Seed thread',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+
+  let finishTurn: (() => void) | undefined;
+  onTurnStartHook.fn = ({ emit }) => {
+    const scope = { threadId: 'native-thread', turnId: 'native-turn' };
+    queueMicrotask(() => {
+      emit('item/agentMessage/delta', { ...scope, itemId: 'msg-1', delta: 'Working...' });
+    });
+    finishTurn = () => {
+      emit('item/completed', { ...scope, item: { id: 'msg-1', type: 'agentMessage', text: 'Working...' } });
+      emit('turn/completed', { ...scope, turn: { id: 'native-turn', status: 'completed' } });
+    };
+  };
+
+  let checked = false;
+  for await (const event of runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'codex-busy',
+    execution: { kind: 'codex' },
+    runId: 'busy-run',
+    content: 'Long task',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  })) {
+    if (!checked && event.type === 'message_update') {
+      checked = true;
+      await expect(compactExternalSession(session.key)).rejects.toThrow('Cannot compact while Codex is running');
+      await expect(rollbackExternalSession(session.key, 1)).rejects.toThrow('Cannot roll back while Codex is running');
+      finishTurn?.();
+    }
+  }
+  expect(checked).toBe(true);
+});
+
+it('surfaces an actionable error when both thread/resume and thread/fork fail on active writer lock, and retries compact', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-codex-writer-error-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  initializeTestAgentCatalog({
+    defaults: {
+      models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
+      skills: { mode: 'all-enabled', exclude: [] },
+      tools: {},
+      runtime: {},
+    },
+    agents: [
+      { id: 'main', enabled: true, profile: { name: 'Main' } },
+      { id: 'codex-err', enabled: true, execution: { kind: 'codex' }, profile: { name: 'Codex Err' } },
+    ],
+  });
+  const project = new ProjectStore().create({ name: 'Codex Err', workspaceRoot: root });
+  const session = createConversation({ agentId: 'codex-err', projectId: project.id }, root);
+
+  const run = (runId: string) => Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'codex-err',
+    execution: { kind: 'codex' },
+    runId,
+    content: 'Hello',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+
+  await run('seed');
+  await disposeAllPooledExternalSessions(true);
+  requests.mockClear();
+
+  onRequestOverride.fn = (method) => {
+    if (method === 'thread/resume') {
+      throw new Error('thread native-thread already has an active writer');
+    }
+    if (method === 'thread/fork') {
+      throw new Error('rollout unavailable');
+    }
+    return undefined;
+  };
+
+  const events = await run('locked-run');
+  const errorEvent = events.find((e) => e.type === 'error') as { content?: string } | undefined;
+  expect(errorEvent?.content).toContain('Codex thread native-thread already has an active writer in another process');
+
+  let compactAttempts = 0;
+  onRequestOverride.fn = (method) => {
+    if (method === 'thread/resume') {
+      compactAttempts += 1;
+      if (compactAttempts === 1) {
+        throw new Error('thread native-thread already has an active writer');
+      }
+    }
+    return undefined;
+  };
+  const compacted = await compactExternalSession(session.key);
+  expect(compacted.compacted).toBe(true);
+  expect(compactAttempts).toBe(2);
+});
+
+it('skips native thread/rollback when a failed Codex turn never started, and tags pre-rollback errors as not applied', async () => {
+  const { isExternalRollbackNotAppliedError } = await import('../index.js');
+  const { CodexRpcError } = await import('../drivers/codex/app-server.js');
+  root = mkdtempSync(join(tmpdir(), 'xopc-codex-rollback-safe-'));
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  initializeTestAgentCatalog({
+    defaults: {
+      models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
+      skills: { mode: 'all-enabled', exclude: [] },
+      tools: {},
+      runtime: {},
+    },
+    agents: [
+      { id: 'main', enabled: true, profile: { name: 'Main' } },
+      { id: 'codex-rb', enabled: true, execution: { kind: 'codex' }, profile: { name: 'Codex Rollback' } },
+    ],
+  });
+  const project = new ProjectStore().create({ name: 'Codex Rollback', workspaceRoot: root });
+  const session = createConversation({ agentId: 'codex-rb', projectId: project.id }, root);
+
+  const run = (runId: string) => Array.fromAsync(runExternalProjectTurn({
+    conversationId: session.key,
+    transcriptId: session.transcriptId!,
+    agentId: 'codex-rb',
+    execution: { kind: 'codex' },
+    runId,
+    content: `Turn ${runId}`,
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+
+  // 1. Seed a completed turn so the binding exists.
+  await run('turn-1');
+  await disposeAllPooledExternalSessions(true);
+  requests.mockClear();
+
+  // 2. Second turn fails during turn/start (Codex never created a native turn for turn-2).
+  onRequestOverride.fn = (method) => {
+    if (method === 'turn/start') throw new CodexRpcError('turn rejected', -32600);
+    return undefined;
+  };
+  const failedEvents = await run('turn-2');
+  expect(failedEvents.some((e) => e.type === 'error')).toBe(true);
+
+  requests.mockClear();
+  onRequestOverride.fn = undefined;
+  expect(await rollbackExternalSession(session.key, 1, {
+    expectedTranscriptId: session.transcriptId!,
+    targetTurnId: 'turn-2',
+  })).toBe(true);
+  expect(requests).not.toHaveBeenCalledWith('thread/rollback', expect.anything());
+
+  // 3. Explicit Codex JSON-RPC rejection on thread/rollback is marked as rollbackApplied === false.
+  await run('turn-3');
+  requests.mockClear();
+  onRequestOverride.fn = (method) => {
+    if (method === 'thread/rollback') throw new CodexRpcError('no turns to roll back', -32600);
+    return undefined;
+  };
+  let caught: unknown;
+  try {
+    await rollbackExternalSession(session.key, 1, {
+      expectedTranscriptId: session.transcriptId!,
+      targetTurnId: 'turn-3',
+    });
+  } catch (err) {
+    caught = err;
+  }
+  expect(isExternalRollbackNotAppliedError(caught)).toBe(true);
 });

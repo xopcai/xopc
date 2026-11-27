@@ -211,9 +211,14 @@ describe('chat bottom region composition', () => {
     expect(actions).not.toContain(".id('chat-header-actions')");
     expect(actions).not.toContain(".id('chat-header-switch-session')");
     expect(actions).toContain('if (this.personalConversation)');
-    expect(header).toContain("this.sessionChat ? 'session-chat-header-title' : 'chat-header-identity'");
-    expect(header).toContain('.alignItems(HorizontalAlign.Start)');
-    expect(header).toContain('.backgroundColor(Color.Transparent)');
+    const identityPill = header.slice(header.indexOf('  chatIdentityPill('), header.indexOf('  chatContextStripBar('));
+    const conversationHeader = header.slice(header.indexOf('  conversationHeader()'), header.indexOf('  chatNetworkNotice()'));
+    expect(identityPill).toContain("this.sessionChat ? 'session-chat-header-title' : 'chat-header-identity'");
+    expect(identityPill).toContain('.alignItems(HorizontalAlign.Start)');
+    expect(identityPill).toContain('.backgroundColor(this.colors.chat.card)');
+    expect(identityPill).not.toContain('.backgroundColor(Color.Transparent)');
+    expect(conversationHeader).toContain('.backgroundColor(this.colors.chat.canvas)');
+    expect(conversationHeader).not.toContain('.backgroundColor(Color.Transparent)');
     expect(header).toContain('if (identity.showsAvatarInPrimary)');
     expect(header).toContain('if (identity.secondaryAgentName)');
     expect(header).toContain("this.openSheet('actions')");

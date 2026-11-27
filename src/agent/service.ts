@@ -1,5 +1,6 @@
 import { configureTracing, flushTracing } from '../observability/runtime.js';
 import { drainEmbeddedSessionRunnerShutdowns } from './embedded/session-runner.js';
+import { abortAllExternalTurns } from './external/turn-runner.js';
 import { resolveAgentIdFromConversationId } from '../routing/agent-session-key.js';
 import type { AgentEvent, AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../gateway/chat-limits.js';
@@ -888,7 +889,10 @@ export class AgentService {
     this.inboundLoop.stop();
     this.agentManager.dispose();
     this.dispose();
-    await drainEmbeddedSessionRunnerShutdowns();
+    await Promise.all([
+      drainEmbeddedSessionRunnerShutdowns(),
+      abortAllExternalTurns(),
+    ]);
 
     this.hookHandler.trigger('gateway_stop', { reason: 'stopped' });
     log.debug('Agent service stopped');

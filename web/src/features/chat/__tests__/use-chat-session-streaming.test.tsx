@@ -353,4 +353,96 @@ describe('useChatSessionStreaming run lookup', () => {
     expect(resume).toHaveBeenCalledWith('same-run', conversationId, expect.any(Object), { replayFromStart: false });
   });
 
+  it('keeps messages and sending flags stable without layout thrash when replace/retry is rejected by the gateway', async () => {
+    const sender = chatRunManager.senderFor(conversationId);
+    const failedOutcome = {
+      version: 1 as const,
+      outcomeId: 'outcome-1',
+      turnId: 'turn-1',
+      runId: 'turn-1',
+      status: 'failed' as const,
+      summary: 'thread abc already has an active writer',
+      deliverables: [],
+      evidence: [],
+      createdAt: '2026-11-27T00:00:00Z',
+    };
+    const initialMessages: Message[] = [
+      { role: 'user', turnId: 'turn-1', content: [{ type: 'text', text: 'Retry me' }] },
+      { role: 'assistant', turnId: 'turn-1', content: [], outcome: failedOutcome },
+    ];
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...defaultSessionMeta(),
+      historyStatus: 'ready',
+      hasMore: false,
+      messages: initialMessages,
+      streamingMsg: null,
+      progress: null,
+      taskPlan: null,
+      sending: false,
+      streaming: false,
+    });
+
+    const beforeMessages = getChatSessionSnapshot(conversationId)!.messages;
+    const observedDuringSend: Array<{ sending: boolean; msgCount: number; hasStreaming: boolean }> = [];
+    vi.spyOn(sender, 'send').mockImplementation(async () => {
+      const snap = getChatSessionSnapshot(conversationId)!;
+      observedDuringSend.push({
+        sending: snap.sending,
+        msgCount: snap.messages.length,
+        hasStreaming: snap.streamingMsg !== null,
+      });
+      throw new Error('External rollback is incomplete. Resolve the workspace conflict or reset the session.');
+    });
+
+    await act(async () => {
+      await streaming.replaceLatestUserTurn('turn-1', 'Retry me');
+    });
+
+    expect(observedDuringSend).toEqual([{ sending: false, msgCount: 2, hasStreaming: false }]);
+    const after = getChatSessionSnapshot(conversationId)!;
+    expect(after.messages).toEqual(beforeMessages);
+    expect(after.streamingMsg).toBeNull();
+    expect(after.sending).toBe(false);
+    expect(useChatSessionStore.getState().shellError).toContain('External rollback is incomplete');
+    expect(sessionManager.loadSession).not.toHaveBeenCalled();
+  });
+
+  it('replaces the round cleanly only after the gateway accepts a replace/retry request', async () => {
+    const sender = chatRunManager.senderFor(conversationId);
+    const initialMessages: Message[] = [
+      { role: 'user', turnId: 'turn-1', content: [{ type: 'text', text: 'Retry me' }] },
+      { role: 'assistant', turnId: 'turn-1', content: [{ type: 'text', text: 'Old reply' }] },
+    ];
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...defaultSessionMeta(),
+      historyStatus: 'ready',
+      hasMore: false,
+      messages: initialMessages,
+      streamingMsg: null,
+      progress: null,
+      taskPlan: null,
+      sending: false,
+      streaming: false,
+    });
+
+    let beforeAcceptSnap: ReturnType<typeof getChatSessionSnapshot>;
+    let afterAcceptSnap: ReturnType<typeof getChatSessionSnapshot>;
+    vi.spyOn(sender, 'send').mockImplementation(async (_c, _id, _att, _t, callbacks) => {
+      beforeAcceptSnap = getChatSessionSnapshot(conversationId);
+      callbacks?.onInputAccepted?.();
+      afterAcceptSnap = getChatSessionSnapshot(conversationId);
+    });
+
+    await act(async () => {
+      await streaming.replaceLatestUserTurn('turn-1', 'Edited prompt');
+    });
+
+    expect(beforeAcceptSnap!.messages).toHaveLength(2);
+    expect(beforeAcceptSnap!.sending).toBe(false);
+    expect(afterAcceptSnap!.messages).toHaveLength(1);
+    expect(afterAcceptSnap!.messages[0]?.content).toEqual([{ type: 'text', text: 'Edited prompt' }]);
+    expect(afterAcceptSnap!.streamingMsg?.pendingResponseStatus).toBe('waiting');
+    expect(afterAcceptSnap!.sending).toBe(true);
+  });
+
 });

@@ -89,8 +89,10 @@ export {
 } from './checkpoint.js';
 export {
   compactExternalSession,
+  ExternalRollbackNotAppliedError,
   forkExternalSession,
   getSessionTurnCheckpointDiff,
+  isExternalRollbackNotAppliedError,
   restoreSessionTurnCheckpoint,
   rollbackExternalSession,
 } from './control.js';
@@ -135,6 +137,7 @@ export {
   checkoutPooledExternalSession,
   disposeAllPooledExternalSessions,
   disposePooledExternalSession,
+  disposePooledExternalSessionsByNativeId,
   getPooledExternalSessionCount,
 } from './session-pool.js';
 export {

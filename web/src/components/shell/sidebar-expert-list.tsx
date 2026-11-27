@@ -192,7 +192,7 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
           onNavigate,
         )}
       />
-      {experts.length === 0 ? <p className="px-2 py-3 text-xs text-fg-muted">{sidebar.expertsEmpty}</p> : null}
+      {experts.length === 0 ? <p className="px-2 py-3 text-[0.8125rem] text-fg-muted">{sidebar.expertsEmpty}</p> : null}
       <ul className="space-y-0.5" aria-label={sidebar.sessionViewExperts}>
         {experts.map((agent) => {
           const name = agentListDisplayName(agent, agentsSettings);
@@ -233,10 +233,10 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
                   />
                   <span className="sidebar-hover-fade flex min-w-0 flex-1 flex-col">
                     <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="min-w-0 truncate text-sm text-fg">{name}</span>
+                      <span className="min-w-0 truncate text-[0.9375rem] leading-[1.375rem] text-fg">{name}</span>
                       {agent.execution ? <ExternalRuntimePill kind={agent.execution} variant="short" /> : null}
                     </span>
-                    {description ? <span className="truncate text-xs text-fg-muted" title={description}>{description}</span> : null}
+                    {description ? <span className="truncate text-[0.8125rem] leading-4 text-fg-muted" title={description}>{description}</span> : null}
                   </span>
                   {replying ? (
                     <span
@@ -283,7 +283,7 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
                   </button>
                 </div>
               </div>
-              {failedId === agent.id ? <p role="alert" className="px-2 py-1 text-xs text-fg-muted">{sidebar.expertConversationError}</p> : null}
+              {failedId === agent.id ? <p role="alert" className="px-2 py-1 text-[0.8125rem] text-fg-muted">{sidebar.expertConversationError}</p> : null}
             </li>
           );
         })}

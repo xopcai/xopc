@@ -35,7 +35,7 @@ import { clampSettingsRailWidthPx, useSettingsRailStore } from '@/stores/setting
 /** Keep the settings rail rhythm aligned with the main app sidebar. */
 function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
   return cn(
-    'touch-target flex w-full shrink-0 items-center gap-2.5 rounded-xl px-4 py-2 text-sm font-medium leading-6 transition-colors duration-200 ease-out',
+    'touch-target flex w-full shrink-0 items-center gap-2.5 rounded-xl px-4 py-2 text-[0.9375rem] font-medium leading-6 transition-colors duration-200 ease-out',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
     isActive
       ? 'bg-surface-active text-fg [&_svg]:text-accent-fg'
@@ -45,7 +45,7 @@ function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
 
 /** Compact control — hover only on the pill, not full rail width. */
 const backLinkClass = cn(
-  'touch-target inline-flex max-w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-200 ease-out',
+  'touch-target inline-flex max-w-full items-center gap-2 rounded-xl px-3 py-2 text-[0.9375rem] font-medium transition-colors duration-200 ease-out',
   'text-fg-muted hover:bg-surface-hover hover:text-fg',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
   'sm:px-4',
@@ -92,7 +92,7 @@ function SettingsNavGroupBlock({
     <div>
       <p
         className={cn(
-          'px-4 pb-1 pt-2 text-xs font-medium text-fg-muted',
+          'px-4 pb-1 pt-2 text-[0.8125rem] font-medium text-fg-muted',
           groupIndex === 0 && 'pt-0',
         )}
       >

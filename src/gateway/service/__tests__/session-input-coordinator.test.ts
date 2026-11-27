@@ -520,6 +520,14 @@ describe('SessionInputCoordinator', () => {
       expect(execute).not.toHaveBeenCalled();
       expect(getExternalTurnReplacement(conversationId)?.state).toBe('rolling_back');
       expect(loadTranscriptRowsForSession(conversationId)).toHaveLength(1);
+      const retry = await coordinator.replaceLatestTurn({
+        conversationId, targetTurnId: 'original', clientMessageId: 'edit', delivery: 'next', content: 'New request', origin,
+      }, async () => {});
+      expect(retry).toEqual({
+        ok: false,
+        code: 'ROLLBACK_FAILED',
+        message: 'External rollback could not be confirmed. Reset the session before continuing.',
+      });
     } else {
       await coordinator.waitForCompletion(conversationId, 'edit');
       expect(execute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ content: 'New request' }));

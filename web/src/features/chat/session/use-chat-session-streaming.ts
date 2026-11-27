@@ -397,73 +397,96 @@ export function useChatSessionStreaming(deps: {
       chatRunManager.setUserAborted(chatId, false);
       sendingRef.current = true;
       streamingRef.current = false;
-      clearShellError();
-      fq.dismissClarify();
 
-      const baseMessages = replaceIndex >= 0
-        ? currentMessages.slice(0, replaceIndex)
-        : currentMessages;
       const userTurnDocument = parseUserTurnDocument(content) ?? undefined;
       const contextTitles = new Map(contextRefs?.flatMap(ref => ref.refId ? [[ref.refId, ref.title] as const] : []) ?? []);
       const displayContent = userTurnDocument
         ? renderUserTurnDocument(userTurnDocument, refId => contextTitles.get(refId))
         : content;
-      const nextMessages = [
-        ...baseMessages,
-        {
-          role: 'user',
-          content: displayContent ? [{ type: 'text', text: displayContent }] : [],
-          userTurnDocument,
-          deliveryStatus: 'sending',
-          clientSubmissionId,
-          pendingAppContext: appContext === undefined ? undefined : structuredClone(appContext),
-          attachments,
-          contextRefs: contextRefs?.map((ref) => ({
-            refId: ref.refId,
-            kind: ref.kind,
-            sourceId: ref.sourceId,
-            version: ref.expectedVersion,
-            title: ref.title,
-            fileKind: ref.fileKind,
-          })),
-          timestamp: Date.now(),
-        },
-      ] as Message[];
+      const buildNextMessages = (deliveryStatus: 'sending' | 'accepted') => {
+        const latestStored = getSessionMessages(chatId);
+        const filtered = replaceClientSubmissionId
+          ? latestStored.filter((message) => message.clientSubmissionId !== replaceClientSubmissionId)
+          : latestStored;
+        const latestReplaceIndex = replaceTurnId
+          ? filtered.findIndex((message) => userMessageTurnTarget(message) === replaceTurnId)
+          : -1;
+        const baseMessages = latestReplaceIndex >= 0
+          ? filtered.slice(0, latestReplaceIndex)
+          : filtered;
+        return [
+          ...baseMessages,
+          {
+            role: 'user',
+            content: displayContent ? [{ type: 'text', text: displayContent }] : [],
+            userTurnDocument,
+            deliveryStatus,
+            clientSubmissionId,
+            pendingAppContext: appContext === undefined ? undefined : structuredClone(appContext),
+            attachments,
+            contextRefs: contextRefs?.map((ref) => ({
+              refId: ref.refId,
+              kind: ref.kind,
+              sourceId: ref.sourceId,
+              version: ref.expectedVersion,
+              title: ref.title,
+              fileKind: ref.fileKind,
+            })),
+            timestamp: Date.now(),
+          },
+        ] as Message[];
+      };
 
-      onDispatched?.(clientSubmissionId);
-      const existing = getChatSessionSnapshot(chatId);
-      store().initSessionSnapshot(chatId, {
-        ...(existing ?? {
-          ...defaultSessionMeta(),
-          historyStatus: 'ready',
-          hasMore: false,
-          streamingMsg: null,
+      const applyTurnSnapshot = (
+        deliveryStatus: 'sending' | 'accepted',
+        pendingResponseStatus: 'sending' | 'waiting',
+      ) => {
+        const existing = getChatSessionSnapshot(chatId);
+        store().initSessionSnapshot(chatId, {
+          ...(existing ?? {
+            ...defaultSessionMeta(),
+            historyStatus: 'ready',
+            hasMore: false,
+            streamingMsg: null,
+            progress: null,
+            taskPlan: null,
+            sending: false,
+            streaming: false,
+          }),
+          messages: buildNextMessages(deliveryStatus),
+          hasMore: existing?.hasMore ?? false,
+          streamingMsg: {
+            role: 'assistant',
+            content: [],
+            timestamp: Date.now(),
+            renderKey: pendingRenderKey,
+            pendingResponseStatus,
+          },
           progress: null,
-          taskPlan: null,
-          sending: false,
+          sending: true,
           streaming: false,
-        }),
-        messages: nextMessages,
-        hasMore: existing?.hasMore ?? false,
-        streamingMsg: {
-          role: 'assistant',
-          content: [],
-          timestamp: Date.now(),
-          renderKey: pendingRenderKey,
-          pendingResponseStatus: 'sending',
-        },
-        progress: null,
-        sending: true,
-        streaming: false,
-      });
-      markChatRunRunning(chatId);
+        });
+        markChatRunRunning(chatId);
 
-      if (!existing?.name?.trim() && displayContent.trim()) {
-        const provisional = provisionalTitleFromUserText(displayContent.trim());
-        if (provisional) {
-          store().patchSessionMeta(chatId, { name: provisional });
-          dispatchSessionTitleUpdated(chatId, provisional);
+        if (!existing?.name?.trim() && displayContent.trim()) {
+          const provisional = provisionalTitleFromUserText(displayContent.trim());
+          if (provisional) {
+            store().patchSessionMeta(chatId, { name: provisional });
+            dispatchSessionTitleUpdated(chatId, provisional);
+          }
         }
+      };
+
+      // Defer optimistic message replacement until the gateway confirms the replace/rollback
+      // so a rejected retry or edit does not tear down the failed round, flash a sending state,
+      // and snap back via a full history reload.
+      let snapshotApplied = false;
+      if (!replaceTurnId) {
+        clearShellError();
+        fq.dismissClarify();
+        onDispatched?.(clientSubmissionId);
+        applyTurnSnapshot('sending', 'sending');
+        snapshotApplied = true;
       }
 
       const updateDeliveryStatus = (status: 'accepted' | 'failed') => {
@@ -494,8 +517,16 @@ export function useChatSessionStreaming(deps: {
           });
           sendStreamCallbacks.onInputAccepted = () => {
             inputAccepted = true;
-            updateDeliveryStatus('accepted');
-            if (isCurrentSubmission()) store().setPendingResponseStatus(chatId, 'waiting');
+            if (!snapshotApplied) {
+              clearShellError();
+              fq.dismissClarify();
+              onDispatched?.(clientSubmissionId);
+              applyTurnSnapshot('accepted', 'waiting');
+              snapshotApplied = true;
+            } else {
+              updateDeliveryStatus('accepted');
+              if (isCurrentSubmission()) store().setPendingResponseStatus(chatId, 'waiting');
+            }
             onInputAccepted();
           };
 
@@ -514,27 +545,31 @@ export function useChatSessionStreaming(deps: {
         } catch (err) {
           if (!isCurrentSubmission()) return;
           if ((err as Error).name !== 'AbortError') {
-            store().clearStreamingState(chatId);
-            clearChatRunPresence(chatId);
+            if (snapshotApplied) {
+              store().clearStreamingState(chatId);
+              clearChatRunPresence(chatId);
+            }
             if (shouldApplyStreamUpdate(chatId)) {
               setShellError(err instanceof Error ? err.message : String(err));
             }
-            if (replaceTurnId) void loadSessionById(chatId, 0);
+            if (replaceTurnId && snapshotApplied) void loadSessionById(chatId, 0);
           } else {
-            clearChatRunPresence(chatId);
-            const pending = getChatSessionSnapshot(chatId)?.streamingMsg;
-            if (pending?.renderKey === pendingRenderKey && pending.pendingResponseStatus) {
-              store().clearStreamingState(chatId);
+            if (snapshotApplied) {
+              clearChatRunPresence(chatId);
+              const pending = getChatSessionSnapshot(chatId)?.streamingMsg;
+              if (pending?.renderKey === pendingRenderKey && pending.pendingResponseStatus) {
+                store().clearStreamingState(chatId);
+              }
             }
           }
         } finally {
           if (isCurrentSubmission()) {
-            if (!inputAccepted) updateDeliveryStatus('failed');
+            if (!inputAccepted && snapshotApplied) updateDeliveryStatus('failed');
             if (shouldApplyStreamUpdate(chatId)) {
               sendingRef.current = false;
               streamingRef.current = false;
             }
-            store().setSessionFlags(chatId, { sending: false });
+            if (snapshotApplied) store().setSessionFlags(chatId, { sending: false });
             chatRunManager.releaseIdleSender(chatId);
           }
         }

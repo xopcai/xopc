@@ -97,6 +97,13 @@ export function readExternalSessionBinding(identity: ExternalSessionIdentity): E
   };
 }
 
+export function readExternalSessionLastInputEntryId(transcriptId: string): string | null {
+  const row = getSqliteDatabase()
+    .prepare('SELECT last_input_entry_id AS lastInputEntryId FROM external_agent_session_bindings WHERE transcript_id = ?')
+    .get(transcriptId) as { lastInputEntryId: string | null } | undefined;
+  return row?.lastInputEntryId ?? null;
+}
+
 export function bindExternalSession(
   identity: ExternalSessionIdentity,
   binding: {

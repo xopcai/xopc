@@ -13,8 +13,27 @@ import {
   clearExternalSessionLastInputEntry,
   getExternalConversationAgent,
   readExternalSessionBinding,
+  readExternalSessionLastInputEntryId,
 } from './session-binding.js';
+import { hasActiveExternalTurn } from './turn-runner.js';
 import { ensureExternalSessionWorkspaceCwd } from './workspace.js';
+
+/** Error indicating rollback failed before mutating the native external thread (safe to retry without resetting). */
+export class ExternalRollbackNotAppliedError extends Error {
+  readonly rollbackApplied = false as const;
+
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'ExternalRollbackNotAppliedError';
+  }
+}
+
+export function isExternalRollbackNotAppliedError(error: unknown): boolean {
+  return error instanceof ExternalRollbackNotAppliedError
+    || (typeof error === 'object'
+      && error !== null
+      && (error as { rollbackApplied?: unknown }).rollbackApplied === false);
+}
 
 async function resolveExternalSessionContext(conversationId: string) {
   const agent = getExternalConversationAgent(conversationId);
@@ -68,6 +87,9 @@ export async function compactExternalSession(
       tokensAfter: 0,
       messages: [],
     };
+  }
+  if (hasActiveExternalTurn(conversationId)) {
+    throw new Error(`Cannot compact while ${driver.label} is running in this session.`);
   }
   const result = await driver.compactSession({
     conversationId,
@@ -136,18 +158,41 @@ export async function forkExternalSession(input: {
 export async function rollbackExternalSession(
   conversationId: string,
   numTurns: number,
-  options?: { signal?: AbortSignal; expectedTranscriptId?: string },
+  options?: { signal?: AbortSignal; expectedTranscriptId?: string; targetTurnId?: string },
 ): Promise<boolean> {
   const resolved = await resolveExternalSessionContext(conversationId);
   if (!resolved) return false;
   const { agent, driver, identity, binding } = resolved;
   if (options?.expectedTranscriptId && identity.transcriptId !== options.expectedTranscriptId) {
-    throw new Error('Session transcript changed before rollback.');
+    throw new ExternalRollbackNotAppliedError('Session transcript changed before rollback.');
   }
   if (!driver.rollbackSession) {
-    throw new Error(`${driver.label} sessions do not support rolling back turns.`);
+    throw new ExternalRollbackNotAppliedError(`${driver.label} sessions do not support rolling back turns.`);
   }
   if (binding) {
+    const targetTurnId = options?.targetTurnId?.trim();
+    if (targetTurnId) {
+      const lastAttemptRunId = typeof binding.metadata?.lastAttemptRunId === 'string'
+        ? binding.metadata.lastAttemptRunId
+        : undefined;
+      const lastStartedRunId = typeof binding.metadata?.lastStartedRunId === 'string'
+        ? binding.metadata.lastStartedRunId
+        : undefined;
+      const expectedEntryId = `${identity.runtimeKind}:${targetTurnId}:user`;
+      const lastInputEntryId = readExternalSessionLastInputEntryId(identity.transcriptId);
+      // If the failed turn never started natively in the external runtime (e.g. failed during
+      // thread/resume or turn/start), do not roll back an earlier completed native turn.
+      if (lastAttemptRunId === targetTurnId && lastStartedRunId !== targetTurnId) {
+        clearExternalSessionLastInputEntry(identity.transcriptId);
+        return true;
+      }
+      if (lastInputEntryId && lastInputEntryId !== expectedEntryId && lastStartedRunId !== targetTurnId) {
+        return true;
+      }
+    }
+    if (hasActiveExternalTurn(conversationId)) {
+      throw new ExternalRollbackNotAppliedError(`Cannot roll back while ${driver.label} is running in this session.`);
+    }
     await driver.rollbackSession({
       conversationId,
       execution: agent.execution,

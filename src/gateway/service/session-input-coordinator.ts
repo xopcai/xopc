@@ -53,7 +53,12 @@ import {
   activeExternalTurnReplacements, getExternalTurnReplacement, listActiveExternalTurnReplacementConversations, updateExternalTurnReplacement,
   type ReplaceLatestSessionTurnInput,
 } from '../../storage/sqlite/session-turn-replace-repository.js';
-import { getExternalConversationAgent, restoreSessionTurnCheckpoint, rollbackExternalSession } from '../../agent/external/index.js';
+import {
+  getExternalConversationAgent,
+  isExternalRollbackNotAppliedError,
+  restoreSessionTurnCheckpoint,
+  rollbackExternalSession,
+} from '../../agent/external/index.js';
 import { TaskApplicationService } from '../../tasks/task-application-service.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 
@@ -408,7 +413,13 @@ export class SessionInputCoordinator {
           return { ok: false, code: 'SESSION_BUSY', message: 'External turn replacement is pending recovery.' };
         }
         if (!await this.recoverExternalReplacement(conversationId, pending)) {
-          return { ok: false, code: 'ROLLBACK_FAILED', message: 'External rollback is incomplete. Resolve the workspace conflict or reset the session.' };
+          return {
+            ok: false,
+            code: 'ROLLBACK_FAILED',
+            message: pending.state === 'rolling_back'
+              ? 'External rollback could not be confirmed. Reset the session before continuing.'
+              : 'External rollback is incomplete. Resolve the workspace conflict or reset the session.',
+          };
         }
         if (pending.state !== 'reserved') return { ok: true, effectiveDelivery: 'next' };
       }
@@ -463,7 +474,7 @@ export class SessionInputCoordinator {
         try {
           await restoreSessionTurnCheckpoint(conversationId, targetTurnId, 'before', { optional: true, checkOnly: true });
           updateExternalTurnReplacement(transcriptId, 'rolling_back');
-          if (!await rollbackExternalSession(conversationId, 1, { expectedTranscriptId: transcriptId })) {
+          if (!await rollbackExternalSession(conversationId, 1, { expectedTranscriptId: transcriptId, targetTurnId })) {
             throw new Error('External runtime changed before rollback.');
           }
           updateExternalTurnReplacement(transcriptId, 'native_rolled_back');
@@ -472,9 +483,11 @@ export class SessionInputCoordinator {
         } catch (err) {
           const failure = err instanceof Error ? err.message : String(err);
           const state = getExternalTurnReplacement(conversationId)?.state;
-          if (state === 'reserved') updateExternalTurnReplacement(transcriptId);
-          log.warn({ err, conversationId, targetTurnId, state }, 'External turn replacement rollback failed');
-          const message = state === 'native_rolled_back' || state === 'reserved'
+          const rollbackNotApplied = state === 'reserved'
+            || (state === 'rolling_back' && isExternalRollbackNotAppliedError(err));
+          if (rollbackNotApplied) updateExternalTurnReplacement(transcriptId);
+          log.warn({ err, conversationId, targetTurnId, state, rollbackNotApplied }, 'External turn replacement rollback failed');
+          const message = rollbackNotApplied || state === 'native_rolled_back'
             ? failure : 'External rollback could not be confirmed. Reset the session before continuing.';
           return { ok: false, code: 'ROLLBACK_FAILED', message };
         } finally {
