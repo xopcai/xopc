@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -48,10 +49,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-internal val FLOATING_TAB_BAR_HEIGHT: Dp = 60.dp
-internal val FLOATING_TAB_BAR_COMPOSER_GAP: Dp = 10.dp
-internal val FLOATING_TAB_BAR_BOTTOM_MARGIN: Dp = 8.dp
+internal val FLOATING_TAB_BAR_HEIGHT: Dp = 54.dp
+internal val FLOATING_TAB_BAR_COMPOSER_GAP: Dp = 8.dp
+internal val FLOATING_TAB_BAR_BOTTOM_MARGIN: Dp = 6.dp
 internal val FLOATING_TAB_BAR_TOTAL_INSET: Dp = FLOATING_TAB_BAR_HEIGHT + FLOATING_TAB_BAR_BOTTOM_MARGIN + FLOATING_TAB_BAR_COMPOSER_GAP
+
+internal fun floatingPillSurfaceColor(scheme: ColorScheme, isDark: Boolean): Color =
+  if (isDark) scheme.surfaceContainer.copy(alpha = 0.94f) else scheme.surface.copy(alpha = 0.95f)
+
+internal fun floatingPillBorderColor(scheme: ColorScheme, isDark: Boolean): Color =
+  scheme.outlineVariant.copy(alpha = if (isDark) 0.55f else 0.45f)
 
 /**
  * Floating pill bottom navigation bar with 5 core slots (Ada, Conversations, Workbench, Notes, Library).
@@ -84,12 +91,8 @@ internal fun FloatingTabBar(
   val pendingRecordingDescription = stringResource(R.string.notes_pending_recording_indicator)
 
   // Translucent elevated pill surface; falls back cleanly to solid border-framed contrast in dark/light modes.
-  val pillColor = if (isDark) {
-    scheme.surfaceContainer.copy(alpha = 0.94f)
-  } else {
-    scheme.surface.copy(alpha = 0.95f)
-  }
-  val borderColor = scheme.outlineVariant.copy(alpha = if (isDark) 0.55f else 0.45f)
+  val pillColor = floatingPillSurfaceColor(scheme, isDark)
+  val borderColor = floatingPillBorderColor(scheme, isDark)
 
   Box(
     modifier = modifier
@@ -115,7 +118,7 @@ internal fun FloatingTabBar(
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 4.dp, vertical = 5.dp),
+          .padding(horizontal = 4.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
@@ -144,7 +147,7 @@ internal fun FloatingTabBar(
           PersonalAgentAvatar(
             avatar = personalAvatar,
             appearance = personalAppearance,
-            extent = 21.dp,
+            extent = 19.dp,
             active = selected || personalActive,
           )
         }
@@ -172,7 +175,7 @@ internal fun FloatingTabBar(
             painter = painterResource(R.drawable.tab_conversations),
             contentDescription = null,
             tint = if (selected) scheme.primary else scheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(18.dp),
           )
         }
 
@@ -199,7 +202,7 @@ internal fun FloatingTabBar(
             painter = painterResource(R.drawable.tab_progress),
             contentDescription = null,
             tint = if (selected) scheme.primary else scheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(18.dp),
           )
         }
 
@@ -226,7 +229,7 @@ internal fun FloatingTabBar(
             painter = painterResource(R.drawable.tab_notes),
             contentDescription = null,
             tint = if (selected) scheme.primary else scheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(18.dp),
           )
         }
 
@@ -253,7 +256,7 @@ internal fun FloatingTabBar(
             painter = painterResource(R.drawable.action_folder),
             contentDescription = null,
             tint = if (selected) scheme.primary else scheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(18.dp),
           )
         }
       }
@@ -286,7 +289,7 @@ private fun FloatingTabSlot(
 
   Box(
     modifier = modifier
-      .heightIn(min = 48.dp)
+      .heightIn(min = 44.dp)
       .clip(CircleShape)
       .background(capsuleColor)
       .clickable(
@@ -306,11 +309,11 @@ private fun FloatingTabSlot(
   ) {
     Column(
       horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.spacedBy(2.dp),
-      modifier = Modifier.padding(horizontal = 2.dp, vertical = 4.dp),
+      verticalArrangement = Arrangement.spacedBy(1.dp),
+      modifier = Modifier.padding(horizontal = 2.dp, vertical = 3.dp),
     ) {
       Box(contentAlignment = Alignment.TopEnd) {
-        Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
           icon(isSelected)
         }
         if (badgeCount > 0) {

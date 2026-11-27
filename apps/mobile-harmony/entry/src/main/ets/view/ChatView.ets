@@ -2017,12 +2017,14 @@ export struct XopcChatView {
         }.width('100%').padding({ left: 8, right: 8, bottom: 8 })
       }
     }.id('chat-composer-shell').width('100%')
-      .backgroundColor(this.panelOpen ? Color.Transparent : this.colors.input).borderRadius(this.colors.corner(28))
+      .backgroundColor(this.panelOpen ? Color.Transparent : this.colors.panel).borderRadius(this.colors.corner(28))
+      .shadow(this.panelOpen ? { radius: 0, color: Color.Transparent } : ShadowStyle.OUTER_DEFAULT_SM)
       .clip(true).margin({ bottom: 6, top: 8 })
     XopcChatActionPanel({ open: this.panelOpen, canSwitchAgent: this.canSwitchAgent, showVoiceCall: this.canSwitchAgent,
       disabledIds: this.disabledActionIds(),
       onSelect: (id: string): void => { this.chooseAction(id); } })
     }.width('calc(100% - 24vp)').backgroundColor(this.panelOpen ? this.colors.panel : Color.Transparent).borderRadius(this.colors.corner(28))
+      .shadow(this.panelOpen ? ShadowStyle.OUTER_DEFAULT_SM : { radius: 0, color: Color.Transparent })
     }
     }.id('chat-bottom-surface').width('100%').backgroundColor(Color.Transparent)
       .borderRadius(this.colors.corner(24)).clip(true)

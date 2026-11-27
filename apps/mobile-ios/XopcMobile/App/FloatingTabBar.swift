@@ -45,7 +45,7 @@ struct FloatingTabBar: View {
                 tabButton(for: tab)
             }
         }
-        .padding(4)
+        .padding(3)
         .background { pillBackground }
         .overlay {
             Capsule()
@@ -59,8 +59,8 @@ struct FloatingTabBar: View {
         )
         .frame(maxWidth: 440)
         .padding(.horizontal, 12)
-        .padding(.top, 4)
-        .padding(.bottom, 6)
+        .padding(.top, 2)
+        .padding(.bottom, 4)
         .frame(maxWidth: .infinity)
         .animation(MobileMotion.animation(MobileMotion.standardDuration, reduceMotion: reduceMotion), value: selectedTab)
         .sensoryFeedback(.selection, trigger: selectedTab)
@@ -93,22 +93,22 @@ struct FloatingTabBar: View {
         return Button {
             onSelect(tab)
         } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: 2) {
                 tabIcon(for: tab, selected: isSelected)
-                    .frame(width: 24, height: 22)
+                    .frame(width: 22, height: 20)
                     .overlay(alignment: .topTrailing) {
                         tabBadge(for: tab)
                             .offset(x: 9, y: -5)
                     }
                 Text(verbatim: title)
-                    .font(.caption2.weight(isSelected ? .semibold : .medium))
+                    .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
             .foregroundStyle(foreground)
             .padding(.horizontal, 3)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, minHeight: 48)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .background {
                 if isSelected {
                     if reduceMotion {
@@ -136,30 +136,30 @@ struct FloatingTabBar: View {
             PersonalAgentAvatar(
                 configuration: configuration,
                 agent: personalAgent,
-                size: 22,
+                size: 20,
                 active: selected,
                 working: personalWorking
             )
             .accessibilityHidden(true)
         case .conversations:
             Image(systemName: selected ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right")
-                .font(.callout.weight(selected ? .semibold : .medium))
+                .font(.subheadline.weight(selected ? .semibold : .medium))
                 .accessibilityHidden(true)
         case .workbench:
             Image(systemName: selected ? "square.grid.2x2.fill" : "square.grid.2x2")
-                .font(.callout.weight(selected ? .semibold : .medium))
+                .font(.subheadline.weight(selected ? .semibold : .medium))
                 .accessibilityHidden(true)
         case .notes:
             Image(systemName: "note.text")
-                .font(.callout.weight(selected ? .semibold : .medium))
+                .font(.subheadline.weight(selected ? .semibold : .medium))
                 .accessibilityHidden(true)
         case .library:
             Image(systemName: selected ? "doc.on.doc.fill" : "doc.on.doc")
-                .font(.callout.weight(selected ? .semibold : .medium))
+                .font(.subheadline.weight(selected ? .semibold : .medium))
                 .accessibilityHidden(true)
         case .pinnedSpace:
             Image(systemName: selected ? "square.stack.fill" : "square.stack")
-                .font(.callout.weight(selected ? .semibold : .medium))
+                .font(.subheadline.weight(selected ? .semibold : .medium))
                 .accessibilityHidden(true)
         }
     }

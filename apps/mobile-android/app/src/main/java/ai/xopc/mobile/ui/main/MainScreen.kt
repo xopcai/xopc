@@ -121,6 +121,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
@@ -3315,9 +3316,17 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
     ComposerPaletteSuggestions(composerValue, composerFocused && !showVoicePad && !actionsOpen,
       connection.profile?.gatewayId, locale, onLoadComposerPalette, onComposerValueChange)
     val personalAgent = connection.personal.agent?.takeIf { it.conversationId == connection.selectedConversationId }
-    Column(modifier = Modifier.fillMaxWidth()
-      .background(if (actionsOpen) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
-        themedCorners(28)).testTag("assistant-composer-shell")) {
+    val composerScheme = MaterialTheme.colorScheme
+    val composerDark = composerScheme.background.luminance() < 0.2f
+    Surface(
+      shape = themedCorners(28),
+      color = if (actionsOpen) Color.Transparent else floatingPillSurfaceColor(composerScheme, composerDark),
+      border = if (actionsOpen) null else BorderStroke(1.dp, floatingPillBorderColor(composerScheme, composerDark)),
+      shadowElevation = if (actionsOpen) 0.dp else if (composerDark) 2.dp else 6.dp,
+      tonalElevation = if (actionsOpen) 0.dp else if (composerDark) 2.dp else 0.dp,
+      modifier = Modifier.fillMaxWidth().testTag("assistant-composer-shell"),
+    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
       Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.Bottom) {
         if (!expandedComposer) {
@@ -3377,6 +3386,7 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
           AssistantComposerButtons(connection, onSendMessage, onStopRun, voiceBusy || voiceHeld)
         }
       }
+    }
     }
   }
 }

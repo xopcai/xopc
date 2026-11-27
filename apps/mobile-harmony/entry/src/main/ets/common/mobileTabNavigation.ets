@@ -7,9 +7,9 @@ export type XopcMobileTab = XopcCoreMobileTab | string;
 export const CORE_MOBILE_TABS: XopcCoreMobileTab[] = ['ada', 'conversations', 'workbench', 'notes', 'library'];
 export const PINNED_SPACE_TAB_PREFIX: string = 'pinnedSpace:';
 
-export const FLOATING_TAB_BAR_HEIGHT_VP: number = 62;
-export const FLOATING_TAB_BAR_MARGIN_BOTTOM_VP: number = 8;
-export const FLOATING_TAB_BAR_COMPOSER_GAP_VP: number = 10;
+export const FLOATING_TAB_BAR_HEIGHT_VP: number = 54;
+export const FLOATING_TAB_BAR_MARGIN_BOTTOM_VP: number = 6;
+export const FLOATING_TAB_BAR_COMPOSER_GAP_VP: number = 4;
 
 export type XopcTabTapResult = 'switched' | 'popped-to-root' | 'scroll-to-top';
 export type XopcBackAction = 'overlay' | 'sidebar' | 'pop' | 'switch-ada' | 'system';

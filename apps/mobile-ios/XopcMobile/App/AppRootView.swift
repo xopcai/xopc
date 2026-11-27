@@ -344,7 +344,7 @@ struct AppRootView: View {
                     composerFocused = focused
                 }
             },
-            bottomComposerSpacing: showBottomTabBar ? 11 : 4,
+            bottomComposerSpacing: showBottomTabBar ? 8 : 4,
             scrollToLatestToken: appState.retapRevision(for: .ada),
             onRunningStateChanged: { personalWorking = $0 },
             onOpenSidebar: { setSidebar(true) },

@@ -51,10 +51,10 @@ export struct XopcFloatingTabBar {
   @Builder
   adaTab() {
     Button({ type: ButtonType.Normal }) {
-      Column({ space: 2 }) {
+      Column({ space: 1 }) {
         Stack({ alignContent: Alignment.TopEnd }) {
           XopcPersonalAgentAvatar({
-            extent: 22,
+            extent: 20,
             compact: true,
             activePage: false,
             agentId: this.personalAgent?.agentId ?? '',
@@ -62,9 +62,9 @@ export struct XopcFloatingTabBar {
             revision: this.personalAgent?.revision ?? 0,
           })
           this.tabBadge(this.personalUnread, false)
-        }.width(28).height(24).alignContent(Alignment.Center)
+        }.width(26).height(21).alignContent(Alignment.Center)
         Text(this.adaLabel())
-          .fontSize(10.5)
+          .fontSize(10)
           .fontWeight(this.selectedTab === 'ada' ? FontWeight.Medium : FontWeight.Normal)
           .fontColor(this.selectedTab === 'ada' ? this.colors.accent : this.colors.secondary)
           .maxLines(1)
@@ -73,10 +73,10 @@ export struct XopcFloatingTabBar {
     }
     .id('floating-tab-ada')
     .layoutWeight(1)
-    .constraintSize({ minWidth: 44, minHeight: 48 })
-    .height(50)
+    .constraintSize({ minWidth: 44, minHeight: 44 })
+    .height(46)
     .padding({ left: 2, right: 2 })
-    .borderRadius(25)
+    .borderRadius(23)
     .backgroundColor(this.selectedTab === 'ada' ? this.colors.accentSoft : Color.Transparent)
     .clickEffect(xopcClickEffect())
     .accessibilitySelected(this.selectedTab === 'ada')
@@ -93,10 +93,10 @@ export struct XopcFloatingTabBar {
     showRecordingDot: boolean = false,
   ) {
     Button({ type: ButtonType.Normal }) {
-      Column({ space: 2 }) {
+      Column({ space: 1 }) {
         Stack({ alignContent: Alignment.TopEnd }) {
           SymbolGlyph(symbol)
-            .fontSize(20)
+            .fontSize(18)
             .fontColor([this.selectedTab === tab ? this.colors.accent : this.colors.secondary])
             .accessibilityLevel('no')
           if (badgeCount > 0) {
@@ -109,9 +109,9 @@ export struct XopcFloatingTabBar {
               .offset({ x: 4, y: -2 })
               .accessibilityLevel('no')
           }
-        }.width(28).height(24).alignContent(Alignment.Center)
+        }.width(26).height(21).alignContent(Alignment.Center)
         Text(label)
-          .fontSize(10.5)
+          .fontSize(10)
           .fontWeight(this.selectedTab === tab ? FontWeight.Medium : FontWeight.Normal)
           .fontColor(this.selectedTab === tab ? this.colors.accent : this.colors.secondary)
           .maxLines(1)
@@ -120,10 +120,10 @@ export struct XopcFloatingTabBar {
     }
     .id('floating-tab-' + tab)
     .layoutWeight(1)
-    .constraintSize({ minWidth: 44, minHeight: 48 })
-    .height(50)
+    .constraintSize({ minWidth: 44, minHeight: 44 })
+    .height(46)
     .padding({ left: 2, right: 2 })
-    .borderRadius(25)
+    .borderRadius(23)
     .backgroundColor(this.selectedTab === tab ? this.colors.accentSoft : Color.Transparent)
     .clickEffect(xopcClickEffect())
     .accessibilitySelected(this.selectedTab === tab)
