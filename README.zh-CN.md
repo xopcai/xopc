@@ -116,7 +116,7 @@ xopc
 
 | 你想做什么 | 指南 |
 | --- | --- |
-| 设置个人助手 | [认识 Ada](https://xopcai.github.io/xopc/zh/personal-ai) |
+| 设置个人智能体 | [认识 Ada](https://xopcai.github.io/xopc/zh/personal-ai) |
 | 交办并修改成果 | [任务交付](https://xopcai.github.io/xopc/zh/task-delegation) |
 | 处理文件与项目 | [工作空间](https://xopcai.github.io/xopc/zh/workspace-guide) |
 | 检查结果与重试 | [任务验收](https://xopcai.github.io/xopc/zh/task-review) |
@@ -151,7 +151,7 @@ xopc
 
 **最快怎么试用？** — [桌面端](#快速开始) 适合 GUI 用户，终端用户执行 `xopc onboard --quick && xopc`。
 
-**它和普通聊天 UI 有什么区别？** — 聊天只是入口。xopc 会把对你的理解、长期目标、项目、Task、决定和执行记录保留下来，让同一个助手可以跨越时间和入口继续工作。
+**它和普通聊天 UI 有什么区别？** — 聊天只是入口。xopc 会把对你的理解、长期目标、项目、Task、决定和执行记录保留下来，让同一个智能体可以跨越时间和入口继续工作。
 
 **能在手机或即时通讯里用吗？** — 可以。用 [移动端 App](https://xopcai.github.io/xopc/zh/mobile-app) 扫码连接，或在 Gateway 中配置[消息通道](https://xopcai.github.io/xopc/zh/channels/)。
 

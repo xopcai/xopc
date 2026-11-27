@@ -103,12 +103,12 @@ describe('AssistantResultTail product deliveries', () => {
 
   it('opens the newly created expert or starts a chat with that expert', async () => {
     const delivery: ProductDeliveryEnvelope = { version: 2, operation: 'created', primary: {
-      kind: 'agent', id: 'weekly-report', title: '周报专家', capabilities: ['open', 'edit'],
+      kind: 'agent', id: 'weekly-report', title: '周报智能体', capabilities: ['open', 'edit'],
     } };
     const render = () => <MemoryRouter initialEntries={['/chat/setup']}>{renderDelivery(delivery)}<LocationProbe /></MemoryRouter>;
     await act(async () => root.render(render()));
     const settings = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes('编辑设置'));
-    expect(settings?.textContent).toContain('周报专家');
+    expect(settings?.textContent).toContain('周报智能体');
     await act(async () => settings!.click());
     expect(container.querySelector('[data-testid="location"]')?.textContent).toContain('/capabilities/agents/weekly-report');
 

@@ -242,7 +242,7 @@ AutoGLM 的 `Type` / `Type_Name` 会替换当前聚焦的非密码字段：重�
 
 ### 鸿蒙 USB 真机
 
-在「设置 → 手机控制 → 添加手机」选择「USB 连接鸿蒙手机」。点击「一键安装缺失组件」，或在对话中请配置助手安装鸿蒙连接组件，**无需安装 DevEco Studio**。之后手机开启开发者模式和 USB 调试，用数据线连接并授权电脑。第一版只接入 `hdc list targets -v` 中的 USB 设备，暂不支持无线 HDC 和鸿蒙云手机。
+在「设置 → 手机控制 → 添加手机」选择「USB 连接鸿蒙手机」。点击「一键安装缺失组件」，或在对话中请配置智能体安装鸿蒙连接组件，**无需安装 DevEco Studio**。之后手机开启开发者模式和 USB 调试，用数据线连接并授权电脑。第一版只接入 `hdc list targets -v` 中的 USB 设备，暂不支持无线 HDC 和鸿蒙云手机。
 
 默认自动查找常见 SDK 目录，也可在连接窗口填写 HDC 可执行文件路径，保存到 `phone.hdcPath`。环境变量 `HARMONYOS_SDK_HOME`、`DEVECO_SDK_HOME` 可指向包含 `openharmony/toolchains/hdc` 或 `toolchains/hdc` 的 SDK 根目录；同时支持自动发现 xopc 托管的 HDC，最后回退到 PATH 中的 HDC。鸿蒙连接不依赖 ADB 和 scrcpy。
 

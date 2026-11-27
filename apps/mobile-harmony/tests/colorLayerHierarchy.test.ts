@@ -15,10 +15,10 @@ function arkUiSources(directory: string): string[] {
 }
 
 describe('color-based visual hierarchy', () => {
-  it('separates application surfaces without decorative borders or dividers', () => {
+  it('separates application surfaces without decorative borders, shadows, or dividers', () => {
     for (const file of arkUiSources(sourceRoot.pathname)) {
       const source = readFileSync(file, 'utf8');
-      expect(source, file).not.toMatch(/\.(?:border|outline)\s*\(/);
+      expect(source, file).not.toMatch(/\.(?:border|outline|shadow)\s*\(/);
       expect(source, file).not.toMatch(/\bDivider\s*\(/);
       expect(source, file).not.toMatch(/\.divider\s*\(/);
     }

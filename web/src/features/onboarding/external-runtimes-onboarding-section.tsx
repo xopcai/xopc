@@ -404,7 +404,7 @@ export function ExternalRuntimesOnboardingSection({
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-medium tracking-[0.02em] text-fg-subtle">
-            {zh ? '本机编程助手' : 'Local coding agents'}
+            {zh ? '本机编程智能体' : 'Local coding agents'}
           </span>
           {selectedKinds.size > 0 ? (
             <span className="rounded-full bg-surface-panel px-2 py-0.5 text-[10px] font-medium text-fg-muted ring-1 ring-edge/80">
@@ -631,7 +631,7 @@ export function ExternalRuntimesOnboardingSection({
                   {hasSelectedProjects && projectDefaultOptions.length > 0 ? (
                     <div className="space-y-1.5">
                       <label htmlFor="onboarding-project-default-runtime" className="block text-[11px] font-medium text-fg-muted">
-                        {zh ? '新创建项目的默认助手' : 'Default agent for new projects'}
+                        {zh ? '新创建项目的默认智能体' : 'Default agent for new projects'}
                       </label>
                       <Select
                         id="onboarding-project-default-runtime"

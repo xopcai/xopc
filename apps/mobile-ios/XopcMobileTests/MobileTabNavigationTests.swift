@@ -319,13 +319,20 @@ extension MobileTabNavigationTests {
             .appendingPathComponent("XopcMobile/App", isDirectory: true)
         let appRoot = try String(contentsOf: root.appendingPathComponent("AppRootView.swift"), encoding: .utf8)
         let tabBar = try String(contentsOf: root.appendingPathComponent("FloatingTabBar.swift"), encoding: .utf8)
+        let composer = try String(
+            contentsOf: root.deletingLastPathComponent().appendingPathComponent("Features/Assistant/AssistantComposer.swift"),
+            encoding: .utf8
+        )
         let sidebar = try String(contentsOf: root.appendingPathComponent("ChatSidebarView.swift"), encoding: .utf8)
         #expect(!appRoot.contains("reopenSidebar"))
         #expect(appRoot.contains("FloatingTabBar("))
         #expect(appRoot.contains("tabStack(for: .conversations)"))
         #expect(appRoot.contains("ShareCenterView("))
         #expect(appRoot.contains("initialCategory: initialCategory"))
-        #expect(tabBar.contains("accessibilityReduceTransparency"))
+        #expect(tabBar.contains(".background(mobileTheme.panel, in: Capsule())"))
+        #expect(composer.contains(".background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(24)))"))
+        #expect(!tabBar.contains(".regularMaterial"))
+        #expect(!composer.contains(".regularMaterial"))
         #expect(tabBar.contains("accessibilityReduceMotion"))
         #expect(tabBar.contains("bubble.left.and.bubble.right"))
         #expect(sidebar.contains("CapabilityCategory.allCases"))

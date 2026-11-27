@@ -5,8 +5,6 @@ struct FloatingTabBar: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.displayScale) private var displayScale
 
     let configuration: GatewayConfiguration
     let selectedTab: MobileTab
@@ -28,17 +26,6 @@ struct FloatingTabBar: View {
         return trimmed.isEmpty ? "Ada" : trimmed
     }
 
-    private var borderWidth: CGFloat {
-        reduceTransparency ? max(1 / max(displayScale, 1), 1) : 0.75
-    }
-
-    private var borderColor: Color {
-        if reduceTransparency {
-            return mobileTheme.secondary.opacity(colorScheme == .dark ? 0.34 : 0.24)
-        }
-        return colorScheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.08)
-    }
-
     var body: some View {
         HStack(spacing: 2) {
             ForEach(MobileTab.coreTabs, id: \.self) { tab in
@@ -46,17 +33,7 @@ struct FloatingTabBar: View {
             }
         }
         .padding(3)
-        .background { pillBackground }
-        .overlay {
-            Capsule()
-                .strokeBorder(borderColor, lineWidth: borderWidth)
-                .allowsHitTesting(false)
-        }
-        .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.32 : 0.10),
-            radius: reduceTransparency ? 4 : 14,
-            y: reduceTransparency ? 2 : 6
-        )
+        .background(mobileTheme.panel, in: Capsule())
         .frame(maxWidth: 440)
         .padding(.horizontal, 12)
         .padding(.top, 2)
@@ -66,18 +43,6 @@ struct FloatingTabBar: View {
         .sensoryFeedback(.selection, trigger: selectedTab)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("mobile-floating-tab-bar")
-    }
-
-    @ViewBuilder
-    private var pillBackground: some View {
-        if reduceTransparency {
-            Capsule().fill(mobileTheme.panel)
-        } else {
-            ZStack {
-                Capsule().fill(.regularMaterial)
-                Capsule().fill(mobileTheme.panel.opacity(colorScheme == .dark ? 0.42 : 0.56))
-            }
-        }
     }
 
     private func tabButton(for tab: MobileTab) -> some View {

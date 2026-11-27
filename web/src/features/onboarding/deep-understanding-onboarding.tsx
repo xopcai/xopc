@@ -1964,7 +1964,7 @@ export function DeepUnderstandingOnboarding({
                     </span>
                     <h2 className="text-[1.5rem] font-semibold tracking-[-0.03em] text-fg">
                       {createdProjects.length === 0
-                        ? (zh ? '编程助手已就绪' : 'Coding agents ready')
+                        ? (zh ? '编程智能体已就绪' : 'Coding agents ready')
                         : allProjectsUnderstood
                           ? (zh ? '项目已就绪' : 'Projects ready')
                           : (createdProjects.length === 1
@@ -1985,7 +1985,7 @@ export function DeepUnderstandingOnboarding({
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-medium text-fg-muted">
-                          {zh ? '已接入助手' : 'Connected'}
+                          {zh ? '已接入智能体' : 'Connected'}
                         </span>
                         {connectedExternalKinds.map((entry) => (
                           <ExternalRuntimePill key={entry.agentId} kind={entry.kind} />
@@ -2194,12 +2194,12 @@ export function DeepUnderstandingOnboarding({
                   <>
                     <span>
                       {selectedFolderPaths.size > 0 && selectedExternalKinds.size > 0
-                        ? (zh ? '创建并接入助手' : 'Create & connect')
+                        ? (zh ? '创建并接入智能体' : 'Create & connect')
                         : selectedFolderPaths.size > 1
                           ? (zh ? `创建 ${selectedFolderPaths.size} 个项目` : `Create ${selectedFolderPaths.size} projects`)
                           : selectedFolderPaths.size === 1
                             ? (zh ? '创建项目' : 'Create project')
-                            : (zh ? `接入 ${selectedExternalKinds.size} 个助手` : `Connect ${selectedExternalKinds.size} agent${selectedExternalKinds.size > 1 ? 's' : ''}`)}
+                            : (zh ? `接入 ${selectedExternalKinds.size} 个智能体` : `Connect ${selectedExternalKinds.size} agent${selectedExternalKinds.size > 1 ? 's' : ''}`)}
                     </span>
                     <ArrowRight className="size-3.5" aria-hidden />
                   </>

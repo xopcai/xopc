@@ -1,6 +1,6 @@
 # Voice input and replies
 
-xopc can turn voice messages into text (speech-to-text, or STT) and assistant replies into audio (text-to-speech, or TTS). Availability depends on the selected provider and client.
+xopc can turn voice messages into text (speech-to-text, or STT) and agent replies into audio (text-to-speech, or TTS). Availability depends on the selected provider and client.
 
 ## Call or dictate
 
@@ -8,7 +8,7 @@ Use **Voice call** to talk with Ada in the current conversation. The Gateway aut
 
 ## Realtime calls
 
-Repeated calls share the same conversation, confirmed user profile, Ada persona, memory permissions and bounded recent context. Everyday speech and tentative expressions stay in a hidden voice stream; they do not appear sentence by sentence in main Chat. Ada can place substantial explanations, settled decisions, useful drafts and explicitly requested content in Chat as natural assistant messages. Actual delegated task results are retained independently of the call connection. There is no required call card or end-of-call summary.
+Repeated calls share the same conversation, confirmed user profile, Ada persona, memory permissions and bounded recent context. Everyday speech and tentative expressions stay in a hidden voice stream; they do not appear sentence by sentence in main Chat. Ada can place substantial explanations, settled decisions, useful drafts and explicitly requested content in Chat as natural agent messages. Actual delegated task results are retained independently of the call connection. There is no required call card or end-of-call summary.
 
 The hidden stream remains in SQLite for context continuity and permitted memory learning. It is not automatically deleted, and normal Chat pagination excludes it. A reset starts a new transcript; late publications cannot cross the reset. Interrupted generated speech is not treated as a reply the user fully heard. Typed Chat updates are synchronized into an active native call as quoted context, without replaying requests as new actions.
 
@@ -16,7 +16,7 @@ Configure voice in **Settings → Capabilities → Voice**. For Higgs, configure
 
 Ada delegates explicit actions to the existing Agent, retaining its tools, permissions and on-screen approval controls. A task runs while conversation continues, and Ada reports the actual result during a quiet gap. Stopping speech and cancelling execution are separate actions. Hanging up does not cancel work: its result remains in Chat, and redialing restores running voice tasks in the same transcript. Cancellation cannot undo already completed effects. Ordinary speech cannot approve a pending permission request.
 
-The call has its own window. Minimize it to keep talking while visiting other pages. **Mute microphone** disables capture upload and discards unfinished input while assistant playback continues; **End call** releases the microphone. Dictation buffers text until **Finish**, applies the configured cleanup, and inserts an editable draft without sending. **Cancel** leaves the original draft untouched, including cancellation during cleanup. Finalized text remains recoverable after a disconnect. An automatic native call can begin while an existing Agent task is running; the fallback Agent engine still requires the execution lane to be available.
+The call has its own window. Minimize it to keep talking while visiting other pages. **Mute microphone** disables capture upload and discards unfinished input while agent playback continues; **End call** releases the microphone. Dictation buffers text until **Finish**, applies the configured cleanup, and inserts an editable draft without sending. **Cancel** leaves the original draft untouched, including cancellation during cleanup. Finalized text remains recoverable after a disconnect. An automatic native call can begin while an existing Agent task is running; the fallback Agent engine still requires the execution lane to be available.
 
 Choose **XOPC hosted** or **Your API key** once under **Settings → Capabilities → Voice**. This configures dictation, Agent speech and natural conversation together, without changing ordinary message readout. Natural voice defaults to the shared input credential; independent endpoints, keys and instructions are optional advanced settings. If setup is missing, the call window links to Voice settings, with a return link to the original Chat. Capability validation precedes microphone permission; it does not prove a live provider connection will succeed.
 
@@ -43,7 +43,7 @@ Open **Settings → Capabilities → Voice** and choose **XOPC hosted** or **You
 
 Choose a conversation voice, then use **Test voice**. The test opens the microphone only after a click, displays a real final transcript, plays a fixed sample through the native streaming speech provider, and asks you to confirm that you heard it. It does not create a chat or call an Agent. **Not tested** means a route is configured, not that a live connection has succeeded. Testing may incur provider usage. When only input is configured, use **Test dictation**.
 
-After testing, open Chat and use the microphone for dictation or the call button for voice conversation. Voice assistant mode also requires a working Agent model. **Read messages aloud** controls ordinary message readout separately. Settings are grouped into **Speaking & listening**, **Input & display**, **Audio devices**, **Voice service**, and **Troubleshooting**. Voice/pacing/language are listening preferences; cleanup and message readout are input/display options; providers and fallback live under service. Captions and microphone selection are saved on this browser; output follows the system device.
+After testing, open Chat and use the microphone for dictation or the call button for voice conversation. Agent voice mode also requires a working Agent model. **Read messages aloud** controls ordinary message readout separately. Settings are grouped into **Speaking & listening**, **Input & display**, **Audio devices**, **Voice service**, and **Troubleshooting**. Voice/pacing/language are listening preferences; cleanup and message readout are input/display options; providers and fallback live under service. Captions and microphone selection are saved on this browser; output follows the system device.
 
 ### Audio attachments and message channels
 

@@ -101,7 +101,7 @@
     "setupBannerLinkModels": "Default model",
     "setupBannerDismiss": "Don't show again",
     "gatewayExitTitle": "Local gateway stopped",
-    "gatewayExitBody": "The assistant backend exited unexpectedly. Restart the app to continue."
+    "gatewayExitBody": "The agent backend exited unexpectedly. Restart the app to continue."
   },
   "connection": {
     "connecting": "Connecting…",
@@ -152,7 +152,7 @@
     "taskListStartChat": "Start a chat",
     "appMenuAria": "App menu and settings",
     "taskSessionMenuAria": "Session actions",
-    "taskSessionAgentRunning": "Assistant is still responding",
+    "taskSessionAgentRunning": "Agent is still responding",
     "taskSessionAgentCompleted": "New response ready",
     "taskSessionAgentFailed": "Response needs attention",
     "automationRunsExpand": "Expand execution history",
@@ -187,10 +187,10 @@
     "sessionViewLabel": "Conversation view",
     "sessionViewRecent": "Recent",
     "sessionViewProjects": "Projects",
-    "sessionViewExperts": "Experts",
-    "createExpert": "New expert",
-    "expertsEmpty": "Create an expert to take on recurring work.",
-    "expertsLoadError": "Could not load experts.",
+    "sessionViewExperts": "Agents",
+    "createExpert": "New agent",
+    "expertsEmpty": "Create an agent to take on recurring work.",
+    "expertsLoadError": "Could not load agents.",
     "expertConversationError": "Could not open the latest chat. Try again.",
     "expertNewConversation": "Start a new chat with {{name}}",
     "expertSettings": "Configure {{name}}",

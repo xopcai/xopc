@@ -37,7 +37,7 @@ xopc 是工作与生活中的 AI 助理，帮你理清想法，处理事务，�
 3. 打开 **聊天**，或者在终端运行 `xopc`。
 4. 发送：`请回复“xopc 已就绪”，并告诉我你正在使用哪个模型。`
 
-助手正常回复，并且没有凭据或连接错误，就表示基础设置完成。
+智能体正常回复，并且没有凭据或连接错误，就表示基础设置完成。
 
 如果没有成功，先运行 `xopc doctor`，再查看[故障排查](./how-to/diagnose-broken-setup.md)。
 
@@ -61,10 +61,10 @@ xopc 是工作与生活中的 AI 助理，帮你理清想法，处理事务，�
 | --- | --- | --- |
 | 用户理解 | 可审查的目标、偏好、关系、当前重点和协作规则 | [用户理解](./user-understanding.md) |
 | Session | 可以从任一已连接客户端继续的对话 | [聊天与会话](./session.md) |
-| Agent | 有独立角色、模型、工具和工作区的助手 | [Agent](./routing-system.md) |
+| Agent | 有独立角色、模型、工具和工作区的智能体 | [Agent](./routing-system.md) |
 | Project 与 Task | 有明确结果、状态和下一步的长期工作 | [Project、Task 与笔记](./projects-tasks-notes.md) |
 | Automation | 按时间、Webhook 或手动触发工作 | [自动化](./automations.md) |
-| Channel | 从 Telegram、微信或飞书使用同一个助手 | [消息通道](./channels/index.md) |
+| Channel | 从 Telegram、微信或飞书使用同一个智能体 | [消息通道](./channels/index.md) |
 
 
 ## 推荐的下一步

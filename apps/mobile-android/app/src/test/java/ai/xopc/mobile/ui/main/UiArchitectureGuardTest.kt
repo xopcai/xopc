@@ -95,6 +95,34 @@ class UiArchitectureGuardTest {
   }
 
   @Test
+  fun noDecorativeSurfaceBordersOrShadowsInUiMain() {
+    val files = uiMainKotlinFiles()
+    val borderStrokeOffenders = files.filter { it.readText().contains("BorderStroke(") }.map { it.name }
+    assertTrue(
+      "Use borderless layered surface colors instead of BorderStroke in: $borderStrokeOffenders",
+      borderStrokeOffenders.isEmpty(),
+    )
+    val shadowOffenders = files.filter {
+      val text = it.readText()
+      text.contains("shadowElevation") || text.contains("tonalElevation")
+    }.map { it.name }
+    assertTrue(
+      "Use flat layered surface colors instead of shadow/tonal elevation in: $shadowOffenders",
+      shadowOffenders.isEmpty(),
+    )
+    val tabBar = File(uiMainDir(), "FloatingTabBar.kt").readText()
+    val mainScreen = File(uiMainDir(), "MainScreen.kt").readText()
+    assertTrue(
+      "FloatingTabBar must use opaque scheme.surface via floatingPillSurfaceColor",
+      tabBar.contains("internal fun floatingPillSurfaceColor(scheme: ColorScheme): Color = scheme.surface"),
+    )
+    assertTrue(
+      "AssistantComposer must share floatingPillSurfaceColor with FloatingTabBar",
+      mainScreen.contains("floatingPillSurfaceColor(composerScheme)"),
+    )
+  }
+
+  @Test
   fun noRawToastMakeTextOutsideMobileChrome() {
     val offenders = uiMainKotlinFiles()
       .filter { it.name != "MobileChrome.kt" }

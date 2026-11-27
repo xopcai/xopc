@@ -30,7 +30,7 @@ it('lets the owner choose a real named agent and project without silently select
   };
   await openScope();
   expect(document.body.textContent).not.toContain('This assistant only');
-  await act(async () => Array.from(document.querySelectorAll('button')).find(button => button.textContent?.includes('Assistant: Researcher'))!.click());
+  await act(async () => Array.from(document.querySelectorAll('button')).find(button => button.textContent?.includes('Agent: Researcher'))!.click());
   expect(change).toHaveBeenLastCalledWith({ type: 'agent', id: 'researcher' });
   await openScope();
   await act(async () => Array.from(document.querySelectorAll('button')).find(button => button.textContent?.includes('Project: Atlas'))!.click());

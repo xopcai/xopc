@@ -18,7 +18,7 @@ Pairing is recommended because an unknown sender must present a one-time code be
 xopc channels pairing approve weixin <code> --account default
 ```
 
-Use **Allowlist** for fixed users, **Open** only for an intentionally public assistant, and **Disabled** to block direct messages.
+Use **Allowlist** for fixed users, **Open** only for an intentionally public agent, and **Disabled** to block direct messages.
 
 ## Multiple accounts
 
@@ -37,6 +37,6 @@ Do not copy the stored login files to an untrusted machine. Re-login if credenti
 
 A paired, explicitly approved private chat can request Skill installation and use. HTTP MCP requests return a secure page where the Gateway owner signs in, checks the exact service and Weixin identity, and approves the connection before Token entry or OAuth. The original Weixin chat continues automatically; failed result delivery can resend the saved result without repeating the read.
 
-Secure MCP return requires a phone-accessible HTTPS `gateway.publicUrl`, `session.dmScope=per-account-channel-peer`, and no identity merging. Shared chats and group configuration are outside this scope. Connections join shared Gateway capabilities under the assistant's tool policies; pairing does not grant general administration rights.
+Secure MCP return requires a phone-accessible HTTPS `gateway.publicUrl`, `session.dmScope=per-account-channel-peer`, and no identity merging. Shared chats and group configuration are outside this scope. Connections join shared Gateway capabilities under the agent's tool policies; pairing does not grant general administration rights.
 
 Self-contained reminders use the original account and peer through the durable automation delivery outbox. See the [implementation and acceptance record](https://github.com/xopcai/xopc/blob/main/docs/design/technical/weixin-conversation-configuration-2026-10-28.md) for exact scope; local protocol acceptance does not imply official WeChat or physical-phone acceptance.

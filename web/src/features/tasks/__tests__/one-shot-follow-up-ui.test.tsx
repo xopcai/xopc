@@ -182,9 +182,9 @@ describe('Workbench TaskCurrentAction one-shot follow-up integration', () => {
     );
     expect(onUpdated).toHaveBeenCalledTimes(1);
 
-    // Click "和助手讨论" -> navigates to /personal carrying kind='task' contextRef without posting any session input
+    // Click "和智能体讨论" -> navigates to /personal carrying kind='task' contextRef without posting any session input
     fetchJson.mockClear();
-    const discussBtn = [...container.querySelectorAll('button')].find(b => b.textContent?.includes('和助手讨论'))!;
+    const discussBtn = [...container.querySelectorAll('button')].find(b => b.textContent?.includes('和智能体讨论'))!;
     act(() => {
       discussBtn.click();
     });

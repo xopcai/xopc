@@ -49,7 +49,7 @@ Meet
 → become gradually proactive
 ```
 
-The assistant begins with conversation and safe defaults. The user may then connect a work folder or another source, see what xopc examined, review what it inferred, and correct it. Each useful result and correction makes the next interaction better grounded.
+The agent begins with conversation and safe defaults. The user may then connect a work folder or another source, see what xopc examined, review what it inferred, and correct it. Each useful result and correction makes the next interaction better grounded.
 
 The desired first-value moment is not “xopc can access my files.” It is:
 
@@ -72,7 +72,7 @@ Ordinary understanding is maintained automatically and can be inspected, correct
 
 ### Hold messy, long-running work
 
-People rarely produce perfectly organized tasks. A useful assistant must be able to receive an incomplete thought, file, link, voice note, message, or piece of evidence and help turn it into something actionable:
+People rarely produce perfectly organized tasks. A useful agent must be able to receive an incomplete thought, file, link, voice note, message, or piece of evidence and help turn it into something actionable:
 
 ```text
 Capture
@@ -138,7 +138,7 @@ On macOS, the experimental Work Discovery onboarding can request separate operat
 
 ## Start with the work you have
 
-Ask your assistant to [follow a topic](./personal-agent-proactivity.md), keep [Task results and acceptance criteria](./projects-tasks-notes.md), or [schedule repeatable work](./automations.md). Authorize external sources through [Connectors](./connectors/index.md).
+Ask your agent to [follow a topic](./personal-agent-proactivity.md), keep [Task results and acceptance criteria](./projects-tasks-notes.md), or [schedule repeatable work](./automations.md). Authorize external sources through [Connectors](./connectors/index.md).
 
 Describe recurring work in chat and use Tasks or Automations to manage it. The separate Scenes feature has been removed.
 

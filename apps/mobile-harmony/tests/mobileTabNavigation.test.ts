@@ -343,11 +343,13 @@ describe('HarmonyOS multi-stack mobile tab navigation', () => {
     expect(sidebar).toContain("this.shortcut($r('app.string.about_you'), $r('sys.symbol.person'), 'about-you')");
     expect(sidebar).toContain("this.shortcut($r('app.string.sidebar_goals'), $r('sys.symbol.flag'), 'personal-goals')");
 
-    // FloatingTabBar defines the 5 exact core slots
+    // FloatingTabBar defines the 5 exact core slots and matches chat input panel background
     expect(tabBar).toContain(".id('floating-tab-ada')");
     expect(tabBar).toContain("this.iconTab('conversations'");
     expect(tabBar).toContain("this.iconTab('workbench'");
     expect(tabBar).toContain("this.iconTab('notes'");
     expect(tabBar).toContain("this.iconTab('library'");
+    expect(tabBar).toContain('.backgroundColor(this.colors.panel)');
+    expect(tabBar).not.toContain('.backgroundBlurStyle(');
   });
 });

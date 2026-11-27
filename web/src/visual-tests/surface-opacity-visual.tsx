@@ -57,7 +57,7 @@ function Fixture() {
             <p className="mt-3 text-xs text-accent-fg">继续配置　　查看详情</p>
           </div>
         </SurfaceCase>
-        <SurfaceCase title="桌面助手任务提示（实际队列表面样式）">
+        <SurfaceCase title="桌面智能体任务提示（实际队列表面样式）">
           <div className="desktop-pet-queue absolute inset-x-4 bottom-4 text-sm text-fg">
             <div className="p-3"><strong>任务已完成</strong><p className="mt-2 text-fg-muted">结果已保存，可以继续查看或处理。</p></div>
           </div>

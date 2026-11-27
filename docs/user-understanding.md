@@ -14,7 +14,7 @@ The ordinary `writePolicy` supports `allow` (default) and `deny`. On upgrade, th
 
 ## Editing and deletion
 
-Edit an understanding or work-memory item in **You**. Explicit edits take priority over subsequent source refreshes. You can also tell the assistant to correct or forget an existing user understanding in conversation.
+Edit an understanding or work-memory item in **You**. Explicit edits take priority over subsequent source refreshes. You can also tell the agent to correct or forget an existing user understanding in conversation.
 
 Deleting an understanding removes its revision chain, linked evidence associations, search entries, and matching maintenance/context audit entries. Cached discovery candidates are removed without deleting the rest of the discovery result. Deleting work memory also removes linked compaction-derived records. Minimal hashed suppression keys prevent the same slot, canonical key, or normalized text from being automatically recreated. They contain no original memory text. An explicit new remember command can restore a deleted user understanding.
 

@@ -155,7 +155,7 @@ internal fun ChatSelectableText(source: String, pressInWindow: Offset?,
       }
     }
     Popup(popupPositionProvider = position, onDismissRequest = { onDone() }) {
-      Surface(shape = themedCorners(16), shadowElevation = 6.dp, color = MaterialTheme.colorScheme.surfaceContainer) {
+      Surface(shape = themedCorners(16), color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.padding(horizontal = 4.dp).testTag("message-selection-toolbar")) {
           SelectionToolbarButton(R.string.assistant_copy, R.drawable.message_copy, "copy") {
             onCopy(selectedText())

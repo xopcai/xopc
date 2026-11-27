@@ -325,11 +325,11 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
   const retainedFiles = new Set([...allFiles].sort((a, b) => b.tab.visitedAt - a.tab.visitedAt).slice(0, 8).map(({ tab }) => tab.id));
 
   return <>{visible && taskDrawer ? <button type="button" tabIndex={-1} aria-hidden className="absolute inset-0 z-[39] bg-scrim" onClick={closePersonalTasksPanel} /> : null}
-    {floatingPersonalTasks ? <aside id="personal-preview-details" aria-label={zh ? '助手详情' : 'Assistant details'}
+    {floatingPersonalTasks ? <aside id="personal-preview-details" aria-label={zh ? '智能体详情' : 'Agent details'}
       data-personal-preview-details className={cn('personal-floating-details-enter file-preview-surface absolute inset-y-2 left-2 z-[45] flex min-w-0 flex-col overflow-hidden rounded-2xl shadow-popover', (single || workspaceExpanded) && 'w-[min(92%,24rem)]')}
       style={single || workspaceExpanded ? undefined : { right: panelWidth + 8 }}
       onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeFloatingTasks(true); } }}>
-      <button ref={taskOverlayClose} type="button" aria-label={zh ? '收起助手详情' : 'Close assistant details'}
+      <button ref={taskOverlayClose} type="button" aria-label={zh ? '收起智能体详情' : 'Close agent details'}
         className={cn(buttonClass, 'mr-2 mt-2 self-end transition-[background-color,transform] duration-150 active:scale-90 motion-reduce:active:scale-100')} onClick={() => closeFloatingTasks(true)}><X className="size-5" aria-hidden /></button>
       <div ref={taskOverlay} className="flex min-h-0 flex-1 flex-col" />
     </aside> : null}
@@ -367,7 +367,7 @@ export function RightWorkspace({ scope, enabled = true, elevated = false, onDock
     {!singleFileHeader || single || workspaceExpanded ? <div data-workspace-tab-bar className={cn('flex shrink-0 items-center justify-end gap-1 bg-surface-base px-2', personalTasks || singleFileHeader ? 'h-12 px-3' : 'h-14')}>
       {personalPreview && (single || workspaceExpanded) ? <button type="button" data-personal-preview-tasks className={cn(buttonClass, 'mr-auto w-auto gap-1 px-2 text-sm')}
         aria-expanded={floatingPersonalTasks} aria-controls="personal-preview-details"
-        onClick={() => floatingPersonalTasks ? closeFloatingTasks(true) : store.openPersonalTasks(scope)}><ListTodo className="size-4" aria-hidden />{zh ? '助手详情' : 'Assistant details'}</button> : null}
+        onClick={() => floatingPersonalTasks ? closeFloatingTasks(true) : store.openPersonalTasks(scope)}><ListTodo className="size-4" aria-hidden />{zh ? '智能体详情' : 'Agent details'}</button> : null}
       {showWorkspaceTabs ? <SlidingTabList ref={tabListRef} role="tablist" aria-label={zh ? '工作区标签' : 'Workspace tabs'} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onKeyDown={(event) => {
           const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];

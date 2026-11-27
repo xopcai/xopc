@@ -56,7 +56,7 @@ describe('scheduled task card and shared editor', () => {
     const advanced = document.querySelector('details')!;
     expect(advanced.open).toBe(false);
     const assignee = document.querySelector<HTMLButtonElement>('button[aria-label="由谁执行"]')!;
-    expect(assignee.textContent).toBe('使用默认（通用助手）');
+    expect(assignee.textContent).toBe('使用默认（通用智能体）');
     expect(advanced.contains(assignee)).toBe(false);
     await act(async () => assignee.click());
     const choice = Array.from(document.querySelectorAll('button')).find(element => element.textContent?.includes('Research'));

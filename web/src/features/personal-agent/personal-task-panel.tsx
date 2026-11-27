@@ -200,7 +200,7 @@ export function PersonalTaskPanel({ scope, zh, closeOnNavigate = false, visible 
         >
           <PersonalAvatar appearance={appearance} agentId={agentId} activity={avatarState} lively className="relative z-10 size-full" />
         </div>
-        <Link to="/settings/personal" state={{ settingsBackPath: personalHref }} aria-label={zh ? '编辑助手资料' : 'Edit assistant profile'}
+        <Link to="/settings/personal" state={{ settingsBackPath: personalHref }} aria-label={zh ? '编辑智能体资料' : 'Edit agent profile'}
           className={cn(
             'personal-edit-badge absolute bottom-0 right-0 z-20 grid size-9 place-items-center rounded-full border-[3px] border-surface-base bg-surface-hover text-fg transition-[background-color,transform,opacity] duration-150 hover:scale-105 hover:bg-surface-active active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transition-colors motion-reduce:hover:scale-100 motion-reduce:active:scale-100',
             flyingToPanel && 'pointer-events-none scale-75 opacity-0',

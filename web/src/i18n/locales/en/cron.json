@@ -59,7 +59,7 @@
     "taskKind": "Task type",
     "taskKindMessage": "Send message / AI processing",
     "message": "Message *",
-    "messagePlaceholder": "What should the assistant do?",
+    "messagePlaceholder": "What should the agent do?",
     "messageEdit": "Edit",
     "messagePreview": "Preview",
     "messageMarkdownHint": "Supports Markdown (headings, lists, code blocks, links, …).",

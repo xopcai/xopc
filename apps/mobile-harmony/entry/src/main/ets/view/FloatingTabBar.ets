@@ -6,7 +6,6 @@ import {
 import { xopcClickEffect } from '../common/motionTokens';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
-import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 
 @ComponentV2
@@ -19,7 +18,6 @@ export struct XopcFloatingTabBar {
   @Param recordingActive: boolean = false;
   @Event onSelectTab: (tab: XopcMobileTab) => void = (_tab: XopcMobileTab): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
-  @Local layout: XopcLayoutState = layoutState;
 
   private adaLabel(): string {
     const name = this.personalAgent?.displayName?.trim() ?? '';
@@ -147,15 +145,6 @@ export struct XopcFloatingTabBar {
       .padding({ left: 4, right: 4 })
       .borderRadius(FLOATING_TAB_BAR_HEIGHT_VP / 2)
       .backgroundColor(this.colors.panel)
-      .backgroundBlurStyle(
-        this.layout.reduceMotion ? BlurStyle.NONE : BlurStyle.COMPONENT_THICK,
-        {
-          colorMode: this.colors.light ? ThemeColorMode.LIGHT : ThemeColorMode.DARK,
-          adaptiveColor: AdaptiveColor.DEFAULT,
-          scale: 1.0,
-        },
-      )
-      .shadow(ShadowStyle.OUTER_DEFAULT_SM)
       .alignItems(VerticalAlign.Center)
     }
     .id('floating-tab-bar-host')

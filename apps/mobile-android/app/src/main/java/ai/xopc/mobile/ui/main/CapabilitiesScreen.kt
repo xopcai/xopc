@@ -22,7 +22,6 @@ import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -906,7 +905,7 @@ private fun CapabilitySetupOptions(authorizationUrl: String?, userCode: String?,
   val colors = MaterialTheme.colorScheme
   val card = themedCorners(16)
   if (authorizationUrl != null && userCode != null) {
-    Row(Modifier.fillMaxWidth().background(colors.surfaceContainerLow, card).border(1.dp, colors.outlineVariant, card)
+    Row(Modifier.fillMaxWidth().background(colors.surfaceContainerLow, card)
       .padding(horizontal = 14.dp, vertical = 8.dp),
       horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

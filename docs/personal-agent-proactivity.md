@@ -11,7 +11,7 @@ Check this direction again tomorrow afternoon. If you have a useful suggestion,
 tell me here. Keep the follow-up within the sources I have already authorized.
 ```
 
-Wait for the assistant to confirm the saved follow-up and actual check time. “Tomorrow afternoon” is interpreted as 15:00 in the proactive-message timezone. A check time is not a guaranteed delivery time: preparation and queues can delay it, and there may be no message when nothing useful has changed. Use an [Automation](./automations.md) for a fixed scheduled reminder.
+Wait for the agent to confirm the saved follow-up and actual check time. “Tomorrow afternoon” is interpreted as 15:00 in the proactive-message timezone. A check time is not a guaranteed delivery time: preparation and queues can delay it, and there may be no message when nothing useful has changed. Use an [Automation](./automations.md) for a fixed scheduled reminder.
 
 ## Review a draft Task or continuing goal
 
@@ -33,7 +33,7 @@ Your current conversation takes priority. Proactive updates wait while you are s
 
 ## Review and change a topic
 
-Open the small explanation below a proactive message to see why the assistant followed the topic and why it contacted you now. Inferred attention is labeled; it does not mean you authorized work or external actions.
+Open the small explanation below a proactive message to see why the agent followed the topic and why it contacted you now. Inferred attention is labeled; it does not mean you authorized work or external actions.
 
 You can delay or stop the topic, ask for more complete preparation or shorter updates, and undo the latest topic adjustment. These choices apply to that topic, rather than changing every conversation. A stopped topic requires an explicit request to resume. Expired or inaccessible sources cannot be restarted through undo.
 
@@ -45,9 +45,9 @@ You can also ask in chat: “Stop following this topic” or “Prepare a comple
 - After an offline period, checks are combined rather than sending a backlog of outdated messages.
 - User-understanding, session-access and write policies still apply. Background model preparation is paused under the local-only understanding policy in the current release.
 - Updates are delivered in the Personal AI conversation. External channel notifications are not enabled by this feature.
-- You can ask what long-term interests the assistant has inferred. Interest candidates remain silent and do not automatically start follow-ups.
+- You can ask what long-term interests the agent has inferred. Interest candidates remain silent and do not automatically start follow-ups.
 - Deleting or revoking a source prevents further disclosure of that evidence; it does not erase message text already delivered.
 
-If nothing arrives, check the selected mode, quiet hours, timezone, model availability and Gateway connection. Ask the assistant to show the saved topic before creating another follow-up.
+If nothing arrives, check the selected mode, quiet hours, timezone, model availability and Gateway connection. Ask the agent to show the saved topic before creating another follow-up.
 
 See [Understanding and memory](./user-understanding.md) for correction and deletion, and [Projects, Tasks, and Notes](./projects-tasks-notes.md) for work with a verifiable result.

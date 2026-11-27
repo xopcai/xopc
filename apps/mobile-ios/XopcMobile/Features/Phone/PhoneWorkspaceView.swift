@@ -159,7 +159,10 @@ struct PhoneWorkspaceView: View {
             .sheet(isPresented: $textOpen, onDismiss: { draft = "" }) {
                 NavigationStack {
                     VStack(alignment: .leading, spacing: 20) {
-                        TextField("输入到手机的文字", text: $draft).textFieldStyle(.roundedBorder).accessibilityIdentifier("phone-text-input")
+                        TextField("输入到手机的文字", text: $draft)
+                            .padding(.horizontal, 14).padding(.vertical, 10)
+                            .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(12)))
+                            .accessibilityIdentifier("phone-text-input")
                         if model.failed {
                             Text("操作尚未确认，请检查手机状态后再试。").font(.footnote).foregroundStyle(mobileTheme.danger)
                         }

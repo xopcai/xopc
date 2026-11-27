@@ -180,7 +180,7 @@
   },
   "voiceSettings": {
     "setup": {
-      "subtitle": "Speak to type, or talk naturally with your assistant.",
+      "subtitle": "Speak to type, or talk naturally with your agent.",
       "service": "Service setup",
       "enable": "Enable realtime voice",
       "dictation": "Live dictation",
@@ -253,7 +253,7 @@
     "apiKeyRevealFailed": "Could not load key from config.",
     "overview": {
       "title": "Voice status",
-      "description": "A quick check of what the assistant can hear and speak right now.",
+      "description": "A quick check of what the agent can hear and speak right now.",
       "input": "Input",
       "replies": "Replies",
       "voice": "Voice",
@@ -273,7 +273,7 @@
       "turnDetection": "Automatic turn detection",
       "turnDetectionDescription": "Automatically detects speech pauses and sends each completed utterance.",
       "bargeIn": "Allow interruption",
-      "bargeInDescription": "Speaking while the assistant replies stops the current response."
+      "bargeInDescription": "Speaking while the agent replies stops the current response."
     },
     "behavior": {
       "title": "How voice should work",
@@ -293,7 +293,7 @@
         },
         "always": {
           "title": "Always speak replies",
-          "description": "Read every assistant reply aloud."
+          "description": "Read every agent reply aloud."
         }
       }
     },
@@ -303,7 +303,7 @@
     },
     "stt": {
       "title": "Voice input (STT)",
-      "description": "Transcribe voice messages so the assistant can read them.",
+      "description": "Transcribe voice messages so the agent can read them.",
       "enable": "Enable voice input",
       "enableDesc": "When on, voice messages can be transcribed for the agent.",
       "provider": "STT provider",
@@ -321,20 +321,20 @@
       "refinementLight": "Light cleanup"
     },
     "tts": {
-      "title": "Assistant voice replies (TTS)",
-      "description": "Generate audio when the assistant should speak back.",
+      "title": "Agent voice replies (TTS)",
+      "description": "Generate audio when the agent should speak back.",
       "enable": "Enable voice replies",
-      "enableDesc": "When on, assistant replies can be spoken according to the rule below.",
+      "enableDesc": "When on, agent replies can be spoken according to the rule below.",
       "trigger": "Speak replies",
       "triggerOff": "Off",
       "triggerAlways": "Always",
       "triggerInbound": "Inbound voice only",
       "triggerTagged": "Tagged ([[tts]])",
       "triggerDescOff": "TTS is completely disabled.",
-      "triggerDescAlways": "Apply TTS to all assistant messages.",
+      "triggerDescAlways": "Apply TTS to all agent messages.",
       "triggerDescInbound": "Only reply with voice when the user sends voice.",
       "triggerDescTagged": "Only when the [[tts]] directive is used.",
-      "triggerHelp": "Choose when assistant text should be converted to speech.",
+      "triggerHelp": "Choose when agent text should be converted to speech.",
       "provider": "Voice engine",
       "providerOpenai": "OpenAI TTS",
       "providerEdge": "Microsoft Edge (free)",
@@ -361,7 +361,7 @@
       "test": {
         "title": "Test voice",
         "description": "Generate a short sample with the selected provider, model, and voice before saving it for chats.",
-        "sampleText": "Hi, I can read assistant replies aloud when voice output is enabled.",
+        "sampleText": "Hi, I can read agent replies aloud when voice output is enabled.",
         "play": "Play test",
         "stop": "Stop",
         "generating": "Generating…",
@@ -390,7 +390,7 @@
       "service": "Service setup",
       "diagnostics": "Troubleshooting",
       "defaultMode": "Default call mode",
-      "assistant": "Current assistant",
+      "assistant": "Current agent",
       "natural": "Natural voice",
       "assistantHint": "Uses the current chat model and tools.",
       "naturalHint": "Direct audio conversation; tool execution is not supported.",
@@ -401,7 +401,7 @@
       "refreshDevices": "Allow access and refresh devices",
       "deviceHint": "Device choices stay in this browser. Speakers follow the system.",
       "dictationReady": "Dictation",
-      "agentReady": "Assistant calls",
+      "agentReady": "Agent calls",
       "omniReady": "Native calls",
       "ready": "Configured",
       "unavailable": "Not ready",

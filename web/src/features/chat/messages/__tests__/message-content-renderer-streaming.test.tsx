@@ -87,7 +87,7 @@ describe('streaming assistant Markdown rendering', () => {
 
   it.each([
     ['preparing', 'unknown', 'Collecting changes', '正在收集修改'],
-    ['reviewing', 'unknown', 'Review assistant', '审查助手'],
+    ['reviewing', 'unknown', 'Review agent', '审查智能体'],
     ['complete', 'patch is correct', 'Patch is correct', '修改正确'],
     ['complete', 'patch is incorrect', 'Patch is incorrect', '修改有误'],
     ['error', 'unknown', 'Unknown', '尚未确定'],
@@ -107,7 +107,7 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent).toContain(zh);
     expect(container.textContent).toContain('基于 main');
     expect(container.textContent).not.toContain(en);
-    if (status === 'error') expect(container.textContent).toContain('审查助手未能完成：Example error');
+    if (status === 'error') expect(container.textContent).toContain('审查智能体未能完成：Example error');
     if (status === 'complete') expect(container.textContent).toContain('未发现问题。');
 
     act(() => useLocaleStore.setState({ language: 'en' }));

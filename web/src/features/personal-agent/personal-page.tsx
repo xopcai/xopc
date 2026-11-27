@@ -324,7 +324,7 @@ export function PersonalPage() {
   if (record?.state === 'ready') return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-surface-panel">
       {avatarUploadFailed && <div role="alert" className="flex shrink-0 items-center justify-between gap-3 border-b border-warning/30 bg-warning/5 px-5 py-3 text-sm text-fg-muted">
-        <span>{zh ? '助手已创建，头像上传未完成。可在资料设置中重新上传。' : 'Your assistant is ready. Upload the avatar again in profile settings.'}</span>
+        <span>{zh ? '智能体已创建，头像上传未完成。可在资料设置中重新上传。' : 'Your agent is ready. Upload the avatar again in profile settings.'}</span>
         <button type="button" onClick={() => { setAvatarUploadFailed(false); openSettings(); }} className="shrink-0 text-accent hover:underline">{zh ? '打开设置' : 'Open settings'}</button>
       </div>}
       <div className="flex min-h-0 flex-1">

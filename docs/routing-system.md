@@ -1,6 +1,6 @@
 # Agents
 
-An Agent is a named assistant configured for a particular kind of work. Every Agent inherits one global capability configuration and stores only its profile, workspace choice, and explicit overrides. User-owned context remains available across Agents according to your settings.
+An Agent is a named AI agent configured for a particular kind of work. Every Agent inherits one global capability configuration and stores only its profile, workspace choice, and explicit overrides. User-owned context remains available across Agents according to your settings.
 
 ## When to create another Agent
 

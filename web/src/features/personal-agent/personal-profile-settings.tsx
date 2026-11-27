@@ -167,12 +167,12 @@ export function PersonalProfileSettings({ zh, onOpenVoiceServices, showMessageRe
   const messageReactionsLabel = zh ? '消息表情' : 'Message reactions';
   const messageReactionsEnabled = record.messageReactionsEnabled === true;
   const sectionSpacing = compact ? 'space-y-3' : 'space-y-5';
-  return <section className={sectionSpacing} aria-label={zh ? 'Ada 助手设置' : 'Ada assistant settings'}>
+  return <section className={sectionSpacing} aria-label={zh ? 'Ada 智能体设置' : 'Ada agent settings'}>
     <div className={cn('flex items-center', compact ? 'gap-2' : 'flex-col')}>
       <button type="button" disabled={uploadingAvatar} onClick={() => setShowAppearanceChoices(open => !open)} aria-expanded={showAppearanceChoices} aria-controls="personal-appearance-options" aria-label={zh ? '选择头像' : 'Choose avatar'} className="shrink-0 rounded-full transition-[opacity,transform] duration-150 hover:scale-[1.02] hover:opacity-90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 motion-reduce:transition-opacity motion-reduce:hover:scale-100 motion-reduce:active:scale-100">
         <PersonalAvatar appearance={appearance} agentId={record.agentId} lively className={compact ? 'size-11' : 'size-16'} />
       </button>
-      <input id="personal-name" aria-label={zh ? '助手名称' : 'Assistant name'}
+      <input id="personal-name" aria-label={zh ? '智能体名称' : 'Agent name'}
         value={displayName} onChange={event => setDisplayName(event.target.value)}
         onBlur={event => {
           const next = event.currentTarget.value.trim();

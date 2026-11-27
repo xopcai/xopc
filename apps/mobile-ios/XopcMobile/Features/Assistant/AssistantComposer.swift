@@ -6,7 +6,6 @@ import SwiftUI
 // swiftlint:disable:next type_body_length
 struct AssistantComposer: View {
     @Environment(\.mobileTheme) private var mobileTheme
-    @Environment(\.colorScheme) private var colorScheme
     let configuration: GatewayConfiguration
     var focusAllowed = true
     var connectionReady = true
@@ -15,8 +14,6 @@ struct AssistantComposer: View {
     var onAcceptSuggestion: (NextTurnSuggestion) -> Void = { _ in }
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.displayScale) private var displayScale
 
     @Binding var draft: String
     @Binding var attachments: [MessageAttachment]
@@ -285,41 +282,7 @@ struct AssistantComposer: View {
         .foregroundStyle(mobileTheme.action)
         .padding(.horizontal, 8)
         .padding(.vertical, 2)
-        .background { composerPillBackground }
-        .overlay {
-            RoundedRectangle(cornerRadius: mobileTheme.corner(24), style: .continuous)
-                .strokeBorder(composerBorderColor, lineWidth: composerBorderWidth)
-                .allowsHitTesting(false)
-        }
-        .shadow(
-            color: Color.black.opacity(colorScheme == .dark ? 0.32 : 0.10),
-            radius: reduceTransparency ? 4 : 14,
-            y: reduceTransparency ? 2 : 6
-        )
-    }
-
-    private var composerBorderWidth: CGFloat {
-        reduceTransparency ? max(1 / max(displayScale, 1), 1) : 0.75
-    }
-
-    private var composerBorderColor: Color {
-        if reduceTransparency {
-            return mobileTheme.secondary.opacity(colorScheme == .dark ? 0.34 : 0.24)
-        }
-        return colorScheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.08)
-    }
-
-    @ViewBuilder
-    private var composerPillBackground: some View {
-        let shape = RoundedRectangle(cornerRadius: mobileTheme.corner(24), style: .continuous)
-        if reduceTransparency {
-            shape.fill(mobileTheme.panel)
-        } else {
-            ZStack {
-                shape.fill(.regularMaterial)
-                shape.fill(mobileTheme.panel.opacity(colorScheme == .dark ? 0.42 : 0.56))
-            }
-        }
+        .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(24)))
     }
 
     private var messageField: some View {

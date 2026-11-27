@@ -78,7 +78,6 @@ internal fun ComposerPaletteSuggestions(value: TextFieldValue, focused: Boolean,
     modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
     shape = MaterialTheme.shapes.medium,
     color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    tonalElevation = 2.dp,
   ) {
     Column(Modifier.fillMaxWidth().heightIn(max = 180.dp).verticalScroll(rememberScrollState())) {
       suggestions.forEach { item ->

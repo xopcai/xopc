@@ -189,7 +189,7 @@ function countDistinctTemplatePhraseHits(text: string, templateId: SoulTemplateI
 // ---------------------------------------------------------------------------
 
 export const CREATURE_PRESETS = [
-  { value: 'AI assistant', labelEn: 'AI Assistant', labelZh: 'AI 助手' },
+  { value: 'AI agent', labelEn: 'AI Agent', labelZh: 'AI 智能体' },
   { value: 'robot', labelEn: 'Robot', labelZh: '机器人' },
   { value: 'familiar', labelEn: 'Familiar', labelZh: '精灵' },
   { value: 'ghost in the machine', labelEn: 'Ghost in the machine', labelZh: '机器幽灵' },

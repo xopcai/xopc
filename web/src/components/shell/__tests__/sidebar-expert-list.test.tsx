@@ -30,7 +30,7 @@ vi.mock('@/features/chat/session/local-session-drafts', () => ({
 }));
 vi.mock('@/features/sessions/session-api', () => ({ getSessionDetail: vi.fn(), listSessions: vi.fn() }));
 
-const agents = [{ id: 'coder' }, { id: 'main' }, { id: 'researcher', name: '调研专家' }];
+const agents = [{ id: 'coder' }, { id: 'main' }, { id: 'researcher', name: '调研智能体' }];
 
 function TestSidebar() {
   const { conversationId } = useParams();
@@ -91,8 +91,8 @@ it('lists the general assistant first and reopens its latest conversation', asyn
   await renderSidebar();
 
   const assistant = container.querySelector<HTMLButtonElement>('ul > li:first-child button');
-  expect(assistant?.textContent).toContain('通用助手');
-  expect(container.querySelector('button[aria-label="与 通用助手 新建对话"]')).not.toBeNull();
+  expect(assistant?.textContent).toContain('通用智能体');
+  expect(container.querySelector('button[aria-label="与 通用智能体 新建对话"]')).not.toBeNull();
 
   await act(async () => assistant!.click());
   expect(listSessions).toHaveBeenCalledWith(expect.objectContaining({ agentId: 'main' }));
@@ -107,11 +107,11 @@ it('keeps the three dots on the replying expert when navigation selects another 
   await act(async () => markChatRunRunning('code-chat'));
   expect(replyingRow()?.querySelectorAll('.expert-reply-dot')).toHaveLength(3);
   expect(replyingRow()?.querySelector('button[aria-current="page"]')).not.toBeNull();
-  expect(replyingRow()?.querySelector('button[aria-label="与 编程专家 新建对话"]')).not.toBeNull();
+  expect(replyingRow()?.querySelector('button[aria-label="与 编程智能体 新建对话"]')).not.toBeNull();
 
   await act(async () => container.querySelector<HTMLAnchorElement>('a')!.click());
-  expect(container.querySelector('button[aria-current="page"]')?.textContent).toContain('调研专家');
-  expect(replyingRow()?.textContent).toContain('编程专家');
+  expect(container.querySelector('button[aria-current="page"]')?.textContent).toContain('调研智能体');
+  expect(replyingRow()?.textContent).toContain('编程智能体');
 
   await act(async () => markChatRunCompleted('code-chat', true));
   expect(replyingRow()).toBeUndefined();
@@ -130,7 +130,7 @@ it('clears an expert only after all its chats stop replying and ignores setup an
   expect(container.querySelectorAll('[title="回复中"]')).toHaveLength(1);
 
   await act(async () => markChatRunFailed('code-chat', false));
-  expect(replyingRow()?.textContent).toContain('编程专家');
+  expect(replyingRow()?.textContent).toContain('编程智能体');
 
   await act(async () => clearChatRunPresence('another-chat'));
   expect(replyingRow()).toBeUndefined();
@@ -148,7 +148,7 @@ it('exposes hover overlay buttons for new chat and agent settings on every exper
     </SWRConfig>,
   ));
 
-  const settingsButton = container.querySelector<HTMLButtonElement>('button[aria-label="设置 编程专家"]');
+  const settingsButton = container.querySelector<HTMLButtonElement>('button[aria-label="设置 编程智能体"]');
   expect(settingsButton).not.toBeNull();
   expect(container.querySelector('.sidebar-hover-row .sidebar-hover-fade')).not.toBeNull();
 

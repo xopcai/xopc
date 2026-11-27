@@ -78,7 +78,22 @@ struct UIArchitectureGuardTests {
         let url = Self.iosSourceRoot.appendingPathComponent("Features/Assistant/ClarificationCard.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         #expect(!source.contains("Self.hex("), "ClarificationCard must not use hardcoded hex colors")
-        #expect(!source.contains(".stroke(palette.border, lineWidth: 0.5)"), "ClarificationCard outer surface must stay borderless")
+        #expect(!source.contains(".stroke(palette.border"), "ClarificationCard outer surface must stay borderless")
+        #expect(!source.contains(".shadow("), "ClarificationCard must stay shadowless")
+    }
+
+    @Test func noDecorativeBordersOrShadowsInAppOrFeatures() throws {
+        let files = Self.swiftFiles(under: "Features") + Self.swiftFiles(under: "App")
+        let shadowOffenders = try files.filter { url in
+            try String(contentsOf: url, encoding: .utf8).contains(".shadow(")
+        }.map(\.lastPathComponent)
+        #expect(shadowOffenders.isEmpty, "Use flat layered surface colors instead of .shadow() in: \(shadowOffenders)")
+
+        let borderOffenders = try files.filter { url in
+            let text = try String(contentsOf: url, encoding: .utf8)
+            return text.contains(".strokeBorder(") || text.contains(".textFieldStyle(.roundedBorder)")
+        }.map(\.lastPathComponent)
+        #expect(borderOffenders.isEmpty, "Use borderless layered surface colors instead of decorative borders in: \(borderOffenders)")
     }
 
     @Test func noResidualNativeSegmentedPickerInFeatures() throws {

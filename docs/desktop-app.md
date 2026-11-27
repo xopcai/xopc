@@ -54,7 +54,7 @@ Open **You** to inspect automatically maintained understanding, edit it, or dele
 | --- | --- |
 | Review or correct what xopc knows | **User model** |
 | Start or resume a conversation | **Chat** |
-| Create and edit assistants | **Agents** |
+| Create and edit agents | **Agents** |
 | Organize ongoing work | **Projects** or **Tasks** |
 | Connect Telegram, Weixin, or Feishu | **Channels** |
 | Inspect a problem | **Settings → Logs** |

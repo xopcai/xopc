@@ -504,7 +504,7 @@ function VoiceSettingsEditor({ capability, onPendingChange, disabled = false, on
         </section>
 
         <label className="flex items-center justify-between text-sm">{v.experience.captions}<input type="checkbox" role="switch" aria-checked={captions} className="ui-checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} /></label>
-      {form.voice.realtime.defaultEngine === 'agent' && stt.provider === 'xopc-cloud' ? <details className="rounded-xl border border-edge p-4"><summary className="cursor-pointer text-sm font-medium">{language === 'zh' ? '语音助手输出' : 'Assistant speech output'}</summary><div className="mt-4"><PlatformVoiceSettings modes={['speech.stream']} disabled={dirty || autosave.status === 'saving'} onPendingChange={setCatalogPending} /></div></details> : null}
+      {form.voice.realtime.defaultEngine === 'agent' && stt.provider === 'xopc-cloud' ? <details className="rounded-xl border border-edge p-4"><summary className="cursor-pointer text-sm font-medium">{language === 'zh' ? '智能体语音输出' : 'Agent speech output'}</summary><div className="mt-4"><PlatformVoiceSettings modes={['speech.stream']} disabled={dirty || autosave.status === 'saving'} onPendingChange={setCatalogPending} /></div></details> : null}
       <details className="rounded-xl border border-edge p-4"><summary className="cursor-pointer text-sm font-medium">{language === 'zh' ? '麦克风、扬声器与诊断' : 'Microphone, speakers and diagnostics'}</summary><div className="mt-4 space-y-4"><VoiceDeviceSettings v={v} /><VoiceSetup section="diagnostics" v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} onChange={updateForm} /></div></details>
     </>}
   </fieldset>;

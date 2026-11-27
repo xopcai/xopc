@@ -280,7 +280,7 @@ Developers can use `scripts/benchmark-phone-apps-live.mts` with `baseline`, `eff
 
 ### HarmonyOS USB phones
 
-In **Settings → Phone Use → Add phone**, choose **USB HarmonyOS phone**. Use **Install missing components** in the dialog, or ask the configuration assistant to set up a HarmonyOS phone. No DevEco Studio is needed. Then enable developer mode and USB debugging on the phone, connect a USB data cable and authorize the computer. Only USB targets reported by `hdc list targets -v` are offered; wireless HDC and HarmonyOS cloud phones are not supported in this version.
+In **Settings → Phone Use → Add phone**, choose **USB HarmonyOS phone**. Use **Install missing components** in the dialog, or ask the configuration agent to set up a HarmonyOS phone. No DevEco Studio is needed. Then enable developer mode and USB debugging on the phone, connect a USB data cable and authorize the computer. Only USB targets reported by `hdc list targets -v` are offered; wireless HDC and HarmonyOS cloud phones are not supported in this version.
 
 Common SDK locations are detected automatically. The connection dialog also accepts a custom executable path, saved as `phone.hdcPath`. `HARMONYOS_SDK_HOME` and `DEVECO_SDK_HOME` can point to SDK roots containing `openharmony/toolchains/hdc` or `toolchains/hdc`; xopc-managed HDC is also detected, then PATH is used as a fallback. ADB and scrcpy are not required for this connection.
 

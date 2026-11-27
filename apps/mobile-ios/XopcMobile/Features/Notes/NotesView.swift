@@ -384,11 +384,7 @@ private struct NotesCaptureActions: View {
         .buttonStyle(.plain)
         .font(.subheadline.weight(.semibold))
         .padding(5)
-        .background(.regularMaterial, in: .capsule)
-        .overlay {
-            Capsule().strokeBorder(.primary.opacity(0.08)).allowsHitTesting(false)
-        }
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        .background(mobileTheme.panel, in: .capsule)
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity)

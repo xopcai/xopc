@@ -595,7 +595,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           })
         Surface(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = effectiveBottomInset + 8.dp)
           .testTag("notes-capture-actions"), shape = CircleShape,
-          color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 4.dp) {
+          color = MaterialTheme.colorScheme.surfaceContainerHigh) {
           Row(Modifier.padding(5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             if (voiceNotes != null && voiceScope != null) {
@@ -1610,7 +1610,6 @@ internal fun NotesDetailContent(state: NotesUiState, id: String, onRetry: () -> 
           .padding(bottom = 8.dp).testTag("note-detail-toolbar"),
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shadowElevation = 3.dp,
       ) {
         Row(
           modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),

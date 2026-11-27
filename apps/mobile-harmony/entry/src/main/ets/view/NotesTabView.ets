@@ -208,7 +208,7 @@ export struct XopcNotesTabView {
           })
       }
     }.id('notes-capture-actions').padding(5).margin({ bottom: 12 + this.stackBottomInset() })
-      .borderRadius(30).backgroundColor(this.colors.panel).shadow(ShadowStyle.OUTER_DEFAULT_SM)
+      .borderRadius(30).backgroundColor(this.colors.panel)
   }
 
   private async restoreRecording(id: string): Promise<void> {

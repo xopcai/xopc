@@ -185,7 +185,7 @@
         "background": "Keep running when the window closes",
         "update": "Update xopc on your computer and try again.",
         "access": "Access details",
-        "accessHint": "Conversations, tasks, workspace and authorized assistant capabilities. Existing approval rules still apply.",
+        "accessHint": "Conversations, tasks, workspace and authorized agent capabilities. Existing approval rules still apply.",
         "openAuthorization": "Open authorization"
       },
       "title": "Device access",
@@ -566,11 +566,11 @@
       "presets": {
         "lightChat": {
           "title": "Light chat",
-          "description": "Talk to your assistant in the web console with one provider and a default model."
+          "description": "Talk to your agent in the web console with one provider and a default model."
         },
         "multiChannel": {
-          "title": "Multi-channel assistant",
-          "description": "Connect Telegram or another channel so the same assistant can reply from the web console and messaging apps."
+          "title": "Multi-channel agent",
+          "description": "Connect Telegram or another channel so the same agent can reply from the web console and messaging apps."
         },
         "automation": {
           "title": "Automation workflow",
@@ -837,7 +837,7 @@
       "failedRuns": "Failed tasks",
       "failedRunsDesc": "Notify when a task fails.",
       "needsInput": "Decisions and approvals",
-      "needsInputDesc": "Notify when the assistant needs your answer or authorization.",
+      "needsInputDesc": "Notify when the agent needs your answer or authorization.",
       "testTitle": "xopc notifications are ready",
       "testBody": "You will be notified when background tasks finish.",
       "testShown": "A test notification was sent.",

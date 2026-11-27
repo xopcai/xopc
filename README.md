@@ -116,7 +116,7 @@ Authorize sources, tools, and channels as needed. Execution confirmation depends
 
 | You want to… | Read |
 | --- | --- |
-| Set up your personal assistant | [Meet Ada](https://xopcai.github.io/xopc/personal-ai) |
+| Set up your personal agent | [Meet Ada](https://xopcai.github.io/xopc/personal-ai) |
 | Delegate and refine a result | [Task delivery](https://xopcai.github.io/xopc/task-delegation) |
 | Work with files and projects | [Workspace](https://xopcai.github.io/xopc/workspace-guide) |
 | Review results and retry | [Task acceptance](https://xopcai.github.io/xopc/task-review) |
@@ -151,7 +151,7 @@ Read the [community guide](https://xopcai.github.io/xopc/community) and [Code of
 
 **What is the fastest way to try it?** — [Desktop app](#get-started) for GUI users, or `xopc onboard --quick && xopc` for terminal.
 
-**How is this different from another chat UI?** — Chat is only one surface. xopc preserves understanding, long-term goals, projects, tasks, decisions, and run history so the same assistant can continue working across time and surfaces.
+**How is this different from another chat UI?** — Chat is only one surface. xopc preserves understanding, long-term goals, projects, tasks, decisions, and run history so the same agent can continue working across time and surfaces.
 
 **Can I use it from my phone or messengers?** — Yes. Pair the [mobile app](https://xopcai.github.io/xopc/mobile-app) by QR code, or configure a [messaging channel](https://xopcai.github.io/xopc/channels/) through the Gateway.
 

@@ -343,7 +343,7 @@ export function TasksPage() {
                 : (zh ? '当前筛选下暂无任务' : 'No tasks in this view')}
             </p>
             <p className="mt-1 text-xs text-fg-muted">
-              {zh ? '点击右上角“新建任务”，或在对话中直接交办给助手。' : 'Create a task above or delegate one directly in chat.'}
+              {zh ? '点击右上角“新建任务”，或在对话中直接交办给智能体。' : 'Create a task above or delegate one directly in chat.'}
             </p>
           </div>
         ) : (

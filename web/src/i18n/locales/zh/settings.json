@@ -185,7 +185,7 @@
         "background": "关闭窗口后继续运行",
         "update": "请更新电脑版后重试。",
         "access": "访问范围",
-        "accessHint": "对话、任务、工作区与已授权的助手能力。重要操作仍遵循原有确认规则。",
+        "accessHint": "对话、任务、工作区与已授权的智能体能力。重要操作仍遵循原有确认规则。",
         "openAuthorization": "打开授权页面"
       },
       "title": "设备接入",
@@ -569,8 +569,8 @@
           "description": "在网页控制台对话 — 配置一家服务商并选择默认模型即可。"
         },
         "multiChannel": {
-          "title": "多通道助手",
-          "description": "连接 Telegram 等通道，让同一个助手可以从网页和消息应用回复。"
+          "title": "多通道智能体",
+          "description": "连接 Telegram 等通道，让同一个智能体可以从网页和消息应用回复。"
         },
         "automation": {
           "title": "自动化工作流",
@@ -837,7 +837,7 @@
       "failedRuns": "任务失败",
       "failedRunsDesc": "任务执行失败时通知。",
       "needsInput": "需要判断或授权",
-      "needsInputDesc": "助手需要你回答问题或授权时通知。",
+      "needsInputDesc": "智能体需要你回答问题或授权时通知。",
       "testTitle": "xopc 通知已就绪",
       "testBody": "后台任务结束时会通知你。",
       "testShown": "测试通知已发送。",
@@ -1091,7 +1091,7 @@
     "aboutApp": "关于",
     "activityDetailDefaultTitle": "AI 执行动态",
     "activityDetailDefaultDescription": "设置所有对话如何展示分析过程与工具执行。",
-    "activityDetailDefaultHint": "应用于智能体对话。个人助手始终使用三点动态指示执行状态。",
+    "activityDetailDefaultHint": "应用于智能体对话。个人智能体始终使用三点动态指示执行状态。",
     "activityDetailSaving": "保存中…",
     "activityDetailSaveError": "无法保存执行动态默认值。",
     "activityDetailLevels": {

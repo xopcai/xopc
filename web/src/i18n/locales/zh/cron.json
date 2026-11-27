@@ -59,7 +59,7 @@
     "taskKind": "任务类型",
     "taskKindMessage": "发送消息 / AI 处理",
     "message": "消息 *",
-    "messagePlaceholder": "助手应该做什么？",
+    "messagePlaceholder": "智能体应该做什么？",
     "messageEdit": "编辑",
     "messagePreview": "预览",
     "messageMarkdownHint": "支持 Markdown（标题、列表、代码块、链接等）。",

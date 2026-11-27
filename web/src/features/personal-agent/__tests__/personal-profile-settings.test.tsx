@@ -65,7 +65,7 @@ it('edits the avatar on the settings page and saves the chosen appearance', asyn
 });
 
 it('saves the assistant name on blur and keeps the call preferences available', async () => {
-  const name = container.querySelector<HTMLInputElement>('[aria-label="Assistant name"]')!;
+  const name = container.querySelector<HTMLInputElement>('[aria-label="Agent name"]')!;
   await act(async () => { name.focus(); name.value = 'Nova'; name.blur(); });
   const patch = vi.mocked(fetchJson).mock.calls.find(([, options]) => options?.method === 'PATCH');
   expect(JSON.parse(String(patch?.[1]?.body)).displayName).toBe('Nova');
@@ -83,7 +83,7 @@ it('uses the latest profile revision when an earlier quick-setting save complete
     agentId: 'personal', conversationId: 'conversation-1', state: 'ready', displayName: 'Nova', appearance: 'loopi',
     voicePreference: null, voiceCallPreferences: { openingGreetingEnabled: true, enginePreference: 'assistant' }, revision: 7,
   } })));
-  expect(container.querySelector<HTMLInputElement>('[aria-label="Assistant name"]')?.value).toBe('Nova');
+  expect(container.querySelector<HTMLInputElement>('[aria-label="Agent name"]')?.value).toBe('Nova');
   const engine = container.querySelector<HTMLSelectElement>('[aria-label="Call engine"]')!;
   expect(engine.value).toBe('assistant');
   await act(async () => { engine.value = 'auto'; engine.dispatchEvent(new Event('change', { bubbles: true })); });

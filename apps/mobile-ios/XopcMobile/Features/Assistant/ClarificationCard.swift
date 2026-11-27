@@ -2,14 +2,12 @@ import SwiftUI
 import UIKit
 
 struct ClarificationPalette {
-    let surface, grouped, divider, border, shadow, primaryText, secondaryText, tertiaryText: Color
+    let surface, grouped, divider, primaryText, secondaryText, tertiaryText: Color
     let accent, onAccent, accentSoft, accentText, tonalFill, tonalText, inputFill, badgeAmberFill, badgeAmberTint, danger: Color
     init(theme: MobileTheme, dark: Bool) {
         surface = theme.panel
         grouped = theme.grouped
         divider = dark ? Color.white.opacity(0.07) : Color.black.opacity(0.06)
-        border = dark ? Color.white.opacity(0.09) : Color.black.opacity(0.08)
-        shadow = theme.scrim.opacity(dark ? 0.45 : 0.16)
         primaryText = theme.foreground
         secondaryText = theme.secondary
         tertiaryText = theme.secondary.opacity(0.75)
@@ -34,7 +32,7 @@ struct ClarificationCardShell<Content: View>: View {
     let palette: ClarificationPalette; let cornerRadius: CGFloat; @ViewBuilder let content: Content
     var body: some View {
         content.background(palette.surface, in: .rect(cornerRadius: cornerRadius))
-            .shadow(color: palette.shadow, radius: 12, y: 4).accessibilityElement(children: .contain)
+            .accessibilityElement(children: .contain)
     }
 }
 
@@ -54,7 +52,6 @@ struct ClarificationCollapsedBar: View {
             }.buttonStyle(.plain)
         }.padding(.horizontal, 14).padding(.vertical, 10).frame(maxWidth: .infinity, minHeight: 48)
             .background(palette.surface, in: .rect(cornerRadius: cornerRadius))
-            .shadow(color: palette.shadow, radius: 8, y: 3)
     }
 }
 
@@ -128,7 +125,7 @@ struct ClarificationCustomEditor: View {
             TextField(selectedLabel == nil ? "输入回答…" : "补充说明…", text: $text, axis: .vertical)
                 .font(.subheadline).foregroundStyle(palette.primaryText).lineLimit(2 ... 5)
                 .padding(11).background(palette.inputFill, in: .rect(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(count > limit ? palette.danger : palette.border, lineWidth: 1)).disabled(disabled)
+                .disabled(disabled)
             if count >= (limit * 4) / 5 {
                 Text("\(count)/\(limit)").font(.caption2.monospacedDigit()).foregroundStyle(count > limit ? palette.danger : palette.tertiaryText)
             }

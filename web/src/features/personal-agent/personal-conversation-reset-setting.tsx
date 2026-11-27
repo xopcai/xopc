@@ -78,7 +78,7 @@ export function PersonalConversationResetSetting({
           <h3 className="text-sm font-medium text-fg">{zh ? '重新开始对话' : 'Start a fresh conversation'}</h3>
           <p className="text-xs text-fg-muted">
             {zh
-              ? '归档当前对话记录并清空聊天窗口，以全新上下文开始。你的长期记忆、助手设置、定时任务和已委派任务都会保留。'
+              ? '归档当前对话记录并清空聊天窗口，以全新上下文开始。你的长期记忆、智能体设置、定时任务和已委派任务都会保留。'
               : 'Archive the current transcript and clear the chat view to start with a fresh context. Your memory, settings, schedules, and delegated tasks are kept.'}
           </p>
         </div>

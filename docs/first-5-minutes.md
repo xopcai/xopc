@@ -62,7 +62,7 @@ Ask only for missing context, help me define what done means,
 and propose the smallest credible next action.
 ```
 
-The assistant can use enabled tools and your workspace when the task requires them. It should ask before actions that need missing access or credentials. Review any proposed long-term understanding instead of assuming every message should be remembered.
+The agent can use enabled tools and your workspace when the task requires them. It should ask before actions that need missing access or credentials. Review any proposed long-term understanding instead of assuming every message should be remembered.
 
 ## If it does not work
 

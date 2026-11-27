@@ -40,7 +40,7 @@ The default experience exposes only Home, Conversation, Task, and optional Proje
 
 ## Authority inside the loop
 
-Execution capability and permission are separate. The assistant may understand what should happen without being authorized to do it.
+Execution capability and permission are separate. The agent may understand what should happen without being authorized to do it.
 
 ```text
 Observe

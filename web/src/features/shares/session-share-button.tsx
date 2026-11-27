@@ -353,25 +353,25 @@ function formatBytes(bytes: number): string {
 const LABELS_ZH = {
   share: '分享会话', title: '分享会话', hint: '创建当前会话的只读快照', created: '分享已创建', createdHint: '复制链接后即可发送给其他人',
   close: '关闭', loading: '正在准备预览…', snapshotMessages: '当前快照包含 {{count}} 条公开消息',
-  scope: '默认仅包含用户与助手的可见文本；系统提示、推理、工具参数、命令文本、输出和路径始终不会公开。', ttl: '有效期', maxViews: '最大访问次数',
+  scope: '默认仅包含用户与智能体的可见文本；系统提示、推理、工具参数、命令文本、输出和路径始终不会公开。', ttl: '有效期', maxViews: '最大访问次数',
   includeTools: '包含 {{count}} 条工具活动', toolDisclosure: '只公开工具名称和成功/失败状态，不公开参数与结果。', attachments: '附件', attachmentDisclosure: '附件默认不公开，请逐个选择。',
   oneHour: '1 小时', oneDay: '24 小时', sevenDays: '7 天', thirtyDays: '30 天', unlimited: '不限', description: '说明（可选）',
   publicWarning: '任何获得链接的人都可以查看这份快照。后续会话消息不会自动加入。', cancel: '取消', create: '创建分享', revoke: '撤销分享', refresh: '更新到当前会话', open: '打开分享页面',
   revision: '快照版本 {{revision}}', sharedAttachments: '{{count}} 个附件', newShare: '新建分享',
   delivery: '分享方式', hosted: 'XOPC 托管分享', local: '本机 Gateway 分享',
   hostedDisabled: '管理员已暂停你的公网分享能力。已有托管链接当前不可访问，但仍可撤销。',
-  reviewContent: '检查将要公开的内容', you: '你', assistant: '助手',
+  reviewContent: '检查将要公开的内容', you: '你', assistant: '智能体',
 };
 
 const LABELS_EN = {
   share: 'Share conversation', title: 'Share conversation', hint: 'Create a read-only snapshot of this conversation', created: 'Share created', createdHint: 'Copy the link and send it to anyone',
   close: 'Close', loading: 'Preparing preview…', snapshotMessages: 'This snapshot contains {{count}} public messages',
-  scope: 'Only visible user and assistant text is included by default. System prompts, reasoning, tool arguments, command text, output, and paths always stay private.', ttl: 'Expires after', maxViews: 'Maximum views',
+  scope: 'Only visible user and agent text is included by default. System prompts, reasoning, tool arguments, command text, output, and paths always stay private.', ttl: 'Expires after', maxViews: 'Maximum views',
   includeTools: 'Include {{count}} tool activities', toolDisclosure: 'Only tool names and success/failure states are shared; arguments and results stay private.', attachments: 'Attachments', attachmentDisclosure: 'Attachments stay private unless selected individually.',
   oneHour: '1 hour', oneDay: '24 hours', sevenDays: '7 days', thirtyDays: '30 days', unlimited: 'Unlimited', description: 'Description (optional)',
   publicWarning: 'Anyone with the link can view this snapshot. Later conversation messages are not added automatically.', cancel: 'Cancel', create: 'Create share', revoke: 'Revoke share', refresh: 'Update to current conversation', open: 'Open shared page',
   revision: 'Snapshot revision {{revision}}', sharedAttachments: '{{count}} attachments', newShare: 'New share',
   delivery: 'Delivery', hosted: 'XOPC Hosted Share', local: 'Local Gateway Share',
   hostedDisabled: 'An administrator has paused public sharing for your account. Existing hosted links are unavailable, but can still be revoked.',
-  reviewContent: 'Review the content to publish', you: 'You', assistant: 'Assistant',
+  reviewContent: 'Review the content to publish', you: 'You', assistant: 'Agent',
 };

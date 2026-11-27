@@ -35,14 +35,14 @@ describe('agent display names', () => {
     const en = messages('en').agentsSettings;
     const zh = messages('zh').agentsSettings;
     const agents = [
-      ['main', 'General assistant', '通用助手'],
+      ['main', 'General agent', '通用智能体'],
       ['conductor', 'Conductor', '指挥家'],
       ['task-router', 'Task Router', '任务调度员'],
-      ['coder', 'Coding Expert', '编程专家'],
-      ['writer', 'Writing Assistant', '写作助手'],
-      ['researcher', 'Research Assistant', '研究助手'],
+      ['coder', 'Coding agent', '编程智能体'],
+      ['writer', 'Writing agent', '写作智能体'],
+      ['researcher', 'Research agent', '研究智能体'],
       ['data-analyst', 'Data Analyst', '数据分析师'],
-      ['creative', 'Creative Assistant', '创意助手'],
+      ['creative', 'Creative agent', '创意智能体'],
     ] as const;
 
     for (const [id, enName, zhName] of agents) {
@@ -55,14 +55,14 @@ describe('agent display names', () => {
     const en = messages('en').agentsSettings;
     const zh = messages('zh').agentsSettings;
 
-    expect(agentListDisplayName({ id: 'main', name: 'Main' }, zh)).toBe('通用助手');
-    expect(agentListDisplayName({ id: 'coder', name: 'Coder' }, zh)).toBe('编程专家');
+    expect(agentListDisplayName({ id: 'main', name: 'Main' }, zh)).toBe('通用智能体');
+    expect(agentListDisplayName({ id: 'coder', name: 'Coder' }, zh)).toBe('编程智能体');
     expect(agentListDisplayName({ id: 'conductor', name: 'Conductor' }, zh)).toBe('指挥家');
     expect(agentListDisplayDescription({ id: 'conductor' }, zh)).toBe(
-      '协调多位专家，并向你汇报进展。',
+      '协调多个智能体，并向你汇报进展。',
     );
     expect(agentListDisplayDescription({ id: 'conductor' }, en)).toBe(
-      'Coordinates experts and keeps you updated on progress.',
+      'Coordinates agents and keeps you updated on progress.',
     );
     expect(
       agentListDisplayDescription(
@@ -103,9 +103,9 @@ describe('agent display names', () => {
     const zh = messages('zh').agentsSettings;
 
     expect(agentListDisplayName(agent, zh)).toBe('任务调度员');
-    expect(agentListDisplayDescription(agent, zh)).toBe('为委派的任务选择合适的专家。');
+    expect(agentListDisplayDescription(agent, zh)).toBe('为委派的任务选择合适的智能体。');
     expect(agentListDisplayName(agent, en)).toBe(agent.name);
-    expect(agentListDisplayDescription(agent, en)).toBe(agent.description);
+    expect(agentListDisplayDescription(agent, en)).toBe('Selects one suitable agent for a delegated task.');
     expect(agentListDisplayName({ ...agent, name: 'My Router' }, zh)).toBe('My Router');
     expect(agentListDisplayDescription({ ...agent, description: 'My routing rules.' }, zh)).toBe('My routing rules.');
   });

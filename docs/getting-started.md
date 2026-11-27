@@ -37,7 +37,7 @@ You do not need to configure channels, tools, extra Agents, or remote access bef
 3. Open **Chat** or run `xopc`.
 4. Send: `Reply with “xopc is ready” and tell me which model you are using.`
 
-The setup is complete when the assistant replies without a credential or connection error.
+The setup is complete when the agent replies without a credential or connection error.
 
 If it does not, run `xopc doctor` and continue with [Troubleshooting](./how-to/diagnose-broken-setup.md).
 
@@ -61,10 +61,10 @@ Some desktop releases also offer experimental **Connect recent work** onboarding
 | --- | --- | --- |
 | User model | Reviewable assertions, goals, priority windows, collaboration rules, and knowledge | [User model and memory](./user-understanding.md) |
 | Session | A conversation you can return to from any connected client | [Chat and sessions](./session.md) |
-| Agent | A named assistant with its own role, model choices, tools, and workspace | [Agents](./routing-system.md) |
+| Agent | A named agent with its own role, model choices, tools, and workspace | [Agents](./routing-system.md) |
 | Project and Task | Long-running work with an explicit result, status, and next action | [Projects, Tasks, and Notes](./projects-tasks-notes.md) |
 | Automation | A schedule, webhook, or manual trigger that starts work | [Automations](./automations.md) |
-| Channel | Telegram, Weixin, or Feishu access to the same assistant | [Channels](./channels/index.md) |
+| Channel | Telegram, Weixin, or Feishu access to the same agent | [Channels](./channels/index.md) |
 
 
 ## Recommended next steps

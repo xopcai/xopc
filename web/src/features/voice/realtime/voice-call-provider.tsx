@@ -220,7 +220,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             {!active && voice.failureKind === 'session' ? <div className="space-y-2 text-sm text-fg-muted">
               <p>{m.callSetupHint}</p>{settingsLink}
               {target?.mode === 'natural' && <Button type="button" variant="ghost" onClick={() => start({ ...target, mode: 'assistant', naturalBackend: undefined })}>
-                {language === 'zh' ? '改用当前助手' : 'Use current assistant'}
+                {language === 'zh' ? '改用当前智能体' : 'Use current agent'}
               </Button>}
             </div> : null}
             {connected && captions ? <div className="space-y-3 text-sm leading-relaxed">

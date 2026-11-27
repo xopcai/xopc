@@ -60,7 +60,7 @@ afterEach(() => { act(() => root.unmount()); container.remove(); });
 
 it('localizes the built-in overview while retaining the stored name in the editor', async () => {
   const overview = container.querySelector('#agent-panel-overview');
-  expect(overview?.textContent).toContain('编程专家');
+  expect(overview?.textContent).toContain('编程智能体');
   expect(overview?.textContent).toContain('编写、调试、重构和测试软件。');
   await click(tab('个性'));
   expect(container.querySelector<HTMLInputElement>('input[placeholder="例如：小助"]')?.value).toBe('Coder');

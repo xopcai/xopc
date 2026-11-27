@@ -4,7 +4,6 @@ import ai.xopc.mobile.R
 import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.theme.LocalChatColors
 import android.graphics.Bitmap
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -32,7 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -54,15 +52,11 @@ internal val FLOATING_TAB_BAR_COMPOSER_GAP: Dp = 8.dp
 internal val FLOATING_TAB_BAR_BOTTOM_MARGIN: Dp = 6.dp
 internal val FLOATING_TAB_BAR_TOTAL_INSET: Dp = FLOATING_TAB_BAR_HEIGHT + FLOATING_TAB_BAR_BOTTOM_MARGIN + FLOATING_TAB_BAR_COMPOSER_GAP
 
-internal fun floatingPillSurfaceColor(scheme: ColorScheme, isDark: Boolean): Color =
-  if (isDark) scheme.surfaceContainer.copy(alpha = 0.94f) else scheme.surface.copy(alpha = 0.95f)
-
-internal fun floatingPillBorderColor(scheme: ColorScheme, isDark: Boolean): Color =
-  scheme.outlineVariant.copy(alpha = if (isDark) 0.55f else 0.45f)
+internal fun floatingPillSurfaceColor(scheme: ColorScheme): Color = scheme.surface
 
 /**
  * Floating pill bottom navigation bar with 5 core slots (Ada, Conversations, Workbench, Notes, Library).
- * Designed with >=48dp touch targets, translucent/elevated pill surface, and active capsule highlight.
+ * Designed with >=44dp touch targets, borderless pill surface matching chat input, and active capsule highlight.
  */
 @Composable
 internal fun FloatingTabBar(
@@ -81,7 +75,6 @@ internal fun FloatingTabBar(
   val chatColors = LocalChatColors.current
   val attentionColors = LocalAttentionColors.current
   val haptics = LocalHapticFeedback.current
-  val isDark = scheme.background.luminance() < 0.2f
   val barLabel = stringResource(R.string.tab_bar_description)
   val adaLabel = personalName?.trim()?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.tab_ada_fallback)
   val conversationsLabel = stringResource(R.string.tab_conversations)
@@ -90,9 +83,8 @@ internal fun FloatingTabBar(
   val libraryLabel = stringResource(R.string.library_title)
   val pendingRecordingDescription = stringResource(R.string.notes_pending_recording_indicator)
 
-  // Translucent elevated pill surface; falls back cleanly to solid border-framed contrast in dark/light modes.
-  val pillColor = floatingPillSurfaceColor(scheme, isDark)
-  val borderColor = floatingPillBorderColor(scheme, isDark)
+  // Borderless opaque pill surface matching the chat composer background.
+  val pillColor = floatingPillSurfaceColor(scheme)
 
   Box(
     modifier = modifier
@@ -105,9 +97,6 @@ internal fun FloatingTabBar(
     Surface(
       shape = CircleShape,
       color = pillColor,
-      border = BorderStroke(1.dp, borderColor),
-      shadowElevation = if (isDark) 2.dp else 6.dp,
-      tonalElevation = if (isDark) 2.dp else 0.dp,
       modifier = Modifier
         .fillMaxWidth()
         .widthIn(max = 440.dp)

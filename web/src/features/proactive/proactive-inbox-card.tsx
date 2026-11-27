@@ -64,7 +64,7 @@ const COPY = {
     adoptBtn: '采纳启用',
     rollbackBtn: '一键回滚',
     resolvedToast: '已更新处理状态',
-    discussBtn: '和助手讨论',
+    discussBtn: '和智能体讨论',
     taskStartedNotice: '已批准并启动执行任务',
     openTaskBtn: '查看任务',
   },

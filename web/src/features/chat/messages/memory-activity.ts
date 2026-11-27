@@ -92,8 +92,8 @@ export function buildMemoryMutationView(block: ToolUseContent, zh: boolean): Mem
   };
   const scope = asRecord(receipt?.scope)?.type;
   const scopes: Record<string, string> = zh
-    ? { global: '所有协作', agent: '当前助手', workspace: '当前工作区', project: '当前项目', session: '当前会话' }
-    : { global: 'All work', agent: 'This assistant', workspace: 'This workspace', project: 'This project', session: 'This conversation' };
+    ? { global: '所有协作', agent: '当前智能体', workspace: '当前工作区', project: '当前项目', session: '当前会话' }
+    : { global: 'All work', agent: 'This agent', workspace: 'This workspace', project: 'This project', session: 'This conversation' };
   if (receipt?.status === 'forgotten') return { title: zh ? '已忘记这条记忆' : 'Memory forgotten',
     purpose: zh ? '后续不再自动使用；原始对话和文件保留，已运行的上下文不受影响。' : 'Future automatic recall is stopped. Original sources and already running contexts are retained.' };
   if (receipt?.available === false) return { title: zh ? '这条记忆已不再可用' : 'This memory is no longer available', purpose: '' };

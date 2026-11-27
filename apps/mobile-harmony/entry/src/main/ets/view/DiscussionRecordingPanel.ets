@@ -484,7 +484,7 @@ export struct XopcDiscussionRecordingPanelView {
       }
     }.id('discussion-recording-float').width(this.panel.cardWidth).height(this.panelHeight)
       .alignItems(HorizontalAlign.Start).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(24))
-      .shadow(ShadowStyle.OUTER_DEFAULT_SM).clip(true)
+      .clip(true)
       .position({
         x: this.docked ? (this.viewportWidth - this.panel.cardWidth) / 2 : this.panel.panelX,
         y: this.docked ? this.viewportHeight - this.panelHeight - 8 - this.bottomChromeInset : this.panel.panelY

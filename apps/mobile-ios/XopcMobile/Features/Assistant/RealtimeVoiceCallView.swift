@@ -296,7 +296,6 @@ struct RealtimeVoiceMiniBar: View {
         .padding(.horizontal, 14)
         .frame(height: 62)
         .background(.regularMaterial, in: .rect(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.secondary.opacity(0.15)))
         .padding(.horizontal, 16)
     }
 }

@@ -34,7 +34,7 @@ Runtime files live under `<state>/connectors/cli/runtimes/<adapter>/<version>/<p
 
 ## Verify and troubleshoot
 
-After connecting, use **Check connection**, then ask the assistant to read a document, event or todo you recognize. Verify the selected account and returned content. Successful login does not establish every enterprise permission.
+After connecting, use **Check connection**, then ask the agent to read a document, event or todo you recognize. Verify the selected account and returned content. Successful login does not establish every enterprise permission.
 
 - Missing content: check the selected account, resource sharing and application scopes.
 - Authorization failure: inspect the dialog's reason; administrator approval or subscription limits require administrator action.

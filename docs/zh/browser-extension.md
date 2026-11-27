@@ -208,7 +208,7 @@ Chrome 不会在文件变化后自动重新加载解压扩展。如果 **设置 
 
 如果用户拒绝新权限，或授权后页面采集立即失败，xopc 会移除本次新授予的 origin，并在下次明确操作时重新申请。
 
-### 助手提示 `DRIVER_UNAVAILABLE`
+### 智能体提示 `DRIVER_UNAVAILABLE`
 
 ```bash
 xopc browser extension doctor

@@ -145,7 +145,7 @@ export function TaskCurrentAction({ detail, executorName, language, onUpdated, r
           onClick={discussWithPersonal}
         >
           <MessageCircle className="size-3.5" aria-hidden />
-          {zh ? '和助手讨论' : 'Discuss with assistant'}
+          {zh ? '和智能体讨论' : 'Discuss with agent'}
         </Button>
       )}
     </div>

@@ -232,9 +232,9 @@
         "formName": "Webhook agent task"
       },
       "blockedTask": {
-        "name": "Blocked task helper",
+        "name": "Blocked task agent",
         "description": "When a task becomes blocked, ask an agent to diagnose it.",
-        "formName": "Blocked task helper",
+        "formName": "Blocked task agent",
         "instruction": "A task became blocked. Diagnose the likely blocker and suggest the next concrete step."
       },
       "noteCreated": {
@@ -322,7 +322,7 @@
       "agent": "Use default assignee",
       "agentWithId": "Assignee · {id}",
       "taskWithId": "Task: {id}",
-      "runAgent": "Assign to an assistant or expert",
+      "runAgent": "Assign to an agent",
       "runTask": "Run Task"
     },
     "status": {

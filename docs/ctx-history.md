@@ -26,6 +26,6 @@ Use `--output-dir <path>` to choose another directory, or `--json` for script-fr
 
 ## Export boundary
 
-The exporter includes visible user and assistant messages, tool calls and outputs, local command activity, and compaction summaries. It deliberately excludes hidden context rows, system prompts, model reasoning blocks, invisible extension messages, and deleted Sessions. Each reset generation keeps its own stable XOPC Session ID.
+The exporter includes visible user and agent messages, tool calls and outputs, local command activity, and compaction summaries. It deliberately excludes hidden context rows, system prompts, model reasoning blocks, invisible extension messages, and deleted Sessions. Each reset generation keeps its own stable XOPC Session ID.
 
 The export is explicit; XOPC does not run it in the background. Newly created output directories and exported files use private permissions (`0700` and `0600`) on platforms that support POSIX modes. Review the JSONL before importing it if a Session may contain sensitive text.

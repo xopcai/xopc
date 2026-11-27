@@ -349,41 +349,41 @@
     "connectionsTitle": "连接",
     "filesNavAria": "角色配置文件",
     "listSearchPlaceholder": "搜索名称、职责或 ID",
-    "listAssistantsHeading": "常用助手",
-    "listExpertsHeading": "专家",
+    "listAssistantsHeading": "常用智能体",
+    "listExpertsHeading": "专项智能体",
     "listSystemHeading": "系统角色",
     "listChatAction": "对话",
     "listChatWithName": "与 {{name}} 对话",
     "listEmpty": "没有找到匹配的结果。",
-    "listNoAgentsYet": "还没有可用的助手或专家。",
-    "listNewAgentCard": "新建专家",
+    "listNoAgentsYet": "还没有可用的智能体。",
+    "listNewAgentCard": "新建智能体",
     "manualCreateMenu": "手动创建",
-    "manualCreateTitle": "手动创建专家",
+    "manualCreateTitle": "手动创建智能体",
     "manualCreateExecution": "执行方式",
     "manualCreateCodexHint": "在项目会话中选择此 Agent。Codex 使用 Gateway 主机上的 CLI 登录，以完全访问权限运行，无需审批。",
     "manualCreateAgyHint": "在项目会话中选择此 Agent。Antigravity (AGY) 通过 agy acp 使用 Gateway 主机上的 CLI 登录，以完全访问权限运行。",
     "manualCreateDescription": "只填写必要信息即可创建，其余设置可以在后续对话中继续完善。",
-    "manualCreateClose": "关闭手动创建专家",
+    "manualCreateClose": "关闭手动创建智能体",
     "manualCreateName": "名称",
-    "manualCreateNamePlaceholder": "周报专家",
+    "manualCreateNamePlaceholder": "周报智能体",
     "manualCreateInstructions": "工作说明（可选）",
     "manualCreateInstructionsPlaceholder": "简单描述它的职责和工作方式",
     "manualCreateWorkspace": "工作区（可选）",
-    "manualCreateWorkspaceHint": "可以指定专家工作的文件夹。留空时，系统会分配工作区。",
+    "manualCreateWorkspaceHint": "可以指定智能体工作的文件夹。留空时，系统会分配工作区。",
     "manualCreateWorkspacePlaceholder": "使用自动工作区",
     "manualCreateCancel": "取消",
-    "manualCreateSubmit": "创建专家",
+    "manualCreateSubmit": "创建智能体",
     "manualCreating": "正在创建…",
-    "setupTitle": "新建专家",
-    "setupDescription": "告诉 {{name}} 你希望这位专家负责什么，以及你希望收到什么结果。",
-    "setupComposerPlaceholder": "你希望这位专家负责什么？",
-    "setupPromptIdentity": "帮我创建一位专家，一起确定它的职责和交流方式",
-    "setupPromptProject": "创建周报专家，每周五汇总项目进展、阻塞项和下一步",
-    "setupPromptComplete": "先问我几个问题，再帮我创建专家",
+    "setupTitle": "新建智能体",
+    "setupDescription": "告诉 {{name}} 你希望这个智能体负责什么，以及你希望收到什么结果。",
+    "setupComposerPlaceholder": "你希望这个智能体负责什么？",
+    "setupPromptIdentity": "帮我创建一个智能体，一起确定它的职责和交流方式",
+    "setupPromptProject": "创建周报智能体，每周五汇总项目进展、阻塞项和下一步",
+    "setupPromptComplete": "先问我几个问题，再帮我创建智能体",
     "listChatWithAgent": "开始对话",
     "listConfigureAgent": "配置 {{name}}",
     "listDefaultBadge": "全局默认",
-    "listPersonalDefaultBadge": "个人助手",
+    "listPersonalDefaultBadge": "个人智能体",
     "listDisabledBadge": "已停用",
     "listCustomBadge": "自定义",
     "listUsesGlobalSettings": "使用全局配置",
@@ -417,27 +417,27 @@
     "listSkillsCount": "允许 {{count}} 个",
     "builtInAgents": {
       "assistant": {
-        "name": "通用助手",
+        "name": "通用智能体",
         "description": "解答常见问题，协助处理日常事务。"
       },
       "conductor": {
         "name": "指挥家",
-        "description": "协调多位专家，并向你汇报进展。"
+        "description": "协调多个智能体，并向你汇报进展。"
       },
       "taskRouter": {
         "name": "任务调度员",
-        "description": "为委派的任务选择合适的专家。"
+        "description": "为委派的任务选择合适的智能体。"
       },
       "coding": {
-        "name": "编程专家",
+        "name": "编程智能体",
         "description": "编写、调试、重构和测试软件。"
       },
       "writing": {
-        "name": "写作助手",
+        "name": "写作智能体",
         "description": "根据受众需求起草、编辑和润色内容。"
       },
       "research": {
-        "name": "研究助手",
+        "name": "研究智能体",
         "description": "研究主题、比较来源并综合结论。"
       },
       "data": {
@@ -445,7 +445,7 @@
         "description": "清洗和分析数据，生成可视化并交付报告。"
       },
       "creative": {
-        "name": "创意助手",
+        "name": "创意智能体",
         "description": "探索视觉方向、提示词、设计评审和创意方案。"
       }
     },

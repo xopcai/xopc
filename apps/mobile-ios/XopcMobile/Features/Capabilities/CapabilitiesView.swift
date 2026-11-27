@@ -941,7 +941,6 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
             .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
-            .overlay { RoundedRectangle(cornerRadius: theme.corner(16)).strokeBorder(theme.secondary.opacity(0.18)) }
         }
         if verifiedURL != nil, panel?.qrUrl != nil {
             Button { showQr.toggle() } label: {

@@ -22,8 +22,8 @@ export function PlatformVoiceSettings({ disabled = false, modes, onPendingChange
     return voiceSettingsCatalogSchema.parse(response.payload);
   });
   const labels: Record<VoiceSelection['mode'], string> = zh ? {
-    transcription: '录音转文字', 'transcription.stream': '实时听写 / 语音助手输入', speech: '消息朗读', 'speech.stream': '语音助手输出', conversation: '自然语音对话',
-  } : { transcription: 'Recorded transcription', 'transcription.stream': 'Live dictation / assistant input', speech: 'Message readout', 'speech.stream': 'Assistant speech', conversation: 'Natural conversation' };
+    transcription: '录音转文字', 'transcription.stream': '实时听写 / 智能体语音输入', speech: '消息朗读', 'speech.stream': '智能体语音输出', conversation: '自然语音对话',
+  } : { transcription: 'Recorded transcription', 'transcription.stream': 'Live dictation / agent input', speech: 'Message readout', 'speech.stream': 'Agent speech', conversation: 'Natural conversation' };
   const request = async (selection?: VoiceSelection) => {
     if (!data) return;
     setBusy(true); setError('');

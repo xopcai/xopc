@@ -32,16 +32,16 @@ export function MemoryActions({ language, busy, statement, scope, onEdit, onDele
     return { agents: agents.payload?.agents ?? [], projects: projects.items ?? [] };
   });
   const choices: Array<{ value: Scope; icon: typeof Globe2; title: string; detail: string }> = [
-    { value: { type: 'global' }, icon: Globe2, title: zh ? '所有协作' : 'All work', detail: zh ? '任何助手和对话都可按需使用' : 'Available when relevant across all work' },
+    { value: { type: 'global' }, icon: Globe2, title: zh ? '所有协作' : 'All work', detail: zh ? '任何智能体和对话都可按需使用' : 'Available when relevant across all work' },
     ...(scopeData?.agents ?? []).map(agent => ({ value: { type: 'agent' as const, id: agent.id }, icon: Bot,
-      title: zh ? `仅助手：${agent.name || agent.id}` : `Assistant: ${agent.name || agent.id}`, detail: zh ? '不会分享给其他助手' : 'Not shared with other assistants' })),
+      title: zh ? `仅智能体：${agent.name || agent.id}` : `Agent: ${agent.name || agent.id}`, detail: zh ? '不会分享给其他智能体' : 'Not shared with other agents' })),
     ...(scopeData?.projects ?? []).map(project => ({ value: { type: 'project' as const, id: project.id }, icon: Globe2,
       title: zh ? `仅项目：${project.name}` : `Project: ${project.name}`, detail: zh ? '仅在此项目中按需使用' : 'Available only in this project' })),
   ];
   if (scope && !choices.some(choice => choice.value.type === scope.type && choice.value.id === scope.id)) {
     choices.push({ value: scope, icon: Bot, title: zh ? '保留现有范围' : 'Keep existing scope', detail: (zh
-      ? { global: '所有协作', agent: '指定助手', workspace: '指定工作区', project: '指定项目', session: '指定会话' }
-      : { global: 'All work', agent: 'Assigned assistant', workspace: 'Assigned workspace', project: 'Assigned project', session: 'Assigned conversation' })[scope.type] });
+      ? { global: '所有协作', agent: '指定智能体', workspace: '指定工作区', project: '指定项目', session: '指定会话' }
+      : { global: 'All work', agent: 'Assigned agent', workspace: 'Assigned workspace', project: 'Assigned project', session: 'Assigned conversation' })[scope.type] });
   }
   const itemClass = 'flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm text-fg outline-none focus:bg-surface-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50';
   return <>
@@ -81,7 +81,7 @@ export function MemoryActions({ language, busy, statement, scope, onEdit, onDele
         <Dialog.Content className="fixed left-1/2 top-1/2 z-[120] flex h-[min(25rem,calc(100dvh-2rem))] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover">
           <header className="shrink-0 border-b border-edge px-5 py-4">
             <Dialog.Title className="font-semibold text-fg">{zh ? '这条记忆在哪里生效？' : 'Where should this memory apply?'}</Dialog.Title>
-            <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">{zh ? '选择明确的助手或项目。工作区和会话范围也可在对应聊天中设置。' : 'Choose an assistant or project. Workspace and conversation scopes can also be set in the corresponding chat.'}</Dialog.Description>
+            <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">{zh ? '选择明确的智能体或项目。工作区和会话范围也可在对应聊天中设置。' : 'Choose an agent or project. Workspace and conversation scopes can also be set in the corresponding chat.'}</Dialog.Description>
           </header>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
             {scopeLoading ? <Skeleton className="h-20 w-full rounded-xl" /> : null}

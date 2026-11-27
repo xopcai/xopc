@@ -105,7 +105,7 @@
     "basicConfiguration": "基础配置",
     "basicConfigurationHint": "配置此通道启动并接收消息所需的必要字段。",
     "agentRouting": "由谁回复",
-    "agentRoutingHint": "选择处理此通道消息的助手或专家。账号或对话有单独设置时，优先使用该设置。",
+    "agentRoutingHint": "选择处理此通道消息的智能体。账号或对话有单独设置时，优先使用该设置。",
     "messageHandling": "消息处理",
     "messageHandlingHint": "选择由谁回复此通道收到的消息。",
     "agentRoutingSelect": "使用默认",
@@ -180,7 +180,7 @@
   },
   "voiceSettings": {
     "setup": {
-      "subtitle": "用声音输入，与助手自然对话。",
+      "subtitle": "用声音输入，与智能体自然对话。",
       "service": "服务接入",
       "enable": "启用实时语音",
       "dictation": "实时听写",
@@ -253,7 +253,7 @@
     "apiKeyRevealFailed": "无法从配置文件读取密钥。",
     "overview": {
       "title": "语音状态",
-      "description": "快速确认助手现在能不能听、会不会说。",
+      "description": "快速确认智能体现在能不能听、会不会说。",
       "input": "输入",
       "replies": "回复",
       "voice": "声音",
@@ -273,7 +273,7 @@
       "turnDetection": "自动语音分轮",
       "turnDetectionDescription": "自动检测说话停顿，并在每句话说完后自动发送。",
       "bargeIn": "允许打断",
-      "bargeInDescription": "助手回复时再次说话，会停止当前回复。"
+      "bargeInDescription": "智能体回复时再次说话，会停止当前回复。"
     },
     "behavior": {
       "title": "语音应该如何工作",
@@ -293,7 +293,7 @@
         },
         "always": {
           "title": "始终朗读回复",
-          "description": "每条助手回复都会朗读。"
+          "description": "每条智能体回复都会朗读。"
         }
       }
     },
@@ -303,7 +303,7 @@
     },
     "stt": {
       "title": "语音识别服务",
-      "description": "将语音消息转写成文字，让助手能够阅读。",
+      "description": "将语音消息转写成文字，让智能体能够阅读。",
       "enable": "启用语音输入",
       "enableDesc": "开启后，可将语音消息转写给智能体使用。",
       "provider": "服务商",
@@ -322,26 +322,26 @@
     },
     "tts": {
       "title": "消息朗读服务",
-      "description": "在需要时把助手回复合成为音频。",
+      "description": "在需要时把智能体回复合成为音频。",
       "enable": "启用语音回复",
-      "enableDesc": "开启后，助手回复会按下方规则朗读。",
+      "enableDesc": "开启后，智能体回复会按下方规则朗读。",
       "trigger": "朗读回复",
       "triggerOff": "关闭",
       "triggerAlways": "始终",
       "triggerInbound": "仅回复语音消息时",
       "triggerTagged": "标签（[[tts]]）",
       "triggerDescOff": "完全关闭 TTS。",
-      "triggerDescAlways": "对所有助手消息启用语音朗读。",
+      "triggerDescAlways": "对所有智能体消息启用语音朗读。",
       "triggerDescInbound": "仅当用户发送语音时以语音回复。",
       "triggerDescTagged": "仅在使用 [[tts]] 指令时。",
-      "triggerHelp": "选择什么时候把助手文字回复转换成语音。",
+      "triggerHelp": "选择什么时候把智能体文字回复转换成语音。",
       "provider": "语音引擎",
       "providerOpenai": "OpenAI TTS",
       "providerEdge": "Microsoft Edge（免费）",
       "voice": "音色",
       "alwaysWarning": "始终朗读会在高频聊天中打扰用户，只建议在明确以语音为主的通道中开启。",
       "statusTitle": "当前语音回复状态",
-      "statusOff": "语音回复已关闭，助手仍会正常发送文字回复。",
+      "statusOff": "语音回复已关闭，智能体仍会正常发送文字回复。",
       "statusReady": "已可用：",
       "statusNeedsSetup": "需要配置：",
       "advanced": {
@@ -361,7 +361,7 @@
       "test": {
         "title": "试听音色",
         "description": "用当前服务商、模型和音色生成一小段样例，确认效果后再用于聊天。",
-        "sampleText": "你好，我是你的助手。启用语音输出后，我可以朗读助手回复。",
+        "sampleText": "你好，我是你的智能体。启用语音输出后，我可以朗读智能体回复。",
         "play": "试听",
         "stop": "停止",
         "generating": "生成中…",
@@ -390,7 +390,7 @@
       "service": "服务接入",
       "diagnostics": "排查问题",
       "defaultMode": "默认通话方案",
-      "assistant": "当前助手",
+      "assistant": "当前智能体",
       "natural": "自然语音",
       "assistantHint": "沿用当前聊天的模型与工具能力。",
       "naturalHint": "直接进行音频交流，当前不支持执行工具。",
@@ -401,7 +401,7 @@
       "refreshDevices": "授权并刷新设备",
       "deviceHint": "设备选择仅保存在当前浏览器。扬声器跟随系统。",
       "dictationReady": "语音输入",
-      "agentReady": "助手通话",
+      "agentReady": "智能体通话",
       "omniReady": "原生语音",
       "ready": "已配置",
       "unavailable": "未就绪",

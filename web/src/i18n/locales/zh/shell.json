@@ -101,7 +101,7 @@
     "setupBannerLinkModels": "默认模型",
     "setupBannerDismiss": "不再提示",
     "gatewayExitTitle": "本地网关已停止",
-    "gatewayExitBody": "助手后端进程异常退出，请重启应用后再试。"
+    "gatewayExitBody": "智能体后端进程异常退出，请重启应用后再试。"
   },
   "connection": {
     "connecting": "连接中…",
@@ -152,7 +152,7 @@
     "taskListStartChat": "开始对话",
     "appMenuAria": "应用菜单与设置",
     "taskSessionMenuAria": "会话操作",
-    "taskSessionAgentRunning": "助手仍在回复中",
+    "taskSessionAgentRunning": "智能体仍在回复中",
     "taskSessionAgentCompleted": "有新的回复结果",
     "taskSessionAgentFailed": "回复需要处理",
     "automationRunsExpand": "展开执行记录",
@@ -187,10 +187,10 @@
     "sessionViewLabel": "会话视图",
     "sessionViewRecent": "最近",
     "sessionViewProjects": "项目",
-    "sessionViewExperts": "专家",
-    "createExpert": "新建专家",
-    "expertsEmpty": "新建一位专家，让它负责一项经常做的工作。",
-    "expertsLoadError": "无法加载专家列表。",
+    "sessionViewExperts": "智能体",
+    "createExpert": "新建智能体",
+    "expertsEmpty": "新建一个智能体，让它负责一项经常做的工作。",
+    "expertsLoadError": "无法加载智能体列表。",
     "expertConversationError": "无法打开最近对话，请重试。",
     "expertNewConversation": "与 {{name}} 新建对话",
     "expertSettings": "设置 {{name}}",

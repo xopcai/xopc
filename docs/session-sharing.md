@@ -37,11 +37,11 @@ The share dialog shows the detected reachability. See [Remote access](./remote-a
 
 ## What is shared
 
-By default, the snapshot contains only visible user and assistant text.
+By default, the snapshot contains only visible user and agent text.
 
 | Content | Shared? |
 | --- | --- |
-| Visible user and assistant messages | Yes |
+| Visible user and agent messages | Yes |
 | Markdown headings, lists, tables, quotes, links, and code blocks | Yes |
 | Tool names and completed/failed states | Only when you enable **Include tool activities** |
 | Session attachments | Only the files you select individually |

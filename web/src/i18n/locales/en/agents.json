@@ -349,41 +349,41 @@
     "connectionsTitle": "Connections",
     "filesNavAria": "Profile files",
     "listSearchPlaceholder": "Search by name, responsibility, or ID",
-    "listAssistantsHeading": "Everyday assistants",
-    "listExpertsHeading": "Experts",
+    "listAssistantsHeading": "Everyday agents",
+    "listExpertsHeading": "Specialized agents",
     "listSystemHeading": "System roles",
     "listChatAction": "Chat",
     "listChatWithName": "Chat with {{name}}",
     "listEmpty": "No matches found.",
-    "listNoAgentsYet": "No assistants or experts yet.",
-    "listNewAgentCard": "New expert",
+    "listNoAgentsYet": "No agents yet.",
+    "listNewAgentCard": "New agent",
     "manualCreateMenu": "Create manually",
-    "manualCreateTitle": "Create an expert manually",
+    "manualCreateTitle": "Create an agent manually",
     "manualCreateExecution": "Runtime",
     "manualCreateCodexHint": "Select this Agent in a Project chat. Codex uses the Gateway host’s CLI login and runs with full access, without approval prompts.",
     "manualCreateAgyHint": "Select this Agent in a Project chat. Antigravity (AGY) connects via agy acp using the Gateway host’s CLI login and runs with full access.",
-    "manualCreateDescription": "Enter a name and optionally add working instructions. You can refine the expert in chat.",
-    "manualCreateClose": "Close expert creation",
+    "manualCreateDescription": "Enter a name and optionally add working instructions. You can refine the agent in chat.",
+    "manualCreateClose": "Close agent creation",
     "manualCreateName": "Name",
-    "manualCreateNamePlaceholder": "Weekly reporting expert",
+    "manualCreateNamePlaceholder": "Weekly reporting agent",
     "manualCreateInstructions": "Working instructions (optional)",
     "manualCreateInstructionsPlaceholder": "Briefly describe its responsibilities and working style",
     "manualCreateWorkspace": "Workspace (optional)",
-    "manualCreateWorkspaceHint": "Choose a folder for this expert, or leave it blank to use an assigned workspace.",
+    "manualCreateWorkspaceHint": "Choose a folder for this agent, or leave it blank to use an assigned workspace.",
     "manualCreateWorkspacePlaceholder": "Use automatic workspace",
     "manualCreateCancel": "Cancel",
-    "manualCreateSubmit": "Create expert",
+    "manualCreateSubmit": "Create agent",
     "manualCreating": "Creating…",
-    "setupTitle": "New expert",
-    "setupDescription": "Tell {{name}} what this expert should handle and what you want it to deliver.",
-    "setupComposerPlaceholder": "What should this expert handle?",
-    "setupPromptIdentity": "Help me create an expert and define its responsibilities and communication style",
-    "setupPromptProject": "Create a weekly reporting expert to summarize progress, blockers, and next steps every Friday",
-    "setupPromptComplete": "Ask me a few questions before creating an expert",
+    "setupTitle": "New agent",
+    "setupDescription": "Tell {{name}} what this agent should handle and what you want it to deliver.",
+    "setupComposerPlaceholder": "What should this agent handle?",
+    "setupPromptIdentity": "Help me create an agent and define its responsibilities and communication style",
+    "setupPromptProject": "Create a weekly reporting agent to summarize progress, blockers, and next steps every Friday",
+    "setupPromptComplete": "Ask me a few questions before creating an agent",
     "listChatWithAgent": "Start a chat",
     "listConfigureAgent": "Configure {{name}}",
     "listDefaultBadge": "Global default",
-    "listPersonalDefaultBadge": "Personal assistant",
+    "listPersonalDefaultBadge": "Personal agent",
     "listDisabledBadge": "Disabled",
     "listCustomBadge": "Custom",
     "listUsesGlobalSettings": "Uses global settings",
@@ -417,27 +417,27 @@
     "listSkillsCount": "{{count}} allowed",
     "builtInAgents": {
       "assistant": {
-        "name": "General assistant",
+        "name": "General agent",
         "description": "Answers general questions and helps with everyday work."
       },
       "conductor": {
         "name": "Conductor",
-        "description": "Coordinates experts and keeps you updated on progress."
+        "description": "Coordinates agents and keeps you updated on progress."
       },
       "taskRouter": {
         "name": "Task Router",
-        "description": "Selects one suitable specialist for a delegated task."
+        "description": "Selects one suitable agent for a delegated task."
       },
       "coding": {
-        "name": "Coding Expert",
+        "name": "Coding agent",
         "description": "Build, debug, refactor, and test software."
       },
       "writing": {
-        "name": "Writing Assistant",
+        "name": "Writing agent",
         "description": "Draft, edit, and refine content for its audience."
       },
       "research": {
-        "name": "Research Assistant",
+        "name": "Research agent",
         "description": "Research topics, compare sources, and synthesize findings."
       },
       "data": {
@@ -445,7 +445,7 @@
         "description": "Clean and analyze data, create visualizations, and report results."
       },
       "creative": {
-        "name": "Creative Assistant",
+        "name": "Creative agent",
         "description": "Explore visual direction, prompts, critique, and creative options."
       }
     },

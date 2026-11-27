@@ -54,7 +54,6 @@ internal fun ClarificationCardSurface(
     shape = RoundedCornerShape(20.dp),
     color = palette.surface,
     contentColor = palette.primaryText,
-    shadowElevation = 6.dp,
     content = content,
   )
 }
@@ -72,7 +71,6 @@ internal fun ClarificationCollapsedBar(
     shape = RoundedCornerShape(18.dp),
     color = palette.surface,
     contentColor = palette.primaryText,
-    shadowElevation = 4.dp,
   ) {
     Row(
       Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
@@ -326,8 +324,12 @@ internal fun ClarificationCustomEditor(
       colors = OutlinedTextFieldDefaults.colors(
         focusedContainerColor = palette.inputFill,
         unfocusedContainerColor = palette.inputFill,
-        focusedBorderColor = palette.accent,
-        unfocusedBorderColor = palette.border,
+        disabledContainerColor = palette.inputFill,
+        errorContainerColor = palette.inputFill,
+        focusedBorderColor = Color.Transparent,
+        unfocusedBorderColor = Color.Transparent,
+        disabledBorderColor = Color.Transparent,
+        errorBorderColor = Color.Transparent,
         focusedTextColor = palette.primaryText,
         unfocusedTextColor = palette.primaryText,
       ),

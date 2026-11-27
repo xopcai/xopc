@@ -14,9 +14,9 @@ const copy = computed(() => zh.value ? {
   ],
   guides: '按你正在做的事探索',
   groups: [
-    { title: '对话与个人助手', description: '从一次对话开始，让背景和偏好持续积累。', links: [['认识 Ada', 'personal-ai'], ['聊天与 Session', 'session'], ['用户理解', 'user-understanding'], ['分享会话', 'session-sharing']] },
+    { title: '对话与个人智能体', description: '从一次对话开始，让背景和偏好持续积累。', links: [['认识 Ada', 'personal-ai'], ['聊天与 Session', 'session'], ['用户理解', 'user-understanding'], ['分享会话', 'session-sharing']] },
     { title: '文件与任务交付', description: '带入资料、组织工作，把想法变成可以验收的成果。', links: [['工作空间', 'workspace-guide'], ['任务交付', 'task-delegation'], ['任务验收', 'task-review'], ['Project、Task 与笔记', 'projects-tasks-notes']] },
-    { title: '流程与自动化', description: '选择合适的助手，让重复工作按流程或计划运行。', links: [['Agent', 'routing-system'], ['Workflow', 'workflows'], ['Automation', 'automations'], ['连接器', 'connectors/']] },
+    { title: '流程与自动化', description: '选择合适的智能体，让重复工作按流程或计划运行。', links: [['Agent', 'routing-system'], ['Workflow', 'workflows'], ['Automation', 'automations'], ['连接器', 'connectors/']] },
     { title: '随时随地使用', description: '从你常用的设备、浏览器和消息应用继续工作。', links: [['消息通道', 'channels/'], ['Chrome 浏览器扩展', 'browser-extension'], ['手机应用', 'mobile-app'], ['远程访问', 'remote-access']] },
   ],
   more: '配置与维护',
@@ -36,9 +36,9 @@ const copy = computed(() => zh.value ? {
   ],
   guides: 'Explore what you want to do',
   groups: [
-    { title: 'Chat and your assistant', description: 'Start a conversation and carry context and preferences forward.', links: [['Meet Ada', 'personal-ai'], ['Chat and Sessions', 'session'], ['User understanding', 'user-understanding'], ['Share a conversation', 'session-sharing']] },
+    { title: 'Chat and your agent', description: 'Start a conversation and carry context and preferences forward.', links: [['Meet Ada', 'personal-ai'], ['Chat and Sessions', 'session'], ['User understanding', 'user-understanding'], ['Share a conversation', 'session-sharing']] },
     { title: 'Files and task delivery', description: 'Bring your material, organize the work, and review tangible results.', links: [['Workspace', 'workspace-guide'], ['Task delivery', 'task-delegation'], ['Task acceptance', 'task-review'], ['Projects, Tasks, and Notes', 'projects-tasks-notes']] },
-    { title: 'Workflows and automations', description: 'Choose an assistant and run repeatable work on a process or schedule.', links: [['Agents', 'routing-system'], ['Workflows', 'workflows'], ['Automations', 'automations'], ['Connectors', 'connectors/']] },
+    { title: 'Workflows and automations', description: 'Choose an agent and run repeatable work on a process or schedule.', links: [['Agents', 'routing-system'], ['Workflows', 'workflows'], ['Automations', 'automations'], ['Connectors', 'connectors/']] },
     { title: 'Work from anywhere', description: 'Continue from your devices, browser, and messaging apps.', links: [['Channels', 'channels/'], ['Chrome extension', 'browser-extension'], ['Mobile app', 'mobile-app'], ['Remote access', 'remote-access']] },
   ],
   more: 'Configuration and maintenance',

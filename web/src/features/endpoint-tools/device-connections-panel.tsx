@@ -19,7 +19,7 @@ import { DevicePairingAction } from './device-pairing-action';
 type LocalizedText = readonly [zh: string, en: string];
 const DEVICE_CONNECTIONS_PATH = '/api/endpoint-tools/device-connections';
 const mobileTools: ReadonlyArray<readonly [MobileDeviceChatTool, LucideIcon, LocalizedText, LocalizedText, LocalizedText, false?]> = [
-  ['mobile.file.pick', Folder, ['阅读文件', 'Read a file'], ['从手机上选择一个文件，请助理阅读或总结。', 'Select a file on your phone to read or summarize.'],
+  ['mobile.file.pick', Folder, ['阅读文件', 'Read a file'], ['从手机上选择一个文件，请智能体阅读或总结。', 'Select a file on your phone to read or summarize.'],
     ['请在选中的手机上打开文件选择器，帮我阅读并总结所选文件。', 'Let me pick a file on the selected phone, then read and summarize it.']],
   ['mobile.media.pick', Image, ['解读照片', 'Analyze a photo'], ['从相册选一张照片，了解画面里的内容。', 'Choose a photo from your library and ask about what’s in it.'],
     ['请让我在选中的手机上从相册选择一张照片，然后帮我解读。', 'Let me pick a photo on the selected phone, then describe what’s in it.']],

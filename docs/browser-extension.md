@@ -197,7 +197,7 @@ Current releases declare website access at installation and do not request origi
 
 A capture failure does not revoke site access. If Chrome blocks a site, adjust extension site access and retry.
 
-### The assistant reports `DRIVER_UNAVAILABLE`
+### The agent reports `DRIVER_UNAVAILABLE`
 
 ```bash
 xopc browser extension doctor

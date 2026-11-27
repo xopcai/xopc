@@ -1,7 +1,7 @@
 {
   "automations": {
     "title": "自动化",
-    "subtitle": "让助手按计划提醒、汇总和跟进，在这里查看结果。",
+    "subtitle": "让智能体按计划提醒、汇总和跟进，在这里查看结果。",
     "refresh": "刷新",
     "new": "新建",
     "createTitle": "创建自动化",
@@ -232,9 +232,9 @@
         "formName": "Webhook 智能体任务"
       },
       "blockedTask": {
-        "name": "阻塞任务助手",
+        "name": "阻塞任务智能体",
         "description": "当任务变成阻塞状态时，让智能体诊断原因。",
-        "formName": "阻塞任务助手",
+        "formName": "阻塞任务智能体",
         "instruction": "有一个任务变成阻塞状态。请诊断可能的阻塞原因，并建议下一步具体行动。"
       },
       "noteCreated": {
@@ -322,7 +322,7 @@
       "agent": "使用默认执行者",
       "agentWithId": "执行者 · {id}",
       "taskWithId": "任务：{id}",
-      "runAgent": "交给助手或专家执行",
+      "runAgent": "交给智能体执行",
       "runTask": "执行任务"
     },
     "status": {

@@ -42,7 +42,7 @@ Delegated Tasks use automatic acceptance by default: verified results close the 
 | --- | --- |
 | Waiting for information or access | Open the task and resolve its request |
 | Execution failed | Inspect the cause and existing artifacts before retrying |
-| Assistant says a file exists but you cannot find it | Ask for the saved path and inspect the artifact or task record |
+| Agent says a file exists but you cannot find it | Ask for the saved path and inspect the artifact or task record |
 | Gateway disconnected | Reconnect to the same instance and check current state |
 | Work should stop | Cancel the task execution; ending a voice call does not cancel it |
 

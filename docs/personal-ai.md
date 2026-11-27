@@ -13,7 +13,7 @@ Install the [desktop app](./desktop-app.md) or open the Gateway console, connect
 3. Share a little context: `I work independently. Keep replies concise, ask when the goal is unclear, and help me finish one useful thing at a time.`
 4. Bring a real question or small task. If you only want to discuss, say so.
 
-The first check is a visible reply in the personal conversation. Confirm that the assistant understood your request before granting access to additional material.
+The first check is a visible reply in the personal conversation. Confirm that the agent understood your request before granting access to additional material.
 
 ## Make it yours
 

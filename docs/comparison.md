@@ -39,13 +39,13 @@ Facts, inferences, and collaboration rules are distinct. The user can inspect, c
 
 xopc's intended progression is observation, reminder, proposal, confirmed execution, then explicitly authorized low-risk automation. High-impact external actions do not become acceptable merely because the model is confident.
 
-### One assistant across surfaces
+### One agent across surfaces
 
-Desktop, web, terminal, mobile, and messaging channels can reach the same Agents, Conversations, Projects, Tasks, and user understanding. Surfaces do not need to become separate assistants that forget one another.
+Desktop, web, terminal, mobile, and messaging channels can reach the same Agents, Conversations, Projects, Tasks, and user understanding. Surfaces do not need to become separate agents that forget one another.
 
 ## Choose xopc when
 
-- you want one personal assistant to become more useful across months, not only one session;
+- you want one personal agent to become more useful across months, not only one session;
 - you want understanding and memory to be visible and correctable;
 - you want to begin with messy input rather than maintaining a perfect task system;
 - you want Tasks and Projects to preserve important work and its evidence;
