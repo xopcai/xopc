@@ -389,10 +389,63 @@ extension ProductStateTests {
         let failed = await options.save(conversation, using: failingGateway)
         #expect(failed == nil)
         #expect(options.errorMessage != nil)
+        #expect(options.failedOperation == .save(refreshingVersion: false))
         #expect(!options.isSaving)
         #expect(options.thinkingLevel == "high")
-        let updated = await options.save(conversation, using: GatewayStub())
+        let updated = await options.retry(conversation, using: GatewayStub())
         #expect(updated?.thinkingLevel == "high")
+        #expect(options.errorMessage == nil)
+        #expect(options.failedOperation == nil)
+    }
+
+    @Test func sessionOptionConflictRefreshesVersionWithoutDiscardingTheSelection() async {
+        let conversation = ConversationSelection.existing(id: "session", title: "Options", agentId: "main")
+        let options = AssistantOptionsState()
+        var gateway = GatewayStub()
+        await options.load(conversation, using: gateway)
+        options.thinkingLevel = "high"
+        gateway.agentConfigVersion = 2
+        let failed = await options.save(conversation, using: gateway)
+        #expect(failed == nil)
+        #expect(options.failedOperation == .save(refreshingVersion: true))
+
+        let updated = await options.retry(conversation, using: gateway)
+        #expect(updated?.thinkingLevel == "high")
+        #expect(options.errorMessage == nil)
+    }
+
+    @Test func sessionOptionLoadFailureRetriesLoadingTheCatalog() async {
+        let conversation = ConversationSelection.existing(id: "session", title: "Options", agentId: "main")
+        let options = AssistantOptionsState()
+        var gateway = GatewayStub()
+        gateway.modelLoadFails = true
+        await options.load(conversation, using: gateway)
+        #expect(options.failedOperation == .load)
+        #expect(options.models.isEmpty)
+
+        gateway.modelLoadFails = false
+        let updated = await options.retry(conversation, using: gateway)
+        #expect(updated == nil)
+        #expect(options.selectedModelID == "model")
+        #expect(options.errorMessage == nil)
+    }
+
+    @Test func sessionOptionFastModeFailureRetriesTheServiceTierWrite() async {
+        let conversation = ConversationSelection.existing(id: "session", title: "Options", agentId: "main")
+        let options = AssistantOptionsState()
+        var gateway = GatewayStub()
+        gateway.modelServiceTiers = [ChatModelServiceTier(id: "fast", label: "Fast", description: nil, isDefault: false)]
+        gateway.serviceTierSaveFails = true
+        await options.load(conversation, using: gateway)
+        let failed = await options.toggleFastMode(true, for: conversation, using: gateway)
+        #expect(failed == nil)
+        #expect(!options.isFastModeEnabled)
+        #expect(options.failedOperation == .serviceTier(true))
+
+        gateway.serviceTierSaveFails = false
+        let updated = await options.retry(conversation, using: gateway)
+        #expect(updated?.serviceTier == "fast")
+        #expect(options.isFastModeEnabled)
         #expect(options.errorMessage == nil)
     }
 }

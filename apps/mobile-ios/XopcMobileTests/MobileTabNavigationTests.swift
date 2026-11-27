@@ -257,10 +257,20 @@ struct MobileTabNavigationTests {
         let ada = try makePersonalRecord(conversationID: "ada-conv-1")
         state.syncPersonalAgent(ada)
 
-        // Task cold start synthesizes [taskDetail, taskChat] on workbench.
         state.openPushTarget(MobilePushTarget(kind: "task", taskId: "task-7"), personalConversationID: ada.conversationId)
         #expect(state.selectedTab == .workbench)
-        #expect(state.path(for: .workbench) == [.taskDetail("task-7"), .taskChat("task-7")])
+        #expect(state.path(for: .workbench) == [.taskDetail("task-7")])
+
+        state.openPushTarget(
+            MobilePushTarget(kind: "task", taskId: "task-8", conversationId: "task-conversation-8"),
+            personalConversationID: ada.conversationId
+        )
+        #expect(state.path(for: .workbench) == [.taskDetail("task-8"), .taskChat("task-8")])
+        state.pop()
+        #expect(state.activeStack == [.taskDetail("task-8")])
+
+        state.openPushTarget(MobilePushTarget(kind: "task_chat", taskId: "task-9"), personalConversationID: ada.conversationId)
+        #expect(state.activeStack == [.taskDetail("task-9"), .taskChat("task-9")])
 
         // Automation run synthesizes [automations, libraryAutomationRun] on workbench.
         state.openPushTarget(MobilePushTarget(kind: "automation_run", runId: "run-9"), personalConversationID: ada.conversationId)

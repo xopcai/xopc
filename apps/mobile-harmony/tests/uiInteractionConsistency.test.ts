@@ -184,4 +184,14 @@ describe('HarmonyOS UI & interaction unification guard', () => {
       expect(source, `${view} should render XopcSheetHeader`).toContain('XopcSheetHeader(');
     }
   });
+
+  it('clears bottomChromeInset under batch action bars on root tabs', () => {
+    const notesTab = readFileSync(join(etsRoot, 'view', 'NotesTabView.ets'), 'utf8');
+    expect(notesTab).toContain("barId: 'notes-batch-bar'");
+    expect(notesTab).toContain('Column() { this.batchBar() }.width(\'100%\')');
+    expect(notesTab).toContain('this.bottomChromeInset');
+    expect(notesTab).toContain('selectionTitle: this.model.selecting');
+    const home = readFileSync(join(etsRoot, 'view', 'HomeView.ets'), 'utf8');
+    expect(home).toContain('notesBackHandler');
+  });
 });

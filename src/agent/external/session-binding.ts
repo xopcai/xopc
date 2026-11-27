@@ -84,7 +84,7 @@ export function readExternalSessionBinding(identity: ExternalSessionIdentity): E
     || binding.cwd !== identity.cwd
     || !binding.inputUnchanged
   ) {
-    throw new Error('This external runtime conversation no longer matches this session or workspace. Start a new Project session or reset this one.');
+    throw new Error('This external runtime conversation no longer matches this session or workspace. Start a new session or reset this one.');
   }
   return {
     transcriptId: binding.transcriptId,

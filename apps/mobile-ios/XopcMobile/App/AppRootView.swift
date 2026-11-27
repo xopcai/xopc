@@ -22,11 +22,6 @@ struct AppRootView: View {
     @State private var keyboardVisible = false
     @State private var phoneVisible = false
     @State private var actionPanelVisible = false
-    @State private var recentConversations: [ConversationSummary]?
-    @State private var recentScope: String?
-    @State private var recentLoading = false
-    @State private var recentRevision = 0
-    @State private var recentUpdatedAt: Date?
     @State private var homeRetry = 0
     @State private var pendingAttention = 0
     @State private var defaultAgentID = "main"
@@ -287,16 +282,6 @@ struct AppRootView: View {
             guard personalAgent.errorMessage == nil else { return }
             await openPersonalAgent(navigateToAda: false)
         }
-        .task(id: SidebarLoad(configuration: appState.gatewayConfiguration, revision: recentRevision)) {
-            await loadRecent(using: appState.gatewayConfiguration)
-        }
-        .task(id: appState.activeSessionRoute) {
-            guard appState.activeSessionRoute != nil else { return }
-            let recentsAreStale = recentUpdatedAt.map { Date.now.timeIntervalSince($0) > 30 } ?? true
-            if !recentLoading, recentsAreStale {
-                recentRevision += 1
-            }
-        }
         .task(id: sidebarPresented) {
             guard sidebarPresented else { return }
             do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
@@ -307,24 +292,11 @@ struct AppRootView: View {
         }
         .onChange(of: ComposerDraftStore.accountScope(appState.gatewayConfiguration)) {
             setSidebar(false)
-            recentUpdatedAt = nil
-            recentConversations = nil
-            recentScope = nil
             pendingAttention = 0
             personalWorking = false
             hasPendingRecording = false
             personalReadTarget = nil
             defaultAgentID = "main"
-        }
-        .onChange(of: appState.sessionPromotionRevision) {
-            recentUpdatedAt = nil
-            recentRevision += 1
-        }
-        .onChange(of: appState.listCacheRevision) {
-            recentUpdatedAt = nil
-            recentConversations = nil
-            recentScope = nil
-            recentRevision += 1
         }
     }
 
@@ -473,17 +445,6 @@ struct AppRootView: View {
             personalReadTarget?.conversationID == appState.personalConversation?.id
         return PersonalUnreadLoad(configuration: appState.gatewayConfiguration, foreground: scenePhase == .active,
                                   sidebarOpen: sidebarOpen, viewed: canRead ? personalReadTarget : nil)
-    }
-
-    private var recentOrdinaryConversations: [ConversationSummary] {
-        let currentScope = ComposerDraftStore.accountScope(appState.gatewayConfiguration)
-        guard recentScope == currentScope, let recents = recentConversations else { return [] }
-        let personalID = personalAgent.record(using: appState.gatewayConfiguration)?.conversationId
-        return recents.filter { $0.id != personalID && $0.isRecentSidebarCandidate }
-            .sorted {
-                ($0.status == "pinned") == ($1.status == "pinned")
-                    ? $0.updatedAt > $1.updatedAt : $0.status == "pinned"
-            }
     }
 
     // swiftlint:disable:next cyclomatic_complexity function_body_length
@@ -654,17 +615,6 @@ struct AppRootView: View {
             bottomComposerSpacing: 4,
             backAccessibilityID: "session-chat-back",
             showsSessionConversationTitle: true,
-            recentSwitchConversations: recentOrdinaryConversations,
-            onSwitchConversation: { item in
-                appState.replaceTopSessionChat(ConversationSelection(summary: item), in: tab)
-            },
-            onCreateNewConversation: {
-                appState.replaceTopSessionChat(.draft(agentId: defaultAgentID), in: tab)
-            },
-            onOpenConversationList: {
-                appState.switchTab(.conversations)
-                appState.popToRoot(in: .conversations)
-            },
             onBack: { appState.pop(in: tab) },
             onConversationUnavailable: { id in
                 guard configuration == appState.gatewayConfiguration else { return }
@@ -694,8 +644,6 @@ struct AppRootView: View {
 
     private func handleConversationDeleted(_ id: String) {
         appState.conversationUnavailable(id)
-        recentConversations?.removeAll { $0.id == id }
-        recentRevision += 1
     }
 
     private func openMobilePush(_ route: String) async {
@@ -803,46 +751,6 @@ struct AppRootView: View {
         defaultAgentID = catalog.defaultId
     }
 
-    private func restoreRecents(using configuration: GatewayConfiguration) async {
-        let scope = ComposerDraftStore.accountScope(configuration)
-        let cached = await RecentConversationsStore.shared.read(scope: scope)
-        guard !Task.isCancelled, scope == ComposerDraftStore.accountScope(appState.gatewayConfiguration),
-              let cached else { return }
-        recentScope = scope
-        recentConversations = cached
-    }
-
-    private func loadRecent(using configuration: GatewayConfiguration) async {
-        let scope = ComposerDraftStore.accountScope(configuration)
-        let revision = recentRevision
-        guard configuration == appState.gatewayConfiguration else { return }
-        let isCurrentRequest = {
-            !Task.isCancelled && revision == recentRevision && configuration == appState.gatewayConfiguration
-        }
-        let requestedAt = Date.now
-        recentLoading = true
-        defer {
-            if isCurrentRequest() {
-                recentLoading = false
-            }
-        }
-        if recentScope != scope || recentConversations == nil {
-            await restoreRecents(using: configuration)
-        }
-        guard !Task.isCancelled else { return }
-        do {
-            let page = try await GatewayClient(configuration: configuration).fetchSidebarConversations(startOffset: 0)
-            guard isCurrentRequest() else { return }
-            var seen = Set<String>()
-            recentScope = scope
-            recentConversations = page.items.filter { seen.insert($0.id).inserted }
-            recentUpdatedAt = .now
-            await RecentConversationsStore.shared.write(page.items, scope: scope, requestedAt: requestedAt)
-        } catch {
-            return
-        }
-    }
-
     private func loadAttention(using configuration: GatewayConfiguration) async {
         let resolvedLocale = (AppLanguage(rawValue: language) ?? .system).locale
         if let home = try? await GatewayClient(configuration: configuration).fetchHome(locale: resolvedLocale.identifier),
@@ -874,11 +782,6 @@ private struct PersonalUnreadLoad: Hashable {
     let foreground: Bool
     let sidebarOpen: Bool
     let viewed: PersonalReadTarget?
-}
-
-private struct SidebarLoad: Hashable {
-    let configuration: GatewayConfiguration
-    let revision: Int
 }
 
 private struct PushedSessionIdentity: Decodable {

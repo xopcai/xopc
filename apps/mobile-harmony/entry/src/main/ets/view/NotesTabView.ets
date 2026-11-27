@@ -45,6 +45,7 @@ export struct XopcNotesTabView {
   @Local searchOpen: boolean = false;
   @Event onExit: () => void = (): void => {};
   @Event onOpenSidebar: () => void = (): void => {};
+  @Event onBackHandler: (handler?: () => boolean) => void = (_handler?: () => boolean): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onStartVoice: () => void = (): void => {};
   @Local model: XopcNoteViewModel = new XopcNoteViewModel();
@@ -82,8 +83,38 @@ export struct XopcNotesTabView {
     void this.model.list(false, true);
   }
 
-  aboutToAppear(): void { this.updateActivity(); }
-  aboutToDisappear(): void { this.model.dispose(); this.initialized = false; }
+  aboutToAppear(): void {
+    this.onBackHandler((): boolean => this.back());
+    this.updateActivity();
+  }
+  aboutToDisappear(): void {
+    this.onBackHandler();
+    this.model.dispose();
+    this.initialized = false;
+  }
+
+  private back(): boolean {
+    if (this.model.saving) return true;
+    if (this.model.selecting) { this.model.clearSelection(); return true; }
+    if (this.searchOpen) { this.toggleSearch(); return true; }
+    return false;
+  }
+
+  private stackBottomInset(): number {
+    return this.model.selecting || (this.activePage && !!this.music.track) ? 0 : this.bottomChromeInset;
+  }
+
+  private allSelectedPinned(): boolean {
+    if (!this.model.selectedIds.length) return false;
+    let remoteCount = 0;
+    for (const id of this.model.selectedIds) {
+      if (id.startsWith('local:')) continue;
+      const item = this.model.items.find((entry: XopcNoteIndexEntry): boolean => entry.id === id);
+      if (!item || !item.pinned) return false;
+      remoteCount++;
+    }
+    return remoteCount > 0;
+  }
 
   private searchAll(): void {
     this.model.search = this.searchText.trim();
@@ -176,7 +207,7 @@ export struct XopcNotesTabView {
             this.onNavigate({ page: 'note-create', itemId: '' });
           })
       }
-    }.id('notes-capture-actions').padding(5).margin({ bottom: 12 + this.bottomChromeInset })
+    }.id('notes-capture-actions').padding(5).margin({ bottom: 12 + this.stackBottomInset() })
       .borderRadius(30).backgroundColor(this.colors.panel).shadow(ShadowStyle.OUTER_DEFAULT_SM)
   }
 
@@ -306,41 +337,44 @@ export struct XopcNotesTabView {
               Row({ space: 12 }) {
                 if (item.kind === 'voice') {
                   Row() {
-                    SymbolGlyph($r('sys.symbol.mic')).fontSize(17).fontColor([this.colors.secondary])
-                  }.width(32).height(32).justifyContent(FlexAlign.Center)
-                    .borderRadius(this.colors.corner(8)).backgroundColor(this.colors.input)
+                    SymbolGlyph($r('sys.symbol.waveform')).fontSize(17).fontColor([this.colors.accent])
+                  }.width(36).height(36).justifyContent(FlexAlign.Center)
+                    .borderRadius(this.colors.corner(10)).backgroundColor(this.colors.accentSoft)
                 }
                 Column({ space: 5 }) {
                   Row({ space: 6 }) {
                     if (item.pinned) { SymbolGlyph($r('sys.symbol.pin')).fontSize(13).fontColor([this.colors.accent]) }
-                    Text(item.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(item.title) ? $r('app.string.note_voice_option') : item.title || $r('app.string.untitled')).fontSize(17).fontWeight(FontWeight.Medium)
+                    Text(item.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(item.title) ? $r('app.string.note_voice_option') : item.title || $r('app.string.untitled')).fontSize(16).fontWeight(FontWeight.Medium)
                       .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   }.width('100%')
                   if (item.snippet) {
                     Text(item.snippet).fontSize(14).lineHeight(20).fontColor(this.colors.secondary)
                       .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
                   }
-                  Text(formatNoteTimestamp(item.updatedAt, appSettings.effectiveLanguage()))
-                    .fontSize(12).fontColor(this.colors.tertiary).width('100%')
-                  if (item.projects?.length) {
-                    Text(item.projects.map((project: XopcNoteProjectReference): string => project.name).join(' · '))
-                      .fontSize(12).fontColor(this.colors.secondary).maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                  }
+                  Text(item.projects?.length
+                    ? formatNoteTimestamp(item.updatedAt, appSettings.effectiveLanguage()) + ' · ' +
+                      item.projects.map((project: XopcNoteProjectReference): string => project.name).join(' · ')
+                    : formatNoteTimestamp(item.updatedAt, appSettings.effectiveLanguage()))
+                    .fontSize(12).fontColor(this.colors.tertiary).maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
                   if (item.tags?.length) {
                     Text(item.tags.slice(0, 2).map((tag: string): string => '#' + tag).join('  '))
                       .fontSize(12).fontColor(this.colors.accent).maxLines(1)
                       .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
                   }
                 }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
                 if (this.model.selecting) {
                   SymbolGlyph(this.model.selectedIds.includes(item.id) ? $r('sys.symbol.checkmark_circle_fill')
-                    : $r('sys.symbol.circle')).fontSize(21).fontColor([this.colors.accent])
+                    : $r('sys.symbol.circle')).fontSize(21)
+                    .fontColor([this.model.selectedIds.includes(item.id) ? this.colors.accent : this.colors.tertiary])
+                } else {
+                  SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
                 }
-              }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
-            }.width('100%').constraintSize({ minHeight: item.kind === 'voice' ? 72 : 96 }).padding(0)
-              .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
+              }.width('100%').padding({ left: 16, right: 14, top: 14, bottom: 14 })
+            }.width('100%').constraintSize({ minHeight: item.kind === 'voice' ? 72 : 84 }).padding(0)
+              .backgroundColor(this.model.selecting && this.model.selectedIds.includes(item.id) ? this.colors.active : this.colors.panel)
+              .borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
+              .accessibilitySelected(this.model.selecting && this.model.selectedIds.includes(item.id))
               .clickEffect(xopcClickEffect())
               .onClick((): void => {
                 if (this.model.selecting) this.model.toggleSelection(item.id);
@@ -350,7 +384,7 @@ export struct XopcNotesTabView {
                 this.model.toggleSelection(item.id);
               }))
           }
-        }, (item: XopcNoteIndexEntry): string => item.id + ':' + item.updatedAt)
+        }, (item: XopcNoteIndexEntry): string => item.id + ':' + item.updatedAt + ':' + (item.pinned ? '1' : '0'))
         if (this.model.hasMore) {
           ListItem() {
             XopcPaginationFooter({ loadingPage: this.model.loading || this.model.loadingMore, failedPage: !!this.model.error,
@@ -358,22 +392,64 @@ export struct XopcNotesTabView {
           }
         }
       }.width('100%').height('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).scrollBar(BarState.Off)
-        .contentEndOffset((!this.model.selecting || this.recordingAvailable ? 72 : 0) + this.bottomChromeInset)
+        .contentEndOffset((!this.model.selecting || this.recordingAvailable ? 72 : 12) + this.stackBottomInset())
     }.width('100%').height('100%').pullToRefresh(!this.model.loading)
       .onRefreshing((): void => { void this.model.list(false, true); })
   }
 
   @Builder
+  batchBar() {
+    XopcBatchActionBar({ barId: 'notes-batch-bar', barEnabled: !this.model.saving && this.model.selectedIds.length > 0 }) {
+      Button() {
+        Column({ space: 2 }) {
+          SymbolGlyph($r('sys.symbol.pin')).fontSize(18).fontColor([this.colors.secondary])
+          Text(this.allSelectedPinned() ? $r('app.string.unpin') : $r('app.string.pin')).fontSize(11).fontColor(this.colors.tertiary)
+        }
+      }.id('notes-batch-pin').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
+        .enabled(!this.model.saving).clickEffect(xopcClickEffect())
+        .accessibilityText(this.allSelectedPinned() ? $r('app.string.unpin') : $r('app.string.pin'))
+        .onClick((): void => { void this.model.batch(this.allSelectedPinned() ? 'unpin' : 'pin'); })
+      Button() {
+        Column({ space: 2 }) {
+          SymbolGlyph($r('sys.symbol.archivebox')).fontSize(18).fontColor([this.colors.secondary])
+          Text($r('app.string.archive')).fontSize(11).fontColor(this.colors.tertiary)
+        }
+      }.id('notes-batch-archive').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
+        .enabled(!this.model.saving).clickEffect(xopcClickEffect()).accessibilityText($r('app.string.archive'))
+        .onClick((): void => { void this.model.batch('archive'); })
+      Button() {
+        Column({ space: 2 }) {
+          SymbolGlyph($r('sys.symbol.trash')).fontSize(18).fontColor([this.colors.danger])
+          Text($r('app.string.delete')).fontSize(11).fontColor(this.colors.danger)
+        }
+      }.id('notes-batch-delete').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
+        .enabled(!this.model.saving).clickEffect(xopcClickEffect()).accessibilityText($r('app.string.delete'))
+        .onClick((): void => { void this.confirmBatchDelete(); })
+      Button() {
+        Column({ space: 2 }) {
+          SymbolGlyph($r('sys.symbol.xmark')).fontSize(18).fontColor([this.colors.secondary])
+          Text($r('app.string.cancel')).fontSize(11).fontColor(this.colors.tertiary)
+        }
+      }.id('notes-batch-cancel').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
+        .clickEffect(xopcClickEffect()).accessibilityText($r('app.string.cancel'))
+        .onClick((): void => { this.model.clearSelection(); })
+    }
+  }
+
+  @Builder
   listPane() {
     Column() {
-      XopcPageHeader({ heading: this.currentStatusLabel(), titleOptions: this.statusOptions,
+      XopcPageHeader({ heading: this.currentStatusLabel(),
+        selectionTitle: this.model.selecting ? $r('app.string.sessions_selected', this.model.selectedIds.length) : '',
+        titleOptions: this.statusOptions,
         selectedTitle: this.model.status, titleMenuId: 'notes-page-menu',
         onSelectTitle: (key: string): void => { this.selectStatus(key); },
-        backVisible: !this.rootTab, onBack: this.onExit,
-        drawerVisible: this.rootTab, drawerId: 'notes-header-sidebar', onOpenDrawer: this.onOpenSidebar,
+        backVisible: !this.rootTab || this.model.selecting, backId: 'notes-back',
+        onBack: (): void => { if (!this.back()) this.onExit(); },
+        drawerVisible: this.rootTab && !this.model.selecting, drawerId: 'notes-header-sidebar', onOpenDrawer: this.onOpenSidebar,
         searchId: 'notes-open-search', searchOpen: this.searchOpen, searchLabel: $r('app.string.search_notes'),
         onSearch: (): void => { this.toggleSearch(); } })
-      if (this.searchOpen) {
+      if (this.searchOpen && !this.model.selecting) {
         Column() {
           XopcPageSearchField({ searchId: 'notes-search', text: this.searchText, placeholder: $r('app.string.search_notes'),
             onChange: (value: string): void => { this.searchText = value; }, onSubmit: (): void => { this.searchAll(); } })
@@ -408,20 +484,8 @@ export struct XopcNotesTabView {
         if (!this.model.selecting || this.recordingAvailable) this.captureActions()
       }.layoutWeight(1).width('100%')
       if (this.model.selecting) {
-        XopcBatchActionBar({ barEnabled: !this.model.saving }) {
-          Button($r('app.string.pin')).layoutWeight(1).height(44).backgroundColor(Color.Transparent)
-            .fontColor(this.colors.foreground).enabled(!this.model.saving).clickEffect(xopcClickEffect())
-            .onClick((): void => { void this.model.batch('pin'); })
-          Button($r('app.string.archive')).layoutWeight(1).height(44).backgroundColor(Color.Transparent)
-            .fontColor(this.colors.foreground).enabled(!this.model.saving).clickEffect(xopcClickEffect())
-            .onClick((): void => { void this.model.batch('archive'); })
-          Button($r('app.string.delete')).layoutWeight(1).height(44).backgroundColor(Color.Transparent)
-            .fontColor(this.colors.danger).enabled(!this.model.saving).clickEffect(xopcClickEffect())
-            .onClick((): void => { void this.confirmBatchDelete(); })
-          Button($r('app.string.cancel')).layoutWeight(1).height(44).backgroundColor(Color.Transparent)
-            .fontColor(this.colors.secondary).clickEffect(xopcClickEffect())
-            .onClick((): void => { this.model.clearSelection(); })
-        }
+        Column() { this.batchBar() }.width('100%')
+          .padding({ bottom: this.activePage && this.music.track ? 0 : this.bottomChromeInset })
       }
       if (this.activePage && this.music.track) {
         Column() { XopcMusicMiniPlayer() }.width('100%')

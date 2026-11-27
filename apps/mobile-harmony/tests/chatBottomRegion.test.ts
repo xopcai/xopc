@@ -206,8 +206,13 @@ describe('chat bottom region composition', () => {
     expect(header).toContain("$r('sys.symbol.phone')");
     const actions = header.slice(header.indexOf('  conversationActions()'), header.indexOf('  navigationButtons()'));
     expect(actions).not.toContain(".id('chat-header-actions')");
-    expect(header).toContain(".id('chat-header-identity')");
-    expect(header).toContain(".id('session-chat-header-title')");
+    expect(actions).not.toContain(".id('chat-header-switch-session')");
+    expect(actions).toContain('if (this.personalConversation)');
+    expect(header).toContain("this.sessionChat ? 'session-chat-header-title' : 'chat-header-identity'");
+    expect(header).toContain('.alignItems(HorizontalAlign.Start)');
+    expect(header).toContain('.backgroundColor(Color.Transparent)');
+    expect(header).toContain('if (identity.showsAvatarInPrimary)');
+    expect(header).toContain('if (identity.secondaryAgentName)');
     expect(header).toContain("this.openSheet('actions')");
     expect(header).toContain(".id('chat-header-voice-call')");
     expect(header).toContain('this.startVoiceCall()');
@@ -216,9 +221,12 @@ describe('chat bottom region composition', () => {
     expect(actions).toContain('this.continuousReadButton()');
     const draftHeader = header.split('} else if (this.isStandaloneDraft())')[1]?.split('} else {')[0];
     expect(draftHeader).toContain('this.navigationButtons()');
-    expect(draftHeader).toContain('this.voiceCallButton()');
+    expect(draftHeader).not.toContain('this.voiceCallButton()');
     expect(draftHeader).toContain('this.continuousReadButton()');
     expect(draftHeader).not.toContain('this.conversationActions()');
+    expect(chat).toContain('showVoiceCall: this.canSwitchAgent');
+    expect(chat).toContain("id === 'voice-call' && this.canStartVoiceCall()");
+    expect(actionPanel).toContain("this.actionTile('voice-call'");
     expect(header).not.toContain(".id('chat-header-new')");
     expect(header).not.toContain(".id('chat-header-search')");
     expect(header).toContain("page: 'personal-agent-overview'");
@@ -259,7 +267,7 @@ describe('chat bottom region composition', () => {
     expect(compactAttention).toContain('.responseRegion([');
     expect(compactAttention).not.toContain('.width(44).height(44)');
     const ordinary = header.slice(header.indexOf('} else if (this.isStandaloneDraft())'));
-    expect(ordinary.match(/this\.chatIdentityPill\(\)/g)).toHaveLength(2);
+    expect(ordinary.match(/this\.chatIdentityPill\(/g)).toHaveLength(2);
     expect(ordinary).toContain('this.chatContextStripBar(');
     expect(ordinary).not.toContain('this.chat.title');
     expect(ordinary).not.toContain('this.options.agentName()');
@@ -361,9 +369,10 @@ describe('chat bottom region composition', () => {
     expect(actionPanel).toContain(".id('chat-action-panel')");
     expect(actionPanel).toContain(".width('25%').height(84)");
     expect(Array.from(actionPanel.matchAll(/this\.actionTile\('([^']+)'/g), match => match[1])).toEqual([
-      'photos', 'camera', 'document', 'record-voice', 'reference-note', 'reference-task', 'reference-file', 'switch-agent',
+      'photos', 'camera', 'document', 'record-voice', 'reference-note', 'reference-task', 'reference-file', 'switch-agent', 'voice-call',
     ]);
     expect(actionPanel).toContain('if (this.canSwitchAgent)');
+    expect(actionPanel).toContain('if (this.showVoiceCall)');
     expect(chat).not.toContain('chat-header-agent');
     expect(chat).toContain("if (this.canSwitchAgent) this.openSheet('agent');");
     expect(actionPanel).toContain(".accessibilityLevel(this.open ? 'auto' : 'no-hide-descendants')");

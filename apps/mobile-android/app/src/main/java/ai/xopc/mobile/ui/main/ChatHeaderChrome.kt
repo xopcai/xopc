@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -36,6 +37,35 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+internal data class ChatHeaderModelParts(
+  val name: String,
+  val suffix: String?,
+) {
+  val fullText: String
+    get() = if (suffix.isNullOrBlank()) name else "$name $suffix"
+}
+
+internal data class ChatHeaderIdentityModel(
+  val hasConversationTitle: Boolean,
+  val primaryText: String,
+  val primaryRuntimeBadge: String?,
+  val secondaryAgentName: String?,
+  val secondaryRuntimeBadge: String?,
+  val modelName: String?,
+  val modelSuffix: String?,
+) {
+  val showsAvatarInPrimary: Boolean get() = !hasConversationTitle
+  val showsAgentInSecondary: Boolean get() = secondaryAgentName != null
+  val hasSecondaryRow: Boolean get() = secondaryAgentName != null || modelName != null
+  val accessibilitySummary: String
+    get() {
+      val modelText = modelName?.let { ChatHeaderModelParts(it, modelSuffix).fullText }
+      return listOfNotNull(primaryText, secondaryAgentName, modelText)
+        .filter { it.isNotBlank() }
+        .joinToString("，")
+    }
+}
 
 internal data class ChatContextStripModel(
   val hasProject: Boolean,
@@ -67,21 +97,63 @@ internal fun shortThinkingLabel(level: String, isZh: Boolean): String? {
   }
 }
 
+internal fun chatModelSubtitleParts(
+  modelName: String?,
+  thinkingMode: String?,
+  thinkingLevel: String,
+  isFastEnabled: Boolean,
+  isZh: Boolean,
+): ChatHeaderModelParts? {
+  val trimmed = modelName?.trim().orEmpty()
+  if (trimmed.isEmpty()) return null
+  val effort = if (thinkingMode == "levels" || thinkingMode == "toggle") {
+    shortThinkingLabel(thinkingLevel, isZh)
+  } else {
+    null
+  }
+  val suffix = when {
+    effort != null && isFastEnabled -> "· $effort ⚡"
+    effort != null -> "· $effort"
+    isFastEnabled -> "⚡"
+    else -> null
+  }
+  return ChatHeaderModelParts(trimmed, suffix)
+}
+
 internal fun chatModelSubtitle(
   modelName: String?,
   thinkingMode: String?,
   thinkingLevel: String,
   isFastEnabled: Boolean,
   isZh: Boolean,
-): String? {
-  val trimmed = modelName?.trim().orEmpty()
-  if (trimmed.isEmpty()) return null
-  val parts = mutableListOf(trimmed)
-  if (thinkingMode == "levels" || thinkingMode == "toggle") {
-    shortThinkingLabel(thinkingLevel, isZh)?.let { parts.add(it) }
-  }
-  val base = parts.joinToString(" · ")
-  return if (isFastEnabled) "$base ⚡" else base
+): String? = chatModelSubtitleParts(modelName, thinkingMode, thinkingLevel, isFastEnabled, isZh)?.fullText
+
+internal fun chatHeaderIdentity(
+  conversationTitle: String?,
+  isDraft: Boolean,
+  agentId: String?,
+  defaultAgentId: String?,
+  agentName: String,
+  runtimeBadge: String?,
+  modelParts: ChatHeaderModelParts?,
+): ChatHeaderIdentityModel {
+  val trimmedTitle = conversationTitle?.trim().orEmpty()
+  val hasConversationTitle = !isDraft && trimmedTitle.isNotEmpty()
+  val trimmedAgent = agentName.trim()
+  val shownBadge = runtimeBadge?.takeIf { shouldShowRuntimeBadge(trimmedAgent, it) }
+  val normalizedAgent = agentId?.trim()?.lowercase().orEmpty()
+  val normalizedDefault = defaultAgentId?.trim()?.lowercase().orEmpty().ifEmpty { "main" }
+  val isDefaultAgent = normalizedAgent.isEmpty() || normalizedAgent == normalizedDefault
+  val showSecondaryAgent = hasConversationTitle && !isDefaultAgent && trimmedAgent.isNotEmpty()
+  return ChatHeaderIdentityModel(
+    hasConversationTitle = hasConversationTitle,
+    primaryText = if (hasConversationTitle) trimmedTitle else trimmedAgent,
+    primaryRuntimeBadge = if (hasConversationTitle) null else shownBadge,
+    secondaryAgentName = if (showSecondaryAgent) trimmedAgent else null,
+    secondaryRuntimeBadge = if (showSecondaryAgent) shownBadge else null,
+    modelName = modelParts?.name,
+    modelSuffix = modelParts?.suffix,
+  )
 }
 
 internal fun localizedTaskPhase(phase: String?, isZh: Boolean): String? {
@@ -179,53 +251,55 @@ internal fun ChatHeaderIdentityPill(
   agentAvatar: Bitmap?,
   agentAvatarRef: String,
   agentId: String,
-  agentName: String,
-  runtimeBadge: String?,
-  modelSubtitle: String?,
+  identity: ChatHeaderIdentityModel,
   onClick: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  val shownBadge = runtimeBadge?.takeIf { shouldShowRuntimeBadge(agentName, it) }
-  val summary = listOfNotNull(agentName, modelSubtitle).joinToString("，")
   Surface(
     onClick = onClick,
-    shape = themedCorners(18),
-    color = LocalChatColors.current.card,
+    shape = themedCorners(14),
+    color = Color.Transparent,
     modifier = modifier
+      .fillMaxWidth()
       .defaultMinSize(minHeight = 44.dp)
-      .semantics { contentDescription = summary }
+      .semantics { contentDescription = identity.accessibilitySummary }
       .testTag("chat-header-identity"),
   ) {
     Column(
-      modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 6.dp, vertical = 4.dp),
+      horizontalAlignment = Alignment.Start,
       verticalArrangement = Arrangement.Center,
     ) {
       Row(
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
       ) {
-        AgentAvatar(
-          avatar = agentAvatar,
-          reference = agentAvatarRef,
-          agentId = agentId,
-          extent = 18.dp,
-          active = false,
-          fallbackName = agentName,
-        )
+        if (identity.showsAvatarInPrimary) {
+          AgentAvatar(
+            avatar = agentAvatar,
+            reference = agentAvatarRef,
+            agentId = agentId,
+            extent = 18.dp,
+            active = false,
+            fallbackName = identity.primaryText,
+          )
+        }
         Text(
-          text = agentName,
-          style = MaterialTheme.typography.labelLarge,
+          text = identity.primaryText,
+          style = MaterialTheme.typography.titleMedium,
           fontWeight = FontWeight.SemiBold,
           color = MaterialTheme.colorScheme.onSurface,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
-          modifier = Modifier.widthIn(max = 128.dp),
+          modifier = Modifier.weight(1f, fill = false),
         )
-        if (shownBadge != null) {
+        if (identity.primaryRuntimeBadge != null) {
           Surface(shape = themedCorners(999), color = MaterialTheme.colorScheme.surfaceVariant) {
             Text(
-              text = shownBadge,
+              text = identity.primaryRuntimeBadge,
               fontSize = 10.sp,
               fontWeight = FontWeight.Medium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -241,15 +315,70 @@ internal fun ChatHeaderIdentityPill(
           modifier = Modifier.size(12.dp),
         )
       }
-      if (!modelSubtitle.isNullOrBlank()) {
-        Text(
-          text = modelSubtitle,
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-          modifier = Modifier.widthIn(max = 176.dp),
-        )
+      if (identity.hasSecondaryRow) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+          if (identity.secondaryAgentName != null) {
+            AgentAvatar(
+              avatar = agentAvatar,
+              reference = agentAvatarRef,
+              agentId = agentId,
+              extent = 14.dp,
+              active = false,
+              fallbackName = identity.secondaryAgentName,
+            )
+            Text(
+              text = identity.secondaryAgentName,
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.widthIn(max = 120.dp),
+            )
+            if (identity.secondaryRuntimeBadge != null) {
+              Surface(shape = themedCorners(999), color = MaterialTheme.colorScheme.surfaceVariant) {
+                Text(
+                  text = identity.secondaryRuntimeBadge,
+                  fontSize = 9.5.sp,
+                  fontWeight = FontWeight.Medium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  maxLines = 1,
+                  modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                )
+              }
+            }
+            if (!identity.modelName.isNullOrBlank()) {
+              Text(
+                text = "·",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+              )
+            }
+          }
+          if (!identity.modelName.isNullOrBlank()) {
+            Text(
+              text = identity.modelName,
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.weight(1f, fill = false),
+            )
+          }
+          if (!identity.modelSuffix.isNullOrBlank()) {
+            Text(
+              text = identity.modelSuffix,
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 1,
+              softWrap = false,
+            )
+          }
+        }
       }
     }
   }

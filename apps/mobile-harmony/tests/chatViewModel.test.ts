@@ -566,6 +566,25 @@ describe('chat history isolation', () => {
     await vi.waitFor(() => expect(mocks.subscribe.mock.calls.at(-1)).toEqual(['run:main-run']));
     expect(root.rows[0].text).toBe('main'); root.dispose();
   });
+  it('does not take realtime ownership when mounting a hidden chat', async () => {
+    mocks.history.mockImplementation(async (id) => page(id, id));
+    mocks.activeRun.mockImplementation(async (id) => ({ active: true, runId: id + '-run' }));
+    const visible = new XopcChatViewModel();
+    visible.start('visible');
+    await vi.waitFor(() => expect(visible.runId).toBe('visible-run'));
+    const hidden = new XopcChatViewModel();
+    hidden.start('hidden', undefined, false);
+    await vi.waitFor(() => expect(hidden.loading).toBe(false));
+
+    expect(mocks.unsubscribe).not.toHaveBeenCalledWith('run:visible-run');
+    expect(mocks.subscribe).not.toHaveBeenCalledWith('run:hidden-run');
+
+    hidden.activate();
+    await vi.waitFor(() => expect(mocks.subscribe).toHaveBeenCalledWith('run:hidden-run'));
+    expect(mocks.unsubscribe).toHaveBeenCalledWith('run:visible-run');
+    hidden.dispose();
+    visible.dispose();
+  });
   it('does not apply a late create after disposal', async () => {
     let finish!: (value: string) => void;
     mocks.create.mockImplementation(() => new Promise<string>((resolve) => { finish = resolve; }));

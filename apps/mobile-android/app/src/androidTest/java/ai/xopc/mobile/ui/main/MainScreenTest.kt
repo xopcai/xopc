@@ -133,6 +133,7 @@ import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeReader
 import org.junit.Rule
 import org.junit.Test
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import java.io.File
@@ -478,7 +479,7 @@ class MainScreenTest {
       MainContent(selectedTab = selectedTab, onSelectTab = { selectedTab = it },
         connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
           selectedConversationId = id, messages = listOf(user, assistant)),
-        onOpenNote = { openedNote = it }, onOpenTaskChat = { openedTask = it },
+        onOpenNote = { openedNote = it }, onResolveTaskConversation = { openedTask = it; id },
         onLoadMessageMedia = { _, _ -> "hello".toByteArray() })
       }
     }
@@ -596,7 +597,7 @@ class MainScreenTest {
           connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
             selectedConversationId = id,
             messages = listOf(ConversationMessage("linked-answer", "assistant", "[task](/tasks/task-1)"))),
-          onOpenTaskChat = { openedTask = it })
+          onResolveTaskConversation = { openedTask = it; id })
       }
     }
     val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
@@ -1764,11 +1765,10 @@ class MainScreenTest {
     var submitted = ""
     composeTestRule.setContent {
       MainScreen(connection = connection,
-        onOpenTaskChat = { id ->
-          connection = connection.copy(selectedConversationId = taskConversation,
-            taskConversationTaskId = id, chatNavigationId = taskConversation)
+        onResolveTaskConversation = { taskConversation },
+        onRestoreTaskConversation = { taskId, id ->
+          connection = connection.copy(selectedConversationId = id, taskConversationTaskId = taskId)
         },
-        onChatNavigationHandled = { connection = connection.copy(chatNavigationId = null) },
         onRestoreConversation = { id ->
           connection = connection.copy(selectedConversationId = id, taskConversationTaskId = null)
         },
@@ -1968,7 +1968,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-project-tab-sessions").performClick()
     composeTestRule.onNodeWithTag("progress-project-session-${existing.id}").performClick()
     composeTestRule.onNodeWithTag("project-chat-close").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("chat-header-voice-call").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-header-voice-call").assertDoesNotExist()
     composeTestRule.onNodeWithTag("chat-header-identity").assertIsDisplayed()
     composeTestRule.onNodeWithTag("assistant-options").assertDoesNotExist()
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
@@ -1985,7 +1985,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("progress-project-new-chat").performClick()
     composeTestRule.onNodeWithTag("project-chat-close").assertIsDisplayed()
     composeTestRule.onNodeWithTag("chat-header-sidebar").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("chat-header-voice-call").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-header-voice-call").assertDoesNotExist()
     Espresso.pressBack()
     composeTestRule.onNodeWithTag("progress-project-session-${existing.id}").assertIsDisplayed()
     composeTestRule.runOnIdle {
@@ -3259,7 +3259,10 @@ class MainScreenTest {
     composeTestRule.runOnIdle { dark.value = false }
     checkHeader()
     composeTestRule.onNodeWithTag("chat-header-agent").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("chat-header-voice-call").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-header-voice-call").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("session-chat-switch").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
+    composeTestRule.onNodeWithTag("assistant-action-voice-call").assertIsDisplayed()
   }
 
   @Test fun scheduleIdeaOpensUnsentConfigurationAndReturnsToList() {
@@ -3297,7 +3300,7 @@ class MainScreenTest {
     }
   }
 
-  @Test fun assistantActionGridMatchesHarmonyAndKeepsCallInHeader() {
+  @Test fun assistantActionGridMatchesHarmonyAndMovesOrdinaryVoiceCallToPanel() {
     val id = "11111111-2222-3333-4444-555555555555"
     composeTestRule.setContent {
       MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
@@ -3305,12 +3308,13 @@ class MainScreenTest {
           selectedConversationId = id))
     }
     composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
-    listOf("photos", "camera", "local-files", "voice", "reference-note", "reference-task", "reference-file", "switch-agent").forEach {
+    listOf("photos", "camera", "local-files", "voice", "reference-note", "reference-task", "reference-file", "switch-agent", "voice-call").forEach {
       composeTestRule.onNodeWithTag("assistant-action-$it").assertExists()
     }
     composeTestRule.onNodeWithTag("assistant-action-new-chat").assertDoesNotExist()
     composeTestRule.onNodeWithTag("assistant-action-search").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("chat-header-voice-call").assertIsEnabled()
+    composeTestRule.onNodeWithTag("chat-header-voice-call").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-action-voice-call").assertIsEnabled()
   }
 
   @Test fun assistantKeepsConversationHeaderCompactAndMovesConfigurationIntoOptions() {
@@ -3943,6 +3947,107 @@ class MainScreenTest {
   }
 
   @Test
+  fun unresolvedTaskChatHidesThePreviousComposerAndRetriesWithoutChangingConversations() {
+    val previous = "11111111-2222-4333-8444-555555555555"
+    val taskConversation = "22222222-3333-4444-8555-666666666666"
+    val taskId = "task-1"
+    val firstResult = CompletableDeferred<String>()
+    var attempts = 0
+    val connection = mutableStateOf(ConnectionUiState(
+      profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+      selectedConversationId = previous, draftText = "Previous conversation draft", realtimeStatus = "connected",
+    ))
+    val nav = MobileTabNavState(MobileNavSnapshot().openTaskChat(taskId))
+    val sent = mutableListOf<String>()
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(connection = connection.value, navState = nav,
+          onResolveTaskConversation = {
+            if (++attempts == 1) firstResult.await() else taskConversation
+          },
+          onRestoreTaskConversation = { task, id ->
+            connection.value = connection.value.copy(
+              selectedConversationId = id, taskConversationTaskId = task, draftText = "Task draft",
+            )
+          },
+          onSendMessage = { sent.add(it) })
+      }
+    }
+    composeTestRule.onNodeWithTag("assistant-history-skeleton").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-composer-shell").assertDoesNotExist()
+    composeTestRule.runOnIdle { firstResult.completeExceptionally(IllegalStateException("offline")) }
+    composeTestRule.onNodeWithTag("task-chat-open-retry").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-send").assertDoesNotExist()
+    composeTestRule.runOnIdle { assertEquals(previous, connection.value.selectedConversationId) }
+    composeTestRule.onNodeWithTag("task-chat-open-retry").performClick()
+    composeTestRule.onNodeWithTag("task-chat-header").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-send").assertIsEnabled().performClick()
+    composeTestRule.runOnIdle {
+      assertEquals(2, attempts)
+      assertEquals(listOf(taskConversation), sent)
+    }
+  }
+
+  @Test
+  fun leavingAnUnresolvedTaskDoesNotReopenItWhenTheRequestFinishes() {
+    val result = CompletableDeferred<String>()
+    val connection = ConnectionUiState(
+      profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+      selectedConversationId = "11111111-2222-4333-8444-555555555555",
+    )
+    val nav = MobileTabNavState(MobileNavSnapshot().openTaskChat("task-1"))
+    val restored = mutableListOf<String>()
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(connection = connection, navState = nav,
+          onResolveTaskConversation = { result.await() },
+          onRestoreTaskConversation = { _, id -> restored.add(id) })
+      }
+    }
+    composeTestRule.onNodeWithTag("task-chat-close").performClick()
+    composeTestRule.onNodeWithTag("task-chat-close").assertDoesNotExist()
+    composeTestRule.runOnIdle { result.complete("22222222-3333-4444-8555-666666666666") }
+    composeTestRule.runOnIdle {
+      assertTrue(nav.activeStack.isEmpty())
+      assertTrue(restored.isEmpty())
+    }
+  }
+
+  @Test
+  fun creatingAnOrdinaryDraftUsesTheReturnedIdEvenWhenTheOldChatIsStillSelected() {
+    val previous = "11111111-2222-4333-8444-555555555555"
+    val draft = "22222222-3333-4444-8555-666666666666"
+    val result = CompletableDeferred<String>()
+    val connection = mutableStateOf(ConnectionUiState(
+      profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+      selectedConversationId = previous, draftText = "Old draft",
+      conversations = listOf(ConversationSummary(previous, "Previous chat", "", 1, "main")),
+    ))
+    val nav = MobileTabNavState(MobileNavSnapshot().openOrdinaryChat(previous))
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(connection = connection.value, navState = nav,
+          onCreateOrdinaryDraft = { result.await() },
+          onSelectConversation = { id -> connection.value = connection.value.copy(
+            selectedConversationId = id, draftText = "",
+          ) })
+      }
+    }
+    composeTestRule.onNodeWithTag("session-chat-back").performClick()
+    composeTestRule.onNodeWithTag("conversations-new").performClick()
+    composeTestRule.runOnIdle {
+      assertEquals(previous, connection.value.selectedConversationId)
+      result.complete(draft)
+    }
+    composeTestRule.onNodeWithTag("assistant-composer-shell").assertIsDisplayed()
+    composeTestRule.runOnIdle {
+      assertEquals(draft, (nav.topRoute as MobileRoute.SessionChat).conversationId)
+      assertEquals(draft, connection.value.selectedConversationId)
+      assertEquals(1, nav.activeStack.size)
+    }
+  }
+
+  @Test
   fun localDraftCanOpenBeforeGatewayHasListedIt() {
     var created = 0
     var sent = 0
@@ -3952,10 +4057,11 @@ class MainScreenTest {
         connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
           selectedConversationId = id, draftText = "Hello", realtimeStatus = "connected", draftModelReady = true,
           conversations = listOf(ConversationSummary(id, "", "", 0, "main", isLocalDraft = true))),
-        onCreateConversation = { created++ }, onSendMessage = { sent++ })
+        onCreateOrdinaryDraft = { created++; id }, onSendMessage = { sent++ })
     }
     composeTestRule.onNodeWithTag("chat-floating-header").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("chat-header-voice-call").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-header-voice-call").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("session-chat-switch").assertDoesNotExist()
     composeTestRule.onNodeWithTag("chat-header-new").assertDoesNotExist()
     composeTestRule.onNodeWithTag("assistant-options").assertDoesNotExist()
     composeTestRule.onNodeWithTag("assistant-send").assertIsEnabled().performClick()

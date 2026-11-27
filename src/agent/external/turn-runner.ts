@@ -1,5 +1,3 @@
-import { realpath } from 'node:fs/promises';
-
 import {
   parseUserTurnDocument,
   renderUserTurnDocument,
@@ -7,10 +5,8 @@ import {
 } from '@xopcai/gateway-contract';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 
-import { getExecutionEnvironmentForSession } from '../../execution-environments/subject.js';
 import type { UserTurnAttachment } from '../../gateway/user-turn-input.js';
 import { getProjectForSession } from '../../projects/workspace.js';
-import { projectWorkspacePath } from '../../session/session-workspace.js';
 import { getExternalTurnReplacement } from '../../storage/sqlite/session-turn-replace-repository.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 import { getSessionInteractionPolicy } from '../session/interaction-policy-state.js';
@@ -49,6 +45,7 @@ import {
   disposeAllPooledExternalSessions,
   disposePooledExternalSession,
 } from './session-pool.js';
+import { ensureExternalSessionWorkspaceCwd } from './workspace.js';
 import type {
   ExternalRuntimeEvent,
   ExternalRuntimeToolCall,
@@ -165,16 +162,9 @@ export async function* runExternalProjectTurn(
   const signal = AbortSignal.any([input.signal, stop.signal]);
 
   const project = getProjectForSession(conversationId);
-  const workspace =
-    (project && (getExecutionEnvironmentForSession(conversationId)?.rootPath ?? projectWorkspacePath(project)))
-    || input.workspaceOverride?.trim()
-    || undefined;
-  if (driver.capabilities.requiresWorkspace && !workspace) {
-    throw new Error(`Start a Project session with a workspace to use this ${driver.label} Agent.`);
-  }
   const hasAttachments = Boolean(input.attachments?.length);
   if (!driver.capabilities.supportsAttachments && (input.hasAttachmentsOrContext || hasAttachments)) {
-    throw new Error(`${driver.label} Project sessions currently accept text messages only.`);
+    throw new Error(`${driver.label} sessions currently accept text messages only.`);
   }
   const document = parseUserTurnDocument(input.content);
   const content = document ? renderUserTurnDocument(document, () => null) : input.content;
@@ -182,7 +172,11 @@ export async function* runExternalProjectTurn(
   if (!content.trim() && !initialContextMerged.attachments.length && !initialContextMerged.summaryMetadata?.length) {
     throw new Error(`Enter a task for ${driver.label}.`);
   }
-  const cwd = await realpath(workspace!);
+  const cwd = await ensureExternalSessionWorkspaceCwd({
+    conversationId,
+    agentId,
+    workspaceOverride: input.workspaceOverride,
+  });
   signal.throwIfAborted();
   if (activeRuns.has(conversationId)) throw new Error(`${driver.label} is already running in this session.`);
   if (getExternalTurnReplacement(conversationId)) throw new Error('External turn replacement is pending recovery.');

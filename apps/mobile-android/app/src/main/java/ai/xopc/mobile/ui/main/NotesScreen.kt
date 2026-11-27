@@ -801,12 +801,12 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   if (aiOpen) XopcBottomSheet(XopcSheetPreset.Medium, onDismissRequest = { aiOpen = false },
     modifier = Modifier.testTag("note-ai-sheet")) {
     val formScroll = if (aiPreview == null) Modifier.verticalScroll(rememberScrollState()) else Modifier
-    Column(modifier = Modifier.fillMaxWidth().then(formScroll).padding(horizontal = 20.dp, vertical = 12.dp),
+    XopcSheetHeader(title = stringResource(R.string.notes_ai_edit), onClose = { aiOpen = false })
+    Column(modifier = Modifier.fillMaxWidth().then(formScroll).padding(horizontal = 20.dp, vertical = 8.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      Text(stringResource(R.string.notes_ai_edit), style = MaterialTheme.typography.titleLarge)
       if (aiPreview == null) {
         OutlinedTextField(aiInstruction, { aiInstruction = it }, modifier = Modifier.fillMaxWidth()
-          .testTag("note-ai-instruction"), minLines = 3,
+          .testTag("note-ai-instruction"), minLines = 3, shape = themedCorners(14),
           label = { Text(stringResource(R.string.notes_ai_instruction)) })
         Button(onClick = { scope.launch {
           aiBusy = true; aiError = false
@@ -815,31 +815,38 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           aiBusy = false
         } }, enabled = !aiBusy && !state.draftLoading &&
           state.draft?.id == selectedId && aiInstruction.isNotBlank(),
-          modifier = Modifier.testTag("note-ai-generate")) {
+          shape = CircleShape,
+          modifier = Modifier.fillMaxWidth().height(46.dp).testTag("note-ai-generate")) {
           Text(stringResource(R.string.notes_ai_preview))
         }
       } else {
         Text(aiPreview!!.summary.ifBlank { aiPreview!!.message },
-          style = MaterialTheme.typography.bodyMedium)
+          style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Column(modifier = Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 380.dp)
-          .verticalScroll(rememberScrollState()).testTag("note-ai-preview")) {
+          .verticalScroll(rememberScrollState()).testTag("note-ai-preview"),
+          verticalArrangement = Arrangement.spacedBy(8.dp)) {
           Text(stringResource(R.string.notes_ai_before),
-            style = MaterialTheme.typography.labelMedium)
-          MarkdownContent(aiPreview!!.originalMarkdown)
+            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          Surface(shape = themedCorners(14), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            Box(Modifier.fillMaxWidth().padding(14.dp)) { MarkdownContent(aiPreview!!.originalMarkdown) }
+          }
           Text(stringResource(R.string.notes_ai_after),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 12.dp))
-          MarkdownContent(aiPreview!!.proposedMarkdown)
+            modifier = Modifier.padding(top = 4.dp))
+          Surface(shape = themedCorners(14), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)) {
+            Box(Modifier.fillMaxWidth().padding(14.dp)) { MarkdownContent(aiPreview!!.proposedMarkdown) }
+          }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          OutlinedButton(onClick = { aiPreview = null }) { Text(stringResource(R.string.notes_ai_retry)) }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+          FilledTonalButton(onClick = { aiPreview = null }, shape = CircleShape,
+            modifier = Modifier.weight(1f).height(46.dp)) { Text(stringResource(R.string.notes_ai_retry)) }
           Button(onClick = {
             val proposal = aiPreview!!
             if (state.draft?.id == selectedId && state.draft?.markdown == proposal.originalMarkdown) {
               onApplyAi(proposal); aiOpen = false; editorOpen = true
             } else aiError = true
-          }, modifier = Modifier.testTag("note-ai-apply")) {
+          }, shape = CircleShape, modifier = Modifier.weight(1f).height(46.dp).testTag("note-ai-apply")) {
             Text(stringResource(R.string.notes_ai_apply))
           }
         }
@@ -851,25 +858,23 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   }
   if (attachmentSheetOpen) XopcBottomSheet(XopcSheetPreset.Compact, onDismissRequest = { attachmentSheetOpen = false },
     modifier = Modifier.testTag("note-attachment-sheet")) {
-    Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
+    XopcSheetHeader(title = stringResource(R.string.notes_add_attachment), onClose = { attachmentSheetOpen = false })
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text(stringResource(R.string.notes_add_attachment), style = MaterialTheme.typography.titleLarge)
-      TextButton(onClick = { photoPicker.launch(PickVisualMediaRequest(
-        ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-        modifier = Modifier.testTag("note-attachment-photo")) {
-        Text(stringResource(R.string.assistant_action_photos))
+      NoteSheetActionRow(R.drawable.action_photo, stringResource(R.string.assistant_action_photos),
+        tag = "note-attachment-photo") {
+        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
       }
-      TextButton(onClick = { filePicker.launch(arrayOf("*/*")) },
-        modifier = Modifier.testTag("note-attachment-file")) {
-        Text(stringResource(R.string.assistant_action_local_files))
+      NoteSheetActionRow(R.drawable.action_folder, stringResource(R.string.assistant_action_local_files),
+        tag = "note-attachment-file") {
+        filePicker.launch(arrayOf("*/*"))
       }
-      TextButton(onClick = {
+      NoteSheetActionRow(R.drawable.action_microphone, stringResource(R.string.notes_create_voice),
+        tag = "note-attachment-voice") {
         attachmentSheetOpen = false
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
           PackageManager.PERMISSION_GRANTED) noteVoice.start()
         else noteVoicePermission.launch(Manifest.permission.RECORD_AUDIO)
-      }, modifier = Modifier.testTag("note-attachment-voice")) {
-        Text(stringResource(R.string.notes_create_voice))
       }
     }
   }
@@ -995,40 +1000,39 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   )
   if (moreOpen && detail != null) XopcBottomSheet(XopcSheetPreset.Compact, onDismissRequest = { moreOpen = false },
     modifier = Modifier.testTag("note-more-sheet")) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+    XopcSheetHeader(title = stringResource(R.string.notes_more), onClose = { moreOpen = false })
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text(stringResource(R.string.notes_more), style = MaterialTheme.typography.titleLarge)
-      TextButton(onClick = {
+      NoteSheetActionRow(R.drawable.action_pin,
+        stringResource(if (detail.pinned) R.string.notes_unpin else R.string.notes_pin),
+        enabled = !state.metadataBusy, tag = "note-toggle-pin") {
         moreOpen = false
         onMetadataChange(NoteMetadataPatch(pinned = !detail.pinned))
-      }, enabled = !state.metadataBusy, modifier = Modifier.testTag("note-toggle-pin")) {
-        Text(stringResource(if (detail.pinned) R.string.notes_unpin else R.string.notes_pin))
       }
-      TextButton(onClick = {
+      NoteSheetActionRow(R.drawable.message_bookmark, stringResource(R.string.notes_manage_tags),
+        enabled = !state.metadataBusy, tag = "note-manage-tags") {
         tagsText = detail.tags.joinToString(", ")
         moreOpen = false
         tagsOpen = true
-      }, enabled = !state.metadataBusy, modifier = Modifier.testTag("note-manage-tags")) {
-        Text(stringResource(R.string.notes_manage_tags))
       }
-      if (detail.status != "archived") TextButton(onClick = {
+      if (detail.status != "archived") NoteSheetActionRow(R.drawable.action_folder,
+        stringResource(R.string.notes_archive), enabled = !state.metadataBusy, tag = "note-archive") {
         moreOpen = false
         onMetadataChange(NoteMetadataPatch(status = "archived"))
-      }, enabled = !state.metadataBusy, modifier = Modifier.testTag("note-archive")) {
-        Text(stringResource(R.string.notes_archive))
       }
-      TextButton(onClick = { moreOpen = false; onShareNote() },
+      NoteSheetActionRow(R.drawable.message_share, stringResource(R.string.notes_share),
         enabled = !state.shareBusy && !state.metadataBusy && !state.deleteBusy &&
           !state.draftSaving && state.draft?.takeIf {
             it.id == detail.id && it.version != state.draftSyncedVersion
           } == null,
-        modifier = Modifier.testTag("note-share")) {
-        Text(stringResource(R.string.notes_share))
+        tag = "note-share") {
+        moreOpen = false
+        onShareNote()
       }
-      TextButton(onClick = { moreOpen = false; deleteConfirmOpen = true },
-        enabled = !state.deleteBusy && !state.metadataBusy,
-        modifier = Modifier.testTag("note-delete")) {
-        Text(stringResource(R.string.notes_delete), color = MaterialTheme.colorScheme.error)
+      NoteSheetActionRow(R.drawable.action_delete, stringResource(R.string.notes_delete),
+        enabled = !state.deleteBusy && !state.metadataBusy, destructive = true, tag = "note-delete") {
+        moreOpen = false
+        deleteConfirmOpen = true
       }
     }
   }
@@ -1177,44 +1181,55 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
           color = MaterialTheme.colorScheme.onSurfaceVariant)
         inner()
       } })
-    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-      horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-      val blocked = state.draftSaving && state.draftConflict != null
-      val tool = Modifier.height(42.dp)
-        .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(12))
-      TextButton(onClick = { preview = !preview },
-        modifier = tool.testTag("notes-preview-toggle")) {
-        Text(stringResource(if (preview) R.string.notes_edit else R.string.notes_preview))
-      }
-      if (!preview) {
-      TextButton(onClick = {
-        if (undo.isNotEmpty()) {
-          val previous = undo.last(); undo = undo.dropLast(1)
-          redo = (redo + bodyValue.text).takeLast(100)
-          updateBody(TextFieldValue(previous, TextRange(previous.length)), false)
+    Surface(shape = themedCorners(12), color = MaterialTheme.colorScheme.surfaceContainerLow,
+      modifier = Modifier.fillMaxWidth()) {
+      Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+        val blocked = state.draftSaving && state.draftConflict != null
+        val tool = Modifier.height(36.dp)
+        TextButton(onClick = { preview = !preview }, contentPadding = PaddingValues(horizontal = 10.dp),
+          modifier = tool.testTag("notes-preview-toggle")) {
+          Text(stringResource(if (preview) R.string.notes_edit else R.string.notes_preview),
+            style = MaterialTheme.typography.labelLarge)
         }
-      }, enabled = !blocked && undo.isNotEmpty(), modifier = tool.testTag("notes-undo")) { Text("↶") }
-      TextButton(onClick = {
-        if (redo.isNotEmpty()) {
-          val next = redo.last(); redo = redo.dropLast(1)
-          undo = (undo + bodyValue.text).takeLast(100)
-          updateBody(TextFieldValue(next, TextRange(next.length)), false)
+        if (!preview) {
+          TextButton(onClick = {
+            if (undo.isNotEmpty()) {
+              val previous = undo.last(); undo = undo.dropLast(1)
+              redo = (redo + bodyValue.text).takeLast(100)
+              updateBody(TextFieldValue(previous, TextRange(previous.length)), false)
+            }
+          }, enabled = !blocked && undo.isNotEmpty(), contentPadding = PaddingValues(horizontal = 8.dp),
+            modifier = tool.testTag("notes-undo")) { Text("↶") }
+          TextButton(onClick = {
+            if (redo.isNotEmpty()) {
+              val next = redo.last(); redo = redo.dropLast(1)
+              undo = (undo + bodyValue.text).takeLast(100)
+              updateBody(TextFieldValue(next, TextRange(next.length)), false)
+            }
+          }, enabled = !blocked && redo.isNotEmpty(), contentPadding = PaddingValues(horizontal = 8.dp),
+            modifier = tool.testTag("notes-redo")) { Text("↷") }
+          listOf("B" to "**", "I" to "*").forEach { (label, marker) ->
+            TextButton(onClick = { insertMarkdown(marker, marker) }, enabled = !blocked,
+              contentPadding = PaddingValues(horizontal = 8.dp),
+              modifier = tool.testTag("notes-format-${label.lowercase()}")) {
+              Text(label, fontWeight = FontWeight.SemiBold)
+            }
+          }
+          (1..3).forEach { level ->
+            TextButton(onClick = { formatLine("#".repeat(level) + " ") }, enabled = !blocked,
+              contentPadding = PaddingValues(horizontal = 8.dp),
+              modifier = tool.testTag("notes-heading-$level")) { Text("H$level") }
+          }
+          listOf("•" to "- ", "1." to "1. ", "☐" to "- [ ] ", "❝" to "> ").forEach { (label, prefix) ->
+            TextButton(onClick = { formatLine(prefix) }, enabled = !blocked,
+              contentPadding = PaddingValues(horizontal = 8.dp), modifier = tool) { Text(label) }
+          }
+          listOf("</>" to "`code`", "🔗" to "[link](https://)", "—" to "\n---\n").forEach { (label, value) ->
+            TextButton(onClick = { insertMarkdown(value) }, enabled = !blocked,
+              contentPadding = PaddingValues(horizontal = 8.dp), modifier = tool) { Text(label) }
+          }
         }
-      }, enabled = !blocked && redo.isNotEmpty(), modifier = tool.testTag("notes-redo")) { Text("↷") }
-      listOf("B" to "**", "I" to "*").forEach { (label, marker) ->
-        TextButton(onClick = { insertMarkdown(marker, marker) }, enabled = !blocked,
-          modifier = tool.testTag("notes-format-${label.lowercase()}")) { Text(label) }
-      }
-      (1..3).forEach { level ->
-        TextButton(onClick = { formatLine("#".repeat(level) + " ") }, enabled = !blocked,
-          modifier = tool.testTag("notes-heading-$level")) { Text("H$level") }
-      }
-      listOf("•" to "- ", "1." to "1. ", "☐" to "- [ ] ", "❝" to "> ").forEach { (label, prefix) ->
-        TextButton(onClick = { formatLine(prefix) }, enabled = !blocked, modifier = tool) { Text(label) }
-      }
-      listOf("</>" to "`code`", "🔗" to "[link](https://)", "—" to "\n---\n").forEach { (label, value) ->
-        TextButton(onClick = { insertMarkdown(value) }, enabled = !blocked, modifier = tool) { Text(label) }
-      }
       }
     }
     if (preview) Column(modifier = Modifier.fillMaxWidth().weight(1f)
@@ -1267,20 +1282,22 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
       else -> R.string.notes_saving_locally
     }),
       style = MaterialTheme.typography.bodySmall)
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      OutlinedButton(onClick = onAddAttachment,
+    Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+      FilledTonalButton(onClick = onAddAttachment,
         enabled = !attachmentBusy && !state.draftSaving &&
           (draft.title.isNotBlank() || draft.markdown.isNotBlank()),
-        modifier = Modifier.weight(1f).testTag("note-add-attachment")) {
-        Text(stringResource(R.string.notes_add_attachment), maxLines = 1)
+        shape = CircleShape,
+        modifier = Modifier.weight(1f).height(46.dp).testTag("note-add-attachment")) {
+        Text(stringResource(R.string.notes_add_attachment), maxLines = 1, overflow = TextOverflow.Ellipsis)
       }
       Button(onClick = onSave, enabled = conflict == null &&
         (draft.title.isNotBlank() || draft.markdown.isNotBlank() ||
           draft.version == state.draftSyncedVersion),
-        modifier = Modifier.weight(1f).testTag("notes-draft-save"),
-        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface,
-          contentColor = MaterialTheme.colorScheme.surface)) {
-        Text(stringResource(R.string.notes_save))
+        shape = CircleShape,
+        modifier = Modifier.weight(1f).height(46.dp).testTag("notes-draft-save"),
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary,
+          contentColor = MaterialTheme.colorScheme.onPrimary)) {
+        Text(stringResource(R.string.notes_save), maxLines = 1)
       }
     }
   }
@@ -1494,39 +1511,66 @@ private fun NoteDraftCard(draft: NoteDraft, onOpen: (String) -> Unit) {
 }
 
 @Composable
+private fun NoteSheetActionRow(iconRes: Int, label: String, enabled: Boolean = true,
+  destructive: Boolean = false, tag: String = "", onClick: () -> Unit) {
+  val contentColor = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+  val containerColor = if (destructive) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+    else MaterialTheme.colorScheme.surfaceContainerLow
+  Surface(onClick = onClick, enabled = enabled, shape = themedCorners(14), color = containerColor,
+    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).then(if (tag.isNotEmpty()) Modifier.testTag(tag) else Modifier)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+      horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+      ActionIcon(iconRes, size = 18.dp, color = contentColor)
+      Text(label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
+        color = contentColor, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+    }
+  }
+}
+
+@Composable
 private fun NoteCard(note: NoteSummary, onOpen: (String) -> Unit) {
   val voice = note.kind == "voice"
-  Card(onClick = { onOpen(note.id) }, modifier = Modifier.fillMaxWidth().heightIn(min = if (voice) 72.dp else 96.dp)
-    .testTag("note-${note.id}"), colors = if (voice)
-      CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-      else CardDefaults.cardColors()) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+  Card(onClick = { onOpen(note.id) }, modifier = Modifier.fillMaxWidth().heightIn(min = if (voice) 72.dp else 84.dp)
+    .testTag("note-${note.id}"), shape = themedCorners(16),
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
       horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-      if (voice) Surface(shape = themedCorners(8), color = MaterialTheme.colorScheme.surfaceContainer) {
-        Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+      if (voice) Surface(shape = themedCorners(10), color = MaterialTheme.colorScheme.primaryContainer) {
+        Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
           Icon(painterResource(R.drawable.action_microphone), contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
         }
       }
       Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         val title = if (voice) voiceRecordingTitle(note.title) else note.title.ifBlank { stringResource(R.string.notes_untitled) }
-        Text((if (note.pinned) "⌖ " else "") + title,
-          style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+          if (note.pinned) {
+            ActionIcon(R.drawable.action_pin, size = 14.dp, color = MaterialTheme.colorScheme.primary)
+          }
+          Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        }
         if (note.snippet.isNotBlank()) Text(note.snippet, maxLines = 2,
           overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
           color = MaterialTheme.colorScheme.onSurfaceVariant)
         val statusLabel = noteStatusLabel(note.status)
         val date = if (voice) recordingDate(note.updatedAt) else DateFormat.getDateInstance().format(Date(note.updatedAt))
-        Text("$date · $statusLabel",
-          style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (note.projectNames.isNotEmpty()) Text(note.projectNames.joinToString(" · "),
-          style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        val meta = buildString {
+          append(date)
+          append(" · ")
+          append(statusLabel)
+          if (note.projectNames.isNotEmpty()) {
+            append(" · ")
+            append(note.projectNames.joinToString(" · "))
+          }
+        }
+        Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
           maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (note.tags.isNotEmpty()) Text(note.tags.take(2).joinToString("  ") { "#$it" },
           style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary,
           maxLines = 1, overflow = TextOverflow.Ellipsis)
       }
-      ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 16.dp)
+      ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 14.dp)
     }
   }
 }
@@ -1560,42 +1604,72 @@ internal fun NotesDetailContent(state: NotesUiState, id: String, onRetry: () -> 
         modifier = Modifier.fillMaxWidth().testTag("note-delete-busy"))
       if (note != null) NoteBody(note, onOpenLink, onPreviewAttachment, reader, { readerOpen = true })
     }
-    if (note != null) Row(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-      .padding(bottom = 8.dp).testTag("note-detail-toolbar"),
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
-      verticalAlignment = Alignment.CenterVertically) {
-      Row(modifier = Modifier.weight(1f)
-        .background(MaterialTheme.colorScheme.surfaceContainerLow, themedCorners(30))
-        .padding(4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-      NoteDetailAction("✎", stringResource(R.string.notes_edit), onEdit,
-        note.remoteVersion != null && !state.metadataBusy && !state.deleteBusy,
-        Modifier.weight(1f).testTag("note-detail-edit"))
-      NoteDetailAction("✦", stringResource(R.string.notes_ai_edit), onAi,
-        note.remoteVersion != null && !state.metadataBusy && !state.deleteBusy,
-        Modifier.weight(1f).testTag("note-detail-ai"))
-      NoteDetailAction("↺", stringResource(R.string.notes_history), onHistory,
-        !state.metadataBusy && !state.deleteBusy,
-        Modifier.weight(1f).testTag("note-detail-history"))
-      NoteDetailAction("⋯", stringResource(R.string.notes_more), onMore,
-        note.remoteVersion != null && !state.metadataBusy && !state.deleteBusy,
-        Modifier.weight(1f).testTag("note-detail-more"))
+    if (note != null) {
+      Surface(
+        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+          .padding(bottom = 8.dp).testTag("note-detail-toolbar"),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 3.dp,
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+          horizontalArrangement = Arrangement.spacedBy(2.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          NoteDetailAction(R.drawable.action_new_chat, stringResource(R.string.notes_edit), onEdit,
+            note.remoteVersion != null && !state.metadataBusy && !state.deleteBusy,
+            emphasized = true, modifier = Modifier.weight(1f).testTag("note-detail-edit"))
+          NoteDetailAction(R.drawable.action_lightbulb, stringResource(R.string.notes_ai_edit), onAi,
+            note.remoteVersion != null && !state.metadataBusy && !state.deleteBusy,
+            modifier = Modifier.weight(1f).testTag("note-detail-ai"))
+          NoteDetailAction(R.drawable.action_refresh, stringResource(R.string.notes_history), onHistory,
+            !state.metadataBusy && !state.deleteBusy,
+            modifier = Modifier.weight(1f).testTag("note-detail-history"))
+          NoteDetailAction(R.drawable.tab_conversations, stringResource(R.string.notes_continue_chat), onContinueChat,
+            !chatBusy && !state.deleteBusy,
+            modifier = Modifier.weight(1f).testTag("note-detail-chat"))
+          NoteDetailAction(R.drawable.action_more_horizontal, stringResource(R.string.notes_more), onMore,
+            note.remoteVersion != null && !state.metadataBusy && !state.deleteBusy,
+            modifier = Modifier.weight(1f).testTag("note-detail-more"))
+        }
       }
-      NoteDetailAction("▣", stringResource(R.string.notes_continue_chat), onContinueChat,
-        !chatBusy && !state.deleteBusy,
-        Modifier.width(60.dp).background(MaterialTheme.colorScheme.surfaceContainerLow,
-          themedCorners(30)).testTag("note-detail-chat"))
     }
   }
 }
 
 @Composable
-private fun NoteDetailAction(symbol: String, label: String, onClick: () -> Unit,
-  enabled: Boolean, modifier: Modifier = Modifier) {
-  TextButton(onClick = onClick, enabled = enabled, modifier = modifier.height(52.dp),
-    contentPadding = PaddingValues(0.dp)) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-      Text(symbol, style = MaterialTheme.typography.titleMedium)
-      Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+private fun NoteDetailAction(iconRes: Int, label: String, onClick: () -> Unit,
+  enabled: Boolean, emphasized: Boolean = false, modifier: Modifier = Modifier) {
+  val tint = when {
+    !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = XopcDesignTokens.DisabledAlpha)
+    emphasized -> MaterialTheme.colorScheme.primary
+    else -> MaterialTheme.colorScheme.onSurface
+  }
+  Surface(
+    onClick = onClick,
+    enabled = enabled,
+    shape = CircleShape,
+    color = if (emphasized && enabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+      else androidx.compose.ui.graphics.Color.Transparent,
+    modifier = modifier.height(50.dp),
+  ) {
+    Column(
+      modifier = Modifier.fillMaxSize().padding(horizontal = 2.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+    ) {
+      ActionIcon(iconRes, size = 18.dp, color = tint)
+      Text(
+        text = label,
+        fontSize = 10.5.sp,
+        lineHeight = 13.sp,
+        fontWeight = if (emphasized) FontWeight.Medium else FontWeight.Normal,
+        color = tint,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+      )
     }
   }
 }
@@ -1604,14 +1678,32 @@ private fun NoteDetailAction(symbol: String, label: String, onClick: () -> Unit,
 private fun NoteBody(note: NoteDetail, onOpenLink: (String) -> Unit,
   onPreviewAttachment: (NoteAttachment) -> Unit, reader: MarkdownNoteReadingState,
   onReadingTools: () -> Unit) {
-  Text(note.title.ifBlank { stringResource(R.string.notes_untitled) },
-    style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
-    modifier = Modifier.testTag("note-detail-title"))
-  Text("${DateFormat.getDateTimeInstance().format(Date(note.updatedAt))} · ${noteStatusLabel(note.status)}",
-    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-  if (reader.entries.isNotEmpty()) TextButton(onClick = onReadingTools,
-    modifier = Modifier.testTag("note-reading-tools")) {
-    Text(stringResource(R.string.notes_reading_tools))
+  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+    verticalAlignment = Alignment.Top) {
+    Text(note.title.ifBlank { stringResource(R.string.notes_untitled) },
+      style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
+      modifier = Modifier.weight(1f).testTag("note-detail-title"))
+    if (reader.entries.isNotEmpty()) {
+      Surface(onClick = onReadingTools, shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.size(40.dp).testTag("note-reading-tools")) {
+        Box(contentAlignment = Alignment.Center) {
+          ActionIcon(R.drawable.action_search, size = 18.dp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            contentDescription = stringResource(R.string.notes_reading_tools))
+        }
+      }
+    }
+  }
+  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+    verticalAlignment = Alignment.CenterVertically) {
+    Text(DateFormat.getDateTimeInstance().format(Date(note.updatedAt)),
+      style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+      modifier = Modifier.weight(1f))
+    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+      Text(noteStatusLabel(note.status), Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
   }
   if (note.tags.isNotEmpty()) Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1619,23 +1711,30 @@ private fun NoteBody(note: NoteDetail, onOpenLink: (String) -> Unit,
       Text("#$tag", style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.background(MaterialTheme.colorScheme.primaryContainer,
-          themedCorners(16)).padding(horizontal = 10.dp, vertical = 6.dp))
+          CircleShape).padding(horizontal = 10.dp, vertical = 5.dp))
     }
   }
   if (note.attachments.isNotEmpty()) Row(modifier = Modifier.fillMaxWidth()
     .horizontalScroll(rememberScrollState()).testTag("note-attachments"),
     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
     note.attachments.forEach { attachment ->
-      OutlinedButton(onClick = { onPreviewAttachment(attachment) },
+      Surface(onClick = { onPreviewAttachment(attachment) }, shape = themedCorners(12),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.testTag("note-attachment-${attachment.id}")) {
-        Text(attachment.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+          horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+          ActionIcon(R.drawable.action_link, size = 15.dp, color = MaterialTheme.colorScheme.primary)
+          Text(attachment.fileName, style = MaterialTheme.typography.labelLarge,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
       }
     }
   }
   if (note.markdown.isNotEmpty()) MarkdownContent(note.markdown,
     modifier = Modifier.fillMaxWidth().testTag("note-detail-body"), onOpenLink = onOpenLink, noteReader = reader)
   else Text(stringResource(R.string.notes_empty_body),
-    style = MaterialTheme.typography.bodyLarge, modifier = Modifier.testTag("note-detail-body"))
+    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    modifier = Modifier.testTag("note-detail-body"))
 }
 
 @Composable

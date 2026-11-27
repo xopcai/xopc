@@ -149,3 +149,8 @@ export {
   steerExternalTurn,
   type SteerExternalTurnOptions,
 } from './turn-runner.js';
+export {
+  ensureExternalSessionWorkspaceCwd,
+  resolveExternalSessionWorkspace,
+  type ResolvedExternalSessionWorkspace,
+} from './workspace.js';

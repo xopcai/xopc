@@ -60,10 +60,17 @@ struct NotesView: View {
                         .listRowSeparator(.hidden)
                     }
                     if matchingNotes.isEmpty, isLoading || loadedQuery != currentQuery && error == nil {
-                        loadingRows
-                    } else if matchingNotes.isEmpty, error == nil {
-                        ContentUnavailableView(emptyTitle, systemImage: "note.text")
+                        MobileListSkeleton(rows: 4)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                             .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    } else if matchingNotes.isEmpty, error == nil {
+                        MobileEmptyState(
+                            message: String(localized: emptyTitle),
+                            systemImage: "note.text"
+                        )
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                     }
                     ForEach(matchingNotes) { note in
                         Button {
@@ -74,13 +81,17 @@ struct NotesView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .listRowBackground(note.kind == "voice" ? Color.clear : nil)
-                        .listRowSeparator(note.kind == "voice" ? .hidden : .automatic)
+                        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                         .accessibilityIdentifier("note-row-\(note.id)")
                     }
                     if loadedQuery == currentQuery, nextOffset != nil {
                         Button("加载更多") { Task { await loadMore() } }
                             .disabled(isLoading || isLoadingMore)
+                            .frame(maxWidth: .infinity)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                             .accessibilityIdentifier("notes-load-more")
                     }
                 }
@@ -184,16 +195,6 @@ private extension NotesView {
 
     var emptyTitle: LocalizedStringResource {
         search.isEmpty ? "暂无笔记" : "没有匹配的笔记"
-    }
-
-    var loadingRows: some View {
-        ForEach(0 ..< 4, id: \.self) { _ in
-            VStack(alignment: .leading, spacing: 8) {
-                Text("笔记标题占位").mobileTextStyle(.rowTitle)
-                Text("正在读取笔记内容摘要").mobileTextStyle(.secondary)
-            }
-            .redacted(reason: .placeholder)
-        }
     }
 
     var errorBinding: Binding<Bool> {
@@ -403,61 +404,77 @@ struct NoteRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Image(systemName: note.pinned == true ? "pin" : note.kind == "voice" ? "waveform" : "note.text")
-                    .foregroundStyle(.tint)
+        HStack(alignment: .center, spacing: 12) {
+            if note.kind == "voice" {
+                Image(systemName: "waveform")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(mobileTheme.action)
+                    .frame(width: 36, height: 36)
+                    .background(mobileTheme.active, in: .rect(cornerRadius: mobileTheme.corner(10)))
                     .accessibilityHidden(true)
-                Text(isDefaultVoiceNoteTitle(note.title, kind: note.kind)
-                    ? AppLocalization.string("语音记录", locale: AppLocalization.selectedLocale)
-                    : note.displayTitle)
-                    .mobileTextStyle(.rowTitle)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
             }
-            if let snippet = note.snippet, !snippet.isEmpty {
-                Text(snippet)
-                    .mobileTextStyle(.secondary)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 2) { noteMetadata }
-                } else {
-                    HStack(spacing: 8) { noteMetadata }
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    if note.pinned == true {
+                        Image(systemName: "pin.fill")
+                            .font(.caption)
+                            .foregroundStyle(mobileTheme.action)
+                            .accessibilityHidden(true)
+                    }
+                    Text(isDefaultVoiceNoteTitle(note.title, kind: note.kind)
+                        ? AppLocalization.string("语音记录", locale: AppLocalization.selectedLocale)
+                        : note.displayTitle)
+                        .mobileTextStyle(.rowTitle)
+                        .foregroundStyle(mobileTheme.foreground)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                }
+                if let snippet = note.snippet, !snippet.isEmpty {
+                    Text(snippet)
+                        .mobileTextStyle(.secondary)
+                        .foregroundStyle(mobileTheme.secondary)
+                        .lineLimit(2)
+                }
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 2) { noteMetadata }
+                    } else {
+                        HStack(spacing: 6) { noteMetadata }
+                    }
+                }
+                .mobileTextStyle(.caption)
+                .foregroundStyle(mobileTheme.secondary)
+                if let tags = note.tags, !tags.isEmpty {
+                    Text(tags.prefix(3).map { "#\($0)" }.joined(separator: "  "))
+                        .mobileTextStyle(.caption)
+                        .foregroundStyle(mobileTheme.action)
+                        .lineLimit(1)
                 }
             }
-            .mobileTextStyle(.caption)
-            .foregroundStyle(note.kind == "voice" ? mobileTheme.secondary : Color.secondary)
-            if let projects = note.projects, !projects.isEmpty {
-                Text(projects.map(\.name).joined(separator: " · "))
-                    .mobileTextStyle(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            if let tags = note.tags, !tags.isEmpty {
-                Text(tags.prefix(3).map { "#\($0)" }.joined(separator: "  "))
-                    .mobileTextStyle(.caption)
-                    .foregroundStyle(.tint)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
         }
-        .padding(.vertical, 5)
-        .padding(note.kind == "voice" ? 12 : 0)
-        .background(note.kind == "voice" ? mobileTheme.panel : Color.clear, in: .rect(cornerRadius: 14))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(MobileDesignTokens.radiusMd)))
         .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
     private var noteMetadata: some View {
         Text(note.updatedAt.millisecondsDate, format: .dateTime.month().day().hour().minute())
-        Text(note.status.noteStatusLabel)
         if let duration = note.voiceDurationSec {
+            Text("·")
             Text(voiceNoteTime(duration)).monospacedDigit()
+        }
+        Text("·")
+        Text(note.status.noteStatusLabel)
+        if let projects = note.projects, !projects.isEmpty {
+            Text("·")
+            Text(projects.map(\.name).joined(separator: " · "))
+                .lineLimit(1)
         }
     }
 }

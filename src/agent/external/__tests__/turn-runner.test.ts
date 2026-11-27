@@ -1,10 +1,11 @@
 import { persistInboundAttachments } from '../../../channels/attachments/inbound-persist.js';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import { closeXopcDatabase, openXopcDatabase } from '../../../storage/sqlite/connection.js';
+import { updateSessionConfig } from '../../../storage/sqlite/config-repository.js';
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import { ProjectStore } from '../../../projects/project-store.js';
@@ -706,4 +707,91 @@ it('bridges Codex mcpServer/elicitation/request (form + url) through unified ext
     { action: 'accept', content: null, _meta: null },
   ]);
   expect(events.some((e) => e.type === 'message_end')).toBe(true);
+});
+
+it('uses the agent default workspace (and respects agent/session overrides) for direct non-Project external chats', async () => {
+  root = mkdtempSync(join(tmpdir(), 'xopc-external-default-ws-'));
+  vi.stubEnv('XOPC_STATE_DIR', root);
+  openXopcDatabase({ path: join(root, 'xopc.db') });
+  const configuredWorkspace = join(root, 'custom-codex-dir');
+  initializeTestAgentCatalog({
+    defaults: {
+      models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
+      skills: { mode: 'all-enabled', exclude: [] },
+      tools: {},
+      runtime: {},
+    },
+    agents: [
+      { id: 'main', enabled: true, profile: { name: 'Main' } },
+      { id: 'codex-auto', enabled: true, execution: { kind: 'codex' }, profile: { name: 'Codex Auto' } },
+      { id: 'codex-custom', enabled: true, workspace: configuredWorkspace, execution: { kind: 'codex' }, profile: { name: 'Codex Custom' } },
+    ],
+  });
+
+  // 1. Automatic default workspace (~/.xopc/workspace-<agentId>) is created & used without any Project.
+  const directSession = createConversation({ agentId: 'codex-auto' }, '');
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: directSession.key,
+    transcriptId: directSession.transcriptId!,
+    agentId: 'codex-auto',
+    execution: { kind: 'codex' },
+    runId: 'direct-auto-run',
+    content: 'Check default workspace',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+  const expectedAutoDir = join(root, 'workspace-codex-auto');
+  expect(existsSync(expectedAutoDir)).toBe(true);
+  const expectedAutoReal = realpathSync(expectedAutoDir);
+  expect(requests).toHaveBeenCalledWith('thread/start', expect.objectContaining({
+    cwd: expectedAutoReal,
+  }));
+
+  // Session control operations (compact / fork / rollback) work in direct non-Project sessions too.
+  const compacted = await compactExternalSession(directSession.key);
+  expect(compacted.compacted).toBe(true);
+  const forkedTarget = createConversation({ agentId: 'codex-auto' }, '');
+  expect(await forkExternalSession({
+    sourceConversationId: directSession.key,
+    targetConversationId: forkedTarget.key,
+  })).toBe(true);
+  expect(await rollbackExternalSession(directSession.key, 1)).toBe(true);
+
+  // 2. Configured agent workspace override is used when set on the external agent.
+  requests.mockClear();
+  const customAgentSession = createConversation({ agentId: 'codex-custom' }, '');
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: customAgentSession.key,
+    transcriptId: customAgentSession.transcriptId!,
+    agentId: 'codex-custom',
+    execution: { kind: 'codex' },
+    runId: 'direct-custom-agent-run',
+    content: 'Check custom agent workspace',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+  expect(existsSync(configuredWorkspace)).toBe(true);
+  expect(requests).toHaveBeenCalledWith('thread/start', expect.objectContaining({
+    cwd: realpathSync(configuredWorkspace),
+  }));
+
+  // 3. Per-session workingDirectoryOverride takes precedence over agent default workspace.
+  requests.mockClear();
+  const sessionFolder = join(root, 'picked-session-folder');
+  const overrideSession = createConversation({ agentId: 'codex-auto' }, '');
+  updateSessionConfig(overrideSession.key, { workingDirectoryOverride: sessionFolder });
+  await Array.fromAsync(runExternalProjectTurn({
+    conversationId: overrideSession.key,
+    transcriptId: overrideSession.transcriptId!,
+    agentId: 'codex-auto',
+    execution: { kind: 'codex' },
+    runId: 'direct-session-override-run',
+    content: 'Check session override workspace',
+    hasAttachmentsOrContext: false,
+    signal: new AbortController().signal,
+  }));
+  expect(existsSync(sessionFolder)).toBe(true);
+  expect(requests).toHaveBeenCalledWith('thread/start', expect.objectContaining({
+    cwd: realpathSync(sessionFolder),
+  }));
 });

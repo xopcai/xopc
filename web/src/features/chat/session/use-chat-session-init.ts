@@ -13,7 +13,6 @@ import {
   type SessionInitialAgentConfig,
 } from '@xopcai/gateway-contract';
 
-import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { fetchProject, type Project } from '@/features/projects/api';
 import { useGatewayStore } from '@/stores/gateway-store';
 import type { Message } from '@/features/chat/messages/messages.types';
@@ -172,11 +171,6 @@ export function useChatSessionInit(opts: {
       const project = spec.projectId ? await fetchProject(spec.projectId) : null;
       if (!isLive()) return;
       if (!request.requestedAgentId && project?.defaultAgentId) spec.agentId = project.defaultAgentId;
-      if (!project?.workspaceRoot?.trim()) {
-        const agents = await fetchChatAgents().catch(() => undefined);
-        if (!isLive()) return;
-        if (agents?.items.some(agent => agent.id === spec.agentId && agent.execution)) spec.agentId = agents.defaultId;
-      }
       const modelPreference = modelPreferenceForAgent(preferences, spec.agentId);
       const open = (executionMode?: LocalSessionOptions['executionMode'], config?: SessionInitialAgentConfig, onOpened?: (id: string) => void) => openNewChatHandoff({
         sessionMgr: runtime.sessionMgrRef.current,

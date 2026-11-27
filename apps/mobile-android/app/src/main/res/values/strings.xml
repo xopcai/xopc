@@ -330,6 +330,7 @@
     <string name="conversations_days_ago">%1$d days ago</string>
     <string name="conversations_weeks_ago">%1$d weeks ago</string>
     <string name="chat_load_error">Could not load conversations. Check your Gateway connection and retry.</string>
+    <string name="chat_create_error">Could not create a conversation. Try again.</string>
     <string name="message_you">You</string>
     <string name="feature_pending">This feature is not implemented yet.</string>
     <string name="progress_tasks">Tasks</string>

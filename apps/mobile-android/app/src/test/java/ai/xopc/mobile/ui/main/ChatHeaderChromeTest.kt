@@ -115,4 +115,62 @@ class ChatHeaderChromeTest {
     assertTrue(shouldShowRuntimeBadge("前端专家", "Claude"))
     assertFalse(shouldShowRuntimeBadge("主助理", null))
   }
+
+  @Test
+  fun splitsModelSubtitlePartsAndFormatsHeaderIdentityByAgentAndDraftState() {
+    val parts = chatModelSubtitleParts("Claude Sonnet 4.6", "levels", "medium", isFastEnabled = true, isZh = true)
+    assertEquals(ChatHeaderModelParts("Claude Sonnet 4.6", "· 中 ⚡"), parts)
+
+    val fastOnly = chatModelSubtitleParts("GPT-5.4", "levels", "off", isFastEnabled = true, isZh = true)
+    assertEquals(ChatHeaderModelParts("GPT-5.4", "⚡"), fastOnly)
+    assertEquals("GPT-5.4 ⚡", fastOnly?.fullText)
+
+    val defaultTitled = chatHeaderIdentity(
+      conversationTitle = "重构移动端导航方案",
+      isDraft = false,
+      agentId = "main",
+      defaultAgentId = "main",
+      agentName = "主助理",
+      runtimeBadge = null,
+      modelParts = parts,
+    )
+    assertTrue(defaultTitled.hasConversationTitle)
+    assertFalse(defaultTitled.showsAvatarInPrimary)
+    assertEquals("重构移动端导航方案", defaultTitled.primaryText)
+    assertNull(defaultTitled.secondaryAgentName)
+    assertEquals("Claude Sonnet 4.6", defaultTitled.modelName)
+    assertEquals("· 中 ⚡", defaultTitled.modelSuffix)
+
+    val expertTitled = chatHeaderIdentity(
+      conversationTitle = "重构移动端导航方案",
+      isDraft = false,
+      agentId = "architect",
+      defaultAgentId = "main",
+      agentName = "架构专家",
+      runtimeBadge = "Claude",
+      modelParts = parts,
+    )
+    assertTrue(expertTitled.hasConversationTitle)
+    assertFalse(expertTitled.showsAvatarInPrimary)
+    assertNull(expertTitled.primaryRuntimeBadge)
+    assertEquals("架构专家", expertTitled.secondaryAgentName)
+    assertEquals("Claude", expertTitled.secondaryRuntimeBadge)
+    assertEquals("Claude Sonnet 4.6", expertTitled.modelName)
+
+    val draft = chatHeaderIdentity(
+      conversationTitle = "新对话",
+      isDraft = true,
+      agentId = "architect",
+      defaultAgentId = "main",
+      agentName = "架构专家",
+      runtimeBadge = "Claude",
+      modelParts = parts,
+    )
+    assertFalse(draft.hasConversationTitle)
+    assertTrue(draft.showsAvatarInPrimary)
+    assertEquals("架构专家", draft.primaryText)
+    assertEquals("Claude", draft.primaryRuntimeBadge)
+    assertNull(draft.secondaryAgentName)
+    assertEquals("Claude Sonnet 4.6", draft.modelName)
+  }
 }

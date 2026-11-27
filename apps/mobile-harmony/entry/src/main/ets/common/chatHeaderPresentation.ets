@@ -1,5 +1,25 @@
 import { XopcContextDelegatedTask, XopcContextSummary } from '../model/chat';
 
+export interface XopcChatHeaderModelParts {
+  name: string;
+  suffix: string;
+  fullText: string;
+}
+
+export interface XopcChatHeaderIdentity {
+  hasConversationTitle: boolean;
+  showsAvatarInPrimary: boolean;
+  primaryText: string;
+  primaryRuntimeBadge: string;
+  showsAgentInSecondary: boolean;
+  secondaryAgentName: string;
+  secondaryRuntimeBadge: string;
+  modelName: string;
+  modelSuffix: string;
+  hasSecondaryRow: boolean;
+  accessibilitySummary: string;
+}
+
 export interface XopcChatContextStrip {
   hasProject: boolean;
   projectTitle: string;
@@ -25,6 +45,31 @@ export function shortThinkingLabel(level: string, isZh: boolean): string {
   return level.trim();
 }
 
+export function chatModelSubtitleParts(
+  modelName: string,
+  thinkingMode: string | undefined,
+  thinkingLevel: string,
+  fastEnabled: boolean,
+  language: string,
+): XopcChatHeaderModelParts | undefined {
+  const trimmed = modelName.trim();
+  if (!trimmed) return undefined;
+  const isZh = language.startsWith('zh');
+  let effort = '';
+  if (thinkingMode === 'levels' || thinkingMode === 'toggle') {
+    effort = shortThinkingLabel(thinkingLevel, isZh);
+  }
+  let suffix = '';
+  if (effort && fastEnabled) suffix = `· ${effort} ⚡`;
+  else if (effort) suffix = `· ${effort}`;
+  else if (fastEnabled) suffix = '⚡';
+  return {
+    name: trimmed,
+    suffix,
+    fullText: suffix ? `${trimmed} ${suffix}` : trimmed,
+  };
+}
+
 export function chatModelSubtitle(
   modelName: string,
   thinkingMode: string | undefined,
@@ -32,17 +77,46 @@ export function chatModelSubtitle(
   fastEnabled: boolean,
   language: string,
 ): string {
-  const trimmed = modelName.trim();
-  if (!trimmed) return '';
-  const isZh = language.startsWith('zh');
-  const parts: string[] = [trimmed];
-  if (thinkingMode === 'levels' || thinkingMode === 'toggle') {
-    const effort = shortThinkingLabel(thinkingLevel, isZh);
-    if (effort) parts.push(effort);
-  }
-  let result = parts.join(' · ');
-  if (fastEnabled) result += ' ⚡';
-  return result;
+  return chatModelSubtitleParts(modelName, thinkingMode, thinkingLevel, fastEnabled, language)?.fullText ?? '';
+}
+
+export function chatHeaderIdentity(
+  conversationTitle: string,
+  isDraft: boolean,
+  agentId: string,
+  defaultAgentId: string,
+  agentName: string,
+  runtimeBadge: string,
+  modelParts: XopcChatHeaderModelParts | undefined,
+): XopcChatHeaderIdentity {
+  const trimmedTitle = conversationTitle.trim();
+  const hasConversationTitle = !isDraft && trimmedTitle.length > 0;
+  const trimmedAgent = agentName.trim();
+  const shownBadge = shouldShowRuntimeBadge(trimmedAgent, runtimeBadge) ? runtimeBadge.trim() : '';
+  const normalizedAgent = agentId.trim().toLowerCase();
+  const normalizedDefault = defaultAgentId.trim().toLowerCase() || 'main';
+  const isDefaultAgent = !normalizedAgent || normalizedAgent === normalizedDefault;
+  const showsAgentInSecondary = hasConversationTitle && !isDefaultAgent && trimmedAgent.length > 0;
+  const modelName = modelParts?.name ?? '';
+  const modelSuffix = modelParts?.suffix ?? '';
+  const summaryParts: string[] = [];
+  const primaryText = hasConversationTitle ? trimmedTitle : trimmedAgent;
+  if (primaryText) summaryParts.push(primaryText);
+  if (showsAgentInSecondary) summaryParts.push(trimmedAgent);
+  if (modelParts?.fullText) summaryParts.push(modelParts.fullText);
+  return {
+    hasConversationTitle,
+    showsAvatarInPrimary: !hasConversationTitle,
+    primaryText,
+    primaryRuntimeBadge: hasConversationTitle ? '' : shownBadge,
+    showsAgentInSecondary,
+    secondaryAgentName: showsAgentInSecondary ? trimmedAgent : '',
+    secondaryRuntimeBadge: showsAgentInSecondary ? shownBadge : '',
+    modelName,
+    modelSuffix,
+    hasSecondaryRow: showsAgentInSecondary || modelName.length > 0,
+    accessibilitySummary: summaryParts.join('，'),
+  };
 }
 
 export function localizedTaskPhase(phase: string | undefined, isZh: boolean): string {

@@ -23,33 +23,33 @@ struct NoteAudioPlayerView: View {
                     } else {
                         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.tint)
+                            .foregroundStyle(mobileTheme.action)
                     }
                 }
-                .frame(width: 36, height: 36)
-                .background(Color.accentColor.opacity(0.14), in: .circle)
+                .frame(width: 40, height: 40)
+                .background(mobileTheme.active, in: .circle)
                 .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(isPlaying ? LocalizedStringResource("暂停播放") : "播放录音")
                         .mobileTextStyle(.rowTitle)
                     if let errorMessage {
                         Text(errorMessage).font(.caption).foregroundStyle(mobileTheme.danger)
                     } else if showsFileName {
-                        Text(displayFileName).font(.caption).foregroundStyle(.secondary)
+                        Text(displayFileName).font(.caption).foregroundStyle(mobileTheme.secondary)
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 if let duration = attachment.duration {
                     Text(voiceNoteTime(duration)).font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(mobileTheme.secondary)
                 }
             }
             .foregroundStyle(mobileTheme.foreground)
-            .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-            .background(mobileTheme.panel, in: .rect(cornerRadius: 14))
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(MobileDesignTokens.radiusMd)))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)

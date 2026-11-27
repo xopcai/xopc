@@ -229,6 +229,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 
 internal enum class HomeTab { Assistant, Conversations, Progress, Projects, Automations, Notes, Library, Capabilities, Me }
 
@@ -407,6 +408,31 @@ private fun AssistantHistorySkeleton() {
 }
 
 @Composable
+private fun ChatRouteLoading(
+  backTag: String,
+  insets: PaddingValues,
+  onBack: () -> Unit,
+  failed: Boolean = false,
+  onRetry: () -> Unit = {},
+) {
+  Column(Modifier.fillMaxSize().padding(insets)) {
+    IconButton(onClick = onBack, modifier = Modifier.testTag(backTag)) {
+      Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+    }
+    if (failed) {
+      Column(Modifier.padding(horizontal = 16.dp)) {
+        Text(stringResource(R.string.progress_task_chat_error))
+        TextButton(onClick = onRetry, modifier = Modifier.testTag("task-chat-open-retry")) {
+          Text(stringResource(R.string.assistant_retry))
+        }
+      }
+    } else {
+      AssistantHistorySkeleton()
+    }
+  }
+}
+
+@Composable
 internal fun MainScreen(
   modifier: Modifier = Modifier,
   connection: ConnectionUiState = ConnectionUiState(),
@@ -440,6 +466,7 @@ internal fun MainScreen(
   onRetryChatNetwork: () -> Unit = {},
   onSelectTaskChildConversation: (String, String) -> Unit = { _, _ -> },
   onCreateConversation: () -> Unit = {},
+  onCreateOrdinaryDraft: suspend () -> String = { error("UNAVAILABLE") },
   onSearchExternalConversations: suspend (String) -> List<ConversationSummary> = { emptyList() },
   onAppendExternalFiles: suspend (ai.xopc.mobile.gateway.ExternalFileBatch, String?) -> Unit = { _, _ -> },
   onCreateProjectConversation: suspend (String) -> String = { error("UNAVAILABLE") },
@@ -471,7 +498,7 @@ internal fun MainScreen(
   onRemoveDraftRef: (String, String) -> Unit = { _, _ -> },
   onLoadReferences: (String, String) -> Unit = { _, _ -> },
   onAddDraftRef: (ReferencePickerItem) -> Boolean = { false },
-  onSendMessage: () -> Unit = {},
+  onSendMessage: (String) -> Unit = {},
   onRetryPendingInput: () -> Unit = {},
   onStopRun: () -> Unit = {},
   onReloadModels: () -> Unit = {},
@@ -514,7 +541,8 @@ internal fun MainScreen(
   onWriteProgressProject: suspend (ai.xopc.mobile.gateway.ProjectMutation) -> ai.xopc.mobile.gateway.ProgressProject = { error("UNAVAILABLE") },
   onCreateProjectNote: (String) -> Unit = {},
   onCreateProgressTask: (ProgressTaskEdit) -> Unit = {},
-  onOpenTaskChat: (String) -> Unit = {},
+  onResolveTaskConversation: suspend (String) -> String = { error("UNAVAILABLE") },
+  onRestoreTaskConversation: (String, String) -> Unit = { _, _ -> },
   onSaveProgressTask: (String, Int, ProgressTaskEdit) -> Unit = { _, _, _ -> },
   onProgressTaskSearchChange: (String) -> Unit = {},
   onSubmitProgressTaskSearch: () -> Unit = {},
@@ -747,12 +775,9 @@ internal fun MainScreen(
     if (id != null && id == connection.selectedConversationId) {
       val personalId = connection.personal.agent?.conversationId
       val taskId = connection.taskConversationTaskId
-      val top = navState.topRoute
       when {
         id == personalId -> navState.openPushTarget(PushNavTarget.AdaHome)
         taskId != null -> navState.openTaskChat(taskId = taskId, conversationId = id)
-        top is MobileRoute.SessionChat && top.draftId == "pending-draft" ->
-          navState.promoteSessionDraftInPlace("pending-draft", id)
         else -> navState.openOrdinaryChat(
           conversationId = id,
           agentId = connection.selectedAgentId.ifBlank { connection.defaultAgentId },
@@ -792,6 +817,7 @@ internal fun MainScreen(
     onRetryChatNetwork = onRetryChatNetwork,
     onSelectTaskChildConversation = onSelectTaskChildConversation,
     onCreateConversation = onCreateConversation,
+    onCreateOrdinaryDraft = onCreateOrdinaryDraft,
     onCreateProjectConversation = onCreateProjectConversation,
     onDiscardDraft = onDiscardDraft,
     onBeginRename = onBeginRename, onRenameDraftChange = onRenameDraftChange,
@@ -859,7 +885,8 @@ internal fun MainScreen(
     onOpenProgressProject = onOpenProgressProject,
     onWriteProgressProject = onWriteProgressProject, onCreateProjectNote = onCreateProjectNote,
     onCreateProgressTask = onCreateProgressTask,
-    onOpenTaskChat = onOpenTaskChat,
+    onResolveTaskConversation = onResolveTaskConversation,
+    onRestoreTaskConversation = onRestoreTaskConversation,
     onSaveProgressTask = onSaveProgressTask,
     onSubmitProgressTaskSearch = onSubmitProgressTaskSearch,
     onOpenExecution = onOpenExecution, onRetryExecution = onRetryExecution,
@@ -1005,6 +1032,7 @@ internal fun MainContent(
   onRetryChatNetwork: () -> Unit = {},
   onSelectTaskChildConversation: (String, String) -> Unit = { _, _ -> },
   onCreateConversation: () -> Unit = {},
+  onCreateOrdinaryDraft: suspend () -> String = { error("UNAVAILABLE") },
   onCreateProjectConversation: suspend (String) -> String = { error("UNAVAILABLE") },
   onDiscardDraft: (String) -> Unit = {},
   onBeginRename: (String) -> Unit = {},
@@ -1032,7 +1060,7 @@ internal fun MainContent(
   onRemoveDraftRef: (String, String) -> Unit = { _, _ -> },
   onLoadReferences: (String, String) -> Unit = { _, _ -> },
   onAddDraftRef: (ReferencePickerItem) -> Boolean = { false },
-  onSendMessage: () -> Unit = {},
+  onSendMessage: (String) -> Unit = {},
   onRetryPendingInput: () -> Unit = {},
   onStopRun: () -> Unit = {},
   onReloadModels: () -> Unit = {},
@@ -1075,7 +1103,8 @@ internal fun MainContent(
   onWriteProgressProject: suspend (ai.xopc.mobile.gateway.ProjectMutation) -> ai.xopc.mobile.gateway.ProgressProject = { error("UNAVAILABLE") },
   onCreateProjectNote: (String) -> Unit = {},
   onCreateProgressTask: (ProgressTaskEdit) -> Unit = {},
-  onOpenTaskChat: (String) -> Unit = {},
+  onResolveTaskConversation: suspend (String) -> String = { error("UNAVAILABLE") },
+  onRestoreTaskConversation: (String, String) -> Unit = { _, _ -> },
   onSaveProgressTask: (String, Int, ProgressTaskEdit) -> Unit = { _, _, _ -> },
   onProgressTaskSearchChange: (String) -> Unit = {},
   onSubmitProgressTaskSearch: () -> Unit = {},
@@ -1180,6 +1209,7 @@ internal fun MainContent(
   modifier: Modifier = Modifier,
 ) {
   val gatewayId = connection.profile?.gatewayId
+  val gatewayScope = connection.profile?.let { it.gatewayId to it.deviceId }
   val isPaired = gatewayId != null
   val activeTab = navState.selectedTab
   val topRoute = navState.topRoute
@@ -1190,7 +1220,13 @@ internal fun MainContent(
     topRoute is MobileRoute.ProjectChat ||
     topRoute is MobileRoute.AutomationSetupChat
   val activeChatConnection = if (isAdaRoot) connection.forAdaRoot() else connection
-  val conversationId = activeChatConnection.selectedConversationId
+  val taskRoute = topRoute as? MobileRoute.TaskChat
+  val chatRouteReady = when (topRoute) {
+    is MobileRoute.TaskChat -> topRoute.matchesConversation(connection.selectedConversationId, connection.taskConversationTaskId)
+    is MobileRoute.SessionChat -> topRoute.effectiveConversationId == connection.selectedConversationId
+    else -> true
+  }
+  val conversationId = activeChatConnection.selectedConversationId.takeIf { chatRouteReady }
   val personalConversationId = connection.personal.agent?.conversationId
 
   // Bridge external legacy HomeTab updates (used in instrumentation tests).
@@ -1329,6 +1365,8 @@ internal fun MainContent(
   }
   var openingAutomation by remember(gatewayId) { mutableStateOf(false) }
   var openingProjectChat by remember(gatewayId) { mutableStateOf(false) }
+  var openingOrdinaryDraft by remember(gatewayScope) { mutableStateOf(false) }
+  val latestGatewayScope by rememberUpdatedState(gatewayScope)
   var notesPendingVoiceCount by remember(gatewayId) { mutableIntStateOf(0) }
   val latestGateway by rememberUpdatedState(gatewayId)
   val latestConversation by rememberUpdatedState(conversationId)
@@ -1357,7 +1395,7 @@ internal fun MainContent(
       }
       route is MobileRoute.SessionChat -> {
         val cid = route.effectiveConversationId
-        if (cid != null && cid != "pending-draft" && connection.selectedConversationId != cid) {
+        if (cid != null && connection.selectedConversationId != cid) {
           onRestoreConversation(cid)
         }
       }
@@ -1365,12 +1403,6 @@ internal fun MainContent(
         val cid = route.conversationId
         if (cid != null && connection.selectedConversationId != cid) {
           onSelectProjectConversation(cid, route.projectId)
-        }
-      }
-      route is MobileRoute.TaskChat -> {
-        val cid = route.conversationId
-        if (cid != null && connection.selectedConversationId != cid) {
-          onOpenTaskChat(route.taskId)
         }
       }
     }
@@ -1381,15 +1413,26 @@ internal fun MainContent(
     syncChatForActiveDestination()
   }
 
-  // In-place draft promotion: update placeholder pending-draft SessionChat without pop+push.
-  LaunchedEffect(connection.selectedConversationId, topRoute) {
-    val currentId = connection.selectedConversationId ?: return@LaunchedEffect
-    val top = topRoute
-    if (top is MobileRoute.SessionChat && top.draftId == "pending-draft" && currentId != personalConversationId) {
-      navState.promoteSessionDraftInPlace("pending-draft", currentId, connection.conversationSummary(currentId)?.title)
-    } else if (top is MobileRoute.SessionChat && top.draftId != null && top.draftId == currentId &&
-      connection.conversationSummary(currentId)?.isLocalDraft == false) {
-      navState.promoteSessionDraftInPlace(top.draftId, currentId, connection.conversationSummary(currentId)?.title)
+  var taskOpenFailed by remember(gatewayScope, activeTab, taskRoute) { mutableStateOf(false) }
+  var taskOpenAttempt by remember(gatewayScope, activeTab, taskRoute) { mutableIntStateOf(0) }
+  LaunchedEffect(gatewayScope, activeTab, taskRoute, taskOpenAttempt) {
+    if (gatewayScope == null || taskRoute == null || chatRouteReady) return@LaunchedEffect
+    taskOpenFailed = false
+    val conversation = taskRoute.conversationId
+    if (conversation != null) {
+      onRestoreTaskConversation(taskRoute.taskId, conversation)
+      return@LaunchedEffect
+    }
+    try {
+      val resolvedId = onResolveTaskConversation(taskRoute.taskId)
+      coroutineContext.ensureActive()
+      if (latestGatewayScope == gatewayScope && navState.selectedTab == activeTab && navState.topRoute == taskRoute) {
+        navState.openTaskChat(taskRoute.taskId, conversationId = resolvedId)
+      }
+    } catch (error: CancellationException) {
+      throw error
+    } catch (_: Exception) {
+      taskOpenFailed = true
     }
   }
 
@@ -1418,33 +1461,32 @@ internal fun MainContent(
     }
   }
 
-  fun switchConversationRoute(id: String) {
-    if (id == personalConversationId) {
-      navState.openPushTarget(PushNavTarget.AdaHome)
-      onOpenPersonalAgent()
-    } else {
-      navState.switchOrdinaryChat(
-        conversationId = id,
-        agentId = connection.conversationSummary(id)?.agentId ?: connection.defaultAgentId,
-        title = connection.conversationSummary(id)?.title,
-      )
-      onSelectConversation(id)
+  fun openNewOrdinaryDraft() {
+    if (!isPaired || openingOrdinaryDraft || connection.creatingConversation) return
+    openingOrdinaryDraft = true
+    val sourceTab = navState.selectedTab
+    val sourceStack = navState.activeStack
+    fun sourceIsCurrent() = latestGatewayScope == gatewayScope &&
+      navState.selectedTab == sourceTab && navState.activeStack == sourceStack
+    voiceScope.launch {
+      try {
+        val draftId = onCreateOrdinaryDraft()
+        if (sourceIsCurrent()) {
+          navState.openOrdinaryChat(conversationId = draftId, agentId = connection.defaultAgentId)
+          onSelectConversation(draftId)
+        }
+      } catch (error: CancellationException) {
+        throw error
+      } catch (_: Exception) {
+        if (sourceIsCurrent()) xopcShowToast(voiceContext, R.string.chat_create_error)
+      } finally {
+        openingOrdinaryDraft = false
+      }
     }
   }
 
-  fun openNewOrdinaryDraft() {
-    navState.openOrdinaryChat(
-      conversationId = null,
-      draftId = "pending-draft",
-      agentId = connection.defaultAgentId,
-    )
-    onCreateConversation()
-  }
-
   fun openTaskConversation(taskId: String) {
-    if (connection.progress.taskChatBusy) return
     navState.openTaskChat(taskId = taskId)
-    onOpenTaskChat(taskId)
   }
 
   fun openProjectChat(id: String, projectId: String) {
@@ -1700,7 +1742,7 @@ internal fun MainContent(
   val showOverview = topRoute is MobileRoute.PersonalOverview
   val showMusicMini = activeMusic != null &&
     (!isChatRoute || phonePage || inlineMusicKey != activeMusic.key || activeMusic.conversationId != conversationId)
-  val showBottomChrome = isPaired && isChatRoute && !phonePage && !showOverview &&
+  val showBottomChrome = isPaired && isChatRoute && chatRouteReady && !phonePage && !showOverview &&
     (conversationId != null || !activeChatConnection.restoringHomeChat)
   LaunchedEffect(showBottomChrome) {
     if (!showBottomChrome) {
@@ -1787,7 +1829,6 @@ internal fun MainContent(
             "task_chat" -> {
               val tid = target.getString("taskId")
               navState.openPushTarget(PushNavTarget.TaskChat(tid))
-              onOpenTaskChat(tid)
             }
             "chat", "work_discovery" -> {
               val cid = target.getString("conversationId")
@@ -1828,7 +1869,6 @@ internal fun MainContent(
       }
     }
   }
-  var sessionSwitcherOpen by remember(gatewayId) { mutableStateOf(false) }
   val closeKeyboard: () -> Unit = {
     focusManager.clearFocus(force = true)
     keyboardController?.hide()
@@ -1852,7 +1892,7 @@ internal fun MainContent(
   // 4. Non-Ada root -> switch to Ada
   // 5. Ada root -> disabled (system backgrounds app)
   val hasTransientUi = assistantActionsOpen || messageSearchOpen || musicPlayerOpen ||
-    linkedMcp != null || phonePage || sessionSwitcherOpen
+    linkedMcp != null || phonePage
   val canHandleBack = (isPaired && (
     hasTransientUi ||
     sidebar.open ||
@@ -1862,7 +1902,6 @@ internal fun MainContent(
   BackHandler(enabled = canHandleBack) {
     if (hasTransientUi) {
       when {
-        sessionSwitcherOpen -> sessionSwitcherOpen = false
         linkedMcp != null -> linkedMcp = null
         musicPlayerOpen -> musicPlayerOpen = false
         messageSearchOpen -> messageSearchOpen = false
@@ -1936,7 +1975,7 @@ internal fun MainContent(
               onDraftChange(value.text)
             }, assistantComposerFocus, assistantActionsOpen, { assistantActionsOpen = it },
               onRemoveDraftRef, onRemoveDraftAttachment, onPreviewDraftImage, onPreviewDraftFile,
-              onSendMessage, onStopRun,
+              { conversationId?.let(onSendMessage) }, onStopRun,
               inputVoiceMode, inputVoiceHeld, inputVoiceBusy, inputVoice.phase, inputVoiceError,
               inputVoiceDestination, inputVoiceElapsed,
               ::toggleInputVoice, onVoiceStart = ::startInputVoice, onVoiceMove = { dx, dy ->
@@ -1952,12 +1991,25 @@ internal fun MainContent(
             AnimatedVisibility(visible = assistantActionsOpen,
               enter = xopcExpandPanelEnter(panelMotionAllowed, Alignment.Bottom),
               exit = xopcExpandPanelExit(panelMotionAllowed, Alignment.Bottom), label = "assistant-actions") {
+              val showingPersonalVoiceHeader = activeChatConnection.personal.agent?.let {
+                it.state == "ready" && it.conversationId == activeChatConnection.selectedConversationId
+              } == true
               AssistantActionPanel(
                 canSwitchAgent = topRoute !is MobileRoute.AutomationSetupChat &&
                   topRoute !is MobileRoute.TaskChat && !isAdaRoot,
                 onOpenAgentPicker = {
                   assistantActionsOpen = false
                   agentPickerOpen = true
+                },
+                showsVoiceCall = !showingPersonalVoiceHeader &&
+                  topRoute !is MobileRoute.AutomationSetupChat && topRoute !is MobileRoute.TaskChat,
+                canStartVoiceCall = voiceCall.phase == "idle" && pendingVoiceMode == null &&
+                  !activeChatConnection.creatingConversation &&
+                  activeChatConnection.selectedConversationId != null && !activeChatConnection.sending,
+                onStartVoiceCall = {
+                  assistantActionsOpen = false
+                  closeKeyboard()
+                  requestVoice("auto")
                 },
                 canRecord = !inputVoiceBusy && !inputVoiceMode && inputVoice.phase == "idle" && !activeChatConnection.sending,
                 canReference = !activeChatConnection.sending && activeChatConnection.pendingInput == null,
@@ -2128,11 +2180,6 @@ internal fun MainContent(
                 onBackFromChat = if (sessionChatRoute != null) {
                   { closeKeyboard(); popCurrentRoute() }
                 } else null,
-                onSwitchConversation = if (sessionChatRoute != null) ({
-                  closeKeyboard()
-                  onRefreshRecentConversations()
-                  sessionSwitcherOpen = true
-                }) else null,
                 sessionTitleOverride = sessionChatRoute?.title,
                 isTaskChatRoute = taskChatRoute != null,
                 isAutomationSetupRoute = automationSetupRoute != null,
@@ -2343,16 +2390,21 @@ internal fun MainContent(
           } else {
             // L1 Pushed Routes (bottom tab bar automatically hidden, `< Back` shown)
             when (route) {
-              is MobileRoute.SessionChat -> renderChatSurface(
-                chatConn = connection,
-                isAdaRootSurface = false,
-                sessionChatRoute = route,
-              )
-              is MobileRoute.TaskChat -> renderChatSurface(
-                chatConn = connection,
-                isAdaRootSurface = false,
-                taskChatRoute = route,
-              )
+              is MobileRoute.SessionChat -> {
+                if (route.effectiveConversationId == connection.selectedConversationId) {
+                  renderChatSurface(chatConn = connection, isAdaRootSurface = false, sessionChatRoute = route)
+                } else {
+                  ChatRouteLoading("session-chat-back", rootInsets, ::popCurrentRoute)
+                }
+              }
+              is MobileRoute.TaskChat -> {
+                if (route.matchesConversation(connection.selectedConversationId, connection.taskConversationTaskId)) {
+                  renderChatSurface(chatConn = connection, isAdaRootSurface = false, taskChatRoute = route)
+                } else {
+                  ChatRouteLoading("task-chat-close", rootInsets, ::popCurrentRoute,
+                    failed = route == taskRoute && taskOpenFailed, onRetry = { taskOpenAttempt++ })
+                }
+              }
               is MobileRoute.ProjectChat -> renderChatSurface(
                 chatConn = connection,
                 isAdaRootSurface = false,
@@ -2836,24 +2888,6 @@ internal fun MainContent(
           navState.openSidebarTool(MobileRoute.Settings())
         },
       )
-      if (sessionSwitcherOpen) {
-        val activeSessionId = (topRoute as? MobileRoute.SessionChat)?.effectiveConversationId
-        SessionQuickSwitcherSheet(
-          connection = connection,
-          activeSessionId = activeSessionId,
-          onDismiss = { sessionSwitcherOpen = false },
-          onRetry = onRefreshRecentConversations,
-          onLoadMore = onLoadMoreRecentConversations,
-          onNewChat = {
-            sessionSwitcherOpen = false
-            openNewOrdinaryDraft()
-          },
-          onSelectConversation = { id ->
-            sessionSwitcherOpen = false
-            if (id != activeSessionId) switchConversationRoute(id)
-          },
-        )
-      }
     },
   )
   if (connection.renameDraftId != null) AlertDialog(
@@ -3452,7 +3486,8 @@ private fun VoiceInputToggle(active: Boolean, disabled: Boolean, onClick: () -> 
 @Composable
 private fun AssistantActionPanel(canRecord: Boolean, canReference: Boolean, onOpenReference: (String) -> Unit,
   canPick: Boolean, onPick: (String) -> Unit, onVoiceAction: () -> Unit,
-  canSwitchAgent: Boolean, onOpenAgentPicker: () -> Unit) {
+  canSwitchAgent: Boolean, onOpenAgentPicker: () -> Unit,
+  showsVoiceCall: Boolean = false, canStartVoiceCall: Boolean = false, onStartVoiceCall: () -> Unit = {}) {
   val actions = listOfNotNull(
     Triple(R.string.assistant_action_photos, R.drawable.action_photo, "photos"),
     Triple(R.string.assistant_action_camera, R.drawable.action_camera, "camera"),
@@ -3462,6 +3497,7 @@ private fun AssistantActionPanel(canRecord: Boolean, canReference: Boolean, onOp
     Triple(R.string.assistant_action_reference_task, R.drawable.tab_progress, "reference-task"),
     Triple(R.string.assistant_action_reference_file, R.drawable.action_folder, "reference-file"),
     Triple(R.string.assistant_action_switch_agent, R.drawable.tab_assistant, "switch-agent").takeIf { canSwitchAgent },
+    Triple(R.string.assistant_action_voice_natural, R.drawable.action_call, "voice-call").takeIf { showsVoiceCall },
   )
   Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp).padding(top = 2.dp, bottom = 10.dp)
     .testTag("assistant-action-panel"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -3471,6 +3507,7 @@ private fun AssistantActionPanel(canRecord: Boolean, canReference: Boolean, onOp
           val enabled = when (id) {
             "voice" -> canRecord
             "switch-agent" -> canSwitchAgent
+            "voice-call" -> canStartVoiceCall
             "reference-note", "reference-task" -> canReference
             else -> canPick
           }
@@ -3478,6 +3515,7 @@ private fun AssistantActionPanel(canRecord: Boolean, canReference: Boolean, onOp
             when {
               id == "voice" -> onVoiceAction()
               id == "switch-agent" -> onOpenAgentPicker()
+              id == "voice-call" -> onStartVoiceCall()
               id.startsWith("reference-") -> onOpenReference(id.removePrefix("reference-"))
               else -> onPick(id)
             }
@@ -3603,7 +3641,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   isAdaRoot: Boolean = false,
   scrollToTopRevision: Int = 0,
   onBackFromChat: (() -> Unit)? = null,
-  onSwitchConversation: (() -> Unit)? = null,
   sessionTitleOverride: String? = null,
   isTaskChatRoute: Boolean = false,
   isAutomationSetupRoute: Boolean = false,
@@ -4261,7 +4298,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
       val headerFastEnabled = headerFastTier != null && connection.serviceTier.isNotBlank() &&
         connection.serviceTier != "default" &&
         (connection.serviceTier == headerFastTier.id || headerModel.serviceTiers.any { it.id == connection.serviceTier })
-      val headerModelSubtitle = chatModelSubtitle(
+      val headerModelParts = chatModelSubtitleParts(
         modelName = headerModel?.localizedName(modelLanguage) ?: connection.selectedModelId.substringAfterLast('/'),
         thinkingMode = headerModel?.thinkingMode,
         thinkingLevel = connection.thinkingLevel,
@@ -4275,7 +4312,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
         .onSizeChanged { headerHeightPx = it.height }
         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
         .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = if (personalAgent != null) Alignment.CenterHorizontally else Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (personalAgent != null) {
           val collapsePersonalHeader by remember(messageListState, displayMessages.size, followBottom) {
@@ -4383,12 +4420,15 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
         } else {
           val resolvedTitle = selected?.title?.takeIf { it.isNotBlank() && !selected.isLocalDraft }
             ?: sessionTitleOverride?.takeIf { it.isNotBlank() }
-          val identityPrimary = if (onBackFromChat != null && resolvedTitle != null) resolvedTitle else headerAgentName
-          val identitySubtitle = if (onBackFromChat != null && resolvedTitle != null) {
-            listOfNotNull(headerAgentName, headerModelSubtitle).joinToString(" · ")
-          } else {
-            headerModelSubtitle
-          }
+          val headerIdentity = chatHeaderIdentity(
+            conversationTitle = resolvedTitle,
+            isDraft = selected?.isLocalDraft == true || resolvedTitle == null,
+            agentId = headerAgentId,
+            defaultAgentId = connection.defaultAgentId,
+            agentName = headerAgentName,
+            runtimeBadge = headerAgent?.externalRuntimeBadge,
+            modelParts = headerModelParts,
+          )
           Row(Modifier.fillMaxWidth().heightIn(min = 48.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -4408,25 +4448,17 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
                 }
               }
             }
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
               ChatHeaderIdentityPill(
                 agentAvatar = connection.agentAvatars[headerAgentId],
                 agentAvatarRef = headerAgent?.avatar.orEmpty(),
                 agentId = headerAgentId,
-                agentName = identityPrimary,
-                runtimeBadge = headerAgent?.externalRuntimeBadge,
-                modelSubtitle = identitySubtitle,
+                identity = headerIdentity,
                 onClick = { optionsOpen = true },
               )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(if (onCloseProjectChat == null) 3.dp else 0.dp),
               verticalAlignment = Alignment.CenterVertically) {
-              if (onSwitchConversation != null) {
-                IconButton(onClick = onSwitchConversation,
-                  modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("session-chat-switch")) {
-                  Icon(painterResource(R.drawable.tab_conversations), stringResource(R.string.chat_switch_conversation), Modifier.size(20.dp))
-                }
-              }
               LocalBrowserPreviewOpen.current?.let { openPreview ->
                 IconButton(onClick = openPreview,
                   modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-browser-preview")) {
@@ -4440,15 +4472,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
                   if (phoneNeedsUser) Box(Modifier.align(Alignment.TopEnd).size(6.dp)
                     .background(MaterialTheme.colorScheme.primary, CircleShape))
                 }
-              }
-              IconButton(onClick = {
-                focusManager.clearFocus()
-                keyboardController?.hide()
-                onStartVoiceCall()
-              }, enabled = canStartVoiceCall,
-                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-voice-call")) {
-                Icon(painterResource(R.drawable.action_call),
-                  stringResource(R.string.assistant_action_voice_natural), Modifier.size(22.dp))
               }
             }
           }
@@ -5659,122 +5682,6 @@ private fun ConversationsScreen(
       }
       }
     }
-    }
-  }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SessionQuickSwitcherSheet(
-  connection: ConnectionUiState,
-  activeSessionId: String?,
-  onDismiss: () -> Unit,
-  onRetry: () -> Unit,
-  onLoadMore: () -> Unit,
-  onNewChat: () -> Unit,
-  onSelectConversation: (String) -> Unit,
-) {
-  val scheme = MaterialTheme.colorScheme
-  val personalId = connection.personal.agent?.conversationId
-  val agents = remember(connection.agents) { connection.agents.associateBy { it.id } }
-  val recent = remember(connection.recentConversations, personalId, connection.pendingDeleteId) {
-    connection.recentConversations.orEmpty().filter {
-      it.id != personalId && it.id != connection.pendingDeleteId && it.isRecentSidebarCandidate
-    }.sortedWith(compareByDescending<ConversationSummary> { it.status == "pinned" }.thenByDescending { it.updatedAt })
-  }
-  val nextOffset = connection.recentConversationsNextOffset
-  val requestMore by rememberUpdatedState(onLoadMore)
-  XopcBottomSheet(XopcSheetPreset.Medium, onDismissRequest = onDismiss) {
-    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp).testTag("session-switcher-sheet")) {
-      XopcSheetHeader(
-        title = stringResource(R.string.chat_switch_conversation),
-        onClose = onDismiss,
-        closeTag = "session-switcher-close",
-        trailing = {
-          TextButton(
-            onClick = onNewChat,
-            enabled = !connection.creatingConversation,
-            modifier = Modifier.testTag("session-switcher-new"),
-          ) {
-            Text(stringResource(R.string.assistant_action_new_chat))
-          }
-        },
-      )
-      LazyColumn(
-        modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(horizontal = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        contentPadding = PaddingValues(bottom = 8.dp),
-      ) {
-        if (connection.recentConversationsLoading && recent.isEmpty()) {
-          item("loading") { XopcListSkeleton(rows = 4) }
-        } else if (connection.recentConversationsError && recent.isEmpty()) {
-          item("error") {
-            XopcErrorState(
-              message = stringResource(R.string.chat_load_error),
-              retryLabel = stringResource(R.string.progress_refresh),
-              onRetry = onRetry,
-              retryTag = "session-switcher-retry",
-            )
-          }
-        } else if (recent.isEmpty()) {
-          item("empty") {
-            XopcEmptyState(message = stringResource(R.string.assistant_choose_conversation))
-          }
-        } else {
-          items(recent, key = { "switcher-${it.id}" }) { item ->
-            val agentId = item.agentId.orEmpty()
-            val agent = agents[agentId]
-            val agentName = agent?.let { agentDisplayName(it) } ?: agentId
-            val avatarRef = agent?.avatar.orEmpty()
-            val selected = item.id == activeSessionId
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .clip(themedCorners(XopcDesignTokens.RadiusSm))
-                .background(if (selected) scheme.primaryContainer else Color.Transparent)
-                .clickable(role = Role.Button) { onSelectConversation(item.id) }
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                .testTag("session-switcher-item-${item.id}"),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-              AgentAvatar(
-                connection.agentAvatars[agentId].takeIf { avatarRef.isNotBlank() },
-                avatarRef,
-                agentId,
-                24.dp,
-                active = false,
-                fallbackName = agentName,
-              )
-              Text(
-                text = item.title,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (selected) scheme.onPrimaryContainer else scheme.onSurface,
-              )
-              if (item.status == "pinned") {
-                Icon(
-                  painterResource(R.drawable.action_pin),
-                  stringResource(R.string.conversations_pinned),
-                  Modifier.size(16.dp),
-                  tint = scheme.onSurfaceVariant,
-                )
-              }
-            }
-          }
-          if (connection.recentConversationsLoading) {
-            item("loading-more") { BrandLoadingIndicator(Modifier.padding(10.dp), extent = 24.dp) }
-          } else if (nextOffset != null) {
-            item("load-more") {
-              Spacer(Modifier.height(16.dp))
-              LaunchedEffect(nextOffset) { requestMore() }
-            }
-          }
-        }
-      }
     }
   }
 }

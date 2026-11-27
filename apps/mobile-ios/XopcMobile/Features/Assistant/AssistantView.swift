@@ -18,11 +18,7 @@ struct AssistantView<Dock: View>: View {
     var showsFloatingHeader = true
     var bottomComposerSpacing: CGFloat = 4
     var backAccessibilityID = "project-chat-close"
-    var showsSessionConversationTitle = false
-    var recentSwitchConversations: [ConversationSummary] = []
-    var onSwitchConversation: ((ConversationSummary) -> Void)?
-    var onCreateNewConversation: (() -> Void)?
-    var onOpenConversationList: (() -> Void)?
+    var showsSessionConversationTitle = true
     var scrollToLatestToken = 0
     var onRunningStateChanged: ((Bool) -> Void)?
     var onBack: (() -> Void)?
@@ -1250,16 +1246,20 @@ struct AssistantView<Dock: View>: View {
             : (currentAgent?.localizedName(locale) ?? AppLocalization.string("未选择", locale: locale))
     }
 
-    private var currentModelSubtitle: String? {
+    private var currentModelParts: ChatHeaderModelParts? {
         let modelName = options.selectedModel?.localizedName(locale)
             ?? options.selectedModelID.split(separator: "/").last.map(String.init)
-        return ChatHeaderPresentation.modelSubtitle(
+        return ChatHeaderPresentation.modelSubtitleParts(
             modelName: modelName,
             thinkingMode: options.selectedModel?.thinking?.mode,
             thinkingLevel: options.thinkingLevel,
             isFastEnabled: options.isFastModeEnabled,
             locale: locale
         )
+    }
+
+    private var currentModelSubtitle: String? {
+        currentModelParts?.fullText
     }
 
     private var currentProjectTitle: String? {
@@ -1458,6 +1458,9 @@ struct AssistantView<Dock: View>: View {
             attachmentError: $attachmentError,
             canReferenceFiles: conversation?.isDraft == false,
             onSwitchAgent: showsFloatingHeader && !isPersonalConversation ? { showingAgentPicker = true } : nil,
+            showsVoiceCallInPanel: showsFloatingHeader && !isPersonalConversation,
+            canStartVoiceCall: canStartRealtimeVoice,
+            onStartVoiceCall: { startRealtimeVoice() },
             isRunActive: state.isRunActive,
             onInputFocusChanged: onInputFocusChanged,
             onStop: {
@@ -1538,33 +1541,20 @@ struct AssistantView<Dock: View>: View {
         isPersonalConversation && !state.messages.isEmpty && positionedTimeline && ((!followingBottom && !isAtBottom) || composerFocused)
     }
 
-    private var sessionHeaderTitle: String {
-        guard showsSessionConversationTitle, let conversation else {
-            return currentAgentName
-        }
-        let trimmed = conversation.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !conversation.isDraft, !trimmed.isEmpty {
-            return trimmed
-        }
-        return currentAgentName
-    }
-
-    private var sessionHeaderSubtitle: String? {
-        guard showsSessionConversationTitle else {
-            return currentModelSubtitle
-        }
-        var parts: [String] = []
-        if sessionHeaderTitle != currentAgentName {
-            parts.append(currentAgentName)
-        }
-        if let model = currentModelSubtitle, !model.isEmpty {
-            parts.append(model)
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    private var chatHeaderIdentity: ChatHeaderIdentityModel {
+        ChatHeaderPresentation.headerIdentity(.init(
+            conversationTitle: showsSessionConversationTitle ? conversation?.title : nil,
+            isDraft: conversation?.isDraft ?? true,
+            agentID: currentAgent?.id ?? conversation?.agentId ?? state.selectedAgentID,
+            defaultAgentID: state.defaultAgentID,
+            agentName: currentAgentName,
+            runtimeBadge: currentAgent?.externalRuntimeBadge,
+            modelParts: currentModelParts
+        ))
     }
 
     private var floatingHeader: some View {
-        VStack(spacing: 6) {
+        VStack(alignment: isPersonalConversation ? .center : .leading, spacing: 6) {
             ZStack(alignment: .top) {
                 HStack(spacing: 6) {
                     if let onBack {
@@ -1582,26 +1572,24 @@ struct AssistantView<Dock: View>: View {
                         ChatHeaderIdentityButton(
                             configuration: configuration,
                             agent: currentAgent,
-                            agentName: sessionHeaderTitle,
-                            modelSubtitle: sessionHeaderSubtitle,
+                            identity: chatHeaderIdentity,
                             isActive: isActive && !showingMessageSearch
                         ) {
                             sessionSheetDestination = .actions
                             showingSessionActions = true
                         }
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
                         Spacer(minLength: 0)
                     }
                     if phone.summary?.available == true, !isPersonalConversation {
                         phoneWorkspaceButton
                     }
-                    if !isPersonalConversation, let onSwitchConversation {
-                        sessionSwitcherMenu(onSwitchConversation: onSwitchConversation)
+                    if isPersonalConversation {
+                        headerButton("语音通话", icon: Image(systemName: "phone"), action: startRealtimeVoice)
+                            .disabled(!canStartRealtimeVoice)
+                            .accessibilityIdentifier("chat-header-voice-call")
                     }
-                    headerButton("语音通话", icon: Image(systemName: "phone"), action: startRealtimeVoice)
-                        .disabled(!canStartRealtimeVoice)
-                        .accessibilityIdentifier("chat-header-voice-call")
                 }
                 if isPersonalConversation {
                     personalFloatingCenterHeader
@@ -1692,41 +1680,6 @@ struct AssistantView<Dock: View>: View {
                 }
             }
         }
-    }
-
-    private func sessionSwitcherMenu(onSwitchConversation: @escaping (ConversationSummary) -> Void) -> some View {
-        Menu {
-            if let onCreateNewConversation {
-                Button("新建对话", systemImage: "square.and.pencil", action: onCreateNewConversation)
-            }
-            if let onOpenConversationList {
-                Button("全部对话", systemImage: "sidebar.left", action: onOpenConversationList)
-            }
-            if !recentSwitchConversations.isEmpty {
-                Section("最近对话") {
-                    ForEach(recentSwitchConversations.prefix(8)) { item in
-                        Button {
-                            onSwitchConversation(item)
-                        } label: {
-                            if item.id == conversation?.id {
-                                Label(item.displayName, systemImage: "checkmark")
-                            } else {
-                                Text(verbatim: item.displayName)
-                            }
-                        }
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.title3)
-                .frame(width: 44, height: 44)
-                .foregroundStyle(mobileTheme.foreground)
-                .background(mobileTheme.card, in: Circle())
-                .contentShape(.rect)
-        }
-        .accessibilityLabel("切换对话")
-        .accessibilityIdentifier("session-chat-switcher")
     }
 
     private var phoneWorkspaceButton: some View {
@@ -1890,7 +1843,7 @@ struct PersonalAgentProfileView: View {
             .navigationDestination(isPresented: $modelPickerOpen) {
                 AssistantOptionPicker(configuration: configuration, conversation: conversation,
                                       state: modelOptions, pickingModel: true,
-                                      onSave: onModelSaved, reloadAfterError: true)
+                                      onSave: onModelSaved)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

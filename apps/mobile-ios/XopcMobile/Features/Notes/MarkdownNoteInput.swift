@@ -2,6 +2,7 @@ import SwiftUI
 
 @available(iOS 18.0, *)
 struct MarkdownNoteInput: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     @Binding var markdown: String
     let configuration: GatewayConfiguration
     var autofocus = false
@@ -23,18 +24,28 @@ struct MarkdownNoteInput: View {
             } else {
                 textEditor
             }
-            ScrollView(.horizontal) {
-                HStack(spacing: 12) {
-                    Button(showsPreview ? "编辑" : "预览", systemImage: showsPreview ? "pencil" : "eye") {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    Button {
                         isEditing = false
                         showsPreview.toggle()
+                    } label: {
+                        Label(showsPreview ? "编辑" : "预览", systemImage: showsPreview ? "pencil" : "eye")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(mobileTheme.action)
+                            .padding(.horizontal, 10)
+                            .frame(height: 34)
+                            .background(mobileTheme.active, in: .capsule)
                     }
                     if !showsPreview {
                         formattingControls
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 5)
             }
+            .background(mobileTheme.grouped, in: .rect(cornerRadius: mobileTheme.corner(12)))
             .accessibilityLabel("笔记格式")
             .accessibilityIdentifier("note-markdown-toolbar")
         }
@@ -57,19 +68,43 @@ struct MarkdownNoteInput: View {
     }
 
     @ViewBuilder private var formattingControls: some View {
-        Button("撤销", systemImage: "arrow.uturn.backward", action: undo)
+        toolbarIconButton("撤销", systemImage: "arrow.uturn.backward", action: undo)
             .disabled(undoStack.isEmpty)
-        Button("重做", systemImage: "arrow.uturn.forward", action: redo)
+            .opacity(undoStack.isEmpty ? MobileDesignTokens.disabledOpacity : 1)
+        toolbarIconButton("重做", systemImage: "arrow.uturn.forward", action: redo)
             .disabled(redoStack.isEmpty)
-        Button("粗体", systemImage: "bold") { wrapSelection(with: "**", placeholder: "粗体") }
-        Button("斜体", systemImage: "italic") { wrapSelection(with: "*", placeholder: "斜体") }
-        Button("一级标题") { prefixLine("# ") }
-        Button("二级标题") { prefixLine("## ") }
-        Button("三级标题") { prefixLine("### ") }
-        Button("列表", systemImage: "list.bullet") { prefixLine("- ") }
-        Button("编号列表", systemImage: "list.number") { prefixLine("1. ") }
-        Button("核对清单", systemImage: "checklist") { prefixLine("- [ ] ") }
-        Button("引用", systemImage: "quote.opening") { prefixLine("> ") }
+            .opacity(redoStack.isEmpty ? MobileDesignTokens.disabledOpacity : 1)
+        toolbarIconButton("粗体", systemImage: "bold") { wrapSelection(with: "**", placeholder: "粗体") }
+        toolbarIconButton("斜体", systemImage: "italic") { wrapSelection(with: "*", placeholder: "斜体") }
+        toolbarTextButton("H1", accessibilityLabel: "一级标题") { prefixLine("# ") }
+        toolbarTextButton("H2", accessibilityLabel: "二级标题") { prefixLine("## ") }
+        toolbarTextButton("H3", accessibilityLabel: "三级标题") { prefixLine("### ") }
+        toolbarIconButton("列表", systemImage: "list.bullet") { prefixLine("- ") }
+        toolbarIconButton("编号列表", systemImage: "list.number") { prefixLine("1. ") }
+        toolbarIconButton("核对清单", systemImage: "checklist") { prefixLine("- [ ] ") }
+        toolbarIconButton("引用", systemImage: "quote.opening") { prefixLine("> ") }
+    }
+
+    private func toolbarIconButton(_ label: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(mobileTheme.foreground)
+                .frame(minWidth: 34, minHeight: 34)
+                .contentShape(.rect)
+        }
+        .accessibilityLabel(label)
+    }
+
+    private func toolbarTextButton(_ symbol: String, accessibilityLabel: LocalizedStringKey, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(verbatim: symbol)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(mobileTheme.foreground)
+                .frame(minWidth: 34, minHeight: 34)
+                .contentShape(.rect)
+        }
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var textEditor: some View {

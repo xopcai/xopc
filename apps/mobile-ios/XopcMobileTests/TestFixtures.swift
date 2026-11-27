@@ -12,7 +12,7 @@ func emptyContext(conversationID: String) -> ConversationContextSummary {
     )
 }
 
-func modelCatalog() -> ChatModelCatalog {
+func modelCatalog(serviceTiers: [ChatModelServiceTier]? = nil) -> ChatModelCatalog {
     ChatModelCatalog(
         defaultId: "model",
         models: [
@@ -22,7 +22,8 @@ func modelCatalog() -> ChatModelCatalog {
                 provider: "test",
                 reasoning: true,
                 vision: false,
-                thinking: ChatModelThinking(options: ["off", "high"], initialValue: "off")
+                thinking: ChatModelThinking(options: ["off", "high"], initialValue: "off"),
+                serviceTiers: serviceTiers
             )
         ]
     )
@@ -39,7 +40,11 @@ extension GatewayServing {
 }
 
 struct GatewayStub: GatewayServing {
+    var modelLoadFails = false
     var modelSaveFails = false
+    var agentConfigVersion: Int?
+    var serviceTierSaveFails = false
+    var modelServiceTiers: [ChatModelServiceTier]?
     var conversationPages: [ConversationPage]?
     var clarification: ClarificationRequest?
     var activeRun: ActiveRun
@@ -139,18 +144,31 @@ struct GatewayStub: GatewayServing {
     }
 
     func fetchModels(agentID _: String) async throws -> ChatModelCatalog {
-        modelCatalog()
+        if modelLoadFails {
+            throw URLError(.notConnectedToInternet)
+        }
+        return modelCatalog(serviceTiers: modelServiceTiers)
     }
 
     func fetchAgentConfiguration(conversationID _: String) async throws -> SessionAgentConfiguration {
-        SessionAgentConfiguration(model: "model", thinkingLevel: "off", configVersion: 1)
+        SessionAgentConfiguration(model: "model", thinkingLevel: "off", configVersion: agentConfigVersion ?? 1)
     }
 
     func updateAgentConfiguration(conversationID _: String, model: String, thinkingLevel: String, configVersion: Int?) async throws -> SessionAgentConfiguration {
         if modelSaveFails {
             throw GatewayClientError.server("Save failed")
         }
+        if let agentConfigVersion, configVersion != agentConfigVersion {
+            throw GatewayClientError.http(statusCode: 409, message: "Configuration changed")
+        }
         return SessionAgentConfiguration(model: model, thinkingLevel: thinkingLevel, configVersion: (configVersion ?? 0) + 1)
+    }
+
+    func updateAgentServiceTier(conversationID _: String, serviceTier: String) async throws -> SessionAgentConfiguration {
+        if serviceTierSaveFails {
+            throw GatewayClientError.server("Service tier save failed")
+        }
+        return SessionAgentConfiguration(model: "model", thinkingLevel: "off", configVersion: 2, serviceTier: serviceTier)
     }
 
     func fetchClarification(conversationID _: String) async throws -> ClarificationRequest? {

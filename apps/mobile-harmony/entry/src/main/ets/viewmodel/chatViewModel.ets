@@ -97,9 +97,9 @@ export class XopcChatViewModel {
   private executionInputIds: Set<string> = new Set<string>();
   private executionAssistantIds: Set<string> = new Set<string>();
 
-  start(initialId: string, onUnavailable?: (id: string) => void): void {
+  start(initialId: string, onUnavailable?: (id: string) => void, active: boolean = true): void {
     this.onUnavailable = onUnavailable;
-    this.activate();
+    if (active) this.activate();
     void this.open(initialId);
   }
 

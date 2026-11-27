@@ -1,4 +1,3 @@
-import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MoreHorizontal, Plus, Settings, SlidersHorizontal, Terminal } from 'lucide-react';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -7,15 +6,13 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { PopoverSelect } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { CapabilityHeaderActionChange } from '@/features/capabilities/capability-header-actions';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
-import { newAgentSetupHref, newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
+import { newAgentSetupHref } from '@/features/chat/session/composer-handoff-params';
 import { navigateToNewChat } from '@/features/chat/session/new-chat-navigation';
 import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
 import { usePersonalProfile } from '@/features/personal-agent/use-personal-profile';
-import { fetchProjects } from '@/features/projects/api';
 import { externalRuntimeDefaultAvatar } from '@/components/brand/external-runtime-avatar';
 import { bumpAgentAvatarCacheRevision } from '@/features/settings/agents/agent-avatar-cache';
 import { XOPC_CUSTOM_AVATAR } from '@/features/settings/agents/agent-avatar-dicebear-value';
@@ -38,7 +35,6 @@ import type { ExternalAgentKind, GatewayAgentRow } from '@/features/settings/typ
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
-import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -98,13 +94,6 @@ export function AgentsSettingsPanel({
   const [actionError, setActionError] = useState<string | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
-  const [projectChatAgent, setProjectChatAgent] = useState<string | null>(null);
-  const { data: chatProjects, error: chatProjectsError, isLoading: chatProjectsLoading, mutate: reloadChatProjects } = useSWR(
-    projectChatAgent && token ? ['external-agent-chat-projects', token] : null,
-    () => fetchProjects({ status: 'active', sortBy: 'updatedAt', sortOrder: 'desc', limit: 200 }),
-    { revalidateOnFocus: false },
-  );
-  const projectOptions = chatProjects?.items.filter(project => project.workspaceRoot?.trim()) ?? [];
   const [manualDraft, setManualDraft] = useState<ManualAgentDraft>({
     open: false,
     name: '',
@@ -143,19 +132,15 @@ export function AgentsSettingsPanel({
         },
         ...(manualDraft.execution !== 'embedded'
           ? { execution: manualDraft.executionConfig?.kind === manualDraft.execution ? manualDraft.executionConfig : { kind: manualDraft.execution } }
-          : manualDraft.workspace.trim() ? { workspace: manualDraft.workspace.trim() } : {}),
+          : {}),
+        ...(manualDraft.workspace.trim() ? { workspace: manualDraft.workspace.trim() } : {}),
       });
       if (manualDraft.pendingAvatar) {
         await uploadGatewayAgentAvatar(next.createdAgentId, manualDraft.pendingAvatar);
         bumpAgentAvatarCacheRevision(next.createdAgentId);
       }
-      const createdExecution = manualDraft.execution;
       setManualDraft({ open: false, name: '', avatar: '', pendingAvatar: null, instructions: '', workspace: '', execution: 'embedded', executionConfig: undefined });
       void mutate(next, { revalidate: false });
-      if (createdExecution !== 'embedded') {
-        navigate(AGENTS_APP_LIST_PATH);
-        return;
-      }
       rememberSelectedAgent(next.createdAgentId);
       navigate('/chat/new?projectScope=none', {
         state: { forceNewChat: true, agentId: next.createdAgentId, fromAgentEditor: true },
@@ -251,10 +236,6 @@ export function AgentsSettingsPanel({
   const startChat = (id: string) => {
     if (id === personalProfile?.agentId) {
       navigate('/personal');
-      return;
-    }
-    if (data?.agents.find(agent => agent.id === id)?.override.execution) {
-      setProjectChatAgent(id);
       return;
     }
     rememberSelectedAgent(id);
@@ -392,36 +373,6 @@ export function AgentsSettingsPanel({
           if (!open) setManualError(null);
         }}
       />
-
-      <Dialog.Root open={projectChatAgent !== null} onOpenChange={(open) => { if (!open) setProjectChatAgent(null); }}>
-        <Dialog.Portal>
-          <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)} />
-          <Dialog.Content className={cn('xopc-dialog-content fixed left-1/2 top-1/2 w-[min(100%-2rem,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-edge bg-surface-overlay p-5 shadow-popover outline-none', SETTINGS_SHELL_CONTENT_Z)}>
-            <Dialog.Title className="text-base font-semibold text-fg">{zh ? '开始项目对话' : 'Start Project chat'}</Dialog.Title>
-            <Dialog.Description className="mb-4 mt-2 text-sm text-fg-muted">
-              {zh ? '请选择已设置工作区的项目。' : 'Choose a Project with a workspace.'}
-            </Dialog.Description>
-            <PopoverSelect value="" options={projectOptions.map(project => ({ value: project.id, label: project.name }))}
-              placeholder={messageBundle.chat.composerContext.chooseProject} loading={chatProjectsLoading}
-              searchPlaceholder={messageBundle.chat.composerContext.searchProjects}
-              statusMessage={chatProjectsError ? messageBundle.chat.composerContext.projectsFailed : undefined}
-              onChange={(projectId) => {
-                if (!projectChatAgent || !projectOptions.some(project => project.id === projectId)) return;
-                setProjectChatAgent(null);
-                navigateToNewChat(navigate, newChatHrefForProject(projectId), {
-                  state: { forceNewChat: true, agentId: projectChatAgent, fromAgentEditor: true },
-                });
-              }} />
-            {!chatProjectsLoading && !chatProjectsError && projectOptions.length === 0 ? (
-              <p className="mt-3 text-sm text-fg-muted">{zh ? '当前没有已设置工作区的项目。' : 'No active Projects have a workspace.'}</p>
-            ) : null}
-            <div className="mt-4 flex justify-end gap-2">
-              {chatProjectsError ? <Button variant="secondary" onClick={() => void reloadChatProjects()}>{zh ? '重试' : 'Retry'}</Button> : null}
-              <Dialog.Close asChild><Button variant="secondary">{zh ? '取消' : 'Cancel'}</Button></Dialog.Close>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
 
       <ConfirmDialog
         open={pendingConfirmation !== null}

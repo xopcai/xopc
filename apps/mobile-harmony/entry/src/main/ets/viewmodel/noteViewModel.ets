@@ -377,7 +377,7 @@ export class XopcNoteViewModel {
 
   clearSelection(): void { this.selecting = false; this.selectedIds = []; }
 
-  async batch(action: 'pin' | 'archive' | 'delete'): Promise<void> {
+  async batch(action: 'pin' | 'unpin' | 'archive' | 'delete'): Promise<void> {
     if (this.saving || !this.selectedIds.length) return;
     this.saving = true; this.error = '';
     const targets = this.selectedIds;
@@ -390,6 +390,7 @@ export class XopcNoteViewModel {
         const note = await this.repository.detail(id);
         if (action === 'delete') await this.repository.remove(note, this.crypto.uuid());
         else if (action === 'archive') await this.repository.updateMetadata(note, { status: 'archived' });
+        else if (action === 'unpin') await this.repository.updateMetadata(note, { pinned: false });
         else await this.repository.updateMetadata(note, { pinned: true });
         await this.drafts.remove(id);
       }

@@ -225,6 +225,7 @@ export function AgentEditor({
         isExternal
           ? {
               expectedRevision: agent.revision,
+              workspace: draft.workspace ?? null,
               profile: draft.profile,
               execution: draft.execution,
             }
@@ -305,7 +306,7 @@ export function AgentEditor({
   const profileDirty = identityChanged || documentDirty.soul || pendingAvatar !== null;
   const capabilityDirty = differs(['models', 'skills', 'tools', 'toolAllowlist', 'specialistProfile']);
   const workDirty = differs(['workspace', 'runtime']) || draft.profile?.instructions !== agent.override.profile?.instructions || documentDirty.agents || documentDirty.tools;
-  const executionDirty = differs(['execution']);
+  const executionDirty = differs(['execution', 'workspace']);
   const externalProfileDirty = JSON.stringify(draft.profile) !== JSON.stringify(agent.override.profile) || pendingAvatar !== null;
   const dirtySuffix = (value: boolean) => value ? <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label={zh ? '有未保存的更改' : 'Unsaved changes'} /> : undefined;
   const navItems: Array<{ id: AgentPanel; label: string; suffix?: React.ReactNode }> = isExternal
@@ -373,8 +374,8 @@ export function AgentEditor({
                   </div>
                   <p className="mt-1.5 text-xs leading-5 text-fg-muted">
                     {zh
-                      ? '在项目会话中自动绑定项目目录作为工作区，工具调用和上下文由外部 CLI 驱动。'
-                      : 'Runs inside Project chats using the project directory as its working tree; tools and execution are driven by the external CLI.'}
+                      ? '直接对话时使用默认工作区（或会话所选目录），在项目会话中自动绑定项目目录；工具调用和上下文由外部 CLI 驱动。'
+                      : 'Uses its default workspace (or session folder) in direct chats and binds the project directory in Project chats; tools and execution are driven by the external CLI.'}
                   </p>
                   {externalProbe?.status === 'ready' && externalProbe.rateLimits ? (
                     <div className="max-w-sm">
@@ -422,6 +423,12 @@ export function AgentEditor({
                         : (zh ? '注入为 Antigravity systemPrompt' : 'Passed as Antigravity systemPrompt')
                   }
                 />
+                <SummaryCard
+                  onClick={() => switchPanel('runtime')}
+                  label={zh ? '默认工作区' : 'Default workspace'}
+                  value={agent.effective.workspace}
+                  detail={draft.workspace ? (zh ? '单独设置' : 'Agent specific') : (zh ? '自动工作区' : 'Automatic workspace')}
+                />
               </div>
               <div className="flex items-center justify-between gap-4 rounded-2xl border border-red-500/25 bg-red-500/5 p-4">
                 <div>
@@ -456,6 +463,41 @@ export function AgentEditor({
                 workingDirectoryMessages={workingDirectoryMessages}
                 onChange={(next) => setDraft((current) => ({ ...current, execution: next }))}
               />
+              <section className="rounded-2xl border border-edge bg-surface-base p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-fg">{zh ? '默认工作区' : 'Default workspace'}</h4>
+                    <p className="mt-1 text-xs leading-5 text-fg-muted">
+                      {zh
+                        ? '直接与该智能体对话时使用的默认目录；留空则使用自动工作区。项目会话仍使用项目目录。'
+                        : 'Default working directory for direct chats with this agent, or leave empty to use the automatic workspace. Project chats still use the project workspace.'}
+                    </p>
+                  </div>
+                  {!draft.workspace ? (
+                    <InheritedBadge>{zh ? '自动' : 'Automatic'}</InheritedBadge>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      className="px-2 py-1 text-xs"
+                      onClick={() => setDraft((current) => ({ ...current, workspace: undefined }))}
+                    >
+                      <RotateCcw className="size-3.5" />
+                      {zh ? '恢复自动' : 'Use automatic'}
+                    </Button>
+                  )}
+                </div>
+                <div className="mt-4">
+                  <DirectoryPickerPathField
+                    value={draft.workspace ?? ''}
+                    onChange={(workspace) => setDraft((current) => ({ ...current, workspace: workspace || undefined }))}
+                    wd={workingDirectoryMessages}
+                    placeholder={agent.effective.workspace}
+                    inputAriaLabel={zh ? '智能体工作区路径' : 'Agent workspace path'}
+                    inputClassName={`${inputClass} font-mono`}
+                    disabled={saving}
+                  />
+                </div>
+              </section>
             </div>
           ) : null}
 

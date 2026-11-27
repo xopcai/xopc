@@ -82,9 +82,9 @@ describe('project session preparation', () => {
     }));
   });
 
-  it('uses the default Agent when a non-Project chat requests an external Agent', async () => {
+  it('preserves a requested external Agent in a non-Project chat using its default workspace', async () => {
     await act(async () => root.render(<Harness search="?projectScope=none" requestedAgentId="codex" />));
-    expect(openNewChatHandoff).toHaveBeenCalledWith(expect.objectContaining({ agentId: 'main', projectId: null }));
+    expect(openNewChatHandoff).toHaveBeenCalledWith(expect.objectContaining({ agentId: 'codex', projectId: null }));
   });
 
   it('does not prepare or change an existing conversation environment', async () => {

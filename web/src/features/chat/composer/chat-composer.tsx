@@ -148,7 +148,6 @@ export const ChatComposer = memo(function ChatComposer({
   onServiceTierChange,
   onChatAgentChange,
   currentAgentId,
-  externalAgentsAvailable,
   voiceAgentName,
   voiceTaskId,
   voiceMode,
@@ -216,7 +215,6 @@ export const ChatComposer = memo(function ChatComposer({
   onChatAgentChange?: (agentId: string) => void;
   /** Active session agent id; the matching agent row in `/` palette gets a "current" badge. */
   currentAgentId?: string;
-  externalAgentsAvailable?: boolean;
   voiceAgentName?: string;
   voiceTaskId?: string;
   voiceMode?: 'assistant';
@@ -473,7 +471,6 @@ export const ChatComposer = memo(function ChatComposer({
     onUserTextCommitted,
     onChatAgentChange,
     currentAgentId,
-    externalAgentsAvailable,
     prepareSession: prepareContextSession,
     contextRefs,
     onAddContextRef: addContextRef,

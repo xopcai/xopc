@@ -224,6 +224,7 @@ enum AssistantAction: String, CaseIterable, Identifiable {
     case photo, camera, localFile, voice
     case noteReference, taskReference, fileReference
     case switchAgent = "switch-agent"
+    case voiceCall = "voice-call"
 
     var id: String {
         rawValue
@@ -239,6 +240,7 @@ enum AssistantAction: String, CaseIterable, Identifiable {
         case .taskReference: "引用任务"
         case .fileReference: "引用文件"
         case .switchAgent: "切换 Agent"
+        case .voiceCall: "语音通话"
         }
     }
 
@@ -251,6 +253,7 @@ enum AssistantAction: String, CaseIterable, Identifiable {
         case .noteReference: "doc"
         case .taskReference: "checkmark.circle"
         case .switchAgent: "person.crop.circle"
+        case .voiceCall: "phone"
         }
     }
 
@@ -268,6 +271,8 @@ struct AssistantActionPanel: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let canReferenceFiles: Bool
     let canSwitchAgent: Bool
+    var showsVoiceCall = false
+    var canStartVoiceCall = false
     let onSelect: (AssistantAction) -> Void
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -276,10 +281,26 @@ struct AssistantActionPanel: View {
         Array(repeating: GridItem(.flexible(), spacing: 8), count: dynamicTypeSize.isAccessibilitySize ? 2 : 4)
     }
 
+    private var visibleActions: [AssistantAction] {
+        AssistantAction.allCases.filter { action in
+            if action == .switchAgent {
+                return canSwitchAgent
+            }
+            if action == .voiceCall {
+                return showsVoiceCall
+            }
+            return true
+        }
+    }
+
     var body: some View {
         LazyVGrid(columns: columns, spacing: 4) {
-            ForEach(AssistantAction.allCases.filter { $0 != .switchAgent || canSwitchAgent }) { action in
-                let enabled = action != .fileReference || canReferenceFiles
+            ForEach(visibleActions) { action in
+                let enabled = switch action {
+                case .fileReference: canReferenceFiles
+                case .voiceCall: canStartVoiceCall
+                default: true
+                }
                 Button {
                     onSelect(action)
                 } label: {

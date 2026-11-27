@@ -121,7 +121,7 @@ export type ExternalRuntimeCapabilities = {
   supportsAttachments: boolean;
   /** Whether the external runtime manages its own model/thinking selection. */
   managesOwnModel: boolean;
-  /** Whether the runtime requires a Project workspace on disk. */
+  /** Whether the runtime requires a workspace directory on disk. */
   requiresWorkspace: boolean;
   /** Whether gateway principals must hold workspace.write scope. */
   requiresWorkspaceWrite: boolean;

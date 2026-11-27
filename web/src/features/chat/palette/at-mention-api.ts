@@ -85,7 +85,6 @@ export type AtMentionItem =
 export interface AtMentionProviderContext {
   conversationId: string;
   currentAgentId?: string;
-  externalAgentsAvailable?: boolean;
   language: 'en' | 'zh';
   selectedContextKeys: ReadonlySet<string>;
   recentPaths: ReadonlySet<string>;
@@ -258,7 +257,6 @@ export const atMentionProviders: readonly AtMentionProvider[] = [
       const payload = await fetchChatAgents();
       const agentMessages = messages(context.language).agentsSettings;
       return payload.items.flatMap((agent): AtMentionAgentItem[] => {
-        if (agent.execution && !context.externalAgentsAvailable) return [];
         const name = agentListDisplayName(agent, agentMessages);
         const description = agentListDisplayDescription(agent, agentMessages);
         if (!includesQuery(query, agent.id, name, description)) return [];

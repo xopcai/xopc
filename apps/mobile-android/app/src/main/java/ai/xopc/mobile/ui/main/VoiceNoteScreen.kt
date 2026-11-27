@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,7 +31,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -225,56 +229,122 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
     if (busy || finishing) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("voice-note-saving"))
     when {
       active -> {
-        Text(stringResource(if (recorder.phase == "paused") R.string.voice_recording_paused_seconds
-          else R.string.voice_recording_seconds, elapsed), modifier = Modifier.testTag("voice-note-timer"))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          OutlinedButton(onClick = {
-            if (recorder.phase == "paused") recorder.resumeRecording()
-            else { elapsed = recorder.elapsedSeconds; recorder.pauseRecording() }
-          }, modifier = Modifier.testTag("voice-note-pause")) {
-            Text(stringResource(if (recorder.phase == "paused") R.string.voice_note_resume else R.string.voice_note_pause))
-          }
-          Button(onClick = recorder::stopRecording, modifier = Modifier.testTag("voice-note-finish")) {
-            Text(stringResource(R.string.voice_note_finish))
+        Surface(shape = themedCorners(20), color = MaterialTheme.colorScheme.surfaceContainerLow,
+          modifier = Modifier.fillMaxWidth()) {
+          Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Surface(shape = CircleShape,
+              color = if (recorder.phase == "paused") MaterialTheme.colorScheme.surfaceContainerHigh
+                else MaterialTheme.colorScheme.errorContainer) {
+              Row(Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = CircleShape,
+                  color = if (recorder.phase == "paused") MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.error,
+                  modifier = Modifier.size(7.dp)) {}
+                Text(stringResource(if (recorder.phase == "paused") R.string.voice_recording_paused_seconds
+                  else R.string.voice_recording_seconds, elapsed),
+                  style = MaterialTheme.typography.labelMedium,
+                  color = if (recorder.phase == "paused") MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onErrorContainer,
+                  modifier = Modifier.testTag("voice-note-timer"))
+              }
+            }
+            Text(recordingTime(elapsed * 1000L),
+              fontSize = 40.sp, fontWeight = FontWeight.Medium, fontFamily = FontFamily.Monospace,
+              color = MaterialTheme.colorScheme.onSurface)
           }
         }
-        Text(stringResource(R.string.voice_note_live_transcript), style = MaterialTheme.typography.titleMedium)
-        val preview = if (liveAvailable || fallbackTranscript.isBlank()) streamText else fallbackTranscript
-        if (preview.isBlank()) {
-          Text(stringResource(R.string.voice_note_live_waiting), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
-          LazyColumn(Modifier.weight(1f).testTag("voice-note-live-text"), reverseLayout = true,
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(preview.split('\n').asReversed()) { line -> Text(line) }
+        Surface(shape = themedCorners(18), color = MaterialTheme.colorScheme.surfaceContainerLow,
+          modifier = Modifier.fillMaxWidth().weight(1f)) {
+          Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.voice_note_live_transcript),
+              style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val preview = if (liveAvailable || fallbackTranscript.isBlank()) streamText else fallbackTranscript
+            if (preview.isBlank()) {
+              Text(stringResource(R.string.voice_note_live_waiting),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+              LazyColumn(Modifier.weight(1f).testTag("voice-note-live-text"), reverseLayout = true,
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(preview.split('\n').asReversed()) { line ->
+                  Text(line, style = MaterialTheme.typography.bodyLarge)
+                }
+              }
+            }
+          }
+        }
+        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+          FilledTonalButton(onClick = {
+            if (recorder.phase == "paused") recorder.resumeRecording()
+            else { elapsed = recorder.elapsedSeconds; recorder.pauseRecording() }
+          }, shape = CircleShape, modifier = Modifier.weight(1f).height(48.dp).testTag("voice-note-pause")) {
+            Text(stringResource(if (recorder.phase == "paused") R.string.voice_note_resume else R.string.voice_note_pause))
+          }
+          Button(onClick = recorder::stopRecording, shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error,
+              contentColor = MaterialTheme.colorScheme.onError),
+            modifier = Modifier.weight(1f).height(48.dp).testTag("voice-note-finish")) {
+            Text(stringResource(R.string.voice_note_finish))
           }
         }
       }
       finishing -> Unit
       settings?.acknowledged == false -> {
-        Text(stringResource(R.string.voice_note_consent))
-        Button(enabled = !busy, onClick = {
-          val policy = settings ?: return@Button
-          scope.launch {
-            busy = true
-            try {
-              access.acknowledge(gatewayId, policy.version)
-              settings = policy.copy(acknowledged = true)
-              issue = 0
-            } catch (error: CancellationException) { throw error }
-            catch (_: Exception) { issue = R.string.voice_note_load_error }
-            finally { busy = false }
+        Surface(shape = themedCorners(20), color = MaterialTheme.colorScheme.surfaceContainerLow,
+          modifier = Modifier.fillMaxWidth()) {
+          Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(stringResource(R.string.voice_note_consent), style = MaterialTheme.typography.bodyLarge,
+              color = MaterialTheme.colorScheme.onSurface)
+            Button(enabled = !busy, shape = CircleShape, onClick = {
+              val policy = settings ?: return@Button
+              scope.launch {
+                busy = true
+                try {
+                  access.acknowledge(gatewayId, policy.version)
+                  settings = policy.copy(acknowledged = true)
+                  issue = 0
+                } catch (error: CancellationException) { throw error }
+                catch (_: Exception) { issue = R.string.voice_note_load_error }
+                finally { busy = false }
+              }
+            }, modifier = Modifier.fillMaxWidth().height(48.dp).testTag("voice-note-consent")) {
+              Text(stringResource(R.string.voice_note_agree))
+            }
           }
-        }, modifier = Modifier.testTag("voice-note-consent")) { Text(stringResource(R.string.voice_note_agree)) }
+        }
       }
       settings?.acknowledged == true && !recoveryOnly -> {
-        Text(stringResource(R.string.voice_note_record_limit), style = MaterialTheme.typography.bodySmall)
-        if (recorder.phase == "error") {
-          Text(stringResource(if (recorder.saveFailed) R.string.voice_note_save_error else R.string.voice_record_error))
+        Surface(shape = themedCorners(20), color = MaterialTheme.colorScheme.surfaceContainerLow,
+          modifier = Modifier.fillMaxWidth()) {
+          Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer,
+              modifier = Modifier.size(64.dp)) {
+              Box(contentAlignment = Alignment.Center) {
+                Icon(painterResource(R.drawable.action_microphone), contentDescription = null,
+                  tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+              }
+            }
+            Text(stringResource(R.string.voice_note_record_limit), style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            if (recorder.phase == "error") {
+              Text(stringResource(if (recorder.saveFailed) R.string.voice_note_save_error else R.string.voice_record_error),
+                color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center)
+            }
+            Button(enabled = !busy, shape = CircleShape, onClick = {
+              if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start()
+              else permission.launch(Manifest.permission.RECORD_AUDIO)
+            }, modifier = Modifier.fillMaxWidth().height(48.dp).testTag("voice-note-record")) {
+              Text(stringResource(R.string.voice_note_record))
+            }
+          }
         }
-        Button(enabled = !busy, onClick = {
-          if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start()
-          else permission.launch(Manifest.permission.RECORD_AUDIO)
-        }, modifier = Modifier.testTag("voice-note-record")) { Text(stringResource(R.string.voice_note_record)) }
       }
       issue == R.string.voice_note_load_error -> TextButton(onClick = { revision++ }) {
         Text(stringResource(R.string.voice_note_retry))
@@ -354,7 +424,9 @@ internal fun VoiceNoteResult(detail: VoiceNoteDetail, loadAudio: suspend (File) 
       }
     }
     if (detail.audioSaved) item(key = "playback") { VoiceNotePlayback(detail.id, detail.durationMs, loadAudio) }
-    item { VoiceNoteStatus(detail, busy, retryError, onRetry) }
+    if (detail.status != "completed" || detail.processing || detail.canRetry || retryError) {
+      item { VoiceNoteStatus(detail, busy, retryError, onRetry) }
+    }
     item {
       SegmentedTabs(listOf(
         SegmentOption("summary", stringResource(R.string.voice_note_overview), "voice-note-tab-summary"),
@@ -363,31 +435,58 @@ internal fun VoiceNoteResult(detail: VoiceNoteDetail, loadAudio: suspend (File) 
     }
     if (tab == "transcript") {
       if (detail.segments.isEmpty()) item {
-        if (detail.transcript.isNotBlank()) SelectionContainer { Text(detail.transcript) }
-        else Text(stringResource(R.string.voice_note_empty_transcript), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (detail.transcript.isNotBlank()) {
+          Surface(shape = themedCorners(16), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            SelectionContainer {
+              Text(detail.transcript, Modifier.fillMaxWidth().padding(16.dp),
+                style = MaterialTheme.typography.bodyLarge)
+            }
+          }
+        } else Text(stringResource(R.string.voice_note_empty_transcript), color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
       items(detail.segments, key = { it.index }) { segment ->
-        Surface(shape = themedCorners(12), color = MaterialTheme.colorScheme.surfaceContainerLow) {
-          Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(recordingTime(segment.startedAt) + segment.speaker?.let { " · $it" }.orEmpty(),
-              style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            SelectionContainer { Text(segment.text) }
+        Surface(shape = themedCorners(16), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+          Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+              Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+                Text(recordingTime(segment.startedAt),
+                  Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                  style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+                  color = MaterialTheme.colorScheme.primary)
+              }
+              segment.speaker?.let { speaker ->
+                Text(speaker, style = MaterialTheme.typography.labelMedium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+            }
+            SelectionContainer { Text(segment.text, style = MaterialTheme.typography.bodyLarge) }
           }
         }
       }
     } else if (detail.summary.isNotBlank() || detail.keyPoints.isNotEmpty()) item {
-      Surface(shape = themedCorners(14), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+      Surface(shape = themedCorners(18), color = MaterialTheme.colorScheme.surfaceContainerLow) {
         SelectionContainer {
-          Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.voice_note_summary), style = MaterialTheme.typography.titleMedium)
-            if (detail.summary.isNotBlank()) Text(detail.summary, Modifier.testTag("voice-note-summary"))
-            detail.keyPoints.forEach { Text("• $it") }
+          Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.voice_note_summary), style = MaterialTheme.typography.titleMedium,
+              fontWeight = FontWeight.SemiBold)
+            if (detail.summary.isNotBlank()) Text(detail.summary, style = MaterialTheme.typography.bodyLarge,
+              modifier = Modifier.testTag("voice-note-summary"))
+            detail.keyPoints.forEach { point ->
+              Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("•", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(point, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+              }
+            }
           }
         }
       }
     } else if (detail.transcript.isNotBlank()) item {
-      Text(detail.transcript.take(400))
-      TextButton(onClick = { tab = "transcript" }) { Text(stringResource(R.string.voice_note_transcript)) }
+      Surface(shape = themedCorners(16), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text(detail.transcript.take(400), style = MaterialTheme.typography.bodyLarge)
+          TextButton(onClick = { tab = "transcript" }) { Text(stringResource(R.string.voice_note_transcript)) }
+        }
+      }
     }
   }
 }

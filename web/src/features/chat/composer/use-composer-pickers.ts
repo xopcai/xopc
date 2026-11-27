@@ -43,7 +43,6 @@ export interface UseComposerPickersOptions {
   onChatAgentChange?: (agentId: string) => void;
   /** Active session agent id; used to resolve skill availability in `/` palette. */
   currentAgentId?: string;
-  externalAgentsAvailable?: boolean;
   prepareSession?: () => Promise<string | null>;
   contextRefs: ComposerContextRef[];
   onAddContextRef: (ref: ComposerContextRef) => ComposerContextRef | null;
@@ -130,7 +129,6 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     onUserTextCommitted,
     onChatAgentChange,
     currentAgentId,
-    externalAgentsAvailable,
     prepareSession,
     contextRefs,
     onAddContextRef,
@@ -154,13 +152,11 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     capabilities,
     isComposing,
     currentAgentId,
-    externalAgentsAvailable,
     conversationId,
   });
   const atPicker = useAtMentionPicker(editorValue, editorCursor, {
     conversationId,
     currentAgentId,
-    externalAgentsAvailable,
     slashPaletteOpen: palette.open,
     capabilities,
     isComposing,

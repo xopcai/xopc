@@ -273,10 +273,11 @@ extension AppState {
 
     func openPushTarget(_ target: MobilePushTarget, personalConversationID: String?, defaultAgentID: String = "main") {
         switch target.kind {
-        case "task":
+        case "task", "task_chat":
             if let id = target.taskId, MobilePushClick.validID(id) {
                 selectedTab = .workbench
-                setPath([.taskDetail(id), .taskChat(id)], for: .workbench)
+                let opensChat = target.kind == "task_chat" || target.conversationId.map(MobilePushClick.validID) == true
+                setPath(opensChat ? [.taskDetail(id), .taskChat(id)] : [.taskDetail(id)], for: .workbench)
             }
         case "automation_run":
             if let id = target.runId, MobilePushClick.validID(id) {

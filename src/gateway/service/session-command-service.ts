@@ -35,9 +35,6 @@ function validateCreation(service: GatewayService, creation: SessionCreation): S
   const externalAgent = getExternalAgent(agentId);
   if (externalAgent) {
     const driver = getExternalAgentDriver(externalAgent.execution.kind);
-    if (driver.capabilities.requiresWorkspace && !project?.workspaceRoot?.trim()) {
-      throw new Error(`${driver.label} requires a Project with a workspace`);
-    }
     if (!driver.capabilities.managesOwnModel) {
       const model = resolveModel(creation.model);
       if (!getModelThinking(model).options.includes(creation.thinkingLevel as ModelThinkingValue)) throw new Error('Unsupported model thinking level');

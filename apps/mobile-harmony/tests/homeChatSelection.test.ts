@@ -1,17 +1,21 @@
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
-import { XopcMobileTabNavState } from '../entry/src/main/ets/common/mobileTabNavigation.ets';
+import { isActiveMobileDestination, XopcMobileTabNavState } from '../entry/src/main/ets/common/mobileTabNavigation.ets';
 
 const source = readFileSync(new URL('../entry/src/main/ets/view/HomeView.ets', import.meta.url), 'utf8');
 const methods = source.slice(
   source.indexOf('  private async restoreInitialChat('),
   source.indexOf('  private async openOrdinaryChat('),
 );
-const compiled = ts.transpileModule(`class Home { ${methods} }`, {
+const placeDestination = source.slice(
+  source.indexOf('  private placeDestination('),
+  source.indexOf('  private updateTabStackMetrics('),
+);
+const compiled = ts.transpileModule(`class Home { ${placeDestination} ${methods} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const Home = new Function(`${compiled}; return Home;`)();
+const Home = new Function('isActiveMobileDestination', `${compiled}; return Home;`)(isActiveMobileDestination);
 
 const personal = { conversationId: 'personal', displayName: 'Ada', state: 'ready' };
 
@@ -39,6 +43,8 @@ function setup() {
   };
   const home = Object.assign(new Home(), {
     tabNav: new XopcMobileTabNavState(),
+    tabTopEntries: new Map<string, number>(),
+    nextStackEntryId: 0,
     navigationRevision: 0,
     adaRequestRevision: 0,
     adaFocusRevision: 0,
@@ -51,7 +57,6 @@ function setup() {
     sessionChatId: '',
     selectedTab: 'ada',
     disposed: false,
-    sessionSwitcherOpen: false,
     layout: { reduceMotion: false },
     personalAgent: {
       record: null as typeof personal | null,
@@ -114,11 +119,34 @@ describe('HarmonyOS home chat selection & state isolation', () => {
     expect(home.selectedTab).toBe('ada');
   });
 
+  it('keeps only the selected stack’s top chat active even when the routes share a name and conversation', () => {
+    const home = setup();
+    home.selectedTab = 'notes';
+    home.tabNav.selectedTab = 'notes';
+    home.openConversationFromSearch('same-chat');
+    const searchChat = home.tabNav.topRoute('notes');
+    home.tabTopEntries.set('notes', searchChat.stackEntryId);
+    expect(isActiveMobileDestination(home.selectedTab, home.tabTopEntries, searchChat.stackEntryId)).toBe(true);
+
+    home.openSessionChat('same-chat');
+    const otherChat = home.tabNav.topRoute('conversations');
+    home.tabTopEntries.set('conversations', otherChat.stackEntryId);
+    expect(isActiveMobileDestination(home.selectedTab, home.tabTopEntries, searchChat.stackEntryId)).toBe(false);
+    expect(isActiveMobileDestination(home.selectedTab, home.tabTopEntries, otherChat.stackEntryId)).toBe(true);
+
+    home.openSessionChat('same-chat');
+    const replacement = home.tabNav.topRoute('conversations');
+    home.tabTopEntries.set('conversations', replacement.stackEntryId);
+    expect(isActiveMobileDestination(home.selectedTab, home.tabTopEntries, otherChat.stackEntryId)).toBe(false);
+    expect(isActiveMobileDestination(home.selectedTab, home.tabTopEntries, replacement.stackEntryId)).toBe(true);
+  });
+
   it('promotes a new draft in-place and pops back to conversations root when unavailable', async () => {
     const home = setup();
     await home.restoreInitialChat();
     home.openSessionChat('draft-1');
     const route = home.tabNav.topRoute('conversations');
+    home.tabTopEntries.set('conversations', route.stackEntryId);
 
     home.promoteSessionChatDraft('draft-1', 'persisted-1', route);
     expect(route.itemId).toBe('persisted-1');

@@ -108,17 +108,27 @@ struct NoteEditorView: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Button { isImportingFile = true } label: {
-                        Text("添加附件").frame(maxWidth: .infinity, minHeight: 48)
+                        Label("添加附件", systemImage: "paperclip")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(mobileTheme.foreground)
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                            .background(mobileTheme.grouped, in: .capsule)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                     .disabled(!restored || isSaving || stagedAttachments.count >= AttachmentPolicy.maximumCount)
+                    .opacity((!restored || isSaving || stagedAttachments.count >= AttachmentPolicy.maximumCount) ? MobileDesignTokens.disabledOpacity : 1)
                     Button { Task { await save() } } label: {
-                        Text("完成").frame(maxWidth: .infinity, minHeight: 48)
+                        Text("完成")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(mobileTheme.onAction)
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                            .background(mobileTheme.action, in: .capsule)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.plain)
                     .disabled(!restored || isSaving || !canSave || conflictingNote != nil)
+                    .opacity((!restored || isSaving || !canSave || conflictingNote != nil) ? MobileDesignTokens.disabledOpacity : 1)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 10)

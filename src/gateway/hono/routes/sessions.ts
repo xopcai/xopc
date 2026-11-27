@@ -861,9 +861,6 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
         const external = getExternalConversationAgent(key);
         if (external) {
           const driver = getExternalAgentDriver(external.execution.kind);
-          if (driver.capabilities.requiresWorkspace && (!requestedProjectId || !service.projects.get(requestedProjectId)?.workspaceRoot?.trim())) {
-            return c.json({ ok: false, error: `${driver.label} requires a Project with a workspace` }, 400);
-          }
           if (hasExternalSessionBinding(key)) {
             return c.json({ ok: false, error: `Cannot change the project of an active ${driver.label} session. Reset or start a new session instead.` }, 409);
           }
@@ -974,7 +971,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (external) {
       const driver = getExternalAgentDriver(external.execution.kind);
       if (!driver.forkSession) {
-        return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new Project session instead.` }, 400);
+        return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new session instead.` }, 400);
       }
     }
     const body = await c.req.json().catch(() => ({}));
@@ -998,7 +995,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (external) {
       const driver = getExternalAgentDriver(external.execution.kind);
       if (!driver.forkSession) {
-        return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new Project session instead.` }, 400);
+        return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new session instead.` }, 400);
       }
     }
     const body = await c.req.json().catch(() => ({}));
@@ -1021,7 +1018,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const external = getExternalConversationAgent(key);
     if (external) {
       const driver = getExternalAgentDriver(external.execution.kind);
-      return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new Project session instead.` }, 400);
+      return c.json({ ok: false, error: `${driver.label} sessions cannot be forked. Start a new session instead.` }, 400);
     }
     const body = await c.req.json().catch(() => ({}));
     const targetKey = typeof body.targetKey === 'string' ? body.targetKey : '';

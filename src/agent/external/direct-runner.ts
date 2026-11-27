@@ -59,7 +59,7 @@ export async function runExternalDirectTurn(
   const project = getProjectForSession(input.conversationId);
   const workspaceOverride = input.cfg
     ? effectiveWorkspacePathForSession(input.cfg, input.conversationId, sessionConfig, project)
-    : sessionConfig?.workingDirectory?.trim() || undefined;
+    : sessionConfig?.workingDirectoryOverride?.trim() || undefined;
 
   const controller = new AbortController();
   let deadlineTimer: NodeJS.Timeout | undefined;

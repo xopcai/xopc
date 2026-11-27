@@ -2,13 +2,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { cachedList: vi.fn(), list: vi.fn(), detail: vi.fn(), load: vi.fn(), initialize: vi.fn(), pending: vi.fn(), uuid: vi.fn(), save: vi.fn(), remove: vi.fn(), create: vi.fn() };
+  return {
+    cachedList: vi.fn(),
+    list: vi.fn(),
+    detail: vi.fn(),
+    updateMetadata: vi.fn(),
+    removeRemote: vi.fn(),
+    load: vi.fn(),
+    initialize: vi.fn(),
+    pending: vi.fn(),
+    uuid: vi.fn(),
+    save: vi.fn(),
+    remove: vi.fn(),
+    create: vi.fn(),
+  };
 });
 vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { warn: vi.fn() } }));
 vi.mock('../entry/src/main/ets/repository/noteRepository.ets', () => ({ XopcNoteRepository: class {
   cachedList = mocks.cachedList;
   list = mocks.list;
   detail = mocks.detail;
+  updateMetadata = mocks.updateMetadata;
+  remove = mocks.removeRemote;
   create = mocks.create;
 } }));
 vi.mock('../entry/src/main/ets/service/noteDraftStore.ets', () => ({ XopcNoteDraftStore: class {
@@ -37,6 +52,8 @@ describe('native notes list', () => {
     mocks.save.mockResolvedValue(undefined);
     mocks.remove.mockResolvedValue(undefined);
     mocks.uuid.mockReturnValue("test-id");
+    mocks.updateMetadata.mockResolvedValue({ id: 'first', title: 'first', markdown: '', updatedAt: 10 });
+    mocks.removeRemote.mockResolvedValue(undefined);
     mocks.detail.mockResolvedValue({ id: 'recorded-note', title: 'Voice note', markdown: '', updatedAt: 10 });
   });
 
@@ -177,5 +194,31 @@ describe('native notes list', () => {
     await vm.start({} as never, 'recorded-note');
     expect(vm.openingId).toBe('');
     expect(vm.error).toBe('DRAFT_STORE_UNAVAILABLE');
+  });
+
+  it('supports batch pin, unpin, archive, and delete on selected notes', async () => {
+    const vm = new XopcNoteViewModel();
+    await vm.start({} as never);
+    mocks.detail.mockResolvedValue({ id: 'first', title: 'First', markdown: '', updatedAt: 10, remoteVersion: 2 });
+
+    vm.toggleSelection('first');
+    expect(vm.selecting).toBe(true);
+    expect(vm.selectedIds).toEqual(['first']);
+    await vm.batch('pin');
+    expect(mocks.updateMetadata).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'first' }), { pinned: true });
+    expect(vm.selecting).toBe(false);
+
+    vm.toggleSelection('first');
+    await vm.batch('unpin');
+    expect(mocks.updateMetadata).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'first' }), { pinned: false });
+
+    vm.toggleSelection('first');
+    await vm.batch('archive');
+    expect(mocks.updateMetadata).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'first' }), { status: 'archived' });
+
+    vm.toggleSelection('first');
+    await vm.batch('delete');
+    expect(mocks.removeRemote).toHaveBeenCalledWith(expect.objectContaining({ id: 'first' }), 'test-id');
+    expect(vm.selecting).toBe(false);
   });
 });

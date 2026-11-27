@@ -330,6 +330,7 @@
     <string name="conversations_days_ago">%1$d 天前</string>
     <string name="conversations_weeks_ago">%1$d 周前</string>
     <string name="chat_load_error">无法加载对话。请检查网关连接后重试。</string>
+    <string name="chat_create_error">无法新建对话，请重试。</string>
     <string name="message_you">你</string>
     <string name="feature_pending">此功能暂未实现。</string>
     <string name="progress_tasks">任务</string>

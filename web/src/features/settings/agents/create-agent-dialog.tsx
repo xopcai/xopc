@@ -248,25 +248,23 @@ export function CreateAgentDialog({
               />
             </label>
 
-            {draft.execution === 'embedded' ? (
-              <div>
-                <label htmlFor="manual-agent-workspace" className="block text-xs font-medium text-fg-muted">
-                  {messages.manualCreateWorkspace}
-                </label>
-                <p className="mt-1 text-xs leading-5 text-fg-subtle">{messages.manualCreateWorkspaceHint}</p>
-                <div className="mt-2">
-                  <DirectoryPickerPathField
-                    value={draft.workspace}
-                    onChange={(workspace) => onChange({ workspace })}
-                    disabled={busy}
-                    wd={workingDirectoryMessages}
-                    placeholder={messages.manualCreateWorkspacePlaceholder}
-                    inputAriaLabel={messages.manualCreateWorkspace}
-                    inputClassName={`${inputClass} font-mono`}
-                  />
-                </div>
+            <div>
+              <label htmlFor="manual-agent-workspace" className="block text-xs font-medium text-fg-muted">
+                {messages.manualCreateWorkspace}
+              </label>
+              <p className="mt-1 text-xs leading-5 text-fg-subtle">{messages.manualCreateWorkspaceHint}</p>
+              <div className="mt-2">
+                <DirectoryPickerPathField
+                  value={draft.workspace}
+                  onChange={(workspace) => onChange({ workspace })}
+                  disabled={busy}
+                  wd={workingDirectoryMessages}
+                  placeholder={messages.manualCreateWorkspacePlaceholder}
+                  inputAriaLabel={messages.manualCreateWorkspace}
+                  inputClassName={`${inputClass} font-mono`}
+                />
               </div>
-            ) : null}
+            </div>
           </div>
 
           <footer className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">

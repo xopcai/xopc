@@ -82,7 +82,14 @@ import { XopcPersonalAgentRecord, XopcPersonalReadTarget, XopcPersonalUnreadSnap
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { XopcPersonalChatActivity } from './PersonalChatActivity';
 import { agentDisplayName, agentExternalRuntimeBadge } from '../common/agentPresentation';
-import { chatContextStrip, chatModelSubtitle, shouldShowRuntimeBadge, XopcChatContextStrip } from '../common/chatHeaderPresentation';
+import {
+  chatContextStrip,
+  chatHeaderIdentity,
+  chatModelSubtitleParts,
+  XopcChatContextStrip,
+  XopcChatHeaderIdentity,
+  XopcChatHeaderModelParts,
+} from '../common/chatHeaderPresentation';
 import { FLOATING_TAB_BAR_COMPOSER_GAP_VP } from '../common/mobileTabNavigation';
 
 interface XopcChatReadingAnchor { rowId: string; offset: number; }
@@ -157,7 +164,6 @@ export struct XopcChatView {
   @Event onProjectClose: () => void = (): void => {};
   @Param sessionChat: boolean = false;
   @Event onSessionClose: () => void = (): void => {};
-  @Event onOpenSessionSwitcher: () => void = (): void => {};
   @Param bottomChromeInset: number = 0;
   @Param scrollToLatestRevision: number = 0;
   @Event onOverlayActiveChange: (active: boolean) => void = (_active: boolean): void => {};
@@ -908,11 +914,11 @@ export struct XopcChatView {
     if (this.visible) { this.bindBack(); }
     this.appliedRequestRevision = this.requestRevision;
     this.chat.taskId = this.taskId;
-    this.chat.start(this.requestedId, this.onConversationUnavailable);
+    this.chat.start(this.requestedId, this.onConversationUnavailable, this.activePage);
   }
   private bindBack(): void {
-    layoutState.dismissChatOverlay = (): boolean => { return this.dismissOverlay(); };
-    shareIntake.liveDraftScope = (): string => this.restoringDraft || this.disposed ? '' : this.draftScope;
+    layoutState.dismissChatOverlay = (): boolean => this.activePage && !this.disposed && this.dismissOverlay();
+    shareIntake.liveDraftScope = (): string => !this.activePage || this.restoringDraft || this.disposed ? '' : this.draftScope;
     shareIntake.readLiveDraft = (): XopcChatDraft => ({ text: this.draft, files: this.attachments, refs: this.refs, intakeReceipts: this.intakeReceipts });
     shareIntake.applyLiveDraft = (draft: XopcChatDraft): void => {
       this.draft = draft.text; this.attachments = draft.files; this.intakeReceipts = draft.intakeReceipts ?? []; this.cursor = this.draft.length;
@@ -1079,9 +1085,10 @@ export struct XopcChatView {
     if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.connectionWait.pause(); this.chat.deactivate(); }
     else { this.bindBack(); this.chat.activate(); this.onHistoryReady(); this.onMessageChange(); this.options.resume(); this.prompt.resume(); if (this.layout.foreground) this.connectionWait.onReturn(); }
   }
-  @Monitor('requestRevision', 'chat.sending')
+  @Monitor('requestRevision', 'chat.sending', 'activePage')
   onTargetChange(): void {
-    if (this.disposed || !this.requestedId || this.appliedRequestRevision === this.requestRevision || this.chat.sending) return;
+    if (this.disposed || !this.activePage || !this.requestedId ||
+      this.appliedRequestRevision === this.requestRevision || this.chat.sending) return;
     this.appliedRequestRevision = this.requestRevision;
     if (this.requestedId === this.chat.selectedId) return;
     this.chat.taskId = this.taskId;
@@ -2012,7 +2019,8 @@ export struct XopcChatView {
     }.id('chat-composer-shell').width('100%')
       .backgroundColor(this.panelOpen ? Color.Transparent : this.colors.input).borderRadius(this.colors.corner(28))
       .clip(true).margin({ bottom: 6, top: 8 })
-    XopcChatActionPanel({ open: this.panelOpen, canSwitchAgent: this.canSwitchAgent, disabledIds: this.disabledActionIds(),
+    XopcChatActionPanel({ open: this.panelOpen, canSwitchAgent: this.canSwitchAgent, showVoiceCall: this.canSwitchAgent,
+      disabledIds: this.disabledActionIds(),
       onSelect: (id: string): void => { this.chooseAction(id); } })
     }.width('calc(100% - 24vp)').backgroundColor(this.panelOpen ? this.colors.panel : Color.Transparent).borderRadius(this.colors.corner(28))
     }
@@ -2062,6 +2070,7 @@ export struct XopcChatView {
     if (this.voice.busy || this.voice.state !== 'idle') ids.push('record-voice');
     if (this.refs.length >= 5) ids.push('reference-note', 'reference-task');
     if (this.attachments.length >= MAX_ATTACHMENTS) ids.push('reference-file');
+    if (!this.canStartVoiceCall()) ids.push('voice-call');
     return ids;
   }
 
@@ -2080,6 +2089,7 @@ export struct XopcChatView {
     if (id === 'camera' || id === 'photos' || id === 'document') this.addAttachment(id);
     else if (id.startsWith('reference-')) this.openReference(id.slice('reference-'.length));
     else if (id === 'record-voice' && !this.showVoice) this.toggleVoice();
+    else if (id === 'voice-call' && this.canStartVoiceCall()) this.startVoiceCall();
   }
 
   private judgeSidebarPan(event: PanGestureEvent, recognizers: GestureRecognizer[]): GestureJudgeResult {
@@ -2265,15 +2275,10 @@ export struct XopcChatView {
         }.id('chat-header-phone').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
           .accessibilityText($r('app.string.phone_open')).onClick((): void => { this.dismissComposer(); this.phonePage = 1; })
       }
-      this.voiceCallButton()
-      this.continuousReadButton()
-      if (this.sessionChat) {
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.ellipsis_bubble')).fontSize(20).fontColor([this.colors.foreground])
-        }.id('chat-header-switch-session').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
-          .accessibilityText($r('app.string.chat_switch_conversation'))
-          .onClick((): void => { this.dismissComposer(); this.onOpenSessionSwitcher(); })
+      if (this.personalConversation) {
+        this.voiceCallButton()
       }
+      this.continuousReadButton()
     }
   }
 
@@ -2337,22 +2342,34 @@ export struct XopcChatView {
     return 'configured';
   }
 
-  private currentChatAgentBadge(): string {
-    const agent = this.currentChatAgent();
-    if (!agent) return '';
-    const badge = agentExternalRuntimeBadge(agent);
-    return shouldShowRuntimeBadge(this.currentChatAgentNameText(), badge) ? badge : '';
-  }
-
-  private currentChatModelSubtitle(): string {
-    if (!this.options.modelId && !this.options.selectedModel()) return '';
+  private currentChatModelParts(): XopcChatHeaderModelParts | undefined {
+    if (!this.options.modelId && !this.options.selectedModel()) return undefined;
     const language = appSettings.effectiveLanguage();
-    return chatModelSubtitle(
+    return chatModelSubtitleParts(
       this.options.modelName(language),
       this.options.selectedModel()?.thinking?.mode,
       this.options.thinkingLevel,
       this.options.isFastModeEnabled(),
       language,
+    );
+  }
+
+  private currentChatModelSubtitle(): string {
+    return this.currentChatModelParts()?.fullText ?? '';
+  }
+
+  private currentChatHeaderIdentity(): XopcChatHeaderIdentity {
+    const agent = this.currentChatAgent();
+    const agentId = agent?.id ?? (this.options.agentId || this.chat.agentId || 'main');
+    const runtimeBadge = agent ? agentExternalRuntimeBadge(agent) : '';
+    return chatHeaderIdentity(
+      this.chat.title,
+      this.chat.localDraft,
+      agentId,
+      this.options.defaultAgentId || 'main',
+      this.currentChatAgentNameText(),
+      runtimeBadge,
+      this.currentChatModelParts(),
     );
   }
 
@@ -2362,55 +2379,104 @@ export struct XopcChatView {
   }
 
   @Builder
-  chatIdentityPill() {
+  chatIdentityPill(identity: XopcChatHeaderIdentity) {
     Button({ type: ButtonType.Normal }) {
-      Column({ space: 1 }) {
+      Column({ space: 2 }) {
         Row({ space: 5 }) {
-          XopcPersonalAgentAvatar({
-            extent: 18,
-            activePage: false,
-            agentId: this.currentChatAgent()?.id ?? (this.options.agentId || this.chat.agentId || 'main'),
-            appearance: this.currentChatAgentAppearance(),
-            avatarReference: this.currentChatAgent()?.avatar ?? '',
-            fallbackLabel: this.currentChatAgentNameText(),
-            compact: true,
-          })
-          Text(this.currentChatAgentName())
-            .fontSize(14)
+          if (identity.showsAvatarInPrimary) {
+            XopcPersonalAgentAvatar({
+              extent: 18,
+              activePage: false,
+              agentId: this.currentChatAgent()?.id ?? (this.options.agentId || this.chat.agentId || 'main'),
+              appearance: this.currentChatAgentAppearance(),
+              avatarReference: this.currentChatAgent()?.avatar ?? '',
+              fallbackLabel: this.currentChatAgentNameText(),
+              compact: true,
+            })
+          }
+          Text(identity.primaryText)
+            .fontSize(16)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.colors.foreground)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .constraintSize({ maxWidth: 120 })
-          if (this.currentChatAgentBadge()) {
-            Text(this.currentChatAgentBadge())
+            .flexShrink(1)
+          if (identity.primaryRuntimeBadge) {
+            Text(identity.primaryRuntimeBadge)
               .fontSize(10)
               .fontWeight(FontWeight.Medium)
               .fontColor(this.colors.secondary)
               .backgroundColor(this.colors.input)
               .borderRadius(999)
               .padding({ left: 5, right: 5, top: 1, bottom: 1 })
+              .flexShrink(0)
           }
           SymbolGlyph($r('sys.symbol.chevron_down'))
             .fontSize(11)
             .fontColor([this.colors.secondary])
+            .flexShrink(0)
             .accessibilityLevel('no')
-        }.justifyContent(FlexAlign.Center).alignItems(VerticalAlign.Center)
-        if (this.currentChatModelSubtitle()) {
-          Text(this.currentChatModelSubtitle())
-            .fontSize(11)
-            .fontColor(this.colors.secondary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }.width('100%').alignItems(VerticalAlign.Center)
+        if (identity.hasSecondaryRow) {
+          Row({ space: 4 }) {
+            if (identity.secondaryAgentName) {
+              XopcPersonalAgentAvatar({
+                extent: 14,
+                activePage: false,
+                agentId: this.currentChatAgent()?.id ?? (this.options.agentId || this.chat.agentId || 'main'),
+                appearance: this.currentChatAgentAppearance(),
+                avatarReference: this.currentChatAgent()?.avatar ?? '',
+                fallbackLabel: identity.secondaryAgentName,
+                compact: true,
+              })
+              Text(identity.secondaryAgentName)
+                .fontSize(12)
+                .fontColor(this.colors.secondary)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .constraintSize({ maxWidth: 120 })
+                .flexShrink(0)
+              if (identity.secondaryRuntimeBadge) {
+                Text(identity.secondaryRuntimeBadge)
+                  .fontSize(9.5)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(this.colors.secondary)
+                  .backgroundColor(this.colors.input)
+                  .borderRadius(999)
+                  .padding({ left: 5, right: 5, top: 1, bottom: 1 })
+                  .flexShrink(0)
+              }
+              if (identity.modelName) {
+                Text('·').fontSize(12).fontColor(this.colors.tertiary).flexShrink(0)
+              }
+            }
+            if (identity.modelName) {
+              Text(identity.modelName)
+                .fontSize(12)
+                .fontColor(this.colors.secondary)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .flexShrink(1)
+            }
+            if (identity.modelSuffix) {
+              Text(identity.modelSuffix)
+                .fontSize(12)
+                .fontColor(this.colors.secondary)
+                .maxLines(1)
+                .flexShrink(0)
+            }
+          }.width('100%').alignItems(VerticalAlign.Center)
         }
-      }.alignItems(HorizontalAlign.Center)
+      }.alignItems(HorizontalAlign.Start).width('100%')
     }
-    .id('chat-header-identity')
-    .constraintSize({ minHeight: 44, maxWidth: '100%' })
-    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-    .borderRadius(this.colors.corner(18))
-    .clipShape(this.colors.cornerClip(18))
-    .backgroundColor(this.colors.chat.card)
+    .id(this.sessionChat ? 'session-chat-header-title' : 'chat-header-identity')
+    .layoutWeight(1)
+    .constraintSize({ minHeight: 44 })
+    .padding({ left: 6, right: 6, top: 4, bottom: 4 })
+    .borderRadius(this.colors.corner(14))
+    .clipShape(this.colors.cornerClip(14))
+    .backgroundColor(Color.Transparent)
+    .accessibilityText(identity.accessibilitySummary)
     .onClick((): void => { this.dismissComposer(); this.openSheet('actions'); })
   }
 
@@ -2466,55 +2532,12 @@ export struct XopcChatView {
     .id('chat-context-bar')
     .constraintSize({ minHeight: 34, maxWidth: 'calc(100% - 24vp)' })
     .padding({ left: 12, right: 10, top: 6, bottom: 6 })
-    .margin({ top: 6 })
+    .margin({ left: 12, right: 12, top: 6 })
     .borderRadius(this.colors.corner(14))
     .clipShape(this.colors.cornerClip(14))
     .backgroundColor(strip.needsAttention ? this.colors.attentionFill : this.colors.chat.card)
     .accessibilityText(strip.summaryText)
     .onClick((): void => { this.dismissComposer(); this.openSheet('context'); })
-  }
-
-  @Builder
-  sessionChatTitlePill() {
-    Button({ type: ButtonType.Normal }) {
-      Column({ space: 1 }) {
-        Row({ space: 4 }) {
-          Text(this.chat.title || $r('app.string.new_chat'))
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.colors.foreground)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .constraintSize({ maxWidth: 160 })
-          SymbolGlyph($r('sys.symbol.chevron_down'))
-            .fontSize(11)
-            .fontColor([this.colors.secondary])
-            .accessibilityLevel('no')
-        }.justifyContent(FlexAlign.Center).alignItems(VerticalAlign.Center)
-        Row({ space: 4 }) {
-          Text(this.currentChatAgentName())
-            .fontSize(11)
-            .fontColor(this.colors.secondary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-          if (this.currentChatModelSubtitle()) {
-            Text('·').fontSize(11).fontColor(this.colors.tertiary)
-            Text(this.currentChatModelSubtitle())
-              .fontSize(11)
-              .fontColor(this.colors.secondary)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-        }.justifyContent(FlexAlign.Center).alignItems(VerticalAlign.Center)
-      }.alignItems(HorizontalAlign.Center).constraintSize({ maxWidth: '100%' })
-    }
-    .id('session-chat-header-title')
-    .constraintSize({ minHeight: 44, maxWidth: '100%' })
-    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-    .borderRadius(this.colors.corner(18))
-    .clipShape(this.colors.cornerClip(18))
-    .backgroundColor(this.colors.chat.card)
-    .onClick((): void => { this.dismissComposer(); this.openSheet('actions'); })
   }
 
   @Builder
@@ -2567,23 +2590,16 @@ export struct XopcChatView {
           promptId: this.prompt.prompt?.conversationId === this.chat.selectedId ? this.prompt.prompt?.id ?? '' : '',
           onOpenAttention: (): void => { this.openPersonalOverview(); },
           onOpenTask: (taskId: string): void => { this.dismissComposer(); this.onNavigate({ page: 'tasks', itemId: taskId }); } })
-      } else if (this.sessionChat) {
-        Row({ space: 6 }) {
-          this.navigationButtons()
-          Row() { this.sessionChatTitlePill() }.layoutWeight(1).justifyContent(FlexAlign.Center)
-          this.conversationActions()
-        }.width('100%').padding({ left: 12, right: 12 }).alignItems(VerticalAlign.Center)
       } else if (this.isStandaloneDraft()) {
         Row({ space: 6 }) {
           this.navigationButtons()
-          Row() { this.chatIdentityPill() }.layoutWeight(1).justifyContent(FlexAlign.Center)
-          this.voiceCallButton()
+          this.chatIdentityPill(this.currentChatHeaderIdentity())
           this.continuousReadButton()
         }.width('100%').padding({ left: 12, right: 12 }).alignItems(VerticalAlign.Center)
       } else {
         Row({ space: 6 }) {
           this.navigationButtons()
-          Row() { this.chatIdentityPill() }.layoutWeight(1).justifyContent(FlexAlign.Center)
+          this.chatIdentityPill(this.currentChatHeaderIdentity())
           this.conversationActions()
         }.width('100%').padding({ left: 12, right: 12 }).alignItems(VerticalAlign.Center)
       }
@@ -2594,21 +2610,23 @@ export struct XopcChatView {
         if (this.desktopChatTarget?.deviceName) {
           if (this.desktopChatTarget?.reselectEndpointId) {
             Button(this.desktopTargetLabel()).height(36).fontSize(12).fontColor(this.colors.chat.action)
-              .backgroundColor(this.colors.chat.card).margin({ top: 6 })
+              .backgroundColor(this.colors.chat.card).margin({ left: 12, right: 12, top: 6 })
               .enabled(!this.desktopReselecting && !this.chat.sending && !this.chat.runId)
               .id('chat-execution-device').onClick((): void => { void this.selectDesktopAgain(); })
           } else {
             Text(this.desktopTargetLabel()).fontSize(12).fontColor(this.colors.secondary).maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-              .margin({ top: 6 })
+              .margin({ left: 12, right: 12, top: 6 })
               .borderRadius(this.colors.corner(12))
               .backgroundColor(this.colors.chat.card)
               .id('chat-execution-device-label')
           }
         }
       }
-    }.id('chat-floating-header').width('100%').alignItems(HorizontalAlign.Center).padding({ top: this.chatTopInset + 8, bottom: 8 })
+    }.id('chat-floating-header').width('100%')
+      .alignItems(this.personalConversation ? HorizontalAlign.Center : HorizontalAlign.Start)
+      .padding({ top: this.chatTopInset + 8, bottom: 8 })
       .backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.None)
       .onAreaChange((_previous: Area, current: Area): void => {
         const height = Number(current.height);

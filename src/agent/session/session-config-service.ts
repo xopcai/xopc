@@ -35,7 +35,11 @@ import { createLogger } from '../../utils/logger.js';
 import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
-import { getExternalAgentDriver, getExternalConversationAgent } from '../external/index.js';
+import {
+  getExternalAgentDriver,
+  getExternalConversationAgent,
+  hasExternalSessionBinding,
+} from '../external/index.js';
 import { getSessionInteractionPolicy, setSessionInteractionPolicy } from './interaction-policy.js';
 
 const log = createLogger('SessionConfigService');
@@ -373,8 +377,9 @@ export class SessionConfigService {
     const incoming = workingDirectory.trim();
 
     const priorMessages = await this.opts.sessionStore.load(conversationId);
+    const hasActiveExternalSession = hasExternalSessionBinding(conversationId);
 
-    if (priorMessages.length > 0) {
+    if (priorMessages.length > 0 || hasActiveExternalSession) {
       if (!incoming) {
         return { ok: false, error: 'workingDirectory is empty' };
       }

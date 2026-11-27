@@ -68,6 +68,9 @@ internal sealed interface MobileRoute {
     val title: String? = null,
   ) : MobileRoute {
     override val routeKey: String get() = "taskChat:$taskId"
+
+    fun matchesConversation(selectedId: String?, selectedTaskId: String?): Boolean =
+      conversationId != null && conversationId == selectedId && taskId == selectedTaskId
   }
 
   data class ProjectChat(

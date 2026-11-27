@@ -267,9 +267,9 @@ export struct XopcNativeNoteEditor {
 
   @Builder
   tool(label: string, action: () => void) {
-    Button(label).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-      .height(38).constraintSize({ minWidth: 42 }).padding({ left: 10, right: 10 })
-      .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(this.colors.input).onClick(action)
+    Button(label, { type: ButtonType.Normal }).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+      .height(34).constraintSize({ minWidth: 38 }).padding({ left: 10, right: 10 })
+      .borderRadius(this.colors.corner(10)).clipShape(this.colors.cornerClip(10)).backgroundColor(Color.Transparent).onClick(action)
   }
 
   build() {
@@ -297,7 +297,7 @@ export struct XopcNativeNoteEditor {
         .onBlur((): void => { this.cancelChangeTimer(); this.emitChange(); })
       if (!this.readOnly) {
         Scroll() {
-          Row({ space: 8 }) {
+          Row({ space: 4 }) {
             this.tool('↶', (): void => { this.undo(); })
             this.tool('↷', (): void => { this.redo(); })
             this.tool('B', (): void => { this.toggleBold(); })
@@ -311,8 +311,9 @@ export struct XopcNativeNoteEditor {
             this.tool('</>', (): void => { this.insert('`code`'); })
             this.tool('🔗', (): void => { this.insert('[链接](https://)'); })
             this.tool('—', (): void => { this.insert('\n---\n'); })
-          }.padding({ left: 2, right: 2 })
+          }.padding({ left: 4, right: 4 })
         }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%')
+          .padding({ top: 4, bottom: 4 }).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.panel)
       }
       }
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)

@@ -35,16 +35,16 @@ class TaskChatHeaderTest {
         MainScreen(connection = state.value,
           onOpenProgressTask = { id -> state.value = state.value.copy(progress = state.value.progress.copy(
             detailTaskId = id, detailTask = task)) },
-          onOpenTaskChat = { id ->
+          onResolveTaskConversation = { id ->
             openedTask = id
-            state.value = state.value.copy(selectedConversationId = conversationId,
-              taskConversationTaskId = id, chatNavigationId = conversationId)
+            conversationId
           },
-          onChatNavigationHandled = { state.value = state.value.copy(chatNavigationId = null) })
+          onRestoreTaskConversation = { taskId, id ->
+            state.value = state.value.copy(selectedConversationId = id, taskConversationTaskId = taskId)
+          })
       }
     }
-    compose.onNodeWithTag("chat-header-sidebar").performClick()
-    compose.onNodeWithTag("chat-sidebar-workbench").performClick()
+    compose.onNodeWithTag("floating-tab-workbench").performClick()
     compose.onNodeWithTag("progress-item-header-task").performScrollTo().performClick()
     compose.runOnIdle { assertEquals(task.id, openedTask) }
     compose.onNodeWithTag("task-chat-header").assertIsDisplayed()

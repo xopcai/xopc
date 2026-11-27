@@ -28,7 +28,9 @@ struct NoteDetailView: View {
     var body: some View {
         Group {
             if isLoading {
-                ProgressView("正在读取笔记…")
+                MobileListSkeleton(rows: 4)
+                    .padding(.horizontal, 20).padding(.top, 12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             } else if let note {
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -59,7 +61,7 @@ struct NoteDetailView: View {
                             if !note.markdown.isEmpty || note.kind != "voice" {
                                 Group {
                                     if note.markdown.isEmpty {
-                                        Text("暂无正文")
+                                        Text("暂无正文").foregroundStyle(mobileTheme.secondary)
                                     } else {
                                         MarkdownBodyView(parts: readingParts, configuration: configuration, conversationID: nil,
                                                          highlightedPart: readingTarget)
@@ -74,7 +76,7 @@ struct NoteDetailView: View {
                                 NoteAttachmentsSection(configuration: configuration, noteID: note.id, attachments: attachments)
                             }
                         }
-                        .padding()
+                        .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 24)
                     }
                     .onChange(of: readingTarget) { _, target in
                         guard let target else { return }
@@ -97,15 +99,30 @@ struct NoteDetailView: View {
         .background(mobileTheme.canvas)
         .mobilePageTitle(Text("笔记"))
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let note, note.kind == "voice" {
-                Button("编辑笔记", systemImage: "square.and.pencil") { editingNote = note }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .accessibilityIdentifier("voice-note-edit")
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(mobileTheme.canvas)
+            if let note {
+                HStack(spacing: 6) {
+                    if note.kind != "voice" {
+                        Button { Task { await openConversation(note) } } label: {
+                            Label("继续对话", systemImage: "bubble.left")
+                                .padding(.horizontal, 14).frame(minHeight: 44)
+                                .foregroundStyle(mobileTheme.foreground).contentShape(.capsule)
+                        }
+                        .accessibilityIdentifier("note-detail-chat")
+                    }
+                    Button { editingNote = note } label: {
+                        Label("编辑笔记", systemImage: "square.and.pencil")
+                            .padding(.horizontal, 16).frame(minHeight: 44)
+                            .foregroundStyle(mobileTheme.action)
+                            .background(mobileTheme.active, in: .capsule)
+                    }
+                    .accessibilityIdentifier(note.kind == "voice" ? "voice-note-edit" : "note-detail-edit")
+                }
+                .buttonStyle(.plain).font(.subheadline.weight(.semibold)).padding(5)
+                .background(.regularMaterial, in: .capsule)
+                .overlay { Capsule().strokeBorder(.primary.opacity(0.08)).allowsHitTesting(false) }
+                .shadow(color: .black.opacity(0.10), radius: 8, y: 3)
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: note.kind == "voice" ? .trailing : .center)
             }
         }
         .toolbar {
@@ -123,23 +140,13 @@ struct NoteDetailView: View {
                     .accessibilityIdentifier("note-reading-tools")
                 }
             }
-            if let note, note.kind == "voice" {
+            if let note {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("更多", systemImage: "ellipsis.circle") {
                         Button("添加附件", systemImage: "paperclip") { isImportingFile = true }
                             .disabled(isUploadingFile)
                         Button("继续对话", systemImage: "bubble.left") { Task { await openConversation(note) } }
                         noteStateActions(note)
-                    }
-                }
-            } else {
-                ToolbarItemGroup(placement: .bottomBar) {
-                    if let note {
-                        Button("编辑", systemImage: "pencil") { editingNote = note }
-                        Button("添加附件", systemImage: "paperclip") { isImportingFile = true }
-                            .disabled(isUploadingFile)
-                        Menu("更多", systemImage: "ellipsis.circle") { noteStateActions(note) }
-                        Button("继续对话", systemImage: "bubble.left") { Task { await openConversation(note) } }
                     }
                 }
             }
@@ -184,10 +191,7 @@ struct NoteDetailView: View {
             Button("删除", role: .destructive) { Task { await remove() } }
             Button("取消", role: .cancel) {}
         } message: { Text("删除后将无法在移动端恢复。") }
-        .task(id: noteID) {
-            await load()
-            await monitorDiscussion()
-        }
+        .task(id: noteID) { await load(); await monitorDiscussion() }
     }
 
     private func noteHeader(_ note: NoteDetail) -> some View {

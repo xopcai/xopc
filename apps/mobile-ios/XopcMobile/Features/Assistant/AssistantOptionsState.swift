@@ -4,10 +4,17 @@ import Observation
 @MainActor
 @Observable
 final class AssistantOptionsState {
+    enum FailedOperation: Equatable {
+        case load
+        case save(refreshingVersion: Bool)
+        case serviceTier(Bool)
+    }
+
     private(set) var models: [ChatModel] = []
     private(set) var isLoading = false
     private(set) var isSaving = false
     private(set) var errorMessage: String?
+    private(set) var failedOperation: FailedOperation?
     private var configVersion: Int?
     var selectedModelID = ""
     var thinkingLevel = "off"
@@ -49,6 +56,7 @@ final class AssistantOptionsState {
     func load(_ conversation: ConversationSelection, using gateway: any GatewayServing) async {
         isLoading = true
         errorMessage = nil
+        failedOperation = nil
         defer { isLoading = false }
         do {
             let catalog = try await gateway.fetchModels(agentID: conversation.agentId)
@@ -68,6 +76,7 @@ final class AssistantOptionsState {
         } catch {
             if !Task.isCancelled {
                 errorMessage = error.localizedDescription
+                failedOperation = .load
             }
         }
     }
@@ -79,14 +88,19 @@ final class AssistantOptionsState {
 
     func save(
         _ conversation: ConversationSelection,
-        using gateway: any GatewayServing
+        using gateway: any GatewayServing,
+        refreshingVersion: Bool = false
     ) async -> ConversationSelection? {
         guard !isSaving, !isLoading, !selectedModelID.isEmpty else { return nil }
         isSaving = true
         errorMessage = nil
+        failedOperation = nil
         defer { isSaving = false }
         do {
             if !conversation.isDraft {
+                if refreshingVersion {
+                    configVersion = try await gateway.fetchAgentConfiguration(conversationID: conversation.id).configVersion
+                }
                 let saved = try await gateway.updateAgentConfiguration(
                     conversationID: conversation.id,
                     model: selectedModelID,
@@ -101,6 +115,11 @@ final class AssistantOptionsState {
             return conversation.configured(model: selectedModelID, thinkingLevel: thinkingLevel, serviceTier: serviceTier)
         } catch {
             errorMessage = error.localizedDescription
+            if case .http(statusCode: 409, message: _) = error as? GatewayClientError {
+                failedOperation = .save(refreshingVersion: true)
+            } else {
+                failedOperation = .save(refreshingVersion: refreshingVersion)
+            }
             return nil
         }
     }
@@ -116,6 +135,7 @@ final class AssistantOptionsState {
         serviceTier = nextTier
         isSaving = true
         errorMessage = nil
+        failedOperation = nil
         defer { isSaving = false }
         do {
             if !conversation.isDraft {
@@ -135,6 +155,21 @@ final class AssistantOptionsState {
         } catch {
             serviceTier = previous
             errorMessage = error.localizedDescription
+            failedOperation = .serviceTier(enabled)
+            return nil
+        }
+    }
+
+    func retry(_ conversation: ConversationSelection, using gateway: any GatewayServing) async -> ConversationSelection? {
+        switch failedOperation {
+        case .load:
+            await load(conversation, using: gateway)
+            return nil
+        case let .save(refreshingVersion):
+            return await save(conversation, using: gateway, refreshingVersion: refreshingVersion)
+        case let .serviceTier(enabled):
+            return await toggleFastMode(enabled, for: conversation, using: gateway)
+        case nil:
             return nil
         }
     }

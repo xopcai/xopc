@@ -168,9 +168,7 @@ export async function createGatewayAgent(
     return { ok: false, error: `agent "${agentId}" already exists`, status: 409 };
   }
 
-  const workspace = body.execution
-    ? undefined
-    : body.workspace?.trim() ? resolveUserPath(body.workspace) : undefined;
+  const workspace = body.workspace?.trim() ? resolveUserPath(body.workspace) : undefined;
   const profile = structuredClone(body.profile);
   if (body.execution && !profile.avatar?.trim()) {
     profile.avatar = externalRuntimeDefaultAvatar(body.execution.kind);

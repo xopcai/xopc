@@ -14,6 +14,7 @@ export class XopcChatOptionsViewModel {
   @Trace projectsLoading: boolean = false;
   @Trace modelId: string = '';
   @Trace agentId: string = '';
+  @Trace defaultAgentId: string = 'main';
   @Trace loading: boolean = false;
   @Trace saving: boolean = false;
   @Trace preparationBusy: boolean = false;
@@ -48,7 +49,7 @@ export class XopcChatOptionsViewModel {
       if (generation !== this.generation) return;
       const agents = await this.repository.agents(locale);
       if (generation !== this.generation) return;
-      this.agents = agents.agents; this.agentId = agentId || agents.defaultId;
+      this.agents = agents.agents; this.defaultAgentId = agents.defaultId || 'main'; this.agentId = agentId || agents.defaultId;
       const models = await this.repository.models(this.agentId);
       if (generation !== this.generation) return;
       this.models = models.models ?? models.items ?? [];

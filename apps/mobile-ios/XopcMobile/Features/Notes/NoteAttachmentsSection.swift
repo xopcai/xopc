@@ -2,6 +2,7 @@ import QuickLook
 import SwiftUI
 
 struct NoteAttachmentsSection: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let noteID: String
     let attachments: [NoteAttachment]
@@ -15,7 +16,9 @@ struct NoteAttachmentsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if showsHeading {
-                Text("附件").font(.headline)
+                Text("附件")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(mobileTheme.secondary)
             }
             ForEach(attachments) { attachment in
                 if attachment.mimeType.hasPrefix("audio/") {
@@ -29,15 +32,27 @@ struct NoteAttachmentsSection: View {
                     Button {
                         Task { await open(attachment) }
                     } label: {
-                        Label {
-                            Text(attachment.fileName)
-                                .fixedSize(horizontal: false, vertical: true)
-                        } icon: {
+                        HStack(spacing: 12) {
                             Image(systemName: "paperclip")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(mobileTheme.action)
+                                .frame(width: 34, height: 34)
+                                .background(mobileTheme.active, in: .rect(cornerRadius: mobileTheme.corner(9)))
+                            Text(attachment.fileName)
+                                .mobileTextStyle(.rowTitle)
+                                .foregroundStyle(mobileTheme.foreground)
+                                .lineLimit(1)
+                            Spacer(minLength: 4)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                        .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(14)))
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                     .disabled(loadingAttachmentID != nil)
                 }
                 if let transcript = attachment.transcript?.trimmingCharacters(in: .whitespacesAndNewlines),

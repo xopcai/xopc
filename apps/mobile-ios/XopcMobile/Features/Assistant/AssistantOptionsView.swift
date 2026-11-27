@@ -77,8 +77,7 @@ struct AssistantSessionActionsView: View {
                             conversation: conversation,
                             state: options,
                             pickingModel: true,
-                            onSave: onConversationUpdated,
-                            reloadAfterError: true
+                            onSave: onConversationUpdated
                         )
                         .toolbar {
                             ToolbarItem(placement: .topBarTrailing) {
@@ -237,7 +236,14 @@ struct AssistantSessionActionsView: View {
             }
             if let error = options.errorMessage {
                 Text(error).foregroundStyle(.red)
-                Button("重试") { Task { await loadOptions() } }
+                Button("重试") {
+                    guard let conversation else { return }
+                    Task {
+                        if let updated = await options.retry(conversation, using: GatewayClient(configuration: configuration)) {
+                            onConversationUpdated(updated)
+                        }
+                    }
+                }.disabled(options.isLoading || options.isSaving)
             }
         }
         .listStyle(.plain)
@@ -292,11 +298,11 @@ struct AssistantOptionPicker: View {
     let state: AssistantOptionsState
     let pickingModel: Bool
     let onSave: (ConversationSelection) -> Void
-    var reloadAfterError = false
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @State private var search = ""
+    @State private var dismissAfterSave = true
 
     private var matchingModels: [ChatModel] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -407,13 +413,7 @@ struct AssistantOptionPicker: View {
             }
             if let error = state.errorMessage {
                 Text(error).foregroundStyle(.red)
-                if reloadAfterError {
-                    Button("重试") {
-                        Task { await state.load(conversation, using: GatewayClient(configuration: configuration)) }
-                    }.disabled(state.isLoading || state.isSaving)
-                } else {
-                    Button("重试") { save() }.disabled(state.isSaving)
-                }
+                Button("重试", action: retry).disabled(state.isLoading || state.isSaving)
             }
         }
         .disabled(state.isLoading)
@@ -424,10 +424,27 @@ struct AssistantOptionPicker: View {
     }
 
     private func save(dismissAfter: Bool = true) {
+        dismissAfterSave = dismissAfter
         Task {
             if let updated = await state.save(conversation, using: GatewayClient(configuration: configuration)) {
                 onSave(updated)
                 if dismissAfter {
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    private func retry() {
+        let dismissOnSuccess = if case .save = state.failedOperation {
+            dismissAfterSave
+        } else {
+            false
+        }
+        Task {
+            if let updated = await state.retry(conversation, using: GatewayClient(configuration: configuration)) {
+                onSave(updated)
+                if dismissOnSuccess {
                     dismiss()
                 }
             }

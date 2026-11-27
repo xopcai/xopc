@@ -51,94 +51,25 @@ private struct VoiceNoteCaptureView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
-                    if draft == nil {
-                        Image(systemName: recorder.isRecording ? "waveform.circle.fill" : "mic.circle")
-                            .font(.system(size: 56))
-                            .foregroundStyle(recorder.isRecording ? mobileTheme.danger : mobileTheme.action)
-                            .accessibilityHidden(true)
-                    }
-                    if let draft {
-                        VoiceNoteRecoveryCard(
-                            draft: draft,
-                            isSaving: isSaving,
-                            onDiscard: { showingDiscardConfirmation = true },
-                            onSave: { Task { await save() } }
-                        )
-                    } else if unsavedAudio != nil {
-                        Text("录音尚未写入本地存储，请重试")
-                            .foregroundStyle(.secondary)
-                        Button("重试保存", systemImage: "arrow.clockwise") { Task { await save() } }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(isSaving)
-                    } else if recorder.isRecording {
-                        Text(recorder.duration, format: .number.precision(.fractionLength(1))) + Text(" 秒")
-                            .font(.title.monospacedDigit())
-                        recorderStatusText
-                        HStack {
-                            Button {
-                                recorder.togglePause()
-                            } label: {
-                                Label {
-                                    Text(recorder.isPaused
-                                        ? LocalizedStringResource("继续")
-                                        : LocalizedStringResource("暂停"))
-                                } icon: {
-                                    Image(systemName: recorder.isPaused ? "play.fill" : "pause.fill")
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                            Button("保存", systemImage: "checkmark") { Task { await save() } }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(isSaving)
-                        }
-                    } else if isLoadingDraft {
-                        ProgressView("正在检查未完成的录音…")
-                    } else if draftLoadFailed {
-                        Text("无法读取此前保存的录音，请保留应用数据。")
-                            .foregroundStyle(.secondary)
-                        Button("重新检查", systemImage: "arrow.clockwise") { Task { await restoreDraft() } }
-                    } else {
-                        recorderStatusText
-                        Button { Task { await prepareRecording() } } label: {
-                            Label {
-                                Text("开始录音")
-                                    .lineLimit(nil)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            } icon: {
-                                Image(systemName: "mic.fill")
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 48)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    if recorder.hasRecoverableInterruption {
-                        Text("录音被系统中断，已自动暂停。可以继续录音或保存当前内容。")
-                            .font(.footnote)
-                            .foregroundStyle(.orange)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if recorder.isMicrophonePermissionDenied {
-                        Text("未获得麦克风权限，请在系统设置中允许访问。")
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                        MicrophonePermissionSettingsButton()
-                    } else if let message = recorder.errorMessage ?? saveError {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                VStack(spacing: 20) {
+                    captureStageContent
+                    captureNotices
                 }
-                .padding()
-                .frame(maxWidth: .infinity, minHeight: draft == nil ? 360 : 0)
+                .padding(20)
+                .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(mobileTheme.canvas)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if draft == nil, unsavedAudio == nil, recorder.isRecording {
+                    VoiceRecordingDock(
+                        isPaused: recorder.isPaused,
+                        isSaving: isSaving,
+                        onTogglePause: { recorder.togglePause() },
+                        onSave: { Task { await save() } }
+                    )
+                }
+            }
             .navigationTitle(draft == nil ? LocalizedStringKey("语音笔记") : "待恢复录音")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -161,7 +92,7 @@ private struct VoiceNoteCaptureView: View {
                 }
             }
         }
-        .presentationDetents(voiceNoteDetents)
+        .mobileSheetPreset(.large)
         .interactiveDismissDisabled(recorder.isRecording || unsavedAudio != nil)
         .task { await restoreDraft() }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) {
@@ -189,16 +120,94 @@ private struct VoiceNoteCaptureView: View {
         }
     }
 
+    @ViewBuilder
+    private var captureStageContent: some View {
+        if let draft {
+            VoiceNoteRecoveryCard(
+                draft: draft,
+                isSaving: isSaving,
+                onDiscard: { showingDiscardConfirmation = true },
+                onSave: { Task { await save() } }
+            )
+        } else if unsavedAudio != nil {
+            VStack(spacing: 14) {
+                Image(systemName: "waveform.circle")
+                    .font(.largeTitle)
+                    .foregroundStyle(mobileTheme.danger)
+                    .accessibilityHidden(true)
+                Text("录音尚未写入本地存储，请重试")
+                    .foregroundStyle(mobileTheme.secondary)
+                    .multilineTextAlignment(.center)
+                Button("重试保存", systemImage: "arrow.clockwise") { Task { await save() } }
+                    .buttonStyle(.borderedProminent)
+                    .clipShape(.capsule)
+                    .disabled(isSaving)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity)
+            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(MobileDesignTokens.radiusLg)))
+        } else if recorder.isRecording {
+            VoiceRecordingLiveStage(
+                duration: recorder.duration,
+                statusText: recorder.statusText,
+                isPaused: recorder.isPaused
+            )
+        } else if isLoadingDraft {
+            ProgressView("正在检查未完成的录音…")
+                .padding(.vertical, 48)
+        } else if draftLoadFailed {
+            VStack(spacing: 12) {
+                Text("无法读取此前保存的录音，请保留应用数据。")
+                    .foregroundStyle(mobileTheme.secondary)
+                    .multilineTextAlignment(.center)
+                Button("重新检查", systemImage: "arrow.clockwise") { Task { await restoreDraft() } }
+                    .buttonStyle(.bordered)
+                    .clipShape(.capsule)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity)
+            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(MobileDesignTokens.radiusLg)))
+        } else {
+            VoiceRecordingIdleStage(statusText: recorder.statusText) {
+                Task { await prepareRecording() }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var captureNotices: some View {
+        if recorder.hasRecoverableInterruption {
+            Text("录音被系统中断，已自动暂停。可以继续录音或保存当前内容。")
+                .font(.footnote)
+                .foregroundStyle(mobileTheme.warningForeground)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(12)
+                .frame(maxWidth: .infinity)
+                .background(mobileTheme.warningFill, in: .rect(cornerRadius: mobileTheme.corner(12)))
+        }
+        if recorder.isMicrophonePermissionDenied {
+            Text("未获得麦克风权限，请在系统设置中允许访问。")
+                .font(.footnote)
+                .foregroundStyle(mobileTheme.danger)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            MicrophonePermissionSettingsButton()
+        } else if let message = recorder.errorMessage ?? saveError {
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(mobileTheme.danger)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var consentBinding: Binding<Bool> {
         Binding(get: { pendingConsentVersion != nil }, set: {
             if !$0 {
                 pendingConsentVersion = nil
             }
         })
-    }
-
-    private var voiceNoteDetents: Set<PresentationDetent> {
-        [.large]
     }
 
     private var recorderStatusText: some View {
@@ -277,6 +286,113 @@ private struct VoiceNoteCaptureView: View {
             unsavedAudio = nil
             saveError = nil
         } catch { saveError = error.localizedDescription }
+    }
+}
+
+private struct VoiceRecordingLiveStage: View {
+    @Environment(\.mobileTheme) private var mobileTheme
+    let duration: Double
+    let statusText: LocalizedStringResource
+    let isPaused: Bool
+
+    var body: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(isPaused ? mobileTheme.secondary : mobileTheme.danger)
+                    .frame(width: 8, height: 8)
+                Text(statusText)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(isPaused ? mobileTheme.secondary : mobileTheme.danger)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isPaused ? mobileTheme.input : mobileTheme.dangerSoft, in: .capsule)
+
+            (Text(duration, format: .number.precision(.fractionLength(1))) + Text(" 秒"))
+                .font(.largeTitle.weight(.medium).monospacedDigit())
+                .foregroundStyle(mobileTheme.foreground)
+        }
+        .padding(.vertical, 32)
+        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity)
+        .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(MobileDesignTokens.radiusLg)))
+    }
+}
+
+private struct VoiceRecordingIdleStage: View {
+    @Environment(\.mobileTheme) private var mobileTheme
+    let statusText: LocalizedStringResource
+    let onStart: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "mic.fill")
+                .font(.title)
+                .foregroundStyle(mobileTheme.action)
+                .frame(width: 64, height: 64)
+                .background(mobileTheme.active, in: .circle)
+                .accessibilityHidden(true)
+            Text(statusText)
+                .foregroundStyle(mobileTheme.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(action: onStart) {
+                Label {
+                    Text("开始录音")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "mic.fill")
+                }
+                .foregroundStyle(mobileTheme.onAction)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(mobileTheme.action, in: .capsule)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(MobileDesignTokens.radiusLg)))
+    }
+}
+
+private struct VoiceRecordingDock: View {
+    @Environment(\.mobileTheme) private var mobileTheme
+    let isPaused: Bool
+    let isSaving: Bool
+    let onTogglePause: () -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: onTogglePause) {
+                Label {
+                    Text(isPaused ? LocalizedStringResource("继续") : LocalizedStringResource("暂停"))
+                } icon: {
+                    Image(systemName: isPaused ? "play.fill" : "pause.fill")
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(mobileTheme.foreground)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(mobileTheme.panel, in: .capsule)
+            }
+            .buttonStyle(.plain)
+            Button(action: onSave) {
+                Label("保存", systemImage: "checkmark")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(mobileTheme.onAction)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(mobileTheme.danger, in: .capsule)
+            }
+            .buttonStyle(.plain)
+            .disabled(isSaving)
+            .opacity(isSaving ? MobileDesignTokens.disabledOpacity : 1)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(mobileTheme.canvas)
     }
 }
 
@@ -369,79 +485,104 @@ struct DiscussionProcessingSection: View {
                 if transcriptExpanded {
                     if !detail.transcript.segments.isEmpty {
                         ForEach(detail.transcript.segments.prefix(visibleSegments)) { segment in
-                            VStack(alignment: .leading, spacing: 5) {
+                            VStack(alignment: .leading, spacing: 6) {
                                 HStack(spacing: 8) {
                                     if let startedAtMs = segment.startedAtMs {
                                         Text(Self.captureTime(startedAtMs))
-                                            .foregroundStyle(.tint)
+                                            .font(.caption.weight(.medium).monospacedDigit())
+                                            .foregroundStyle(mobileTheme.action)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(mobileTheme.active, in: .capsule)
                                     }
                                     if let speaker = segment.speakerLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !speaker.isEmpty {
-                                        Text(speaker).foregroundStyle(.secondary)
+                                        Text(speaker)
+                                            .font(.caption.weight(.medium))
+                                            .foregroundStyle(mobileTheme.secondary)
                                     }
                                 }
-                                .font(.caption)
                                 Text(segment.displayText?.nonEmptyTranscript ?? segment.rawText?.nonEmptyTranscript
                                     ?? AppLocalization.string("等待转写…", locale: AppLocalization.selectedLocale))
+                                    .foregroundStyle(mobileTheme.foreground)
                                     .textSelection(.enabled)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
-                            .background(Color.secondary.opacity(0.08), in: .rect(cornerRadius: 12))
+                            .padding(14)
+                            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(MobileDesignTokens.radiusMd)))
                         }
                         if detail.transcript.segments.count > visibleSegments {
                             Button("加载更多") { visibleSegments += 20 }
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(mobileTheme.action)
                         }
                     } else if !detail.transcript.text.isEmpty {
                         Text(detail.transcript.text).textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
-                            .background(Color.secondary.opacity(0.08), in: .rect(cornerRadius: 12))
+                            .padding(16)
+                            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(MobileDesignTokens.radiusMd)))
                     } else {
                         Text(transcriptPlaceholder)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(mobileTheme.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
-                            .background(Color.secondary.opacity(0.08), in: .rect(cornerRadius: 12))
+                            .padding(14)
+                            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(MobileDesignTokens.radiusMd)))
                     }
                 }
             } else if detail.discussion.status == "completed", detail.organization?.organization == nil {
                 Text("没有识别到可用的语音内容")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(mobileTheme.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    @ViewBuilder
     private var processingCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if detail.discussion.status == "completed" || detail.discussion.status == "cancelled" {
-                statusHeading.frame(minHeight: 44, alignment: .leading)
-            } else {
-                DisclosureGroup(isExpanded: $statusExpanded) {
-                    Text(detail.statusDetail)
-                        .mobileTextStyle(.secondary)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } label: {
-                    statusHeading.frame(minHeight: 44, alignment: .leading)
+        if detail.discussion.status == "completed" {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(mobileTheme.success)
+                    .accessibilityHidden(true)
+                Text(detail.statusTitle)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(mobileTheme.secondary)
+            }
+            .padding(.horizontal, 4)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                if detail.discussion.status == "cancelled" {
+                    statusHeading.frame(minHeight: 40, alignment: .leading)
+                } else {
+                    DisclosureGroup(isExpanded: $statusExpanded) {
+                        Text(detail.statusDetail)
+                            .mobileTextStyle(.secondary)
+                            .foregroundStyle(mobileTheme.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } label: {
+                        statusHeading.frame(minHeight: 40, alignment: .leading)
+                    }
+                }
+                if detail.discussion.status == "needs_attention" {
+                    Button(action: onRetry) {
+                        Text(retryUsesLocalAudio ? LocalizedStringResource("重新上传本地录音") : "重试")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(mobileTheme.action)
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: 40)
+                            .background(mobileTheme.active, in: .capsule)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isRetrying)
                 }
             }
-            if detail.discussion.status == "needs_attention" {
-                Button(action: onRetry) {
-                    Text(retryUsesLocalAudio ? LocalizedStringResource("重新上传本地录音") : "重试")
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(minHeight: 44)
-                }
-                .buttonStyle(.bordered)
-                .disabled(isRetrying)
-            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(MobileDesignTokens.radiusMd)))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(mobileTheme.panel, in: .rect(cornerRadius: 14))
     }
 
     private var statusHeading: some View {
@@ -480,18 +621,25 @@ struct DiscussionProcessingSection: View {
 }
 
 private struct DiscussionSummarySection: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let organization: DiscussionOrganization
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("讨论纪要").font(.headline)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("讨论纪要")
+                .font(.headline)
+                .foregroundStyle(mobileTheme.foreground)
             Text(organization.summary)
+                .foregroundStyle(mobileTheme.foreground)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
             if !organization.keyPoints.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("关键要点").font(.subheadline.weight(.semibold))
+                    Text("关键要点")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(mobileTheme.secondary)
                     Text(verbatim: organization.keyPoints.map { "• \($0)" }.joined(separator: "\n"))
+                        .foregroundStyle(mobileTheme.foreground)
                 }
             }
             factSection("决定", facts: organization.decisions)
@@ -500,16 +648,19 @@ private struct DiscussionSummarySection: View {
             let actions = organization.actionItems.filter { $0.ignored != true }
             if !actions.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("行动项").font(.subheadline.weight(.semibold))
+                    Text("行动项")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(mobileTheme.secondary)
                     ForEach(actions) { action in
                         Text(verbatim: "• \(action.title)")
+                            .foregroundStyle(mobileTheme.foreground)
                     }
                 }
             }
         }
-        .padding(16)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(uiColor: .systemGray5), in: .rect(cornerRadius: 16))
+        .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(18)))
     }
 
     @ViewBuilder
@@ -517,9 +668,12 @@ private struct DiscussionSummarySection: View {
         let visible = facts.filter { $0.ignored != true }
         if !visible.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text(title).font(.subheadline.weight(.semibold))
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(mobileTheme.secondary)
                 ForEach(visible) { fact in
                     Text(verbatim: "• \(fact.text)")
+                        .foregroundStyle(mobileTheme.foreground)
                 }
             }
         }

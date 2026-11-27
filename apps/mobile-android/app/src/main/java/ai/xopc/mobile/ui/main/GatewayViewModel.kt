@@ -2514,28 +2514,13 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
-  fun openTaskConversation(taskId: String) {
-    val current = mutableState.value
-    val gatewayId = current.profile?.gatewayId ?: return
-    if (!taskId.matches(Regex("[A-Za-z0-9_-]{1,128}")) ||
-      current.progress.taskChatBusy) return
-    mutableState.update { it.copy(progress = it.progress.copy(taskChatBusy = true, taskChatError = false)) }
-    viewModelScope.launch {
-      try {
-        val id = runInterruptible(Dispatchers.IO) { conversations.ensureTaskConversation(taskId) }
-        if (mutableState.value.profile?.gatewayId == gatewayId) {
-          mutableState.update { it.copy(progress = it.progress.copy(taskChatBusy = false)) }
-          selectConversationScoped(id, taskId)
-          mutableState.update { it.copy(chatNavigationId = id) }
-          loadConversations()
-        }
-      } catch (error: CancellationException) { throw error }
-      catch (_: Exception) {
-        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-          it.copy(progress = it.progress.copy(taskChatBusy = false, taskChatError = true))
-        }
-      }
-    }
+  suspend fun resolveTaskConversation(taskId: String): String {
+    val profile = checkNotNull(mutableState.value.profile)
+    val id = runInterruptible(Dispatchers.IO) { conversations.ensureTaskConversation(taskId) }
+    val active = mutableState.value.profile
+    check(active?.gatewayId == profile.gatewayId && active.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
+    loadConversations()
+    return id
   }
 
   fun commandProgressTask(action: String) = runProgressTaskCommand(action, "")
@@ -3494,7 +3479,11 @@ class GatewayViewModel internal constructor(application: Application, private va
     val available = mutableState.value.conversationTaskGroups.values.any { group ->
       group.items.any { it.taskId == taskId && it.activeConversationId == conversationId }
     }
-    if (available) selectConversationScoped(conversationId, taskId)
+    if (available) restoreTaskConversation(taskId, conversationId)
+  }
+
+  fun restoreTaskConversation(taskId: String, conversationId: String) {
+    selectConversationScoped(conversationId, taskId)
   }
 
   private fun saveCurrentChatSnapshot() {
@@ -4754,6 +4743,34 @@ class GatewayViewModel internal constructor(application: Application, private va
       projectChatOriginId = projectChatOriginId, retainCurrentProject = projectChatOriginId != null)
   }
 
+  suspend fun createOrdinaryDraft(): String {
+    val source = mutableState.value
+    val profile = checkNotNull(source.profile)
+    check(!source.creatingConversation) { "DRAFT_CREATION_IN_PROGRESS" }
+    mutableState.update { it.copy(creatingConversation = true) }
+    try {
+      draftWriteJob?.join()
+      val draft = runInterruptible(Dispatchers.IO) {
+        val active = session.currentProfile()
+        check(active?.gatewayId == profile.gatewayId && active.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
+        val projectId = if (source.projectChatOriginId != null) {
+          (source.context ?: source.selectedConversationId?.let(conversations::context))?.project?.id
+        } else null
+        conversations.createDraft(source.defaultAgentId, projectId)
+      }
+      val active = mutableState.value.profile
+      check(active?.gatewayId == profile.gatewayId && active.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
+      loadConversations()
+      return draft.conversationId
+    } finally {
+      mutableState.update {
+        if (it.profile?.gatewayId == profile.gatewayId && it.profile.deviceId == profile.deviceId) {
+          it.copy(creatingConversation = false)
+        } else it
+      }
+    }
+  }
+
   suspend fun useLibraryFile(id: String, version: ai.xopc.mobile.gateway.LibraryVersion,
     origin: ai.xopc.mobile.gateway.LibraryOrigin?) {
     val state = mutableState.value
@@ -5157,11 +5174,10 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
-  fun sendMessage() {
-    val id = mutableState.value.selectedConversationId ?: return
-    if (mutableState.value.pendingInput != null) return
-    val content = mutableState.value.draftText
-    sendContent(id, content)
+  fun sendMessage(conversationId: String) {
+    val current = mutableState.value
+    if (current.selectedConversationId != conversationId || current.pendingInput != null) return
+    sendContent(conversationId, current.draftText)
   }
 
   fun retryPendingInput() {

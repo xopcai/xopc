@@ -1,3 +1,4 @@
+import { xopcClickEffect } from '../common/motionTokens';
 import { XopcRecordingOutcomeInput, projectRecordingOutcome } from '../common/recordingOutcome';
 import { recordingOutcomeStageCopy, recordingOutcomePhrase } from '../common/recordingOutcomeResources';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
@@ -17,50 +18,69 @@ export struct RecordingOutcomeCard {
     if (state.stage === 'analysis_failed' || state.stage === 'transcription_failed' || state.stage === 'verify_failed') return recordingOutcomePhrase('retry_' + state.stage);
     return recordingOutcomePhrase('retry_' + state.retry);
   }
+
   @Builder
-  availability(key: string,available: boolean,stale: boolean = false) {
+  availability(key: string, available: boolean, stale: boolean = false) {
     Row({ space: 4 }) {
       Text(recordingOutcomePhrase(key)).fontSize(12).fontColor(this.colors.secondary)
-      Text(recordingOutcomePhrase(available ? stale ? 'old_note' : 'available' : 'pending')).fontSize(12).fontColor(this.colors.secondary)
-    }.margin({ right: 12,bottom: 4 })
+      Text(recordingOutcomePhrase(available ? stale ? 'old_note' : 'available' : 'pending'))
+        .fontSize(12).fontWeight(FontWeight.Medium)
+        .fontColor(available ? this.colors.foreground : this.colors.tertiary)
+    }.margin({ right: 12, bottom: 4 })
   }
+
   build() {
-    Column({ space: this.noteContext ? 4 : 10 }) {
-      if (!this.noteContext) Text(recordingOutcomePhrase('leave_' + projectRecordingOutcome(this.input).leave))
-        .fontSize(13).lineHeight(20).fontColor(this.colors.secondary).width('100%')
+    Column({ space: this.noteContext ? 6 : 10 }) {
+      if (!this.noteContext) {
+        Text(recordingOutcomePhrase('leave_' + projectRecordingOutcome(this.input).leave))
+          .fontSize(13).lineHeight(20).fontColor(this.colors.secondary).width('100%')
+      }
       Button({ type: ButtonType.Normal }) {
         Row({ space: 8 }) {
           if (this.noteContext) {
             SymbolGlyph(projectRecordingOutcome(this.input).stage === 'ready' ? $r('sys.symbol.checkmark_circle_fill')
-              : $r('sys.symbol.doc')).fontSize(16).fontColor([this.colors.secondary])
+              : $r('sys.symbol.waveform')).fontSize(16)
+              .fontColor([projectRecordingOutcome(this.input).stage === 'ready' ? this.colors.success : this.colors.accent])
           }
           Text(recordingOutcomeStageCopy(projectRecordingOutcome(this.input).stage).title)
             .fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
-          SymbolGlyph(this.detailsOpen ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(12).fontColor([this.colors.secondary])
+          SymbolGlyph(this.detailsOpen ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
+            .fontSize(12).fontColor([this.colors.secondary])
         }.width('100%')
-      }.id('recording-outcome-details').width('100%').constraintSize({ minHeight: 44 }).padding(0).backgroundColor(Color.Transparent)
-        .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
+      }.id('recording-outcome-details').width('100%').constraintSize({ minHeight: 42 }).padding(0)
+        .backgroundColor(Color.Transparent).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
         .onClick((): void => { this.detailsOpen = !this.detailsOpen; })
       if (this.detailsOpen) {
-      if (this.noteContext) Text(recordingOutcomePhrase('leave_' + projectRecordingOutcome(this.input).leave)).fontSize(12).lineHeight(19).fontColor(this.colors.secondary).width('100%')
-      if (!this.compact) {
-        Text(recordingOutcomeStageCopy(projectRecordingOutcome(this.input).stage).body).fontSize(12).lineHeight(19).fontColor(this.colors.secondary).width('100%')
-        if (projectRecordingOutcome(this.input).leave === 'local') Text(recordingOutcomePhrase('local_hint')).fontSize(12).lineHeight(19).fontColor(this.colors.secondary).width('100%')
-        if (projectRecordingOutcome(this.input).leave === 'cloud' && (projectRecordingOutcome(this.input).stage === 'transcribing' || projectRecordingOutcome(this.input).stage === 'organizing' || projectRecordingOutcome(this.input).stage === 'transcription_retrying' || projectRecordingOutcome(this.input).stage === 'analysis_retrying')) Text(recordingOutcomePhrase('cloud_hint')).fontSize(12).lineHeight(19).fontColor(this.colors.secondary).width('100%')
-        Flex({ wrap: FlexWrap.Wrap }) {
-          this.availability('audio',projectRecordingOutcome(this.input).audio)
-          this.availability('text',projectRecordingOutcome(this.input).text)
-          this.availability('note',projectRecordingOutcome(this.input).note,projectRecordingOutcome(this.input).stale)
-        }.width('100%')
+        if (this.noteContext) {
+          Text(recordingOutcomePhrase('leave_' + projectRecordingOutcome(this.input).leave))
+            .fontSize(12).lineHeight(19).fontColor(this.colors.secondary).width('100%')
+        }
+        if (!this.compact) {
+          Text(recordingOutcomeStageCopy(projectRecordingOutcome(this.input).stage).body)
+            .fontSize(12).lineHeight(19).fontColor(this.colors.secondary).width('100%')
+          if (projectRecordingOutcome(this.input).leave === 'local') {
+            Text(recordingOutcomePhrase('local_hint')).fontSize(12).lineHeight(19).fontColor(this.colors.secondary).width('100%')
+          }
+          if (projectRecordingOutcome(this.input).leave === 'cloud' && (projectRecordingOutcome(this.input).stage === 'transcribing' || projectRecordingOutcome(this.input).stage === 'organizing' || projectRecordingOutcome(this.input).stage === 'transcription_retrying' || projectRecordingOutcome(this.input).stage === 'analysis_retrying')) {
+            Text(recordingOutcomePhrase('cloud_hint')).fontSize(12).lineHeight(19).fontColor(this.colors.secondary).width('100%')
+          }
+          Flex({ wrap: FlexWrap.Wrap }) {
+            this.availability('audio', projectRecordingOutcome(this.input).audio)
+            this.availability('text', projectRecordingOutcome(this.input).text)
+            this.availability('note', projectRecordingOutcome(this.input).note, projectRecordingOutcome(this.input).stale)
+          }.width('100%')
+        }
       }
+      if (projectRecordingOutcome(this.input).retry !== 'none') {
+        Button(this.retryLabel(), { type: ButtonType.Normal })
+          .id('recording-outcome-retry').height(40).fontSize(13).fontWeight(FontWeight.Medium)
+          .padding({ left: 14, right: 14 }).borderRadius(this.colors.corner(12))
+          .fontColor(this.colors.accent).backgroundColor(this.noteContext ? this.colors.accentSoft : this.colors.panel)
+          .enabled(!this.busy).clickEffect(xopcClickEffect())
+          .onClick((): void => { this.onRetry(projectRecordingOutcome(this.input).retry); })
       }
-      if (projectRecordingOutcome(this.input).retry !== 'none') Button(this.retryLabel(), { type: ButtonType.Normal })
-        .id('recording-outcome-retry').constraintSize({ minHeight: 44 }).fontSize(13).fontWeight(FontWeight.Medium)
-        .padding({ left: 12, right: 12 }).borderRadius(this.colors.corner(10))
-        .fontColor(this.colors.accent).backgroundColor(this.noteContext ? this.colors.accentSoft : this.colors.input).enabled(!this.busy)
-        .onClick((): void => { this.onRetry(projectRecordingOutcome(this.input).retry); })
     }.width('100%').alignItems(HorizontalAlign.Start)
-      .padding({ left: 12, right: 12, top: this.noteContext ? 4 : 12, bottom: 12 })
-      .borderRadius(this.colors.corner(14)).backgroundColor(this.noteContext ? this.colors.panel : this.colors.input)
+      .padding({ left: 14, right: 14, top: this.noteContext ? 6 : 14, bottom: 12 })
+      .borderRadius(this.colors.corner(16)).backgroundColor(this.noteContext ? this.colors.panel : this.colors.input)
   }
 }

@@ -232,7 +232,6 @@ export function useCommandPalette(
     capabilities?: Readonly<ComposerCapabilities>;
     isComposing?: boolean;
     currentAgentId?: string;
-    externalAgentsAvailable?: boolean;
     conversationId?: string | null;
   },
 ) {
@@ -337,7 +336,7 @@ export function useCommandPalette(
           // Best-effort runtime command discovery.
         }
       }
-      const selectableAgents = allAgents.filter(agent => options?.externalAgentsAvailable || !agent.execution);
+      const selectableAgents = allAgents;
       const agentItems: PaletteItem[] =
         selectableAgents.length > 1
           ? selectableAgents.map((a) => ({
@@ -353,7 +352,7 @@ export function useCommandPalette(
           : [];
       return { items: [...externalItems, ...skillItems, ...commandItems, ...agentItems], failedKinds };
     },
-    [language, options?.currentAgentId, options?.conversationId, options?.externalAgentsAvailable, skillsVersion],
+    [language, options?.currentAgentId, options?.conversationId, skillsVersion],
     {
       enabled: paletteActive,
       initial: { items: [] as PaletteItem[], failedKinds: [] as PaletteItemKind[] },

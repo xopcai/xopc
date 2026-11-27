@@ -84,6 +84,12 @@ export function bottomChromeInsetFor(showBottomTabBar: boolean): number {
   return showBottomTabBar ? FLOATING_TAB_BAR_HEIGHT_VP + FLOATING_TAB_BAR_MARGIN_BOTTOM_VP : 0;
 }
 
+export function isActiveMobileDestination(
+  selectedTab: XopcMobileTab, topEntries: Map<XopcMobileTab, number>, entryId?: number,
+): boolean {
+  return entryId !== undefined && topEntries.get(selectedTab) === entryId;
+}
+
 export function synthesizeNotificationPlan(
   route: XopcNotificationRoute,
   personalConversationId: string,

@@ -1,8 +1,3 @@
-import { realpath } from 'node:fs/promises';
-
-import { getExecutionEnvironmentForSession } from '../../execution-environments/subject.js';
-import { getProjectForSession } from '../../projects/workspace.js';
-import { projectWorkspacePath } from '../../session/session-workspace.js';
 import { readCurrentTranscriptId } from '../../storage/sqlite/session-instance-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import type { CompactionResult } from '../memory/compaction.js';
@@ -19,6 +14,7 @@ import {
   getExternalConversationAgent,
   readExternalSessionBinding,
 } from './session-binding.js';
+import { ensureExternalSessionWorkspaceCwd } from './workspace.js';
 
 async function resolveExternalSessionContext(conversationId: string) {
   const agent = getExternalConversationAgent(conversationId);
@@ -28,12 +24,10 @@ async function resolveExternalSessionContext(conversationId: string) {
   if (!transcriptId) {
     throw new Error(`Session "${conversationId}" has no active transcript.`);
   }
-  const project = getProjectForSession(conversationId);
-  const workspace = project && (getExecutionEnvironmentForSession(conversationId)?.rootPath ?? projectWorkspacePath(project));
-  if (!workspace) {
-    throw new Error(`${driver.label} session has no project workspace.`);
-  }
-  const cwd = await realpath(workspace);
+  const cwd = await ensureExternalSessionWorkspaceCwd({
+    conversationId,
+    agentId: agent.id,
+  });
   const identity = {
     conversationId,
     transcriptId,
@@ -169,12 +163,7 @@ export async function rollbackExternalSession(
 }
 
 async function resolveSessionWorkspaceCwd(conversationId: string): Promise<string> {
-  const project = getProjectForSession(conversationId);
-  const workspace = project && (getExecutionEnvironmentForSession(conversationId)?.rootPath ?? projectWorkspacePath(project));
-  if (!workspace) {
-    throw new Error('Session has no project workspace.');
-  }
-  return realpath(workspace);
+  return ensureExternalSessionWorkspaceCwd({ conversationId });
 }
 
 /** Read the Git checkpoint diff and availability for a turn in a Project session. */

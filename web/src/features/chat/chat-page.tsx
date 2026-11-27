@@ -1579,7 +1579,6 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                   !personal && !agentSetup && !taskId && agents.showChatAgentSelector ? agents.onChatAgentChange : undefined
                 }
                 currentAgentId={agents.displayAgentId}
-                externalAgentsAvailable={Boolean(scopedProject?.workspaceRoot?.trim())}
                 voiceAgentName={personal && personalWelcome ? personalWelcome.name : welcomeAgent.name}
                 voiceTaskId={taskId ?? undefined}
                 prepareVoiceSession={session.projectPreparation ? projectComposer.prepareSession : undefined}

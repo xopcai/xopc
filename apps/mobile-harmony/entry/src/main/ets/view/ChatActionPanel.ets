@@ -4,6 +4,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 export const CHAT_ACTION_PANEL_OPEN_MS: number = XOPC_MOTION_STANDARD_MS;
 export const CHAT_ACTION_PANEL_CLOSE_MS: number = XOPC_MOTION_EXIT_MS;
 const CHAT_ACTION_GRID_HEIGHT: number = 184;
+const CHAT_ACTION_GRID_EXPANDED_HEIGHT: number = 272;
 
 @ComponentV2
 export struct XopcChatActionPanel {
@@ -11,8 +12,13 @@ export struct XopcChatActionPanel {
   @Local hoveredId: string = '';
   @Param open: boolean = false;
   @Param canSwitchAgent: boolean = false;
+  @Param showVoiceCall: boolean = false;
   @Param disabledIds: string[] = [];
   @Event onSelect: (id: string) => void = (_id: string): void => {};
+
+  private gridHeight(): number {
+    return this.showVoiceCall ? CHAT_ACTION_GRID_EXPANDED_HEIGHT : CHAT_ACTION_GRID_HEIGHT;
+  }
 
   @Monitor('open')
   clearHover(): void {
@@ -59,8 +65,13 @@ export struct XopcChatActionPanel {
             this.actionTile('switch-agent', $r('app.string.chat_switch_agent'), $r('sys.symbol.person'))
           }
         }.width('100%')
-      }.width('100%').height(CHAT_ACTION_GRID_HEIGHT).padding({ left: 6, right: 6, top: 2, bottom: 10 })
-    }.id('chat-action-panel').width('100%').height(this.open ? CHAT_ACTION_GRID_HEIGHT : 0).clip(true)
+        if (this.showVoiceCall) {
+          Row() {
+            this.actionTile('voice-call', $r('app.string.voice_call_action_natural'), $r('sys.symbol.phone'))
+          }.width('100%')
+        }
+      }.width('100%').height(this.gridHeight()).padding({ left: 6, right: 6, top: 2, bottom: 10 })
+    }.id('chat-action-panel').width('100%').height(this.open ? this.gridHeight() : 0).clip(true)
       .opacity(this.open ? 1 : 0).enabled(this.open)
       .accessibilityLevel(this.open ? 'auto' : 'no-hide-descendants')
   }

@@ -12,6 +12,7 @@ import { serve } from '@hono/node-server';
 import { expect, it, vi } from 'vitest';
 
 import { ConfigSchema } from '../../config/schema.js';
+import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { getSessionMetadata, deleteSessionRecord } from '../../storage/sqlite/session-repository.js';
@@ -275,6 +276,38 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     finish({ status: 'ok', summary: '' });
     await vi.waitFor(() => expect(coordinator.snapshot(defaultConversationId).activeRunId).toBeUndefined());
     expect(execute).toHaveBeenCalledTimes(8);
+
+    // Direct non-Project conversation with an external runtime agent is accepted using its default workspace.
+    new AgentCatalogRepository().create({
+      id: 'codex',
+      enabled: true,
+      execution: { kind: 'codex' },
+      profile: { name: 'Codex' },
+    }, { ready: true });
+    const directExternalConversationId = randomUUID();
+    const directExternalAccepted = await fetch(`${base}/api/sessions/${directExternalConversationId}/inputs`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        ...command,
+        clientMessageId: randomUUID(),
+        creation: {
+          agentId: 'codex',
+          projectId: null,
+          execution: null,
+          model: 'codex',
+          thinkingLevel: 'medium',
+          temporary: false,
+        },
+        input: { content: 'Direct external chat without a project' },
+      }),
+    });
+    expect(directExternalAccepted.status, await directExternalAccepted.clone().text()).toBe(202);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(9));
+    expect(getSessionMetadata(directExternalConversationId)?.agentId).toBe('codex');
+    finish({ status: 'ok', summary: '' });
+    await vi.waitFor(() => expect(coordinator.snapshot(directExternalConversationId).activeRunId).toBeUndefined());
+    expect(execute).toHaveBeenCalledTimes(9);
   } finally {
     await preparations.stop();
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

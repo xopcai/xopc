@@ -30,6 +30,9 @@ struct AssistantComposer: View {
     @Binding var attachmentError: String?
     let canReferenceFiles: Bool
     let onSwitchAgent: (() -> Void)?
+    var showsVoiceCallInPanel = false
+    var canStartVoiceCall = false
+    var onStartVoiceCall: (() -> Void)?
     let isRunActive: Bool
     let onInputFocusChanged: (Bool) -> Void
     let onStop: () -> Void
@@ -95,6 +98,8 @@ struct AssistantComposer: View {
                 AssistantActionPanel(
                     canReferenceFiles: canReferenceFiles,
                     canSwitchAgent: onSwitchAgent != nil,
+                    showsVoiceCall: showsVoiceCallInPanel,
+                    canStartVoiceCall: canStartVoiceCall,
                     onSelect: selectAction
                 )
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
@@ -459,6 +464,7 @@ struct AssistantComposer: View {
         case .localFile: showingFilePicker = true
         case .voice: voiceMode = true
         case .switchAgent: onSwitchAgent?()
+        case .voiceCall: onStartVoiceCall?()
         case .noteReference, .taskReference, .fileReference:
             referenceKind = action.referenceKind ?? .note
             showingReferencePicker = true

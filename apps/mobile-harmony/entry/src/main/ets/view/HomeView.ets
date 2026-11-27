@@ -1,4 +1,4 @@
-import { xopcConfirmDialog, xopcSheetOptions, xopcToast } from '../common/dialogActions';
+import { xopcConfirmDialog, xopcToast } from '../common/dialogActions';
 import {
   XOPC_MOTION_STANDARD_MS,
   xopcPagerAnimated,
@@ -7,6 +7,7 @@ import {
 } from '../common/motionTokens';
 import {
   bottomChromeInsetFor,
+  isActiveMobileDestination,
   shouldAllowSidebarEdgeSwipe,
   shouldMarkPersonalViewed,
   shouldShowBottomTabBar,
@@ -36,7 +37,7 @@ import { XopcProjectSpaceView } from './ProjectSpaceView';
 import { XopcNotesView } from './NotesView';
 import { XopcNotesTabView } from './NotesTabView';
 import { XopcSpaceLibraryView, XopcLibraryOrigin } from './SpaceLibraryView';
-import { XopcChatAttachment, XopcContextRef, XopcSessionItem } from '../model/chat';
+import { XopcChatAttachment, XopcContextRef } from '../model/chat';
 import { XopcChatDrafts } from '../service/chatDrafts';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcFilesView } from './FilesView';
@@ -67,10 +68,8 @@ import { chatDraftIntake } from '../service/chatDraftIntake';
 import {
   XopcBrandLoading,
   XopcErrorState,
-  XopcListSkeleton,
   XopcPageHeader,
   XopcPageTitleOption,
-  XopcSheetHeader,
 } from './MobileComponents';
 import { common } from '@kit.AbilityKit';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
@@ -115,6 +114,8 @@ export struct XopcHomeView {
   @Local workbenchTopRoute: string = '';
   @Local notesTopRoute: string = '';
   @Local libraryTopRoute: string = '';
+  @Local tabTopEntries: Map<XopcMobileTab, number> = new Map<XopcMobileTab, number>();
+  private nextStackEntryId: number = 0;
   @Local adaScrollRevision: number = 0;
   @Local conversationsScrollRevision: number = 0;
   @Local workbenchResetRevision: number = 0;
@@ -133,15 +134,12 @@ export struct XopcHomeView {
   @Local sessionChatFocusRevision: number = 0;
   @Local projectConversationId: string = '';
 
-  // Quick conversation switcher sheet for session-chat
-  @Local sessionSwitcherOpen: boolean = false;
-  @Local switcherItems: XopcSessionItem[] = [];
-  @Local switcherLoading: boolean = false;
-
   // Overlay & back handlers
   @Local chatOverlayActive: boolean = false;
   @Local libraryDetailOpen: boolean = false;
   private conversationsBackHandler?: () => boolean;
+  private notesBackHandler?: () => boolean;
+  private notesListBackHandler?: () => boolean;
   private libraryBackHandler?: () => boolean;
   private workbenchBackHandler?: () => boolean;
   @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
@@ -184,7 +182,7 @@ export struct XopcHomeView {
   }
 
   @Computed get fullScreenOverlayActive(): boolean {
-    return this.chatOverlayActive || this.libraryDetailOpen || this.sessionSwitcherOpen
+    return this.chatOverlayActive || this.libraryDetailOpen
       || !!this.intake.pending || (this.call.phase !== 'idle' && this.call.expanded) || this.music.expanded;
   }
 
@@ -250,6 +248,13 @@ export struct XopcHomeView {
     return this.stackFor(this.selectedTab);
   }
 
+  private placeDestination(stack: NavPathStack, route: XopcMobileRoute, replace: boolean = false,
+    animated: boolean = true): void {
+    route.stackEntryId = ++this.nextStackEntryId;
+    if (replace) stack.replacePath({ name: route.page, param: route }, animated);
+    else stack.pushPath({ name: route.page, param: route }, animated);
+  }
+
   private updateTabStackMetrics(tab: XopcCoreMobileTab, stack: NavPathStack, topName: string): void {
     const depth = stack.size();
     const routes: XopcMobileRoute[] = [];
@@ -258,6 +263,9 @@ export struct XopcHomeView {
       if (param) routes.push(param);
     }
     this.tabNav.syncStack(tab, routes);
+    const entryId = routes[routes.length - 1]?.stackEntryId;
+    if (entryId === undefined) this.tabTopEntries.delete(tab);
+    else if (this.tabTopEntries.get(tab) !== entryId) this.tabTopEntries.set(tab, entryId);
     if (tab === 'ada') {
       this.adaDepth = depth;
       this.adaTopRoute = depth > 0 ? topName : '';
@@ -378,12 +386,12 @@ export struct XopcHomeView {
     this.workbenchTopRoute = '';
     this.notesTopRoute = '';
     this.libraryTopRoute = '';
+    this.tabTopEntries.clear();
     this.adaChatReady = false;
     this.adaConversationId = '';
     this.initialChatError = '';
     this.sessionChatId = '';
     this.projectConversationId = '';
-    this.sessionSwitcherOpen = false;
     this.personalReadTarget = undefined;
   }
 
@@ -409,15 +417,14 @@ export struct XopcHomeView {
 
   private handleBackPress(): boolean {
     const hasOverlay = this.layout.keyboardVisible
-      || this.sessionSwitcherOpen
       || (layoutState.dismissChatOverlay?.() ?? false)
       || this.collapseNotesRecording()
       || (this.selectedTab === 'conversations' && this.conversationsDepth === 0 && (this.conversationsBackHandler?.() ?? false))
+      || (this.selectedTab === 'notes' && this.notesDepth === 0 && (this.notesBackHandler?.() ?? false))
       || (this.selectedTab === 'library' && this.libraryDepth === 0 && (this.libraryBackHandler?.() ?? false))
       || (this.selectedTab === 'workbench' && this.workbenchDepth === 0 && (this.workbenchBackHandler?.() ?? false));
     if (hasOverlay) {
       if (this.layout.keyboardVisible) this.getUIContext().getFocusController().clearFocus();
-      if (this.sessionSwitcherOpen) this.sessionSwitcherOpen = false;
       return true;
     }
     this.tabNav.sidebarOpen = this.sidebarOpen || this.sidebarDragging;
@@ -476,7 +483,7 @@ export struct XopcHomeView {
     stack.clear(false);
     for (const item of plan.routes) {
       if (item.page === 'session-chat') this.sessionChatId = item.itemId;
-      stack.pushPath({ name: item.page, param: item }, false);
+      this.placeDestination(stack, item, false, false);
     }
   }
 
@@ -517,7 +524,7 @@ export struct XopcHomeView {
     }
     const transition = this.tabNav.pushOnActiveTab(route);
     if (transition.operation === 'push' && transition.route) {
-      this.stackFor(transition.tab).pushPath({ name: transition.route.page, param: transition.route });
+      this.placeDestination(this.stackFor(transition.tab), transition.route);
     } else if (transition.operation === 'pop') {
       this.stackFor(transition.tab).pop();
     }
@@ -528,7 +535,7 @@ export struct XopcHomeView {
     this.closeSidebar();
     const transition = this.tabNav.openSidebarLowFrequencyRoute(route);
     if (transition.route) {
-      this.stackFor(transition.tab).pushPath({ name: transition.route.page, param: transition.route });
+      this.placeDestination(this.stackFor(transition.tab), transition.route);
     }
   }
 
@@ -546,7 +553,7 @@ export struct XopcHomeView {
         || destination !== this.detailRoute || depth !== stack.size()) return;
       const target: XopcMobileRoute = { page: 'automation-configuration-chat', itemId: id, prompt: route.prompt };
       this.tabNav.pushOnTab(tab, target);
-      stack.pushPath({ name: target.page, param: target });
+      this.placeDestination(stack, target);
     } catch (error) {
       if (!this.disposed && revision === this.navigationRevision && tab === this.selectedTab
         && destination === this.detailRoute && depth === stack.size()) {
@@ -596,7 +603,7 @@ export struct XopcHomeView {
       };
       const transition = this.tabNav.pushOnTab(sourceTab, target);
       if (transition.operation === 'pop') stack.pop();
-      else if (transition.operation === 'push') stack.pushPath({ name: 'task-conversation', param: target });
+      else if (transition.operation === 'push') this.placeDestination(stack, target);
     } catch (error) {
       xopcToast(this.getUIContext(), userErrorMessage((error as Error).message, 'save'));
     } finally { this.taskOpening = false; }
@@ -771,31 +778,8 @@ export struct XopcHomeView {
     this.sessionChatId = id;
     this.sessionChatRequestRevision++;
     if (focusComposer) this.sessionChatFocusRevision++;
-    if (transition.operation === 'replace' && transition.route) {
-      this.conversationsStack.replacePath({ name: 'session-chat', param: transition.route }, !this.layout.reduceMotion);
-    } else if (transition.route) {
-      this.conversationsStack.pushPath({ name: 'session-chat', param: transition.route }, !this.layout.reduceMotion);
-    }
-  }
-
-  private switchSessionChatInPlace(id: string): void {
-    if (!id) return;
-    if (id === (this.personalAgent.record?.conversationId || this.adaConversationId)) {
-      this.sessionSwitcherOpen = false;
-      this.switchToAdaRoot();
-      return;
-    }
-    this.sessionSwitcherOpen = false;
-    this.navigationRevision++;
-    const transition = this.tabNav.switchSessionChatInPlace({ page: 'session-chat', itemId: id });
-    this.selectedTab = transition.tab;
-    this.sessionChatId = id;
-    this.sessionChatRequestRevision++;
-    const stack = this.stackFor(transition.tab);
-    if (transition.operation === 'replace' && transition.route) {
-      stack.replacePath({ name: 'session-chat', param: transition.route }, !this.layout.reduceMotion);
-    } else if (transition.route) {
-      stack.pushPath({ name: 'session-chat', param: transition.route }, !this.layout.reduceMotion);
+    if (transition.route) {
+      this.placeDestination(this.conversationsStack, transition.route, transition.operation === 'replace', !this.layout.reduceMotion);
     }
   }
 
@@ -820,7 +804,7 @@ export struct XopcHomeView {
     if (result.route) {
       this.sessionChatId = id;
       this.sessionChatRequestRevision++;
-      this.stackFor(result.tab).pushPath({ name: 'session-chat', param: result.route });
+      this.placeDestination(this.stackFor(result.tab), result.route);
     }
   }
 
@@ -831,7 +815,9 @@ export struct XopcHomeView {
       route.draftId = undefined;
     }
     this.tabNav.promoteSessionChatDraft(draftId, conversationId);
-    this.sessionChatId = conversationId;
+    if (!route || isActiveMobileDestination(this.selectedTab, this.tabTopEntries, route.stackEntryId)) {
+      this.sessionChatId = conversationId;
+    }
   }
 
   private onSessionChatUnavailable(id: string): void {
@@ -878,69 +864,6 @@ export struct XopcHomeView {
     if (!this.disposed && navigation === this.navigationRevision) this.openSessionChat(id);
   }
 
-  private openSessionSwitcher(): void {
-    this.sessionSwitcherOpen = true;
-    const cached = this.chatRepository.cachedRecent();
-    if (cached) {
-      this.switcherItems = cached.items.filter((item: XopcSessionItem): boolean =>
-        item.key !== this.personalAgent.record?.conversationId && item.status !== 'archived' && item.messageCount > 0);
-    }
-    this.switcherLoading = !this.switcherItems.length;
-    void this.chatRepository.refreshRecent().then((page): void => {
-      if (this.disposed) return;
-      this.switcherItems = page.items.filter((item: XopcSessionItem): boolean =>
-        item.key !== this.personalAgent.record?.conversationId && item.status !== 'archived' && item.messageCount > 0);
-    }).catch((): void => {}).finally((): void => { this.switcherLoading = false; });
-  }
-
-  @Builder
-  sessionSwitcherSheet() {
-    Column({ space: 8 }) {
-      XopcSheetHeader({
-        heading: $r('app.string.chat_switch_conversation'),
-        onClose: (): void => { this.sessionSwitcherOpen = false; },
-      })
-      Button({ type: ButtonType.Normal }) {
-        Row({ space: 10 }) {
-          SymbolGlyph($r('sys.symbol.square_and_pencil')).fontSize(18).fontColor([this.colors.accent])
-          Text($r('app.string.new_chat')).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
-            .layoutWeight(1).textAlign(TextAlign.Start)
-        }.width('100%').padding({ left: 14, right: 14 })
-      }.id('session-switcher-new').width('100%').height(48).backgroundColor(this.colors.accentSoft)
-        .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
-        .onClick((): void => {
-          this.sessionSwitcherOpen = false;
-          void this.openOrdinaryChat();
-        })
-      List({ space: 6 }) {
-        if (this.switcherLoading && !this.switcherItems.length) {
-          ListItem() { XopcListSkeleton() }
-        }
-        ForEach(this.switcherItems, (item: XopcSessionItem) => {
-          ListItem() {
-            Button({ type: ButtonType.Normal }) {
-              Row({ space: 10 }) {
-                Text(item.displayName || item.name || item.title || $r('app.string.untitled'))
-                  .fontSize(15)
-                  .fontWeight(item.key === this.sessionChatId ? FontWeight.Medium : FontWeight.Normal)
-                  .fontColor(item.key === this.sessionChatId ? this.colors.accent : this.colors.foreground)
-                  .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .textAlign(TextAlign.Start)
-                if (item.status === 'pinned') {
-                  SymbolGlyph($r('sys.symbol.pin')).fontSize(13).fontColor([this.colors.secondary])
-                }
-              }.width('100%').padding({ left: 14, right: 14 })
-            }.id('session-switcher-item-' + item.key).width('100%').constraintSize({ minHeight: 48 })
-              .backgroundColor(item.key === this.sessionChatId ? this.colors.active : this.colors.grouped)
-              .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
-              .onClick((): void => { this.switchSessionChatInPlace(item.key); })
-          }
-        }, (item: XopcSessionItem): string => item.key)
-      }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
-    }.id('session-switcher-sheet').width('100%').height('100%')
-      .padding({ left: 16, right: 16, bottom: 16 }).backgroundColor(this.colors.panel)
-  }
-
   @Builder
   destination(page: string, param: Object) {
     if (page === 'session-chat') {
@@ -953,10 +876,9 @@ export struct XopcHomeView {
           intakeText: (param as XopcMobileRoute).prompt ?? '',
           personalAgent: this.personalAgent.record,
           sessionChat: true,
-          activePage: this.detailRoute === 'session-chat',
+          activePage: isActiveMobileDestination(this.selectedTab, this.tabTopEntries, (param as XopcMobileRoute).stackEntryId),
           bottomChromeInset: 0,
           onSessionClose: (): void => { this.popActiveStack(); },
-          onOpenSessionSwitcher: (): void => { this.openSessionSwitcher(); },
           onNewOrdinaryChat: (): void => { void this.openOrdinaryChat(); },
           onOpenPersonalAgent: (): void => { this.switchToAdaRoot(); },
           onLocalChatCreated: (id: string): void => {
@@ -969,7 +891,9 @@ export struct XopcHomeView {
             if (route.itemId && route.itemId !== id) {
               this.promoteSessionChatDraft(route.itemId, id, route);
             }
-            this.sessionChatId = id;
+            if (isActiveMobileDestination(this.selectedTab, this.tabTopEntries, route.stackEntryId)) {
+              this.sessionChatId = id;
+            }
           },
         })
       }.hideTitleBar(true).onBackPressed((): boolean => {
@@ -1030,9 +954,11 @@ export struct XopcHomeView {
           recordingAvailable: this.recordingAvailable,
           initialStatus: page === 'inbox' ? 'inbox' : '',
           onExit: (): void => { this.popActiveStack(); },
+          onBackHandler: (handler?: () => boolean): void => { this.notesListBackHandler = handler; },
           onStartVoice: (): void => { void this.startNoteCapture(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
-      }.hideTitleBar(true).backgroundColor(this.colors.surface).onBackPressed((): boolean => this.collapseNotesRecording())
+      }.hideTitleBar(true).backgroundColor(this.colors.surface)
+        .onBackPressed((): boolean => this.collapseNotesRecording() || (this.notesListBackHandler?.() ?? false))
     } else if (page === 'personal-goals') {
       NavDestination() {
         XopcPersonalGoalsView({ onExit: (): void => { this.popActiveStack(); } })
@@ -1072,7 +998,8 @@ export struct XopcHomeView {
           XopcPageHeader({ heading: $r('app.string.automation_setup_title'), backVisible: true,
             onBack: (): void => { this.popActiveStack(); } })
           XopcChatView({ requestedId: (param as XopcMobileRoute).itemId, embedded: true, automationSetup: true,
-            activePage: this.detailRoute === 'automation-configuration-chat' && this.layout.foreground,
+            activePage: isActiveMobileDestination(this.selectedTab, this.tabTopEntries, (param as XopcMobileRoute).stackEntryId)
+              && this.layout.foreground,
             intakeText: (param as XopcMobileRoute).prompt ?? '', intakeRevision: 1,
             onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
             .width('100%').layoutWeight(1)
@@ -1084,7 +1011,8 @@ export struct XopcHomeView {
     } else if (page === 'project-chat') {
       NavDestination() {
         XopcChatView({ requestedId: (param as XopcMobileRoute).itemId,
-          activePage: this.detailRoute === 'project-chat', projectChat: true,
+          activePage: isActiveMobileDestination(this.selectedTab, this.tabTopEntries, (param as XopcMobileRoute).stackEntryId),
+          projectChat: true,
           scopedProjectName: (param as XopcMobileRoute).title ?? '',
           onProjectClose: (): void => { this.closeProjectChat(); },
           onOpenSidebar: (): void => { this.openSidebar(); },
@@ -1098,7 +1026,9 @@ export struct XopcHomeView {
     } else if (page === 'task-conversation') {
       NavDestination() {
         XopcChatView({ requestedId: (param as XopcMobileRoute).prompt ?? '',
-          taskId: (param as XopcMobileRoute).itemId, activePage: this.detailRoute === 'task-conversation', embedded: false,
+          taskId: (param as XopcMobileRoute).itemId,
+          activePage: isActiveMobileDestination(this.selectedTab, this.tabTopEntries, (param as XopcMobileRoute).stackEntryId),
+          embedded: false,
           onTaskClose: (): void => { this.popActiveStack(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
       }.hideTitleBar(true).onBackPressed((): boolean => { if (layoutState.dismissChatOverlay?.()) return true; this.popActiveStack(); return true; })
@@ -1289,6 +1219,7 @@ export struct XopcHomeView {
         scrollTopRevision: this.notesScrollRevision,
         recordingAvailable: this.recordingAvailable,
         onOpenSidebar: (): void => { this.openSidebar(); },
+        onBackHandler: (handler?: () => boolean): void => { this.notesBackHandler = handler; },
         onStartVoice: (): void => { void this.startNoteCapture(); },
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
       })
@@ -1428,9 +1359,6 @@ export struct XopcHomeView {
           this.navigate({ page: 'notes', itemId: noteId });
         },
       })
-
-      Column().width('100%').height(0)
-        .bindSheet($$this.sessionSwitcherOpen, this.sessionSwitcherSheet, xopcSheetOptions('medium'))
     }.width('100%').height('100%')
       .onAreaChange((_previous: Area, current: Area): void => {
         this.recordingViewportWidth = Number(current.width);

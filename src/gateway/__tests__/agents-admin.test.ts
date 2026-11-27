@@ -159,17 +159,29 @@ describe('agents admin', () => {
     ]);
   });
 
-  it('ignores workspace overrides when creating a Codex agent and prevents setting it as default', async () => {
+  it('preserves workspace overrides and defaults for external agents while preventing setting as default', async () => {
+    const customWorkspace = join(stateDir, 'custom-codex-workspace');
     const created = await createGatewayAgent({
       id: 'codex-helper',
-      workspace: '/tmp/should-be-ignored',
+      workspace: customWorkspace,
       execution: { kind: 'codex' },
       profile: { name: 'Codex Helper' },
     });
     expect(created.ok).toBe(true);
     const stored = new AgentCatalogRepository().get('codex-helper');
     expect(stored?.execution).toEqual({ kind: 'codex' });
-    expect(stored?.workspace).toBeUndefined();
+    expect(stored?.workspace).toBe(customWorkspace);
+    if (created.ok) expect(created.data.workspace).toBe(customWorkspace);
+
+    const autoWorkspaceAgent = await createGatewayAgent({
+      id: 'codex-auto',
+      execution: { kind: 'codex' },
+      profile: { name: 'Codex Auto' },
+    });
+    expect(autoWorkspaceAgent.ok).toBe(true);
+    if (autoWorkspaceAgent.ok) {
+      expect(autoWorkspaceAgent.data.workspace).toBe(join(stateDir, 'workspace-codex-auto'));
+    }
 
     const setDefaultRes = await updateGatewayAgent('codex-helper', { setDefault: true });
     expect(setDefaultRes).toEqual({
