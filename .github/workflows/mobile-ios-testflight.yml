@@ -87,11 +87,14 @@ jobs:
         run: git diff --exit-code -- apps/mobile-ios/XopcMobile.xcodeproj/project.pbxproj
       - name: Run unit tests
         working-directory: apps/mobile-ios
+        env:
+          # Match the simulator runtime installed on the macos-26 image.
+          DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
         run: |
           xcodebuild \
             -project XopcMobile.xcodeproj \
             -scheme XopcMobile \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
             -only-testing:XopcMobileTests \
             CODE_SIGNING_ALLOWED=NO \
             test
