@@ -1385,9 +1385,17 @@ export struct XopcChatView {
           .onClick((): void => { this.send(); })
       }
       if (this.chat.runId) {
-        Button({ type: ButtonType.Circle }) { Text('■').fontSize(18).fontColor(this.colors.chat.onAction) }
+        Button({ type: ButtonType.Circle }) {
+          if (this.chat.stopping) {
+            LoadingProgress().width(18).height(18).color(this.colors.chat.onAction)
+          } else {
+            Text('■').fontSize(18).fontColor(this.colors.chat.onAction)
+          }
+        }
           .id('chat-stop').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
-          .backgroundColor(this.colors.chat.action).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
+          .backgroundColor(this.colors.chat.action).opacity(this.chat.stopping ? 0.6 : 1)
+          .enabled(!this.chat.stopping)
+          .responseRegion({ x: -4, y: -4, width: 44, height: 44 })
           .accessibilityText($r('app.string.stop')).onClick((): void => { this.chat.abort(); })
       }
     }

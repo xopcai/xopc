@@ -30,8 +30,22 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
         400,
       );
     }
-    const result = await service.abortAgentRun(runId);
-    return c.json({ ok: true, payload: result });
+    const abortPromise = service.abortAgentRun(runId);
+    const STOP_HTTP_WAIT_MS = 1_500;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const outcome = await Promise.race([
+      abortPromise.then((result) => ({ done: true as const, result })),
+      new Promise<{ done: false }>((resolve) => {
+        timer = setTimeout(() => resolve({ done: false }), STOP_HTTP_WAIT_MS);
+        timer.unref();
+      }),
+    ]);
+    if (timer) clearTimeout(timer);
+    if (!outcome.done) {
+      void abortPromise.catch(() => {});
+      return c.json({ ok: true, payload: { aborted: true, idle: false } }, 202);
+    }
+    return c.json({ ok: true, payload: outcome.result });
   });
 
   authenticated.get('/api/sessions/:conversationId/input-state', (c) => {

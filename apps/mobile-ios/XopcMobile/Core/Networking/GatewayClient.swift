@@ -35,7 +35,8 @@ protocol GatewayServing: Sendable {
         clientMessageID: String
     ) async throws -> SessionCommandResult
     func fetchActiveRun(conversationID: String) async throws -> ActiveRun
-    func abort(runID: String) async throws
+    @discardableResult
+    func abort(runID: String) async throws -> AbortResult
     func streamRun(runID: String) -> AsyncThrowingStream<RunStreamEvent, Error>
     func streamTaskResults(conversationID: String) -> AsyncThrowingStream<RunStreamEvent, Error>
     func renameConversation(id: String, name: String) async throws
@@ -316,7 +317,8 @@ struct GatewayClient: GatewayServing, Sendable {
         return run
     }
 
-    func abort(runID: String) async throws {
+    @discardableResult
+    func abort(runID: String) async throws -> AbortResult {
         let body = try encoder.encode(AbortCommand(runId: runID))
         let envelope: GatewayEnvelope<AbortResult> = try await request(
             path: "/api/agent/abort",
@@ -326,6 +328,7 @@ struct GatewayClient: GatewayServing, Sendable {
         guard envelope.isSuccessful else {
             throw GatewayClientError.server(envelope.error?.message ?? "无法停止执行")
         }
+        return envelope.payload ?? AbortResult(aborted: true, idle: true)
     }
 
     func streamTaskResults(conversationID: String) -> AsyncThrowingStream<RunStreamEvent, Error> {

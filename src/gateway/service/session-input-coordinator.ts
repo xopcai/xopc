@@ -155,6 +155,7 @@ export class SessionInputCoordinator {
   private readonly draining = new Set<string>();
   private readonly submissionTails = new Map<string, Promise<void>>();
   private readonly pendingConnectionStops = new Set<string>();
+  private readonly activeRunSettlements = new Map<string, Promise<void>>();
 
   constructor(private readonly deps: {
     prioritizeInput?: (input: SubmitSessionInput) => boolean;
@@ -226,7 +227,28 @@ export class SessionInputCoordinator {
     if (accepted.runId) {
       // Keep the durable stop fence if cancellation fails. Retrying the same operation
       // must never capture or cancel a later run.
-      await this.deps.interrupt?.(conversationId, accepted.runId, 'user_stop');
+      const runId = accepted.runId;
+      const settled = this.activeRunSettlements.get(runId);
+      const cancellation = Promise.resolve(this.deps.interrupt?.(conversationId, runId, 'user_stop'))
+        .then(async () => {
+          if (settled) await settled;
+        });
+      const STOP_HTTP_WAIT_MS = 1_500;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timedOut = await Promise.race([
+        cancellation.then(() => false),
+        new Promise<boolean>(resolve => {
+          timer = setTimeout(() => resolve(true), STOP_HTTP_WAIT_MS);
+          timer.unref();
+        }),
+      ]);
+      if (timer) clearTimeout(timer);
+      if (timedOut) {
+        void cancellation.catch(err => {
+          log.warn({ err, conversationId, runId }, 'Background session stop failed');
+        });
+        return this.publish(conversationId);
+      }
     }
     if ((command.action === 'resume' || command.action === 'send') && !accepted.replay) void this.drain(conversationId);
     return this.publish(conversationId);
@@ -752,46 +774,53 @@ export class SessionInputCoordinator {
         }
         if (input.kind === 'connection_resume') publishConnectionWait(conversationId);
         this.publish(conversationId);
-        let result: { status: string; summary: string };
+        let settleRun!: () => void;
+        this.activeRunSettlements.set(runId, new Promise<void>(resolve => { settleRun = resolve; }));
         try {
-          result = input.payload?.connectionAction ? await this.executeConnectionControl(input) : await this.deps.execute({
-            inputReceivedAtMs: input.createdAtMs,
-            inputIdentity: { inputId: input.id, clientMessageId: input.clientMessageId },
-            runId,
-            taskRunId: input.taskRunId,
-            conversationId,
-            content: input.content,
-            attachments: input.attachments as UserTurnAttachment[] | undefined,
-            sourceContexts: input.contextSnapshots,
-            thinking: input.thinking,
-            origin: input.origin,
-          });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          result = { status: 'error', summary: message };
-          log.warn({ err: error, conversationId, runId, inputId: input.id }, 'Session input execution failed');
-        }
-        const cancelledWait = input.kind === 'connection_resume' && input.payload ? getConnectionWait(input.payload.waitId) : undefined;
-        const cancelled = cancelledWait?.resolution === 'cancelled' && cancelledWait.objectiveRevision === input.payload?.objectiveRevision;
-        if (cancelled && input.taskRunId) {
-          const runs = new TaskRunRepository();
-          const run = runs.get(input.taskRunId);
-          if (run && ['queued', 'running', 'waiting', 'verifying'].includes(run.status)) {
-            new TaskApplicationService().completeRun({ runId: run.id, expectedRunVersion: run.version,
-              actor: { kind: 'user' }, terminalCode: 'cancelled_by_user', suppressAttention: true,
-              receipt: { status: 'cancelled', summary: 'Connection objective cancelled', changes: [], evidence: [],
-                verification: { status: 'unverified', checks: [] }, remainingWork: [], needsUser: false, completionVerdict: 'not_achieved' } });
+          let result: { status: string; summary: string };
+          try {
+            result = input.payload?.connectionAction ? await this.executeConnectionControl(input) : await this.deps.execute({
+              inputReceivedAtMs: input.createdAtMs,
+              inputIdentity: { inputId: input.id, clientMessageId: input.clientMessageId },
+              runId,
+              taskRunId: input.taskRunId,
+              conversationId,
+              content: input.content,
+              attachments: input.attachments as UserTurnAttachment[] | undefined,
+              sourceContexts: input.contextSnapshots,
+              thinking: input.thinking,
+              origin: input.origin,
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            result = { status: 'error', summary: message };
+            log.warn({ err: error, conversationId, runId, inputId: input.id }, 'Session input execution failed');
           }
+          const cancelledWait = input.kind === 'connection_resume' && input.payload ? getConnectionWait(input.payload.waitId) : undefined;
+          const cancelled = cancelledWait?.resolution === 'cancelled' && cancelledWait.objectiveRevision === input.payload?.objectiveRevision;
+          if (cancelled && input.taskRunId) {
+            const runs = new TaskRunRepository();
+            const run = runs.get(input.taskRunId);
+            if (run && ['queued', 'running', 'waiting', 'verifying'].includes(run.status)) {
+              new TaskApplicationService().completeRun({ runId: run.id, expectedRunVersion: run.version,
+                actor: { kind: 'user' }, terminalCode: 'cancelled_by_user', suppressAttention: true,
+                receipt: { status: 'cancelled', summary: 'Connection objective cancelled', changes: [], evidence: [],
+                  verification: { status: 'unverified', checks: [] }, remainingWork: [], needsUser: false, completionVerdict: 'not_achieved' } });
+            }
+          }
+          const terminal = cancelled ? 'cancelled' : result.status === 'suspended' ? 'suspended' : result.status === 'ok'
+            ? 'completed'
+            : result.status === 'aborted'
+              ? 'cancelled'
+              : 'failed';
+          finishSessionInputRun(conversationId, runId, terminal, terminal === 'failed' ? result.summary : undefined);
+          finishPhoneAssistance(input, terminal === 'completed');
+          finishBrowserAssistance(input, terminal === 'completed');
+          this.publish(conversationId);
+        } finally {
+          this.activeRunSettlements.delete(runId);
+          settleRun();
         }
-        const terminal = cancelled ? 'cancelled' : result.status === 'suspended' ? 'suspended' : result.status === 'ok'
-          ? 'completed'
-          : result.status === 'aborted'
-            ? 'cancelled'
-            : 'failed';
-        finishSessionInputRun(conversationId, runId, terminal, terminal === 'failed' ? result.summary : undefined);
-        finishPhoneAssistance(input, terminal === 'completed');
-        finishBrowserAssistance(input, terminal === 'completed');
-        this.publish(conversationId);
       }
     } finally {
       this.draining.delete(conversationId);

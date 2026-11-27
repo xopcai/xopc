@@ -308,7 +308,8 @@ private struct StreamingGatewayStub: GatewayServing {
         ActiveRun(active: false, runId: nil)
     }
 
-    func abort(runID _: String) async throws {}
+    @discardableResult
+    func abort(runID _: String) async throws -> AbortResult { AbortResult(aborted: true, idle: true) }
 
     func streamRun(runID _: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
         AsyncThrowingStream { continuation in

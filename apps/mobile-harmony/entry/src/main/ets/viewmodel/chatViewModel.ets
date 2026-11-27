@@ -47,6 +47,7 @@ export class XopcChatViewModel {
   @Trace loading: boolean = false;
   @Trace cachedHistory: boolean = false;
   @Trace sending: boolean = false;
+  @Trace stopping: boolean = false;
   @Trace error: string = '';
   @Trace connection: string = 'connecting';
   @Trace connectionNotice: string = '';
@@ -234,7 +235,7 @@ export class XopcChatViewModel {
     this.selection++; this.historyRequest++; this.olderPending = false;
     this.clearAcceptedSuggestion();
     this.observeNextTurnSuggestion('');
-    this.selectedId = id; this.rows = []; this.runId = ''; this.streaming = ''; this.thinking = ''; this.tool = '';
+    this.selectedId = id; this.rows = []; this.runId = ''; this.stopping = false; this.streaming = ''; this.thinking = ''; this.tool = '';
     this.liveReaction = undefined; this.animatedReactionEntry = ''; this.firstAnswerRun = '';
     this.reactionsAvailable = undefined; this.reactionsAllowed = true;
     this.liveRow = undefined; this.liveActivityRow = undefined; this.historyMessages = []; this.rows = this.pendingRows();
@@ -756,7 +757,7 @@ export class XopcChatViewModel {
     if (event.event === 'run_end') {
       this.completedActivityRunId = this.runId;
       this.liveRow = reduceChatStream(this.liveRow || this.liveActivityRow, event.event, payload, this.runId);
-      this.trackRun(''); this.streaming = ''; this.thinking = ''; this.tool = '';
+      this.trackRun(''); this.stopping = false; this.streaming = ''; this.thinking = ''; this.tool = '';
       this.auxiliaryRevision++;
       this.snapshotMode = true;
       void this.refreshCompletedHistory(this.completedActivityRunId);
@@ -764,7 +765,7 @@ export class XopcChatViewModel {
       this.error = payload.message ?? 'RUN_FAILED';
       this.liveRow = reduceChatStream(this.liveRow || this.liveActivityRow, event.event, payload, this.runId);
       this.liveActivityRow = undefined;
-      this.trackRun(''); this.streaming = ''; this.thinking = ''; this.tool = '';
+      this.trackRun(''); this.stopping = false; this.streaming = ''; this.thinking = ''; this.tool = '';
       this.auxiliaryRevision++;
     }
     else if (this.snapshotMode) {
@@ -798,7 +799,33 @@ export class XopcChatViewModel {
   }
 
   async abort(): Promise<void> {
-    try { if (this.runId) await this.repository.abort(this.runId); await this.recover(); }
-    catch (error) { this.error = (error as Error).message; }
+    const targetRunId = this.runId;
+    if (!targetRunId || this.stopping) return;
+    const selection = this.selection;
+    this.flushStream();
+    this.stopping = true;
+    try {
+      const idle = await this.repository.abort(targetRunId);
+      if (this.disposed || this.selection !== selection) return;
+      if (this.runId !== targetRunId) {
+        this.stopping = false;
+        return;
+      }
+      if (idle) {
+        this.completedActivityRunId = targetRunId;
+        this.trackRun(''); this.stopping = false; this.streaming = ''; this.thinking = ''; this.tool = '';
+        this.auxiliaryRevision++;
+        this.snapshotMode = true;
+        void this.refreshCompletedHistory(targetRunId);
+      } else if (this.connection !== 'connected') {
+        await this.recover();
+        if (!this.disposed && this.selection === selection) this.stopping = false;
+      }
+    } catch (error) {
+      if (!this.disposed && this.selection === selection) {
+        this.stopping = false;
+        this.error = (error as Error).message;
+      }
+    }
   }
 }

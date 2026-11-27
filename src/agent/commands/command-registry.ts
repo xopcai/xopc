@@ -142,7 +142,7 @@ export class CommandRegistry {
         clearTimeout(timer); input.signal?.removeEventListener('abort', abort);
         if (containerCleanup) await containerCleanup;
         // Wait for the completion snapshot before publishing terminal evidence.
-        if (input.snapshot) result.endRevision = await readWorkspaceRevision(input.cwd);
+        if (input.snapshot && result.status === 'running') result.endRevision = await readWorkspaceRevision(input.cwd);
         if (result.status === 'running') result.status = processResult.exitCode === 0 ? 'success' : 'failed';
         result.exitCode = processResult.exitCode; result.durationMs = Date.now() - result.createdAtMs;
         try { this.persist(input.owner, result); } catch { result.logTruncated = true; }

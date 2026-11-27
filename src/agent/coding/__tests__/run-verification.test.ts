@@ -82,6 +82,21 @@ describe('coding verification', () => {
     } as unknown as AfterToolCallContext);
     expect((result.result.details as any).verification.status).toBe('unverified');
   });
+
+  it('skips workspace snapshot in afterTool when aborted', async () => {
+    const snapshot = vi.fn().mockResolvedValue('initial');
+    const run = new RunVerification(snapshot);
+    await run.beforeTool('cmd', 'exec_command');
+    expect(snapshot).toHaveBeenCalledTimes(1);
+    const controller = new AbortController();
+    controller.abort();
+    const result = await run.afterTool({
+      toolCall: { id: 'cmd', name: 'exec_command' }, args: { cmd: 'sleep 10' }, isError: true,
+      result: { content: [], details: { status: 'cancelled' } },
+    } as unknown as AfterToolCallContext, controller.signal);
+    expect(snapshot).toHaveBeenCalledTimes(1);
+    expect(result.isError).toBe(true);
+  });
 });
 
 describe('proportionate runtime verification', () => {

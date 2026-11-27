@@ -1465,6 +1465,7 @@ struct AssistantView<Dock: View>: View {
             canStartVoiceCall: canStartRealtimeVoice,
             onStartVoiceCall: { startRealtimeVoice() },
             isRunActive: state.isRunActive,
+            isStopping: state.isStopping,
             onInputFocusChanged: onInputFocusChanged,
             onStop: {
                 Task { await state.stop(using: GatewayClient(configuration: configuration)) }

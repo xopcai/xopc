@@ -486,4 +486,46 @@ Use it.
     ]);
     rmSync(root, { recursive: true, force: true });
   });
+
+  it('parses frontmatter category, merged tags, and markdown headings outside code fences', () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-skills-meta-'));
+    const skillDir = join(root, 'release-guard');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      `---
+name: release-guard
+description: Validate release checklists.
+tags:
+  - release
+metadata:
+  hermes:
+    category: devops
+    tags:
+      - ci
+      - release
+---
+
+# Release Guard
+
+\`\`\`markdown
+# Not A Heading
+\`\`\`
+
+## Canary Verification
+
+### Rollback Triggers
+`,
+    );
+
+    const result = loadTestSkills({ globalDir: root });
+    const loaded = result.skills.find((skill) => skill.name === 'release-guard');
+
+    expect(loaded).toMatchObject({
+      category: 'devops',
+      tags: ['release', 'ci'],
+      headings: ['Release Guard', 'Canary Verification', 'Rollback Triggers'],
+    });
+    rmSync(root, { recursive: true, force: true });
+  });
 });

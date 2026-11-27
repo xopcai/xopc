@@ -35,7 +35,11 @@ export function spawnProcess(spec: ProcessSpec): ProcessHandle {
     terminationRequested = true;
     timedOut = reason === 'timed_out';
     aborted = reason === 'cancelled';
-    void terminateProcess(child, { tree: spec.terminationPolicy === 'tree', detached });
+    void terminateProcess(child, {
+      tree: spec.terminationPolicy === 'tree',
+      detached,
+      ...(reason === 'cancelled' ? { graceMs: 500 } : {}),
+    });
   };
 
   const abort = () => terminate('cancelled');

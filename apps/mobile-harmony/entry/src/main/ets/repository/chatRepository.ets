@@ -31,6 +31,7 @@ interface XopcTaskConversationResult { ok: boolean; conversationId: string; }
 interface XopcTaskInputState { activeRunId?: string; }
 interface XopcTaskInputPayload { conversationId?: string; state?: XopcTaskInputState; }
 interface XopcTaskInputResponse { ok: boolean; payload?: XopcTaskInputPayload; }
+interface XopcAbortResult { aborted?: boolean; idle?: boolean; }
 interface XopcRecentConversationPage extends XopcSessionList { nextOffset: number | null; }
 
 let recentLoad: Promise<XopcRecentConversationPage> | undefined;
@@ -511,9 +512,15 @@ export class XopcChatRepository {
     if (!result.payload?.state) throw new Error('INVALID_INPUT_RESPONSE');
     return result.payload.state.activeRunId ?? '';
   }
-  async abort(runId: string): Promise<void> {
+  async abort(runId: string): Promise<boolean> {
     const body: XopcAbort = { runId };
-    await gatewaySession.request('/api/agent/abort', 'POST', JSON.stringify(body));
+    const raw = await gatewaySession.request('/api/agent/abort', 'POST', JSON.stringify(body));
+    try {
+      const parsed = JSON.parse(raw) as XopcPayload<XopcAbortResult>;
+      return parsed.payload?.idle !== false;
+    } catch (_) {
+      return true;
+    }
   }
   private removeCachedRecent(id: string): void {
     const profile = gatewaySession.currentProfile();

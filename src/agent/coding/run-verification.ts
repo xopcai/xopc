@@ -126,11 +126,11 @@ export class RunVerification {
     this.before.set(toolCallId, revision);
   }
 
-  async afterTool(context: AfterToolCallContext): Promise<{ result: AgentToolResult<unknown>; isError: boolean }> {
+  async afterTool(context: AfterToolCallContext, signal?: AbortSignal): Promise<{ result: AgentToolResult<unknown>; isError: boolean }> {
     const { toolCall, args, result } = context;
     const before = this.before.get(toolCall.id);
     this.before.delete(toolCall.id);
-    const revision = READ_ONLY_TOOLS.has(toolCall.name) ? this.revision : await this.snapshot();
+    const revision = signal?.aborted || READ_ONLY_TOOLS.has(toolCall.name) ? this.revision : await this.snapshot();
     const details = record(result.details);
     const isError = toolResultFailed(result, context.isError);
     const mutation = toolCall.name === 'apply_patch' || toolCall.name === 'write_file';

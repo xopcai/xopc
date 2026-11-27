@@ -84,7 +84,8 @@ describe('durable session input control', () => {
     enqueue('first'); enqueue('next');
     const drain = service.drain(id);
     await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
-    await service.control(id, command('stop'));
+    const stopped = await service.control(id, command('stop'));
+    expect(stopped.control).toMatchObject({ paused: true, phase: 'idle' });
     await drain;
     expect(execute).toHaveBeenCalledOnce();
     expect(getSessionInputState(id).inputs).toMatchObject([{ id: 'next', status: 'queued' }]);

@@ -11,11 +11,30 @@ import { truncateHead, formatSize, DEFAULT_MAX_BYTES } from './truncate.js';
 
 const DEFAULT_MAX_LINES = 500;
 const DEFAULT_MAX_SKILL_FILE_BYTES = 1_048_576;
+const DEFAULT_SKILLS_LIST_LIMIT = 20;
+const MAX_SKILLS_LIST_LIMIT = 50;
+const MAX_LIST_DESCRIPTION_CHARS = 200;
 
 const SkillsListSchema = Type.Object({
   query: Type.Optional(
     Type.String({
-      description: 'Optional case-insensitive substring filter on skill name and description',
+      description:
+        'Optional search keywords or natural-language query across skill name, category, tags, descriptions (en/zh-CN), and headings',
+    }),
+  ),
+  category: Type.Optional(
+    Type.String({
+      description: 'Optional category filter (e.g. "devops", "writing", or "uncategorized")',
+    }),
+  ),
+  limit: Type.Optional(
+    Type.Number({
+      description: `Max skills to return (default ${DEFAULT_SKILLS_LIST_LIMIT}, max ${MAX_SKILLS_LIST_LIMIT})`,
+    }),
+  ),
+  offset: Type.Optional(
+    Type.Number({
+      description: 'Pagination offset (default 0)',
     }),
   ),
 });
@@ -48,12 +67,18 @@ function maxSkillBytes(): number {
   return typeof lim === 'number' && lim > 0 ? lim : DEFAULT_MAX_SKILL_FILE_BYTES;
 }
 
+function compactDescription(text: string): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= MAX_LIST_DESCRIPTION_CHARS) return normalized;
+  return `${normalized.slice(0, MAX_LIST_DESCRIPTION_CHARS - 1).trimEnd()}…`;
+}
+
 export function createSkillsListTool(deps: SkillsToolsDeps): AgentTool {
   return {
     name: 'skills_list',
     label: '📚 Skills',
     description:
-      'List available skills (name and description only). Use skill_view(name) to load SKILL.md or a file under references/, templates/, scripts/, or assets/.',
+      'Search or browse available skills (name, category, and short description; supports keywords, category filter, and pagination). Use skill_view(name) to load SKILL.md or a file under references/, templates/, scripts/, or assets/.',
     parameters: SkillsListSchema,
     async execute(
       _toolCallId: string,
@@ -74,24 +99,39 @@ export function createSkillsListTool(deps: SkillsToolsDeps): AgentTool {
       });
       const projectId = deps.getProjectId?.();
       skills = skills.filter(skill => !skill.origin.projectId || skill.origin.projectId === projectId);
-      const q = (params as { query?: string }).query?.trim().toLowerCase();
-      if (q) {
-        skills = skills.filter(
-          (s) =>
-            s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
-        );
-      }
+
+      const input = (params ?? {}) as {
+        query?: string;
+        category?: string;
+        limit?: number;
+        offset?: number;
+      };
+      const result = mgr.searchSkills(skills, {
+        query: input.query,
+        category: input.category,
+        limit: input.limit ?? DEFAULT_SKILLS_LIST_LIMIT,
+        offset: input.offset ?? 0,
+      });
 
       const payload = {
-        skills: skills.map((s) => ({
-          name: s.name,
-          description: s.description,
-          source: s.source,
+        total: result.total,
+        returned: result.returned,
+        offset: result.offset,
+        hasMore: result.hasMore,
+        ...(result.categories.length > 0 && (!input.query?.trim() || result.hasMore)
+          ? { categories: result.categories }
+          : {}),
+        skills: result.hits.map(({ skill, matchedOn }) => ({
+          name: skill.name,
+          ...(skill.category ? { category: skill.category } : {}),
+          description: compactDescription(skill.description),
+          source: skill.source,
+          ...(matchedOn.length > 0 ? { matchedOn } : {}),
         })),
       };
 
       return {
-        content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
+        content: [{ type: 'text', text: JSON.stringify(payload) }],
         details: {},
       };
     },

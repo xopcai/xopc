@@ -349,7 +349,24 @@ async function* runProcessDirectStreamingInner(
   let slashCommandMetadata: Record<string, unknown> | undefined;
   const slashTraceRows: ReviewTraceContextEntry[] = [];
 
+  const armAbort = () => {
+    if (abortHandled) {
+      return;
+    }
+    abortHandled = true;
+    userAborted = true;
+    void abortEmbeddedRun(conversationId);
+    queue.close();
+  };
+
   const taskPromise = (async () => {
+    if (signal) {
+      if (signal.aborted) {
+        armAbort();
+        return;
+      }
+      signal.addEventListener('abort', armAbort, { once: true });
+    }
     try {
       const cfg = deps.getConfig();
       let turnBody = input.content;
@@ -361,6 +378,7 @@ async function* runProcessDirectStreamingInner(
           body: input.content,
           resetSession: deps.resetSession,
         });
+        if (signal?.aborted) return;
         resetTriggeredAtInit = turn.resetTriggered;
         if (turn.bareReset && turn.ackMessage) {
           ranSlashCommand = true;
@@ -384,6 +402,7 @@ async function* runProcessDirectStreamingInner(
       }
 
       await hydratePerTurnState(deps, conversationId, input.thinking);
+      if (signal?.aborted) return;
       {
         const defReason = channel === 'webchat'
           ? resolveConfiguredActivityDetailDefault(cfg)
@@ -392,9 +411,11 @@ async function* runProcessDirectStreamingInner(
       }
 
       const prepared = await deps.prepareInboundAttachments(conversationId, input.attachments);
+      if (signal?.aborted) return;
 
       const sttCfg = mergeSttConfigFromAppConfig(deps.getConfig()?.tools?.media?.audio, deps.getConfig()?.tools?.media);
       const voiceMerge = await mergeVoiceTranscriptsIntoUserText(prepared, turnBody, sttCfg);
+      if (signal?.aborted) return;
       mergedUserText = voiceMerge.text;
       inboundVoice = voiceMerge.inboundVoice;
       const suppressMediaPromptUris = requestsOriginalVoiceInspection(mergedUserText)
@@ -418,32 +439,17 @@ async function* runProcessDirectStreamingInner(
         });
       }
 
-      const armAbort = () => {
-        if (abortHandled) {
-          return;
-        }
-        abortHandled = true;
-        userAborted = true;
-        void abortEmbeddedRun(conversationId);
-        queue.close();
-      };
-      if (signal) {
-        if (signal.aborted) {
-          armAbort();
-          return;
-        }
-        signal.addEventListener('abort', armAbort, { once: true });
-      }
-
       const turnSourceContexts = input.sourceContexts ?? [];
       const sourceContexts = [...turnSourceContexts];
       if (deps.sourceContextResolver) {
         const metadata = await deps.sessionStore.getMetadata(conversationId).catch(() => null);
+        if (signal?.aborted) return;
         const sourceBinding = metadata?.customData && typeof metadata.customData === 'object'
           ? (metadata.customData as Record<string, unknown>).sourceBinding
           : undefined;
         if (isSessionSourceBinding(sourceBinding)) {
           const sourceContext = await deps.sourceContextResolver(sourceBinding, conversationId);
+          if (signal?.aborted) return;
           if (sourceContext && !sourceContexts.some(
             (context) => context.kind === sourceContext.kind && context.sourceId === sourceContext.sourceId,
           )) {
@@ -514,6 +520,7 @@ async function* runProcessDirectStreamingInner(
         conversationId,
         { suppressMediaPromptUris },
       );
+      if (signal?.aborted) return;
       let userMessage: TranscriptUserMessage = userTurnDocument
         ? {
             ...builtUserMessage,
@@ -622,6 +629,7 @@ async function* runProcessDirectStreamingInner(
         pushVisible({ type: 'error', content: formatStreamError(em) });
       }
     } finally {
+      signal?.removeEventListener('abort', armAbort);
       if (queue.droppedCount > 0) {
         deps.log.warn(
           { conversationId, droppedEvents: queue.droppedCount },

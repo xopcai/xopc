@@ -60,6 +60,10 @@ export interface SkillMetadata {
   name: string;
   /** Skill description (from frontmatter) */
   description: string;
+  /** Optional category from frontmatter / metadata */
+  category?: string;
+  /** Optional discovery tags from frontmatter / metadata */
+  tags?: string[];
   /** Emoji icon for UI */
   emoji?: string;
   /** Homepage URL */
@@ -73,6 +77,8 @@ export interface SkillMetadata {
   /** xopc-specific metadata (for future extensions) */
   xopc?: {
     emoji?: string;
+    category?: string;
+    tags?: string[];
     requires?: SkillRequires;
     install?: SkillInstallSpec[];
     os?: Array<'darwin' | 'linux' | 'win32'>;
@@ -88,9 +94,15 @@ export interface SkillMetadata {
 // Skill Configuration
 // ============================================================================
 
+export type SkillExposure = 'inline' | 'deferred';
+
 export interface SkillConfig {
   /** Whether the skill is enabled */
   enabled?: boolean;
+  /** Prompt exposure mode: 'inline' (default) enters prompt catalog; 'deferred' is discoverable via skills_list only */
+  exposure?: SkillExposure;
+  /** Pin this skill near the front of the inline prompt catalog */
+  pinned?: boolean;
   /** API key for the skill */
   apiKey?: string;
   /** Environment variables */
@@ -146,10 +158,12 @@ export interface SkillsLimitsConfig {
   maxCandidatesPerRoot?: number;
   /** Max number of skills to load per source */
   maxSkillsLoadedPerSource?: number;
-  /** Max number of skills to include in prompt */
+  /** Max number of skills to include in prompt (default: 50) */
   maxSkillsInPrompt?: number;
-  /** Max characters for skills prompt */
+  /** Max characters for skills prompt (default: 12000) */
   maxSkillsPromptChars?: number;
+  /** Max characters per skill description in prompt catalog (default: 180) */
+  maxDescriptionCharsInPrompt?: number;
   /** Max size (bytes) for SKILL.md file */
   maxSkillFileBytes?: number;
 }
@@ -185,8 +199,12 @@ export interface Skill {
   description: string;
   /** Optional user-facing translations from SKILL.md metadata.i18n. */
   localizations?: SkillLocalizations;
-  /** Category derived from parent directory (e.g. skills/creative/theme-factory → 'creative') */
+  /** Category derived from frontmatter or parent directory (e.g. skills/creative/theme-factory → 'creative') */
   category?: string;
+  /** Optional discovery tags from frontmatter / metadata */
+  tags?: string[];
+  /** Extracted Markdown H1-H3 headings from SKILL.md body (used for local search indexing) */
+  headings?: string[];
   /** Path to SKILL.md file */
   filePath: string;
   /** Base directory of the skill */

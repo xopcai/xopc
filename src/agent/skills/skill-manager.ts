@@ -10,6 +10,11 @@ import { resolveBundledSkillsDir, resolveStateDir } from '../../config/paths.js'
 import { createLogger } from '../../utils/logger.js';
 import { createSkillConfigManager, isSkillEnabled } from './config.js';
 import { formatSkillsForPrompt, selectSkillsVisibleInPrompt } from './format-skills-prompt.js';
+import {
+  SkillSearchIndex,
+  type SkillSearchOptions,
+  type SkillSearchResult,
+} from './skill-search.js';
 import type {
   LoadSkillsResult,
   Skill,
@@ -39,6 +44,8 @@ export class SkillManager {
   private workspace: string;
   private bundledSkillsDir: string;
   private version = 0;
+  private searchIndex?: SkillSearchIndex;
+  private searchIndexVersion = -1;
   private pluginRevision = '';
   private loadedAt = 0;
   private reloadInProgress = false;
@@ -260,6 +267,19 @@ export class SkillManager {
       }
     }
     return [...activeCapabilities];
+  }
+
+  /**
+   * Search a visible subset of skills using the cached bilingual BM25 index.
+   */
+  searchSkills(visibleSkills: Skill[], options: SkillSearchOptions = {}): SkillSearchResult {
+    this.refreshPlugins();
+    if (!this.searchIndex || this.searchIndexVersion !== this.version) {
+      this.searchIndex = new SkillSearchIndex(this.skills);
+      this.searchIndexVersion = this.version;
+    }
+    const skillsConfig = options.skillsConfig ?? createSkillConfigManager(resolveStateDir()).load();
+    return this.searchIndex.search(visibleSkills, { ...options, skillsConfig });
   }
 
   /**

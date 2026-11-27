@@ -446,6 +446,10 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       transcriptId: transcriptRuntime.transcriptId,
       runId,
     });
+    if (runLease.signal.aborted || params.abortSignal?.aborted) {
+      const reason = runLease.signal.aborted ? runLease.signal.reason : params.abortSignal?.reason;
+      return { ok: false, retryable: false, terminationReason: resolveAgentAbortReason(reason), errorMessage: 'aborted' };
+    }
     const instructionsStartedAt = performance.now();
     const instructions = await RepositoryInstructions.open(workspaceDir, { isWorkspaceTrusted: params.isWorkspaceTrusted });
     const rootInstructions = await instructions.load('.', true);
@@ -897,7 +901,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       }
       return decision;
     };
-    const hostAfterTool: NonNullable<typeof nativeAfterTool> = async (context) => {
+    const hostAfterTool: NonNullable<typeof nativeAfterTool> = async (context, signal) => {
       phoneStopped ||= isPhoneAssistanceSuspended(conversationId, runId);
       if (phoneStopped && context.toolCall.name === 'phone_use') {
         const details = context.result.details as { message?: string } | undefined;
@@ -910,9 +914,12 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       }
       connectionStopped ||= isConnectionSuspended(conversationId, runId);
       clarificationStopped ||= isClarificationSuspended(conversationId, runId);
-      const scoped = context.toolCall.name === 'read_file' ? await instructions.forTool(context.toolCall.name, context.args)
-        : context.toolCall.name === 'data_batch' ? await instructions.forDataResult(context.result.content) : '';
-      const checked = await verification.afterTool(context);
+      const effectiveSignal = signal?.aborted ? signal : runAbortSignal;
+      const scoped = effectiveSignal.aborted
+        ? ''
+        : context.toolCall.name === 'read_file' ? await instructions.forTool(context.toolCall.name, context.args)
+          : context.toolCall.name === 'data_batch' ? await instructions.forDataResult(context.result.content) : '';
+      const checked = await verification.afterTool(context, effectiveSignal);
       if (scoped && context.toolCall.name === 'data_batch') {
         checked.result = { content: [{ type: 'text', text: `${scoped}\n\nNew directory instructions were discovered. Apply them before retrying the affected data queries; this result is not evidence of a complete search.` }], details: { status: 'retry_required' } };
       } else if (scoped) checked.result.content.unshift({ type: 'text', text: scoped });
@@ -1184,14 +1191,16 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
           }
           // One bounded continuation closes accidental early completion without
           // forcing impossible checks or bypassing user cancellation and budgets.
-          const pending = await verification.pendingContext();
-          if ((params.verifyChanges ?? false) && pending && !policyStopped && !runAbortSignal.aborted
+          if ((params.verifyChanges ?? false) && !policyStopped && !runAbortSignal.aborted
             && !isAssistantTurnFailed(session.agent) && !isAssistantTurnAborted(session.agent)) {
-            await session.sendCustomMessage({
-              customType: 'coding_verification', content: pending, display: false,
-            }, { triggerTurn: true });
-            await session.agent.waitForIdle();
-            await recoverSettledTurn();
+            const pending = await verification.pendingContext();
+            if (pending && !runAbortSignal.aborted) {
+              await session.sendCustomMessage({
+                customType: 'coding_verification', content: pending, display: false,
+              }, { triggerTurn: true });
+              await session.agent.waitForIdle();
+              await recoverSettledTurn();
+            }
           }
         }),
         timeoutMs,
@@ -1228,7 +1237,8 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (clarificationStopped) runner.piSm.appendCustomEntry('clarification_required', { runId, conversationId });
       runner.piSm.appendCustomEntry('coding_verification', {
         runId, workspace: workspaceDir, required: params.verifyChanges ?? false,
-        workspaceSnapshotStarted: verification.workspaceSnapshotStarted, ...await verification.summary(),
+        workspaceSnapshotStarted: verification.workspaceSnapshotStarted,
+        ...(runAbortSignal.aborted ? verification.capturedSummary() : await verification.summary()),
       });
 
       if (runAbortSignal.aborted) {

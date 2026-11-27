@@ -45,9 +45,13 @@ export function buildExternalMemorySection(text: string | undefined): string {
 export function buildSkillsSection(toolNames: string[]): string {
   const view = toolNames.find(name => name.trim().toLowerCase() === 'skill_view')?.trim();
   if (!view) return '';
+  const list = toolNames.find(name => name.trim().toLowerCase() === 'skills_list')?.trim();
+  const discoveryLine = list
+    ? `Scan <available_skills> descriptions before replying. Load the most specific applicable skill with ${view}(name); if <more_skills> indicates omitted skills and none shown applies, search with ${list}(query) first. Load no skill when none applies, and at most one up front.`
+    : `Scan <available_skills> descriptions before replying. Load the most specific applicable skill with ${view}(name); load no skill when none applies, and at most one up front.`;
   return [
     '## Skills (mandatory)',
-    `Scan <available_skills> descriptions before replying. Load the most specific applicable skill with ${view}(name); load no skill when none applies, and at most one up front.`,
+    discoveryLine,
     'Follow its procedures within the authorized task. For external writes, batch requests, serialize bursts, and respect 429/Retry-After.',
   ].join('\n');
 }

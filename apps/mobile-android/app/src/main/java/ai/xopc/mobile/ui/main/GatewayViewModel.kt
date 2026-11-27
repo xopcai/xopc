@@ -2962,7 +2962,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       "run_end" -> {
         refreshClarification()
         realtime.watchRun(null)
-        mutableState.update { it.copy(activeRunId = null,
+        mutableState.update { it.copy(activeRunId = null, stoppingRun = false, stopError = false,
           runProgress = it.runProgress.copy(status = event.status ?: "success")) }
         refreshSelectedHistory(current.selectedConversationId)
         refreshRunState(current.selectedConversationId)
@@ -5267,11 +5267,23 @@ class GatewayViewModel internal constructor(application: Application, private va
     mutableState.update { it.copy(stoppingRun = true, stopError = false) }
     viewModelScope.launch {
       try {
-        runInterruptible(Dispatchers.IO) { conversations.abortRun(runId) }
-        if (mutableState.value.selectedConversationId == id) {
-          mutableState.update { it.copy(runProgress = it.runProgress.forRun(runId).copy(status = "cancelled")) }
-          refreshRunState(id)
-          refreshSelectedHistory(id)
+        val idle = runInterruptible(Dispatchers.IO) { conversations.abortRun(runId) }
+        val latest = mutableState.value
+        if (latest.selectedConversationId == id) {
+          if (latest.activeRunId != runId) {
+            // Terminal stream event already settled this run.
+            mutableState.update { it.copy(stoppingRun = false, stopError = false) }
+          } else if (idle) {
+            realtime.watchRun(null)
+            mutableState.update {
+              it.copy(activeRunId = null, stoppingRun = false, stopError = false,
+                runProgress = it.runProgress.forRun(runId).copy(status = "cancelled"))
+            }
+            refreshSelectedHistory(id)
+          } else {
+            mutableState.update { it.copy(runProgress = it.runProgress.forRun(runId).copy(status = "cancelled")) }
+            if (latest.realtimeStatus != "connected") refreshRunState(id)
+          }
         }
       } catch (error: CancellationException) {
         throw error

@@ -189,6 +189,10 @@ export function useChatFollowUpClarify(options: {
   const [control, setControl] = useState<SessionInputControlView>(() => readInputControl(conversationId ?? ''));
   const [controlPending, setControlPending] = useState(false);
   const controlPendingRef = useRef(false);
+  const stopWaitersRef = useRef<Set<() => void>>(new Set());
+  const wakeStopWaiters = useCallback(() => {
+    for (const wake of stopWaitersRef.current) wake();
+  }, []);
   const editingFollowUpIdRef = useRef<string | null>(null);
   const revisionRef = useRef(-1);
   const [queueEmpty, setQueueEmpty] = useState(false);
@@ -208,6 +212,7 @@ export function useChatFollowUpClarify(options: {
     if (state.control) {
       if (!rememberInputControl(state.conversationId as string, state.control, state.revision)) return;
       setControl(state.control);
+      wakeStopWaiters();
     }
     const rows = projectVisiblePendingFollowUps({
       control: state.control,
@@ -230,7 +235,7 @@ export function useChatFollowUpClarify(options: {
     pendingFollowUpsRef.current = rows;
     setPendingFollowUps(rows);
 
-  }, [conversationIdRef]);
+  }, [conversationIdRef, wakeStopWaiters]);
 
   const refreshState = useCallback(async (key: string) => {
     if (key !== conversationIdRef.current) return;
@@ -257,6 +262,7 @@ export function useChatFollowUpClarify(options: {
   }, [captureScope, conversationIdRef]);
 
   useLayoutEffect(() => {
+    wakeStopWaiters();
     revisionRef.current = -1;
     setQueueEmpty(false);
     emptyResumeAttemptRef.current = null;
@@ -270,7 +276,7 @@ export function useChatFollowUpClarify(options: {
     setPendingFollowUps([]);
     setEditingFollowUpId(null);
     setClarifyPrompt(null);
-  }, [conversationId, gatewayIdentity]);
+  }, [conversationId, gatewayIdentity, wakeStopWaiters]);
 
   useEffect(() => {
     if (!conversationId || conversationId !== decodedKey) return;
@@ -442,9 +448,23 @@ export function useChatFollowUpClarify(options: {
         const deadline = Date.now() + 15_000;
         while (readInputControl(key).phase === 'stopping') {
           assertScope();
-          if (Date.now() >= deadline) throw new Error('Stop is awaiting confirmation');
-          await new Promise(resolve => setTimeout(resolve, 100));
-          await refreshState(key);
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) throw new Error('Stop is awaiting confirmation');
+          const woken = await new Promise<boolean>(resolve => {
+            let done = false;
+            const finish = (fromEvent: boolean) => {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              stopWaitersRef.current.delete(wake);
+              resolve(fromEvent);
+            };
+            const wake = () => finish(true);
+            const timer = setTimeout(() => finish(false), Math.min(250, remaining));
+            stopWaitersRef.current.add(wake);
+          });
+          assertScope();
+          if (!woken && readInputControl(key).phase === 'stopping') await refreshState(key);
         }
       }
       assertScope();

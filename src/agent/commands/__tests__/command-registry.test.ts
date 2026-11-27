@@ -50,4 +50,24 @@ it('redacts secrets before streaming or persisting command output', async () => 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it('skips completion workspace snapshot when a running command is cancelled', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'commands-cancel-'));
+  const registry = new CommandRegistry(root);
+  try {
+    const started = await registry.start({
+      owner: 'cancel-owner',
+      command: `${JSON.stringify(process.execPath)} -e "setInterval(() => {}, 1000)"`,
+      cwd: root,
+      env: process.env,
+      timeoutMs: 10_000,
+      snapshot: true,
+    });
+    const cancelled = await registry.cancel('cancel-owner', started.id);
+    expect(cancelled?.status).toBe('cancelled');
+    expect(cancelled?.endRevision).toBeUndefined();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 useTestDatabase();

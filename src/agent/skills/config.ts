@@ -32,6 +32,8 @@ export function resolveSkillConfig(
   const entryConfig = skillsConfig?.entries?.[skill.name];
   if (entryConfig) {
     config.enabled = entryConfig.enabled;
+    config.exposure = entryConfig.exposure;
+    config.pinned = entryConfig.pinned;
     config.apiKey = entryConfig.apiKey;
     config.env = entryConfig.env ? { ...entryConfig.env } : undefined;
     config.config = entryConfig.config ? { ...entryConfig.config } : undefined;
@@ -323,11 +325,24 @@ export function validateSkillConfig(config: SkillsConfig): {
     if (limits.maxSkillsPromptChars !== undefined && limits.maxSkillsPromptChars < 128) {
       errors.push('limits.maxSkillsPromptChars must be at least 128');
     }
+    if (limits.maxDescriptionCharsInPrompt !== undefined && limits.maxDescriptionCharsInPrompt < 20) {
+      errors.push('limits.maxDescriptionCharsInPrompt must be at least 20');
+    }
   }
 
   // Validate entries
   if (config.entries) {
     for (const [skillName, skillConfig] of Object.entries(config.entries)) {
+      if (
+        skillConfig.exposure !== undefined &&
+        skillConfig.exposure !== 'inline' &&
+        skillConfig.exposure !== 'deferred'
+      ) {
+        errors.push(`entries.${skillName}.exposure must be "inline" or "deferred"`);
+      }
+      if (skillConfig.pinned !== undefined && typeof skillConfig.pinned !== 'boolean') {
+        errors.push(`entries.${skillName}.pinned must be a boolean`);
+      }
       if (skillConfig.apiKey && typeof skillConfig.apiKey !== 'string') {
         errors.push(`entries.${skillName}.apiKey must be a string`);
       }

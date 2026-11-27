@@ -33,6 +33,7 @@ struct AssistantComposer: View {
     var canStartVoiceCall = false
     var onStartVoiceCall: (() -> Void)?
     let isRunActive: Bool
+    var isStopping = false
     let onInputFocusChanged: (Bool) -> Void
     let onStop: () -> Void
     let onSend: () -> Void
@@ -245,12 +246,19 @@ struct AssistantComposer: View {
 
             if isRunActive {
                 Button(action: onStop) {
-                    Image(systemName: "stop.fill")
-                        .font(.callout)
-                        .frame(width: 40, height: 44)
+                    if isStopping {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 40, height: 44)
+                    } else {
+                        Image(systemName: "stop.fill")
+                            .font(.callout)
+                            .frame(width: 40, height: 44)
+                    }
                 }
+                .disabled(isStopping)
                 .foregroundStyle(mobileTheme.danger)
-                .accessibilityLabel("停止")
+                .accessibilityLabel(isStopping ? "正在停止" : "停止")
             }
 
             Button {

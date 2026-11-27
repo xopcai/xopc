@@ -19,6 +19,7 @@ final class AssistantState {
     private(set) var messages: [TimelineMessage] = []
     private(set) var isLoadingHistory = false
     private(set) var isSending = false
+    private(set) var isStopping = false
     private(set) var runID: String?
     private(set) var musicJobsRevision = 0
     private(set) var suggestionRevision = 0
@@ -313,6 +314,7 @@ final class AssistantState {
 
     private func cancelRunObservation() {
         flushStream()
+        isStopping = false
         runGeneration += 1
         runObservation?.cancel()
         runObservation = nil
@@ -479,6 +481,7 @@ final class AssistantState {
             streamGap = false
             messages = streamBuffer.finish(messages)
             self.runID = nil
+            self.isStopping = false
         }
         if event.name == "error" {
             errorMessage = event.errorMessage ?? AppLocalization.resolve("助手执行失败")
@@ -528,15 +531,27 @@ final class AssistantState {
 
     func stop(using gateway: any GatewayServing) async {
         flushStream()
-        guard let runID else { return }
+        guard !isStopping, let targetRunID = runID else { return }
+        isStopping = true
         do {
-            try await gateway.abort(runID: runID)
-            runProgress.begin(runID)
+            let result = try await gateway.abort(runID: targetRunID)
+            guard runID == targetRunID else {
+                isStopping = false
+                return
+            }
+            runProgress.begin(targetRunID)
             runProgress.status = "cancelled"
-            pauseConversation()
-            self.runID = nil
-            isSending = false
+            if result.idle || runObservation == nil {
+                cancelRunObservation()
+                self.runID = nil
+                activityLabel = nil
+                isSending = false
+                isStopping = false
+            }
         } catch {
+            if runID == targetRunID || runID == nil {
+                isStopping = false
+            }
             errorMessage = error.localizedDescription
         }
     }

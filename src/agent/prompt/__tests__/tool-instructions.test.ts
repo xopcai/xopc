@@ -24,6 +24,9 @@ describe('prompt tool capability boundaries', () => {
     expect(prompt).toContain('## Skills (mandatory)');
     expect(prompt).toContain('skill_view(name)');
     expect(prompt).not.toContain('skills_list');
+
+    const withList = buildSystemPrompt('/ws', { toolNames: ['skill_view', 'skills_list'] });
+    expect(withList).toContain('skills_list(query)');
   });
 
   it('retains exact tool names in capability-specific instructions', () => {

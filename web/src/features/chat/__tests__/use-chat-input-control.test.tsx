@@ -261,4 +261,32 @@ describe('unified input editing', () => {
     expect(hook.composerMode.kind).toBe('compose');
   });
 
+  it('wakes stopSession immediately from realtime session-input-state without fallback polling', async () => {
+    state = { ...state, activeRunId: 'active', revision: 1,
+      control: { version: 0, paused: false, phase: 'running', reviewRequired: false } };
+    rememberInputControl(id, state.control, 1);
+    const original = vi.mocked(apiFetch).getMockImplementation()!;
+    let inputStateGets = 0;
+    vi.mocked(apiFetch).mockImplementation(async (url, init) => {
+      if (String(url).endsWith('/input-state')) inputStateGets += 1;
+      if (String(url).endsWith('/input-control')) {
+        state = { ...state, revision: 2, control: { version: 1, paused: true, phase: 'stopping', reviewRequired: false } };
+        return Response.json({ payload: state }, { status: 202 });
+      }
+      return original(url, init);
+    });
+    let settled = false;
+    const stopping = hook.stopSession().then(() => { settled = true; });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(settled).toBe(false);
+    expect(inputStateGets).toBe(0);
+    state = { ...state, activeRunId: undefined, revision: 3, control: { version: 1, paused: true, phase: 'idle', reviewRequired: false } };
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('session-input-state', { detail: state }));
+      await stopping;
+    });
+    expect(settled).toBe(true);
+    expect(inputStateGets).toBe(0);
+  });
+
 });

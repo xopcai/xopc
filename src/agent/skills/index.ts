@@ -259,6 +259,35 @@ function discoverAndMergeSkills(
   };
 }
 
+const MAX_EXTRACTED_HEADINGS = 12;
+
+function extractSkillHeadings(content: string): string[] | undefined {
+  const headings: string[] = [];
+  let inFence = false;
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const trimmed = rawLine.trim();
+    if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+
+    const match = trimmed.match(/^#{1,3}\s+(.+?)\s*#*$/);
+    if (!match) continue;
+    const cleaned = match[1]
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/[*_`~]/g, '')
+      .trim();
+    if (cleaned) {
+      headings.push(cleaned);
+      if (headings.length >= MAX_EXTRACTED_HEADINGS) break;
+    }
+  }
+
+  return headings.length > 0 ? headings : undefined;
+}
+
 function deriveDescriptionFromMarkdown(content: string): string | undefined {
   let fallbackHeading = '';
 
@@ -337,6 +366,8 @@ function loadSkillFromFile(
     const metadata = parseSkillMetadata(frontmatter);
     metadata.name ||= name;
     metadata.description ||= description.trim();
+    const resolvedCategory = metadata.category ?? category;
+    const headings = extractSkillHeadings(content);
     const localized = parseSkillLocalizations(frontmatter);
     const toolConditions = parseSkillToolConditions(frontmatter);
     const requiredEnvVarNames = parseRequiredEnvVarNames(frontmatter);
@@ -346,7 +377,9 @@ function loadSkillFromFile(
         name,
         description: description.trim(),
         ...(localized.localizations ? { localizations: localized.localizations } : {}),
-        category,
+        ...(resolvedCategory ? { category: resolvedCategory } : {}),
+        ...(metadata.tags?.length ? { tags: metadata.tags } : {}),
+        ...(headings ? { headings } : {}),
         filePath,
         baseDir: skillDir,
         source: source.scope,

@@ -292,10 +292,13 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
       };
     }
     const workspaceDir = agentManager.getResolvedWorkspaceForSession(conversationId);
+    if (supervisor.signal.aborted) return await finish({ ok: false, errorMessage: 'aborted' });
     if (executionToolPolicy.externalMaterialization) {
       tools.push(...await materializeNativeExternalTools({ conversationId, tools }));
+      if (supervisor.signal.aborted) return await finish({ ok: false, errorMessage: 'aborted' });
     }
     const preparedMcp = config && executionToolPolicy.nativeMcp ? await prepareNativeMcpConfig(config, workspaceDir, resolveEffectiveAgentProfileForSession(conversationId).agentId) : undefined;
+    if (supervisor.signal.aborted) return await finish({ ok: false, errorMessage: 'aborted' });
     if (source && !preparedMcp) throw new Error('The bound MCP source cannot be loaded.');
     const mcp = preparedMcp ? restrictAutomationMcpConfig(runId, conversationId, preparedMcp) : undefined;
     if (mcp && config) mcp.assertPluginCallAccess = origin => assertPluginMcpCallAccess(config, workspaceDir, origin);

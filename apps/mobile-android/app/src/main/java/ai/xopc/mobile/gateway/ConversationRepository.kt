@@ -844,10 +844,11 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     gateway.request("/api/sessions/${encode(suggestion.conversationId)}/next-turn-suggestion-feedback", "POST", body.toString())
   }
 
-  fun abortRun(runId: String) {
+  fun abortRun(runId: String): Boolean {
     require(runId.isNotBlank()) { "INVALID_RUN_ID" }
     val response = JSONObject(gateway.request("/api/agent/abort", "POST", JSONObject().put("runId", runId).toString()))
     require(response.optBoolean("ok") && response.has("payload")) { "RUN_ABORT_FAILED" }
+    return response.optJSONObject("payload")?.optBoolean("idle", true) ?: true
   }
 
   /** Replays the same command identity after an uncertain transport result. */

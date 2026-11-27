@@ -42,16 +42,48 @@ export function parseSkillLocalizations(
     : { warning: 'metadata.i18n has no supported locales' };
 }
 
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function mergeTags(...lists: Array<string[] | undefined>): string[] | undefined {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const list of lists) {
+    if (!list) continue;
+    for (const item of list) {
+      const key = item.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 /**
  * Maps SKILL.md YAML frontmatter to {@link SkillMetadata} (Hermes / xopc shapes).
  */
 export function parseSkillMetadata(frontmatter: Record<string, unknown>): SkillMetadata {
   const meta = frontmatter.metadata as Record<string, unknown> | undefined;
   const xopcMeta = meta?.xopc as Record<string, unknown> | undefined;
+  const hermesMeta = meta?.hermes as Record<string, unknown> | undefined;
+
+  const category =
+    nonEmptyString(xopcMeta?.category) ||
+    nonEmptyString(hermesMeta?.category) ||
+    nonEmptyString(frontmatter.category);
+  const tags = mergeTags(
+    stringList(frontmatter.tags),
+    stringList(hermesMeta?.tags),
+    stringList(xopcMeta?.tags),
+  );
 
   const metadata: SkillMetadata = {
     name: (frontmatter.name as string) || '',
     description: (frontmatter.description as string) || '',
+    ...(category ? { category } : {}),
+    ...(tags ? { tags } : {}),
     emoji: (xopcMeta?.emoji as string) || (frontmatter.emoji as string) || undefined,
     homepage: (frontmatter.homepage as string) || undefined,
     os:
@@ -67,6 +99,8 @@ export function parseSkillMetadata(frontmatter: Record<string, unknown>): SkillM
   if (xopcMeta) {
     metadata.xopc = {
       emoji: xopcMeta.emoji as string | undefined,
+      category: nonEmptyString(xopcMeta.category),
+      tags: stringList(xopcMeta.tags),
       requires: xopcMeta.requires as SkillRequires | undefined,
       install: xopcMeta.install as SkillInstallSpec[] | undefined,
       os: xopcMeta.os as Array<'darwin' | 'linux' | 'win32'> | undefined,

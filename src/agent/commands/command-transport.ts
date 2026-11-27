@@ -30,10 +30,10 @@ export async function startCommandTransport(input: {
     });
     return { completion, write(text, end) { if (closed) return false; child.write(text + (end ? '\x04' : '')); return true; },
       resize(cols, rows) { if (!closed) child.resize(cols, rows); },
-      stop() {
+      stop(reason) {
         if (closed) return;
         const kill = (signal: string) => { try { if (process.platform !== 'win32') process.kill(-child.pid, signal as NodeJS.Signals); else child.kill(signal); } catch { try { child.kill(signal); } catch {} } };
-        kill('SIGTERM'); killTimer = setTimeout(() => { if (!closed) kill('SIGKILL'); }, 1500); killTimer.unref();
+        kill('SIGTERM'); killTimer = setTimeout(() => { if (!closed) kill('SIGKILL'); }, reason === 'cancelled' ? 500 : 1500); killTimer.unref();
       } };
   }
   const handle = spawnProcess({ program: input.program, args: input.args, shell: input.shell, cwd: input.cwd, env: input.env,
