@@ -69,7 +69,13 @@ function renderNote(content: string, preview = false) {
       {preview ? <NoteMarkdownView content={content} /> : <BlockEditor initialContent={content} onChange={onChange} />}
     </MemoryRouter>,
   ));
-  cleanups.push(() => { root.unmount(); container.remove(); });
+  cleanups.push(() => {
+    const editor = container.querySelector<HTMLElement & { editor?: Editor }>('.ProseMirror')?.editor;
+    root.unmount();
+    // Tiptap schedules destruction after unmount, which can outlive the jsdom environment.
+    if (editor && !editor.isDestroyed) editor.destroy();
+    container.remove();
+  });
   return { container, onChange };
 }
 
