@@ -4,10 +4,11 @@ import { voiceCallPreferencesSchema } from '@xopcai/realtime-protocol/voice';
 
 export const DEFAULT_AGENT_MODEL_REF = 'xopc-cloud/auto';
 export const DEFAULT_CORE_SKILLS = [
-  'doc-coauthoring',
+  'chat-charts',
+  'configure-xopc',
   'define-task',
+  'doc-coauthoring',
   'find-skills',
-  'summarize',
 ] as const;
 
 export const DEFAULT_SKILL_POLICY = {

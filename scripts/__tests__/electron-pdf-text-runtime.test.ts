@@ -28,6 +28,33 @@ function pdfFixture(contents: string) {
   return `${pdf}xref\n0 7\n0000000000 65535 f \n${offsets.slice(1).map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
 }
 
+function multiPagePdfFixture(pages: string[]) {
+  const fontObj = 3;
+  const pageCount = pages.length;
+  const kids = pages.map((_, idx) => `${fontObj + 1 + idx * 2} 0 R`).join(' ');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${kids}] /Count ${pageCount} >>`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  pages.forEach((text, idx) => {
+    const contentObj = fontObj + 2 + idx * 2;
+    const stream = `BT /F1 12 Tf 72 720 Td (${text}) Tj ET`;
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontObj} 0 R >> >> /Contents ${contentObj} 0 R >>`,
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    );
+  });
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(pdf);
+  return `${pdf}xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.slice(1).map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+}
+
 it('extracts PDF text in the packaged worker without Canvas or browser globals', async () => {
   const root = process.cwd();
   const dir = mkdtempSync(join(tmpdir(), 'xopc-pdf-text-runtime-'));
@@ -52,7 +79,12 @@ it('extracts PDF text in the packaged worker without Canvas or browser globals',
     delete env.NODE_PATH;
     delete env.NODE_OPTIONS;
     const run = (path: string) => spawnSync(process.execPath, [join(dir, 'check.mjs'), path], { encoding: 'utf8', timeout: 30_000, env });
-    const result = run(join(root, 'skills/creative/theme-factory/theme-showcase.pdf'));
+    const multiPage = join(dir, 'multi-page.pdf');
+    writeFileSync(
+      multiPage,
+      multiPagePdfFixture(Array.from({ length: 10 }, (_, idx) => (idx === 0 ? 'Ocean Depths' : `Sample Page ${idx + 1}`))),
+    );
+    const result = run(multiPage);
     expect(result.status, result.stderr).toBe(0);
     const extracted = JSON.parse(result.stdout.split('RESULT:')[1]!);
     expect(extracted.unsupported).toBe(false);

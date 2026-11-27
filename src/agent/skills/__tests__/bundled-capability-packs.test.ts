@@ -31,12 +31,17 @@ describe('bundled capability packs', () => {
     const byName = new Map(result.skills.map((skill) => [skill.name, skill]));
 
     expect([...byName.keys()]).toEqual(expect.arrayContaining([
-      'define-task',
+      'build-xopc-local-app',
+      'chat-charts',
       'configure-xopc',
-      'pdf',
-      'docx',
-      'pptx',
+      'define-task',
       'doc-coauthoring',
+      'docx',
+      'find-skills',
+      'hatch-pet',
+      'pdf',
+      'pptx',
+      'xlsx',
     ]));
     expect(byName.get('configure-xopc')?.toolConditions?.requiresTools).toEqual(['xopc_use', 'tool_manual']);
     expect(byName.get('pdf')?.toolConditions?.requiresTools).toEqual([
@@ -59,8 +64,19 @@ describe('bundled capability packs', () => {
     expect(byName.get('build-xopc-local-app')?.metadata.xopc?.activatesCapabilities).toEqual([
       'extension-authoring',
     ]);
-    expect(byName.has('algorithmic-art')).toBe(false);
-    expect(byName.has('design-recurring-work')).toBe(false);
+    for (const removed of [
+      'algorithmic-art',
+      'design-recurring-work',
+      'diagnose',
+      'frontend-design',
+      'github',
+      'summarize',
+      'tdd',
+      'theme-factory',
+      'webapp-testing',
+    ]) {
+      expect(byName.has(removed)).toBe(false);
+    }
   });
 
   it('ships a provenance notice without restricted reference material', () => {
@@ -68,6 +84,7 @@ describe('bundled capability packs', () => {
 
     expect(existsSync(notice)).toBe(true);
     expect(readFileSync(notice, 'utf8')).toContain('clean-room');
+    expect(existsSync(join(bundledSkillsDir, 'documents/xlsx/LICENSE.txt'))).toBe(false);
   });
 
   it('ships executable resources and references alongside the capability packs', () => {
@@ -78,6 +95,9 @@ describe('bundled capability packs', () => {
       'documents/docx/scripts/render_docx.py',
       'documents/pptx/scripts/inspect_ooxml.py',
       'documents/pptx/scripts/render_pptx.py',
+      'documents/xlsx/scripts/inspect_xlsx.py',
+      'documents/xlsx/scripts/render_xlsx.py',
+      'documents/xlsx/references/qa-checklist.md',
       'engineering/define-task/references/task-contract-rubric.md',
     ];
 

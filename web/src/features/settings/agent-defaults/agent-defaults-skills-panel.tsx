@@ -12,34 +12,30 @@ function unique(values: string[]): string[] {
   return [...new Set(values)].sort();
 }
 
+const CORE_SKILL_NAMES = ['chat-charts', 'configure-xopc', 'define-task', 'doc-coauthoring', 'find-skills'] as const;
+
 const SKILL_PRESETS = [
   {
     id: 'core',
-    names: ['doc-coauthoring', 'define-task', 'find-skills', 'summarize'],
+    names: [...CORE_SKILL_NAMES],
     en: 'Core',
     zh: '核心',
   },
   {
     id: 'office',
-    names: ['doc-coauthoring', 'define-task', 'find-skills', 'summarize', 'docx', 'pdf', 'pptx', 'xlsx'],
+    names: [...CORE_SKILL_NAMES, 'docx', 'pdf', 'pptx', 'xlsx'],
     en: 'Office',
     zh: '办公成果',
   },
   {
     id: 'local-app',
-    names: ['doc-coauthoring', 'define-task', 'find-skills', 'summarize', 'build-xopc-local-app', 'frontend-design', 'theme-factory'],
+    names: [...CORE_SKILL_NAMES, 'build-xopc-local-app'],
     en: 'Local App',
     zh: '本地应用',
   },
   {
-    id: 'developer',
-    names: ['doc-coauthoring', 'define-task', 'find-skills', 'summarize', 'diagnose', 'github', 'tdd', 'webapp-testing'],
-    en: 'Developer',
-    zh: '开发者',
-  },
-  {
     id: 'desktop-pet',
-    names: ['doc-coauthoring', 'define-task', 'find-skills', 'summarize', 'hatch-pet'],
+    names: [...CORE_SKILL_NAMES, 'hatch-pet'],
     en: 'Desktop Pet',
     zh: '桌面宠物',
   },
