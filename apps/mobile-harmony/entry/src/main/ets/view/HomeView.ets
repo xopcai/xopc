@@ -1317,7 +1317,7 @@ export struct XopcHomeView {
             onNew: (): void => { void this.openOrdinaryChat(); },
             onNavigate: (route: XopcMobileRoute): void => { this.openSidebarRoute(route); },
           })
-        }.width('100%').height('100%').zIndex(45)
+        }.width('100%').height(LayoutPolicy.matchParent).zIndex(45)
           .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP])
       }
 

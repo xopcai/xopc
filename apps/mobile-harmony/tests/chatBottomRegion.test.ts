@@ -135,6 +135,9 @@ describe('chat bottom region composition', () => {
 
   it('keeps the bottom surface flush with the app safe-area edge', () => {
     expect(home).toMatch(/\.height\(LayoutPolicy\.matchParent\)\s+\.ignoreLayoutSafeArea\(\[LayoutSafeAreaType\.SYSTEM\], \[LayoutSafeAreaEdge\.TOP\]\)/);
+    const sidebarStart = home.indexOf('XopcChatSidebar({');
+    const sidebarOverlay = home.slice(sidebarStart, home.indexOf('if (this.recordingAvailable', sidebarStart));
+    expect(sidebarOverlay).toMatch(/\.width\('100%'\)\.height\(LayoutPolicy\.matchParent\)\.zIndex\(45\)\s+\.ignoreLayoutSafeArea\(\[LayoutSafeAreaType\.SYSTEM\], \[LayoutSafeAreaEdge\.TOP\]\)/);
     expect(chat).toContain(".margin({ top: 4, bottom: 0 })");
     expect(sidebar).toMatch(/\.backgroundColor\(this\.colors\.scrim\)\s+\.opacity\(this\.reveal\)\s+\.expandSafeArea\(\[SafeAreaType\.SYSTEM\], \[SafeAreaEdge\.BOTTOM\]\)/);
     expect(sidebar).toMatch(/\.backgroundColor\(this\.colors\.panel\)\s+\.expandSafeArea\(\[SafeAreaType\.SYSTEM\], \[SafeAreaEdge\.BOTTOM\]\)/);
