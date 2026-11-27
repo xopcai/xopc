@@ -156,7 +156,7 @@ export function PersonalMatterDialog({
   return (
     <Dialog.Root open={open} onOpenChange={next => { if (!next && !busy) onOpenChange(false); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim" />
         <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(38rem,calc(100dvh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover focus:outline-none">
           <header className="flex shrink-0 items-start justify-between gap-3 border-b border-edge px-5 py-4">
             <div className="min-w-0 flex-1 space-y-1">

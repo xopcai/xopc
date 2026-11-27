@@ -259,17 +259,23 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
   const acceptanceRef = useRef<HTMLDetailsElement>(null);
   const resultsRef = useRef<HTMLElement>(null);
   const currentActionRef = useRef<HTMLElement>(null);
-  const { key: navigationKey, state: navigationState } = useLocation();
+  const { state: navigationState } = useLocation();
   const focusTaskResults = (navigationState as { focusTaskResults?: string } | null)?.focusTaskResults;
   const resultsReady = Boolean(detail);
+  const focusedResultsTaskIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!resultsReady || focusTaskResults !== taskId) return;
+    if (focusTaskResults !== taskId) {
+      focusedResultsTaskIdRef.current = null;
+      return;
+    }
+    if (!resultsReady || focusedResultsTaskIdRef.current === taskId) return;
+    focusedResultsTaskIdRef.current = taskId;
     const frame = requestAnimationFrame(() => {
       resultsRef.current?.scrollIntoView?.({ block: 'start' });
       resultsRef.current?.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(frame);
-  }, [focusTaskResults, navigationKey, resultsReady, taskId]);
+  }, [focusTaskResults, resultsReady, taskId]);
   const splitPaneRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
   const [compactHeader, setCompactHeader] = useState(false);
@@ -643,11 +649,12 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
     const hero = heroRef.current;
     const pane = hero?.parentElement;
     if (!hasTaskTitle || !hero || !pane || typeof IntersectionObserver === 'undefined') return;
+    const scroller = findTaskScroller(pane);
     const observer = new IntersectionObserver(([entry]) => {
-      const scroller = findTaskScroller(pane);
-      const top = scroller ? scroller.getBoundingClientRect().top + scroller.clientTop : 0;
+      const activeScroller = findTaskScroller(pane);
+      const top = activeScroller ? activeScroller.getBoundingClientRect().top + activeScroller.clientTop : 0;
       setCompactHeader(!entry.isIntersecting && entry.boundingClientRect.bottom <= top);
-    });
+    }, scroller ? { root: scroller } : undefined);
     observer.observe(hero);
     return () => observer.disconnect();
   }, [hasTaskTitle, taskId]);

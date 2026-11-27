@@ -77,7 +77,7 @@ export function NotePreviewModal({ noteId, backgroundPath, onClose }: {
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/45 backdrop-blur-[1px]" />
+        <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/45" />
         <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(48rem,calc(100dvh-2rem))] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay focus:outline-none">
           <header className="flex shrink-0 items-center gap-3 border-b border-edge bg-surface-panel px-5 py-3.5">
             <Dialog.Title className="min-w-0 flex-1 truncate font-medium text-fg" title={title}>{title}</Dialog.Title>

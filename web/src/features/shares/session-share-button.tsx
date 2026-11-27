@@ -169,7 +169,7 @@ export function SessionShareButton({ conversationId, dialogOpen, onDialogOpenCha
         </button>
       </Dialog.Trigger> : null}
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim" />
         <Dialog.Content
           onCloseAutoFocus={(event) => {
             if (!hideTrigger || !returnFocusRef?.current) return;

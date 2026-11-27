@@ -99,7 +99,7 @@ export function ResponseContextDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim/60 backdrop-blur-[1px]" />
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim/60" />
         <Dialog.Content
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(36rem,calc(100dvh-2rem))]',

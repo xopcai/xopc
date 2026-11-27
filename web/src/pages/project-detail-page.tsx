@@ -549,7 +549,7 @@ function ProjectSwitcher({
 
       <Dialog.Root open={createOpen} onOpenChange={(next) => !creating && setCreateOpen(next)}>
         <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim" />
           <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(32rem,calc(100vh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-float focus:outline-none">
             <div className="shrink-0 border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">
@@ -614,7 +614,7 @@ function ProjectSwitcher({
         if (!next) setMissingWorkspaceRoot(null);
       }}>
         <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[100] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[100] bg-scrim" />
           <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[110] flex w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-float focus:outline-none">
             <div className="border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">{projectsText.workspaceMissingTitle}</Dialog.Title>
@@ -2450,7 +2450,7 @@ export function ProjectDetailPage() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim" />
           <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-overlay p-5 shadow-float focus:outline-none">
             <div className="flex items-start gap-3">
               <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600 dark:text-red-400">
@@ -2515,7 +2515,7 @@ export function ProjectDetailPage() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim" />
           <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(34rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-float focus:outline-none">
             <div className="shrink-0 border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">{pm.settings.workspaceMigrationTitle}</Dialog.Title>
@@ -2592,7 +2592,7 @@ export function ProjectDetailPage() {
         if (!open) setMissingWorkspaceRoot(null);
       }}>
         <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim" />
           <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-float focus:outline-none">
             <div className="border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">{pm.settings.workspaceMissingTitle}</Dialog.Title>

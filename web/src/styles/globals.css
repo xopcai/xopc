@@ -464,7 +464,6 @@ html.dark {
 
 .app-chrome-shell {
   background-image: var(--app-chrome-sidebar-bg);
-  background-attachment: fixed;
   background-position: left top;
   background-repeat: no-repeat;
   background-size: 100vw 100vh;
@@ -472,7 +471,6 @@ html.dark {
 
 .app-chrome-sidebar {
   background-image: var(--app-chrome-sidebar-bg);
-  background-attachment: fixed;
   background-position: left top;
   background-repeat: no-repeat;
   background-size: 100vw 100vh;
@@ -481,7 +479,6 @@ html.dark {
 /* Match the rail's themed background while keeping sticky content opaque over scrolling rows. */
 .app-sidebar-sticky-surface {
   background-image: var(--app-chrome-sidebar-bg);
-  background-attachment: fixed;
   background-position: left top;
   background-repeat: no-repeat;
   background-size: 100vw 100vh;
@@ -656,14 +653,13 @@ html.dark {
 
 /* First-run onboarding: a continuous narrative surface, not a setup card. */
 .xopc-onboarding-dialog {
-  animation: xopc-onboarding-dialog-in 420ms cubic-bezier(.22, 1, .36, 1) both;
+  animation: xopc-onboarding-dialog-in 420ms cubic-bezier(.22, 1, .36, 1) backwards;
 }
 
 .xopc-onboarding-experience,
 .xopc-work-discovery-experience {
   isolation: isolate;
   background-image: var(--app-chrome-bg);
-  background-attachment: fixed;
   background-position: left top;
   background-repeat: no-repeat;
   background-size: 100vw 100vh;
@@ -1157,7 +1153,7 @@ html.dark {
 }
 
 .page-enter {
-  animation: page-enter 200ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation: page-enter 200ms cubic-bezier(0.25, 0.1, 0.25, 1) backwards;
 }
 
 /* Full-screen settings: slightly longer, softer ease to reduce a “snap” vs main chrome. */
@@ -1189,7 +1185,7 @@ html.dark {
 
 @media (prefers-reduced-motion: no-preference) {
   .settings-content-enter {
-    animation: settings-content-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: settings-content-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
   }
 }
 
@@ -1206,7 +1202,7 @@ html.dark {
 
 @media (prefers-reduced-motion: no-preference) {
   .settings-sheet-enter {
-    animation: settings-sheet-enter 250ms ease-out both;
+    animation: settings-sheet-enter 250ms ease-out backwards;
   }
 }
 
@@ -2161,8 +2157,8 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 
 /* Contain wheel/touch scrolling in dialogs, including responsive and nested
  * scroll regions. `none` also suppresses boundary bounce over the page canvas. */
-[role="dialog"]:where([class*="overflow-auto"], [class*="overflow-y-auto"]),
-[role="dialog"] :where([class*="overflow-auto"], [class*="overflow-y-auto"]) {
+[role="dialog"]:where([class*="overflow-auto"], [class*="overflow-y-auto"], [class*="overflow-scroll"], [class*="overflow-y-scroll"]),
+[role="dialog"] :where([class*="overflow-auto"], [class*="overflow-y-auto"], [class*="overflow-scroll"], [class*="overflow-y-scroll"]) {
   overscroll-behavior: none;
 }
 
@@ -2185,6 +2181,10 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 
 /* Opening animations should release their opacity/transform after settling,
  * rather than retain an animation stacking context while content scrolls. */
+.xopc-dialog-overlay {
+  overscroll-behavior: none;
+}
+
 .xopc-dialog-overlay[data-state="open"] {
   animation: xopc-dialog-overlay-in 0.2s ease-out backwards;
 }
@@ -2197,6 +2197,7 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 .xopc-understanding-center,
 .xopc-drawer-right {
   background-color: var(--color-surface-overlay);
+  isolation: isolate;
 }
 
 .xopc-dialog-content {
@@ -2242,7 +2243,7 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 
 /* Route-backed Work Discovery overlay. AppShell and the About You page stay mounted. */
 .xopc-work-discovery-dialog[data-state="open"] {
-  animation: xopc-dialog-content-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: xopc-dialog-content-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .xopc-work-discovery-dialog[data-state="closed"] {
@@ -2250,7 +2251,7 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 }
 
 .xopc-work-discovery-dialog[data-state="open"] .xopc-work-discovery-panel {
-  animation: xopc-work-discovery-panel-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: xopc-work-discovery-panel-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .xopc-work-discovery-dialog[data-state="closed"] .xopc-work-discovery-panel {
@@ -2283,14 +2284,14 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 }
 
 .xopc-mobile-nav-overlay[data-state="open"] {
-  animation: xopc-overlay-in 0.2s ease-out both;
+  animation: xopc-overlay-in 0.2s ease-out backwards;
 }
 .xopc-mobile-nav-overlay[data-state="closed"] {
   animation: xopc-dialog-overlay-out 0.15s ease-in both;
 }
 
 .xopc-mobile-nav-content[data-state="open"] {
-  animation: xopc-drawer-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: xopc-drawer-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {

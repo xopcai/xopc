@@ -1675,7 +1675,7 @@ export function NotesHomePage({ selectedNoteId }: NotesHomePageProps = {}) {
 
       <Dialog.Root open={mobileComposerOpen} onOpenChange={setMobileComposerOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim" />
           <Dialog.Content
             aria-describedby={undefined}
             className="xopc-dialog-content fixed left-1/2 top-1/2 z-[81] flex h-[min(32rem,85dvh)] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover"

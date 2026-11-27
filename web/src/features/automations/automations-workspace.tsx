@@ -1117,7 +1117,7 @@ export function AutomationsWorkspace({
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim" />
           <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-66 flex h-[min(760px,calc(100vh-2rem))] w-[min(100%-2rem,64rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
             <div className="flex items-center justify-between gap-3 border-b border-edge px-5 py-4">
               <div className="min-w-0">
@@ -1248,7 +1248,7 @@ export function AutomationsWorkspace({
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim" />
           <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-66 flex h-[min(85vh,40rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
             <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
               <Dialog.Title className="truncate text-base font-semibold text-fg">

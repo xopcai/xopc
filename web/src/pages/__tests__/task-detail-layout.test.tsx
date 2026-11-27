@@ -226,6 +226,35 @@ describe('task detail action-first layout', () => {
     } finally { vi.unstubAllGlobals(); }
   });
 
+  it('does not re-scroll to results when section navigation updates search params after focusTaskResults', async () => {
+    vi.useFakeTimers();
+    let frame: FrameRequestCallback | undefined;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frame = callback; return 1; });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    try {
+      await act(async () => root.render(
+        <MemoryRouter initialEntries={[{ pathname: '/tasks/task-1', state: { focusTaskResults: 'task-1' } }]}>
+          <Routes><Route path="/tasks/:taskId" element={<TaskDetailPage />} /></Routes>
+        </MemoryRouter>,
+      ));
+      const pane = container.querySelector<HTMLElement>('.task-detail-scroll')!;
+      const targets = [...pane.querySelectorAll<HTMLElement>('[data-task-section]')];
+      const resultsSection = targets[0];
+      const scrollSpy = vi.fn();
+      resultsSection.scrollIntoView = scrollSpy;
+      act(() => { frame?.(0); });
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+
+      targets.forEach((target, index) => {
+        target.getBoundingClientRect = () => ({ top: index <= 3 ? -10 : 500 }) as DOMRect;
+      });
+      act(() => { pane.dispatchEvent(new Event('scroll')); frame?.(0); });
+      act(() => vi.advanceTimersByTime(160));
+      act(() => { frame?.(0); });
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); vi.unstubAllGlobals(); }
+  });
+
   it('shows questions and submit controls inline without a competing chat link', async () => {
     state.detail.presentation = { status: 'needsUser', primaryAction: { type: 'resolve_wait', waitId: 'wait-1' } };
     state.detail.waits = [{ id: 'wait-1', taskId: 'task-1', status: 'active', createdAt: 1, kind: 'user_input', reason: 'Choose audience', condition: { choices: ['Designers'] } }] as TaskDetail['waits'];

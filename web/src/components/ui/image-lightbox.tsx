@@ -57,7 +57,7 @@ export function ImageLightboxProvider({ children, closeLabel = 'Close', interact
       {children}
       <Dialog.Root open={image !== null} onOpenChange={(open) => { if (!open) { generation.current++; setImage(null); } }}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[70] bg-scrim/90 backdrop-blur-sm" />
+          <Dialog.Overlay className="fixed inset-0 z-[70] bg-scrim/90" />
           <Dialog.Content
             className={cn(
               'fixed inset-0 z-[71] flex items-center justify-center p-4 outline-none',

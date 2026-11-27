@@ -104,7 +104,7 @@ export function OnboardingDialog() {
       }}
     >
       <Dialog.Portal>
-        {experience.stage !== 'cloud' ? <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[55] bg-scrim backdrop-blur-md" /> : null}
+        {experience.stage !== 'cloud' ? <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[55] bg-scrim" /> : null}
         <Dialog.Content
           className={cn(
             'app-chrome-shell fixed z-[56] outline-none',

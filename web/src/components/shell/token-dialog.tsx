@@ -33,7 +33,7 @@ export function TokenDialog() {
     >
       <Dialog.Portal>
         <Dialog.Overlay
-          className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim backdrop-blur-[2px]', SETTINGS_SHELL_OVERLAY_Z)}
+          className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
         />
         <Dialog.Content
           className={cn(

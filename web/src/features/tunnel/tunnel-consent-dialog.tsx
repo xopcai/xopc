@@ -43,7 +43,7 @@ export function TunnelConsentDialog({
       <Dialog.Portal>
         <Dialog.Overlay
           className={cn(
-            'xopc-dialog-overlay fixed inset-0 bg-scrim backdrop-blur-[1px]',
+            'xopc-dialog-overlay fixed inset-0 bg-scrim',
             SETTINGS_SHELL_OVERLAY_Z,
           )}
         />

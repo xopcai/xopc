@@ -286,7 +286,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
 
       <Dialog.Root open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="xopc-mobile-nav-overlay fixed inset-0 z-[75] bg-scrim/45 backdrop-blur-[1px] md:hidden" />
+          <Dialog.Overlay className="xopc-mobile-nav-overlay fixed inset-0 z-[75] bg-scrim/45 md:hidden" />
           <Dialog.Content className="xopc-mobile-nav-content app-chrome-sidebar fixed inset-y-0 left-0 z-[76] flex w-[min(20rem,calc(100vw-3rem))] flex-col bg-surface-rail shadow-float outline-none md:hidden">
             <Dialog.Title className="sr-only">{m.nav.settings}</Dialog.Title>
             <Dialog.Description className="sr-only">{activeTitle}</Dialog.Description>
@@ -349,7 +349,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
       </div>
 
       {/* Right: surface-panel — elevated vs left rail */}
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-surface-panel scrollbar-gutter-both">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-surface-panel [scrollbar-gutter:stable_both-edges]">
         {settingsPathBlocked ? (
           <div className="p-5">
             <SettingsAdvancedSection

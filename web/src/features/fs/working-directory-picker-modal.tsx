@@ -278,7 +278,7 @@ export function WorkingDirectoryPickerModal({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim backdrop-blur-[2px]', nested ? 'z-[139]' : 'z-[100]')} />
+        <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', nested ? 'z-[139]' : 'z-[100]')} />
         <Dialog.Content
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(90vh,32rem)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay p-4 shadow-popover',

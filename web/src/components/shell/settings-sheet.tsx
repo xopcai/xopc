@@ -34,7 +34,7 @@ export const SettingsSheet = memo(function SettingsSheet({ children }: SettingsS
 
   const scrim = (
     <Dialog.Overlay
-      className="absolute inset-0 z-40 bg-scrim/55 backdrop-blur-[2px] dark:bg-black/50"
+      className="absolute inset-0 z-40 bg-scrim/55 dark:bg-black/50"
     />
   );
 

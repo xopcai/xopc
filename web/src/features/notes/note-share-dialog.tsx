@@ -214,7 +214,7 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim" />
         <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[71] flex h-[min(42rem,calc(100dvh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover outline-none">
           <div className="flex shrink-0 items-start justify-between border-b border-edge px-5 py-4">
             <div>

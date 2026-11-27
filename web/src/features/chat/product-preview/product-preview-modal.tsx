@@ -71,7 +71,7 @@ function ReadOnlyProductPreviewModal({ target, backgroundPath, onClose }: { targ
   const title = target.kind === 'automation' && target.view === 'run' ? (zh ? '运行情况' : 'Run progress') : LABELS[target.kind][zh ? 0 : 1];
   return <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
     <Dialog.Portal>
-      <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/45 backdrop-blur-[1px]" />
+      <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/45" />
       <Dialog.Content className={`xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(48rem,calc(100dvh-2rem))] ${widthClass} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay focus:outline-none`}>
         <header className="flex shrink-0 items-center gap-3 border-b border-edge bg-surface-panel px-5 py-3.5">
           <Dialog.Title className="min-w-0 flex-1 truncate font-medium text-fg">{title}</Dialog.Title>

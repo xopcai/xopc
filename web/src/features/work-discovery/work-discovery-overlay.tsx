@@ -50,7 +50,7 @@ export function WorkDiscoveryOverlay({
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => { if (!nextOpen) requestClose(); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[75] bg-scrim backdrop-blur-[1px]" />
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[75] bg-scrim" />
         <Dialog.Content
           className="xopc-work-discovery-dialog pointer-events-none fixed inset-0 z-[76] flex items-center justify-center p-3 outline-none sm:p-6"
         >

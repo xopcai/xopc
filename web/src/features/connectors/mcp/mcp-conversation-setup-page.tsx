@@ -115,7 +115,7 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
   const primaryClass = 'min-h-12 w-full rounded-xl text-[15px]';
   const Icon = connected ? Check : tokenRequired ? KeyRound : LockKeyhole;
   return <Dialog.Root open onOpenChange={open => { if (!open) dismiss(); }}><Dialog.Portal>
-    <Dialog.Overlay className="fixed inset-0 z-[70] bg-scrim backdrop-blur-sm" />
+    <Dialog.Overlay className="fixed inset-0 z-[70] bg-scrim" />
     <Dialog.Content
       onOpenAutoFocus={event => { event.preventDefault(); titleRef.current?.focus(); }}
       onPointerDownOutside={event => { if (busy || hasSecret) event.preventDefault(); }}

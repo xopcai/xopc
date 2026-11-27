@@ -211,7 +211,7 @@ export function SetupInteractionPage() {
     <main className="h-full bg-surface-base">
       <Dialog.Root open onOpenChange={open => { if (!open) close(); }}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[70] bg-scrim backdrop-blur-sm" />
+          <Dialog.Overlay className="fixed inset-0 z-[70] bg-scrim" />
           <Dialog.Content
             onOpenAutoFocus={event => { event.preventDefault(); titleRef.current?.focus(); }}
             className="fixed inset-x-0 bottom-0 z-[70] flex h-[min(36rem,calc(100dvh-1rem))] flex-col overflow-hidden rounded-t-3xl border border-edge bg-surface-overlay text-fg sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-[30rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl"

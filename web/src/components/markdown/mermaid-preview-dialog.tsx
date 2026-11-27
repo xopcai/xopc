@@ -99,7 +99,7 @@ export function MermaidPreviewDialog({
   return (
     <Dialog.Root open={preview !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[90] bg-scrim/90 backdrop-blur-sm" />
+        <Dialog.Overlay className="fixed inset-0 z-[90] bg-scrim/90" />
         <Dialog.Content
           className="xopc-dialog-content fixed left-1/2 top-1/2 z-[91] flex h-[min(92dvh,64rem)] w-[min(96vw,96rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay outline-none"
         >
