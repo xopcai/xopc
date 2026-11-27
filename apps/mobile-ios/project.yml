@@ -2,6 +2,7 @@ name: XopcMobile
 
 options:
   bundleIdPrefix: ai.xopc
+  xcodeVersion: "14.3"
   deploymentTarget:
     iOS: "17.0"
   generateEmptyDirectories: true
@@ -109,6 +110,7 @@ targets:
 schemes:
   XopcMobile:
     build:
+      buildArchitectures: useTargetSettings
       targets:
         XopcMobile: all
         XopcMobileTests: [test]
