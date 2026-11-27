@@ -149,7 +149,7 @@ describe('Unified FollowUpMatter Loop, Web Sensor Engine, and personal_inbox Too
     expect(updatedMatter.status).toBe('waiting_user');
     expect(updatedMatter.progressLog[0]?.kind).toBe('action_proposed');
     expect(onChatMessageDelivered).toHaveBeenCalledTimes(1);
-    expect(listProactiveInboxItems(ownerId).some(i => i.title === '周末陶艺工作坊补位')).toBe(true);
+    expect(listProactiveInboxItems(ownerId, { now }).some(i => i.title === '周末陶艺工作坊补位')).toBe(true);
 
     // Pass 3: Goal met -> resolved cascades and disables ALL paired web watches & subscriptions
     now += 30 * 60_000;

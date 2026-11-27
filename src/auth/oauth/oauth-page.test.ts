@@ -1,9 +1,9 @@
-import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { runProcessChecked } from '../../process/run-process.js';
 import { oauthErrorHtml as googleOAuthErrorHtml, oauthSuccessHtml as googleOAuthSuccessHtml } from './google-oauth/oauth-page.js';
 import { oauthErrorHtml, oauthSuccessHtml, renderOAuthCallbackPage } from './oauth-page.js';
 
@@ -78,9 +78,10 @@ describe('xopc unified OAuth callback page', () => {
       '} finally { server.close(); }',
     ].join('\n');
 
-    const stdout = execFileSync(process.execPath, ['--import', 'tsx/esm', '-e', script], {
+    const { stdout } = await runProcessChecked({
+      program: process.execPath,
+      args: ['--import', 'tsx/esm', '-e', script],
       cwd: process.cwd(),
-      encoding: 'utf8',
     });
     expect(JSON.parse(stdout.trim())).toEqual({
       status: 200,
