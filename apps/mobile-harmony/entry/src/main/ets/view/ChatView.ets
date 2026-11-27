@@ -2552,12 +2552,11 @@ export struct XopcChatView {
 
   @Builder
   conversationHeader() {
-    Column({ space: 6 }) {
+    Column({ space: this.personalConversation ? 0 : 6 }) {
       if (this.personalConversation) {
         if (this.compactPersonalHeader) {
-          Row({ space: 8 }) {
+          Row({ space: 6 }) {
             this.navigationButtons()
-            Blank().layoutWeight(1)
             Button({ type: ButtonType.Normal }) {
               Row({ space: 6 }) {
                 XopcPersonalAgentAvatar({ extent: 28, compact: true,
@@ -2575,14 +2574,14 @@ export struct XopcChatView {
               .onClick((): void => { this.openPersonalOverview(); })
             Blank().layoutWeight(1)
             this.conversationActions()
-          }.width('100%').padding({ left: 12, right: 12 }).alignItems(VerticalAlign.Center)
+          }.width('100%').padding({ left: 12, right: 12, top: 3 }).alignItems(VerticalAlign.Center)
         } else {
           Stack({ alignContent: Alignment.Top }) {
             Row() {
               this.navigationButtons()
               Blank().layoutWeight(1)
               this.conversationActions()
-            }.width('100%').padding({ left: 12, right: 12 })
+            }.width('100%').padding({ left: 12, right: 12, top: 3 })
             Button({ type: ButtonType.Circle }) {
               XopcPersonalAgentAvatar({ extent: 62,
                 activePage: this.activePage && this.phonePage === 0 && !this.searchOpen && !this.sheetOpen,
@@ -2593,14 +2592,14 @@ export struct XopcChatView {
               .accessibilityText($r('app.string.personal_overview_open'))
               .onClick((): void => { this.openPersonalOverview(); })
           }.width('100%').height(64)
-          XopcPersonalChatActivity({ conversationId: this.chat.selectedId, displayName: this.personalAgent?.displayName ?? '',
-            activePage: this.activePage && this.layout.foreground && this.phonePage === 0 && !this.searchOpen && !this.sheetOpen
-              && !this.chat.cachedHistory && !this.hasConnectionIssue(),
-            reduceMotion: this.layout.reduceMotion, runId: this.chat.runId ?? '', refreshRevision: this.chat.auxiliaryRevision,
-            promptId: this.prompt.prompt?.conversationId === this.chat.selectedId ? this.prompt.prompt?.id ?? '' : '',
-            onOpenAttention: (): void => { this.openPersonalOverview(); },
-            onOpenTask: (taskId: string): void => { this.dismissComposer(); this.onNavigate({ page: 'tasks', itemId: taskId }); } })
         }
+        XopcPersonalChatActivity({ conversationId: this.chat.selectedId, displayName: this.personalAgent?.displayName ?? '',
+          activePage: this.activePage && this.layout.foreground && this.phonePage === 0 && !this.searchOpen && !this.sheetOpen
+            && !this.chat.cachedHistory && !this.hasConnectionIssue(),
+          reduceMotion: this.layout.reduceMotion, runId: this.chat.runId ?? '', refreshRevision: this.chat.auxiliaryRevision,
+          promptId: this.prompt.prompt?.conversationId === this.chat.selectedId ? this.prompt.prompt?.id ?? '' : '',
+          onOpenAttention: (): void => { this.openPersonalOverview(); },
+          onOpenTask: (taskId: string): void => { this.dismissComposer(); this.onNavigate({ page: 'tasks', itemId: taskId }); } })
       } else if (this.isStandaloneDraft()) {
         Row({ space: 8 }) {
           this.navigationButtons()
@@ -2644,7 +2643,8 @@ export struct XopcChatView {
     }.id('chat-floating-header').width('100%')
       .alignItems(this.personalConversation ? HorizontalAlign.Center : HorizontalAlign.Start)
       .padding({ top: this.chatTopInset + 8, bottom: 8 })
-      .backgroundColor(this.colors.chat.canvas)
+      .backgroundColor(this.personalConversation ? Color.Transparent : this.colors.chat.canvas)
+      .hitTestBehavior(this.personalConversation ? HitTestMode.None : HitTestMode.Default)
       .onAreaChange((_previous: Area, current: Area): void => {
         const height = Number(current.height);
         if (height !== this.floatingHeaderHeight) this.floatingHeaderHeight = height;

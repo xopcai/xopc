@@ -280,7 +280,7 @@ struct AssistantView<Dock: View>: View {
         }
         .overlay(alignment: .top) {
             if showsFloatingHeader {
-                VStack(spacing: 6) {
+                VStack(spacing: isPersonalConversation ? 4 : 6) {
                     floatingHeader.padding(.horizontal, 12)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                             if isPersonalConversation {
@@ -295,9 +295,21 @@ struct AssistantView<Dock: View>: View {
                     }
                 }
                 .padding(.top, 8)
-                .padding(.bottom, 8)
+                .padding(.bottom, isPersonalConversation ? 6 : 8)
                 .frame(maxWidth: .infinity)
-                .background(mobileTheme.canvas.ignoresSafeArea(edges: .top))
+                .background {
+                    if isPersonalConversation {
+                        LinearGradient(stops: [
+                            .init(color: mobileTheme.canvas, location: 0),
+                            .init(color: mobileTheme.canvas, location: 0.84),
+                            .init(color: mobileTheme.canvas.opacity(0), location: 1)
+                        ], startPoint: .top, endPoint: .bottom)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    } else {
+                        mobileTheme.canvas.ignoresSafeArea(edges: .top)
+                    }
+                }
             }
         }
     }
@@ -305,8 +317,8 @@ struct AssistantView<Dock: View>: View {
     private var chatHeaderClearance: CGFloat {
         let measuredHeight = isPersonalConversation ? personalHeaderHeight : ordinaryHeaderHeight
         let headerHeight = showsFloatingHeader && measuredHeight > 0
-            ? measuredHeight + 16 : (isPersonalConversation ? 116 : 66)
-        return chatTopInset + headerHeight + (pinsPlayingMusic ? stickyMusicHeight + 6 : 0)
+            ? measuredHeight + (isPersonalConversation ? 14 : 16) : (isPersonalConversation ? 114 : 66)
+        return chatTopInset + headerHeight + (pinsPlayingMusic ? stickyMusicHeight + (isPersonalConversation ? 4 : 6) : 0)
     }
 
     private var pinsPlayingMusic: Bool {
@@ -1558,9 +1570,9 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var floatingHeader: some View {
-        VStack(alignment: isPersonalConversation ? .center : .leading, spacing: 8) {
+        VStack(alignment: isPersonalConversation ? .center : .leading, spacing: isPersonalConversation ? 6 : 8) {
             ZStack(alignment: .top) {
-                HStack(spacing: 8) {
+                HStack(spacing: isPersonalConversation ? 6 : 8) {
                     if let onBack {
                         headerButton("返回", icon: Image(systemName: "chevron.backward"), action: onBack)
                             .accessibilityIdentifier(backAccessibilityID)
@@ -1583,10 +1595,6 @@ struct AssistantView<Dock: View>: View {
                             showingSessionActions = true
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    } else if compactPersonalHeader {
-                        Spacer(minLength: 0)
-                        personalFloatingCenterHeader
-                        Spacer(minLength: 0)
                     } else {
                         Spacer(minLength: 0)
                     }
@@ -1599,7 +1607,7 @@ struct AssistantView<Dock: View>: View {
                             .accessibilityIdentifier("chat-header-voice-call")
                     }
                 }
-                if isPersonalConversation, !compactPersonalHeader {
+                if isPersonalConversation {
                     personalFloatingCenterHeader
                 }
             }

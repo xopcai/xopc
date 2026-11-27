@@ -217,8 +217,8 @@ describe('chat bottom region composition', () => {
     expect(identityPill).toContain('.alignItems(HorizontalAlign.Start)');
     expect(identityPill).toContain('.backgroundColor(this.colors.chat.card)');
     expect(identityPill).not.toContain('.backgroundColor(Color.Transparent)');
-    expect(conversationHeader).toContain('.backgroundColor(this.colors.chat.canvas)');
-    expect(conversationHeader).not.toContain('.backgroundColor(Color.Transparent)');
+    expect(conversationHeader).toContain('.backgroundColor(this.personalConversation ? Color.Transparent : this.colors.chat.canvas)');
+    expect(conversationHeader).toContain('.hitTestBehavior(this.personalConversation ? HitTestMode.None : HitTestMode.Default)');
     expect(header).toContain('if (identity.showsAvatarInPrimary)');
     expect(header).toContain('if (identity.secondaryAgentName)');
     expect(header).toContain("this.openSheet('actions')");

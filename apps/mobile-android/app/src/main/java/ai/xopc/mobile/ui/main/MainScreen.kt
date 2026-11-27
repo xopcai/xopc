@@ -4318,79 +4318,186 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
       val headerContextStrip = if (personalAgent == null) {
         chatContextStrip(connection.context, connection.projectWelcome?.projectName, isZh = modelLanguage == "zh")
       } else null
-      Surface(
-        color = canvas,
-        modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
-          .onSizeChanged { headerHeightPx = it.height },
-      ) {
-        Column(Modifier.fillMaxWidth()) {
+      if (personalAgent != null) {
+        Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
+          .onSizeChanged { headerHeightPx = it.height }
+          .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+          .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          val collapsePersonalHeader by remember(messageListState, displayMessages.size, followBottom) {
+            derivedStateOf {
+              displayMessages.isNotEmpty() && !followBottom && messageListState.firstVisibleItemIndex >= 0
+            }
+          }
+          val headerMotionAllowed = rememberMotionAllowed()
+          val avatarSize by animateDpAsState(
+            targetValue = if (collapsePersonalHeader) 32.dp else 62.dp,
+            animationSpec = tween(xopcMotionDuration(XopcMotionTokens.StandardMs, headerMotionAllowed)),
+            label = "ada-avatar-size",
+          )
+          val headerRowHeight by animateDpAsState(
+            targetValue = if (collapsePersonalHeader) 48.dp else 64.dp,
+            animationSpec = tween(xopcMotionDuration(XopcMotionTokens.StandardMs, headerMotionAllowed)),
+            label = "ada-header-height",
+          )
+          Box(Modifier.fillMaxWidth().height(headerRowHeight)) {
+            Row(Modifier.align(Alignment.CenterStart), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+              if (onCloseProjectChat != null) IconButton(onClick = onCloseProjectChat,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("project-chat-close")) {
+                Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+              }
+              if (onBackFromChat != null) IconButton(onClick = onBackFromChat,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("session-chat-back")) {
+                Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+              } else IconButton(onClick = onOpenSidebar,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-sidebar")) {
+                Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
+              }
+            }
+            if (collapsePersonalHeader) {
+              Row(
+                modifier = Modifier
+                  .align(Alignment.Center)
+                  .clip(CircleShape)
+                  .background(LocalChatColors.current.card)
+                  .clickable(role = Role.Button, onClick = onOpenPersonalOverview)
+                  .padding(start = 6.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)
+                  .semantics { contentDescription = personalOverviewLabel }
+                  .testTag("chat-personal-overview"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+              ) {
+                PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, avatarSize,
+                  active = !messageSearchOpen)
+                Text(personalAgent.displayName, Modifier.testTag("chat-personal-name"),
+                  style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                  maxLines = 1, overflow = TextOverflow.Ellipsis)
+              }
+            } else {
+              IconButton(onClick = onOpenPersonalOverview,
+                modifier = Modifier.align(Alignment.TopCenter).size(avatarSize).background(LocalChatColors.current.card, CircleShape).semantics {
+                  contentDescription = personalOverviewLabel
+                }.testTag("chat-personal-overview")) {
+                PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, avatarSize,
+                  active = !messageSearchOpen)
+              }
+            }
+            Row(Modifier.align(Alignment.CenterEnd),
+              horizontalArrangement = Arrangement.spacedBy(if (onCloseProjectChat == null) 3.dp else 0.dp)) {
+              LocalBrowserPreviewOpen.current?.let { openPreview ->
+                IconButton(onClick = openPreview,
+                  modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-browser-preview")) {
+                  Icon(painterResource(R.drawable.action_browser_preview), stringResource(R.string.browser_preview_open), Modifier.size(22.dp))
+                }
+              }
+              if (phoneAvailable) IconButton(onClick = onOpenPhone,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-phone")) {
+                Box {
+                  Icon(painterResource(R.drawable.action_phone), stringResource(R.string.phone_open), Modifier.size(22.dp))
+                  if (phoneNeedsUser) Box(Modifier.align(Alignment.TopEnd).size(6.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape))
+                }
+              }
+              IconButton(onClick = {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                onStartVoiceCall()
+              }, enabled = canStartVoiceCall,
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-voice-call")) {
+                Icon(painterResource(R.drawable.action_call),
+                  stringResource(R.string.assistant_action_voice_natural), Modifier.size(22.dp))
+              }
+            }
+          }
+          if (!collapsePersonalHeader) {
+            val attention = connection.progress.needsUser.size
+            val attentionColors = LocalAttentionColors.current
+            Column(horizontalAlignment = Alignment.CenterHorizontally,
+              modifier = Modifier.clip(themedCorners(14))
+                .background(if (attention > 0) attentionColors.fill else LocalChatColors.current.card)
+                .then(if (attention > 0) Modifier.clickable {
+                  onOpenMessageTarget(ConversationTarget("progress", "", ""))
+                } else Modifier)
+                .padding(horizontal = 12.dp, vertical = 2.dp)) {
+              Text(personalAgent.displayName, Modifier.testTag("chat-personal-name"),
+                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+              if (attention > 0) Text(stringResource(R.string.progress_attention_count, attention),
+                style = MaterialTheme.typography.labelSmall, color = attentionColors.foreground)
+            }
+          }
+          connection.desktopChatTarget?.let { target ->
+            val label = stringResource(R.string.device_execution_target, target.name)
+            val status = when (target.state) {
+              "offline" -> stringResource(R.string.device_execution_offline)
+              "authorization_required" -> stringResource(R.string.device_execution_authorization)
+              "reselect" -> stringResource(R.string.device_execution_reselect)
+              else -> ""
+            }
+            val text = if (status.isBlank()) label else "$label · $status"
+            if (target.reselectEndpointId != null) TextButton(onClick = onReselectConnectedComputer,
+              enabled = !connection.sending && connection.activeRunId == null,
+              modifier = Modifier.testTag("chat-execution-device")) { Text(text, maxLines = 2) }
+            else Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 2, modifier = Modifier.testTag("chat-execution-device").background(LocalChatColors.current.card, themedCorners(12))
+                .padding(horizontal = 10.dp, vertical = 5.dp))
+          }
+        }
+      } else {
+        Surface(
+          color = canvas,
+          modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
+            .onSizeChanged { headerHeightPx = it.height },
+        ) {
           Column(Modifier.fillMaxWidth()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
             .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
-            horizontalAlignment = if (personalAgent != null) Alignment.CenterHorizontally else Alignment.Start,
+            horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (personalAgent != null) {
-              val collapsePersonalHeader by remember(messageListState, displayMessages.size, followBottom) {
-                derivedStateOf {
-                  displayMessages.isNotEmpty() && !followBottom && messageListState.firstVisibleItemIndex >= 0
-                }
-              }
-              val headerMotionAllowed = rememberMotionAllowed()
-              val avatarSize by animateDpAsState(
-                targetValue = if (collapsePersonalHeader) 32.dp else 62.dp,
-                animationSpec = tween(xopcMotionDuration(XopcMotionTokens.StandardMs, headerMotionAllowed)),
-                label = "ada-avatar-size",
-              )
-              val headerRowHeight by animateDpAsState(
-                targetValue = if (collapsePersonalHeader) 44.dp else 64.dp,
-                animationSpec = tween(xopcMotionDuration(XopcMotionTokens.StandardMs, headerMotionAllowed)),
-                label = "ada-header-height",
-              )
-              Box(Modifier.fillMaxWidth().height(headerRowHeight)) {
-                Row(Modifier.align(Alignment.CenterStart), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                  if (onCloseProjectChat != null) IconButton(onClick = onCloseProjectChat,
+            val resolvedTitle = selected?.title?.takeIf { it.isNotBlank() && !selected.isLocalDraft }
+              ?: sessionTitleOverride?.takeIf { it.isNotBlank() }
+            val headerIdentity = chatHeaderIdentity(
+              conversationTitle = resolvedTitle,
+              isDraft = selected?.isLocalDraft == true || resolvedTitle == null,
+              agentId = headerAgentId,
+              defaultAgentId = connection.defaultAgentId,
+              agentName = headerAgentName,
+              runtimeBadge = headerAgent?.externalRuntimeBadge,
+              modelParts = headerModelParts,
+            )
+            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                when {
+                  onCloseProjectChat != null -> IconButton(onClick = onCloseProjectChat,
                     modifier = Modifier.size(44.dp).background(LocalChatColors.current.card, CircleShape).testTag("project-chat-close")) {
                     Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
                   }
-                  if (onBackFromChat != null) IconButton(onClick = onBackFromChat,
+                  onBackFromChat != null -> IconButton(onClick = onBackFromChat,
                     modifier = Modifier.size(44.dp).background(LocalChatColors.current.card, CircleShape).testTag("session-chat-back")) {
                     Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
-                  } else IconButton(onClick = onOpenSidebar,
+                  }
+                  else -> IconButton(onClick = onOpenSidebar,
                     modifier = Modifier.size(44.dp).background(LocalChatColors.current.card, CircleShape).testTag("chat-header-sidebar")) {
                     Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
                   }
                 }
-                if (collapsePersonalHeader) {
-                  Row(
-                    modifier = Modifier
-                      .align(Alignment.Center)
-                      .heightIn(min = 44.dp)
-                      .clip(CircleShape)
-                      .background(LocalChatColors.current.card)
-                      .clickable(role = Role.Button, onClick = onOpenPersonalOverview)
-                      .padding(start = 6.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)
-                      .semantics { contentDescription = personalOverviewLabel }
-                      .testTag("chat-personal-overview"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                  ) {
-                    PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, avatarSize,
-                      active = !messageSearchOpen)
-                    Text(personalAgent.displayName, Modifier.testTag("chat-personal-name"),
-                      style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
-                      maxLines = 1, overflow = TextOverflow.Ellipsis)
-                  }
-                } else {
-                  IconButton(onClick = onOpenPersonalOverview,
-                    modifier = Modifier.align(Alignment.TopCenter).size(avatarSize).background(LocalChatColors.current.card, CircleShape).semantics {
-                      contentDescription = personalOverviewLabel
-                    }.testTag("chat-personal-overview")) {
-                    PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, avatarSize,
-                      active = !messageSearchOpen)
-                  }
-                }
-                Row(Modifier.align(Alignment.CenterEnd),
-                  horizontalArrangement = Arrangement.spacedBy(if (onCloseProjectChat == null) 4.dp else 0.dp)) {
+              }
+              Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                ChatHeaderIdentityPill(
+                  agentAvatar = connection.agentAvatars[headerAgentId],
+                  agentAvatarRef = headerAgent?.avatar.orEmpty(),
+                  agentId = headerAgentId,
+                  identity = headerIdentity,
+                  onClick = { optionsOpen = true },
+                )
+              }
+              val hasTrailingActions = LocalBrowserPreviewOpen.current != null || phoneAvailable
+              if (hasTrailingActions) {
+                Row(horizontalArrangement = Arrangement.spacedBy(if (onCloseProjectChat == null) 4.dp else 0.dp),
+                  verticalAlignment = Alignment.CenterVertically) {
                   LocalBrowserPreviewOpen.current?.let { openPreview ->
                     IconButton(onClick = openPreview,
                       modifier = Modifier.size(44.dp).background(LocalChatColors.current.card, CircleShape).testTag("chat-header-browser-preview")) {
@@ -4403,93 +4510,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
                       Icon(painterResource(R.drawable.action_phone), stringResource(R.string.phone_open), Modifier.size(22.dp))
                       if (phoneNeedsUser) Box(Modifier.align(Alignment.TopEnd).size(6.dp)
                         .background(MaterialTheme.colorScheme.primary, CircleShape))
-                    }
-                  }
-                  IconButton(onClick = {
-                    focusManager.clearFocus()
-                    keyboardController?.hide()
-                    onStartVoiceCall()
-                  }, enabled = canStartVoiceCall,
-                    modifier = Modifier.size(44.dp).background(LocalChatColors.current.card, CircleShape).testTag("chat-header-voice-call")) {
-                    Icon(painterResource(R.drawable.action_call),
-                      stringResource(R.string.assistant_action_voice_natural), Modifier.size(22.dp))
-                  }
-                }
-              }
-              if (!collapsePersonalHeader) {
-                val attention = connection.progress.needsUser.size
-                val attentionColors = LocalAttentionColors.current
-                Column(horizontalAlignment = Alignment.CenterHorizontally,
-                  modifier = Modifier.clip(themedCorners(14))
-                    .background(if (attention > 0) attentionColors.fill else LocalChatColors.current.card)
-                    .then(if (attention > 0) Modifier.clickable {
-                      onOpenMessageTarget(ConversationTarget("progress", "", ""))
-                    } else Modifier)
-                    .padding(horizontal = 12.dp, vertical = 3.dp)) {
-                  Text(personalAgent.displayName, Modifier.testTag("chat-personal-name"),
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                  if (attention > 0) Text(stringResource(R.string.progress_attention_count, attention),
-                    style = MaterialTheme.typography.labelSmall, color = attentionColors.foreground)
-                }
-              }
-            } else {
-              val resolvedTitle = selected?.title?.takeIf { it.isNotBlank() && !selected.isLocalDraft }
-                ?: sessionTitleOverride?.takeIf { it.isNotBlank() }
-              val headerIdentity = chatHeaderIdentity(
-                conversationTitle = resolvedTitle,
-                isDraft = selected?.isLocalDraft == true || resolvedTitle == null,
-                agentId = headerAgentId,
-                defaultAgentId = connection.defaultAgentId,
-                agentName = headerAgentName,
-                runtimeBadge = headerAgent?.externalRuntimeBadge,
-                modelParts = headerModelParts,
-              )
-              Row(Modifier.fillMaxWidth().heightIn(min = 44.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                  when {
-                    onCloseProjectChat != null -> IconButton(onClick = onCloseProjectChat,
-                      modifier = Modifier.size(44.dp).background(LocalChatColors.current.card, CircleShape).testTag("project-chat-close")) {
-                      Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
-                    }
-                    onBackFromChat != null -> IconButton(onClick = onBackFromChat,
-                      modifier = Modifier.size(44.dp).background(LocalChatColors.current.card, CircleShape).testTag("session-chat-back")) {
-                      Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
-                    }
-                    else -> IconButton(onClick = onOpenSidebar,
-                      modifier = Modifier.size(44.dp).background(LocalChatColors.current.card, CircleShape).testTag("chat-header-sidebar")) {
-                      Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
-                    }
-                  }
-                }
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                  ChatHeaderIdentityPill(
-                    agentAvatar = connection.agentAvatars[headerAgentId],
-                    agentAvatarRef = headerAgent?.avatar.orEmpty(),
-                    agentId = headerAgentId,
-                    identity = headerIdentity,
-                    onClick = { optionsOpen = true },
-                  )
-                }
-                val hasTrailingActions = LocalBrowserPreviewOpen.current != null || phoneAvailable
-                if (hasTrailingActions) {
-                  Row(horizontalArrangement = Arrangement.spacedBy(if (onCloseProjectChat == null) 4.dp else 0.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    LocalBrowserPreviewOpen.current?.let { openPreview ->
-                      IconButton(onClick = openPreview,
-                        modifier = Modifier.size(44.dp).background(LocalChatColors.current.card, CircleShape).testTag("chat-header-browser-preview")) {
-                        Icon(painterResource(R.drawable.action_browser_preview), stringResource(R.string.browser_preview_open), Modifier.size(22.dp))
-                      }
-                    }
-                    if (phoneAvailable) IconButton(onClick = onOpenPhone,
-                      modifier = Modifier.size(44.dp).background(LocalChatColors.current.card, CircleShape).testTag("chat-header-phone")) {
-                      Box {
-                        Icon(painterResource(R.drawable.action_phone), stringResource(R.string.phone_open), Modifier.size(22.dp))
-                        if (phoneNeedsUser) Box(Modifier.align(Alignment.TopEnd).size(6.dp)
-                          .background(MaterialTheme.colorScheme.primary, CircleShape))
-                      }
                     }
                   }
                 }
