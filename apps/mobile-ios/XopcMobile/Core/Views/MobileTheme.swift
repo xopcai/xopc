@@ -223,7 +223,7 @@ extension ToolbarContent {
     @ToolbarContentBuilder
     func mobileTransparentToolbarItem() -> some ToolbarContent {
         if #available(iOS 26, *) {
-            self.sharedBackgroundVisibility(.hidden)
+            sharedBackgroundVisibility(.hidden)
         } else {
             self
         }
@@ -234,7 +234,7 @@ extension View {
     @ViewBuilder
     func mobileTransparentHeaderScrollEdge() -> some View {
         if #available(iOS 26, *) {
-            self.scrollEdgeEffectHidden(true, for: .top)
+            scrollEdgeEffectHidden(true, for: .top)
         } else {
             self
         }
