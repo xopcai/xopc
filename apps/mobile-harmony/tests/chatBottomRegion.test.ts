@@ -143,6 +143,21 @@ describe('chat bottom region composition', () => {
     expect(sidebar).toMatch(/\.backgroundColor\(this\.colors\.panel\)\s+\.expandSafeArea\(\[SafeAreaType\.SYSTEM\], \[SafeAreaEdge\.BOTTOM\]\)/);
   });
 
+  it('matches pushed chat NavDestination safe-area backgrounds to the chat canvas', () => {
+    const sessionChat = home.slice(home.indexOf("if (page === 'session-chat')"),
+      home.indexOf("} else if (page === 'sessions' || page === 'sessions-search')"));
+    const automationChat = home.slice(home.indexOf("} else if (page === 'automation-configuration-chat')"),
+      home.indexOf("} else if (page === 'project-chat')"));
+    const projectChat = home.slice(home.indexOf("} else if (page === 'project-chat')"),
+      home.indexOf("} else if (page === 'task-conversation')"));
+    const taskChat = home.slice(home.indexOf("} else if (page === 'task-conversation')"),
+      home.indexOf("} else if (page === 'task-detail')"));
+
+    for (const destination of [sessionChat, automationChat, projectChat, taskChat]) {
+      expect(destination).toContain('.hideTitleBar(true).backgroundColor(this.colors.chat.canvas).onBackPressed(');
+    }
+  });
+
   it('keeps the phone library content transparent over the shared page surface', () => {
     expect(home).toContain('deliveries: this.attention.deliveries');
     expect(notesTab).toContain("}.id('notes-tab-content-viewport').width('100%').height('100%')");
@@ -191,7 +206,7 @@ describe('chat bottom region composition', () => {
     expect(home).toContain('layoutState.dismissSidebar = (): boolean => this.closeSidebar();');
     expect(sessions).toContain('.virtualScroll({ totalCount: this.rows.length })');
     expect(sessions).toContain('.cachedCount(5)');
-    expect(home).toContain("}.hideTitleBar(true).onBackPressed((): boolean => { if (layoutState.dismissChatOverlay?.()) return true; this.popActiveStack(); return true; })");
+    expect(home).toContain("}.hideTitleBar(true).backgroundColor(this.colors.chat.canvas).onBackPressed((): boolean => { if (layoutState.dismissChatOverlay?.()) return true; this.popActiveStack(); return true; })");
     expect(chat).toContain('canStartChatSidebarPan(finger.globalX - event.offsetX');
   });
 
@@ -217,8 +232,8 @@ describe('chat bottom region composition', () => {
     expect(identityPill).toContain('.alignItems(HorizontalAlign.Start)');
     expect(identityPill).toContain('.backgroundColor(this.colors.chat.card)');
     expect(identityPill).not.toContain('.backgroundColor(Color.Transparent)');
-    expect(conversationHeader).toContain('.backgroundColor(this.personalConversation ? Color.Transparent : this.colors.chat.canvas)');
-    expect(conversationHeader).toContain('.hitTestBehavior(this.personalConversation ? HitTestMode.None : HitTestMode.Default)');
+    expect(conversationHeader).toContain('.backgroundColor(Color.Transparent)');
+    expect(conversationHeader).toContain('.hitTestBehavior(HitTestMode.None)');
     expect(header).toContain('if (identity.showsAvatarInPrimary)');
     expect(header).toContain('if (identity.secondaryAgentName)');
     expect(header).toContain("this.openSheet('actions')");

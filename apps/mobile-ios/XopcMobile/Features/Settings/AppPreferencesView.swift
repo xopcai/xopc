@@ -87,8 +87,7 @@ struct AppSettingsView: View {
             }
         }
         .listSectionSpacing(16)
-        .navigationTitle(Text(verbatim: AppLocalization.string("设置", locale: locale)))
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text(verbatim: AppLocalization.string("设置", locale: locale)))
     }
 }
 
@@ -133,8 +132,7 @@ struct ShareCenterView: View {
                 shareList(activeOnly: page)
             }
         }
-        .navigationTitle("分享记录")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("分享记录"))
         .task(id: configuration) { await load() }
         .confirmationDialog("撤销链接", isPresented: Binding(get: { revokeTarget != nil }, set: {
             if !$0 {
@@ -308,8 +306,7 @@ private struct NotificationSettingsView: View {
                 }
             }
         }
-        .navigationTitle("通知")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("通知"))
         .task(id: scenePhase) {
             if scenePhase == .active {
                 await push.refreshPermission(configuration)
@@ -331,8 +328,7 @@ private struct LanguageSettingsView: View {
                 .pickerStyle(.inline)
             }
         }
-        .navigationTitle(Text(verbatim: AppLocalization.string("语言", locale: locale)))
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text(verbatim: AppLocalization.string("语言", locale: locale)))
     }
 }
 
@@ -377,8 +373,7 @@ private struct AppearanceSettingsView: View {
         }
         .scrollContentBackground(.hidden)
         .background(mobileTheme.canvas)
-        .navigationTitle(Text(verbatim: AppLocalization.string("外观", locale: locale)))
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text(verbatim: AppLocalization.string("外观", locale: locale)))
     }
 
     private func themeSwatch(_ preset: MobileThemePreset, dark: Bool) -> some View {

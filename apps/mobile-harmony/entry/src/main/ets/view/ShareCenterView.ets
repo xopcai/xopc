@@ -6,7 +6,7 @@ import { XopcShareItem, XopcShareResult } from '../model/share';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { validShareUrl } from '../service/shareService';
 import { XopcShareViewModel } from '../viewmodel/shareViewModel';
-import { XopcEmptyHint, XopcErrorState, XopcListSkeleton, XopcPageHeader } from './MobileComponents';
+import { XOPC_PAGE_HEADER_HEIGHT_VP, XopcEmptyHint, XopcErrorState, XopcListSkeleton, XopcPageHeader } from './MobileComponents';
 import { XopcPagerProgress, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
 import { XopcShareResultView } from './ShareResultView';
 
@@ -141,23 +141,16 @@ export struct XopcShareCenterView {
           ListItem() { this.record(item) }
         }, (item: XopcShareItem): string => item.id + ':' + item.expiresAt + ':' + item.revoked + ':' + item.expired)
       }.id('share-history-list').width('100%').height('100%')
-        .padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 24 }).scrollBar(BarState.Off)
+        .padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 24 })
+        .contentStartOffset(XOPC_PAGE_HEADER_HEIGHT_VP + 58)
+        .scrollBar(BarState.Off)
         .accessibilityLevel(activeOnly === this.model.activeOnly ? 'auto' : 'no-hide-descendants')
     }.height('100%').width('100%').onRefreshing((): void => { void this.model.load(); })
   }
 
   build() {
     NavDestination() {
-      Column() {
-        XopcPageHeader({ heading: $r('app.string.share_center'), showStaticTitle: true,
-          backVisible: true, onBack: (): void => { this.onExit(); },
-          actionLabel: $r('app.string.refresh'), onAction: (): void => { void this.model.load(); } })
-        Column() {
-          XopcSegmentedTabs({ options: this.filters, selectedKey: this.model.activeOnly ? 'active' : 'all',
-            pagerProgress: this.pagerProgress,
-            swipeToSelect: !this.resultOpen,
-            onSelect: (key: string): void => { this.selectFilter(key); } })
-        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 12 })
+      Stack({ alignContent: Alignment.Top }) {
         Swiper(this.pager) {
           this.sharePage(false)
           this.sharePage(true)
@@ -169,10 +162,22 @@ export struct XopcShareCenterView {
           })
           .onAnimationEnd((): void => { this.pagerProgress.reset(); })
           .onChange((index: number): void => { this.model.activeOnly = index === 1; })
-          .width('100%').layoutWeight(1)
+          .width('100%').height('100%')
+        Column() {
+          XopcPageHeader({ heading: $r('app.string.share_center'), showStaticTitle: true,
+            backVisible: true, onBack: (): void => { this.onExit(); },
+            actionLabel: $r('app.string.refresh'), onAction: (): void => { void this.model.load(); } })
+          Column() {
+            XopcSegmentedTabs({ options: this.filters, selectedKey: this.model.activeOnly ? 'active' : 'all',
+              pagerProgress: this.pagerProgress,
+              swipeToSelect: !this.resultOpen,
+              onSelect: (key: string): void => { this.selectFilter(key); } })
+          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
+            .hitTestBehavior(HitTestMode.Default)
+        }.width('100%').backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.None)
       }.width('100%').height('100%').backgroundColor(this.colors.surface)
         .bindSheet($$this.resultOpen, this.resultSheet, xopcSheetOptions('immersive', { backgroundColor: this.colors.panel }))
-    }.hideTitleBar(true).onBackPressed((): boolean => {
+    }.hideTitleBar(true).backgroundColor(this.colors.surface).onBackPressed((): boolean => {
       if (this.resultOpen) this.resultOpen = false;
       else this.onExit();
       return true;

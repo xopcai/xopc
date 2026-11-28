@@ -256,7 +256,7 @@ internal fun ChatHeaderIdentityPill(
 ) {
   Surface(
     onClick = onClick,
-    shape = themedCorners(18),
+    shape = CircleShape,
     color = LocalChatColors.current.card,
     modifier = modifier
       .fillMaxWidth()
@@ -267,7 +267,7 @@ internal fun ChatHeaderIdentityPill(
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 12.dp, vertical = 6.dp),
+        .padding(horizontal = 14.dp, vertical = 6.dp),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -398,7 +398,7 @@ internal fun ChatContextStripBar(
   val attentionColors = LocalAttentionColors.current
   Surface(
     onClick = onClick,
-    shape = themedCorners(12),
+    shape = CircleShape,
     color = if (model.needsAttention) attentionColors.fill else LocalChatColors.current.card,
     modifier = modifier
       .heightIn(min = 32.dp)
@@ -406,7 +406,7 @@ internal fun ChatContextStripBar(
       .testTag("chat-context-bar"),
   ) {
     Row(
-      modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+      modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {

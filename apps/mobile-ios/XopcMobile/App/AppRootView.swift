@@ -20,6 +20,7 @@ struct AppRootView: View {
     @State private var sidebarOpen = false
     @State private var composerFocused = false
     @State private var keyboardVisible = false
+    @State private var bottomSafeAreaInset: CGFloat = 0
     @State private var phoneVisible = false
     @State private var actionPanelVisible = false
     @State private var homeRetry = 0
@@ -212,35 +213,54 @@ struct AppRootView: View {
         return !showingInlineChatDock
     }
 
-    private var homeShell: some View {
-        ZStack {
-            tabStack(for: .ada) { adaRootContainer }
-            tabStack(for: .conversations) { conversationsRoot }
-            tabStack(for: .workbench) { workbenchRoot }
-            tabStack(for: .notes) { notesRoot }
-            tabStack(for: .library) { libraryRoot }
+    private var tabBarBottomPadding: CGFloat {
+        if bottomSafeAreaInset > 20 {
+            return max(18, bottomSafeAreaInset - 16)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 0) {
-                if showsShellMusicDock {
-                    GeneratedMusicDock(playback: music)
+        if bottomSafeAreaInset > 0 {
+            return max(16, bottomSafeAreaInset - 4)
+        }
+        return 6
+    }
+
+    private var homeShell: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                tabStack(for: .ada) { adaRootContainer }
+                tabStack(for: .conversations) { conversationsRoot }
+                tabStack(for: .workbench) { workbenchRoot }
+                tabStack(for: .notes) { notesRoot }
+                tabStack(for: .library) { libraryRoot }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+
+            if showsShellMusicDock || showBottomTabBar {
+                VStack(spacing: 0) {
+                    if showsShellMusicDock {
+                        GeneratedMusicDock(playback: music)
+                    }
+                    if showBottomTabBar {
+                        FloatingTabBar(
+                            configuration: appState.gatewayConfiguration,
+                            selectedTab: appState.selectedTab,
+                            personalAgent: personalAgent.record(using: appState.gatewayConfiguration),
+                            personalUnread: personalAgent.unread(using: appState.gatewayConfiguration)?.unreadCount ?? 0,
+                            personalWorking: personalWorking,
+                            pendingAttention: pendingAttention,
+                            hasPendingRecording: hasPendingRecording,
+                            bottomPadding: tabBarBottomPadding,
+                            onSelect: { tab in
+                                appState.switchTab(tab)
+                            }
+                        )
+                    }
                 }
-                if showBottomTabBar {
-                    FloatingTabBar(
-                        configuration: appState.gatewayConfiguration,
-                        selectedTab: appState.selectedTab,
-                        personalAgent: personalAgent.record(using: appState.gatewayConfiguration),
-                        personalUnread: personalAgent.unread(using: appState.gatewayConfiguration)?.unreadCount ?? 0,
-                        personalWorking: personalWorking,
-                        pendingAttention: pendingAttention,
-                        hasPendingRecording: hasPendingRecording,
-                        onSelect: { tab in
-                            appState.switchTab(tab)
-                        }
-                    )
-                }
+                .background(mobileTheme.canvas.ignoresSafeArea(edges: .bottom))
             }
         }
+        .ignoresSafeArea(.container, edges: showBottomTabBar ? .bottom : [])
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { bottomSafeAreaInset = $0 }
         .modifier(ChatSidebarPresentation(isOpen: sidebarPresented && !linkedProjectChat, canOpenBySwipe: canDragSidebar,
                                           onSetOpen: setSidebar) { sidebar })
         .background(mobileTheme.canvas.ignoresSafeArea())
@@ -344,7 +364,7 @@ struct AppRootView: View {
                     composerFocused = focused
                 }
             },
-            bottomComposerSpacing: showBottomTabBar ? 8 : 4,
+            bottomComposerSpacing: showBottomTabBar ? 6 : 4,
             scrollToLatestToken: appState.retapRevision(for: .ada),
             onRunningStateChanged: { personalWorking = $0 },
             onOpenSidebar: { setSidebar(true) },

@@ -57,8 +57,7 @@ struct GatewayProfilesView: View {
                     Section { Label(storageError, systemImage: "exclamationmark.triangle").foregroundStyle(.red) }
                 }
             }
-            .navigationTitle("Gateway 管理")
-            .navigationBarTitleDisplayMode(.inline)
+            .mobilePageTitle(Text("Gateway 管理"))
             .navigationDestination(item: $detailProfile) { profile in
                 GatewayProfileDetailView(
                     profile: profile,
@@ -72,10 +71,15 @@ struct GatewayProfilesView: View {
                 )
             }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("添加", systemImage: "plus") { editing = true }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { MobileHeaderTextPill(title: "完成") }
+                        .buttonStyle(.plain)
                 }
+                .mobileTransparentToolbarItem()
+                ToolbarItem(placement: .topBarTrailing) {
+                    MobileHeaderIconButton("添加", systemImage: "plus", tone: .accent) { editing = true }
+                }
+                .mobileTransparentToolbarItem()
             }
             .sheet(isPresented: $editing) {
                 GatewayProfileEditor(onPair: onPair)

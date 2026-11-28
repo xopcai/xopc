@@ -54,8 +54,7 @@ import java.util.UUID
 internal fun AutomationFilterButton(filter: String, onSelect: (String) -> Unit) {
   var menuOpen by rememberSaveable { mutableStateOf(false) }
   Box {
-    IconButton(onClick = { menuOpen = true }, colors = IconButtonDefaults.iconButtonColors(
-      containerColor = MaterialTheme.colorScheme.surface),
+    XopcHeaderIconButton(onClick = { menuOpen = true }, accent = filter != "all",
       modifier = Modifier.testTag("automation-filter-menu")) {
       ActionIcon(R.drawable.action_filter, contentDescription = stringResource(R.string.automation_filter),
         color = if (filter == "all") MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary)
@@ -92,6 +91,7 @@ internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
     }
   }
   val motionAllowed = rememberMotionAllowed()
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
   Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
     androidx.compose.animation.AnimatedVisibility(
       visible = searchOpen,
@@ -104,10 +104,11 @@ internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
         placeholder = stringResource(R.string.progress_search),
         tag = "automation-search",
         autoFocus = true,
+        modifier = Modifier.padding(top = headerTopPadding),
       )
     }
     LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp),
-      contentPadding = PaddingValues(bottom = 12.dp)) {
+      contentPadding = PaddingValues(top = if (searchOpen) 0.dp else headerTopPadding, bottom = 12.dp)) {
       if (state.listLoading && state.items.isEmpty()) item {
         XopcListSkeleton(modifier = Modifier.testTag("automation-list-loading"), rows = 4)
       }
@@ -150,7 +151,8 @@ internal fun AutomationEditContent(item: AutomationSummary, name: String, onName
     cron.trim().isNotEmpty() && cron.trim().length <= 256
   val changed = name != item.name || instruction != item.instruction || cron != item.schedule
   var advancedSchedule by rememberSaveable(item.id) { mutableStateOf(false) }
-  Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
+  Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = headerTopPadding, bottom = 16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     OutlinedTextField(name, { onNameChange(it.take(200)) },
       label = { Text(stringResource(R.string.automation_name)) }, readOnly = !item.canEditDetails,
@@ -299,8 +301,9 @@ internal fun AutomationDetailContent(state: AutomationUiState,
   var confirmRun by rememberSaveable(state.selectedId) { mutableStateOf(false) }
   var confirmDelete by rememberSaveable(state.selectedId) { mutableStateOf(false) }
   val deleteKey = rememberSaveable(state.selectedId) { UUID.randomUUID().toString() }
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
   LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp),
-    contentPadding = PaddingValues(bottom = 20.dp)) {
+    contentPadding = PaddingValues(top = headerTopPadding, bottom = 20.dp)) {
     if (state.detailLoading && item == null) item {
       BrandLoadingPanel(modifier = Modifier.testTag("automation-detail-loading"))
     }
@@ -404,8 +407,9 @@ internal fun AutomationRunContent(state: AutomationUiState,
   onAction: (String) -> Unit = {}) {
   val run = state.run.takeIf { it?.id == state.selectedRunId }
   var confirmCancel by rememberSaveable(state.selectedRunId) { mutableStateOf(false) }
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
   LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp),
-    contentPadding = PaddingValues(bottom = 20.dp)) {
+    contentPadding = PaddingValues(top = headerTopPadding, bottom = 20.dp)) {
     if (state.runLoading && run == null) item {
       BrandLoadingPanel(modifier = Modifier.testTag("automation-run-loading"))
     }

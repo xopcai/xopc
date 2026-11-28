@@ -138,21 +138,31 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
   }
   val headerFill = LocalChatColors.current.card
   Box(modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))) {
-    Row(Modifier.fillMaxWidth().height(64.dp).background(MaterialTheme.colorScheme.background)
+    Row(Modifier.fillMaxWidth().height(64.dp)
       .padding(horizontal = 12.dp).testTag("task-chat-header"),
       verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      IconButton(onClick = onClose, modifier = Modifier.background(headerFill, CircleShape).testTag("task-chat-close")) {
+      IconButton(onClick = onClose, modifier = Modifier.size(44.dp).background(headerFill, CircleShape).testTag("task-chat-close")) {
         Icon(painterResource(R.drawable.action_close), stringResource(when (returnTab) {
           HomeTab.Assistant -> R.string.task_chat_return_conversation
           HomeTab.Progress, HomeTab.Projects, HomeTab.Automations, HomeTab.Notes, HomeTab.Library -> R.string.task_chat_return_task
           else -> R.string.task_chat_return_history
         }))
       }
-      Text(task?.title ?: title.ifBlank { stringResource(R.string.progress_task_detail) },
-        modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
-        maxLines = 1, overflow = TextOverflow.Ellipsis)
+      Box(
+        modifier = Modifier
+          .weight(1f)
+          .heightIn(min = 44.dp)
+          .clip(CircleShape)
+          .background(headerFill)
+          .padding(horizontal = 14.dp, vertical = 10.dp),
+        contentAlignment = Alignment.CenterStart,
+      ) {
+        Text(task?.title ?: title.ifBlank { stringResource(R.string.progress_task_detail) },
+          style = MaterialTheme.typography.titleSmall,
+          maxLines = 1, overflow = TextOverflow.Ellipsis)
+      }
       Box {
-        IconButton(onClick = { menuOpen = true }, modifier = Modifier.background(headerFill, CircleShape)
+        IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(44.dp).background(headerFill, CircleShape)
           .semantics { contentDescription = moreLabel }.testTag("task-chat-menu")) {
           Icon(painterResource(R.drawable.action_more_horizontal), contentDescription = null, modifier = Modifier.size(22.dp))
         }

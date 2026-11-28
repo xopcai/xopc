@@ -48,9 +48,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 internal val FLOATING_TAB_BAR_HEIGHT: Dp = 54.dp
-internal val FLOATING_TAB_BAR_COMPOSER_GAP: Dp = 8.dp
-internal val FLOATING_TAB_BAR_BOTTOM_MARGIN: Dp = 6.dp
-internal val FLOATING_TAB_BAR_TOTAL_INSET: Dp = FLOATING_TAB_BAR_HEIGHT + FLOATING_TAB_BAR_BOTTOM_MARGIN + FLOATING_TAB_BAR_COMPOSER_GAP
+internal val FLOATING_TAB_BAR_TOP_PADDING: Dp = 4.dp
+internal val FLOATING_TAB_BAR_COMPOSER_GAP: Dp = 4.dp
+internal val FLOATING_TAB_BAR_BOTTOM_MARGIN: Dp = 0.dp
+internal val FLOATING_TAB_BAR_TOTAL_INSET: Dp = FLOATING_TAB_BAR_HEIGHT + FLOATING_TAB_BAR_TOP_PADDING + FLOATING_TAB_BAR_BOTTOM_MARGIN + FLOATING_TAB_BAR_COMPOSER_GAP
 
 internal fun floatingPillSurfaceColor(scheme: ColorScheme): Color = scheme.surface
 
@@ -89,9 +90,10 @@ internal fun FloatingTabBar(
   Box(
     modifier = modifier
       .fillMaxWidth()
+      .background(scheme.background)
       .navigationBarsPadding()
       .padding(horizontal = 12.dp)
-      .padding(bottom = FLOATING_TAB_BAR_BOTTOM_MARGIN),
+      .padding(top = FLOATING_TAB_BAR_TOP_PADDING, bottom = FLOATING_TAB_BAR_BOTTOM_MARGIN),
     contentAlignment = Alignment.Center,
   ) {
     Surface(

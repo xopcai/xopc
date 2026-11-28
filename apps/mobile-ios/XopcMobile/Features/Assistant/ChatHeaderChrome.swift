@@ -343,9 +343,9 @@ struct ChatHeaderIdentityButton: View {
                     .fixedSize().accessibilityHidden(true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12).padding(.vertical, 6).frame(minHeight: 44).contentShape(.rect)
+            .padding(.horizontal, 14).padding(.vertical, 6).frame(minHeight: 44).contentShape(Capsule())
         }
-        .buttonStyle(MobilePressStyle(radius: mobileTheme.corner(18), restingBackground: mobileTheme.card))
+        .buttonStyle(MobilePressStyle(radius: 22, restingBackground: mobileTheme.card))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(verbatim: identity.accessibilitySummary))
         .accessibilityIdentifier("chat-header-identity")
@@ -405,10 +405,10 @@ struct ChatContextStripButton: View {
                     .foregroundStyle(mobileTheme.secondary.opacity(0.65))
                     .accessibilityHidden(true)
             }
-            .padding(.horizontal, 10).padding(.vertical, 5).frame(minHeight: 32).contentShape(.rect)
+            .padding(.horizontal, 12).padding(.vertical, 5).frame(minHeight: 32).contentShape(Capsule())
         }
         .buttonStyle(MobilePressStyle(
-            radius: mobileTheme.corner(12),
+            radius: 16,
             restingBackground: model.needsAttention ? mobileTheme.attention : mobileTheme.card
         ))
         .accessibilityElement(children: .combine)

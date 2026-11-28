@@ -12,6 +12,7 @@ import { XopcWorkspaceItem } from '../model/workspace';
 import { XopcSessionItem } from '../model/chat';
 import { XopcProjectSpaceViewModel } from '../viewmodel/projectSpaceViewModel';
 import {
+  XOPC_PAGE_HEADER_HEIGHT_VP,
   XopcEmptyHint,
   XopcHubRow,
   XopcInlineBanner,
@@ -312,36 +313,39 @@ export struct XopcProjectSpaceView {
 
   build() {
     NavDestination() {
-      Column() {
+      Stack({ alignContent: Alignment.Top }) {
+        Column() {
+          if (this.model.project) {
+            Text(this.model.project.name).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+              .width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: XOPC_PAGE_HEADER_HEIGHT_VP, bottom: 8 })
+          }
+          if (this.model.error) {
+            Column() {
+              XopcInlineBanner({
+                message: $r('app.string.project_load_error'),
+                actionLabel: $r('app.string.refresh'),
+                busy: this.model.loading,
+                onAction: (): void => { void this.model.load(this.projectId); },
+              })
+            }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: this.model.project ? 4 : XOPC_PAGE_HEADER_HEIGHT_VP, bottom: 8 })
+          }
+          Swiper(this.pager) {
+            ForEach(this.tabOptions, (option: XopcPageTitleOption) => {
+              this.sectionPage(option.key)
+            }, (option: XopcPageTitleOption): string => option.key)
+          }.id('project-pager')
+            .index(Math.max(0, this.tabOptions.findIndex((option: XopcPageTitleOption): boolean => option.key === this.tab)))
+            .loop(false).indicator(false).cachedCount(1).disableSwipe(this.menuOpen)
+            .duration(xopcPagerDuration(this.layout.reduceMotion))
+            .onChange((index: number): void => { this.commitTab(index); })
+            .width('100%').layoutWeight(1)
+            .padding({ top: !this.model.project && !this.model.error ? XOPC_PAGE_HEADER_HEIGHT_VP : 0 })
+        }.height('100%').width('100%')
         XopcPageHeader({ heading: this.tabOptions.find((option: XopcPageTitleOption): boolean => option.key === this.tab)?.label
           ?? $r('app.string.project_overview'), selectedTitle: this.tab, titleOptions: this.tabOptions,
           titleMenuId: 'project-tabs', onSelectTitle: (key: string): void => { this.selectTab(key); },
           backVisible: true, onBack: this.onExit, actionLabel: $r('app.string.project_add_item'), actionIcon: $r('sys.symbol.plus'),
           actionTone: 'accent', onAction: (): void => { this.menuOpen = true; } })
-        if (this.model.project) {
-          Text(this.model.project.name).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-            .width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
-        }
-        if (this.model.error) {
-          Column() {
-            XopcInlineBanner({
-              message: $r('app.string.project_load_error'),
-              actionLabel: $r('app.string.refresh'),
-              busy: this.model.loading,
-              onAction: (): void => { void this.model.load(this.projectId); },
-            })
-          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: 4, bottom: 8 })
-        }
-        Swiper(this.pager) {
-          ForEach(this.tabOptions, (option: XopcPageTitleOption) => {
-            this.sectionPage(option.key)
-          }, (option: XopcPageTitleOption): string => option.key)
-        }.id('project-pager')
-          .index(Math.max(0, this.tabOptions.findIndex((option: XopcPageTitleOption): boolean => option.key === this.tab)))
-          .loop(false).indicator(false).cachedCount(1).disableSwipe(this.menuOpen)
-          .duration(xopcPagerDuration(this.layout.reduceMotion))
-          .onChange((index: number): void => { this.commitTab(index); })
-          .width('100%').layoutWeight(1)
       }.height('100%').width('100%').backgroundColor(this.colors.surface)
         .bindSheet($$this.menuOpen, this.projectMenu, xopcSheetOptions('medium', {
           height: 455,
@@ -350,7 +354,7 @@ export struct XopcProjectSpaceView {
             if (page) this.go(page, page === 'project-settings' ? this.projectId : '');
           },
         }))
-    }.hideTitleBar(true)
+    }.hideTitleBar(true).backgroundColor(this.colors.surface)
       .onShown((): void => {
         if (this.shownOnce) void this.model.load(this.projectId);
         else this.shownOnce = true;

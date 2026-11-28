@@ -261,9 +261,14 @@ internal fun PhoneWorkspaceContent(ui: PhoneUiState, onReturn: () -> Unit, onCom
   LaunchedEffect(ui.summary?.binding) { stopOpen = false }
   Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding().padding(16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-      TextButton(onClick = onReturn, modifier = Modifier.size(48.dp).testTag("phone-return")) { Text("‹", style = MaterialTheme.typography.headlineMedium) }
-      Column(Modifier.weight(1f)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      TextButton(onClick = onReturn, modifier = Modifier.size(44.dp).clip(CircleShape)
+        .background(floatingPillSurfaceColor(MaterialTheme.colorScheme)).testTag("phone-return")) {
+        Text("‹", style = MaterialTheme.typography.headlineSmall)
+      }
+      Column(Modifier.weight(1f).clip(CircleShape)
+        .background(floatingPillSurfaceColor(MaterialTheme.colorScheme))
+        .padding(horizontal = 14.dp, vertical = 6.dp)) {
         Text(ui.summary?.name.orEmpty(), style = MaterialTheme.typography.titleMedium, maxLines = 1)
         Text(stringResource(when {
           ui.busy -> R.string.phone_handoff
@@ -276,8 +281,8 @@ internal fun PhoneWorkspaceContent(ui: PhoneUiState, onReturn: () -> Unit, onCom
         }), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
       Box {
-        TextButton(onClick = { more = true }, enabled = !ui.busy, modifier = Modifier.size(48.dp).clip(CircleShape)
-          .background(MaterialTheme.colorScheme.surfaceContainer).testTag("phone-more")) { Text("•••") }
+        TextButton(onClick = { more = true }, enabled = !ui.busy, modifier = Modifier.size(44.dp).clip(CircleShape)
+          .background(floatingPillSurfaceColor(MaterialTheme.colorScheme)).testTag("phone-more")) { Text("•••") }
         DropdownMenu(more, { more = false }) {
           if (ui.live?.ownControl == true) {
             DropdownMenuItem(text = { Text(stringResource(R.string.phone_back)) }, enabled = !ui.busy,

@@ -82,9 +82,14 @@ class MainActivity : ComponentActivity() {
         else -> systemDark
       }
       SideEffect {
-        enableEdgeToEdge(statusBarStyle = SystemBarStyle.auto(
-          android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
-        ) { darkTheme })
+        enableEdgeToEdge(
+          statusBarStyle = SystemBarStyle.auto(
+            android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
+          ) { darkTheme },
+          navigationBarStyle = SystemBarStyle.auto(
+            android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
+          ) { darkTheme },
+        )
       }
       XopcTheme(darkTheme = darkTheme, scheme = colorScheme) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {

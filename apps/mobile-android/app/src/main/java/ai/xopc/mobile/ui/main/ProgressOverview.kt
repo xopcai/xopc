@@ -54,12 +54,13 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
       }
     }
   }
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
   XopcPullToRefreshBox(
     isRefreshing = state.homeLoading && (state.needsUser.isNotEmpty() || state.background.isNotEmpty()),
     onRefresh = onRefresh, modifier = Modifier.fillMaxSize().testTag("progress-refresh-gesture")) {
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("progress-overview-list"),
       verticalArrangement = Arrangement.spacedBy(8.dp),
-      contentPadding = PaddingValues(bottom = 20.dp)) {
+      contentPadding = PaddingValues(top = headerTopPadding, bottom = 20.dp)) {
       if (state.homeActionError) item(key = "action-error", contentType = "error") {
         XopcInlineBanner(
           message = stringResource(R.string.progress_home_action_error),

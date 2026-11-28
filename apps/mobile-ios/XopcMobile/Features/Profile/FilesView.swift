@@ -77,9 +77,12 @@ struct FilesView: View {
         .mobilePageTitle(Text(verbatim: initialSpace?.title ?? AppLocalization.string("文件", locale: AppLocalization.selectedLocale)))
         .toolbar {
             if let initialSpace, initialSpace.writable {
-                FileUploadButton(configuration: configuration, spaceID: initialSpace.id, directory: "") {
-                    await load(query)
+                ToolbarItem(placement: .topBarTrailing) {
+                    FileUploadButton(configuration: configuration, spaceID: initialSpace.id, directory: "") {
+                        await load(query)
+                    }
                 }
+                .mobileTransparentToolbarItem()
             }
         }
         .searchable(text: $search, prompt: "搜索文件")
@@ -183,9 +186,12 @@ struct FileFolderView: View {
         .mobilePageTitle(Text(verbatim: title))
         .toolbar {
             if writable {
-                FileUploadButton(configuration: configuration, spaceID: spaceID, directory: path) {
-                    await load()
+                ToolbarItem(placement: .topBarTrailing) {
+                    FileUploadButton(configuration: configuration, spaceID: spaceID, directory: path) {
+                        await load()
+                    }
                 }
+                .mobileTransparentToolbarItem()
             }
         }
         .refreshable { await load() }
@@ -272,11 +278,16 @@ struct FilePreviewView: View {
         .background(mobileTheme.canvas.ignoresSafeArea())
         .mobilePageTitle(Text(verbatim: file.name))
         .toolbar {
-            Button("下载", systemImage: "arrow.down.to.line") { Task { await download() } }
-                .disabled(isDownloading)
-            if !isLoading, error == nil, file.capabilities.contains("edit"), text != nil {
-                Button("编辑", systemImage: "pencil") { isEditing = true }
+            ToolbarItem(placement: .topBarTrailing) {
+                HStack(spacing: 8) {
+                    MobileHeaderIconButton("下载", systemImage: "arrow.down.to.line") { Task { await download() } }
+                        .disabled(isDownloading)
+                    if !isLoading, error == nil, file.capabilities.contains("edit"), text != nil {
+                        MobileHeaderIconButton("编辑", systemImage: "pencil") { isEditing = true }
+                    }
+                }
             }
+            .mobileTransparentToolbarItem()
         }
         .sheet(isPresented: $isEditing) {
             if let text {

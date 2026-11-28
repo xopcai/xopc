@@ -274,3 +274,34 @@ struct UIArchitectureGuardTests {
         #expect(bubble.contains(".sensoryFeedback(.success"), "MessageBubble must trigger success haptic feedback on copy")
     }
 }
+
+extension UIArchitectureGuardTests {
+    @Test func transparentHeadersWithCapsuleChromeAcrossPages() throws {
+        let theme = try String(
+            contentsOf: Self.iosSourceRoot.appendingPathComponent("Core/Views/MobileTheme.swift"),
+            encoding: .utf8
+        )
+        #expect(theme.contains("struct MobileHeaderTitlePill"), "MobileTheme must define capsule MobileHeaderTitlePill")
+        #expect(theme.contains("struct MobileHeaderIconButton"), "MobileTheme must define circular capsule MobileHeaderIconButton")
+        #expect(theme.contains(".toolbarBackground(.hidden, for: .navigationBar)"), "mobilePageTitle must keep navigation bar transparent")
+        #expect(theme.contains("scrollEdgeEffectHidden(true, for: .top)"), "mobilePageTitle must hide top scroll edge effect on iOS 26+")
+
+        let segmented = try String(
+            contentsOf: Self.iosSourceRoot.appendingPathComponent("Core/Views/SegmentedTabs.swift"),
+            encoding: .utf8
+        )
+        #expect(segmented.contains(".background(theme.panel, in: Capsule())"), "MobilePageTitleMenu must render inside a capsule pill")
+
+        let assistant = try String(
+            contentsOf: Self.iosSourceRoot.appendingPathComponent("Features/Assistant/AssistantView.swift"),
+            encoding: .utf8
+        )
+        #expect(!assistant.contains("mobileTheme.canvas.ignoresSafeArea(edges: .top)"), "AssistantView floating header must remain transparent")
+
+        let taskDetail = try String(
+            contentsOf: Self.iosSourceRoot.appendingPathComponent("Features/Progress/TaskDetailView.swift"),
+            encoding: .utf8
+        )
+        #expect(!taskDetail.contains(".frame(minHeight: 64)\n            .background(mobileTheme.canvas)"), "TaskDetailView header must remain transparent")
+    }
+}

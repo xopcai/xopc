@@ -208,62 +208,66 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
     load()
   }
 
-  Column(Modifier.fillMaxSize().background(colors.background).padding(insets).imePadding()) {
-    XopcPageHeader(
-      backTag = "capability-back",
-      onBack = onExit,
-      title = stringResource(category.title),
-    ) {
-      if (skills) {
-        IconButton(onClick = {
-          focus.clearFocus()
-          keyboard?.hide()
-          detail = CapabilityItem("marketplace:search", skillMarketTitle, group = "available")
-        }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape).testTag("capability-add-skills")) {
-          ActionIcon(R.drawable.action_capabilities, color = colors.primary, contentDescription = skillMarketTitle)
+  XopcFloatingHeaderScaffold(
+    modifier = Modifier.fillMaxSize().background(colors.background).padding(insets).imePadding(),
+    header = {
+      Column(Modifier.fillMaxWidth()) {
+        XopcPageHeader(
+          backTag = "capability-back",
+          onBack = onExit,
+          title = stringResource(category.title),
+        ) {
+          if (skills) {
+            XopcHeaderIconButton(onClick = {
+              focus.clearFocus()
+              keyboard?.hide()
+              detail = CapabilityItem("marketplace:search", skillMarketTitle, group = "available")
+            }, accent = true, modifier = Modifier.testTag("capability-add-skills")) {
+              ActionIcon(R.drawable.action_capabilities, color = colors.primary, contentDescription = skillMarketTitle)
+            }
+          } else if (plugins) {
+            XopcHeaderIconButton(onClick = {
+              searchFocus.requestFocus()
+              keyboard?.show()
+            }, accent = true, modifier = Modifier.testTag("capability-add-plugins")) {
+              ActionIcon(R.drawable.action_search, color = colors.primary, contentDescription = stringResource(R.string.capability_search_plugins))
+            }
+          }
+          if (skills || agents || connections) {
+            val label = stringResource(when {
+              agents -> R.string.capability_create_agent
+              skills -> R.string.capability_create_skill
+              else -> R.string.capability_add_mcp
+            })
+            val prompt = stringResource(if (agents) R.string.capability_agent_setup_prompt else R.string.capability_skill_setup_prompt)
+            XopcHeaderIconButton(onClick = {
+              focus.clearFocus()
+              keyboard?.hide()
+              if (connections) detail = CapabilityItem("mcp:setup", label, group = "available")
+              else onSetupChat(prompt, agents)
+            }, accent = true, modifier = Modifier.testTag(if (connections) "capability-add-mcp" else "capability-chat-setup-${category.key}")) {
+              ActionIcon(R.drawable.action_add, color = colors.primary, contentDescription = label)
+            }
+          }
         }
-      } else if (plugins) {
-        IconButton(onClick = {
-          searchFocus.requestFocus()
-          keyboard?.show()
-        }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape)
-          .testTag("capability-add-plugins")) {
-          ActionIcon(R.drawable.action_search, color = colors.primary, contentDescription = stringResource(R.string.capability_search_plugins))
+        if (category != CapabilityCategory.Devices) {
+          XopcPageSearchField(
+            query = query,
+            onQueryChange = { updateQuery(it) },
+            placeholder = if (skills) stringResource(R.string.capability_search_installed_skills)
+              else stringResource(R.string.capability_search, stringResource(category.title)),
+            tag = "capability-search",
+            autoFocus = false,
+            focusRequester = searchFocus,
+            modifier = Modifier.padding(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, bottom = 8.dp),
+          )
         }
       }
-      if (skills || agents || connections) {
-        val label = stringResource(when {
-          agents -> R.string.capability_create_agent
-          skills -> R.string.capability_create_skill
-          else -> R.string.capability_add_mcp
-        })
-        val prompt = stringResource(if (agents) R.string.capability_agent_setup_prompt else R.string.capability_skill_setup_prompt)
-        IconButton(onClick = {
-          focus.clearFocus()
-          keyboard?.hide()
-          if (connections) detail = CapabilityItem("mcp:setup", label, group = "available")
-          else onSetupChat(prompt, agents)
-        }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape)
-          .testTag(if (connections) "capability-add-mcp" else "capability-chat-setup-${category.key}")) {
-          ActionIcon(R.drawable.action_add, color = colors.primary, contentDescription = label)
-        }
-      }
-    }
-    Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.PagePaddingX)) {
-      if (category != CapabilityCategory.Devices) {
-        XopcPageSearchField(
-          query = query,
-          onQueryChange = { updateQuery(it) },
-          placeholder = if (skills) stringResource(R.string.capability_search_installed_skills)
-            else stringResource(R.string.capability_search, stringResource(category.title)),
-          tag = "capability-search",
-          autoFocus = false,
-          focusRequester = searchFocus,
-          modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
-        )
-      }
+    },
+  ) { headerTopPadding ->
+    Box(Modifier.fillMaxSize().padding(horizontal = XopcDesignTokens.PagePaddingX)) {
       if (category == CapabilityCategory.Devices) {
-        Box(Modifier.weight(1f).fillMaxWidth().testTag("capability-catalog-${category.key}")) {
+        Box(Modifier.fillMaxSize().padding(top = headerTopPadding).testTag("capability-catalog-${category.key}")) {
           androidx.compose.runtime.key(deviceScope) {
             DeviceConnectionsScreen(onLoadDevices, onUseComputer, onShareDeviceFile, { tool ->
               val prompt = when (tool) {
@@ -282,10 +286,10 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
         XopcPullToRefreshBox(
           isRefreshing = loading && catalog != null,
           onRefresh = { load(refresh = true) },
-          modifier = Modifier.weight(1f).fillMaxWidth(),
+          modifier = Modifier.fillMaxSize(),
         ) {
           LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("capability-catalog-${category.key}"),
-            contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
+            contentPadding = PaddingValues(top = headerTopPadding + 4.dp, bottom = 4.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (pending && catalog == null) item { CapabilityListSkeleton() }
             if (failed || catalog?.incomplete == true) item {

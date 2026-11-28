@@ -83,41 +83,48 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
   val previewItem = state.items.firstOrNull { it.id == previewId }
   val extendItem = state.items.firstOrNull { it.id == extendId }
   val revokeItem = state.items.firstOrNull { it.id == revokeId }
-  Column(Modifier.fillMaxSize().padding(insets).testTag("share-center")) {
-    XopcPageHeader("shares-back", onBack, title = stringResource(R.string.share_center)) {
-      TextButton(onClick = { showInactive = !showInactive },
-        modifier = Modifier.testTag("shares-toggle-inactive")) {
-        Text(stringResource(if (showInactive) R.string.share_hide_inactive else R.string.share_show_inactive))
+  XopcFloatingHeaderScaffold(
+    modifier = Modifier.fillMaxSize().padding(insets).testTag("share-center"),
+    header = {
+      XopcPageHeader("shares-back", onBack, title = stringResource(R.string.share_center)) {
+        XopcHeaderPillButton(
+          label = stringResource(if (showInactive) R.string.share_hide_inactive else R.string.share_show_inactive),
+          onClick = { showInactive = !showInactive },
+          accent = showInactive,
+          modifier = Modifier.testTag("shares-toggle-inactive"),
+        )
       }
-    }
-    if (!connected) {
-      Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(stringResource(R.string.share_connect_gateway),
-          color = MaterialTheme.colorScheme.onSurfaceVariant)
+    },
+  ) { headerTopPadding ->
+    Column(Modifier.fillMaxSize()) {
+      if (!connected) {
+        Box(Modifier.fillMaxSize().padding(top = headerTopPadding), contentAlignment = Alignment.Center) {
+          Text(stringResource(R.string.share_connect_gateway),
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return@Column
       }
-      return@Column
-    }
-    if (state.error) XopcInlineBanner(
-      message = stringResource(R.string.share_load_error),
-      tone = XopcBannerTone.Danger,
-      actionLabel = stringResource(R.string.progress_refresh),
-      onAction = onRefresh,
-      actionEnabled = !state.loading && state.busyId == null,
-      modifier = Modifier.padding(horizontal = XopcDesignTokens.PagePaddingX, vertical = 4.dp),
-    )
-    if (state.loading && state.items.isEmpty()) {
-      Box(Modifier.fillMaxSize().padding(horizontal = XopcDesignTokens.PagePaddingX).testTag("shares-loading")) {
-        XopcListSkeleton(rows = 4)
-      }
-    } else {
-      XopcPullToRefreshBox(
-        isRefreshing = state.loading,
-        onRefresh = { if (state.busyId == null) onRefresh() },
-        modifier = Modifier.fillMaxSize().testTag("shares-refresh-gesture"),
-      ) {
-      LazyColumn(modifier = Modifier.fillMaxSize().testTag("shares-list"),
-        contentPadding = PaddingValues(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, bottom = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      if (state.error) XopcInlineBanner(
+        message = stringResource(R.string.share_load_error),
+        tone = XopcBannerTone.Danger,
+        actionLabel = stringResource(R.string.progress_refresh),
+        onAction = onRefresh,
+        actionEnabled = !state.loading && state.busyId == null,
+        modifier = Modifier.padding(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, top = headerTopPadding + 4.dp, bottom = 4.dp),
+      )
+      if (state.loading && state.items.isEmpty()) {
+        Box(Modifier.fillMaxSize().padding(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, top = if (state.error) 0.dp else headerTopPadding).testTag("shares-loading")) {
+          XopcListSkeleton(rows = 4)
+        }
+      } else {
+        XopcPullToRefreshBox(
+          isRefreshing = state.loading,
+          onRefresh = { if (state.busyId == null) onRefresh() },
+          modifier = Modifier.fillMaxSize().testTag("shares-refresh-gesture"),
+        ) {
+        LazyColumn(modifier = Modifier.fillMaxSize().testTag("shares-list"),
+          contentPadding = PaddingValues(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, top = if (state.error) 0.dp else headerTopPadding, bottom = 20.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (visible.isEmpty() && !state.loading) item {
           XopcEmptyState(
             message = stringResource(R.string.share_empty),
@@ -159,6 +166,7 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
         }
       }
       }
+    }
     }
   }
   if (menuItem != null) XopcBottomSheet(XopcSheetPreset.Compact, onDismissRequest = { menuId = null },

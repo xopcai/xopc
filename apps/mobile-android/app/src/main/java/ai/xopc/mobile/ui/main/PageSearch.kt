@@ -2,19 +2,22 @@ package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,8 +83,17 @@ internal fun <T> PageTitleMenu(options: List<SegmentOption<T>>, selected: T, tag
   var expanded by remember { mutableStateOf(false) }
   val title = options.firstOrNull { it.value == selected }?.label.orEmpty()
   Box(modifier, contentAlignment = Alignment.Center) {
-    TextButton(onClick = { expanded = true }, modifier = Modifier.heightIn(min = 44.dp).testTag(tag)) {
-      Row(verticalAlignment = Alignment.CenterVertically) {
+    Surface(
+      onClick = { expanded = true },
+      shape = CircleShape,
+      color = floatingPillSurfaceColor(MaterialTheme.colorScheme),
+      modifier = Modifier.heightIn(min = 44.dp).testTag(tag),
+    ) {
+      Row(
+        modifier = Modifier.padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+      ) {
         Text(title, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleMedium,
           color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
         ActionIcon(R.drawable.action_chevron_down, size = 16.dp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -104,14 +116,14 @@ internal fun <T> PageTitleMenu(options: List<SegmentOption<T>>, selected: T, tag
 internal fun PageSearchButton(open: Boolean, @StringRes label: Int, tag: String, onClick: () -> Unit) {
   val focusManager = LocalFocusManager.current
   val keyboard = LocalSoftwareKeyboardController.current
-  IconButton(onClick = {
+  XopcHeaderIconButton(onClick = {
     if (open) {
       focusManager.clearFocus(force = true)
       keyboard?.hide()
     }
     onClick()
-  }, modifier = Modifier.size(48.dp).testTag(if (open) "$tag-close" else tag)) {
-    ActionIcon(if (open) R.drawable.action_close else R.drawable.action_search, size = 24.dp,
+  }, modifier = Modifier.testTag(if (open) "$tag-close" else tag)) {
+    ActionIcon(if (open) R.drawable.action_close else R.drawable.action_search, size = XopcDesignTokens.IconHeader,
       contentDescription = stringResource(if (open) R.string.assistant_close else label))
   }
 }

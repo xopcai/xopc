@@ -520,68 +520,75 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     }
   }
   val motionAllowed = rememberMotionAllowed()
-  Column(modifier = Modifier.fillMaxSize().then(if (isWorkbenchRoot) sidebarGesture else Modifier).padding(insets)) {
-    val automationName = state.automations.detail?.takeIf { page == "automation" && it.id == selectedAutomationId }?.name
-    XopcPageHeader(
-      backTag = "progress-back",
-      onBack = ::goBack,
-      backEnabled = !state.commandBusy && !state.editBusy,
-      showBack = !isWorkbenchRoot && (page != "overview" || onExit != null),
-      leadingContent = if (isWorkbenchRoot) ({ PageSidebarButton("workbench-sidebar", onOpenSidebar!!) }) else null,
-      title = if (page == "automations" || page == "automation") (automationName ?: stringResource(R.string.progress_automations)) else null,
-      titleContent = when {
-        workPageIndex >= 0 -> ({ PageTitleMenu(workPages, page, "work-page-menu", Modifier.fillMaxWidth(), ::scrollToWorkPage) })
-        page == "project" && selectedProjectId != null -> ({
-          PageTitleMenu(projectSections, projectSection, "progress-project-tabs", Modifier.fillMaxWidth()) { target ->
-            val index = projectSections.indexOfFirst { it.value == target }
-            projectPagerScope.launch {
-              val distance = index - projectPager.currentPage
-              if (xopcPagerAnimated(motionAllowed, distance)) projectPager.animateScrollToPage(index)
-              else projectPager.scrollToPage(index)
+  XopcFloatingHeaderScaffold(
+    modifier = Modifier.fillMaxSize().then(if (isWorkbenchRoot) sidebarGesture else Modifier).padding(insets),
+    header = {
+      val automationName = state.automations.detail?.takeIf { page == "automation" && it.id == selectedAutomationId }?.name
+      XopcPageHeader(
+        backTag = "progress-back",
+        onBack = ::goBack,
+        backEnabled = !state.commandBusy && !state.editBusy,
+        showBack = !isWorkbenchRoot && (page != "overview" || onExit != null),
+        leadingContent = if (isWorkbenchRoot) ({ PageSidebarButton("workbench-sidebar", onOpenSidebar!!) }) else null,
+        title = if (page == "automations" || page == "automation") (automationName ?: stringResource(R.string.progress_automations)) else null,
+        titleContent = when {
+          workPageIndex >= 0 -> ({ PageTitleMenu(workPages, page, "work-page-menu", Modifier.fillMaxWidth(), ::scrollToWorkPage) })
+          page == "project" && selectedProjectId != null -> ({
+            PageTitleMenu(projectSections, projectSection, "progress-project-tabs", Modifier.fillMaxWidth()) { target ->
+              val index = projectSections.indexOfFirst { it.value == target }
+              projectPagerScope.launch {
+                val distance = index - projectPager.currentPage
+                if (xopcPagerAnimated(motionAllowed, distance)) projectPager.animateScrollToPage(index)
+                else projectPager.scrollToPage(index)
+              }
             }
+          })
+          else -> null
+        },
+        modifier = Modifier.testTag("progress-header"),
+      ) {
+        if (page == "automations") {
+          PageSearchButton(automationSearchOpen, R.string.progress_search, "automation-open-search") {
+            automationSearchOpen = !automationSearchOpen
           }
-        })
-        else -> null
-      },
-      modifier = Modifier.padding(bottom = if (page == "overview") 4.dp else 0.dp).testTag("progress-header"),
-    ) {
-      if (page == "automations") {
-        PageSearchButton(automationSearchOpen, R.string.progress_search, "automation-open-search") {
-          automationSearchOpen = !automationSearchOpen
-        }
-        AutomationFilterButton(automationFilter) {
-          automationFilter = it
-          navigation.rememberSelection("automation-filter", it)
-        }
-      } else if (page == "projects") {
-        PageSearchButton(projectSearchOpen, R.string.progress_search_projects, "projects-open-search") {
-          projectSearchOpen = !projectSearchOpen
-        }
-        IconButton(onClick = { openProjectEditor("create") }, modifier = Modifier.testTag("project-create")) {
-          Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_new))
-        }
-      } else if (page == "project") IconButton(onClick = { projectMenuOpen = true },
-        enabled = state.project?.id == selectedProjectId && selectedProjectId != null,
-        modifier = Modifier.testTag("project-open-actions")) {
-        Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_add_item))
-      } else if (page == "tasks") Row {
-        if (!taskSearchOpen) IconButton(onClick = { taskSearchOpen = true },
-          modifier = Modifier.size(48.dp).testTag("progress-open-search")) {
-          Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.progress_search),
-            modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
-        }
-        IconButton(onClick = { createTask(null) }, modifier = Modifier.size(48.dp).testTag("progress-create-task")) {
-          Icon(painterResource(R.drawable.action_add), contentDescription = stringResource(R.string.progress_new_task),
-            modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
+          AutomationFilterButton(automationFilter) {
+            automationFilter = it
+            navigation.rememberSelection("automation-filter", it)
+          }
+        } else if (page == "projects") {
+          PageSearchButton(projectSearchOpen, R.string.progress_search_projects, "projects-open-search") {
+            projectSearchOpen = !projectSearchOpen
+          }
+          XopcHeaderIconButton(onClick = { openProjectEditor("create") }, accent = true,
+            modifier = Modifier.testTag("project-create")) {
+            Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_new))
+          }
+        } else if (page == "project") XopcHeaderIconButton(onClick = { projectMenuOpen = true },
+          enabled = state.project?.id == selectedProjectId && selectedProjectId != null,
+          accent = true,
+          modifier = Modifier.testTag("project-open-actions")) {
+          Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_add_item))
+        } else if (page == "tasks") Row(horizontalArrangement = Arrangement.spacedBy(XopcDesignTokens.ItemGap)) {
+          if (!taskSearchOpen) XopcHeaderIconButton(onClick = { taskSearchOpen = true },
+            modifier = Modifier.testTag("progress-open-search")) {
+            Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.progress_search),
+              modifier = Modifier.size(XopcDesignTokens.IconHeader), tint = MaterialTheme.colorScheme.onSurface)
+          }
+          XopcHeaderIconButton(onClick = { createTask(null) }, accent = true,
+            modifier = Modifier.testTag("progress-create-task")) {
+            Icon(painterResource(R.drawable.action_add), contentDescription = stringResource(R.string.progress_new_task),
+              modifier = Modifier.size(XopcDesignTokens.IconHeader), tint = MaterialTheme.colorScheme.primary)
+          }
         }
       }
-    }
-    Column(modifier = Modifier.weight(1f).fillMaxWidth()
+    },
+  ) { headerTopPadding ->
+    Column(modifier = Modifier.fillMaxSize()
       .padding(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX,
         bottom = if (isWorkbenchRoot) bottomChromeInset else 0.dp)) {
     if (state.createTaskChatError && page == "tasks") Text(
       stringResource(R.string.progress_create_chat_error), color = MaterialTheme.colorScheme.error,
-      modifier = Modifier.testTag("progress-create-task-error"))
+      modifier = Modifier.padding(top = headerTopPadding).testTag("progress-create-task-error"))
     when (page) {
       "create" -> ProgressTaskEditor(createTitle, { createTitle = it }, createBody, { createBody = it },
         createProjectId, { createProjectId = it }, createPriority, { createPriority = it }, createDueAt, { createDueAt = it },
@@ -805,7 +812,8 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
     else -> true
   } }
   val motionAllowed = rememberMotionAllowed()
-  Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
+  Column(modifier = Modifier.fillMaxSize().padding(top = headerTopPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     androidx.compose.animation.AnimatedVisibility(
       visible = searchOpen,
       enter = xopcExpandPanelEnter(motionAllowed, Alignment.Top),
@@ -875,7 +883,9 @@ private fun ProgressProjectDetail(project: ProgressProject, section: String, tas
   onOpenAttention: (ProgressItem) -> Unit = {},
   onRequestAction: (ProgressHomeAction) -> Unit = {}) {
   val overviewTasks = remember(tasks) { tasks.filter { it.phase != "closed" } }
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
   LazyColumn(modifier = Modifier.fillMaxSize().testTag("progress-project-detail"),
+    contentPadding = PaddingValues(top = headerTopPadding, bottom = 20.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     item {
       Card {
@@ -1027,7 +1037,8 @@ private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterCha
     "closed" -> task.phase == "closed"
     else -> true
   } } }
-  Column(modifier = Modifier.fillMaxSize()) {
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
+  Column(modifier = Modifier.fillMaxSize().padding(top = headerTopPadding)) {
     TextButton(onClick = onCreateTaskWithChat, enabled = !state.creatingTaskChat,
       modifier = Modifier.align(Alignment.End).testTag("progress-create-task-chat")) {
       Text(stringResource(R.string.progress_create_task_in_chat))
@@ -1377,7 +1388,8 @@ internal fun ProgressTaskEditor(title: String, onTitleChange: (String) -> Unit,
   val prefix = if (creating) "progress-create" else "progress-edit"
   val valid = title.trim().isNotEmpty() && title.trim().length <= 500 && body.length <= 50_000 &&
     projectId.trim().length <= 512 && (!requiresProject || projectId.isNotBlank())
-  Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).testTag(if (creating) "progress-task-create" else "progress-task-editor"),
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
+  Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = headerTopPadding, bottom = 16.dp).testTag(if (creating) "progress-task-create" else "progress-task-editor"),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     OutlinedTextField(value = title, onValueChange = onTitleChange,
       modifier = Modifier.fillMaxWidth().testTag("$prefix-title"),

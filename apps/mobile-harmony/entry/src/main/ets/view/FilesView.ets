@@ -9,6 +9,7 @@ import { managedFileMedia } from '../viewmodel/fileDocumentViewModel';
 import { XopcFilesViewModel } from '../viewmodel/filesViewModel';
 import { XopcChatMediaView } from './ChatMediaView';
 import {
+  XOPC_PAGE_HEADER_HEIGHT_VP,
   XopcBrandLoading,
   XopcEmptyHint,
   XopcErrorState,
@@ -201,7 +202,26 @@ export struct XopcFilesView {
 
   build() {
     NavDestination() {
-      Column() {
+      Stack({ alignContent: Alignment.Top }) {
+        Column() {
+          if (this.model.error && (this.model.items.length > 0 || this.model.spaces.length > 0)) {
+            Column() {
+              XopcInlineBanner({
+                message: userErrorMessage(this.model.error, 'generic'),
+                actionLabel: !this.model.busy && !this.model.selected ? $r('app.string.retry') : '',
+                busy: this.model.busy,
+                onAction: (): void => { void this.model.load(this.search); },
+              })
+            }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: XOPC_PAGE_HEADER_HEIGHT_VP, bottom: 8 })
+          }
+          if (this.model.busy && !!this.initialId && !this.model.selected) {
+            Column() { XopcBrandLoading() }.width('100%').padding({ top: XOPC_PAGE_HEADER_HEIGHT_VP })
+          } else {
+            Column() { this.fileList() }.width('100%').layoutWeight(1)
+              .padding({ top: this.model.error && (this.model.items.length > 0 || this.model.spaces.length > 0) ? 0 : XOPC_PAGE_HEADER_HEIGHT_VP })
+          }
+          if (this.model.selected) { this.fileDetail(this.model.selected) }
+        }.height('100%').width('100%')
         XopcPageHeader({
           heading: this.model.space ? this.model.space.title : $r('app.string.files'),
           showStaticTitle: true,
@@ -221,22 +241,9 @@ export struct XopcFilesView {
             if (context) void this.model.upload(context);
           },
         })
-        if (this.model.error && (this.model.items.length > 0 || this.model.spaces.length > 0)) {
-          Column() {
-            XopcInlineBanner({
-              message: userErrorMessage(this.model.error, 'generic'),
-              actionLabel: !this.model.busy && !this.model.selected ? $r('app.string.retry') : '',
-              busy: this.model.busy,
-              onAction: (): void => { void this.model.load(this.search); },
-            })
-          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
-        }
-        if (this.model.busy && !!this.initialId && !this.model.selected) { XopcBrandLoading() }
-        else { this.fileList() }
-        if (this.model.selected) { this.fileDetail(this.model.selected) }
       }.height('100%').width('100%').backgroundColor(this.colors.surface)
         .bindSheet($$this.shareOpen, this.shareSheet, xopcSheetOptions('immersive', { backgroundColor: this.colors.panel }))
-    }.hideTitleBar(true).onBackPressed((): boolean => {
+    }.hideTitleBar(true).backgroundColor(this.colors.surface).onBackPressed((): boolean => {
       void this.goBack(); return true;
     })
   }

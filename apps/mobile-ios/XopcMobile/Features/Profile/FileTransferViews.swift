@@ -29,16 +29,23 @@ struct FileUploadButton: View {
     @State private var renameDraft = ""
     @State private var isRenamingConflict = false
 
+    @Environment(\.mobileTheme) private var theme
+
     var body: some View {
         Button {
             isImporting = true
         } label: {
             if isUploading {
-                ProgressView().accessibilityLabel("正在上传文件…")
+                ProgressView()
+                    .frame(width: 40, height: 40)
+                    .background(theme.panel, in: Circle())
+                    .accessibilityLabel("正在上传文件…")
             } else {
-                Label("上传", systemImage: "plus")
+                MobileHeaderIconLabel(systemImage: "plus", tone: .accent)
             }
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("上传")
         .disabled(isUploading)
         .fileImporter(isPresented: $isImporting, allowedContentTypes: [.item]) { result in
             if case let .failure(importError) = result {

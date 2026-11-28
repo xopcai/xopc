@@ -38,7 +38,10 @@ struct MobilePageTitleMenu<Value: Hashable>: View {
                 Image(systemName: "chevron.down").font(.caption.weight(.semibold))
                     .foregroundStyle(theme.secondary).accessibilityHidden(true)
             }
-            .frame(minHeight: 44)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 40)
+            .background(theme.panel, in: Capsule())
+            .contentShape(Capsule())
         }.accessibilityIdentifier(identifier)
     }
 }

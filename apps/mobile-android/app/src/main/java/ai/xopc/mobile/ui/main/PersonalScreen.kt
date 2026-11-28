@@ -102,22 +102,28 @@ internal fun PersonalGoalsScreen(state: PersonalUiState, insets: PaddingValues, 
     SegmentOption(true, stringResource(R.string.personal_achieved), "personal-goals-achieved"),
   )
   fun selectGoalTab(value: Boolean) { scope.launch { pager.animateScrollToPage(if (value) 1 else 0) } }
-  Column(Modifier.fillMaxSize().padding(insets).testTag("personal-goals-screen")) {
-    XopcPageHeader("personal-goals-back", onBack, title = stringResource(R.string.personal_goals)) {
-      IconButton(onClick = { openEditor(null) }, enabled = state.summary != null,
-        modifier = Modifier.testTag("goal-add")) {
-        ActionIcon(R.drawable.action_add, contentDescription = stringResource(R.string.personal_goal_add))
+  XopcFloatingHeaderScaffold(
+    modifier = Modifier.fillMaxSize().padding(insets).testTag("personal-goals-screen"),
+    header = {
+      Column(Modifier.fillMaxWidth()) {
+        XopcPageHeader("personal-goals-back", onBack, title = stringResource(R.string.personal_goals)) {
+          XopcHeaderIconButton(onClick = { openEditor(null) }, enabled = state.summary != null, accent = true,
+            modifier = Modifier.testTag("goal-add")) {
+            ActionIcon(R.drawable.action_add, color = MaterialTheme.colorScheme.primary, contentDescription = stringResource(R.string.personal_goal_add))
+          }
+        }
+        SegmentedTabs(goalTabs, pager.settledPage == 1, ::selectGoalTab,
+          modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp), enabled = !editorOpen,
+          swipeToSelect = true, pager = pager)
       }
-    }
-    SegmentedTabs(goalTabs, pager.settledPage == 1, ::selectGoalTab,
-      modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), enabled = !editorOpen,
-      swipeToSelect = true, pager = pager)
-    HorizontalPager(pager, modifier = Modifier.weight(1f).fillMaxWidth().testTag("personal-goals-pager"),
+    },
+  ) { headerTopPadding ->
+    HorizontalPager(pager, modifier = Modifier.fillMaxSize().testTag("personal-goals-pager"),
       userScrollEnabled = !editorOpen,
       flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.33f),
     ) { index ->
       Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-        .padding(horizontal = 20.dp, vertical = 8.dp).testTag("personal-goals-list"),
+        .padding(start = 20.dp, end = 20.dp, top = headerTopPadding + 8.dp, bottom = 16.dp).testTag("personal-goals-list"),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (state.loading && state.summary == null) XopcListSkeleton(rows = 3)
         state.summary?.let { PersonalGoals(it, index == 1, ::openEditor) }

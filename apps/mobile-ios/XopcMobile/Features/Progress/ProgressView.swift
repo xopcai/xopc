@@ -73,9 +73,10 @@ struct WorkPagesView: View {
         .toolbar {
             if let onOpenSidebar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
+                    MobileHeaderIconButton("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
                         .accessibilityIdentifier("chat-header-sidebar")
                 }
+                .mobileTransparentToolbarItem()
             }
         }
     }
@@ -691,7 +692,7 @@ private struct TasksView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             PageSearchField("搜索任务", text: $searchText, focused: $searchFocused, accessibilityID: "tasks-search", autoFocus: false)
-                .padding(.horizontal, 20).padding(.bottom, 8).background(theme.canvas)
+                .padding(.horizontal, 20).padding(.bottom, 8)
         }
         .onChange(of: isActive) {
             if !isActive {
@@ -710,12 +711,13 @@ private struct TasksView: View {
         .toolbar {
             if isActive {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("新建任务", systemImage: "plus") {
+                    MobileHeaderIconButton("新建任务", systemImage: "plus") {
                         searchFocused = false
                         creating = true
                     }
                     .accessibilityIdentifier("tasks-create")
                 }
+                .mobileTransparentToolbarItem()
             }
         }
         .sheet(isPresented: $creating, onDismiss: {
@@ -861,19 +863,21 @@ struct ProjectsView: View {
                                 accessibilityID: "projects-search")
                     .padding(.horizontal, 20)
                     .padding(.bottom, 8)
-                    .background(mobileTheme.canvas)
             }
         }
         .refreshable { await load() }
         .task { await load() }
         .toolbar {
             if isActive {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    PageSearchButton("搜索项目", isOpen: $searchOpen, query: $searchText,
-                                     accessibilityID: "projects-open-search")
-                    Button("新建项目", systemImage: "plus") { creating = true }
-                        .accessibilityIdentifier("project-create")
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: 8) {
+                        PageSearchButton("搜索项目", isOpen: $searchOpen, query: $searchText,
+                                         accessibilityID: "projects-open-search")
+                        MobileHeaderIconButton("新建项目", systemImage: "plus") { creating = true }
+                            .accessibilityIdentifier("project-create")
+                    }
                 }
+                .mobileTransparentToolbarItem()
             }
         }
         .onChange(of: isActive) { _, active in

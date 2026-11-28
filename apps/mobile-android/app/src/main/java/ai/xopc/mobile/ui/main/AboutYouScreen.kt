@@ -143,29 +143,48 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
     if (page == "about") snapshotFlow { pager.settledPage }.collect { selectSection(sections[it]) }
   }
   BackHandler(page == "about" && searchOpen, ::closeSearch)
-  Column(Modifier.fillMaxSize().padding(insets).testTag("about-you-screen")) {
-    XopcPageHeader(
-      backTag = "about-you-back",
-      onBack = { if (page == "about" && searchOpen) closeSearch() else onBack() },
-      titleContent = if (page == "about") ({
-        PageTitleMenu(listOf(
-          SegmentOption("overview", stringResource(R.string.about_you_overview), "about-you-tab-overview"),
-          SegmentOption("understanding", stringResource(R.string.about_you_memories), "about-you-tab-understanding"),
-          SegmentOption("work", stringResource(R.string.about_you_work_memory), "about-you-tab-work"),
-        ), section, "about-you-menu", Modifier.fillMaxWidth(), ::showSection)
-      }) else null,
-    ) {
-      if (page == "about" && section == "understanding") {
-        PageSearchButton(searchOpen, R.string.about_you_search, "about-you-search-toggle") {
-          if (searchOpen) closeSearch() else searchOpen = true
+  XopcFloatingHeaderScaffold(
+    modifier = Modifier.fillMaxSize().padding(insets).testTag("about-you-screen"),
+    header = {
+      Column(Modifier.fillMaxWidth()) {
+        XopcPageHeader(
+          backTag = "about-you-back",
+          onBack = { if (page == "about" && searchOpen) closeSearch() else onBack() },
+          title = if (page == "detail") stringResource(R.string.about_you_memories) else null,
+          titleContent = if (page == "about") ({
+            PageTitleMenu(listOf(
+              SegmentOption("overview", stringResource(R.string.about_you_overview), "about-you-tab-overview"),
+              SegmentOption("understanding", stringResource(R.string.about_you_memories), "about-you-tab-understanding"),
+              SegmentOption("work", stringResource(R.string.about_you_work_memory), "about-you-tab-work"),
+            ), section, "about-you-menu", Modifier.fillMaxWidth(), ::showSection)
+          }) else null,
+        ) {
+          if (page == "about" && section == "understanding") {
+            PageSearchButton(searchOpen, R.string.about_you_search, "about-you-search-toggle") {
+              if (searchOpen) closeSearch() else searchOpen = true
+            }
+          }
+        }
+        if (page == "about" && section == "understanding" && searchOpen) {
+          XopcPageSearchField(
+            query = query,
+            onQueryChange = { query = it.take(100) },
+            placeholder = stringResource(R.string.about_you_search),
+            tag = "about-you-search",
+            maxLength = 100,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+          )
         }
       }
-    }
+    },
+  ) { headerTopPadding ->
     if (page == "detail") {
-      AssertionDetail(state, onRetryDetail, onSaveStatement, onDeleteAssertion,
-        onStartChat, chatBusy)
+      Box(Modifier.fillMaxSize().padding(top = headerTopPadding)) {
+        AssertionDetail(state, onRetryDetail, onSaveStatement, onDeleteAssertion,
+          onStartChat, chatBusy)
+      }
     } else {
-      HorizontalPager(pager, modifier = Modifier.weight(1f).fillMaxWidth().testTag("about-you-pager"),
+      HorizontalPager(pager, modifier = Modifier.fillMaxSize().testTag("about-you-pager"),
         key = { sections[it] }, userScrollEnabled = !profileEditorOpen,
         flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.33f),
       ) { index ->
@@ -174,14 +193,11 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
             onOpenDetail, { showSection("work") }, ::editProfile)
           "work" -> WorkMemoryList(state.gatewayId, section == "work", loadWorkMemory)
           else -> Column(Modifier.fillMaxSize()) {
-            if (section == "understanding" && searchOpen) OutlinedTextField(query, { query = it.take(100) },
-              modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).then(searchInputFocus()).testTag("about-you-search"),
-              placeholder = { Text(stringResource(R.string.about_you_search)) }, singleLine = true)
             SegmentedTabs(
               listOf("all" to R.string.about_you_all, "explicit" to R.string.personal_explicit,
                 "learned" to R.string.personal_learned, "review" to R.string.personal_review).map { (value, label) ->
                 SegmentOption(value, stringResource(label), "about-you-filter-$value")
-              }, filter, { filter = it }, Modifier.padding(horizontal = 20.dp), swipeToSelect = true,
+              }, filter, { filter = it }, Modifier.padding(start = 20.dp, end = 20.dp, top = headerTopPadding), swipeToSelect = true,
             )
             AssertionList(state, filter, query, onOpenDetail,
               onLoadMore = { onLoadList(filter, query.trim(), true) },
@@ -267,8 +283,10 @@ internal fun validProfileTimezone(value: String): Boolean = value.isBlank() || t
 @Composable
 private fun AboutOverview(summary: PersonalSummary?, onOpenList: () -> Unit,
   onOpenDetail: (String) -> Unit, onOpenWork: () -> Unit, onEditProfile: () -> Unit) {
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
   Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-    .padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    .padding(start = 20.dp, end = 20.dp, top = headerTopPadding + 4.dp, bottom = 16.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text(stringResource(R.string.about_you_subtitle), style = MaterialTheme.typography.bodySmall,
       color = MaterialTheme.colorScheme.onSurfaceVariant)
     AboutCard {
@@ -351,8 +369,9 @@ private fun WorkMemoryList(gatewayId: String?, active: Boolean,
     onRefresh = { cursor = null; request++ },
     modifier = Modifier.fillMaxSize(),
   ) {
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
   LazyColumn(Modifier.fillMaxSize().testTag("work-memory-list"),
-    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = headerTopPadding + 8.dp, bottom = 16.dp),
     verticalArrangement = Arrangement.spacedBy(10.dp)) {
     if (loading && page == null) item { XopcListSkeleton(rows = 4) }
     if (failed) item {

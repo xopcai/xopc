@@ -17,6 +17,7 @@ import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
 import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
 import {
+  XOPC_PAGE_HEADER_HEIGHT_VP,
   XopcBrandLoading,
   XopcErrorState,
   XopcHubRow,
@@ -1469,10 +1470,11 @@ export struct XopcWorkspaceView {
   @Builder
   header() {
     Stack({ alignContent: Alignment.Center }) {
-      Row({ space: 12 }) {
+      Row({ space: 8 }) {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph(xopcBackIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
         }.width(44).height(44).padding(0).backgroundColor(this.colors.panel).clickEffect(xopcClickEffect())
+          .hitTestBehavior(HitTestMode.Default)
           .accessibilityText($r('app.string.back')).enabled(!this.model.busy || !!this.model.openingId || (!this.model.selected && this.searchOpen))
           .onClick((): void => { this.goBack(); })
         Blank().layoutWeight(1)
@@ -1485,13 +1487,16 @@ export struct XopcWorkspaceView {
             Button({ type: ButtonType.Circle }) {
               SymbolGlyph($r('sys.symbol.funnel')).fontSize(21)
                 .fontColor([this.filter === 'all' ? this.colors.foreground : this.colors.accent])
-            }.id('automation-filter-menu').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
+            }.id('automation-filter-menu').width(44).height(44).padding(0)
+              .backgroundColor(this.filter === 'all' ? this.colors.panel : this.colors.accentSoft)
+              .hitTestBehavior(HitTestMode.Default)
               .accessibilityText($r('app.string.automation_filter_title'))
               .bindMenu(this.automationFilterMenu, { placement: Placement.BottomRight })
           } else {
             Button({ type: ButtonType.Circle }) {
               SymbolGlyph($r('sys.symbol.plus')).fontSize(21).fontColor([this.colors.accent])
             }.width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
+              .hitTestBehavior(HitTestMode.Default)
               .accessibilityText(this.createLabel()).enabled(!this.model.busy)
               .onClick((): void => { this.openCreate(); })
           }
@@ -1500,62 +1505,70 @@ export struct XopcWorkspaceView {
           (this.model.selected.editable || this.model.selected.actions.includes('delete'))) {
           this.automationMore(this.model.selected, false)
         }
-      }.width('100%').height(44)
+      }.width('100%').height(44).hitTestBehavior(HitTestMode.None)
       if (!this.model.selected && !this.model.openingId) {
-        Text(this.heading).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '54%' })
+        Row() {
+          Text(this.heading).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        }.height(44).padding({ left: 16, right: 16 }).borderRadius(22).backgroundColor(this.colors.panel)
+          .alignItems(VerticalAlign.Center).justifyContent(FlexAlign.Center)
+          .constraintSize({ maxWidth: '54%' })
           .accessibilityGroup(true).hitTestBehavior(HitTestMode.None)
       }
     }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
+      .backgroundColor(Color.Transparent)
+      .hitTestBehavior(HitTestMode.None)
   }
 
   @Builder
   workspaceContent() {
-    Column() {
-      if (!this.embeddedInWorkbench) { this.header() }
-      if (this.model.error && (this.model.items.length > 0 || !!this.model.selected)) {
-        Column() {
-          XopcInlineBanner({
-            message: userErrorMessage(this.model.error, 'collection'),
-            actionLabel: !(this.section === 'tasks' && this.initialId) && !this.model.busy && !this.model.selected && !this.model.openingId && !this.model.hasMore ? $r('app.string.retry') : '',
-            busy: this.model.busy,
-            onAction: (): void => { void this.model.list(this.section === 'tasks' ? this.search : ''); },
-          })
-        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
-      }
-      if (this.model.selected) {
-        if (this.initialTaskAction === 'status') { this.taskStatusSheet(this.model.selected) }
-        else { this.detail(this.model.selected) }
-        if (!this.initialTaskAction && this.section === 'tasks' && !this.model.editing && this.model.selected.taskDetail) {
-          this.taskActionBar(this.model.selected)
-        }
-      }
-      else if (this.model.openingId) { XopcBrandLoading() }
-      else if (this.model.error && !this.model.items.length) {
-        XopcErrorState({
-          error: this.model.error,
-          context: 'collection',
-          onAction: (): void => {
-            if (this.section === 'tasks' && this.initialId) void this.openTaskAction();
-            else void this.model.list(this.section === 'tasks' ? this.search : '');
-          },
-        })
-      }
-      else if (this.section === 'tasks' && this.initialId) {
-        Button($r('app.string.retry')).height(44).enabled(!this.model.busy).clickEffect(xopcClickEffect())
-          .onClick((): void => { void this.openTaskAction(); })
-      }
-      else {
-        this.list()
-        if (this.section === 'automations') {
+    Stack({ alignContent: Alignment.Top }) {
+      Column() {
+        if (this.model.error && (this.model.items.length > 0 || !!this.model.selected)) {
           Column() {
-            Button(this.createLabel()).id('automation-create').width('100%').height(48)
-              .borderRadius(this.colors.corner(24)).clipShape(this.colors.cornerClip(24)).backgroundColor(this.colors.chat.action).fontColor(this.colors.chat.onAction)
-              .clickEffect(xopcClickEffect())
-              .enabled(!this.model.busy).onClick((): void => { this.openCreate(); })
-          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: 4, bottom: 10 })
+            XopcInlineBanner({
+              message: userErrorMessage(this.model.error, 'collection'),
+              actionLabel: !(this.section === 'tasks' && this.initialId) && !this.model.busy && !this.model.selected && !this.model.openingId && !this.model.hasMore ? $r('app.string.retry') : '',
+              busy: this.model.busy,
+              onAction: (): void => { void this.model.list(this.section === 'tasks' ? this.search : ''); },
+            })
+          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
         }
-      }
+        if (this.model.selected) {
+          if (this.initialTaskAction === 'status') { this.taskStatusSheet(this.model.selected) }
+          else { this.detail(this.model.selected) }
+          if (!this.initialTaskAction && this.section === 'tasks' && !this.model.editing && this.model.selected.taskDetail) {
+            this.taskActionBar(this.model.selected)
+          }
+        }
+        else if (this.model.openingId) { XopcBrandLoading() }
+        else if (this.model.error && !this.model.items.length) {
+          XopcErrorState({
+            error: this.model.error,
+            context: 'collection',
+            onAction: (): void => {
+              if (this.section === 'tasks' && this.initialId) void this.openTaskAction();
+              else void this.model.list(this.section === 'tasks' ? this.search : '');
+            },
+          })
+        }
+        else if (this.section === 'tasks' && this.initialId) {
+          Button($r('app.string.retry')).height(44).enabled(!this.model.busy).clickEffect(xopcClickEffect())
+            .onClick((): void => { void this.openTaskAction(); })
+        }
+        else {
+          this.list()
+          if (this.section === 'automations') {
+            Column() {
+              Button(this.createLabel()).id('automation-create').width('100%').height(48)
+                .borderRadius(this.colors.corner(24)).clipShape(this.colors.cornerClip(24)).backgroundColor(this.colors.chat.action).fontColor(this.colors.chat.onAction)
+                .clickEffect(xopcClickEffect())
+                .enabled(!this.model.busy).onClick((): void => { this.openCreate(); })
+            }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: 4, bottom: 10 })
+          }
+        }
+      }.height('100%').width('100%').padding({ top: XOPC_PAGE_HEADER_HEIGHT_VP })
+      if (!this.embeddedInWorkbench) { this.header() }
     }.height('100%').width('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.sheetOpen, this.workspaceSheet, xopcSheetOptions('medium', {
         showClose: true,
@@ -1569,7 +1582,7 @@ export struct XopcWorkspaceView {
     } else {
       NavDestination() {
         this.workspaceContent()
-      }.hideTitleBar(true).onShown((): void => {
+      }.hideTitleBar(true).backgroundColor(this.colors.surface).onShown((): void => {
         if (this.section === 'automations' && !this.model.selected && !this.model.openingId) void this.model.list('');
       }).onBackPressed((): boolean => {
         if (!this.model.busy || !!this.model.openingId || (!this.model.selected && this.searchOpen)) this.goBack();

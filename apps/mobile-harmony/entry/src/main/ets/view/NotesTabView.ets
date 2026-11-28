@@ -11,6 +11,7 @@ import { XopcMobileRoute } from '../model/home';
 import { XopcNoteIndexEntry, XopcNoteProjectReference, XopcNoteStatus } from '../model/note';
 import { XopcNoteViewModel } from '../viewmodel/noteViewModel';
 import {
+  XOPC_PAGE_HEADER_HEIGHT_VP,
   XopcBatchActionBar,
   XopcEmptyHint,
   XopcErrorState,
@@ -392,6 +393,7 @@ export struct XopcNotesTabView {
           }
         }
       }.width('100%').height('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).scrollBar(BarState.Off)
+        .contentStartOffset(this.model.error && this.model.items.length > 0 ? 0 : this.headerClearance())
         .contentEndOffset((!this.model.selecting || this.recordingAvailable ? 72 : 12) + this.stackBottomInset())
     }.width('100%').height('100%').pullToRefresh(!this.model.loading)
       .onRefreshing((): void => { void this.model.list(false, true); })
@@ -436,61 +438,71 @@ export struct XopcNotesTabView {
     }
   }
 
+  private headerClearance(): number {
+    return XOPC_PAGE_HEADER_HEIGHT_VP + (this.searchOpen && !this.model.selecting ? 58 : 0);
+  }
+
   @Builder
   listPane() {
-    Column() {
-      XopcPageHeader({ heading: this.currentStatusLabel(),
-        selectionTitle: this.model.selecting ? $r('app.string.sessions_selected', this.model.selectedIds.length) : '',
-        titleOptions: this.statusOptions,
-        selectedTitle: this.model.status, titleMenuId: 'notes-page-menu',
-        onSelectTitle: (key: string): void => { this.selectStatus(key); },
-        backVisible: !this.rootTab || this.model.selecting, backId: 'notes-back',
-        onBack: (): void => { if (!this.back()) this.onExit(); },
-        drawerVisible: this.rootTab && !this.model.selecting, drawerId: 'notes-header-sidebar', onOpenDrawer: this.onOpenSidebar,
-        searchId: 'notes-open-search', searchOpen: this.searchOpen, searchLabel: $r('app.string.search_notes'),
-        onSearch: (): void => { this.toggleSearch(); } })
-      if (this.searchOpen && !this.model.selecting) {
-        Column() {
-          XopcPageSearchField({ searchId: 'notes-search', text: this.searchText, placeholder: $r('app.string.search_notes'),
-            onChange: (value: string): void => { this.searchText = value; }, onSubmit: (): void => { this.searchAll(); } })
-        }.padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 12 })
-      }
-      if (this.model.error && this.model.items.length > 0) {
-        Column() {
-          XopcInlineBanner({
-            message: userErrorMessage(this.model.error, 'collection'),
-            actionLabel: $r('app.string.retry'),
-            busy: this.model.loading,
-            onAction: (): void => { void this.model.list(); },
-          })
-        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
-      }
-      Stack({ alignContent: Alignment.Bottom }) {
-        Swiper(this.pager) {
-          ForEach(this.statusOptions, (option: XopcPageTitleOption) => {
-            Column() {
-              if (option.key === this.model.status) {
-                this.notesListBody()
-              } else {
-                Column() { XopcListSkeleton() }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X })
-              }
-            }.width('100%').height('100%')
-              .accessibilityLevel(option.key === this.model.status ? 'auto' : 'no-hide-descendants')
-          }, (option: XopcPageTitleOption): string => option.key || 'all')
-        }.id('notes-tab-pager').index(this.statusIndex()).loop(false).indicator(false).cachedCount(1)
-          .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(true)
-          .onChange((index: number): void => { this.commitStatus(index); })
-          .width('100%').height('100%')
-        if (!this.model.selecting || this.recordingAvailable) this.captureActions()
-      }.layoutWeight(1).width('100%')
-      if (this.model.selecting) {
-        Column() { this.batchBar() }.width('100%')
-          .padding({ bottom: this.activePage && this.music.track ? 0 : this.bottomChromeInset })
-      }
-      if (this.activePage && this.music.track) {
-        Column() { XopcMusicMiniPlayer() }.width('100%')
-          .padding({ top: 4, bottom: this.bottomChromeInset > 0 ? this.bottomChromeInset + 8 : 4 })
-      }
+    Stack({ alignContent: Alignment.Top }) {
+      Column() {
+        if (this.model.error && this.model.items.length > 0) {
+          Column() {
+            XopcInlineBanner({
+              message: userErrorMessage(this.model.error, 'collection'),
+              actionLabel: $r('app.string.retry'),
+              busy: this.model.loading,
+              onAction: (): void => { void this.model.list(); },
+            })
+          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: this.headerClearance(), bottom: 8 })
+        }
+        Stack({ alignContent: Alignment.Bottom }) {
+          Swiper(this.pager) {
+            ForEach(this.statusOptions, (option: XopcPageTitleOption) => {
+              Column() {
+                if (option.key === this.model.status) {
+                  this.notesListBody()
+                } else {
+                  Column() { XopcListSkeleton() }.width('100%')
+                    .padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: this.headerClearance() })
+                }
+              }.width('100%').height('100%')
+                .accessibilityLevel(option.key === this.model.status ? 'auto' : 'no-hide-descendants')
+            }, (option: XopcPageTitleOption): string => option.key || 'all')
+          }.id('notes-tab-pager').index(this.statusIndex()).loop(false).indicator(false).cachedCount(1)
+            .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(true)
+            .onChange((index: number): void => { this.commitStatus(index); })
+            .width('100%').height('100%')
+          if (!this.model.selecting || this.recordingAvailable) this.captureActions()
+        }.layoutWeight(1).width('100%')
+        if (this.model.selecting) {
+          Column() { this.batchBar() }.width('100%')
+            .padding({ bottom: this.activePage && this.music.track ? 0 : this.bottomChromeInset })
+        }
+        if (this.activePage && this.music.track) {
+          Column() { XopcMusicMiniPlayer() }.width('100%')
+            .padding({ top: 4, bottom: this.bottomChromeInset > 0 ? this.bottomChromeInset + 8 : 4 })
+        }
+      }.width('100%').height('100%')
+      Column() {
+        XopcPageHeader({ heading: this.currentStatusLabel(),
+          selectionTitle: this.model.selecting ? $r('app.string.sessions_selected', this.model.selectedIds.length) : '',
+          titleOptions: this.statusOptions,
+          selectedTitle: this.model.status, titleMenuId: 'notes-page-menu',
+          onSelectTitle: (key: string): void => { this.selectStatus(key); },
+          backVisible: !this.rootTab || this.model.selecting, backId: 'notes-back',
+          onBack: (): void => { if (!this.back()) this.onExit(); },
+          drawerVisible: this.rootTab && !this.model.selecting, drawerId: 'notes-header-sidebar', onOpenDrawer: this.onOpenSidebar,
+          searchId: 'notes-open-search', searchOpen: this.searchOpen, searchLabel: $r('app.string.search_notes'),
+          onSearch: (): void => { this.toggleSearch(); } })
+        if (this.searchOpen && !this.model.selecting) {
+          Column() {
+            XopcPageSearchField({ searchId: 'notes-search', text: this.searchText, placeholder: $r('app.string.search_notes'),
+              onChange: (value: string): void => { this.searchText = value; }, onSubmit: (): void => { this.searchAll(); } })
+          }.padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 12 })
+            .hitTestBehavior(HitTestMode.Default)
+        }
+      }.width('100%').backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.None)
     }.id('notes-tab-list-pane').width(this.contentWidth >= 840 ? 400 : '100%').height('100%')
       .backgroundColor(this.contentWidth >= 840 ? this.colors.grouped : Color.Transparent)
   }

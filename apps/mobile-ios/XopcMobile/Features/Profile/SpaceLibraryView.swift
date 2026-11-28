@@ -168,9 +168,10 @@ struct SpaceLibraryView: View {
             .toolbar {
                 if let onOpenSidebar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
+                        MobileHeaderIconButton("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
                             .accessibilityIdentifier("chat-header-sidebar")
                     }
+                    .mobileTransparentToolbarItem()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -178,8 +179,12 @@ struct SpaceLibraryView: View {
                             Text(label("全部类型", "All types")).tag("")
                             ForEach(kinds, id: \.self) { type in Text(typeName(type)).tag(type) }
                         }
-                    } label: { Label(label("资料类型", "File type"), systemImage: "line.3.horizontal.decrease.circle") }
+                    } label: {
+                        MobileHeaderIconLabel(systemImage: "line.3.horizontal.decrease.circle", tone: kind.isEmpty ? .neutral : .accent)
+                    }
+                    .accessibilityLabel(Text(verbatim: label("资料类型", "File type")))
                 }
+                .mobileTransparentToolbarItem()
             }
             .onChange(of: scope) { query = ""; undo = nil }
             .task(id: filters + [String(refresh), ComposerDraftStore.accountScope(configuration)]) {

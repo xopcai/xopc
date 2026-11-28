@@ -101,18 +101,22 @@ struct ConversationsView: View {
         .toolbar {
             if let onOpenSidebar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
+                    MobileHeaderIconButton("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
                         .accessibilityIdentifier("chat-header-sidebar")
                 }
+                .mobileTransparentToolbarItem()
             }
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                PageSearchButton(searchLabel, isOpen: $searchOpen, query: $state.searchText,
-                                 accessibilityID: "conversations-open-search")
-                if mode == .recent {
-                    Button("新建对话", systemImage: "plus", action: onStartNew)
-                        .accessibilityIdentifier("conversations-new")
+            ToolbarItem(placement: .topBarTrailing) {
+                HStack(spacing: 8) {
+                    PageSearchButton(searchLabel, isOpen: $searchOpen, query: $state.searchText,
+                                     accessibilityID: "conversations-open-search")
+                    if mode == .recent {
+                        MobileHeaderIconButton("新建对话", systemImage: "plus", action: onStartNew)
+                            .accessibilityIdentifier("conversations-new")
+                    }
                 }
             }
+            .mobileTransparentToolbarItem()
         }
         .onChange(of: retapToken) {
             guard retapToken > 0 else { return }
@@ -623,7 +627,7 @@ struct PageSearchButton: View {
     }
 
     var body: some View {
-        Button(isOpen ? "关闭" : title, systemImage: isOpen ? "xmark" : "magnifyingglass") {
+        MobileHeaderIconButton(isOpen ? "关闭" : title, systemImage: isOpen ? "xmark" : "magnifyingglass") {
             isOpen.toggle()
             if !isOpen {
                 query = ""
@@ -674,8 +678,8 @@ struct PageSearchField: View {
             }
         }
         .padding(.horizontal, 16)
-        .frame(minHeight: 48)
-        .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
+        .frame(minHeight: 46)
+        .background(mobileTheme.panel, in: Capsule())
         .task {
             if autoFocus {
                 focused = true

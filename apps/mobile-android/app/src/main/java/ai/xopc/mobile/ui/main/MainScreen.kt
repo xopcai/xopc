@@ -1738,7 +1738,6 @@ internal fun MainContent(
   val allowSidebarEdgeSwipe = isPaired &&
     navState.allowSidebarEdgeSwipe(fullScreenOverlayActive = fullScreenOverlayActive) &&
     !assistantActionsOpen && !messageSearchOpen && !inputVoiceHeld
-  val bottomTabBarInset = if (showBottomTabBar) FLOATING_TAB_BAR_TOTAL_INSET else 0.dp
   val showOverview = topRoute is MobileRoute.PersonalOverview
   val showMusicMini = activeMusic != null &&
     (!isChatRoute || phonePage || inlineMusicKey != activeMusic.key || activeMusic.conversationId != conversationId)
@@ -2034,7 +2033,23 @@ internal fun MainContent(
           } else {
             Spacer(Modifier.fillMaxWidth().navigationBarsPadding().testTag("bottom-content-mask"))
           }
-      } else if (showMusicMini && !showOverview && !showBottomTabBar) {
+      } else if (showBottomTabBar) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background),
+          horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+          if (showMusicMini && !showOverview) {
+            MusicMiniPlayer(
+              activeMusic,
+              openMusicPlayer,
+              Modifier.padding(horizontal = 12.dp).padding(top = 4.dp, bottom = 4.dp),
+            )
+          }
+          floatingTabBarSlot()
+        }
+      } else if (showMusicMini && !showOverview) {
         MusicMiniPlayer(activeMusic, openMusicPlayer, Modifier.navigationBarsPadding()
           .padding(horizontal = 12.dp, vertical = 7.dp))
       }
@@ -2248,7 +2263,7 @@ internal fun MainContent(
                 onLoadProjects = onLoadProgressProjects,
                 onFetchExperts = onFetchConversationExperts,
                 onOpenSidebar = openSidebar,
-                bottomChromeInset = bottomTabBarInset + if (showMusicMini) 68.dp else 0.dp,
+                bottomChromeInset = 0.dp,
                 scrollToTopRevision = navState.scrollToTopRevision(MobileTab.Conversations),
                 sidebarGesture = sidebarGesture,
               )
@@ -2312,7 +2327,7 @@ internal fun MainContent(
                 onExit = null,
                 onOpenLibrary = { navState.selectTab(MobileTab.Library) },
                 onOpenSidebar = openSidebar,
-                bottomChromeInset = bottomTabBarInset + if (showMusicMini) 68.dp else 0.dp,
+                bottomChromeInset = 0.dp,
                 scrollToTopRevision = navState.scrollToTopRevision(MobileTab.Workbench),
                 onNavigateRoute = { nextRoute -> navState.push(nextRoute) },
                 sidebarGesture = sidebarGesture,
@@ -2354,7 +2369,7 @@ internal fun MainContent(
                 voiceNotes = voiceNotes,
                 onExit = null,
                 onOpenSidebar = openSidebar,
-                bottomChromeInset = bottomTabBarInset + if (showMusicMini) 68.dp else 0.dp,
+                bottomChromeInset = 0.dp,
                 scrollToTopRevision = navState.scrollToTopRevision(MobileTab.Notes),
                 onNavigateRoute = { nextRoute -> navState.push(nextRoute) },
                 onPendingVoiceCountChange = { notesPendingVoiceCount = it },
@@ -2380,7 +2395,7 @@ internal fun MainContent(
                     },
                     onUse = onUseLibraryFile,
                     onOpenSidebar = openSidebar,
-                    bottomChromeInset = bottomTabBarInset + if (showMusicMini) 68.dp else 0.dp,
+                    bottomChromeInset = 0.dp,
                     scrollToTopRevision = navState.scrollToTopRevision(target.tab),
                     sidebarGesture = sidebarGesture,
                   )
@@ -2820,23 +2835,6 @@ internal fun MainContent(
     }
     },
     overlays = { sidebarWidth ->
-      // Floating bottom pill for non-chat tab roots (Conversations / Workbench / Notes / Library).
-      // On AdaRoot, the pill sits inside bottomBar directly beneath the composer (10dp gap).
-      if (showBottomTabBar && !showBottomChrome) {
-        Column(
-          modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
-          horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-          if (showMusicMini && !showOverview) {
-            MusicMiniPlayer(
-              activeMusic,
-              openMusicPlayer,
-              Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp),
-            )
-          }
-          floatingTabBarSlot()
-        }
-      }
       linkedMcp?.let { target ->
         target.summary?.let { address ->
           val origin = connection.profile?.let { current ->
@@ -4414,12 +4412,12 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
             val attention = connection.progress.needsUser.size
             val attentionColors = LocalAttentionColors.current
             Column(horizontalAlignment = Alignment.CenterHorizontally,
-              modifier = Modifier.clip(themedCorners(14))
+              modifier = Modifier.clip(CircleShape)
                 .background(if (attention > 0) attentionColors.fill else LocalChatColors.current.card)
                 .then(if (attention > 0) Modifier.clickable {
                   onOpenMessageTarget(ConversationTarget("progress", "", ""))
                 } else Modifier)
-                .padding(horizontal = 12.dp, vertical = 2.dp)) {
+                .padding(horizontal = 14.dp, vertical = 4.dp)) {
               Text(personalAgent.displayName, Modifier.testTag("chat-personal-name"),
                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -4445,16 +4443,12 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
           }
         }
       } else {
-        Surface(
-          color = canvas,
-          modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
-            .onSizeChanged { headerHeightPx = it.height },
-        ) {
-          Column(Modifier.fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
-            .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
+          .onSizeChanged { headerHeightPx = it.height }
+          .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+          .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
+          horizontalAlignment = Alignment.Start,
+          verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val resolvedTitle = selected?.title?.takeIf { it.isNotBlank() && !selected.isLocalDraft }
               ?: sessionTitleOverride?.takeIf { it.isNotBlank() }
             val headerIdentity = chatHeaderIdentity(
@@ -4543,22 +4537,22 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
                     Surface(
                       onClick = onReselectConnectedComputer,
                       enabled = !connection.sending && connection.activeRunId == null,
-                      shape = themedCorners(12),
+                      shape = CircleShape,
                       color = LocalChatColors.current.card,
                       modifier = Modifier.heightIn(min = 32.dp).testTag("chat-execution-device"),
                     ) {
-                      Box(Modifier.padding(horizontal = 10.dp, vertical = 5.dp), contentAlignment = Alignment.Center) {
+                      Box(Modifier.padding(horizontal = 12.dp, vertical = 5.dp), contentAlignment = Alignment.Center) {
                         Text(text, style = MaterialTheme.typography.labelMedium, color = LocalChatColors.current.action,
                           maxLines = 1, overflow = TextOverflow.Ellipsis)
                       }
                     }
                   } else {
                     Surface(
-                      shape = themedCorners(12),
+                      shape = CircleShape,
                       color = LocalChatColors.current.card,
                       modifier = Modifier.heightIn(min = 32.dp).testTag("chat-execution-device"),
                     ) {
-                      Box(Modifier.padding(horizontal = 10.dp, vertical = 5.dp), contentAlignment = Alignment.Center) {
+                      Box(Modifier.padding(horizontal = 12.dp, vertical = 5.dp), contentAlignment = Alignment.Center) {
                         Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                           maxLines = 1, overflow = TextOverflow.Ellipsis)
                       }
@@ -4567,7 +4561,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
                 }
               }
             }
-          }
         }
       }
     }
@@ -5516,73 +5509,84 @@ private fun ConversationsScreen(
     browsingGroups -> R.string.conversations_search_experts
     else -> R.string.conversations_search
   })
-  Column(
+  val sidebarAction = onOpenSidebar.takeIf { isConversationsRoot && groupId.isEmpty() && !selecting }
+  XopcFloatingHeaderScaffold(
     modifier = Modifier
       .fillMaxSize()
       .then(if (isConversationsRoot && groupId.isEmpty() && !selecting) sidebarGesture else Modifier)
       .padding(insets),
-    verticalArrangement = Arrangement.spacedBy(8.dp),
-  ) {
-    val sidebarAction = onOpenSidebar.takeIf { isConversationsRoot && groupId.isEmpty() && !selecting }
-    XopcPageHeader(
-      backTag = "conversations-back",
-      onBack = { if (groupId.isNotEmpty()) clearGroup() else onExit?.invoke() },
-      showBack = !selecting && sidebarAction == null && (groupId.isNotEmpty() || onExit != null),
-      leadingContent = sidebarAction?.let { action -> ({ PageSidebarButton("conversations-sidebar", action) }) },
-      title = if (selecting) stringResource(R.string.conversations_selected, selectedIds.size) else null,
-      titleContent = if (!selecting) ({ PageTitleMenu(historyModes, mode, "sessions-mode-menu", Modifier.fillMaxWidth(), ::selectMode) }) else null,
-    ) {
-      if (selecting) {
-        TextButton(onClick = { selecting = false; selectedIds = emptyList() },
-          enabled = !connection.batchConversationBusy,
-          modifier = Modifier.testTag("conversations-selection-cancel")) {
-          Text(stringResource(R.string.conversations_cancel))
+    header = {
+      Column(modifier = Modifier.fillMaxWidth()) {
+        XopcPageHeader(
+          backTag = "conversations-back",
+          onBack = { if (groupId.isNotEmpty()) clearGroup() else onExit?.invoke() },
+          showBack = !selecting && sidebarAction == null && (groupId.isNotEmpty() || onExit != null),
+          leadingContent = sidebarAction?.let { action -> ({ PageSidebarButton("conversations-sidebar", action) }) },
+          title = if (selecting) stringResource(R.string.conversations_selected, selectedIds.size) else null,
+          titleContent = if (!selecting) ({ PageTitleMenu(historyModes, mode, "sessions-mode-menu", Modifier.fillMaxWidth(), ::selectMode) }) else null,
+        ) {
+          if (selecting) {
+            XopcHeaderPillButton(
+              label = stringResource(R.string.conversations_cancel),
+              onClick = { selecting = false; selectedIds = emptyList() },
+              enabled = !connection.batchConversationBusy,
+              modifier = Modifier.testTag("conversations-selection-cancel"),
+            )
+          }
+          if (!selecting && !searchOpen) XopcHeaderIconButton(onClick = { searchOpen = true },
+            modifier = Modifier.semantics { contentDescription = searchLabel }
+              .testTag("conversations-open-search")) {
+            Icon(painterResource(R.drawable.action_search), contentDescription = null,
+              tint = MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier.size(XopcDesignTokens.IconHeader).testTag("conversations-search-icon"))
+          }
+          if (!selecting && (mode == "recent" || isConversationsRoot)) XopcHeaderIconButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
+            modifier = Modifier.semantics {
+              contentDescription = newConversationLabel
+            }.testTag("chats-new")) {
+            Icon(painterResource(R.drawable.action_add), contentDescription = null,
+              tint = MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier.size(XopcDesignTokens.IconHeader).testTag("conversations-new-icon"))
+          }
+        }
+        if (groupId.isNotEmpty()) {
+          Box(Modifier.padding(horizontal = XopcDesignTokens.PagePaddingX, vertical = 4.dp)) {
+            XopcHeaderPillButton(
+              label = "$groupName ×",
+              onClick = ::clearGroup,
+              modifier = Modifier.testTag("sessions-clear-group"),
+            )
+          }
+        }
+        AnimatedVisibility(
+          visible = searchOpen && !selecting,
+          enter = xopcExpandPanelEnter(sessionsMotionAllowed, Alignment.Top),
+          exit = xopcExpandPanelExit(sessionsMotionAllowed, Alignment.Top),
+        ) {
+          Row(modifier = Modifier.fillMaxWidth().padding(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            XopcPageSearchField(
+              query = if (browsingGroups) groupQuery else connection.conversationSearch,
+              onQueryChange = { if (browsingGroups) groupQuery = it else onSearchChange(it) },
+              placeholder = searchLabel,
+              tag = "conversations-search",
+              autoFocus = true,
+              modifier = Modifier.weight(1f),
+              trailingAction = {},
+            )
+            XopcHeaderIconButton(onClick = ::closeSearch,
+              modifier = Modifier.semantics { contentDescription = clearLabel }
+              .testTag("conversations-clear")) {
+              ActionIcon(R.drawable.action_close, size = XopcDesignTokens.IconRow, contentDescription = null)
+            }
+          }
         }
       }
-      if (!selecting && !searchOpen) IconButton(onClick = { searchOpen = true },
-        modifier = Modifier.size(48.dp).semantics { contentDescription = searchLabel }
-          .testTag("conversations-open-search")) {
-        Icon(painterResource(R.drawable.action_search), contentDescription = null,
-          tint = MaterialTheme.colorScheme.onSurface,
-          modifier = Modifier.size(24.dp).testTag("conversations-search-icon"))
-      }
-      if (!selecting && (mode == "recent" || isConversationsRoot)) IconButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
-        modifier = Modifier.size(48.dp).semantics {
-          contentDescription = newConversationLabel
-        }.testTag("chats-new")) {
-        Icon(painterResource(R.drawable.action_add), contentDescription = null,
-          tint = MaterialTheme.colorScheme.onSurface,
-          modifier = Modifier.size(24.dp).testTag("conversations-new-icon"))
-      }
-    }
-    Column(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.PagePaddingX),
+    },
+  ) { headerTopPadding ->
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = XopcDesignTokens.PagePaddingX),
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    if (groupId.isNotEmpty()) TextButton(onClick = ::clearGroup, modifier = Modifier.testTag("sessions-clear-group")) {
-      Text("$groupName ×", maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-    AnimatedVisibility(
-      visible = searchOpen && !selecting,
-      enter = xopcExpandPanelEnter(sessionsMotionAllowed, Alignment.Top),
-      exit = xopcExpandPanelExit(sessionsMotionAllowed, Alignment.Top),
-    ) {
-      Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        XopcPageSearchField(
-          query = if (browsingGroups) groupQuery else connection.conversationSearch,
-          onQueryChange = { if (browsingGroups) groupQuery = it else onSearchChange(it) },
-          placeholder = searchLabel,
-          tag = "conversations-search",
-          autoFocus = true,
-          modifier = Modifier.weight(1f),
-          trailingAction = {},
-        )
-        IconButton(onClick = ::closeSearch,
-          modifier = Modifier.size(48.dp).semantics { contentDescription = clearLabel }
-          .testTag("conversations-clear")) {
-          ActionIcon(R.drawable.action_close, size = XopcDesignTokens.IconRow, contentDescription = null)
-        }
-      }
-    }
     androidx.compose.foundation.pager.HorizontalPager(
       state = modePager,
       modifier = Modifier.fillMaxWidth().weight(1f).testTag("sessions-mode-pager"),
@@ -5592,7 +5596,7 @@ private fun ConversationsScreen(
     ) { pageIndex ->
       val pageMode = historyModes[pageIndex].value
       if (pageMode != mode) {
-        Box(Modifier.fillMaxSize()) { XopcListSkeleton(rows = 4) }
+        Box(Modifier.fillMaxSize().padding(top = headerTopPadding)) { XopcListSkeleton(rows = 4) }
       } else Column(Modifier.fillMaxSize()) page@{
       if (browsingGroups) {
         val projects = mode == "projects"
@@ -5604,16 +5608,20 @@ private fun ConversationsScreen(
         } else experts.map { it.id to it.name }
         val matches = groups.filter { (_, name) -> name.contains(groupQuery.trim(), ignoreCase = true) }
         when {
-          loading -> XopcListSkeleton(rows = 4)
-          failed -> XopcErrorState(
-            message = stringResource(R.string.chat_load_error),
-            retryLabel = stringResource(R.string.progress_refresh),
-            onRetry = { if (projects) onLoadProjects() else expertReload++ },
-          )
-          matches.isEmpty() -> XopcEmptyState(message = stringResource(R.string.progress_no_matches))
+          loading -> Box(Modifier.padding(top = headerTopPadding)) { XopcListSkeleton(rows = 4) }
+          failed -> Box(Modifier.padding(top = headerTopPadding)) {
+            XopcErrorState(
+              message = stringResource(R.string.chat_load_error),
+              retryLabel = stringResource(R.string.progress_refresh),
+              onRetry = { if (projects) onLoadProjects() else expertReload++ },
+            )
+          }
+          matches.isEmpty() -> Box(Modifier.padding(top = headerTopPadding)) {
+            XopcEmptyState(message = stringResource(R.string.progress_no_matches))
+          }
           else -> LazyColumn(
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = bottomChromeInset + 20.dp),
+            contentPadding = PaddingValues(top = headerTopPadding, bottom = bottomChromeInset + 20.dp),
           ) {
             items(matches, key = { it.first }) { (id, name) ->
               Card(onClick = { closeSearch(); groupId = id; groupName = name },
@@ -5628,6 +5636,11 @@ private fun ConversationsScreen(
         }
         return@page
       }
+      val hasTopNotice = (connection.conversationsLoading && connection.conversations.isEmpty()) ||
+        connection.conversationsError || connection.pinActionError || connection.archiveActionError ||
+        connection.deleteActionError || connection.batchConversationFailedIds.isNotEmpty() ||
+        connection.discardDraftError || connection.pendingDeleteId != null || selecting
+      if (hasTopNotice) Spacer(Modifier.height(headerTopPadding))
       if (connection.conversationsLoading && connection.conversations.isEmpty()) XopcListSkeleton(rows = 5)
       if (connection.conversationsError) XopcInlineBanner(
         message = stringResource(R.string.chat_load_error),
@@ -5689,7 +5702,7 @@ private fun ConversationsScreen(
         modifier = Modifier.fillMaxSize().testTag("conversations-refresh-gesture"),
       ) {
       LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("conversations-list"),
-        contentPadding = PaddingValues(bottom = bottomChromeInset + 20.dp),
+        contentPadding = PaddingValues(top = if (hasTopNotice) 0.dp else headerTopPadding, bottom = bottomChromeInset + 20.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ConversationGroups.group(ConversationGroups.visibleHistory(connection.conversations)
           .filterNot { it.id == connection.pendingDeleteId || it.id == connection.personal.agent?.conversationId }).forEach { group ->

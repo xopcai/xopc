@@ -126,28 +126,33 @@ struct NoteDetailView: View {
         .toolbar {
             if showsCloseButton {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("关闭", systemImage: "xmark") { dismiss() }
+                    MobileHeaderIconButton("关闭", systemImage: "xmark") { dismiss() }
                 }
+                .mobileTransparentToolbarItem()
             }
-            if !readingParts.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("在笔记中查找", systemImage: "magnifyingglass") {
-                        readingTarget = nil
-                        readingToolsOpen = true
+            ToolbarItem(placement: .topBarTrailing) {
+                HStack(spacing: 8) {
+                    if !readingParts.isEmpty {
+                        MobileHeaderIconButton("在笔记中查找", systemImage: "magnifyingglass") {
+                            readingTarget = nil
+                            readingToolsOpen = true
+                        }
+                        .accessibilityIdentifier("note-reading-tools")
                     }
-                    .accessibilityIdentifier("note-reading-tools")
-                }
-            }
-            if let note {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu("更多", systemImage: "ellipsis.circle") {
-                        Button("添加附件", systemImage: "paperclip") { isImportingFile = true }
-                            .disabled(isUploadingFile)
-                        Button("继续对话", systemImage: "bubble.left") { Task { await openConversation(note) } }
-                        noteStateActions(note)
+                    if let note {
+                        Menu {
+                            Button("添加附件", systemImage: "paperclip") { isImportingFile = true }
+                                .disabled(isUploadingFile)
+                            Button("继续对话", systemImage: "bubble.left") { Task { await openConversation(note) } }
+                            noteStateActions(note)
+                        } label: {
+                            MobileHeaderIconLabel(systemImage: "ellipsis.circle")
+                        }
+                        .accessibilityLabel("更多")
                     }
                 }
             }
+            .mobileTransparentToolbarItem()
         }
         .task(id: note?.markdown) {
             guard let markdown = note?.markdown else { return }

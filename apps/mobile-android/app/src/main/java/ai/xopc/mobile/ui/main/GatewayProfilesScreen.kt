@@ -52,13 +52,19 @@ internal fun GatewayProfilesScreen(state: ConnectionUiState, insets: PaddingValu
     if (editingId.isNotEmpty() && state.gatewayProfiles.firstOrNull { it.gatewayId == editingId }
         ?.name == editedName.trim()) editingId = ""
   }
-  Column(Modifier.fillMaxSize().padding(insets).testTag("gateway-profiles-screen")) {
-    XopcPageHeader("gateways-back", onBack, backEnabled = !state.gatewayBusy,
-      title = stringResource(R.string.gateways_heading)) {
-      IconButton(onClick = onAdd, enabled = !state.gatewayBusy,
-        modifier = Modifier.testTag("gateways-add")) { ActionIcon(R.drawable.action_add, size = 24.dp) }
-    }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
+  XopcFloatingHeaderScaffold(
+    modifier = Modifier.fillMaxSize().padding(insets).testTag("gateway-profiles-screen"),
+    header = {
+      XopcPageHeader("gateways-back", onBack, backEnabled = !state.gatewayBusy,
+        title = stringResource(R.string.gateways_heading)) {
+        XopcHeaderIconButton(onClick = onAdd, enabled = !state.gatewayBusy, accent = true,
+          modifier = Modifier.testTag("gateways-add")) {
+          ActionIcon(R.drawable.action_add, size = XopcDesignTokens.IconHeader, color = MaterialTheme.colorScheme.primary)
+        }
+      }
+    },
+  ) { headerTopPadding ->
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = headerTopPadding + 4.dp, bottom = 24.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
       item {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(bottom = 6.dp)) {

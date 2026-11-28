@@ -124,7 +124,16 @@ struct TaskConversationView: View {
         .navigationDestination(item: $nestedTaskID) { id in
             TaskConversationView(configuration: configuration, taskID: id)
         }
-        .mobilePageTitle(Text("任务对话"))
+        .navigationTitle(Text("任务对话"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
+            }
+            .mobileTransparentToolbarItem()
+        }
+        .mobileTransparentHeaderScrollEdge()
         .toolbar(returnLabel == nil ? .visible : .hidden, for: .navigationBar)
         .task(id: taskID) { await load() }
         .task(id: conversation?.id) {
@@ -160,29 +169,30 @@ struct TaskConversationView: View {
     }
 
     private var taskHeader: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 8) {
             if let returnLabel {
                 Button { dismiss() } label: {
                     Image(systemName: "chevron.backward").frame(width: 44, height: 44)
                         .background(mobileTheme.card, in: Circle())
-                        .contentShape(.rect)
+                        .contentShape(Circle())
                 }
                 .accessibilityLabel(Text(returnLabel)).accessibilityIdentifier("task-chat-close")
             }
             Text(detail?.task.title ?? AppLocalization.resolve("任务对话"))
                 .font(.subheadline.weight(.medium)).lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .background(mobileTheme.card, in: Capsule())
             Menu {
                 Button("搜索消息") { searchRevision += 1 }
                 Button("会话选项") { optionsRevision += 1 }
             } label: {
                 Image(systemName: "ellipsis.circle").frame(width: 44, height: 44)
                     .background(mobileTheme.card, in: Circle())
-                    .contentShape(.rect)
+                    .contentShape(Circle())
             }
             .accessibilityLabel("更多").accessibilityIdentifier("task-chat-menu")
-        }.buttonStyle(.plain).foregroundStyle(mobileTheme.foreground).padding(.horizontal, 12).frame(minHeight: 64)
-            .background(mobileTheme.canvas)
+        }.buttonStyle(.plain).foregroundStyle(mobileTheme.foreground).padding(.horizontal, 12).padding(.vertical, 8)
     }
 
     private func taskActions(_ task: TaskRecord) -> some View {

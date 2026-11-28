@@ -12,7 +12,7 @@ import { appSettings, XopcSettings } from '../service/settings';
 import { gatewaySession } from '../service/gatewaySession';
 import { common } from '@kit.AbilityKit';
 import { pushNotifications, XopcPushNotifications } from '../service/pushNotifications';
-import { XopcPageHeader, XopcHubRow, XopcSectionLabel } from './MobileComponents';
+import { XOPC_PAGE_HEADER_HEIGHT_VP, XopcPageHeader, XopcHubRow, XopcSectionLabel } from './MobileComponents';
 import { connectionModel } from '../viewmodel/connectionViewModel';
 import { XopcMobileRoute } from '../model/home';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
@@ -268,9 +268,7 @@ export struct XopcSettingsView {
   }
 
   build() {
-    Column() {
-      XopcPageHeader({ heading: this.sectionTitle(), showStaticTitle: true,
-        backVisible: true, backId: 'settings-back', onBack: this.onExit })
+    Stack({ alignContent: Alignment.Top }) {
       Scroll() {
         Column() {
           if (!this.section) { this.rootSettings() }
@@ -303,8 +301,10 @@ export struct XopcSettingsView {
             this.notificationPreferences()
           }
           if (this.error) { Text(userErrorMessage(this.error, 'save')).fontColor(this.colors.danger).margin({ top: 16 }) }
-        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 24 }).alignItems(HorizontalAlign.Start)
-      }.layoutWeight(1).width('100%').align(Alignment.Top)
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: XOPC_PAGE_HEADER_HEIGHT_VP, bottom: 24 }).alignItems(HorizontalAlign.Start)
+      }.height('100%').width('100%').align(Alignment.Top)
+      XopcPageHeader({ heading: this.sectionTitle(), showStaticTitle: true,
+        backVisible: true, backId: 'settings-back', onBack: this.onExit })
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
   }
 }

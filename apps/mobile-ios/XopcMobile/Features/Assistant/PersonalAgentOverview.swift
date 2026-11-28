@@ -224,9 +224,7 @@ struct PersonalAgentOverview: View {
 
     private var top: some View {
         VStack(spacing: 8) {
-            Button("关闭", systemImage: "xmark", action: { dismiss() })
-                .labelStyle(.iconOnly)
-                .frame(width: 44, height: 44)
+            MobileHeaderIconButton("关闭", systemImage: "xmark", size: 44) { dismiss() }
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .accessibilityIdentifier("personal-overview-close")
             Button { showingEdit = true } label: {

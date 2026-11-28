@@ -105,9 +105,7 @@ struct ModelSettingsView: View {
             }
         }
         .listSectionSpacing(16)
-        .mobilePageTitle(Text("模型设置")) {
-            Text("模型设置").font(.headline).foregroundStyle(theme.foreground)
-        }
+        .mobilePageTitle(Text("模型设置"))
         .task(id: configuration) { await load() }
         .refreshable { await load() }
         .sheet(item: $sheet) { sheet in

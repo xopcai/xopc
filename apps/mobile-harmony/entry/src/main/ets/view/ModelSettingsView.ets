@@ -3,7 +3,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcHttpError } from '../service/transport';
 import { appSettings } from '../service/settings';
-import { XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcSectionLabel, XopcSheetHeader } from './MobileComponents';
+import { XOPC_PAGE_HEADER_HEIGHT_VP, XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcSectionLabel, XopcSheetHeader } from './MobileComponents';
 
 interface XopcGlobalModelChoice {
   ref: string; name: string; provider: string; displayNames?: Record<string, string>;
@@ -301,11 +301,7 @@ export struct XopcModelSettingsView {
 
   build() {
     NavDestination() {
-    Column() {
-      XopcPageHeader({
-        heading: $r('app.string.ms_title'), backVisible: true,
-        onBack: (): void => { if (!this.saving) this.onExit(); }
-      })
+    Stack({ alignContent: Alignment.Top }) {
       Scroll() {
         Column() {
           if (this.loading) { XopcListSkeleton() }
@@ -316,13 +312,17 @@ export struct XopcModelSettingsView {
             if (!this.loading && !this.data) { Button($r('app.string.retry')).onClick((): void => { void this.load(); }) }
           }
           if (this.data) { this.settingsList() }
-        }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 16, right: 16, bottom: 20 })
-      }.layoutWeight(1).width('100%').align(Alignment.Top)
+        }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 16, right: 16, top: XOPC_PAGE_HEADER_HEIGHT_VP, bottom: 20 })
+      }.height('100%').width('100%').align(Alignment.Top)
+      XopcPageHeader({
+        heading: $r('app.string.ms_title'), showStaticTitle: true, backVisible: true,
+        onBack: (): void => { if (!this.saving) this.onExit(); }
+      })
     }.id('model-settings').width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.showingSheet, this.sheetBody, xopcSheetOptions('medium', {
         height: this.sheetHeight(),
         shouldDismiss: (action: SheetDismiss): void => { if (!this.saving) action.dismiss(); },
       }))
-    }.hideTitleBar(true).onBackPressed((): boolean => this.saving)
+    }.hideTitleBar(true).backgroundColor(this.colors.surface).onBackPressed((): boolean => this.saving)
   }
 }

@@ -71,28 +71,30 @@ struct AutomationsView: View {
                                 accessibilityID: "automation-search")
                     .padding(.horizontal, 20)
                     .padding(.bottom, 8)
-                    .background(mobileTheme.canvas)
             }
         }
         .refreshable { await load() }
         .task { await load() }
-        .navigationBarTitleDisplayMode(.inline)
         .mobilePageTitle(Text("自动化"))
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                PageSearchButton("搜索", isOpen: $searchOpen, query: $searchText,
-                                 accessibilityID: "automation-open-search")
-                Menu {
-                    filterOption("全部", id: "all")
-                    filterOption("已启用", id: "enabled")
-                    filterOption("已暂停", id: "paused")
-                    filterOption("需关注", id: "attention")
-                } label: {
-                    Label("筛选", systemImage: "line.3.horizontal.decrease")
-                        .foregroundStyle(filter == "all" ? mobileTheme.foreground : mobileTheme.action)
+            ToolbarItem(placement: .topBarTrailing) {
+                HStack(spacing: 8) {
+                    PageSearchButton("搜索", isOpen: $searchOpen, query: $searchText,
+                                     accessibilityID: "automation-open-search")
+                    Menu {
+                        filterOption("全部", id: "all")
+                        filterOption("已启用", id: "enabled")
+                        filterOption("已暂停", id: "paused")
+                        filterOption("需关注", id: "attention")
+                    } label: {
+                        MobileHeaderIconLabel(systemImage: "line.3.horizontal.decrease",
+                                              tone: filter == "all" ? .neutral : .accent)
+                    }
+                    .accessibilityLabel("筛选")
+                    .accessibilityIdentifier("automation-filter-menu")
                 }
-                .accessibilityIdentifier("automation-filter-menu")
             }
+            .mobileTransparentToolbarItem()
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Button {
@@ -334,9 +336,14 @@ private struct AutomationActionsMenu: View {
                         .accessibilityIdentifier("automation-menu-delete")
                 }
             } label: {
-                Label("自动化操作", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
-                    .frame(minWidth: 44, minHeight: 44)
+                if inList {
+                    Label("自动化操作", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
+                        .frame(minWidth: 44, minHeight: 44)
+                } else {
+                    MobileHeaderIconLabel(systemImage: "ellipsis.circle")
+                }
             }
+            .accessibilityLabel("自动化操作")
             .buttonStyle(.plain)
             .disabled(busy)
             .accessibilityIdentifier(inList ? "automation-card-menu-\(automation.id)" : "automation-detail-menu")
@@ -469,6 +476,7 @@ struct AutomationDetailView: View {
                                           onEdit: { editingAutomation = automation }, onToggle: {},
                                           onDelete: { Task { await delete(automation) } })
                 }
+                .mobileTransparentToolbarItem()
             }
         }
         .task { await load() }

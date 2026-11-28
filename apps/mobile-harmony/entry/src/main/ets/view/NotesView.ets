@@ -12,6 +12,7 @@ import { shareService } from '../service/shareService';
 import { XopcNoteViewModel } from '../viewmodel/noteViewModel';
 import { XopcMarkdownView } from './MarkdownView';
 import {
+  XOPC_PAGE_HEADER_HEIGHT_VP,
   XopcBrandLoading,
   XopcEmptyHint,
   XopcErrorState,
@@ -226,26 +227,34 @@ export struct XopcNotesView {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph(xopcBackIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
         }.id('note-back').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
+          .hitTestBehavior(HitTestMode.Default)
           .clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.back')).onClick((): void => { this.back(); })
       }
       Blank().layoutWeight(1)
       if (this.model.draft) {
-        Text(this.syncText()).fontSize(12).fontColor(this.model.draft.syncState === 'conflict' ? this.colors.danger : this.colors.secondary)
+        Row() {
+          Text(this.syncText()).fontSize(12).fontColor(this.model.draft.syncState === 'conflict' ? this.colors.danger : this.colors.secondary)
+        }.height(36).padding({ left: 12, right: 12 }).borderRadius(18).backgroundColor(this.colors.panel)
+          .alignItems(VerticalAlign.Center)
       }
       if (this.model.selected?.markdown && !this.model.editing) {
-        Button({ type: ButtonType.Circle }) { SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.secondary]) }
-          .id('note-reading-tools').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+        Button({ type: ButtonType.Circle }) { SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground]) }
+          .id('note-reading-tools').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
+          .hitTestBehavior(HitTestMode.Default)
           .clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.note_reading_tools')).onClick((): void => { this.openSheet('reading'); })
       }
       if (this.model.selected && !this.model.editing) {
-        Button({ type: ButtonType.Circle }) { SymbolGlyph(xopcMoreIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.secondary]) }
-          .id('note-more').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+        Button({ type: ButtonType.Circle }) { SymbolGlyph(xopcMoreIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground]) }
+          .id('note-more').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
+          .hitTestBehavior(HitTestMode.Default)
           .clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.more')).onClick((): void => { this.openSheet('more'); })
       }
     }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: 8, bottom: 8 })
+      .backgroundColor(Color.Transparent)
+      .hitTestBehavior(HitTestMode.None)
   }
 
   @Builder
@@ -698,8 +707,8 @@ export struct XopcNotesView {
 
   @Builder
   page() {
-    Column() {
-        this.header()
+    Stack({ alignContent: Alignment.Top }) {
+      Column() {
         if (this.model.error && this.model.selected) {
           Column() {
             XopcInlineBanner({ message: userErrorMessage(this.model.error, 'collection') })
@@ -720,6 +729,8 @@ export struct XopcNotesView {
         } else {
           XopcListSkeleton()
         }
+      }.width('100%').height('100%').padding({ top: XOPC_PAGE_HEADER_HEIGHT_VP })
+      this.header()
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.sheetOpen, this.activeSheetContent, xopcSheetOptions('medium', {
         height: this.sheetHeight(),
@@ -734,7 +745,7 @@ export struct XopcNotesView {
     if (this.embedded) {
       this.page()
     } else {
-      NavDestination() { this.page() }.hideTitleBar(true).onBackPressed((): boolean => { this.back(); return true; })
+      NavDestination() { this.page() }.hideTitleBar(true).backgroundColor(this.colors.surface).onBackPressed((): boolean => { this.back(); return true; })
     }
   }
 }

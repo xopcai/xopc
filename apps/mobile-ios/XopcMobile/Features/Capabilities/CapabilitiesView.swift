@@ -162,25 +162,24 @@ struct CapabilitiesView: View {
                 searchField
             }
         }
-        .navigationTitle(Text(category.title))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .mobilePageTitle(Text(category.title))
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                if category == .skills {
-                    Button("capability_skill_market", systemImage: "square.grid.2x2") { openSkillMarket() }
-                        .labelStyle(.iconOnly).foregroundStyle(mobileTheme.action).accessibilityIdentifier("capability-add-skills")
-                } else if category == .plugins {
-                    Button("capability_search_plugins", systemImage: "magnifyingglass") { searchFocused = true }
-                        .labelStyle(.iconOnly).foregroundStyle(mobileTheme.action)
-                        .accessibilityIdentifier("capability-add-plugins")
-                }
-                if category == .skills || category == .agents || category == .connections {
-                    Button(setupLabel, systemImage: "plus") { startSetup() }
-                        .labelStyle(.iconOnly).foregroundStyle(mobileTheme.action)
-                        .accessibilityIdentifier(category == .connections ? "capability-add-mcp" : "capability-chat-setup-\(category.id)")
+            ToolbarItem(placement: .topBarTrailing) {
+                HStack(spacing: 8) {
+                    if category == .skills {
+                        MobileHeaderIconButton("capability_skill_market", systemImage: "square.grid.2x2", tone: .accent) { openSkillMarket() }
+                            .accessibilityIdentifier("capability-add-skills")
+                    } else if category == .plugins {
+                        MobileHeaderIconButton("capability_search_plugins", systemImage: "magnifyingglass", tone: .accent) { searchFocused = true }
+                            .accessibilityIdentifier("capability-add-plugins")
+                    }
+                    if category == .skills || category == .agents || category == .connections {
+                        MobileHeaderIconButton(setupLabel, systemImage: "plus", tone: .accent) { startSetup() }
+                            .accessibilityIdentifier(category == .connections ? "capability-add-mcp" : "capability-chat-setup-\(category.id)")
+                    }
                 }
             }
+            .mobileTransparentToolbarItem()
         }
         .onAppear { load() }
         .onChange(of: locale.identifier) { reloadCatalog() }

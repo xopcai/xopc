@@ -5,6 +5,7 @@ import {
   CORE_MOBILE_TABS,
   FLOATING_TAB_BAR_HEIGHT_VP,
   FLOATING_TAB_BAR_MARGIN_BOTTOM_VP,
+  FLOATING_TAB_BAR_TOP_PADDING_VP,
   isPinnedSpaceTab,
   pinnedSpaceIdFromTab,
   pinnedSpaceTabId,
@@ -25,8 +26,11 @@ describe('HarmonyOS multi-stack mobile tab navigation', () => {
     expect(shouldShowBottomTabBar(0, true, false)).toBe(false);
     expect(shouldShowBottomTabBar(0, false, true)).toBe(false);
 
-    // bottomChromeInset matches pill height + margin when visible, 0 when hidden
-    expect(bottomChromeInsetFor(true)).toBe(FLOATING_TAB_BAR_HEIGHT_VP + FLOATING_TAB_BAR_MARGIN_BOTTOM_VP);
+    // bottomChromeInset matches pill height + vertical padding when visible, 0 when hidden
+    expect(FLOATING_TAB_BAR_MARGIN_BOTTOM_VP).toBe(0);
+    expect(bottomChromeInsetFor(true)).toBe(
+      FLOATING_TAB_BAR_HEIGHT_VP + FLOATING_TAB_BAR_TOP_PADDING_VP + FLOATING_TAB_BAR_MARGIN_BOTTOM_VP,
+    );
     expect(bottomChromeInsetFor(false)).toBe(0);
 
     // allowSidebarEdgeSwipe = activeStackDepth === 0 && !sidebarMounted && !fullScreenOverlayActive
@@ -320,6 +324,9 @@ describe('HarmonyOS multi-stack mobile tab navigation', () => {
     expect(home).toContain('this.conversationsTabStack()');
     expect(home).toContain('initialCategory: (param as XopcMobileRoute).itemId');
     expect(home).toContain('XopcFloatingTabBar({');
+    expect(home).toContain(".width('100%').layoutWeight(1).clip(true)");
+    expect(tabBar).toContain('.backgroundColor(this.colors.surface)');
+    expect(tabBar).not.toContain('HitTestMode.Transparent');
 
     // SessionsView supports L0 root tab mode with drawer button, bottom chrome inset, and scroll-to-top
     expect(sessions).toContain('@Param rootTab: boolean = false;');

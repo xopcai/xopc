@@ -1,7 +1,7 @@
 import { xopcConfirmDialog } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
-import { XopcHubRow, XopcListSkeleton, XopcEmptyHint, XopcPageTitleOption } from './MobileComponents';
+import { XOPC_PAGE_HEADER_HEIGHT_VP, XopcHubRow, XopcListSkeleton, XopcEmptyHint, XopcPageTitleOption } from './MobileComponents';
 import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { XopcHomeAction, XopcHomeDelivery, XopcHomeItem, XopcMobileRoute } from '../model/home';
 import { dispatchHomeAction } from '../common/homeProtocol';
@@ -140,7 +140,7 @@ export struct XopcProgressView {
         Text(this.model.actionError === 'UNSUPPORTED_ROUTE' ? $r('app.string.unsupported_route')
           : this.model.actionError === 'TASK_RETRY_UNAVAILABLE' ? $r('app.string.progress_retry_unavailable')
           : userErrorMessage(this.model.actionError, 'save')).fontColor(this.colors.danger).fontSize(14).lineHeight(20)
-          .width('100%').padding({ left: 20, right: 20, bottom: 12 })
+          .width('100%').padding({ left: 20, right: 20, top: XOPC_PAGE_HEADER_HEIGHT_VP, bottom: 12 })
       }
       Refresh({ refreshing: this.pulling }) {
         List({ scroller: this.listScroller }) {
@@ -201,7 +201,9 @@ export struct XopcProgressView {
               ListItem() { XopcEmptyHint({ message: $r('app.string.progress_empty') }) }
             }
           }
-        }.width('100%').height('100%').padding({ left: 20, right: 20 }).contentEndOffset(this.bottomChromeInset + 12).scrollBar(BarState.Off)
+        }.width('100%').height('100%').padding({ left: 20, right: 20 })
+          .contentStartOffset(this.model.actionError ? 0 : XOPC_PAGE_HEADER_HEIGHT_VP)
+          .contentEndOffset(this.bottomChromeInset + 12).scrollBar(BarState.Off)
       }.layoutWeight(1).onRefreshing((): void => {
         this.pulling = true; this.model.refresh().finally((): void => { this.pulling = false; });
       })

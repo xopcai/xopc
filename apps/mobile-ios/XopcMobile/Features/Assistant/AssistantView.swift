@@ -297,19 +297,6 @@ struct AssistantView<Dock: View>: View {
                 .padding(.top, 8)
                 .padding(.bottom, isPersonalConversation ? 6 : 8)
                 .frame(maxWidth: .infinity)
-                .background {
-                    if isPersonalConversation {
-                        LinearGradient(stops: [
-                            .init(color: mobileTheme.canvas, location: 0),
-                            .init(color: mobileTheme.canvas, location: 0.84),
-                            .init(color: mobileTheme.canvas.opacity(0), location: 1)
-                        ], startPoint: .top, endPoint: .bottom)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    } else {
-                        mobileTheme.canvas.ignoresSafeArea(edges: .top)
-                    }
-                }
             }
         }
     }
@@ -1693,16 +1680,16 @@ struct AssistantView<Dock: View>: View {
                             } icon: { Circle().fill(mobileTheme.onAttention).frame(width: 6, height: 6) }
                                 .font(.caption).foregroundStyle(mobileTheme.onAttention)
                         }
-                        .padding(.horizontal, 12).frame(minHeight: 44)
-                        .background(mobileTheme.attention, in: .rect(cornerRadius: mobileTheme.corner(15)))
+                        .padding(.horizontal, 14).frame(minHeight: 44)
+                        .background(mobileTheme.attention, in: Capsule())
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("chat-header-attention")
                 } else {
                     Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
                         .foregroundStyle(mobileTheme.foreground)
-                        .padding(.horizontal, 12).padding(.vertical, 4)
-                        .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(14)))
+                        .padding(.horizontal, 14).padding(.vertical, 6)
+                        .background(mobileTheme.card, in: Capsule())
                 }
             }
         }

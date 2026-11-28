@@ -163,48 +163,61 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
   }
   val isLibraryRoot = onOpenSidebar != null
   val activeID = selected
-  Column(Modifier.fillMaxSize().then(if (isLibraryRoot) sidebarGesture else Modifier).padding(insets).testTag("space-library")) {
-    XopcPageHeader(
-      backTag = "library-back",
-      onBack = onExit,
-      showBack = !isLibraryRoot,
-      leadingContent = if (isLibraryRoot) ({ PageSidebarButton("library-sidebar", onOpenSidebar!!) }) else null,
-      titleContent = { PageTitleMenu(scopes, view, "space-scope-menu", onSelect = ::selectScope) },
-    )
-    Row(Modifier.fillMaxWidth().padding(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      XopcPageSearchField(
-        query = query,
-        onQueryChange = { query = it },
-        placeholder = t("搜索资料", "Search files"),
-        tag = "space-search",
-        autoFocus = false,
-        modifier = Modifier.weight(1f),
-      )
-      Box {
-        TextButton(onClick = { filterMenu = true }, Modifier.testTag("space-file-type")) {
-          Text(kinds[fileKinds.indexOf(kind).coerceAtLeast(0)])
-        }
-        DropdownMenu(expanded = filterMenu, onDismissRequest = { filterMenu = false }) {
-          fileKinds.forEachIndexed { index, type ->
-            DropdownMenuItem(text = { Text(kinds[index]) }, onClick = {
-              kind = type
-              navigation.rememberSelection("library-kind", type)
-              filterMenu = false
-            })
+  XopcFloatingHeaderScaffold(
+    modifier = Modifier.fillMaxSize().then(if (isLibraryRoot) sidebarGesture else Modifier).padding(insets).testTag("space-library"),
+    header = {
+      Column(Modifier.fillMaxWidth()) {
+        XopcPageHeader(
+          backTag = "library-back",
+          onBack = onExit,
+          showBack = !isLibraryRoot,
+          leadingContent = if (isLibraryRoot) ({ PageSidebarButton("library-sidebar", onOpenSidebar!!) }) else null,
+          titleContent = { PageTitleMenu(scopes, view, "space-scope-menu", onSelect = ::selectScope) },
+        )
+        Row(
+          Modifier.fillMaxWidth().padding(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, bottom = 8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          XopcPageSearchField(
+            query = query,
+            onQueryChange = { query = it },
+            placeholder = t("搜索资料", "Search files"),
+            tag = "space-search",
+            autoFocus = false,
+            modifier = Modifier.weight(1f),
+          )
+          Box {
+            XopcHeaderPillButton(
+              label = kinds[fileKinds.indexOf(kind).coerceAtLeast(0)],
+              onClick = { filterMenu = true },
+              accent = kind.isNotEmpty(),
+              modifier = Modifier.testTag("space-file-type"),
+            )
+            DropdownMenu(expanded = filterMenu, onDismissRequest = { filterMenu = false }) {
+              fileKinds.forEachIndexed { index, type ->
+                DropdownMenuItem(text = { Text(kinds[index]) }, onClick = {
+                  kind = type
+                  navigation.rememberSelection("library-kind", type)
+                  filterMenu = false
+                })
+              }
+            }
           }
         }
       }
-    }
+    },
+  ) { headerTopPadding ->
     androidx.compose.foundation.pager.HorizontalPager(
       state = scopePager,
-      modifier = Modifier.weight(1f).fillMaxWidth(),
+      modifier = Modifier.fillMaxSize(),
       key = { scopes[it].value },
       userScrollEnabled = false,
       flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(scopePager, snapPositionalThreshold = 0.33f),
     ) { pageIndex ->
       val pageScope = scopes[pageIndex].value
       if (pageScope != view) {
-        Box(Modifier.fillMaxSize().padding(horizontal = XopcDesignTokens.PagePaddingX)) {
+        Box(Modifier.fillMaxSize().padding(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, top = headerTopPadding)) {
           XopcListSkeleton(rows = 5)
         }
       } else {
@@ -219,6 +232,7 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
       contentPadding = PaddingValues(
         start = XopcDesignTokens.PagePaddingX,
         end = XopcDesignTokens.PagePaddingX,
+        top = headerTopPadding,
         bottom = if (isLibraryRoot) bottomChromeInset + 16.dp else 16.dp,
       ),
       verticalArrangement = Arrangement.spacedBy(8.dp),

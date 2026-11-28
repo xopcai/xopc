@@ -2483,10 +2483,11 @@ export struct XopcChatView {
     .id(this.sessionChat ? 'session-chat-header-title' : 'chat-header-identity')
     .layoutWeight(1)
     .constraintSize({ minHeight: 44 })
-    .padding({ left: 12, right: 10, top: 6, bottom: 6 })
-    .borderRadius(this.colors.corner(18))
-    .clipShape(this.colors.cornerClip(18))
+    .padding({ left: 14, right: 12, top: 6, bottom: 6 })
+    .borderRadius(22)
+    .clip(true)
     .backgroundColor(this.colors.chat.card)
+    .hitTestBehavior(HitTestMode.Default)
     .accessibilityText(identity.accessibilitySummary)
     .onClick((): void => { this.dismissComposer(); this.openSheet('actions'); })
   }
@@ -2542,10 +2543,11 @@ export struct XopcChatView {
     }
     .id('chat-context-bar')
     .constraintSize({ minHeight: 32 })
-    .padding({ left: 10, right: 8, top: 5, bottom: 5 })
-    .borderRadius(this.colors.corner(12))
-    .clipShape(this.colors.cornerClip(12))
+    .padding({ left: 12, right: 10, top: 5, bottom: 5 })
+    .borderRadius(16)
+    .clip(true)
     .backgroundColor(strip.needsAttention ? this.colors.attentionFill : this.colors.chat.card)
+    .hitTestBehavior(HitTestMode.Default)
     .accessibilityText(strip.summaryText)
     .onClick((): void => { this.dismissComposer(); this.openSheet('context'); })
   }
@@ -2623,16 +2625,17 @@ export struct XopcChatView {
               if (this.desktopChatTarget?.reselectEndpointId) {
                 Button(this.desktopTargetLabel()).height(32).fontSize(12).fontColor(this.colors.chat.action)
                   .backgroundColor(this.colors.chat.card)
-                  .borderRadius(this.colors.corner(12))
-                  .padding({ left: 10, right: 10 })
+                  .borderRadius(16)
+                  .padding({ left: 12, right: 12 })
+                  .hitTestBehavior(HitTestMode.Default)
                   .enabled(!this.desktopReselecting && !this.chat.sending && !this.chat.runId)
                   .id('chat-execution-device').onClick((): void => { void this.selectDesktopAgain(); })
               } else {
                 Text(this.desktopTargetLabel()).fontSize(12).fontColor(this.colors.secondary).maxLines(1)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
                   .constraintSize({ minHeight: 32 })
-                  .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-                  .borderRadius(this.colors.corner(12))
+                  .padding({ left: 12, right: 12, top: 5, bottom: 5 })
+                  .borderRadius(16)
                   .backgroundColor(this.colors.chat.card)
                   .id('chat-execution-device-label')
               }
@@ -2643,8 +2646,8 @@ export struct XopcChatView {
     }.id('chat-floating-header').width('100%')
       .alignItems(this.personalConversation ? HorizontalAlign.Center : HorizontalAlign.Start)
       .padding({ top: this.chatTopInset + 8, bottom: 8 })
-      .backgroundColor(this.personalConversation ? Color.Transparent : this.colors.chat.canvas)
-      .hitTestBehavior(this.personalConversation ? HitTestMode.None : HitTestMode.Default)
+      .backgroundColor(Color.Transparent)
+      .hitTestBehavior(HitTestMode.None)
       .onAreaChange((_previous: Area, current: Area): void => {
         const height = Number(current.height);
         if (height !== this.floatingHeaderHeight) this.floatingHeaderHeight = height;

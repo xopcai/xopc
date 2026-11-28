@@ -2,7 +2,7 @@ import { xopcConfirmDialog } from '../common/dialogActions';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcMobileRoute } from '../model/home';
-import { XopcHubRow, XopcListSkeleton, XopcSectionLabel, XopcPageHeader } from './MobileComponents';
+import { XOPC_PAGE_HEADER_HEIGHT_VP, XopcHubRow, XopcListSkeleton, XopcSectionLabel, XopcPageHeader } from './MobileComponents';
 import { XopcMarkdownView } from './MarkdownView';
 import { userErrorMessage } from '../common/userError';
 
@@ -93,8 +93,7 @@ export struct XopcAutomationRunView {
   }
   build() {
     NavDestination() {
-      Column() {
-        XopcPageHeader({ heading: $r('app.string.automation_run_title'), backVisible: true, onBack: this.onExit })
+      Stack({ alignContent: Alignment.Top }) {
         Scroll() {
           Column({ space: 12 }) {
             if (this.busy && !this.run) { XopcListSkeleton() }
@@ -150,8 +149,9 @@ export struct XopcAutomationRunView {
                 }.width('100%').padding({ top: 10, bottom: 10 }).alignItems(VerticalAlign.Top)
               }, (event: XopcRunEvent): string => event.id)
             }
-          }.width('100%').padding(20).alignItems(HorizontalAlign.Start)
-        }.layoutWeight(1).width('100%').align(Alignment.Top)
+          }.width('100%').padding({ left: 20, right: 20, top: XOPC_PAGE_HEADER_HEIGHT_VP + 8, bottom: 20 }).alignItems(HorizontalAlign.Start)
+        }.height('100%').width('100%').align(Alignment.Top)
+        XopcPageHeader({ heading: $r('app.string.automation_run_title'), showStaticTitle: true, backVisible: true, onBack: this.onExit })
       }.width('100%').height('100%')
     }.hideTitleBar(true).backgroundColor(this.colors.surface)
   }

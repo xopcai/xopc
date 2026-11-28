@@ -6,7 +6,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcUserGoal } from '../model/userUnderstanding';
 import { XopcPersonalViewModel } from '../viewmodel/homeViewModel';
-import { XopcEmptyHint, XopcInlineBanner, XopcListSkeleton, XopcPageHeader, XopcSheetHeader } from './MobileComponents';
+import { XOPC_PAGE_HEADER_HEIGHT_VP, XopcEmptyHint, XopcInlineBanner, XopcListSkeleton, XopcPageHeader, XopcSheetHeader } from './MobileComponents';
 
 @ComponentV2
 export struct XopcPersonalGoalsView {
@@ -174,22 +174,14 @@ export struct XopcPersonalGoalsView {
             XopcInlineBanner({ message: $r('app.string.personal_profile_unavailable'), actionLabel: $r('app.string.retry'),
               onAction: (): void => { void this.model.refresh(); } })
           }
-        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).alignItems(HorizontalAlign.Start)
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: XOPC_PAGE_HEADER_HEIGHT_VP + 66, bottom: 24 }).alignItems(HorizontalAlign.Start)
       }.id('personal-goals-list').height('100%').width('100%').align(Alignment.Top).scrollBar(BarState.Off)
         .accessibilityLevel(this.selectedGoalTab === key ? 'auto' : 'no-hide-descendants')
     }.width('100%').height('100%').onRefreshing((): void => { void this.model.refresh(); })
   }
 
   build() {
-    Column() {
-      XopcPageHeader({ heading: $r('app.string.personal_goals'), showStaticTitle: true, backVisible: true,
-        onBack: this.onExit, actionLabel: $r('app.string.personal_goal_add'),
-        actionIcon: $r('sys.symbol.plus'), actionTone: 'accent', onAction: (): void => { this.openGoalEditor(); } })
-      Column() {
-        XopcSegmentedTabs({ options: this.goalTabs, selectedKey: this.selectedGoalTab, pagerProgress: this.pagerProgress,
-          swipeToSelect: !this.goalEditorOpen,
-          onSelect: (key: string): void => { this.selectGoalTab(key); } })
-      }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X }).margin({ top: 8, bottom: 16 })
+    Stack({ alignContent: Alignment.Top }) {
       Swiper(this.pager) {
         this.goalsPage('ongoing')
         this.goalsPage('achieved')
@@ -201,7 +193,18 @@ export struct XopcPersonalGoalsView {
         })
         .onAnimationEnd((): void => { this.pagerProgress.reset(); })
         .onChange((index: number): void => { this.selectedGoalTab = this.goalTabs[index].key; })
-        .width('100%').layoutWeight(1)
+        .width('100%').height('100%')
+      Column() {
+        XopcPageHeader({ heading: $r('app.string.personal_goals'), showStaticTitle: true, backVisible: true,
+          onBack: this.onExit, actionLabel: $r('app.string.personal_goal_add'),
+          actionIcon: $r('sys.symbol.plus'), actionTone: 'accent', onAction: (): void => { this.openGoalEditor(); } })
+        Column() {
+          XopcSegmentedTabs({ options: this.goalTabs, selectedKey: this.selectedGoalTab, pagerProgress: this.pagerProgress,
+            swipeToSelect: !this.goalEditorOpen,
+            onSelect: (key: string): void => { this.selectGoalTab(key); } })
+        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
+          .hitTestBehavior(HitTestMode.Default)
+      }.width('100%').backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.None)
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.goalEditorOpen, this.goalEditor, xopcSheetOptions('large'))
   }

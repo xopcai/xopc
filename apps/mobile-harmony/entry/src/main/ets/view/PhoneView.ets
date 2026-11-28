@@ -179,13 +179,14 @@ export struct XopcPhoneView {
         }.width(44).height(44).padding(0).backgroundColor(this.colors.panel).clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.phone_return'))
           .onClick((): void => { this.onReturn(); })
-        Column({ space: 3 }) {
-          Text(this.phone.summary?.deviceName ?? '').fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+        Column({ space: 2 }) {
+          Text(this.phone.summary?.deviceName ?? '').fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           if (this.phone.state) {
             Text(this.statusText).fontSize(12).fontColor(this.colors.secondary).maxLines(1)
           }
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        }.layoutWeight(1).constraintSize({ minHeight: 44 }).padding({ left: 14, right: 14, top: 4, bottom: 4 })
+          .borderRadius(22).backgroundColor(this.colors.panel).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Start)
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph(xopcMoreIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
         }.id('phone-more').width(44).height(44).padding(0).backgroundColor(this.colors.panel).clickEffect(xopcClickEffect())

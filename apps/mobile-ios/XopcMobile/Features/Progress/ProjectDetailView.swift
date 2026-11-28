@@ -61,6 +61,7 @@ struct ProjectDetailView: View {
                 ProgressView("正在读取项目…")
             }
         }
+        .background(mobileTheme.canvas.ignoresSafeArea())
         .mobilePageTitle(Text("项目详情")) {
             MobilePageTitleMenu(options: ProjectSection.allCases.map {
                 SegmentOption(id: $0, title: $0.title, accessibilityID: "project-tab-\($0.rawValue)")
@@ -79,7 +80,7 @@ struct ProjectDetailView: View {
         .toolbar {
             if let project {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu("添加到项目", systemImage: "plus") {
+                    Menu {
                         Button("新建项目对话", systemImage: "bubble.left") { startProjectChat(project) }
                         if project.workspaceRoot?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
                            !externalAgents.isEmpty
@@ -94,9 +95,13 @@ struct ProjectDetailView: View {
                         Button("新建项目笔记", systemImage: "note.text") { creationSheet = .note }
                         Button("新建项目自动化", systemImage: "clock") { setupPrompt = "" }
                         Button { managingProject = true } label: { Label("项目设置", systemImage: "folder") }
+                    } label: {
+                        MobileHeaderIconLabel(systemImage: "plus", tone: .accent)
                     }
+                    .accessibilityLabel("添加到项目")
                     .accessibilityIdentifier("project-add")
                 }
+                .mobileTransparentToolbarItem()
             }
         }
         .sheet(isPresented: $managingProject) {
@@ -169,6 +174,7 @@ struct ProjectDetailView: View {
                 Section { ProgressView("正在刷新项目…") }
             }
         }
+        .scrollContentBackground(.hidden)
         .refreshable { await load() }
     }
 

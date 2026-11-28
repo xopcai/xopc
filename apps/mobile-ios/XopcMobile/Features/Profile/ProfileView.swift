@@ -60,6 +60,7 @@ struct PersonalGoalsView: View {
     @State private var completed = false
     @State private var pagerProgress = PageScrollProgress()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.mobileTheme) private var theme
 
     private let goalTabs = [
         SegmentOption(id: false, title: "进行中", accessibilityID: "personal-goals-ongoing"),
@@ -78,14 +79,15 @@ struct PersonalGoalsView: View {
             }
             .accessibilityIdentifier("personal-goals-pager")
         }
-        .navigationTitle("目标")
-        .navigationBarTitleDisplayMode(.inline)
+        .background(theme.canvas.ignoresSafeArea())
+        .mobilePageTitle(Text("目标"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("添加", systemImage: "plus") { selectedGoal = nil; editing = true }
+                MobileHeaderIconButton("添加", systemImage: "plus", tone: .accent) { selectedGoal = nil; editing = true }
                     .disabled(summary == nil)
                     .accessibilityIdentifier("settings-goal-add")
             }
+            .mobileTransparentToolbarItem()
         }
         .task(id: configuration) { await load() }
         .sheet(isPresented: $editing) {
@@ -120,6 +122,7 @@ struct PersonalGoalsView: View {
                 ProfileSkeleton()
             }
         }
+        .scrollContentBackground(.hidden)
         .accessibilityIdentifier("personal-goals-list")
         .refreshable { await load() }
     }
@@ -171,6 +174,7 @@ struct UserUnderstandingView: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
+        .background(theme.canvas.ignoresSafeArea())
         .accessibilityIdentifier("about-you-pager")
         .mobilePageTitle(Text("隐私与记忆")) {
             MobilePageTitleMenu(options: [
@@ -185,12 +189,13 @@ struct UserUnderstandingView: View {
                     PageSearchButton("搜索记忆", isOpen: $searchOpen, query: $query,
                                      accessibilityID: "about-you-search-toggle")
                 }
+                .mobileTransparentToolbarItem()
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             if section == 1, searchOpen {
                 PageSearchField("搜索记忆", text: $query, focused: $searchFocused, accessibilityID: "about-you-search")
-                    .padding(.horizontal, 20).padding(.bottom, 8).background(theme.canvas)
+                    .padding(.horizontal, 20).padding(.bottom, 8)
             }
         }
         .task(id: configuration) { await refreshSummary() }
@@ -237,6 +242,7 @@ struct UserUnderstandingView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .listSectionSpacing(12)
         .refreshable { await refreshSection(page) }
     }
@@ -634,6 +640,7 @@ private struct UserAssertionDetailView: View {
     let id: String
     var onChanged: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.mobileTheme) private var theme
     @State private var item: MobileUserAssertion?
     @State private var statement = ""
     @State private var editing = false
@@ -682,6 +689,8 @@ private struct UserAssertionDetailView: View {
                 Text(error).foregroundStyle(.red)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(theme.canvas.ignoresSafeArea())
         .mobilePageTitle(Text("记忆详情"))
         .task { await load() }
         .confirmationDialog("删除这条记忆？", isPresented: $showDelete) {
@@ -738,6 +747,7 @@ private func userMemoryScope(_ scope: String?) -> LocalizedStringKey {
 
 struct AboutView: View {
     @Environment(\.locale) private var locale
+    @Environment(\.mobileTheme) private var theme
     private var version: String? {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
     }
@@ -764,9 +774,10 @@ struct AboutView: View {
                 aboutLink("用户协议", icon: "doc.text", path: "/terms", id: "terms")
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(theme.canvas.ignoresSafeArea())
         .listSectionSpacing(16)
-        .navigationTitle("关于 xopc")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("关于 xopc"))
     }
 
     @ViewBuilder

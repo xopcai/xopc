@@ -201,4 +201,29 @@ class UiArchitectureGuardTest {
       assertTrue("$file must animate expandable search/filter with xopcExpandPanelEnter", text.contains("xopcExpandPanelEnter("))
     }
   }
+
+  @Test
+  fun transparentFloatingHeadersAndCapsuleChromeAdoptedAcrossPages() {
+    val chrome = File(uiMainDir(), "MobileChrome.kt").readText()
+    assertTrue("MobileChrome must provide XopcFloatingHeaderScaffold", chrome.contains("fun XopcFloatingHeaderScaffold("))
+    assertTrue("MobileChrome must provide XopcHeaderIconButton", chrome.contains("fun XopcHeaderIconButton("))
+    assertTrue("MobileChrome must render static XopcPageHeader title in a CircleShape capsule",
+      chrome.contains("shape = CircleShape,\n            color = floatingPillSurfaceColor"))
+
+    val pageSearch = File(uiMainDir(), "PageSearch.kt").readText()
+    assertTrue("PageTitleMenu must render in a CircleShape capsule", pageSearch.contains("shape = CircleShape"))
+    assertTrue("PageSearchButton must delegate to XopcHeaderIconButton", pageSearch.contains("XopcHeaderIconButton("))
+
+    for (file in listOf(
+      "MainScreen.kt", "NotesScreen.kt", "ProgressScreen.kt", "SpaceLibraryScreen.kt",
+      "CapabilitiesScreen.kt", "AboutYouScreen.kt", "SettingsScreen.kt", "PersonalScreen.kt",
+      "ShareCenterScreen.kt", "GatewayProfilesScreen.kt", "ModelSettingsScreen.kt", "VoiceNoteScreen.kt",
+    )) {
+      val text = File(uiMainDir(), file).readText()
+      assertTrue("$file must host its header in XopcFloatingHeaderScaffold", text.contains("XopcFloatingHeaderScaffold("))
+    }
+
+    val taskChat = File(uiMainDir(), "TaskChatChrome.kt").readText()
+    assertTrue("TaskChatChrome header must remain transparent", !taskChat.contains(".height(64.dp).background(MaterialTheme.colorScheme.background)"))
+  }
 }

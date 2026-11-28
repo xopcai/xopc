@@ -8,7 +8,8 @@ export const CORE_MOBILE_TABS: XopcCoreMobileTab[] = ['ada', 'conversations', 'w
 export const PINNED_SPACE_TAB_PREFIX: string = 'pinnedSpace:';
 
 export const FLOATING_TAB_BAR_HEIGHT_VP: number = 54;
-export const FLOATING_TAB_BAR_MARGIN_BOTTOM_VP: number = 6;
+export const FLOATING_TAB_BAR_TOP_PADDING_VP: number = 4;
+export const FLOATING_TAB_BAR_MARGIN_BOTTOM_VP: number = 0;
 export const FLOATING_TAB_BAR_COMPOSER_GAP_VP: number = 4;
 
 export type XopcTabTapResult = 'switched' | 'popped-to-root' | 'scroll-to-top';
@@ -81,7 +82,9 @@ export function shouldMarkPersonalViewed(
 }
 
 export function bottomChromeInsetFor(showBottomTabBar: boolean): number {
-  return showBottomTabBar ? FLOATING_TAB_BAR_HEIGHT_VP + FLOATING_TAB_BAR_MARGIN_BOTTOM_VP : 0;
+  return showBottomTabBar
+    ? FLOATING_TAB_BAR_HEIGHT_VP + FLOATING_TAB_BAR_TOP_PADDING_VP + FLOATING_TAB_BAR_MARGIN_BOTTOM_VP
+    : 0;
 }
 
 export function isActiveMobileDestination(

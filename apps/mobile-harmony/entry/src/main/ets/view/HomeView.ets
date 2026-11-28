@@ -896,7 +896,7 @@ export struct XopcHomeView {
             }
           },
         })
-      }.hideTitleBar(true).onBackPressed((): boolean => {
+      }.hideTitleBar(true).backgroundColor(this.colors.chat.canvas).onBackPressed((): boolean => {
         if (layoutState.dismissChatOverlay?.()) return true;
         this.popActiveStack();
         return true;
@@ -981,7 +981,7 @@ export struct XopcHomeView {
           },
           onSaved: (record: XopcPersonalAgentRecord): void => { this.personalAgent.record = record; },
           onClose: (): void => { this.popActiveStack(); } })
-      }.hideTitleBar(true).onHidden((): void => { this.profileOptions.dispose(); this.profileOptions = new XopcChatOptionsViewModel(); })
+      }.hideTitleBar(true).backgroundColor(this.colors.panel).onHidden((): void => { this.profileOptions.dispose(); this.profileOptions = new XopcChatOptionsViewModel(); })
     } else if (page === 'notes' || page === 'inbox' || page === 'note-create') {
       XopcNotesView({ initialId: (param as XopcMobileRoute).itemId,
         createOnAppear: page === 'note-create', projectId: (param as XopcMobileRoute).projectId ?? '',
@@ -994,17 +994,17 @@ export struct XopcHomeView {
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else if (page === 'automation-configuration-chat') {
       NavDestination() {
-        Column() {
-          XopcPageHeader({ heading: $r('app.string.automation_setup_title'), backVisible: true,
-            onBack: (): void => { this.popActiveStack(); } })
+        Stack({ alignContent: Alignment.Top }) {
           XopcChatView({ requestedId: (param as XopcMobileRoute).itemId, embedded: true, automationSetup: true,
             activePage: isActiveMobileDestination(this.selectedTab, this.tabTopEntries, (param as XopcMobileRoute).stackEntryId)
               && this.layout.foreground,
             intakeText: (param as XopcMobileRoute).prompt ?? '', intakeRevision: 1,
             onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
-            .width('100%').layoutWeight(1)
+            .width('100%').height('100%')
+          XopcPageHeader({ heading: $r('app.string.automation_setup_title'), showStaticTitle: true, backVisible: true,
+            onBack: (): void => { this.popActiveStack(); } })
         }.width('100%').height('100%').backgroundColor(this.colors.chat.canvas)
-      }.hideTitleBar(true).onBackPressed((): boolean => {
+      }.hideTitleBar(true).backgroundColor(this.colors.chat.canvas).onBackPressed((): boolean => {
         if (layoutState.dismissChatOverlay?.()) return true;
         this.popActiveStack(); return true;
       })
@@ -1019,7 +1019,7 @@ export struct XopcHomeView {
           sidebarSwipeWidth: this.recordingViewportWidth, sidebarSwipeEnabled: false,
           onConversationChange: (id: string): void => { this.projectConversationId = id; },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
-      }.hideTitleBar(true).onBackPressed((): boolean => {
+      }.hideTitleBar(true).backgroundColor(this.colors.chat.canvas).onBackPressed((): boolean => {
         if (this.closeSidebar() || layoutState.dismissChatOverlay?.()) return true;
         this.closeProjectChat(); return true;
       })
@@ -1031,7 +1031,7 @@ export struct XopcHomeView {
           embedded: false,
           onTaskClose: (): void => { this.popActiveStack(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
-      }.hideTitleBar(true).onBackPressed((): boolean => { if (layoutState.dismissChatOverlay?.()) return true; this.popActiveStack(); return true; })
+      }.hideTitleBar(true).backgroundColor(this.colors.chat.canvas).onBackPressed((): boolean => { if (layoutState.dismissChatOverlay?.()) return true; this.popActiveStack(); return true; })
     } else if (page === 'task-detail') {
       XopcWorkspaceView({ section: 'tasks', heading: $r('app.string.task_detail_title'), initialId: (param as XopcMobileRoute).itemId,
         onExit: (): void => { this.popActiveStack(); },
@@ -1114,7 +1114,7 @@ export struct XopcHomeView {
               intakeRevision: this.intake.chatRevision,
               intakeText: this.adaRequestedDraft,
               activePage: this.selectedTab === 'ada' && this.adaDepth === 0,
-              bottomChromeInset: this.bottomChromeInset,
+              bottomChromeInset: 0,
               scrollToLatestRevision: this.adaScrollRevision,
               sidebarSwipeWidth: this.recordingViewportWidth,
               sidebarSwipeEnabled: this.allowSidebarEdgeSwipe && this.adaChatReady,
@@ -1147,7 +1147,6 @@ export struct XopcHomeView {
               Column() {
                 XopcErrorState({ error: this.initialChatError, onAction: (): void => { void this.restoreInitialChat(); } })
               }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
-                .padding({ bottom: this.bottomChromeInset })
             } else {
               XopcBrandLoading({ reduceMotion: this.layout.reduceMotion })
             }
@@ -1172,7 +1171,7 @@ export struct XopcHomeView {
         activePage: this.selectedTab === 'conversations' && this.conversationsDepth === 0 && this.layout.foreground,
         currentId: this.visibleConversationId,
         personalAgent: this.personalAgent.record,
-        bottomChromeInset: this.bottomChromeInset,
+        bottomChromeInset: 0,
         scrollTopRevision: this.conversationsScrollRevision,
         onOpenSidebar: (): void => { this.openSidebar(); },
         onBackHandler: (handler?: () => boolean): void => { this.conversationsBackHandler = handler; },
@@ -1195,7 +1194,7 @@ export struct XopcHomeView {
       XopcWorkbenchView({
         progress: this.attention,
         activePage: this.selectedTab === 'workbench' && this.workbenchDepth === 0 && this.layout.foreground,
-        bottomChromeInset: this.bottomChromeInset,
+        bottomChromeInset: 0,
         resetRevision: this.workbenchResetRevision,
         onOpenSidebar: (): void => { this.openSidebar(); },
         onBackHandler: (handler?: () => boolean): void => { this.workbenchBackHandler = handler; },
@@ -1215,7 +1214,7 @@ export struct XopcHomeView {
       XopcNotesTabView({
         activePage: this.selectedTab === 'notes' && this.notesDepth === 0 && this.layout.foreground,
         rootTab: true,
-        bottomChromeInset: this.bottomChromeInset,
+        bottomChromeInset: 0,
         scrollTopRevision: this.notesScrollRevision,
         recordingAvailable: this.recordingAvailable,
         onOpenSidebar: (): void => { this.openSidebar(); },
@@ -1237,7 +1236,7 @@ export struct XopcHomeView {
       XopcSpaceLibraryView({
         rootTab: true,
         activePage: this.selectedTab === 'library' && this.libraryDepth === 0 && this.layout.foreground,
-        bottomChromeInset: this.bottomChromeInset,
+        bottomChromeInset: 0,
         scrollTopRevision: this.libraryScrollRevision,
         onOpenSidebar: (): void => { this.openSidebar(); },
         onDetailOpenChange: (open: boolean): void => { this.libraryDetailOpen = open; },
@@ -1259,14 +1258,14 @@ export struct XopcHomeView {
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
-      Stack({ alignContent: Alignment.Bottom }) {
+      Column() {
         Stack({ alignContent: Alignment.TopStart }) {
           this.adaTabStack()
           this.conversationsTabStack()
           this.workbenchTabStack()
           this.notesTabStack()
           this.libraryTabStack()
-        }.width('100%').height('100%')
+        }.width('100%').layoutWeight(1).clip(true)
           .parallelGesture(PanGesture({ fingers: 1, direction: PanDirection.Right, distance: CHAT_SIDEBAR_PAN_DISTANCE_VP })
             .tag('root-tab-sidebar-open')
             .onActionStart((event: GestureEvent): void => { this.startSidebarDrag(event.offsetX); })
@@ -1281,9 +1280,8 @@ export struct XopcHomeView {
         if (this.showGlobalMusicMiniPlayer) {
           Column() { XopcMusicMiniPlayer() }
             .width('100%')
-            .padding({ top: 4, bottom: this.bottomChromeInset > 0 ? this.bottomChromeInset + 8 : 4 })
-            .hitTestBehavior(HitTestMode.Transparent)
-            .zIndex(30)
+            .padding({ top: 4, bottom: 4 })
+            .backgroundColor(this.colors.surface)
         }
 
         if (this.showBottomTabBar) {
@@ -1295,9 +1293,9 @@ export struct XopcHomeView {
             recordingAvailable: this.recordingAvailable,
             recordingActive: this.capture.phase === 'recording',
             onSelectTab: (tab: XopcMobileTab): void => { this.selectTab(tab); },
-          }).zIndex(35)
+          })
         }
-      }.width('100%').height('100%')
+      }.width('100%').height('100%').backgroundColor(this.colors.surface)
 
       if (this.sidebarMounted) {
         Stack() {
@@ -1436,26 +1434,7 @@ struct XopcWorkbenchView {
   }
 
   build() {
-    Column() {
-      XopcPageHeader({
-        heading: WORK_PAGE_OPTIONS[this.selectedIndex].label,
-        titleOptions: WORK_PAGE_OPTIONS,
-        selectedTitle: WORK_PAGE_OPTIONS[this.selectedIndex].key,
-        titleMenuId: 'work-page-menu',
-        onSelectTitle: (page: string): void => { this.selectPage(page); },
-        backVisible: false,
-        drawerVisible: true,
-        drawerId: 'workbench-header-sidebar',
-        onOpenDrawer: (): void => { this.onOpenSidebar(); },
-        searchId: this.selectedIndex === 2 ? 'projects-open-search' : '',
-        searchOpen: this.projectSearchOpen,
-        onSearch: (): void => { this.toggleProjectSearch(); },
-        actionLabel: this.selectedIndex === 0 ? '' : this.selectedIndex === 1 ? $r('app.string.new_task') : $r('app.string.new_project'),
-        actionIcon: $r('sys.symbol.plus'),
-        onAction: (): void => {
-          this.onNavigate({ page: this.selectedIndex === 1 ? 'task-create' : 'project-create', itemId: '' });
-        },
-      }).id('workbench-header')
+    Stack({ alignContent: Alignment.Top }) {
       Swiper(this.pager) {
         XopcProgressView({
           activePage: this.activePage,
@@ -1484,11 +1463,30 @@ struct XopcWorkbenchView {
         })
       }.id('work-page-pager').index(this.selectedIndex).loop(false).indicator(false).cachedCount(2)
         .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(true)
-        .width('100%').layoutWeight(1).clip(true)
+        .width('100%').height('100%').clip(true)
         .onChange((index: number): void => {
           this.selectedIndex = index;
           this.getUIContext().getFocusController().clearFocus();
         })
+      XopcPageHeader({
+        heading: WORK_PAGE_OPTIONS[this.selectedIndex].label,
+        titleOptions: WORK_PAGE_OPTIONS,
+        selectedTitle: WORK_PAGE_OPTIONS[this.selectedIndex].key,
+        titleMenuId: 'work-page-menu',
+        onSelectTitle: (page: string): void => { this.selectPage(page); },
+        backVisible: false,
+        drawerVisible: true,
+        drawerId: 'workbench-header-sidebar',
+        onOpenDrawer: (): void => { this.onOpenSidebar(); },
+        searchId: this.selectedIndex === 2 ? 'projects-open-search' : '',
+        searchOpen: this.projectSearchOpen,
+        onSearch: (): void => { this.toggleProjectSearch(); },
+        actionLabel: this.selectedIndex === 0 ? '' : this.selectedIndex === 1 ? $r('app.string.new_task') : $r('app.string.new_project'),
+        actionIcon: $r('sys.symbol.plus'),
+        onAction: (): void => {
+          this.onNavigate({ page: this.selectedIndex === 1 ? 'task-create' : 'project-create', itemId: '' });
+        },
+      }).id('workbench-header')
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
   }
 }

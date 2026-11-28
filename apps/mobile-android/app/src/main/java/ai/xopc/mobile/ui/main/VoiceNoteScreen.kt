@@ -168,15 +168,18 @@ internal fun VoiceNoteCapture(gatewayId: String, access: VoiceNotesGateway, inse
       revision++
     }
   }
-  Column(Modifier.fillMaxSize().padding(insets).testTag("voice-note-capture"),
-    verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    XopcPageHeader(
-      backTag = "voice-note-back",
-      onBack = close,
-      backEnabled = !busy && !finishing,
-      title = stringResource(if (recoveryOnly) R.string.voice_note_pending else R.string.voice_note_title),
-    )
-    Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.PagePaddingX),
+  XopcFloatingHeaderScaffold(
+    modifier = Modifier.fillMaxSize().padding(insets).testTag("voice-note-capture"),
+    header = {
+      XopcPageHeader(
+        backTag = "voice-note-back",
+        onBack = close,
+        backEnabled = !busy && !finishing,
+        title = stringResource(if (recoveryOnly) R.string.voice_note_pending else R.string.voice_note_title),
+      )
+    },
+  ) { headerTopPadding ->
+    Column(Modifier.fillMaxSize().padding(start = XopcDesignTokens.PagePaddingX, end = XopcDesignTokens.PagePaddingX, top = headerTopPadding + 4.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (confirmClose) XopcConfirmDialog(
       onDismiss = { if (!busy && !finishing) confirmClose = false },

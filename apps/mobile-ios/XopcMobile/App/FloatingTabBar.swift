@@ -13,6 +13,7 @@ struct FloatingTabBar: View {
     let personalWorking: Bool
     let pendingAttention: Int
     let hasPendingRecording: Bool
+    var bottomPadding: CGFloat = 0
     let onSelect: (MobileTab) -> Void
 
     @Namespace private var activePillNamespace
@@ -36,9 +37,10 @@ struct FloatingTabBar: View {
         .background(mobileTheme.panel, in: Capsule())
         .frame(maxWidth: 440)
         .padding(.horizontal, 12)
-        .padding(.top, 2)
-        .padding(.bottom, 4)
+        .padding(.top, 4)
+        .padding(.bottom, bottomPadding)
         .frame(maxWidth: .infinity)
+        .background(mobileTheme.canvas.ignoresSafeArea(edges: .bottom))
         .animation(MobileMotion.animation(MobileMotion.standardDuration, reduceMotion: reduceMotion), value: selectedTab)
         .sensoryFeedback(.selection, trigger: selectedTab)
         .accessibilityElement(children: .contain)

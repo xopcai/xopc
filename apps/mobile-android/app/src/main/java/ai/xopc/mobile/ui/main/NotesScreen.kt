@@ -479,75 +479,93 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     },
     dismissButton = { TextButton(enabled = !uploadBusy, onClick = { conflictUri = null }) { Text(stringResource(R.string.progress_cancel)) } })
   val isNotesRoot = onOpenSidebar != null && !fileBrowserOpen && !editorOpen && selectedId == null
-  Column(modifier = Modifier.fillMaxSize().then(if (isNotesRoot) sidebarGesture else Modifier).padding(insets),
-    verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    val back = when {
-      fileBrowserOpen -> closeFile
-      editorOpen -> closeEditor
-      selectedId != null -> closeNote
-      else -> onExit ?: {}
-    }
-    val showingNotesList = !fileBrowserOpen && !editorOpen && selectedId == null
-    val noteStatusOptions = listOf(
-      "" to R.string.notes_all,
-      "inbox" to R.string.notes_inbox,
-      "processed" to R.string.notes_processed,
-      "archived" to R.string.notes_archived,
-    ).map { (statusValue, labelRes) ->
-      SegmentOption(statusValue, stringResource(labelRes), "notes-filter-${statusValue.ifEmpty { "all" }}")
-    }
-    XopcPageHeader(
-      backTag = "notes-back",
-      onBack = back,
-      showBack = !isNotesRoot && (onExit != null || fileBrowserOpen || editorOpen || selectedId != null),
-      leadingContent = if (isNotesRoot) ({ PageSidebarButton("notes-sidebar", onOpenSidebar!!) }) else null,
-      title = if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
-      titleContent = if (showingNotesList) ({
-        PageTitleMenu(noteStatusOptions, state.status, "notes-page-menu") { next ->
-          onSearch(query.trim(), next)
-        }
-      }) else null,
-    ) {
-      if (fileBrowserOpen || editorOpen || selectedId != null) {
-        if (fileBrowserOpen && selectedFile == null && onUploadSpaceFile != null &&
-          fileSpaces.any { it.id == fileSpaceId && it.writable }) {
-          TextButton(enabled = !uploadBusy, onClick = {
-            uploadTarget = (fileSpaceId ?: return@TextButton) to filePath
-            uploadPicker.launch(arrayOf("*/*"))
-          }, modifier = Modifier.testTag("notes-file-upload")) { Text(stringResource(R.string.file_space_upload)) }
-        } else if (!fileBrowserOpen) {
-          Text(
-            if (!editorOpen || state.draft?.version == state.draftSyncedVersion) stringResource(R.string.notes_saved)
-            else if (state.draftSaving) stringResource(R.string.notes_syncing)
-            else if (state.draft?.version == state.draftSavedVersion) stringResource(R.string.notes_saved_locally)
-            else stringResource(R.string.notes_saving_locally),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-          )
-        }
-      } else {
-        PageSearchButton(searchOpen, R.string.notes_search, "notes-open-search", ::toggleSearch)
-        IconButton(onClick = {
-          focusManager.clearFocus(force = true)
-          if (onNavigateRoute != null && isNotesRoot) {
-            onNavigateRoute(MobileRoute.NoteFiles)
-          } else {
-            fileSpaceId = null
-            filePath = ""
-            fileSearch = ""
-            selectedFile = null
-            fileBrowserOpen = true
+  XopcFloatingHeaderScaffold(
+    modifier = Modifier.fillMaxSize().then(if (isNotesRoot) sidebarGesture else Modifier).padding(insets),
+    header = {
+      val back = when {
+        fileBrowserOpen -> closeFile
+        editorOpen -> closeEditor
+        selectedId != null -> closeNote
+        else -> onExit ?: {}
+      }
+      val showingNotesList = !fileBrowserOpen && !editorOpen && selectedId == null
+      val noteStatusOptions = listOf(
+        "" to R.string.notes_all,
+        "inbox" to R.string.notes_inbox,
+        "processed" to R.string.notes_processed,
+        "archived" to R.string.notes_archived,
+      ).map { (statusValue, labelRes) ->
+        SegmentOption(statusValue, stringResource(labelRes), "notes-filter-${statusValue.ifEmpty { "all" }}")
+      }
+      XopcPageHeader(
+        backTag = "notes-back",
+        onBack = back,
+        showBack = !isNotesRoot && (onExit != null || fileBrowserOpen || editorOpen || selectedId != null),
+        leadingContent = if (isNotesRoot) ({ PageSidebarButton("notes-sidebar", onOpenSidebar!!) }) else null,
+        title = if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
+        titleContent = if (showingNotesList) ({
+          PageTitleMenu(noteStatusOptions, state.status, "notes-page-menu") { next ->
+            onSearch(query.trim(), next)
           }
-        }, modifier = Modifier.testTag("notes-open-files")) {
-          ActionIcon(R.drawable.action_folder, size = 24.dp, contentDescription = stringResource(R.string.notes_files))
+        }) else null,
+      ) {
+        if (fileBrowserOpen || editorOpen || selectedId != null) {
+          if (fileBrowserOpen && selectedFile == null && onUploadSpaceFile != null &&
+            fileSpaces.any { it.id == fileSpaceId && it.writable }) {
+            XopcHeaderPillButton(
+              label = stringResource(R.string.file_space_upload),
+              onClick = {
+                uploadTarget = (fileSpaceId ?: return@XopcHeaderPillButton) to filePath
+                uploadPicker.launch(arrayOf("*/*"))
+              },
+              enabled = !uploadBusy,
+              accent = true,
+              modifier = Modifier.testTag("notes-file-upload"),
+            )
+          } else if (!fileBrowserOpen) {
+            Surface(
+              shape = CircleShape,
+              color = floatingPillSurfaceColor(MaterialTheme.colorScheme),
+              modifier = Modifier.heightIn(min = 36.dp),
+            ) {
+              Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
+                Text(
+                  if (!editorOpen || state.draft?.version == state.draftSyncedVersion) stringResource(R.string.notes_saved)
+                  else if (state.draftSaving) stringResource(R.string.notes_syncing)
+                  else if (state.draft?.version == state.draftSavedVersion) stringResource(R.string.notes_saved_locally)
+                  else stringResource(R.string.notes_saving_locally),
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  maxLines = 1,
+                )
+              }
+            }
+          }
+        } else {
+          PageSearchButton(searchOpen, R.string.notes_search, "notes-open-search", ::toggleSearch)
+          XopcHeaderIconButton(onClick = {
+            focusManager.clearFocus(force = true)
+            if (onNavigateRoute != null && isNotesRoot) {
+              onNavigateRoute(MobileRoute.NoteFiles)
+            } else {
+              fileSpaceId = null
+              filePath = ""
+              fileSearch = ""
+              selectedFile = null
+              fileBrowserOpen = true
+            }
+          }, modifier = Modifier.testTag("notes-open-files")) {
+            ActionIcon(R.drawable.action_folder, size = XopcDesignTokens.IconHeader, contentDescription = stringResource(R.string.notes_files))
+          }
         }
       }
-    }
-    Column(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = XopcDesignTokens.PagePaddingX),
+    },
+  ) { headerTopPadding ->
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = XopcDesignTokens.PagePaddingX),
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    if (fileBrowserOpen && uploadBusy) androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
-    if (fileBrowserOpen && uploadIssue != 0) Text(stringResource(uploadIssue), color = MaterialTheme.colorScheme.error)
+    if (fileBrowserOpen && uploadBusy) androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = headerTopPadding))
+    if (fileBrowserOpen && uploadIssue != 0) Text(stringResource(uploadIssue), color = MaterialTheme.colorScheme.error,
+      modifier = Modifier.padding(top = if (uploadBusy) 0.dp else headerTopPadding))
     val visibleFileSpaces = if (fileSpaceId == null && fileSearch.isBlank()) fileSpaces else emptyList()
     val visibleFileItems = if (fileSpaceId != null) folderItems else
       recentFileItems.orEmpty()
@@ -1311,6 +1329,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
   filtersOpen: MutableState<Boolean> = rememberSaveable { mutableStateOf(false) },
   bottomContentPadding: Dp = 20.dp, pendingVoiceCount: Int = 0, onRecoverVoice: () -> Unit = {}) {
   val motionAllowed = rememberMotionAllowed()
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
     androidx.compose.animation.AnimatedVisibility(
       visible = searchOpen,
@@ -1324,6 +1343,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
         tag = "notes-search",
         maxLength = 4096,
         onSearch = onSubmit,
+        modifier = Modifier.padding(top = headerTopPadding),
         trailingAction = {
           IconButton(onClick = onSubmit, enabled = !state.loading,
             modifier = Modifier.size(48.dp).testTag("notes-refresh")) {
@@ -1339,7 +1359,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
     ) {
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("notes-list"),
       verticalArrangement = Arrangement.spacedBy(8.dp),
-      contentPadding = PaddingValues(bottom = bottomContentPadding)) {
+      contentPadding = PaddingValues(top = if (searchOpen) 0.dp else headerTopPadding, bottom = bottomContentPadding)) {
       if (pendingVoiceCount > 0) item(key = "voice-recovery") {
         Surface(onClick = onRecoverVoice, modifier = Modifier.fillMaxWidth().testTag("notes-recover-voice"),
           shape = themedCorners(14), color = MaterialTheme.colorScheme.surfaceContainer) {
@@ -1406,7 +1426,8 @@ private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<Manage
   onRetry: () -> Unit, onOpenSpace: (ManagedFileSpace) -> Unit,
   onOpenFile: (ManagedFile) -> Unit, modifier: Modifier = Modifier,
   search: String = "", onSearchChange: (String) -> Unit = {}) {
-  Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
+  Column(modifier = modifier.padding(top = headerTopPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (selected == null) {
       OutlinedTextField(value = search, onValueChange = { onSearchChange(it.take(200)) },
         modifier = Modifier.fillMaxWidth().testTag("notes-files-search"),
@@ -1585,9 +1606,10 @@ internal fun NotesDetailContent(state: NotesUiState, id: String, onRetry: () -> 
   val reader = remember(id) { MarkdownNoteReadingState() }
   var readerOpen by rememberSaveable(id) { mutableStateOf(false) }
   if (readerOpen) NoteReadingDialog(reader, onDismiss = { readerOpen = false })
+  val headerTopPadding = LocalFloatingHeaderTopPadding.current
   Box(modifier = modifier.fillMaxWidth().testTag("note-detail")) {
     Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)
-      .padding(top = 8.dp, bottom = 84.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      .padding(top = headerTopPadding + 8.dp, bottom = 84.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       if (state.detailLoading && note == null) BrandLoadingPanel(
         modifier = Modifier.testTag("note-detail-loading"))
       if (state.detailError) OutlinedButton(onClick = onRetry,

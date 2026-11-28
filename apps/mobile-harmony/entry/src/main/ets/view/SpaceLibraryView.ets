@@ -20,6 +20,7 @@ import { gatewaySession } from '../service/gatewaySession';
 import { activeListScope, XopcListSnapshots } from '../service/listSnapshots';
 import { XopcChatMediaView } from './ChatMediaView';
 import {
+  XOPC_PAGE_HEADER_HEIGHT_VP,
   XopcEmptyHint,
   XopcErrorState,
   XopcInlineBanner,
@@ -413,10 +414,11 @@ export struct XopcSpaceLibraryView {
       } }).id('space-library-header')
     Row({ space: 8 }) {
       TextInput({ text: this.query, placeholder: this.t('搜索资料', 'Search files') }).id('space-search')
-        .layoutWeight(1).height(42).maxLength(160).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
-        .borderRadius(this.colors.corner(14)).onChange((value: string): void => { this.query = value; this.setFilters(); })
+        .layoutWeight(1).height(44).maxLength(160).backgroundColor(this.colors.panel).fontColor(this.colors.foreground)
+        .borderRadius(22).onChange((value: string): void => { this.query = value; this.setFilters(); })
       Select(this.typeOptions()).id('space-file-type').selected(this.typeIndex()).value(this.typeOptions()[this.typeIndex()].value)
-        .fontColor(this.colors.foreground).backgroundColor(this.colors.input)
+        .fontColor(this.colors.foreground).backgroundColor(this.colors.panel)
+        .borderRadius(22)
         .optionFontColor(this.colors.foreground).optionBgColor(this.colors.panel)
         .selectedOptionFontColor(this.colors.accent).selectedOptionBgColor(this.colors.accentSoft)
         .onSelect((index: number): void => {
@@ -424,7 +426,8 @@ export struct XopcSpaceLibraryView {
           appSettings.rememberPageSelection('library-kind', this.kind);
           this.setFilters();
         })
-    }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 8 })
+    }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
+      .hitTestBehavior(HitTestMode.Default)
   }
 
   @Builder
@@ -603,39 +606,44 @@ export struct XopcSpaceLibraryView {
           }
         }
       }.id('space-list-' + page.scope).height('100%').width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X })
+        .contentStartOffset(XOPC_PAGE_HEADER_HEIGHT_VP + 52)
         .contentEndOffset(this.bottomChromeInset + 12).cachedCount(5)
     }.layoutWeight(1).width('100%').pullToRefresh(!page.loading && !this.busy).onRefreshing((): void => { void this.load(); })
   }
 
   build() {
-    Column() {
-      this.listHeader()
-      Swiper(this.pager) {
-        ForEach(this.pages, (page: XopcLibraryScopeState) => {
+    Stack({ alignContent: Alignment.Top }) {
+      Column() {
+        Swiper(this.pager) {
+          ForEach(this.pages, (page: XopcLibraryScopeState) => {
+            Column() {
+              this.fileList(page)
+            }.width('100%').height('100%').accessibilityLevel(page.scope === this.scope ? 'auto' : 'no-hide-descendants')
+          }, (page: XopcLibraryScopeState): string => page.scope)
+        }.id('space-library-pager').index(this.scopeIndex).loop(false).indicator(false).cachedCount(2)
+          .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(true)
+          .onChange((index: number): void => { this.commitScope(index); })
+          .width('100%').layoutWeight(1).clip(true)
+        if (this.undo) {
           Column() {
-            this.fileList(page)
-          }.width('100%').height('100%').accessibilityLevel(page.scope === this.scope ? 'auto' : 'no-hide-descendants')
-        }, (page: XopcLibraryScopeState): string => page.scope)
-      }.id('space-library-pager').index(this.scopeIndex).loop(false).indicator(false).cachedCount(2)
-        .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(true)
-        .onChange((index: number): void => { this.commitScope(index); })
-        .width('100%').layoutWeight(1).clip(true)
-      if (this.undo) {
-        Column() {
-          XopcUndoBar({
-            message: this.t('已移到回收站', 'Moved to Trash'),
-            actionLabel: $r('app.string.sessions_undo'),
-            busy: this.busy,
-            onUndo: (): void => {
-              if (this.undo) void this.change('restore', this.undo.id, { revision: this.undo.revision });
-            },
-          })
-        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 + this.bottomChromeInset })
-      } else if (!this.detailOpen && this.error) {
-        Column() {
-          XopcInlineBanner({ message: this.error })
-        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 + this.bottomChromeInset })
-      }
+            XopcUndoBar({
+              message: this.t('已移到回收站', 'Moved to Trash'),
+              actionLabel: $r('app.string.sessions_undo'),
+              busy: this.busy,
+              onUndo: (): void => {
+                if (this.undo) void this.change('restore', this.undo.id, { revision: this.undo.revision });
+              },
+            })
+          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 + this.bottomChromeInset })
+        } else if (!this.detailOpen && this.error) {
+          Column() {
+            XopcInlineBanner({ message: this.error })
+          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 + this.bottomChromeInset })
+        }
+      }.width('100%').height('100%')
+      Column() {
+        this.listHeader()
+      }.width('100%').backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.None)
     }.id('space-library').width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.detailOpen, this.previewSheet, xopcSheetOptions('immersive', {
         height: '95%',

@@ -128,23 +128,140 @@ extension EnvironmentValues {
     @Entry var mobileTheme: MobileTheme = .init()
 }
 
+struct MobileHeaderTitlePill: View {
+    @Environment(\.mobileTheme) private var theme
+    let title: Text
+
+    var body: some View {
+        title
+            .font(.headline)
+            .foregroundStyle(theme.foreground)
+            .lineLimit(1)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 40)
+            .background(theme.panel, in: Capsule())
+    }
+}
+
+enum MobileHeaderPillTone: Sendable {
+    case neutral
+    case accent
+}
+
+struct MobileHeaderIconLabel: View {
+    @Environment(\.mobileTheme) private var theme
+    let systemImage: String
+    var tone: MobileHeaderPillTone = .neutral
+    var size: CGFloat = 40
+
+    private var fill: Color {
+        tone == .accent ? theme.active : theme.panel
+    }
+
+    private var foreground: Color {
+        tone == .accent ? theme.action : theme.foreground
+    }
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.body.weight(.medium))
+            .foregroundStyle(foreground)
+            .frame(width: size, height: size)
+            .background(fill, in: Circle())
+            .contentShape(Circle())
+    }
+}
+
+struct MobileHeaderIconButton: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    var tone: MobileHeaderPillTone = .neutral
+    var size: CGFloat = 40
+    let action: () -> Void
+
+    init(
+        _ title: LocalizedStringKey,
+        systemImage: String,
+        tone: MobileHeaderPillTone = .neutral,
+        size: CGFloat = 40,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.tone = tone
+        self.size = size
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            MobileHeaderIconLabel(systemImage: systemImage, tone: tone, size: size)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+    }
+}
+
+struct MobileHeaderTextPill: View {
+    @Environment(\.mobileTheme) private var theme
+    let title: LocalizedStringKey
+    var tone: MobileHeaderPillTone = .neutral
+
+    var body: some View {
+        Text(title)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(tone == .accent ? theme.action : theme.foreground)
+            .lineLimit(1)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 40)
+            .background(tone == .accent ? theme.active : theme.panel, in: Capsule())
+            .contentShape(Capsule())
+    }
+}
+
+extension ToolbarContent {
+    @ToolbarContentBuilder
+    func mobileTransparentToolbarItem() -> some ToolbarContent {
+        if #available(iOS 26, *) {
+            self.sharedBackgroundVisibility(.hidden)
+        } else {
+            self
+        }
+    }
+}
+
 extension View {
+    @ViewBuilder
+    func mobileTransparentHeaderScrollEdge() -> some View {
+        if #available(iOS 26, *) {
+            self.scrollEdgeEffectHidden(true, for: .top)
+        } else {
+            self
+        }
+    }
+
     func mobilePageTitle(_ title: Text) -> some View {
         navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
+                    MobileHeaderTitlePill(title: title)
                 }
+                .mobileTransparentToolbarItem()
             }
+            .mobileTransparentHeaderScrollEdge()
     }
 
     func mobilePageTitle(_ title: Text, @ViewBuilder switcher: () -> some View) -> some View {
         navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar { ToolbarItem(placement: .principal, content: switcher) }
+            .toolbar {
+                ToolbarItem(placement: .principal, content: switcher)
+                    .mobileTransparentToolbarItem()
+            }
+            .mobileTransparentHeaderScrollEdge()
     }
 }
 

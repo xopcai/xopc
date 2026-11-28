@@ -17,9 +17,11 @@ describe('about you understanding layout', () => {
 
     expect(aboutYou).toContain("titleMenuId: 'about-you-menu'");
     expect(aboutYou).toContain("searchId: this.section === 1 ? 'about-you-search-open' : ''");
+    expect(build).toContain('Stack({ alignContent: Alignment.Top })');
     expect(build.indexOf('this.mainHeader()')).toBeGreaterThan(-1);
     expect(search).toBeGreaterThan(build.indexOf('this.mainHeader()'));
-    expect(pager).toBeGreaterThan(search);
+    expect(pager).toBeGreaterThan(-1);
+    expect(build.indexOf('this.mainHeader()')).toBeGreaterThan(pager);
     expect(build).toContain('this.sectionPage(section)');
     expect(filters).toBeGreaterThan(-1);
     expect(list).toBeGreaterThan(filters);

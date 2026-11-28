@@ -194,4 +194,20 @@ describe('HarmonyOS UI & interaction unification guard', () => {
     const home = readFileSync(join(etsRoot, 'view', 'HomeView.ets'), 'utf8');
     expect(home).toContain('notesBackHandler');
   });
+
+  it('keeps page headers transparent with capsule pills across views', () => {
+    const components = readFileSync(join(etsRoot, 'view', 'MobileComponents.ets'), 'utf8');
+    expect(components).toContain('export const XOPC_PAGE_HEADER_HEIGHT_VP');
+    expect(components).toContain('.backgroundColor(Color.Transparent)');
+    expect(components).toContain('.hitTestBehavior(HitTestMode.None)');
+    expect(components).toContain('.borderRadius(22).backgroundColor(this.colors.panel)');
+    expect(components).not.toContain('return this.colors.light ? this.colors.panel : Color.Transparent;');
+
+    const chat = readFileSync(join(etsRoot, 'view', 'ChatView.ets'), 'utf8');
+    expect(chat).not.toContain('.backgroundColor(this.personalConversation ? Color.Transparent : this.colors.chat.canvas)');
+
+    const taskHeader = readFileSync(join(etsRoot, 'view', 'TaskChatHeader.ets'), 'utf8');
+    expect(taskHeader).not.toContain('.backgroundColor(this.colors.chat.canvas)');
+    expect(taskHeader).toContain('.backgroundColor(Color.Transparent)');
+  });
 });

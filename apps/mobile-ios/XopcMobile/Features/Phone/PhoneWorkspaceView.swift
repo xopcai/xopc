@@ -65,13 +65,21 @@ struct PhoneWorkspaceView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                Button(action: onReturn) { Image(systemName: "chevron.left").font(.title3).frame(width: 44, height: 44) }
-                    .accessibilityLabel("返回对话").accessibilityIdentifier("phone-return")
-                VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Button(action: onReturn) {
+                    Image(systemName: "chevron.left").font(.title3).frame(width: 44, height: 44)
+                        .background(mobileTheme.panel, in: Circle())
+                        .contentShape(Circle())
+                }
+                .accessibilityLabel("返回对话").accessibilityIdentifier("phone-return")
+                VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: model.summary?.deviceName ?? "").font(.headline).lineLimit(1)
                     Text(status).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 5)
+                .frame(minHeight: 44)
+                .background(mobileTheme.panel, in: Capsule())
                 Spacer(minLength: 0)
                 Menu {
                     if ownControl {

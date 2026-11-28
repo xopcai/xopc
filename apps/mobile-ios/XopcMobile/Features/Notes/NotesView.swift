@@ -127,14 +127,16 @@ struct NotesView: View {
         .toolbar {
             if let onOpenSidebar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
+                    MobileHeaderIconButton("打开导航", systemImage: "line.3.horizontal", action: onOpenSidebar)
                         .accessibilityIdentifier("chat-header-sidebar")
                 }
+                .mobileTransparentToolbarItem()
             }
             ToolbarItem(placement: .topBarTrailing) {
                 PageSearchButton("搜索笔记", isOpen: $searchOpen, query: $search,
                                  accessibilityID: "notes-open-search")
             }
+            .mobileTransparentToolbarItem()
         }
         .sheet(item: $presentedSheet, onDismiss: {
             Task {

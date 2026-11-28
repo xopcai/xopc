@@ -71,13 +71,17 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
     "about" -> stringResource(R.string.settings_about_xopc)
     else -> stringResource(R.string.settings_title)
   }
-  Column(Modifier.fillMaxSize().padding(insets).testTag("settings-screen")) {
-    XopcPageHeader("settings-back", onBack, title = headerTitle)
+  XopcFloatingHeaderScaffold(
+    modifier = Modifier.fillMaxSize().padding(insets).testTag("settings-screen"),
+    header = {
+      XopcPageHeader("settings-back", onBack, title = headerTitle)
+    },
+  ) { headerTopPadding ->
     AnimatedContent(targetState = section, modifier = Modifier.fillMaxSize(),
       transitionSpec = { xopcScreenTransition(motionAllowed) },
       label = "settings-section") { currentSection ->
       Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-        .padding(horizontal = 20.dp, vertical = 8.dp),
+        .padding(start = 20.dp, end = 20.dp, top = headerTopPadding + 8.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (currentSection == "appearance") {
           SettingsSectionLabel(R.string.settings_display_mode)

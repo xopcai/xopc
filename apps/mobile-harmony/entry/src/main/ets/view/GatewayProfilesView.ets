@@ -4,7 +4,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcProfile } from '../model/gateway';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { connectionModel, XopcConnectionViewModel, XopcGatewayProbeState } from '../viewmodel/connectionViewModel';
-import { XopcPageHeader } from './MobileComponents';
+import { XOPC_PAGE_HEADER_HEIGHT_VP, XopcPageHeader } from './MobileComponents';
 
 @ComponentV2
 export struct XopcGatewayProfilesView {
@@ -193,8 +193,7 @@ export struct XopcGatewayProfilesView {
   }
 
   build() {
-    Column() {
-      this.header()
+    Stack({ alignContent: Alignment.Top }) {
       List({ space: 12 }) {
         ForEach(this.connection.profiles, (profile: XopcProfile) => {
           ListItem() {
@@ -224,8 +223,9 @@ export struct XopcGatewayProfilesView {
         if (this.connection.errorMessage) {
           ListItem() { Text($r('app.string.gateways_failed')).id('gateways-error').fontColor(this.colors.danger).padding(12) }
         }
-      }.id('gateways-list').width('100%').layoutWeight(1)
-        .padding({ left: 16, right: 16, top: 8, bottom: 24 }).scrollBar(BarState.Off)
+      }.id('gateways-list').width('100%').height('100%')
+        .padding({ left: 16, right: 16, top: XOPC_PAGE_HEADER_HEIGHT_VP + 8, bottom: 24 }).scrollBar(BarState.Off)
+      this.header()
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
   }
 }

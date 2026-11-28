@@ -63,6 +63,8 @@ export struct XopcBrandLoading {
   }
 }
 
+export const XOPC_PAGE_HEADER_HEIGHT_VP: number = 60;
+
 @ComponentV2
 export struct XopcPageTitleMenu {
   @Local colors: XopcThemeColors = appThemeColors;
@@ -90,8 +92,9 @@ export struct XopcPageTitleMenu {
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(13).fontColor([this.colors.secondary])
       }.constraintSize({ maxWidth: '100%' }).justifyContent(FlexAlign.Center)
-    }.id(this.menuId).height(44).padding({ left: 8, right: 8 }).backgroundColor(Color.Transparent)
-      .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
+    }.id(this.menuId).height(44).padding({ left: 16, right: 12 }).backgroundColor(this.colors.panel)
+      .borderRadius(22).clip(true)
+      .hitTestBehavior(HitTestMode.Default)
       .clickEffect(xopcClickEffect())
       .bindMenu(this.menu, { placement: Placement.Bottom })
   }
@@ -143,8 +146,7 @@ export struct XopcPageHeader {
   }
 
   private actionFill(tone: 'default' | 'accent'): ResourceColor {
-    if (tone === 'accent') return this.colors.accentSoft;
-    return this.colors.light ? this.colors.panel : Color.Transparent;
+    return tone === 'accent' ? this.colors.accentSoft : this.colors.panel;
   }
 
   private actionTint(tone: 'default' | 'accent'): Resource {
@@ -159,6 +161,7 @@ export struct XopcPageHeader {
           SymbolGlyph(xopcBackIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
         }.id(this.backId).width(44).height(44).padding(0)
           .backgroundColor(this.colors.panel).enabled(this.backEnabled)
+          .hitTestBehavior(HitTestMode.Default)
           .clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.back')).onClick((): void => { this.onBack(); })
       } else if (this.drawerVisible) {
@@ -166,12 +169,17 @@ export struct XopcPageHeader {
           SymbolGlyph($r('sys.symbol.line_3_horizontal')).fontSize(22).fontColor([this.colors.foreground])
         }.id(this.drawerId).width(44).height(44).padding(0)
           .backgroundColor(this.colors.panel)
+          .hitTestBehavior(HitTestMode.Default)
           .clickEffect(xopcClickEffect())
           .accessibilityText($r('app.string.chat_open_drawer')).onClick((): void => { this.onOpenDrawer(); })
       }
       if (this.selectionTitle !== '') {
-        Text(this.selectionTitle).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+        Row() {
+          Text(this.selectionTitle).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        }.height(44).padding({ left: 16, right: 16 }).borderRadius(22).backgroundColor(this.colors.panel)
+          .alignItems(VerticalAlign.Center).constraintSize({ maxWidth: '64%' })
+        Blank().layoutWeight(1)
       } else {
         Blank().layoutWeight(1)
       }
@@ -184,6 +192,7 @@ export struct XopcPageHeader {
         }
           .id(this.secondaryActionId).width(44).height(44).padding(0)
           .backgroundColor(this.actionFill(this.secondaryActionTone)).enabled(this.secondaryActionEnabled)
+          .hitTestBehavior(HitTestMode.Default)
           .clickEffect(xopcClickEffect())
           .accessibilityText(this.resolveText(this.secondaryActionLabel)).onClick((): void => { this.onSecondaryAction(); })
       }
@@ -193,20 +202,27 @@ export struct XopcPageHeader {
         }
           .id(this.actionId).width(44).height(44).padding(0)
           .backgroundColor(this.actionFill(this.actionTone)).enabled(this.actionEnabled)
+          .hitTestBehavior(HitTestMode.Default)
           .clickEffect(xopcClickEffect())
           .accessibilityText(this.resolveText(this.actionLabel)).onClick((): void => { this.onAction(); })
       }
-     }.width('100%').height(44)
+     }.width('100%').height(44).hitTestBehavior(HitTestMode.None)
       if (this.selectionTitle === '' && this.titleOptions.length) {
         XopcPageTitleMenu({ heading: this.heading, options: this.titleOptions,
           selected: this.selectedTitle, menuId: this.titleMenuId, onSelect: this.onSelectTitle })
           .constraintSize({ maxWidth: '54%' })
       } else if (this.selectionTitle === '' && this.showStaticTitle) {
-        Text(this.heading).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '57%' })
+        Row() {
+          Text(this.heading).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        }.height(44).padding({ left: 16, right: 16 }).borderRadius(22).backgroundColor(this.colors.panel)
+          .alignItems(VerticalAlign.Center).justifyContent(FlexAlign.Center)
+          .constraintSize({ maxWidth: '57%' })
           .accessibilityGroup(true).hitTestBehavior(HitTestMode.None)
       }
     }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, top: 8, bottom: 8 })
+      .backgroundColor(Color.Transparent)
+      .hitTestBehavior(HitTestMode.None)
   }
 }
 
@@ -224,7 +240,8 @@ export struct XopcPageSearchButton {
         .fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
     }.id(this.open ? this.searchId + '-close' : this.searchId)
       .width(44).height(44).padding(0)
-      .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent)
+      .backgroundColor(this.colors.panel)
+      .hitTestBehavior(HitTestMode.Default)
       .clickEffect(xopcClickEffect())
       .accessibilityText(this.open ? $r('app.string.close') : this.label).onClick((): void => { this.onToggle(); })
   }

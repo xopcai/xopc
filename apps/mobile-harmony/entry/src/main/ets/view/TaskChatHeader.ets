@@ -47,23 +47,28 @@ export struct XopcTaskChatHeader {
   }
 
   build() {
-    Row({ space: 10 }) {
+    Row({ space: 8 }) {
       Button({ type: ButtonType.Circle }) {
         SymbolGlyph(xopcBackIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
       }.id('task-chat-close').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+        .hitTestBehavior(HitTestMode.Default)
         .clickEffect(xopcClickEffect())
         .accessibilityText($r('app.string.back')).onClick((): void => { this.onClose(); })
-      Text(this.item?.title || $r('app.string.task_detail_title')).fontSize(16).fontWeight(FontWeight.Medium)
-        .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        .layoutWeight(1)
+      Row() {
+        Text(this.item?.title || $r('app.string.task_detail_title')).fontSize(16).fontWeight(FontWeight.Medium)
+          .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      }.height(44).padding({ left: 14, right: 14 }).borderRadius(22).backgroundColor(this.colors.chat.card)
+        .alignItems(VerticalAlign.Center).layoutWeight(1)
       this.readAloudAction()
       Button({ type: ButtonType.Circle }) {
         SymbolGlyph(xopcMoreIcon()).fontSize(XOPC_ICON_HEADER).fontColor([this.colors.foreground])
       }.id('task-chat-menu').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+        .hitTestBehavior(HitTestMode.Default)
         .clickEffect(xopcClickEffect())
         .accessibilityText($r('app.string.more')).bindMenu(this.taskMenu)
     }.id('task-chat-header').width('100%').height(this.topInset + 64).padding({ left: 12, right: 12, top: this.topInset })
-      .backgroundColor(this.colors.chat.canvas)
+      .backgroundColor(Color.Transparent)
+      .hitTestBehavior(HitTestMode.None)
       .onVisibleAreaChange([0, 0.1], (visible: boolean, ratio: number): void => {
         const returning = !this.headerVisible && visible && ratio > 0;
         this.headerVisible = visible && ratio > 0;

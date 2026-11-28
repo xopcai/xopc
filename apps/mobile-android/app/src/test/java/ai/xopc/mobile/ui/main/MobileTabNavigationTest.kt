@@ -454,6 +454,9 @@ class MobileTabNavigationTest {
     assertFalse("linkedDetails must be removed from MainScreen.kt", mainScreen.contains("linkedDetails"))
 
     val tabBar = File(uiMainDir, "FloatingTabBar.kt").readText()
+    assertTrue("FloatingTabBar must sit flush at bottom navigation inset", tabBar.contains("FLOATING_TAB_BAR_BOTTOM_MARGIN: Dp = 0.dp"))
+    assertTrue("FloatingTabBar host must paint opaque background to prevent scroll bleed-through", tabBar.contains(".background(scheme.background)"))
+    assertFalse("MainScreen must mount non-chat FloatingTabBar in Scaffold bottomBar rather than overlays", mainScreen.contains("if (showBottomTabBar && !showBottomChrome)"))
     for (tabTag in listOf(
       "floating-tab-ada",
       "floating-tab-conversations",

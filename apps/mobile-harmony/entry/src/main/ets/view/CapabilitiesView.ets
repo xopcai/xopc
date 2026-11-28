@@ -18,6 +18,7 @@ import { XopcCapabilityLogo } from './CapabilityLogo';
 import { capabilityDrawerHeight, XopcCapabilityPanelView } from './CapabilityPanelView';
 import { XopcDeviceConnectionsView } from './DeviceConnectionsView';
 import {
+  XOPC_PAGE_HEADER_HEIGHT_VP,
   XopcEmptyHint,
   XopcErrorState,
   XopcInlineBanner,
@@ -296,22 +297,12 @@ export struct XopcCapabilitiesView {
     })
   }
 
+  private headerClearance(): number {
+    return XOPC_PAGE_HEADER_HEIGHT_VP + (this.category === 'skills' || (this.hasSearchButton && this.searchOpen) ? 54 : 0);
+  }
+
   build() {
-    Column() {
-      this.header()
-      if (this.category === 'skills' || (this.hasSearchButton && this.searchOpen)) {
-        Column() {
-          XopcPageSearchField({
-            searchId: 'capability-search',
-            text: this.query,
-            placeholder: this.category === 'skills' ? $r('app.string.capability_search_installed_skills')
-              : $r('app.string.capability_search', this.getLabel(this.title(this.category))),
-            autoFocus: this.hasSearchButton,
-            onChange: (value: string): void => { this.updateQuery(value); },
-            onSubmit: (): void => { this.getUIContext().getFocusController().clearFocus(); },
-          })
-        }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
-      }
+    Stack({ alignContent: Alignment.Top }) {
       Column() {
         if (this.category === 'devices') {
           Column() {
@@ -324,12 +315,29 @@ export struct XopcCapabilitiesView {
                   : $r('app.string.device_connection_location_prompt');
                 this.onSetupChat(this.getLabel(prompt), false);
               } })
-          }.layoutWeight(1).width('100%')
+          }.layoutWeight(1).width('100%').padding({ top: XOPC_PAGE_HEADER_HEIGHT_VP })
         } else {
           this.catalogList()
         }
-      }.id('capability-catalog-' + this.category).width('100%').layoutWeight(1)
+      }.id('capability-catalog-' + this.category).width('100%').height('100%')
         .padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X })
+      Column() {
+        this.header()
+        if (this.category === 'skills' || (this.hasSearchButton && this.searchOpen)) {
+          Column() {
+            XopcPageSearchField({
+              searchId: 'capability-search',
+              text: this.query,
+              placeholder: this.category === 'skills' ? $r('app.string.capability_search_installed_skills')
+                : $r('app.string.capability_search', this.getLabel(this.title(this.category))),
+              autoFocus: this.hasSearchButton,
+              onChange: (value: string): void => { this.updateQuery(value); },
+              onSubmit: (): void => { this.getUIContext().getFocusController().clearFocus(); },
+            })
+          }.width('100%').padding({ left: XOPC_PAGE_PADDING_X, right: XOPC_PAGE_PADDING_X, bottom: 8 })
+            .hitTestBehavior(HitTestMode.Default)
+        }
+      }.width('100%').backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.None)
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.detailOpen, this.detailSheet, xopcSheetOptions('large', {
         height: capabilityDrawerHeight(this.detailExpanded),
@@ -385,7 +393,8 @@ export struct XopcCapabilitiesView {
               + ':' + (item.avatar ?? '') + ':' + (item.iconUrl ?? '').slice(-64))
           }
         }, (group: string): string => group)
-      }.width('100%').height('100%').scrollBar(BarState.Off).margin({ top: 4 })
+      }.width('100%').height('100%').scrollBar(BarState.Off)
+        .contentStartOffset(this.headerClearance() + 4)
     }.width('100%').layoutWeight(1).pullToRefresh(!this.loading).onRefreshing((): void => { void this.load(true); })
   }
 }

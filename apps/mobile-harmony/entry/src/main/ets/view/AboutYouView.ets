@@ -7,7 +7,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcMobileRoute } from '../model/home';
 import { XopcUnderstandingItem, XopcUnderstandingProfile, XopcUnderstandingRule, XopcWorkMemoryItem } from '../model/userUnderstanding';
 import { XopcUserUnderstandingViewModel } from '../viewmodel/userUnderstandingViewModel';
-import { XopcBrandLoading, XopcListSkeleton, XopcPageHeader, XopcPageSearchField, XopcPaginationFooter, XopcSectionLabel } from './MobileComponents';
+import { XOPC_PAGE_HEADER_HEIGHT_VP, XopcBrandLoading, XopcListSkeleton, XopcPageHeader, XopcPageSearchField, XopcPaginationFooter, XopcSectionLabel } from './MobileComponents';
 import { userErrorMessage } from '../common/userError';
 import { XopcLoopi } from './Loopi';
 
@@ -490,40 +490,40 @@ export struct XopcAboutYouView {
 
   @Builder
   private detail(item: XopcUnderstandingItem) {
-    Column() {
-      XopcPageHeader({ backVisible: true, onBack: (): void => { this.model.close(); } })
-      Scroll() {
-        Column({ space: 12 }) {
+    Stack({ alignContent: Alignment.Top }) {
+      Column() {
+        Scroll() {
           Column({ space: 12 }) {
-            Text($r('app.string.about_you_statement')).fontSize(13).fontWeight(FontWeight.Medium)
-              .fontColor(this.colors.secondary).width('100%')
-            if (this.editingStatement) {
-              Text($r('app.string.about_you_edit_help')).fontSize(13).lineHeight(19)
+            Column({ space: 12 }) {
+              Text($r('app.string.about_you_statement')).fontSize(13).fontWeight(FontWeight.Medium)
                 .fontColor(this.colors.secondary).width('100%')
-              TextArea({ text: this.statement }).fontSize(17).lineHeight(25).fontColor(this.colors.foreground)
-                .height(220).padding(14).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.input)
-                .caretColor(this.colors.accent).barState(BarState.Auto)
-                .onChange((value: string): void => { this.statement = value; })
-            } else {
-              Text(item.statement).fontSize(19).lineHeight(28).fontWeight(FontWeight.Medium)
-                .fontColor(this.colors.foreground).width('100%')
-            }
-          }.width('100%').padding(20).borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel)
+              if (this.editingStatement) {
+                Text($r('app.string.about_you_edit_help')).fontSize(13).lineHeight(19)
+                  .fontColor(this.colors.secondary).width('100%')
+                TextArea({ text: this.statement }).fontSize(17).lineHeight(25).fontColor(this.colors.foreground)
+                  .height(220).padding(14).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.input)
+                  .caretColor(this.colors.accent).barState(BarState.Auto)
+                  .onChange((value: string): void => { this.statement = value; })
+              } else {
+                Text(item.statement).fontSize(19).lineHeight(28).fontWeight(FontWeight.Medium)
+                  .fontColor(this.colors.foreground).width('100%')
+              }
+            }.width('100%').padding(20).borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel)
 
-          Column({ space: 16 }) {
-            Text(this.sourceLabel(item)).fontSize(14).fontColor(this.colors.secondary).width('100%')
-            Button($r('app.string.about_you_metadata')).fontSize(15).height(44).width('100%')
-              .fontColor(this.colors.accent).backgroundColor(Color.Transparent)
-              .accessibilityText($r('app.string.about_you_metadata'))
-              .onClick((): void => { this.sourcesOpen = !this.sourcesOpen; })
-            if (this.sourcesOpen) {
-              this.detailRow($r('app.string.about_you_source'), this.sourceText(item))
-              this.detailRow($r('app.string.about_you_scope'), this.text(this.scopeLabel(item.scope.type)))
-            }
-          }.width('100%').padding(20).borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel)
-        }.width('100%').constraintSize({ minHeight: '100%' })
-          .padding({ left: 20, right: 20, top: 4, bottom: 16 }).alignItems(HorizontalAlign.Start)
-      }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
+            Column({ space: 16 }) {
+              Text(this.sourceLabel(item)).fontSize(14).fontColor(this.colors.secondary).width('100%')
+              Button($r('app.string.about_you_metadata')).fontSize(15).height(44).width('100%')
+                .fontColor(this.colors.accent).backgroundColor(Color.Transparent)
+                .accessibilityText($r('app.string.about_you_metadata'))
+                .onClick((): void => { this.sourcesOpen = !this.sourcesOpen; })
+              if (this.sourcesOpen) {
+                this.detailRow($r('app.string.about_you_source'), this.sourceText(item))
+                this.detailRow($r('app.string.about_you_scope'), this.text(this.scopeLabel(item.scope.type)))
+              }
+            }.width('100%').padding(20).borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel)
+          }.width('100%').constraintSize({ minHeight: '100%' })
+            .padding({ left: 20, right: 20, top: XOPC_PAGE_HEADER_HEIGHT_VP + 4, bottom: 16 }).alignItems(HorizontalAlign.Start)
+        }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
       if (this.editingStatement) {
         Row({ space: 10 }) {
           Button($r('app.string.cancel')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24)).clipShape(this.colors.cornerClip(24))
@@ -552,6 +552,8 @@ export struct XopcAboutYouView {
           }.width('100%')
         }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 20 })
       }
+      }.width('100%').height('100%')
+      XopcPageHeader({ heading: $r('app.string.about_you_understanding'), showStaticTitle: true, backVisible: true, onBack: (): void => { this.model.close(); } })
     }.width('100%').height('100%')
   }
 
@@ -650,7 +652,7 @@ export struct XopcAboutYouView {
         }.width('100%').padding({ left: 20, right: 20 })
       }
       if (section === 'understanding') {
-        this.understandingFilters()
+        Column() { this.understandingFilters() }.width('100%').padding({ top: XOPC_PAGE_HEADER_HEIGHT_VP + (this.searchOpen ? 54 : 0) })
         if (this.model.loading) {
           Column() { XopcListSkeleton() }.layoutWeight(1).width('100%').padding({ left: 20, right: 20, top: 8 })
         } else {
@@ -660,12 +662,12 @@ export struct XopcAboutYouView {
         }
         this.understandingConversationAction()
       } else if (section === 'work') {
-        this.workMemory()
+        Column() { this.workMemory() }.width('100%').height('100%').padding({ top: XOPC_PAGE_HEADER_HEIGHT_VP })
       } else if (this.model.loading && !this.model.summary) {
-        Column() { XopcListSkeleton() }.width('100%').padding({ left: 20, right: 20 })
+        Column() { XopcListSkeleton() }.width('100%').padding({ left: 20, right: 20, top: XOPC_PAGE_HEADER_HEIGHT_VP })
       } else if (this.model.summary) {
         Scroll() {
-          this.overview()
+          Column() { this.overview() }.width('100%').padding({ top: XOPC_PAGE_HEADER_HEIGHT_VP })
         }.id('privacy-memory-overview').layoutWeight(1).width('100%').align(Alignment.TopStart).scrollBar(BarState.Off)
       }
     }.width('100%').height('100%')
@@ -677,14 +679,7 @@ export struct XopcAboutYouView {
       if (this.model.selected) { this.detail(this.model.selected) }
       else if (this.model.openingId) { XopcBrandLoading() }
       else {
-        Column() {
-          this.mainHeader()
-          if (this.section === 1 && this.searchOpen) {
-            XopcPageSearchField({ text: this.model.query, placeholder: $r('app.string.about_you_search_placeholder'),
-              searchId: 'about-you-search', onChange: (query: string): void => { this.model.search(query); },
-              onSubmit: (): void => { this.getUIContext().getFocusController().clearFocus(); } })
-              .margin({ left: 20, right: 20, bottom: 8 })
-          }
+        Stack({ alignContent: Alignment.Top }) {
           Swiper(this.pager) {
             ForEach(this.sections, (section: string) => {
               this.sectionPage(section)
@@ -692,7 +687,17 @@ export struct XopcAboutYouView {
           }.id('about-you-pager').index(this.section).loop(false).indicator(false).cachedCount(2)
             .duration(xopcPagerDuration(this.layout.reduceMotion)).disableSwipe(this.editProfileOpen)
             .onChange((index: number): void => { this.commitSection(index); })
-            .width('100%').layoutWeight(1)
+            .width('100%').height('100%')
+          Column() {
+            this.mainHeader()
+            if (this.section === 1 && this.searchOpen) {
+              XopcPageSearchField({ text: this.model.query, placeholder: $r('app.string.about_you_search_placeholder'),
+                searchId: 'about-you-search', onChange: (query: string): void => { this.model.search(query); },
+                onSubmit: (): void => { this.getUIContext().getFocusController().clearFocus(); } })
+                .margin({ left: 20, right: 20, bottom: 8 })
+                .hitTestBehavior(HitTestMode.Default)
+            }
+          }.width('100%').backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.None)
         }.width('100%').height('100%')
       }
     }.hideTitleBar(true).backgroundColor(this.colors.surface)

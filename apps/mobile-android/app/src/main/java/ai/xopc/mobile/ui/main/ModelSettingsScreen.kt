@@ -108,11 +108,16 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
   }
   LaunchedEffect(gatewayId) { load() }
   BackHandler(enabled = saving) {}
-  Column(Modifier.fillMaxSize().padding(insets).testTag("model-settings")) {
-    XopcPageHeader("model-settings-back", onBack, backEnabled = !saving,
-      title = stringResource(R.string.ms_title))
+  XopcFloatingHeaderScaffold(
+    modifier = Modifier.fillMaxSize().padding(insets).testTag("model-settings"),
+    header = {
+      XopcPageHeader("model-settings-back", onBack, backEnabled = !saving,
+        title = stringResource(R.string.ms_title))
+    },
+  ) { headerTopPadding ->
     val snapshot = data
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = headerTopPadding + 8.dp, bottom = 16.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp)) {
       if (error != null) item {
         Text(stringResource(error ?: R.string.ms_load_error), color = MaterialTheme.colorScheme.error)
         if (snapshot == null && !loading) TextButton(onClick = { error = null; scope.launch { load() } }) {

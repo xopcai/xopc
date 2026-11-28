@@ -1,6 +1,7 @@
 import {
   FLOATING_TAB_BAR_HEIGHT_VP,
   FLOATING_TAB_BAR_MARGIN_BOTTOM_VP,
+  FLOATING_TAB_BAR_TOP_PADDING_VP,
   XopcMobileTab,
 } from '../common/mobileTabNavigation';
 import { xopcClickEffect } from '../common/motionTokens';
@@ -149,8 +150,14 @@ export struct XopcFloatingTabBar {
     }
     .id('floating-tab-bar-host')
     .width('100%')
-    .padding({ left: 12, right: 12, bottom: FLOATING_TAB_BAR_MARGIN_BOTTOM_VP })
+    .padding({
+      left: 12,
+      right: 12,
+      top: FLOATING_TAB_BAR_TOP_PADDING_VP,
+      bottom: FLOATING_TAB_BAR_MARGIN_BOTTOM_VP,
+    })
+    .backgroundColor(this.colors.surface)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
     .justifyContent(FlexAlign.Center)
-    .hitTestBehavior(HitTestMode.Transparent)
   }
 }
