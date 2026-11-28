@@ -71,13 +71,15 @@ Both directions use one `XOP3` binary envelope. Header numbers are big-endian; P
 | 7 | 1 | Flags: uplink start/end bits |
 | 8 | 4 | Connection epoch |
 | 12 | 4 | Direction-local sequence |
-| 16 | 8 | Media timestamp in milliseconds |
+| 16 | 8 | Downlink media timestamp in milliseconds. Reserved on uplink. |
 | 24 | 2 | Duration, exactly `20` |
 | 26 | 2 | UTF-8 ID byte length |
 | 28 | 4 | PCM payload byte length |
 | 32 | variable | ID, then PCM payload |
 
 Uplink IDs are `utteranceId`; downlink IDs are `responseId`. Uplink audio is exactly 640 bytes per frame (16 kHz mono, 20 ms). Downlink audio is exactly 960 bytes per frame (24 kHz mono, 20 ms). The gateway converts arbitrary provider chunks to exact downlink frames and pads only the final incomplete frame with silence. Wrong epochs, malformed lengths, and sequence gaps are protocol errors; duplicate or older uplink frames are ignored.
+
+The iOS client writes `0` to the reserved uplink timestamp field. The gateway accepts any finite nonnegative value for compatibility with existing clients and orders uplink audio by sequence within each utterance.
 
 ## Turn and response events
 
@@ -94,7 +96,7 @@ The turn policy combines optional semantic decisions with a bounded deterministi
 
 ## Flow control and weak networks
 
-- The client serializes capture enable/disable and tags every audio frame with epoch, utterance, sequence, and monotonic capture time.
+- The client serializes capture enable/disable and tags every audio frame with epoch, utterance, and sequence.
 - Mobile pauses capture when queued input reaches the degraded threshold instead of growing latency indefinitely. It resumes after recovery; critical overflow reports `INPUT_DROPPED` and starts a fresh utterance.
 - Gateway/provider writes are serialized and bounded. Old input is cleared on mute, interruption, or overflow so recovered networks cannot upload stale speech.
 - Downlink playback uses a bounded unacknowledged-duration window. Acknowledgements describe heard duration rather than transport bytes.

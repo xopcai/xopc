@@ -62,13 +62,18 @@ describe('VoiceRealtimeRuntime media frames', () => {
     expect(events.some(event => event.type === 'session.ready')).toBe(false);
   });
 
-  it('accepts ordered 20 ms uplink frames and ignores exact replays', async () => {
+  it.each([0, 10])('accepts ordered 20 ms uplink frames with timestamp %s and ignores exact replays', async timestamp => {
     const { appendAudio, session } = await start();
-    const bytes = encodeVoiceUplinkAudioFrame({ connectionEpoch: session.connectionEpoch, utteranceId: 'utterance', audioSeq: 1,
-      capturedAtMonotonicMs: 10, durationMs: 20, start: true, audio: new Uint8Array(640) });
-    socket.send(bytes); socket.send(bytes);
-    await vi.waitFor(() => expect(appendAudio).toHaveBeenCalledOnce());
-    expect(appendAudio).toHaveBeenCalledWith(new Uint8Array(640));
+    const firstAudio = new Uint8Array(640);
+    const secondAudio = new Uint8Array(640).fill(1);
+    const firstFrame = encodeVoiceUplinkAudioFrame({ connectionEpoch: session.connectionEpoch, utteranceId: 'utterance', audioSeq: 1,
+      capturedAtMonotonicMs: timestamp, durationMs: 20, start: true, audio: firstAudio });
+    const secondFrame = encodeVoiceUplinkAudioFrame({ connectionEpoch: session.connectionEpoch, utteranceId: 'utterance', audioSeq: 2,
+      capturedAtMonotonicMs: timestamp, durationMs: 20, audio: secondAudio });
+    socket.send(firstFrame);
+    socket.send(firstFrame);
+    socket.send(secondFrame);
+    await vi.waitFor(() => expect(appendAudio.mock.calls).toEqual([[firstAudio], [secondAudio]]));
   });
 
   it('accepts voice sessions through the shared reverse-proxy WebSocket route', async () => {

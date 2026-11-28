@@ -254,7 +254,38 @@ jobs:
           for orientation in UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight; do
             /usr/libexec/PlistBuddy -c 'Print :UISupportedInterfaceOrientations~ipad' "$info_path" | grep -F "$orientation"
           done
-          test -f "$app_path/PrivacyInfo.xcprivacy"
+          python3 - "$app_path/PrivacyInfo.xcprivacy" <<'PY'
+          import plistlib
+          import sys
+
+          with open(sys.argv[1], "rb") as manifest_file:
+              manifest = plistlib.load(manifest_file)
+          if not isinstance(manifest, dict) or manifest.get("NSPrivacyTracking") is not False:
+              sys.exit("The bundled privacy manifest must declare NSPrivacyTracking as false.")
+          entries = manifest.get("NSPrivacyAccessedAPITypes")
+          if not isinstance(entries, list):
+              sys.exit("The bundled privacy manifest must contain an NSPrivacyAccessedAPITypes array.")
+
+          declarations = {}
+          for entry in entries:
+              if not isinstance(entry, dict):
+                  sys.exit("Each NSPrivacyAccessedAPITypes entry must be a dictionary.")
+              category = entry.get("NSPrivacyAccessedAPIType")
+              reasons = entry.get("NSPrivacyAccessedAPITypeReasons")
+              if not isinstance(category, str) or not category or category in declarations:
+                  sys.exit(f"Invalid or duplicate privacy API category: {category!r}")
+              if not isinstance(reasons, list) or not reasons or not all(isinstance(reason, str) and reason for reason in reasons):
+                  sys.exit(f"Invalid privacy API reasons for {category}.")
+              declarations[category] = reasons
+
+          for category, reason in {
+              "NSPrivacyAccessedAPICategoryUserDefaults": "CA92.1",
+              "NSPrivacyAccessedAPICategorySystemBootTime": "35F9.1",
+              "NSPrivacyAccessedAPICategoryFileTimestamp": "C617.1",
+          }.items():
+              if reason not in declarations.get(category, []):
+                  sys.exit(f"The bundled privacy manifest is missing {reason} for {category}.")
+          PY
 
       - name: Upload signed IPA artifact
         uses: actions/upload-artifact@v7

@@ -151,7 +151,6 @@ actor RealtimeVoiceTransport {
                 connectionEpoch: session.connectionEpoch,
                 utteranceID: utteranceID,
                 sequence: inputSequence,
-                capturedAtMonotonicMs: queuedAt * 1000,
                 start: !inputStarted,
                 audio: audio
             )

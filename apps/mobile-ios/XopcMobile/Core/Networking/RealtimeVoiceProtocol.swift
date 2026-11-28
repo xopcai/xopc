@@ -19,13 +19,10 @@ enum RealtimeVoiceProtocol {
     private static let magic: UInt32 = 0x584F_5033
     private static let headerBytes = 32
 
-    // The wire header fields stay explicit so their serialized order remains reviewable.
-    // swiftlint:disable:next function_parameter_count
     static func encodeUplink(
         connectionEpoch: UInt32,
         utteranceID: String,
         sequence: UInt32,
-        capturedAtMonotonicMs: Double,
         start: Bool,
         end: Bool = false,
         audio: Data
@@ -33,8 +30,7 @@ enum RealtimeVoiceProtocol {
         let identifier = Data(utteranceID.utf8)
         guard connectionEpoch > 0, sequence > 0, !identifier.isEmpty, identifier.count <= 160,
               !audio.isEmpty, audio.count.isMultiple(of: 2),
-              headerBytes + identifier.count + audio.count <= maxFrameBytes,
-              capturedAtMonotonicMs.isFinite
+              headerBytes + identifier.count + audio.count <= maxFrameBytes
         else { throw RealtimeVoiceProtocolError.invalidFrame }
 
         var frame = Data(capacity: headerBytes + identifier.count + audio.count)
@@ -42,7 +38,8 @@ enum RealtimeVoiceProtocol {
         frame.append(contentsOf: [UInt8(version), 1, 1, (start ? 1 : 0) | (end ? 2 : 0)])
         frame.appendInteger(connectionEpoch)
         frame.appendInteger(sequence)
-        frame.appendInteger(capturedAtMonotonicMs.bitPattern)
+        // The gateway does not use the v3 uplink timestamp field.
+        frame.appendInteger(UInt64(0))
         frame.appendInteger(UInt16(20))
         frame.appendInteger(UInt16(identifier.count))
         frame.appendInteger(UInt32(audio.count))

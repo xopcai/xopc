@@ -113,7 +113,6 @@ struct RealtimeVoiceProtocolTests {
             connectionEpoch: 7,
             utteranceID: "utterance-1",
             sequence: 1,
-            capturedAtMonotonicMs: 1234.5,
             start: true,
             audio: pcm
         )
@@ -122,6 +121,7 @@ struct RealtimeVoiceProtocolTests {
         #expect(bytes.prefix(8) == [0x58, 0x4F, 0x50, 0x33, 3, 1, 1, 1])
         #expect(bytes[8 ... 11] == [0, 0, 0, 7])
         #expect(bytes[12 ... 15] == [0, 0, 0, 1])
+        #expect(bytes[16 ... 23] == [0, 0, 0, 0, 0, 0, 0, 0])
         #expect(bytes[24 ... 25] == [0, 20])
         #expect(bytes[28 ... 31] == [0, 0, 2, 128])
         #expect(frame.count == 32 + "utterance-1".utf8.count + pcm.count)
@@ -132,7 +132,6 @@ struct RealtimeVoiceProtocolTests {
             connectionEpoch: 2,
             utteranceID: "reply-1",
             sequence: 3,
-            capturedAtMonotonicMs: 240,
             start: false,
             audio: Data(repeating: 0, count: 960)
         )
